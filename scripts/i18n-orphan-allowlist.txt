@@ -42,50 +42,6 @@ subtab_identity
 tab_audit_log
 tab_suggestions
 
-# ── Khmer New Year event page — fully untranslated ──
-# (events/khmer-new-year.html has no applyLanguage handler; data-i18n
-#  attributes are dormant markup. Either translate the page or remove
-#  the attributes.)
-kny_day1_date
-kny_day1_label
-kny_day1_p
-kny_day2_date
-kny_day2_label
-kny_day2_p
-kny_day3_date
-kny_day3_label
-kny_day3_p
-kny_days_h
-kny_days_intro
-kny_footer
-kny_greetings_h
-kny_greetings_p
-kny_hero_subtitle
-kny_trad1_h
-kny_trad1_p
-kny_trad2_h
-kny_trad2_p
-kny_trad3_h
-kny_trad3_p
-kny_trad4_h
-kny_trad4_p
-kny_trad5_h
-kny_trad5_p
-kny_trad6_h
-kny_trad6_p
-kny_traditions_h
-kny_what_h
-kny_what_p1
-kny_what_p2
-kny_what_p3
-kny_zodiac_col_animal
-kny_zodiac_col_khmer
-kny_zodiac_col_years
-kny_zodiac_fact_label
-kny_zodiac_fact_p
-kny_zodiac_h
-kny_zodiac_p
-
 # ── Privacy policy section 10 + a few inline keys — missing in legal-translations.js ──
 # (pp_s10_* are footer/contact section, pp_s1_p7 / pp_s2_li7 / pp_s3_li5
 #  are inline points added later. legal-translations.js has pp_s9_h as

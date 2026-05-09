@@ -37,6 +37,7 @@ TRANSLATION_FILES=(
   "public/admin/translations.js"
   "public/js/suggestions-i18n.js"
   "public/js/roadmap-app.js"
+  "public/js/event-translations.js"
 )
 
 # Aggregate every `keyname:` definition from translation files. Match
