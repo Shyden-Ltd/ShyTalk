@@ -26,9 +26,20 @@
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
+    /*
+     * flex-direction: column so shared-header.js (injects <header> as
+     * the first body child) sits at the top instead of becoming a
+     * row-flex item beside <main> — that regression made the header
+     * render as a 223px-wide box vertically centered next to the
+     * Coming Soon content.
+     *
+     * align-items left at default (stretch) so the header spans the
+     * full viewport width; main centers via margin: auto below.
+     * overflow: hidden retained for the radial-glow ::before — the
+     * page is intentionally non-scrolling.
+     */
     display: flex;
-    align-items: center;
-    justify-content: center;
+    flex-direction: column;
     overflow: hidden;
     position: relative;
   }
@@ -52,6 +63,11 @@
     max-width: 520px;
     position: relative;
     z-index: 1;
+    /* margin: auto absorbs the remaining vertical AND horizontal
+       space inside body's flex column → vertically centered between
+       the header and the bottom of the viewport, horizontally
+       centered within the viewport. */
+    margin: auto;
   }
 
   .logo {

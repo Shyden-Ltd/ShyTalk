@@ -90,4 +90,66 @@ test.describe('Landing Page', () => {
     await expect(copyright).toBeVisible();
     await expect(copyright).toContainText('© 2026 Shyden Ltd. All rights reserved.');
   });
+
+  // Regression: shared-header.js injects <header> as the first body
+  // child. The homepage previously had `body { display: flex }` with
+  // the default `flex-direction: row`, which made the injected header
+  // render as a 223px-wide box vertically centered next to the
+  // Coming Soon content instead of as a full-width banner at the
+  // top. These tests pin the layout so the regression cannot return
+  // silently — the existing element-presence tests above all passed
+  // with the bug active.
+  test.describe('shared header layout (regression)', () => {
+    test('shared header sits at the top, full viewport width', async ({ page }) => {
+      const layout = await page.evaluate(() => {
+        const header = document.querySelector('.sh-header');
+        if (!header) return null;
+        const r = header.getBoundingClientRect();
+        return { top: r.top, left: r.left, width: r.width, vw: window.innerWidth };
+      });
+      expect(layout, 'shared header should be present in the DOM').not.toBeNull();
+      expect(layout!.top).toBeLessThanOrEqual(1);
+      expect(layout!.left).toBeLessThanOrEqual(1);
+      // The pre-fix bug shrank the header to ~223px on a 1280-wide
+      // viewport (37% of the viewport). Require ≥95% of viewport
+      // width — anything smaller is the row-flex regression.
+      expect(layout!.width).toBeGreaterThanOrEqual(layout!.vw * 0.95);
+    });
+
+    test('main content is below the shared header (no row-flex inline)', async ({ page }) => {
+      const positions = await page.evaluate(() => {
+        const header = document.querySelector('.sh-header');
+        const main = document.querySelector('main.container');
+        if (!header || !main) return null;
+        return {
+          headerBottom: header.getBoundingClientRect().bottom,
+          headerHeight: header.getBoundingClientRect().height,
+          mainTop: main.getBoundingClientRect().top,
+        };
+      });
+      expect(positions, 'header and main should both be present').not.toBeNull();
+      // mainTop must be at or below the header's bottom — otherwise
+      // the header is sitting beside the main (the pre-fix bug had
+      // main at top=141 with the header centered vertically beside
+      // it at top=345). Combined with the full-width header check
+      // above, this rules out every row-flex inline layout.
+      expect(positions!.mainTop).toBeGreaterThanOrEqual(positions!.headerHeight);
+    });
+
+    test('mobile viewport keeps header full-width and at top', async ({ page }) => {
+      await page.setViewportSize({ width: 375, height: 667 });
+      // Force a layout reflow read; setViewportSize is synchronous
+      // but the layout pass happens on the next frame.
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(null))));
+      const layout = await page.evaluate(() => {
+        const header = document.querySelector('.sh-header');
+        if (!header) return null;
+        const r = header.getBoundingClientRect();
+        return { top: r.top, left: r.left, width: r.width, vw: window.innerWidth };
+      });
+      expect(layout!.top).toBeLessThanOrEqual(1);
+      expect(layout!.left).toBeLessThanOrEqual(1);
+      expect(layout!.width).toBeGreaterThanOrEqual(layout!.vw * 0.95);
+    });
+  });
 });
