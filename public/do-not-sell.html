@@ -125,15 +125,21 @@
     </main>
 
     <footer>
-      <a href="/privacy.html">Privacy Policy</a> &nbsp;&middot;&nbsp;
-      <a href="/terms.html">Terms of Service</a> &nbsp;&middot;&nbsp;
-      <a href="/community-guidelines.html">Community Guidelines</a> &nbsp;&middot;&nbsp;
-      <a href="/cyber-bullying.html">Cyber Bullying Policy</a>
-      <p class="copyright">&copy; 2026 Shyden Ltd. All rights reserved.</p>
+      <a href="/privacy.html" data-i18n="footer_privacy">Privacy Policy</a> &nbsp;&middot;&nbsp;
+      <a href="/terms.html" data-i18n="footer_terms">Terms of Service</a> &nbsp;&middot;&nbsp;
+      <a href="/community-guidelines.html" data-i18n="footer_guidelines">Community Guidelines</a> &nbsp;&middot;&nbsp;
+      <a href="/cyber-bullying.html" data-i18n="footer_cyber">Cyber Bullying Policy</a>
+      <p class="copyright" data-i18n="footer_copy">&copy; 2026 Shyden Ltd. All rights reserved.</p>
     </footer>
   </div>
+<script>window.LEGAL_PAGE_TYPE = 'donotsell';</script>
 <script src="/js/shared-header.js"></script>
 <script src="/js/language-selector.js"></script>
+<script src="/js/legal-translations.js"></script>
+<script>
+  var lang = (window.ShyTalkLanguage && window.ShyTalkLanguage.get()) || 'en';
+  applyLegalTranslations(window.LEGAL_PAGE_TYPE, lang);
+</script>
 <script src="/js/preview-watermark.js" defer></script>
 </body>
 </html>

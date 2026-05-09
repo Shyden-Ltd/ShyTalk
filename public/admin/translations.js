@@ -1,5 +1,5 @@
 /**
- * Admin panel translations — all 19 locales.
+ * Admin panel translations — all 20 locales.
  *
  * Loaded by admin/index.html. Works with the shared language-selector.js.
  * Each key maps to a data-i18n attribute in the HTML.
