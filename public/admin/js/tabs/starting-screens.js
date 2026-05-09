@@ -633,7 +633,12 @@ function buildScreenCardHtml(
       ? '<button type="button" class="remove-bg-btn" style="padding:4px 10px;background:var(--danger,#e74c3c);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Remove</button>'
       : '') +
     '</div><span class="compression-info" style="font-size:11px;color:var(--text2);margin-top:4px;display:block;"></span>' +
-    (screen.backgroundImage
+    // Defense-in-depth: only render <img> if backgroundImage is an HTTP(S)
+    // URL. escapeHtml prevents HTML injection but doesn't reject
+    // `javascript:` schemes — modern browsers don't execute them via img
+    // src in practice, but disallowing non-HTTP(S) schemes makes the
+    // contract explicit.
+    (screen.backgroundImage && /^https?:\/\//i.test(screen.backgroundImage)
       ? '<img src="' +
         escapeHtml(screen.backgroundImage) +
         '" style="max-width:120px;max-height:80px;border-radius:6px;margin-top:6px;border:1px solid var(--border);" />'

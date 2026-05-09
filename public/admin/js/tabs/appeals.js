@@ -129,7 +129,7 @@ function renderCard(appeal, status) {
     <div class="appeal-profile">
       ${originalPhoto ? `<img src="${escapeHtml(originalPhoto)}" alt="${escapeHtml(originalName)}">` : '<div class="placeholder-avatar">?</div>'}
       <div>
-        <div style="font-weight:600;font-size:14px;">#${uniqueId} \u2014 ${escapeHtml(originalName)}</div>
+        <div style="font-weight:600;font-size:14px;">#${escapeHtml(String(uniqueId))} \u2014 ${escapeHtml(originalName)}</div>
         ${userInfo.displayName && userInfo.displayName !== originalName ? `<div style="font-size:11px;color:var(--text2);">Current name: ${escapeHtml(userInfo.displayName)}</div>` : ''}
       </div>
     </div>`;
@@ -168,7 +168,7 @@ function renderCard(appeal, status) {
         <div class="appeal-report-item">
           <div class="report-reason">${escapeHtml(r.reason || 'Unknown reason')} ${reportStatus}</div>
           <div class="report-meta">
-            Reported by: #${reporterUid} ${escapeHtml(reporterName)} | ${reportDate}
+            Reported by: #${escapeHtml(String(reporterUid))} ${escapeHtml(reporterName)} | ${reportDate}
             ${r.type === 'message' ? ' | Type: Message report' : ''}
           </div>
           ${r.description ? `<div class="report-description">${escapeHtml(r.description)}</div>` : ''}
