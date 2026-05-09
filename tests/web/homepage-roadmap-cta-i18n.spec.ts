@@ -71,17 +71,19 @@ test.describe('Homepage roadmap CTA i18n completeness', () => {
   });
 
   test('all 20 supported locales define both roadmap_cta and roadmap_label', async ({ request }) => {
-    const res = await request.get(`${BASE}/index.html`);
+    // Scrapes the externalized HOMEPAGE_T module (was inline in
+    // index.html until the homepage-translations.js extraction).
+    const res = await request.get(`${BASE}/js/homepage-translations.js`);
     expect(res.ok()).toBe(true);
-    const html = await res.text();
+    const src = await res.text();
 
     for (const lang of SUPPORTED_LOCALES) {
       // Match: e.g. `pt: { ... roadmap_cta: "..." ... roadmap_label: "..." ... }`
       // Use a tolerant regex — the keys can appear in any order on the
       // single-line locale rows we ship today.
       const rowRe = new RegExp(`${lang}:\\s*\\{[^{}]*\\}`);
-      const rowMatch = html.match(rowRe);
-      expect(rowMatch, `${lang} locale row not found in inline dictionary`).not.toBeNull();
+      const rowMatch = src.match(rowRe);
+      expect(rowMatch, `${lang} locale row not found in HOMEPAGE_T`).not.toBeNull();
       const row = rowMatch![0];
       expect(row, `${lang} missing roadmap_cta`).toMatch(/roadmap_cta:/);
       expect(row, `${lang} missing roadmap_label`).toMatch(/roadmap_label:/);

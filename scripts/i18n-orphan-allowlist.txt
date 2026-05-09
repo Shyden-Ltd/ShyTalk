@@ -58,14 +58,3 @@ pp_s10_p5
 pp_s10_p6
 pp_s10_p7
 
-# ── Homepage data-i18n with no applyLanguage handler ──
-# (index.html doesn't load any translations script; data-i18n is
-#  dormant. The "Coming Soon" hero copy is English-only by design but
-#  marked-up for future i18n.)
-app_store
-coming_soon
-roadmap_cta
-roadmap_label
-roadmap_sparkle
-tagline
-
