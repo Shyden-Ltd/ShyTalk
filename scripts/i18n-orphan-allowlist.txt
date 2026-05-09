@@ -1,0 +1,117 @@
+# Allowlisted "legacy" orphan data-i18n keys — known to be undefined in
+# any JS translation file as of 2026-05-09 when scripts/check-orphan-i18n-keys.sh
+# was first wired into CI. The guard only fails on NEW additions; this
+# list is the baseline of pre-existing orphans we haven't yet retired.
+#
+# Each entry should eventually be either:
+#   (a) added to the appropriate JS translation file with translations
+#       for all 20 locales, then removed from this list, OR
+#   (b) confirmed as dormant markup (the page doesn't load any
+#       translation infrastructure) and removed from the HTML, OR
+#   (c) the page wired up with translation infrastructure and (a) applied.
+#
+# When adding a new entry: include a comment with the source page so a
+# future maintainer knows where to look. When removing: just delete the
+# line.
+
+# ── Admin age-verification panel — sub-tab never translated ──
+# (admin/translations.js doesn't define age_verif_* keys; sub-tab is
+#  English-only across all admin locales)
+age_verif_approve_button
+age_verif_approve_help
+age_verif_field_method
+age_verif_field_recorded_dob
+age_verif_field_submission_id
+age_verif_field_submitted_at
+age_verif_image_disclaimer
+age_verif_jump_next
+age_verif_match_no
+age_verif_match_question
+age_verif_match_yes
+age_verif_modify_button
+age_verif_modify_help
+age_verif_new_dob_label
+age_verif_no_pending_for_user
+age_verif_other_pending_label
+age_verif_panel_subtitle
+age_verif_panel_title
+age_verif_reject_button
+age_verif_reject_summary
+subtab_age_verification
+subtab_identity
+tab_audit_log
+tab_suggestions
+
+# ── Khmer New Year event page — fully untranslated ──
+# (events/khmer-new-year.html has no applyLanguage handler; data-i18n
+#  attributes are dormant markup. Either translate the page or remove
+#  the attributes.)
+kny_day1_date
+kny_day1_label
+kny_day1_p
+kny_day2_date
+kny_day2_label
+kny_day2_p
+kny_day3_date
+kny_day3_label
+kny_day3_p
+kny_days_h
+kny_days_intro
+kny_footer
+kny_greetings_h
+kny_greetings_p
+kny_hero_subtitle
+kny_trad1_h
+kny_trad1_p
+kny_trad2_h
+kny_trad2_p
+kny_trad3_h
+kny_trad3_p
+kny_trad4_h
+kny_trad4_p
+kny_trad5_h
+kny_trad5_p
+kny_trad6_h
+kny_trad6_p
+kny_traditions_h
+kny_what_h
+kny_what_p1
+kny_what_p2
+kny_what_p3
+kny_zodiac_col_animal
+kny_zodiac_col_khmer
+kny_zodiac_col_years
+kny_zodiac_fact_label
+kny_zodiac_fact_p
+kny_zodiac_h
+kny_zodiac_p
+
+# ── Privacy policy section 10 + a few inline keys — missing in legal-translations.js ──
+# (pp_s10_* are footer/contact section, pp_s1_p7 / pp_s2_li7 / pp_s3_li5
+#  are inline points added later. legal-translations.js has pp_s9_h as
+#  the last section; section 10 was added without backfilling translations.)
+pp_s1_p7
+pp_s2_li7
+pp_s3_li5
+pp_s10_h
+pp_s10_p1
+pp_s10_p2
+pp_s10_p3
+pp_s10_p4
+pp_s10_p5
+pp_s10_p6
+pp_s10_p7
+
+# ── Homepage data-i18n with no applyLanguage handler ──
+# (index.html doesn't load any translations script; data-i18n is
+#  dormant. The "Coming Soon" hero copy is English-only by design but
+#  marked-up for future i18n.)
+app_store
+coming_soon
+roadmap_cta
+roadmap_label
+roadmap_sparkle
+tagline
+
+# ── Roadmap footer copyright — needs key in roadmap-app.js translations ──
+copyright

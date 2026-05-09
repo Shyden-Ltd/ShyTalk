@@ -88,3 +88,6 @@ jobs:
 
       - name: Workflow concurrency groups are scoped or intentionally global
         run: bash scripts/check-workflow-concurrency-scoping.sh
+
+      - name: HTML data-i18n keys all have JS translation definitions
+        run: bash scripts/check-orphan-i18n-keys.sh
