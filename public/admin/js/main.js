@@ -367,12 +367,26 @@ onAuthStateChanged(auth, async (user) => {
 });
 
 // ── Login ───────────────────────────────────────────────────────
+const loginForm = document.getElementById('login-form');
 const loginBtn = document.getElementById('login-btn');
 const loginEmail = document.getElementById('login-email');
 const loginPassword = document.getElementById('login-password');
 const loginError = document.getElementById('login-error');
 
-loginBtn.addEventListener('click', async () => {
+// Prevent the form from doing a default browser submit (which would
+// reload the page and lose the SPA state). The login-btn click handler
+// below already runs on form submit because submit-type buttons fire
+// `click` before the `submit` event. Without this preventDefault,
+// pressing Enter on an empty form would reload to /admin/?login-email=...
+if (loginForm) {
+  loginForm.addEventListener('submit', (e) => e.preventDefault());
+}
+
+loginBtn.addEventListener('click', async (e) => {
+  // The button's click handler may be invoked from a `submit` event
+  // (Enter key) — preventDefault here too to keep the chain idempotent
+  // even if the form-level handler is removed.
+  e.preventDefault?.();
   loginError.textContent = '';
   const email = loginEmail.value.trim();
   const pass = loginPassword.value;

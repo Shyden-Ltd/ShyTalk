@@ -3093,11 +3093,24 @@
 <div id="login-screen" class="screen">
     <div class="login-box">
         <h2>ShyTalk Admin</h2>
-        <input type="email" id="login-email" placeholder="Email" autocomplete="email"
-               aria-label="Email">
-        <input type="password" id="login-password" placeholder="Password"
-               autocomplete="current-password" aria-label="Password">
-        <button id="login-btn" data-log="sign-in" data-i18n="btn_sign_in">Sign In</button>
+        <!--
+          Wrapped in <form> so password managers (1Password, Chrome,
+          Apple Keychain) detect the credential pair and offer autofill
+          + save. The previous div-only structure triggered a DOM
+          warning ("Password field is not contained in a form") and
+          meant most password managers refused to auto-suggest. The
+          existing #login-btn click handler in admin/js/main.js still
+          runs because submit-type buttons fire click on form submit.
+          The new form `submit` handler in main.js calls
+          preventDefault() so Enter doesn't cause a page reload.
+        -->
+        <form id="login-form" autocomplete="on">
+            <input type="email" id="login-email" placeholder="Email" autocomplete="email"
+                   aria-label="Email">
+            <input type="password" id="login-password" placeholder="Password"
+                   autocomplete="current-password" aria-label="Password">
+            <button id="login-btn" type="submit" data-log="sign-in" data-i18n="btn_sign_in">Sign In</button>
+        </form>
         <div class="login-error" id="login-error"></div>
     </div>
 </div>

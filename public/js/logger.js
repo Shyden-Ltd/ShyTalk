@@ -136,6 +136,11 @@
      */
     _setupErrorHandlers: function () {
       var self = this;
+      // Same idempotency reasoning as _setupFetchInterceptor — init()
+      // is re-invoked on every auth-state change. Without this guard,
+      // a single uncaught error would log N times after N sign-ins.
+      if (self._errorHandlersInstalled) return;
+      self._errorHandlersInstalled = true;
 
       window.addEventListener('error', function (event) {
         self.error('Uncaught error: ' + (event.message || 'Unknown error'), {
@@ -164,9 +169,23 @@
 
     /**
      * Wrap window.fetch to add trace headers and log request completion.
+     *
+     * MUST be idempotent. `init()` is called from auth-state-change
+     * callbacks (admin/js/main.js:onAuthStateChanged invokes
+     * ShyTalkLogger.init on every sign-in). A naive wrapper would
+     * capture the *previously wrapped* window.fetch as "_originalFetch"
+     * on the second call, so the new wrapper would call the old
+     * wrapper, which would call the one before it, etc. After a
+     * handful of sign-in cycles, every fetch overflows the stack with
+     * "Maximum call stack size exceeded" — see admin's alert-count
+     * loader, which fired the regression. The early return below
+     * preserves the very first wrap and keeps `_originalFetch`
+     * pointing at the real native fetch forever.
      */
     _setupFetchInterceptor: function () {
       var self = this;
+      if (self._fetchInterceptorInstalled) return;
+      self._fetchInterceptorInstalled = true;
       self._originalFetch = window.fetch;
 
       window.fetch = function (input, init) {
@@ -233,6 +252,10 @@
      */
     _setupClickTracking: function () {
       var self = this;
+      // Idempotent — see _setupFetchInterceptor. Otherwise every
+      // tracked click logs N times after N sign-ins.
+      if (self._clickTrackingInstalled) return;
+      self._clickTrackingInstalled = true;
 
       document.addEventListener('click', function (event) {
         var el = event.target;
