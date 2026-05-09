@@ -27,6 +27,7 @@ import { showToast, escapeHtml } from '/js/core/ui.js';
 
 let _searchUserByUniqueId = null;
 let _refreshAfterDecisionCallback = null;
+let _initialised = false;
 
 // Cached pending list. Refreshed on subtab open + after decisions.
 // Index lookup: by submission.userId (string keyed).
@@ -48,8 +49,19 @@ const $ = (id) => document.getElementById(id);
  *   after a decision so the read-only DOB / verified badge updates.
  */
 export function init(deps) {
+  // Refresh deps every call — callers may rebind on re-init even though
+  // listeners only get wired once.
   _searchUserByUniqueId = deps?.searchUserByUniqueId || null;
   _refreshAfterDecisionCallback = deps?.refreshAfterDecision || null;
+
+  // Idempotent — init() runs from onAuthStateChanged in main.js. Each
+  // re-fire (sign-out → sign-in, token refresh) would otherwise stack
+  // another click handler on every approve / reject / modify-DOB
+  // button, so a single click would dispatch N concurrent age-verif
+  // approvals. It would also issue N redundant /pending GETs per
+  // cycle. See tests/web/admin-init-idempotency.spec.ts.
+  if (_initialised) return;
+  _initialised = true;
 
   // Wire match-question radios
   document.querySelectorAll('input[name="age-verif-match"]').forEach((r) =>

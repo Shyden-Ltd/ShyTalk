@@ -14,6 +14,7 @@ import { escapeHtml } from '/js/core/ui.js';
 let _apiBase = '';
 let _getToken = () => Promise.resolve(null);
 let _auth = null;
+let _initialised = false;
 
 // ── Public API ────────────────────────────────────────────────────
 
@@ -21,6 +22,15 @@ export function init(deps) {
   _apiBase = deps.apiBase || '';
   _getToken = deps.getToken;
   _auth = deps.auth;
+
+  // Idempotent — init() runs from onAuthStateChanged in main.js, which
+  // fires on every sign-in / sign-out → sign-in cycle. Without this
+  // guard, every destructive nuclear-reset overlay button would
+  // accumulate one extra click listener per cycle, so a single click
+  // on "RESET EVERYTHING" would dispatch N parallel reset runs. See
+  // tests/web/admin-init-idempotency.spec.ts.
+  if (_initialised) return;
+  _initialised = true;
 
   document.getElementById('reset-all-btn').addEventListener('click', () => {
     document.getElementById('reset-all-result').style.display = 'none';

@@ -14,10 +14,13 @@ import { escapeHtml } from '/js/core/ui.js';
 let _apiBase = '';
 let _getToken = () => Promise.resolve(null);
 let _auth = null;
+let _initialised = false;
 
 // ── Public API ────────────────────────────────────────────────────
 
 export function init(deps) {
+  // Refresh deps every call — apiBase / getToken closure / auth instance
+  // are stable in practice but a future caller might rebind them.
   _apiBase = deps.apiBase || '';
   _getToken = deps.getToken;
   _auth = deps.auth;
@@ -26,6 +29,15 @@ export function init(deps) {
   if (_apiBase.includes('dev-api')) {
     migrateCard.style.display = '';
   }
+
+  // init() is invoked from main.js's onAuthStateChanged callback, which
+  // fires on every sign-in, sign-out → sign-in cycle, and ID-token
+  // refresh. Without this guard each cycle stacks another click handler
+  // on every overlay button — clicking "migrate from prod" once would
+  // open N overlays and run N parallel sync requests. See
+  // tests/web/admin-init-idempotency.spec.ts.
+  if (_initialised) return;
+  _initialised = true;
 
   const migrateBtn = document.getElementById('migrate-prod-btn');
   migrateBtn.addEventListener('click', () => {
