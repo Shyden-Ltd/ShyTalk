@@ -100,10 +100,17 @@
 <body>
 <main>
   <div class="code" data-testid="404-code">404</div>
-  <h1>Page not found</h1>
-  <p>The page you were looking for doesn't exist or has moved. Try the homepage or one of the links below.</p>
-  <a href="/" class="home-link" data-testid="404-home-link">Back to ShyTalk</a>
+  <h1 data-i18n="not_found_title">Page not found</h1>
+  <p data-i18n="not_found_desc">The page you were looking for doesn't exist or has moved. Try the homepage or one of the links below.</p>
+  <a href="/" class="home-link" data-testid="404-home-link" data-i18n="not_found_home">Back to ShyTalk</a>
 </main>
+<script>window.LEGAL_PAGE_TYPE = 'notfound';</script>
 <script src="/js/shared-header.js"></script>
+<script src="/js/language-selector.js"></script>
+<script src="/js/legal-translations.js"></script>
+<script>
+  var lang = (window.ShyTalkLanguage && window.ShyTalkLanguage.get()) || 'en';
+  applyLegalTranslations(window.LEGAL_PAGE_TYPE, lang);
+</script>
 </body>
 </html>
