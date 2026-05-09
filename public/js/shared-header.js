@@ -125,6 +125,18 @@
         });
       }
     }
+
+    // Re-apply translations to the freshly-injected header. Without this
+    // the data-i18n="signIn"/"signOut" buttons render the inline English
+    // default in non-English locales — the page's applyLanguage chain
+    // already ran during DOMContentLoaded BEFORE shared-header injected
+    // its DOM, so it had no buttons to translate.
+    if (typeof window.applyLanguage === 'function') {
+      var savedLang = (window.ShyTalkLanguage && typeof window.ShyTalkLanguage.get === 'function')
+        ? window.ShyTalkLanguage.get()
+        : ((typeof localStorage !== 'undefined' && localStorage.getItem('shytalk_language')) || null);
+      if (savedLang) window.applyLanguage(savedLang);
+    }
   }
 
   function escapeHtml(str) {
