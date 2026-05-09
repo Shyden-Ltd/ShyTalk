@@ -77,6 +77,7 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.platform.PlatformSettingsService
 import com.shyden.shytalk.core.platform.SettingsType
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
+import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -828,17 +829,31 @@ private fun AccountPage(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Data export
+            // Mirror the server 24h rate-limit window (RATE_LIMIT_MS in
+            // express-api/src/routes/data-export.js). Disable the button
+            // only while the most recent request is within that window —
+            // do NOT keep it disabled forever based on a stale local
+            // "pending" flag, which previously locked users out of GDPR
+            // re-requests until app restart.
+            // currentTimeMillis() here is the PROJECT KMP wrapper (see
+            // shared/src/commonMain/.../core/util/PlatformTime.kt), NOT
+            // System.currentTimeMillis() — see CLAUDE.md.
+            val exportRateLimitMs = 24L * 60L * 60L * 1000L
+            val exportRecentlyRequested =
+                uiState.exportRequestedAtMs?.let { requestedAt ->
+                    (currentTimeMillis() - requestedAt) < exportRateLimitMs
+                } == true
             OutlinedButton(
                 onClick = { onRequestExport() },
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .testTag("settings_exportDataButton"),
-                enabled = !uiState.isExportRequesting && uiState.exportStatus != "pending",
+                enabled = !uiState.isExportRequesting && !exportRecentlyRequested,
             ) {
                 Text(stringResource(Res.string.export_data))
             }
-            if (uiState.exportStatus == "pending") {
+            if (exportRecentlyRequested) {
                 Text(
                     text = stringResource(Res.string.export_data_pending),
                     style = MaterialTheme.typography.bodySmall,

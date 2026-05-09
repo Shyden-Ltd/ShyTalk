@@ -26,6 +26,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -1034,14 +1035,14 @@ class AppSettingsViewModelTest {
             advanceUntilIdle()
 
             assertFalse(vm.uiState.value.isExportRequesting)
-            assertNull(vm.uiState.value.exportStatus)
+            assertNull(vm.uiState.value.exportRequestedAtMs)
             assertNull(vm.uiState.value.exportError)
         }
 
     @Test
-    fun `requestDataExport - success sets exportStatus to pending`() =
+    fun `requestDataExport - success captures server requestedAt timestamp`() =
         runTest {
-            coEvery { userRepository.requestDataExport(currentUserId) } returns Resource.Success(1000L)
+            coEvery { userRepository.requestDataExport(currentUserId) } returns Resource.Success(1700000000000L)
 
             val vm = createViewModel()
             advanceUntilIdle()
@@ -1050,12 +1051,35 @@ class AppSettingsViewModelTest {
             advanceUntilIdle()
 
             assertFalse(vm.uiState.value.isExportRequesting)
-            assertEquals("pending", vm.uiState.value.exportStatus)
+            // Server-authoritative timestamp drives the 24h rate-limit gate
+            // in the screen — replaces a stuck-forever local "pending" flag.
+            assertEquals(1700000000000L, vm.uiState.value.exportRequestedAtMs)
             assertNull(vm.uiState.value.exportError)
         }
 
     @Test
-    fun `requestDataExport - error sets exportError`() =
+    fun `requestDataExport - non-positive server timestamp falls back to client clock`() =
+        runTest {
+            // If the server returns 0L (clock skew, malformed, etc), the VM
+            // must still set SOME timestamp so the 24h gate engages — the
+            // alternative is leaving exportRequestedAtMs null and
+            // immediately re-enabling the button, allowing spam.
+            coEvery { userRepository.requestDataExport(currentUserId) } returns Resource.Success(0L)
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.requestDataExport()
+            advanceUntilIdle()
+
+            assertNotNull(vm.uiState.value.exportRequestedAtMs)
+            // Must be a recent client timestamp (> 0, not the literal 0L the
+            // server returned).
+            assertTrue((vm.uiState.value.exportRequestedAtMs ?: 0L) > 0L)
+        }
+
+    @Test
+    fun `requestDataExport - error sets exportError and leaves requestedAt null`() =
         runTest {
             coEvery { userRepository.requestDataExport(currentUserId) } returns Resource.Error("Rate limited")
 
@@ -1066,7 +1090,10 @@ class AppSettingsViewModelTest {
             advanceUntilIdle()
 
             assertFalse(vm.uiState.value.isExportRequesting)
-            assertNull(vm.uiState.value.exportStatus)
+            // Failed request must NOT set the rate-limit timestamp — otherwise
+            // a server 500 / network blip would lock the button for 24h even
+            // though the request never completed.
+            assertNull(vm.uiState.value.exportRequestedAtMs)
             assertEquals(UiText.Plain("Rate limited"), vm.uiState.value.exportError)
         }
 
@@ -1083,14 +1110,15 @@ class AppSettingsViewModelTest {
             advanceUntilIdle()
             assertEquals(UiText.Plain("First error"), vm.uiState.value.exportError)
 
-            // Second request succeeds — error should be cleared
-            coEvery { userRepository.requestDataExport(currentUserId) } returns Resource.Success(2000L)
+            // Second request succeeds — error should be cleared and the
+            // server's new requestedAt captured.
+            coEvery { userRepository.requestDataExport(currentUserId) } returns Resource.Success(1700000002000L)
 
             vm.requestDataExport()
             advanceUntilIdle()
 
             assertNull(vm.uiState.value.exportError)
-            assertEquals("pending", vm.uiState.value.exportStatus)
+            assertEquals(1700000002000L, vm.uiState.value.exportRequestedAtMs)
         }
 
     @Test

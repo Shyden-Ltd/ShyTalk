@@ -72,7 +72,17 @@ data class AppSettingsUiState(
     val deletionError: UiText? = null,
     // Data export
     val isExportRequesting: Boolean = false,
-    val exportStatus: String? = null,
+    // Server-returned timestamp (millis since epoch) of the most recent
+    // export request, set on Resource.Success. Drives both the "pending"
+    // hint text in the screen and the rate-limit button gate. Replaces
+    // an earlier `exportStatus: String? = null` flag that was stuck at
+    // "pending" forever after the first request — the local flag had no
+    // mechanism to reset, so the button was disabled until app restart
+    // even after the server-side build had completed or the 24h
+    // rate-limit had expired. See feedback / GDPR compliance: blocking
+    // a user from re-requesting data export after one click would
+    // violate Article 20 portability rights.
+    val exportRequestedAtMs: Long? = null,
     val exportError: UiText? = null,
 )
 
@@ -524,7 +534,13 @@ class AppSettingsViewModel(
                     _uiState.update {
                         it.copy(
                             isExportRequesting = false,
-                            exportStatus = "pending",
+                            // Capture the server-authoritative requestedAt so the UI 24h
+                            // gate matches the server rate-limit window exactly.
+                            // Falling back to the project KMP wrapper currentTimeMillis()
+                            // (NOT System.currentTimeMillis — see CLAUDE.md) if the
+                            // server returns a non-positive value keeps the button
+                            // correctly disabled until the next sane response.
+                            exportRequestedAtMs = result.data.takeIf { ms -> ms > 0L } ?: currentTimeMillis(),
                         )
                     }
                 }
