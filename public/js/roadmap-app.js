@@ -32,6 +32,7 @@
       tryAgain: "Try again",
       notifyPrompt: "Sign in to the app to get notified about this feature.",
       disclaimer: "Features and priorities may change as development progresses and user feedback is received.",
+      copyright: "© Shyden Ltd",
     },
     ar: {
       inProgress:
@@ -697,6 +698,12 @@
     var disclaimerEl = document.querySelector("[data-i18n='disclaimer']");
     if (disclaimerEl) {
       disclaimerEl.textContent = t("disclaimer");
+    }
+
+    // Update footer copyright translation
+    var copyrightEl = document.querySelector("[data-i18n='copyright']");
+    if (copyrightEl) {
+      copyrightEl.textContent = t("copyright");
     }
 
     // Attach collapse/expand handlers

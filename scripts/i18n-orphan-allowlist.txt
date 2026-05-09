@@ -113,5 +113,3 @@ roadmap_label
 roadmap_sparkle
 tagline
 
-# ── Roadmap footer copyright — needs key in roadmap-app.js translations ──
-copyright
