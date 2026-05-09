@@ -191,14 +191,19 @@
       <span class="coming-soon-link" data-i18n="app_store" title="Coming soon to iOS">App Store (Coming Soon)</span>
     </div>
     <div class="links" style="margin-top: 1.5rem;">
-      <a href="/privacy.html">Privacy Policy</a>
-      <a href="/terms.html">Terms of Service</a>
-      <a href="/community-guidelines.html">Community Guidelines</a>
-      <a href="/cyber-bullying.html">Cyber Bullying Policy</a>
-      <a href="/do-not-sell.html">Do Not Sell or Share My Personal Information</a>
+      <a href="/privacy.html" data-i18n="footer_privacy">Privacy Policy</a>
+      <a href="/terms.html" data-i18n="footer_terms">Terms of Service</a>
+      <a href="/community-guidelines.html" data-i18n="footer_guidelines">Community Guidelines</a>
+      <a href="/cyber-bullying.html" data-i18n="footer_cyber">Cyber Bullying Policy</a>
+      <a href="/do-not-sell.html" data-i18n="footer_do_not_sell">Do Not Sell or Share My Personal Information</a>
     </div>
-    <p class="copyright" style="color: var(--text2); font-size: 0.8rem; margin-top: 1.5rem; opacity: 0.6;">&copy; 2026 Shyden Ltd. All rights reserved.</p>
+    <p class="copyright" data-i18n="footer_copy" style="color: var(--text2); font-size: 0.8rem; margin-top: 1.5rem; opacity: 0.6;">&copy; 2026 Shyden Ltd. All rights reserved.</p>
   </main>
+<!-- legal-translations.js + LEGAL_PAGE_TYPE='home' (no LEGAL_T.home section
+     exists, so only LEGAL_T.footer applies — translates the footer-link text
+     and copyright across all 20 locales). -->
+<script>window.LEGAL_PAGE_TYPE = "home";</script>
+<script src="/js/legal-translations.js"></script>
 <script>
 (function() {
   var t = {
@@ -222,6 +227,10 @@
     nl: { tagline: "Spraakchatrooms, opnieuw uitgevonden.", coming_soon: "Binnenkort", app_store: "App Store (Binnenkort)", app_store_title: "Binnenkort op iOS" },
     sv: { tagline: "R\u00f6stchattrum, nyt\u00e4nkt.", coming_soon: "Kommer snart", app_store: "App Store (Kommer snart)", app_store_title: "Kommer snart till iOS" }
   };
+  // Chain with any prior applyLanguage handler (e.g. legal-translations.js
+  // for footer link i18n) so the inline tagline/coming_soon/roadmap_cta
+  // translations co-exist with the shared legal footer translations.
+  var _prevApplyLanguage = window.applyLanguage;
   window.applyLanguage = function(lang) {
     var strings = t[lang];
     if (strings) {
@@ -237,6 +246,7 @@
         if (el.dataset.defaultText) el.textContent = el.dataset.defaultText;
       });
     }
+    if (typeof _prevApplyLanguage === "function") _prevApplyLanguage(lang);
   };
   // Save default English text for reset
   document.querySelectorAll("[data-i18n]").forEach(function(el) {
