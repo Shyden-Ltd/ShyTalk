@@ -633,16 +633,20 @@ function buildScreenCardHtml(
       ? '<button type="button" class="remove-bg-btn" style="padding:4px 10px;background:var(--danger,#e74c3c);color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:12px;">Remove</button>'
       : '') +
     '</div><span class="compression-info" style="font-size:11px;color:var(--text2);margin-top:4px;display:block;"></span>' +
-    // Defense-in-depth: only render <img> if backgroundImage is an HTTP(S)
-    // URL. escapeHtml prevents HTML injection but doesn't reject
-    // `javascript:` schemes — modern browsers don't execute them via img
-    // src in practice, but disallowing non-HTTP(S) schemes makes the
-    // contract explicit.
-    (screen.backgroundImage && /^https?:\/\//i.test(screen.backgroundImage)
-      ? '<img src="' +
-        escapeHtml(screen.backgroundImage) +
-        '" style="max-width:120px;max-height:80px;border-radius:6px;margin-top:6px;border:1px solid var(--border);" />'
-      : '') +
+    // Defense-in-depth: route the URL through the project's
+    // sanitizeImageUrl helper (same one used by updatePreview at line
+    // 134) so non-HTTP(S) schemes are rejected before the URL hits an
+    // `src=""`. escapeHtml alone prevents HTML injection but doesn't
+    // reject `javascript:` schemes; reusing the existing helper keeps
+    // the URL-sanitization contract centralized.
+    ((() => {
+      const safe = sanitizeImageUrl(screen.backgroundImage);
+      return safe
+        ? '<img src="' +
+          escapeHtml(safe) +
+          '" style="max-width:120px;max-height:80px;border-radius:6px;margin-top:6px;border:1px solid var(--border);" />'
+        : '';
+    })()) +
     '</div>' +
     '<div><label style="' +
     labelStyle +
