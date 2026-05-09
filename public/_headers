@@ -3,6 +3,24 @@
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
 
+# Force browsers to revalidate JS / CSS on every load. Cloudflare Pages'
+# default for unfingerprinted assets is `public, max-age=14400` (4h),
+# which means a fix deployed to e.g. /js/logger.js takes up to 4h to
+# reach users with the old version cached. Found 2026-05-09 during
+# manual-qa: the logger fetch-wrapper recursion fix in PR #562 was in
+# the served file but a stale browser-cached copy kept hitting the
+# original "Maximum call stack size exceeded" bug. `must-revalidate`
+# + a short max-age forces an If-Modified-Since round-trip every 5
+# minutes, so deploys propagate within 5 min instead of 4 h.
+/js/*
+  Cache-Control: public, max-age=300, must-revalidate
+/css/*
+  Cache-Control: public, max-age=300, must-revalidate
+/admin/js/*
+  Cache-Control: public, max-age=300, must-revalidate
+/portal/*.js
+  Cache-Control: public, max-age=300, must-revalidate
+
 /portal/*
   Content-Security-Policy: default-src 'none'; script-src 'self' https://www.gstatic.com/firebasejs/; style-src 'self'; img-src 'self' https://images.shytalk.shyden.co.uk; connect-src 'self' https://*.shytalk.shyden.co.uk https://*.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com wss://*.firestore.googleapis.com wss://*.firebaseio.com; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com https://appleid.apple.com; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'
   X-Frame-Options: DENY
