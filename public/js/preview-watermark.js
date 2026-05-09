@@ -88,9 +88,19 @@
     var node = document.createElement('div');
     node.id = 'preview-watermark';
     node.setAttribute('aria-hidden', 'true');
+    // Dodge the shared header (public/js/shared-header.js) when one is
+    // present — otherwise the badge sits inside the header's hit-test
+    // area at the top of the page, swallowing taps that should reach
+    // the header (e.g. the Sign In button) and visually overlapping
+    // the header chrome. Pages without the shared header keep the
+    // original top:4 placement. The 2s re-render interval guarantees
+    // the position stays correct if the header is injected after the
+    // first render (init race between the two scripts).
+    var sharedHeader = document.querySelector('.sh-header');
+    var topPx = (sharedHeader ? sharedHeader.offsetHeight : 0) + 4;
     node.style.cssText = [
       'position:fixed',
-      'top:4px',
+      'top:' + topPx + 'px',
       'right:4px',
       'z-index:2147483647', // max int — guarantee on top of any modal
       // Alpha 0.4 — visible enough to read the build/env/UID lines
@@ -131,10 +141,18 @@
     });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', render, { once: true });
-  } else {
+  // `defer` scripts execute when readyState === 'interactive' — AFTER
+  // parsing but BEFORE DOMContentLoaded. shared-header.js (loaded
+  // without defer) only injects its <header> on its own
+  // DOMContentLoaded handler. If we render immediately at 'interactive'
+  // we miss the header and position the badge at top:4 (inside the
+  // header's hit-test area). Wait for DOMContentLoaded in BOTH the
+  // 'loading' and 'interactive' cases so we always measure
+  // `.sh-header.offsetHeight` after shared-header has rendered.
+  if (document.readyState === 'complete') {
     render();
+  } else {
+    document.addEventListener('DOMContentLoaded', render, { once: true });
   }
 
   // Re-render every 2s so the UID picks up after sign-in even on pages
