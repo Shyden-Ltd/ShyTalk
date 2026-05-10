@@ -1074,11 +1074,11 @@ function renderWarningItem(w, uid) {
   const right = document.createElement("div"); right.style.cssText = "display:flex;align-items:center;gap:6px;";
   const dateSpan = document.createElement("span"); dateSpan.style.cssText = "color:var(--text2);font-size:11px;"; dateSpan.textContent = w.createdAt ? new Date(w.createdAt).toLocaleString() : ""; right.appendChild(dateSpan);
   if (!w.revoked) { const rb = document.createElement("button"); rb.className = "btn-revoke-warning"; rb.textContent = window.tAdmin("btn_revoke"); rb.addEventListener("click", () => revokeWarning(uid, w.id, w.gcsDeduction || 0, rb)); right.appendChild(rb); }
-  else { const rs = document.createElement("span"); rs.style.cssText = "color:var(--text2);font-size:11px;font-style:italic;"; rs.textContent = "Revoked"; right.appendChild(rs); }
+  else { const rs = document.createElement("span"); rs.style.cssText = "color:var(--text2);font-size:11px;font-style:italic;"; rs.textContent = window.tAdmin("inline_revoked"); right.appendChild(rs); }
   header.appendChild(right); item.appendChild(header);
   const reason = document.createElement("div"); reason.style.marginTop = "4px"; reason.textContent = w.reason || ""; item.appendChild(reason);
-  if (w.adminNote) { const note = document.createElement("div"); note.style.cssText = "color:var(--text2);font-size:12px;margin-top:2px;font-style:italic;"; note.textContent = "Note: " + w.adminNote; item.appendChild(note); }
-  const meta = document.createElement("div"); meta.style.cssText = "color:var(--text2);font-size:11px;margin-top:2px;"; meta.textContent = "By: " + (w.issuedByName || w.issuedBy || "System") + " | GCS: " + (w.gcsBefore || "?") + " \u2192 " + (w.gcsAfter ?? "?"); item.appendChild(meta);
+  if (w.adminNote) { const note = document.createElement("div"); note.style.cssText = "color:var(--text2);font-size:12px;margin-top:2px;font-style:italic;"; note.textContent = window.tAdminFmt("inline_warning_note", { note: w.adminNote }); item.appendChild(note); }
+  const meta = document.createElement("div"); meta.style.cssText = "color:var(--text2);font-size:11px;margin-top:2px;"; meta.textContent = window.tAdminFmt("inline_warning_meta", { issuedBy: (w.issuedByName || w.issuedBy || "System"), gcsBefore: (w.gcsBefore || "?"), gcsAfter: (w.gcsAfter ?? "?") }); item.appendChild(meta);
   return item;
 }
 
@@ -1087,11 +1087,11 @@ export async function revokeWarning(uid, warningId, deduction, btn) {
   btn.disabled = true; btn.textContent = "...";
   try {
     await apiCall("POST", "/api/user/" + uid + "/warnings/" + warningId + "/revoke");
-    showToast("Warning revoked, +" + deduction + " GCS restored");
+    showToast(window.tAdminFmt("toast_warning_revoked_gcs", { deduction }));
     const data = await apiCall("GET", "/api/user/" + uid);
     populateGcsSection(data);
     loadWarningHistory(uid, false);
-  } catch (err) { showToast(err.message, "error"); btn.disabled = false; btn.textContent = "Revoke"; }
+  } catch (err) { showToast(err.message, "error"); btn.disabled = false; btn.textContent = window.tAdmin("btn_revoke"); }
 }
 
 // -- populateFormFull - master form populator --------------------
@@ -1191,7 +1191,7 @@ export async function loadSecurityPanel() {
             <small style="color:var(--text2)">Registered: ${escapeHtml(new Date(k.createdAt).toLocaleString())}</small>`;
           const btn = document.createElement("button");
           btn.className = "btn btn-danger btn-sm";
-          btn.textContent = "Revoke";
+          btn.textContent = window.tAdmin("btn_revoke");
           btn.dataset.uid = uid;
           btn.dataset.deviceId = k.deviceId;
           btn.addEventListener("click", () => revokeBiometricKey(btn.dataset.uid, btn.dataset.deviceId));
@@ -1218,7 +1218,7 @@ export async function resetPinLockout() {
   if (!currentUid || !confirm(window.tAdmin("confirm_reset_pin_lockout"))) return;
   try {
     await apiCall("POST", `/api/user/${currentUid}/reset-pin-lockout`);
-    showToast("PIN lockout reset");
+    showToast(window.tAdmin("toast_pin_lockout_reset"));
     loadSecurityPanel();
   } catch (err) {
     showToast("Failed: " + err.message, "error");
@@ -1229,7 +1229,7 @@ export async function revokeBiometricKey(uniqueId, deviceId) {
   if (!confirm(window.tAdminFmt("confirm_revoke_biometric", { deviceId }))) return;
   try {
     await apiCall("DELETE", `/api/user/${uniqueId}/biometric-keys/${deviceId}`);
-    showToast("Biometric key revoked");
+    showToast(window.tAdmin("toast_biometric_revoked"));
     loadSecurityPanel();
   } catch (err) {
     showToast("Failed: " + err.message, "error");
@@ -1293,7 +1293,7 @@ export function wireModerationListeners() {
   if (resetGcsBtn) resetGcsBtn.addEventListener("click", async () => {
     if (!currentUid || !confirm(window.tAdmin("confirm_reset_gcs"))) return;
     resetGcsBtn.disabled = true;
-    try { await apiCall("POST", `/api/user/${currentUid}/reset-gcs`); showToast("GCS reset to 100"); const data = await apiCall("GET", `/api/user/${currentUid}`); populateGcsSection(data); }
+    try { await apiCall("POST", `/api/user/${currentUid}/reset-gcs`); showToast(window.tAdmin("toast_gcs_reset_100")); const data = await apiCall("GET", `/api/user/${currentUid}`); populateGcsSection(data); }
     catch (err) { showToast(err.message, "error"); }
     finally { resetGcsBtn.disabled = false; }
   });
