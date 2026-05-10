@@ -52,29 +52,34 @@
     { value: "other", label: "Other" },
   ];
 
+  // Language names rendered in their NATIVE form so a user filtering by
+  // a language always sees that language in its own script — convention
+  // mirrors language-selector.js's LANGUAGES.native list and is the
+  // standard pattern for language pickers (cf. Wikipedia language nav,
+  // YouTube language selector, etc.).
   var LANG_OPTIONS = [
     { value: "", label: sgT("allLanguages") },
     { value: "en", label: "English" },
-    { value: "ar", label: "Arabic" },
-    { value: "de", label: "German" },
-    { value: "es", label: "Spanish" },
-    { value: "fr", label: "French" },
-    { value: "hi", label: "Hindi" },
-    { value: "id", label: "Indonesian" },
-    { value: "it", label: "Italian" },
-    { value: "ja", label: "Japanese" },
-    { value: "km", label: "Khmer" },
-    { value: "ko", label: "Korean" },
-    { value: "nl", label: "Dutch" },
-    { value: "pl", label: "Polish" },
-    { value: "pt", label: "Portuguese" },
-    { value: "ru", label: "Russian" },
-    { value: "sv", label: "Swedish" },
-    { value: "th", label: "Thai" },
-    { value: "tr", label: "Turkish" },
-    { value: "uk", label: "Ukrainian" },
-    { value: "vi", label: "Vietnamese" },
-    { value: "zh", label: "Chinese" },
+    { value: "ar", label: "العربية" },
+    { value: "de", label: "Deutsch" },
+    { value: "es", label: "Español" },
+    { value: "fr", label: "Français" },
+    { value: "hi", label: "हिन्दी" },
+    { value: "id", label: "Bahasa Indonesia" },
+    { value: "it", label: "Italiano" },
+    { value: "ja", label: "日本語" },
+    { value: "km", label: "ភាសាខ្មែរ" },
+    { value: "ko", label: "한국어" },
+    { value: "nl", label: "Nederlands" },
+    { value: "pl", label: "Polski" },
+    { value: "pt", label: "Português" },
+    { value: "ru", label: "Русский" },
+    { value: "sv", label: "Svenska" },
+    { value: "th", label: "ไทย" },
+    { value: "tr", label: "Türkçe" },
+    { value: "uk", label: "Українська" },
+    { value: "vi", label: "Tiếng Việt" },
+    { value: "zh", label: "中文" },
   ];
 
   var SUBSCRIBE_EVENTS = [
