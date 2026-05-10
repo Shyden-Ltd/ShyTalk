@@ -14,34 +14,6 @@
 # future maintainer knows where to look. When removing: just delete the
 # line.
 
-# ── Admin age-verification panel — sub-tab never translated ──
-# (admin/translations.js doesn't define age_verif_* keys; sub-tab is
-#  English-only across all admin locales)
-age_verif_approve_button
-age_verif_approve_help
-age_verif_field_method
-age_verif_field_recorded_dob
-age_verif_field_submission_id
-age_verif_field_submitted_at
-age_verif_image_disclaimer
-age_verif_jump_next
-age_verif_match_no
-age_verif_match_question
-age_verif_match_yes
-age_verif_modify_button
-age_verif_modify_help
-age_verif_new_dob_label
-age_verif_no_pending_for_user
-age_verif_other_pending_label
-age_verif_panel_subtitle
-age_verif_panel_title
-age_verif_reject_button
-age_verif_reject_summary
-subtab_age_verification
-subtab_identity
-tab_audit_log
-tab_suggestions
-
 # ── Privacy policy section 10 + a few inline keys — missing in legal-translations.js ──
 # (pp_s10_* are footer/contact section, pp_s1_p7 / pp_s2_li7 / pp_s3_li5
 #  are inline points added later. legal-translations.js has pp_s9_h as
