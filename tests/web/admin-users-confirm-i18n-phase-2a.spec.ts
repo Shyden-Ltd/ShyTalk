@@ -86,9 +86,13 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2a)', () => {
     const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
 
     for (const locale of locales) {
+      // Single-line locale rows now contain values with `{name}`
+      // placeholders (added in Phase 2b), so the regex must allow
+      // braces inside placeholder tokens. Match either non-brace
+      // chars OR `{wordchars}` placeholder tokens.
       const localeBlock = multiLine.has(locale)
         ? src.match(new RegExp(`${locale}:\\s*\\{([\\s\\S]*?)\\n  \\},`))
-        : src.match(new RegExp(`${locale}:\\s*\\{([^{}]*?)\\}`));
+        : src.match(new RegExp(`${locale}:\\s*\\{((?:[^{}]|\\{\\w+\\})*?)\\}`));
       expect(localeBlock, `Locale ${locale} block not found`).not.toBeNull();
       const block = localeBlock![1];
 
