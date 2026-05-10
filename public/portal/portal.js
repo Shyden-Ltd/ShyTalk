@@ -590,7 +590,7 @@
       $('recovery-verify-form').hidden = false;
       var msgEl = $('recovery-message');
       if (msgEl) {
-        msgEl.textContent = 'If an account exists with that email, a recovery code has been sent.';
+        msgEl.textContent = t('recovery_code_sent');
         msgEl.hidden = false;
       }
       $('recovery-code').focus();
@@ -765,16 +765,16 @@
 
     if (totpStatusEl && totpBtn && totpBtnLabel) {
       if (!isPasswordUser) {
-        totpStatusEl.textContent = 'Two-factor authentication is managed by your sign-in provider.';
+        totpStatusEl.textContent = t('security_totp_managed');
         totpBtn.hidden = true;
       } else if (profile.totpEnrolled) {
-        totpStatusEl.textContent = 'Two-factor authentication is enabled.';
-        totpBtnLabel.textContent = 'Reset 2FA';
+        totpStatusEl.textContent = t('security_totp_enabled');
+        totpBtnLabel.textContent = t('security_totp_btn_reset');
         totpBtn.hidden = false;
         totpBtn.className = 'btn btn--danger btn--small';
       } else {
-        totpStatusEl.textContent = 'Two-factor authentication is not enabled.';
-        totpBtnLabel.textContent = 'Enable 2FA';
+        totpStatusEl.textContent = t('security_totp_disabled');
+        totpBtnLabel.textContent = t('security_totp_btn_enable');
         totpBtn.hidden = false;
         totpBtn.className = 'btn btn--primary btn--small';
       }
@@ -1158,9 +1158,9 @@
         var key = $('enroll-manual-key');
         if (key && key.value) {
           navigator.clipboard.writeText(key.value).then(function () {
-            copyBtn.textContent = 'Copied!';
+            copyBtn.textContent = t('copy_feedback_copied');
             setTimeout(function () {
-              copyBtn.textContent = 'Copy';
+              copyBtn.textContent = t('enroll_copy');
             }, 2000);
           }).catch(function () {
             // Fallback: select the input

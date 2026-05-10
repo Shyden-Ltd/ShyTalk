@@ -110,6 +110,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'Profile avatar',
     suspended_reason_label: 'Reason:',
     default_user_name: 'User',
+    recovery_code_sent: 'If an account exists with that email, a recovery code has been sent.',
+    security_totp_managed: 'Two-factor authentication is managed by your sign-in provider.',
+    security_totp_enabled: 'Two-factor authentication is enabled.',
+    security_totp_btn_reset: 'Reset 2FA',
+    security_totp_disabled: 'Two-factor authentication is not enabled.',
+    security_totp_btn_enable: 'Enable 2FA',
+    copy_feedback_copied: 'Copied!',
   },
 
   // ─── Arabic ───
@@ -219,6 +226,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'صورة الملف الشخصي',
     suspended_reason_label: 'السبب:',
     default_user_name: 'المستخدم',
+    recovery_code_sent: 'إذا كان هناك حساب بهذا البريد الإلكتروني، فقد تم إرسال رمز الاسترداد.',
+    security_totp_managed: 'يتم إدارة المصادقة الثنائية بواسطة موفر تسجيل الدخول الخاص بك.',
+    security_totp_enabled: 'المصادقة الثنائية مُفعَّلة.',
+    security_totp_btn_reset: 'إعادة تعيين 2FA',
+    security_totp_disabled: 'المصادقة الثنائية غير مُفعَّلة.',
+    security_totp_btn_enable: 'تفعيل 2FA',
+    copy_feedback_copied: 'تم النسخ!',
   },
 
   // ─── German ───
@@ -316,6 +330,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'Profilbild',
     suspended_reason_label: 'Grund:',
     default_user_name: 'Benutzer',
+    recovery_code_sent: 'Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde ein Wiederherstellungscode gesendet.',
+    security_totp_managed: 'Die Zwei-Faktor-Authentifizierung wird von Ihrem Anmeldeanbieter verwaltet.',
+    security_totp_enabled: 'Die Zwei-Faktor-Authentifizierung ist aktiviert.',
+    security_totp_btn_reset: '2FA zurücksetzen',
+    security_totp_disabled: 'Die Zwei-Faktor-Authentifizierung ist nicht aktiviert.',
+    security_totp_btn_enable: '2FA aktivieren',
+    copy_feedback_copied: 'Kopiert!',
   },
 
   // ─── Spanish ───
@@ -413,6 +434,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'Avatar de perfil',
     suspended_reason_label: 'Motivo:',
     default_user_name: 'Usuario',
+    recovery_code_sent: 'Si existe una cuenta con ese correo electrónico, se ha enviado un código de recuperación.',
+    security_totp_managed: 'La autenticación de dos factores la gestiona tu proveedor de inicio de sesión.',
+    security_totp_enabled: 'La autenticación de dos factores está habilitada.',
+    security_totp_btn_reset: 'Restablecer 2FA',
+    security_totp_disabled: 'La autenticación de dos factores no está habilitada.',
+    security_totp_btn_enable: 'Habilitar 2FA',
+    copy_feedback_copied: '¡Copiado!',
   },
 
   // ─── French ───
@@ -510,6 +538,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'Avatar du profil',
     suspended_reason_label: 'Raison :',
     default_user_name: 'Utilisateur',
+    recovery_code_sent: 'Si un compte existe avec cette adresse e-mail, un code de récupération a été envoyé.',
+    security_totp_managed: 'L\'authentification à deux facteurs est gérée par votre fournisseur de connexion.',
+    security_totp_enabled: 'L\'authentification à deux facteurs est activée.',
+    security_totp_btn_reset: 'Réinitialiser 2FA',
+    security_totp_disabled: 'L\'authentification à deux facteurs n\'est pas activée.',
+    security_totp_btn_enable: 'Activer 2FA',
+    copy_feedback_copied: 'Copié !',
   },
 
   // ─── Hindi ───
@@ -607,6 +642,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'प्रोफ़ाइल अवतार',
     suspended_reason_label: 'कारण:',
     default_user_name: 'उपयोगकर्ता',
+    recovery_code_sent: 'यदि उस ईमेल से कोई खाता मौजूद है, तो एक रिकवरी कोड भेजा गया है।',
+    security_totp_managed: 'दो-कारक प्रमाणीकरण आपके साइन-इन प्रदाता द्वारा प्रबंधित किया जाता है।',
+    security_totp_enabled: 'दो-कारक प्रमाणीकरण सक्षम है।',
+    security_totp_btn_reset: '2FA रीसेट करें',
+    security_totp_disabled: 'दो-कारक प्रमाणीकरण सक्षम नहीं है।',
+    security_totp_btn_enable: '2FA सक्षम करें',
+    copy_feedback_copied: 'कॉपी हो गया!',
   },
 
   // ─── Indonesian ───
@@ -704,6 +746,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'Avatar profil',
     suspended_reason_label: 'Alasan:',
     default_user_name: 'Pengguna',
+    recovery_code_sent: 'Jika akun dengan email tersebut ada, kode pemulihan telah dikirim.',
+    security_totp_managed: 'Otentikasi dua faktor dikelola oleh penyedia masuk Anda.',
+    security_totp_enabled: 'Otentikasi dua faktor diaktifkan.',
+    security_totp_btn_reset: 'Atur Ulang 2FA',
+    security_totp_disabled: 'Otentikasi dua faktor tidak diaktifkan.',
+    security_totp_btn_enable: 'Aktifkan 2FA',
+    copy_feedback_copied: 'Disalin!',
   },
 
   // ─── Italian ───
@@ -801,6 +850,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'Avatar del profilo',
     suspended_reason_label: 'Motivo:',
     default_user_name: 'Utente',
+    recovery_code_sent: 'Se esiste un account con quell\'email, è stato inviato un codice di recupero.',
+    security_totp_managed: 'L\'autenticazione a due fattori è gestita dal tuo provider di accesso.',
+    security_totp_enabled: 'L\'autenticazione a due fattori è abilitata.',
+    security_totp_btn_reset: 'Reimposta 2FA',
+    security_totp_disabled: 'L\'autenticazione a due fattori non è abilitata.',
+    security_totp_btn_enable: 'Abilita 2FA',
+    copy_feedback_copied: 'Copiato!',
   },
 
   // ─── Japanese ───
@@ -898,6 +954,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'プロフィールアバター',
     suspended_reason_label: '理由：',
     default_user_name: 'ユーザー',
+    recovery_code_sent: 'そのメールアドレスのアカウントが存在する場合、リカバリーコードが送信されました。',
+    security_totp_managed: '二要素認証はサインインプロバイダーによって管理されています。',
+    security_totp_enabled: '二要素認証は有効です。',
+    security_totp_btn_reset: '2FAをリセット',
+    security_totp_disabled: '二要素認証は有効になっていません。',
+    security_totp_btn_enable: '2FAを有効にする',
+    copy_feedback_copied: 'コピーしました!',
   },
 
   // ─── Khmer ───
@@ -1007,6 +1070,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'រូបតំណាងប្រវត្តិរូប',
     suspended_reason_label: 'មូលហេតុ:',
     default_user_name: 'អ្នកប្រើប្រាស់',
+    recovery_code_sent: 'ប្រសិនបើមានគណនីដែលមានអ៊ីមែលនោះ លេខកូដស្ដារត្រូវបានផ្ញើ។',
+    security_totp_managed: 'ការផ្ទៀងផ្ទាត់ពីរកត្តាត្រូវបានគ្រប់គ្រងដោយអ្នកផ្ដល់សេវាចូលរបស់អ្នក។',
+    security_totp_enabled: 'ការផ្ទៀងផ្ទាត់ពីរកត្តាត្រូវបានបើក។',
+    security_totp_btn_reset: 'កំណត់ 2FA ឡើងវិញ',
+    security_totp_disabled: 'ការផ្ទៀងផ្ទាត់ពីរកត្តាមិនត្រូវបានបើកទេ។',
+    security_totp_btn_enable: 'បើក 2FA',
+    copy_feedback_copied: 'បានចម្លង!',
   },
 
   // ─── Korean ───
@@ -1104,6 +1174,13 @@ var PORTAL_T = {
     aria_profile_avatar: '프로필 아바타',
     suspended_reason_label: '사유:',
     default_user_name: '사용자',
+    recovery_code_sent: '해당 이메일로 계정이 존재하는 경우 복구 코드가 전송되었습니다.',
+    security_totp_managed: '2단계 인증은 로그인 제공업체에서 관리됩니다.',
+    security_totp_enabled: '2단계 인증이 활성화되어 있습니다.',
+    security_totp_btn_reset: '2FA 재설정',
+    security_totp_disabled: '2단계 인증이 활성화되어 있지 않습니다.',
+    security_totp_btn_enable: '2FA 활성화',
+    copy_feedback_copied: '복사되었습니다!',
   },
 
   // ─── Dutch ───
@@ -1201,6 +1278,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'Profielafbeelding',
     suspended_reason_label: 'Reden:',
     default_user_name: 'Gebruiker',
+    recovery_code_sent: 'Als er een account met dat e-mailadres bestaat, is een herstelcode verzonden.',
+    security_totp_managed: 'Tweefactorauthenticatie wordt beheerd door je aanmeldprovider.',
+    security_totp_enabled: 'Tweefactorauthenticatie is ingeschakeld.',
+    security_totp_btn_reset: '2FA opnieuw instellen',
+    security_totp_disabled: 'Tweefactorauthenticatie is niet ingeschakeld.',
+    security_totp_btn_enable: '2FA inschakelen',
+    copy_feedback_copied: 'Gekopieerd!',
   },
 
   // ─── Polish ───
@@ -1298,6 +1382,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'Awatar profilu',
     suspended_reason_label: 'Powód:',
     default_user_name: 'Użytkownik',
+    recovery_code_sent: 'Jeśli istnieje konto z tym adresem e-mail, kod odzyskiwania został wysłany.',
+    security_totp_managed: 'Uwierzytelnianie dwuetapowe jest zarządzane przez dostawcę logowania.',
+    security_totp_enabled: 'Uwierzytelnianie dwuetapowe jest włączone.',
+    security_totp_btn_reset: 'Zresetuj 2FA',
+    security_totp_disabled: 'Uwierzytelnianie dwuetapowe nie jest włączone.',
+    security_totp_btn_enable: 'Włącz 2FA',
+    copy_feedback_copied: 'Skopiowano!',
   },
 
   // ─── Portuguese ───
@@ -1395,6 +1486,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'Avatar do perfil',
     suspended_reason_label: 'Motivo:',
     default_user_name: 'Usuário',
+    recovery_code_sent: 'Se existe uma conta com esse e-mail, um código de recuperação foi enviado.',
+    security_totp_managed: 'A autenticação de dois fatores é gerenciada pelo seu provedor de login.',
+    security_totp_enabled: 'A autenticação de dois fatores está ativada.',
+    security_totp_btn_reset: 'Redefinir 2FA',
+    security_totp_disabled: 'A autenticação de dois fatores não está ativada.',
+    security_totp_btn_enable: 'Ativar 2FA',
+    copy_feedback_copied: 'Copiado!',
   },
 
   // ─── Russian ───
@@ -1492,6 +1590,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'Аватар профиля',
     suspended_reason_label: 'Причина:',
     default_user_name: 'Пользователь',
+    recovery_code_sent: 'Если аккаунт с этой электронной почтой существует, код восстановления был отправлен.',
+    security_totp_managed: 'Двухфакторная аутентификация управляется вашим поставщиком входа.',
+    security_totp_enabled: 'Двухфакторная аутентификация включена.',
+    security_totp_btn_reset: 'Сбросить 2FA',
+    security_totp_disabled: 'Двухфакторная аутентификация не включена.',
+    security_totp_btn_enable: 'Включить 2FA',
+    copy_feedback_copied: 'Скопировано!',
   },
 
   // ─── Swedish ───
@@ -1589,6 +1694,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'Profilbild',
     suspended_reason_label: 'Orsak:',
     default_user_name: 'Användare',
+    recovery_code_sent: 'Om ett konto med den e-postadressen finns har en återställningskod skickats.',
+    security_totp_managed: 'Tvåstegsautentisering hanteras av din inloggningsleverantör.',
+    security_totp_enabled: 'Tvåstegsautentisering är aktiverad.',
+    security_totp_btn_reset: 'Återställ 2FA',
+    security_totp_disabled: 'Tvåstegsautentisering är inte aktiverad.',
+    security_totp_btn_enable: 'Aktivera 2FA',
+    copy_feedback_copied: 'Kopierat!',
   },
 
   // ─── Thai ───
@@ -1686,6 +1798,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'รูปโปรไฟล์',
     suspended_reason_label: 'เหตุผล:',
     default_user_name: 'ผู้ใช้',
+    recovery_code_sent: 'หากมีบัญชีที่ใช้อีเมลนี้ รหัสกู้คืนได้ถูกส่งแล้ว',
+    security_totp_managed: 'การยืนยันตัวตนสองปัจจัยจัดการโดยผู้ให้บริการเข้าสู่ระบบของคุณ',
+    security_totp_enabled: 'การยืนยันตัวตนสองปัจจัยถูกเปิดใช้งาน',
+    security_totp_btn_reset: 'รีเซ็ต 2FA',
+    security_totp_disabled: 'การยืนยันตัวตนสองปัจจัยไม่ได้เปิดใช้งาน',
+    security_totp_btn_enable: 'เปิดใช้งาน 2FA',
+    copy_feedback_copied: 'คัดลอกแล้ว!',
   },
 
   // ─── Turkish ───
@@ -1783,6 +1902,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'Profil avatarı',
     suspended_reason_label: 'Sebep:',
     default_user_name: 'Kullanıcı',
+    recovery_code_sent: 'Bu e-postayla bir hesap varsa, kurtarma kodu gönderildi.',
+    security_totp_managed: 'İki faktörlü kimlik doğrulama, oturum açma sağlayıcınız tarafından yönetilir.',
+    security_totp_enabled: 'İki faktörlü kimlik doğrulama etkin.',
+    security_totp_btn_reset: '2FA Sıfırla',
+    security_totp_disabled: 'İki faktörlü kimlik doğrulama etkin değil.',
+    security_totp_btn_enable: '2FA Etkinleştir',
+    copy_feedback_copied: 'Kopyalandı!',
   },
 
   // ─── Ukrainian ───
@@ -1880,6 +2006,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'Аватар профілю',
     suspended_reason_label: 'Причина:',
     default_user_name: 'Користувач',
+    recovery_code_sent: 'Якщо обліковий запис із цією електронною поштою існує, код відновлення надіслано.',
+    security_totp_managed: 'Двофакторна автентифікація керується вашим постачальником входу.',
+    security_totp_enabled: 'Двофакторна автентифікація увімкнена.',
+    security_totp_btn_reset: 'Скинути 2FA',
+    security_totp_disabled: 'Двофакторна автентифікація не ввімкнена.',
+    security_totp_btn_enable: 'Увімкнути 2FA',
+    copy_feedback_copied: 'Скопійовано!',
   },
 
   // ─── Vietnamese ───
@@ -1977,6 +2110,13 @@ var PORTAL_T = {
     aria_profile_avatar: 'Ảnh đại diện hồ sơ',
     suspended_reason_label: 'Lý do:',
     default_user_name: 'Người dùng',
+    recovery_code_sent: 'Nếu tài khoản với email đó tồn tại, mã khôi phục đã được gửi.',
+    security_totp_managed: 'Xác thực hai yếu tố được quản lý bởi nhà cung cấp đăng nhập của bạn.',
+    security_totp_enabled: 'Xác thực hai yếu tố đã được bật.',
+    security_totp_btn_reset: 'Đặt lại 2FA',
+    security_totp_disabled: 'Xác thực hai yếu tố chưa được bật.',
+    security_totp_btn_enable: 'Bật 2FA',
+    copy_feedback_copied: 'Đã sao chép!',
   },
 
   // ─── Chinese (Simplified) ───
@@ -2074,6 +2214,13 @@ var PORTAL_T = {
     aria_profile_avatar: '个人资料头像',
     suspended_reason_label: '原因：',
     default_user_name: '用户',
+    recovery_code_sent: '如果使用该邮箱的账户存在，恢复代码已发送。',
+    security_totp_managed: '双重身份验证由您的登录提供商管理。',
+    security_totp_enabled: '双重身份验证已启用。',
+    security_totp_btn_reset: '重置 2FA',
+    security_totp_disabled: '双重身份验证未启用。',
+    security_totp_btn_enable: '启用 2FA',
+    copy_feedback_copied: '已复制！',
   },
 
 };
