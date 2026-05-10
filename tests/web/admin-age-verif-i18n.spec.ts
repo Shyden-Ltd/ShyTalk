@@ -86,6 +86,28 @@ test.describe('Admin age-verification i18n contract', () => {
     }
   });
 
+  test('applyAdminTranslations preserves badge children when key value matches HTML default', async ({ page }) => {
+    // Regression: tab_suggestions and subtab_age_verification are on
+    // <button> elements that contain a child <span class="*-badge">
+    // for notification counts. Setting el.textContent = t[key] would
+    // wipe the badge. The fix: when el.children.length > 0, replace
+    // only the first text node, preserving the badge span.
+    await page.goto(`${BASE}/admin/`);
+    await page.waitForFunction(
+      () => typeof (window as Window & { applyAdminTranslations?: (l: string) => void }).applyAdminTranslations === 'function',
+      undefined,
+      { timeout: 10_000 },
+    );
+    await page.evaluate(() => {
+      const w = window as Window & { applyAdminTranslations?: (l: string) => void };
+      if (typeof w.applyAdminTranslations === 'function') w.applyAdminTranslations('en');
+    });
+    const suggestionsBadge = await page.locator('#tab-suggestions #suggestions-badge').count();
+    expect(suggestionsBadge, 'tab_suggestions badge must survive applyAdminTranslations').toBe(1);
+    const ageBadge = await page.locator('button[data-subtab="age-verif"] #age-verif-pending-badge').count();
+    expect(ageBadge, 'subtab_age_verification badge must survive applyAdminTranslations').toBe(1);
+  });
+
   test('age_verif_panel_subtitle is non-empty (catches placeholder regressions)', async ({ request }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     const src = await res.text();
