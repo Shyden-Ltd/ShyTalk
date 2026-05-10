@@ -41,15 +41,15 @@
 
   var TAG_OPTIONS = [
     { value: "", label: sgT("allTags") },
-    { value: "voice", label: "Voice" },
-    { value: "chat", label: "Chat" },
-    { value: "moderation", label: "Moderation" },
-    { value: "ui", label: "UI/UX" },
-    { value: "privacy", label: "Privacy" },
-    { value: "social", label: "Social" },
-    { value: "economy", label: "Economy" },
-    { value: "accessibility", label: "Accessibility" },
-    { value: "other", label: "Other" },
+    { value: "voice", label: sgT("tagVoice") },
+    { value: "chat", label: sgT("tagChat") },
+    { value: "moderation", label: sgT("tagModeration") },
+    { value: "ui", label: sgT("tagUi") },
+    { value: "privacy", label: sgT("tagPrivacy") },
+    { value: "social", label: sgT("tagSocial") },
+    { value: "economy", label: sgT("tagEconomy") },
+    { value: "accessibility", label: sgT("tagAccessibility") },
+    { value: "other", label: sgT("tagOther") },
   ];
 
   // Language names rendered in their NATIVE form so a user filtering by
