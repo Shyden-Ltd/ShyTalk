@@ -114,6 +114,12 @@
   btn.className = 'stl-lang-btn lang-selector';
   btn.setAttribute('aria-label', 'Change language');
   btn.setAttribute('title', 'Change language');
+  // data-i18n-aria-label keys are picked up by legal-translations.js's
+  // applyLegalTranslations iterator (see PR adding aria-label support).
+  // Translates the button + modal aria-labels for screen reader users in
+  // non-English locales — the modal UI ironically rendered English aria
+  // labels in the very picker users open to leave English.
+  btn.setAttribute('data-i18n-aria-label', 'aria_change_language');
   btn.setAttribute('data-testid', 'language-selector');
   btn.innerHTML = '&#127760;';
   btn.addEventListener('click', openModal);
@@ -125,14 +131,15 @@
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-label', 'Select language');
+  overlay.setAttribute('data-i18n-aria-label', 'aria_select_language_dialog');
   overlay.innerHTML = [
     '<div class="stl-lang-modal">',
     '  <div class="stl-lang-header" style="position:relative">',
     '    <h2 data-i18n="lang_select_title">Select Language</h2>',
-    '    <button class="stl-lang-close" aria-label="Close">&times;</button>',
-    '    <input class="stl-lang-search" type="text" placeholder="Search languages..." aria-label="Search languages">',
+    '    <button class="stl-lang-close" aria-label="Close" data-i18n-aria-label="aria_close">&times;</button>',
+    '    <input class="stl-lang-search" type="text" placeholder="Search languages..." aria-label="Search languages" data-i18n-aria-label="aria_search_languages">',
     '  </div>',
-    '  <div class="stl-lang-list" role="listbox" aria-label="Languages"></div>',
+    '  <div class="stl-lang-list" role="listbox" aria-label="Languages" data-i18n-aria-label="aria_languages_list"></div>',
     '</div>',
   ].join('\n');
   document.body.appendChild(overlay);
