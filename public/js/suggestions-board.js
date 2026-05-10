@@ -796,10 +796,10 @@
                   s.id +
                   '" data-testid="duplicate-match-' +
                   i +
-                  '">Yes, this is what I meant</button>' +
+                  '">' + escapeHtml(sgT("duplicate_match")) + '</button>' +
                   '<button class="sg-btn sg-btn--xs sg-btn--secondary sg-duplicate-diff" data-testid="duplicate-diff-' +
                   i +
-                  '">No, my idea is different</button>' +
+                  '">' + escapeHtml(sgT("duplicate_different")) + '</button>' +
                   "</div>" +
                   "</div>";
               }
