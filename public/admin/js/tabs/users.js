@@ -1215,7 +1215,7 @@ export async function loadSecurityPanel() {
 }
 
 export async function resetPinLockout() {
-  if (!currentUid || !confirm("Reset PIN lockout for this user?")) return;
+  if (!currentUid || !confirm(window.tAdmin("confirm_reset_pin_lockout"))) return;
   try {
     await apiCall("POST", `/api/user/${currentUid}/reset-pin-lockout`);
     showToast("PIN lockout reset");
@@ -1267,7 +1267,7 @@ export function wireModerationListeners() {
     // Symmetry with every other destructive admin action (kick, GCS reset,
     // schedule deletion, IP ban) — one accidental click on a suspended
     // user's profile previously lifted the suspension immediately.
-    if (!confirm("Unsuspend this user? Their account will be fully restored.")) return;
+    if (!confirm(window.tAdmin("confirm_unsuspend_user"))) return;
     unsuspendBtn.disabled = true;
     try {
       const result = await apiCall("POST", `/api/user/${currentUid}/unsuspend`);
@@ -1291,7 +1291,7 @@ export function wireModerationListeners() {
   // GCS reset
   const resetGcsBtn = $("#reset-gcs-btn");
   if (resetGcsBtn) resetGcsBtn.addEventListener("click", async () => {
-    if (!currentUid || !confirm("Reset this user's GCS to 100 and clear all warnings?")) return;
+    if (!currentUid || !confirm(window.tAdmin("confirm_reset_gcs"))) return;
     resetGcsBtn.disabled = true;
     try { await apiCall("POST", `/api/user/${currentUid}/reset-gcs`); showToast("GCS reset to 100"); const data = await apiCall("GET", `/api/user/${currentUid}`); populateGcsSection(data); }
     catch (err) { showToast(err.message, "error"); }
@@ -1327,13 +1327,13 @@ export function wireModerationListeners() {
   const scheduleDeletionBtn = $("#schedule-deletion-btn");
   if (scheduleDeletionBtn) scheduleDeletionBtn.addEventListener("click", async () => {
     const reason = prompt("Enter reason for account deletion (optional):"); if (reason === null) return;
-    if (!confirm("Are you sure you want to schedule this account for deletion?")) return;
-    try { await apiCall("POST", `/api/user/${currentUid}/delete`, { reason }); alert("Account deletion scheduled."); const freshData = await apiCall("GET", `/api/user/${currentUid}`); populateDeletionSection(freshData); }
+    if (!confirm(window.tAdmin("confirm_schedule_deletion"))) return;
+    try { await apiCall("POST", `/api/user/${currentUid}/delete`, { reason }); alert(window.tAdmin("alert_deletion_scheduled")); const freshData = await apiCall("GET", `/api/user/${currentUid}`); populateDeletionSection(freshData); }
     catch (err) { alert("Failed to schedule deletion: " + (err.message || err)); }
   });
   const cancelDeletionBtn = $("#cancel-deletion-btn");
   if (cancelDeletionBtn) cancelDeletionBtn.addEventListener("click", async () => {
-    if (!confirm("Cancel the scheduled account deletion?")) return;
+    if (!confirm(window.tAdmin("confirm_cancel_deletion"))) return;
     try { await apiCall("POST", `/api/user/${currentUid}/cancel-delete`); alert("Account deletion cancelled."); const freshData = await apiCall("GET", `/api/user/${currentUid}`); populateDeletionSection(freshData); }
     catch (err) { alert("Failed to cancel deletion: " + (err.message || err)); }
   });
