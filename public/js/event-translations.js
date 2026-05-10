@@ -41,6 +41,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> Saludos de A\u00f1o Nuevo',
       kny_greetings_p: 'Di \u201cFeliz A\u00f1o Nuevo\u201d en las celebraciones de la regi\u00f3n:',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 Celebrando Choul Chnam Thmey',
+      aria_scroll_to_top: 'Desplazarse hacia arriba',
     },
     zh: {
       kny_hero_subtitle: '\u67ec\u57d4\u5be8\u65b0\u5e74 2026',
@@ -73,6 +74,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> \u65b0\u5e74\u795d\u798f',
       kny_greetings_p: '\u7528\u4e0d\u540c\u8bed\u8a00\u8bf4\u201c\u65b0\u5e74\u5feb\u4e50\u201d\uff1a',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 \u5e86\u795d Choul Chnam Thmey',
+      aria_scroll_to_top: '滚动到顶部',
     },
     fr: {
       kny_hero_subtitle: 'Choul Chnam Thmey 2026',
@@ -108,6 +110,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> V\u0153ux de Nouvel An',
       kny_greetings_p: 'Dites \u00ab\u00a0Bonne ann\u00e9e\u00a0\u00bb dans les c\u00e9l\u00e9brations de la r\u00e9gion\u00a0:',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 C\u00e9l\u00e9brant Choul Chnam Thmey',
+      aria_scroll_to_top: 'Faire défiler vers le haut',
     },
     de: {
       kny_hero_subtitle: 'Choul Chnam Thmey 2026',
@@ -143,6 +146,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> Neujahrsgr\u00fc\u00dfe',
       kny_greetings_p: 'Sagen Sie \u201eFrohes neues Jahr\u201c in den Feierlichkeiten der Region:',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 Choul Chnam Thmey feiern',
+      aria_scroll_to_top: 'Nach oben scrollen',
     },
     ja: {
       kny_hero_subtitle: '\u30c1\u30e7\u30eb\u30fb\u30c1\u30e5\u30ca\u30e0\u30fb\u30c8\u30a5\u30e1\u30a4 2026',
@@ -178,6 +182,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> \u65b0\u5e74\u306e\u6328\u62f6',
       kny_greetings_p: '\u5730\u57df\u306e\u304a\u795d\u3044\u3067\u300c\u65b0\u5e74\u304a\u3081\u3067\u3068\u3046\u300d\u3068\u8a00\u3044\u307e\u3057\u3087\u3046\uff1a',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 \u30c1\u30e7\u30eb\u30fb\u30c1\u30e5\u30ca\u30e0\u30fb\u30c8\u30a5\u30e1\u30a4\u3092\u795d\u3063\u3066',
+      aria_scroll_to_top: '上にスクロール',
     },
     ar: {
       kny_hero_subtitle: '\u062a\u0634\u0648\u0644 \u062a\u0634\u0646\u0627\u0645 \u062b\u0645\u064a 2026',
@@ -213,6 +218,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> \u062a\u062d\u064a\u0627\u062a \u0627\u0644\u0639\u0627\u0645 \u0627\u0644\u062c\u062f\u064a\u062f',
       kny_greetings_p: '\u0642\u0644 "\u0639\u0627\u0645 \u062c\u062f\u064a\u062f \u0633\u0639\u064a\u062f" \u0641\u064a \u0627\u062d\u062a\u0641\u0627\u0644\u0627\u062a \u0627\u0644\u0645\u0646\u0637\u0642\u0629:',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 \u0627\u062d\u062a\u0641\u0627\u0644\u0627\u064b \u0628\u0640 Choul Chnam Thmey',
+      aria_scroll_to_top: 'التمرير إلى الأعلى',
     },
     km: {
       kny_hero_subtitle: '\u1786\u17bc\u179b\u1786\u17d2\u1793\u17b6\u17c6\u1790\u17d2\u1798\u17b8 \u17e2\u17e0\u17e2\u17e6',
@@ -248,6 +254,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> \u1780\u17b6\u179a\u1787\u17bc\u1793\u1796\u179a\u1786\u17d2\u1793\u17b6\u17c6\u1790\u17d2\u1798\u17b8',
       kny_greetings_p: '\u179f\u17bc\u1798\u1793\u17b7\u1799\u17b6\u1799 "\u1787\u17bc\u1793\u1796\u179a\u1786\u17d2\u1793\u17b6\u17c6\u1790\u17d2\u1798\u17b8" \u1793\u17c5\u1780\u17d2\u1793\u17bb\u1784\u1780\u17b6\u179a\u17a2\u1794\u17cb\u17a2\u179a:',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 \u17a2\u0300\u1794\u17cb\u17a2\u179a\u1786\u17bc\u179b\u1786\u17d2\u1793\u17b6\u17c6\u1790\u17d2\u1798\u17b8',
+      aria_scroll_to_top: 'រំកិលទៅខាងលើ',
     },
     hi: {
       kny_hero_subtitle: 'Choul Chnam Thmey 2026',
@@ -283,6 +290,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> \u0928\u0935 \u0935\u0930\u094d\u0937 \u0915\u0940 \u0936\u0941\u092d\u0915\u093e\u092e\u0928\u093e\u090f\u0902',
       kny_greetings_p: '\u0915\u094d\u0937\u0947\u0924\u094d\u0930 \u0915\u0947 \u0909\u0924\u094d\u0938\u0935\u094b\u0902 \u092e\u0947\u0902 "\u0928\u092f\u093e \u0938\u093e\u0932 \u092e\u0941\u092c\u093e\u0930\u0915" \u0915\u0939\u0947\u0902:',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 \u091a\u094c\u0932 \u091b\u094d\u0928\u093e\u092e \u0925\u094d\u092e\u0947\u092f \u0915\u093e \u091c\u0936\u094d\u0928',
+      aria_scroll_to_top: 'ऊपर स्क्रॉल करें',
     },
     id: {
       kny_hero_subtitle: 'Choul Chnam Thmey 2026',
@@ -318,6 +326,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> Ucapan Tahun Baru',
       kny_greetings_p: 'Ucapkan "Selamat Tahun Baru" di perayaan kawasan:',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 Merayakan Choul Chnam Thmey',
+      aria_scroll_to_top: 'Gulir ke atas',
     },
     it: {
       kny_hero_subtitle: 'Choul Chnam Thmey 2026',
@@ -353,6 +362,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> Auguri di Capodanno',
       kny_greetings_p: 'Di "Buon anno" nelle celebrazioni della regione:',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 Celebrando Choul Chnam Thmey',
+      aria_scroll_to_top: 'Scorri verso l\'alto',
     },
     ko: {
       kny_hero_subtitle: '\ucd5c\ub974 \uce20\ub0a8 \ud2b8\uba54\uc774 2026',
@@ -388,6 +398,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> \uc0c8\ud574 \uc778\uc0ac',
       kny_greetings_p: '\uc9c0\uc5ed \ucd95\uc81c\uc5d0\uc11c "\uc0c8\ud574 \ubcf5 \ub9ce\uc774 \ubc1b\uc73c\uc138\uc694":',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 Choul Chnam Thmey\ub97c \ucd95\ud558\ud558\uba70',
+      aria_scroll_to_top: '맨 위로 스크롤',
     },
     nl: {
       kny_hero_subtitle: 'Choul Chnam Thmey 2026',
@@ -423,6 +434,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> Nieuwjaarswensen',
       kny_greetings_p: 'Zeg "Gelukkig Nieuwjaar" in de vieringen:',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 Choul Chnam Thmey vieren',
+      aria_scroll_to_top: 'Scroll naar boven',
     },
     pl: {
       kny_hero_subtitle: 'Choul Chnam Thmey 2026',
@@ -458,6 +470,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> \u017byczenia noworoczne',
       kny_greetings_p: 'Powiedz "Szcz\u0119\u015bliwego Nowego Roku":',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 \u015awi\u0119tujemy Choul Chnam Thmey',
+      aria_scroll_to_top: 'Przewiń do góry',
     },
     pt: {
       kny_hero_subtitle: 'Choul Chnam Thmey 2026',
@@ -493,6 +506,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> Sauda\u00e7\u00f5es de Ano Novo',
       kny_greetings_p: 'Diga "Feliz Ano Novo" nas celebra\u00e7\u00f5es:',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 Celebrando Choul Chnam Thmey',
+      aria_scroll_to_top: 'Rolar para o topo',
     },
     ru: {
       kny_hero_subtitle: '\u0427\u043e\u043b \u0427\u043d\u0430\u043c \u0422\u0445\u043c\u044d\u0439 2026',
@@ -528,6 +542,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> \u041d\u043e\u0432\u043e\u0433\u043e\u0434\u043d\u0438\u0435 \u043f\u043e\u0437\u0434\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u044f',
       kny_greetings_p: '\u0421\u043a\u0430\u0436\u0438\u0442\u0435 "\u0421 \u041d\u043e\u0432\u044b\u043c \u0433\u043e\u0434\u043e\u043c":',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 \u041f\u0440\u0430\u0437\u0434\u043d\u0443\u0435\u043c Choul Chnam Thmey',
+      aria_scroll_to_top: 'Прокрутить вверх',
     },
     sv: {
       kny_hero_subtitle: 'Choul Chnam Thmey 2026',
@@ -563,6 +578,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> Ny\u00e5rsh\u00e4lsningar',
       kny_greetings_p: 'S\u00e4g "Gott nytt \u00e5r":',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 Firar Choul Chnam Thmey',
+      aria_scroll_to_top: 'Bläddra till toppen',
     },
     th: {
       kny_hero_subtitle: '\u0e08\u0e38\u0e25\u0e08\u0e19\u0e33\u0e17\u0e40\u0e21\u0e22 2026',
@@ -598,6 +614,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> \u0e04\u0e33\u0e2d\u0e27\u0e22\u0e1e\u0e23\u0e1b\u0e35\u0e43\u0e2b\u0e21\u0e48',
       kny_greetings_p: '\u0e01\u0e25\u0e48\u0e32\u0e27 "\u0e2a\u0e27\u0e31\u0e2a\u0e14\u0e35\u0e1b\u0e35\u0e43\u0e2b\u0e21\u0e48":',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 \u0e09\u0e25\u0e2d\u0e07 Choul Chnam Thmey',
+      aria_scroll_to_top: 'เลื่อนขึ้นด้านบน',
     },
     tr: {
       kny_hero_subtitle: 'Choul Chnam Thmey 2026',
@@ -633,6 +650,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> Y\u0131lba\u015f\u0131 kutlamalar\u0131',
       kny_greetings_p: '"Mutlu Y\u0131llar" deyin:',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 Choul Chnam Thmey kutlamalar\u0131',
+      aria_scroll_to_top: 'Yukarı kaydır',
     },
     uk: {
       kny_hero_subtitle: '\u0427\u043e\u043b \u0427\u043d\u0430\u043c \u0422\u0445\u043c\u0435\u0439 2026',
@@ -668,6 +686,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> \u041d\u043e\u0432\u043e\u0440\u0456\u0447\u043d\u0456 \u043f\u0440\u0438\u0432\u0456\u0442\u0430\u043d\u043d\u044f',
       kny_greetings_p: '\u0421\u043a\u0430\u0436\u0456\u0442\u044c "\u0417 \u041d\u043e\u0432\u0438\u043c \u0440\u043e\u043a\u043e\u043c":',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 \u0421\u0432\u044f\u0442\u043a\u0443\u0454\u043c\u043e Choul Chnam Thmey',
+      aria_scroll_to_top: 'Прокрутити вгору',
     },
     vi: {
       kny_hero_subtitle: 'Choul Chnam Thmey 2026',
@@ -703,6 +722,7 @@ var EVENT_T = {
       kny_greetings_h: '<span class="icon" aria-hidden="true">\ud83d\ude4f</span> L\u1eddi ch\u00fac n\u0103m m\u1edbi',
       kny_greetings_p: 'N\u00f3i "Ch\u00fac m\u1eebng n\u0103m m\u1edbi":',
       kny_footer: '\u00a9 2026 ShyTalk \u00b7 Ch\u00fac m\u1eebng Choul Chnam Thmey',
+      aria_scroll_to_top: 'Cuộn lên đầu',
     },
   },
 };
@@ -713,6 +733,13 @@ function applyEventTranslations(eventSlug, lang) {
   document.querySelectorAll('[data-i18n]').forEach(function(el) {
     var key = el.getAttribute('data-i18n');
     if (t[key]) el.innerHTML = t[key];
+  });
+  // Screen-reader label translations. Walked separately so future keys
+  // can localise aria-label without bleeding into innerHTML — same pattern
+  // as legal-translations.js's applyLegalTranslations.
+  document.querySelectorAll('[data-i18n-aria-label]').forEach(function(el) {
+    var key = el.getAttribute('data-i18n-aria-label');
+    if (t[key]) el.setAttribute('aria-label', t[key]);
   });
   document.documentElement.lang = lang;
 }
