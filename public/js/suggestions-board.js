@@ -200,20 +200,36 @@
 
   function relativeTime(dateStr) {
     if (!dateStr) return "";
+    // Use Intl.RelativeTimeFormat for locale-aware compact relative times
+    // ("5m ago" / "5분 전" / "il y a 5 min"). All 20 supported locales have
+    // browser-native formatting — no project-side translations needed.
+    // Read the current language fresh on each call so the timestamp updates
+    // when the user switches locale post-load.
+    var lang = (window.ShyTalkLanguage && window.ShyTalkLanguage.get())
+      || (navigator.language || "en").slice(0, 2);
+    var rtf;
+    try {
+      rtf = new Intl.RelativeTimeFormat(lang, { style: "narrow", numeric: "auto" });
+    } catch (e) {
+      // Fallback for unsupported locales — RFT spec-compliant browsers
+      // accept any BCP-47 tag, but be defensive.
+      rtf = new Intl.RelativeTimeFormat("en", { style: "narrow", numeric: "auto" });
+    }
     var now = Date.now();
     var then = new Date(dateStr).getTime();
     var diffSec = Math.floor((now - then) / 1000);
-    if (diffSec < 60) return "just now";
+    // numeric:"auto" returns the locale's "now" / "지금" / etc. for 0-unit deltas.
+    if (diffSec < 60) return rtf.format(0, "second");
     var diffMin = Math.floor(diffSec / 60);
-    if (diffMin < 60) return diffMin + "m ago";
+    if (diffMin < 60) return rtf.format(-diffMin, "minute");
     var diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return diffHr + "h ago";
+    if (diffHr < 24) return rtf.format(-diffHr, "hour");
     var diffDay = Math.floor(diffHr / 24);
-    if (diffDay < 30) return diffDay + "d ago";
+    if (diffDay < 30) return rtf.format(-diffDay, "day");
     var diffMon = Math.floor(diffDay / 30);
-    if (diffMon < 12) return diffMon + "mo ago";
+    if (diffMon < 12) return rtf.format(-diffMon, "month");
     var diffYr = Math.floor(diffMon / 12);
-    return diffYr + "y ago";
+    return rtf.format(-diffYr, "year");
   }
 
   function statusBadgeClass(status) {
