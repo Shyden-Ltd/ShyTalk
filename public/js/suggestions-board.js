@@ -83,19 +83,19 @@
   ];
 
   var SUBSCRIBE_EVENTS = [
-    { key: "newSuggestion", label: "New suggestions posted" },
-    { key: "statusChange", label: "Suggestion status changes" },
-    { key: "commentReply", label: "Replies to your comments" },
-    { key: "watchedUpdate", label: "Updates on watched suggestions" },
+    { key: "newSuggestion", label: sgT("subscribe_event_new_suggestion") },
+    { key: "statusChange", label: sgT("subscribe_event_status_change") },
+    { key: "commentReply", label: sgT("subscribe_event_comment_reply") },
+    { key: "watchedUpdate", label: sgT("subscribe_event_watched_update") },
   ];
 
   var SUBSCRIBE_CHANNELS = ["email", "push", "inApp", "systemMessage"];
 
   var CHANNEL_LABELS = {
-    email: "Email",
-    push: "Push",
-    inApp: "In-App",
-    systemMessage: "System Message",
+    email: sgT("subscribe_channel_email"),
+    push: sgT("subscribe_channel_push"),
+    inApp: sgT("subscribe_channel_inapp"),
+    systemMessage: sgT("subscribe_channel_system"),
   };
 
   // ── State ──
@@ -555,7 +555,7 @@
 
     saveBtn.addEventListener("click", function () {
       saveBtn.disabled = true;
-      saveBtn.textContent = "Saving...";
+      saveBtn.textContent = sgT("subscribe_btn_saving");
 
       // Collect toggled values
       var prefs = {};
@@ -573,13 +573,17 @@
 
       saveSubscriptionPrefs({ preferences: prefs, gdprEmailConsent: true })
         .then(function () {
-          showToast("Subscription preferences saved");
+          showToast(sgT("subscribe_toast_saved"));
           close();
         })
         .catch(function (err) {
-          showToast("Failed to save: " + (err.message || "Unknown error"));
+          showToast(
+            sgT("subscribe_toast_save_failed") +
+              ": " +
+              (err.message || sgT("subscribe_unknown_error")),
+          );
           saveBtn.disabled = false;
-          saveBtn.textContent = "Save";
+          saveBtn.textContent = sgT("save");
         });
     });
   }
@@ -592,7 +596,9 @@
     html += '<div class="sg-subscribe-grid">';
     html += '<div class="sg-subscribe-row sg-subscribe-row--header">';
     html +=
-      '<div class="sg-subscribe-cell sg-subscribe-cell--event">Event</div>';
+      '<div class="sg-subscribe-cell sg-subscribe-cell--event">' +
+      escapeHtml(sgT("subscribe_event_header")) +
+      "</div>";
     for (var c = 0; c < SUBSCRIBE_CHANNELS.length; c++) {
       html +=
         '<div class="sg-subscribe-cell sg-subscribe-cell--channel">' +
