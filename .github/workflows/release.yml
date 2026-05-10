@@ -76,7 +76,12 @@ jobs:
           # another release commit — the operator must explicitly choose
           # whether the second click was intentional.
           LATEST_SUBJECT=$(git log -1 --format='%s')
-          if echo "$LATEST_SUBJECT" | grep -qE '^chore: release v[0-9]+\.[0-9]+\.[0-9]+$'; then
+          # Accept optional ` (#NNN)` suffix because squash-merged
+          # release PRs land on main with that PR-number suffix
+          # appended by GitHub. Without the optional group, this guard
+          # would FAIL to detect a just-merged release as a release
+          # commit and would happily double-bump on top of it.
+          if echo "$LATEST_SUBJECT" | grep -qE '^chore: release v[0-9]+\.[0-9]+\.[0-9]+( \(#[0-9]+\))?$'; then
             echo "::error::HEAD is already a release commit ('$LATEST_SUBJECT'). Refusing to bump on top of an existing release. If this was intentional (e.g. publishing a same-content re-tag), do it manually."
             exit 1
           fi

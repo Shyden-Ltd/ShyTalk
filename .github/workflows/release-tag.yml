@@ -59,8 +59,13 @@ jobs:
           SUBJECT_FIRST_LINE=$(printf '%s\n' "$HEAD_COMMIT_MESSAGE" | head -1)
           echo "Latest commit subject: '$SUBJECT_FIRST_LINE'"
 
-          if echo "$SUBJECT_FIRST_LINE" | grep -qE '^chore: release v[0-9]+\.[0-9]+\.[0-9]+$'; then
-            VERSION=$(echo "$SUBJECT_FIRST_LINE" | sed -E 's/^chore: release v([0-9]+\.[0-9]+\.[0-9]+)$/\1/')
+          # GitHub's squash-merge auto-appends a ` (#NNN)` PR-number
+          # suffix to the squashed commit's first line. The regex
+          # accepts that suffix as optional so this workflow fires
+          # for both squash-merged release PRs (the normal path) and
+          # hand-rolled `chore: release v...` commits without a PR.
+          if echo "$SUBJECT_FIRST_LINE" | grep -qE '^chore: release v[0-9]+\.[0-9]+\.[0-9]+( \(#[0-9]+\))?$'; then
+            VERSION=$(echo "$SUBJECT_FIRST_LINE" | sed -E 's/^chore: release v([0-9]+\.[0-9]+\.[0-9]+)( \(#[0-9]+\))?$/\1/')
             echo "is_release=true" >> "$GITHUB_OUTPUT"
             echo "version=$VERSION" >> "$GITHUB_OUTPUT"
             echo "Detected release commit for v${VERSION}"
