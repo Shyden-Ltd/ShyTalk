@@ -339,7 +339,11 @@
         renderBoard();
       })
       .catch(function (err) {
-        showToast("Vote failed: " + (err.message || "Unknown error"));
+        showToast(
+          sgT("toast_vote_failed") +
+            ": " +
+            (err.message || sgT("unknown_error")),
+        );
       });
   }
 
@@ -840,7 +844,7 @@
               for (var m = 0; m < matchBtns.length; m++) {
                 matchBtns[m].addEventListener("click", function () {
                   close();
-                  showToast("Redirecting to existing suggestion");
+                  showToast(sgT("toast_redirecting_to_existing"));
                 });
               }
 
@@ -871,15 +875,17 @@
     submitBtn.addEventListener("click", function () {
       if (submitBtn.disabled) return;
       submitBtn.disabled = true;
-      submitBtn.textContent = "Submitting...";
+      submitBtn.textContent = sgT("btn_submitting");
 
       // Check blocked topics first
       checkBlockedTopics(titleInput.value.trim())
         .then(function (data) {
           if (data.blocked) {
-            showToast("This topic is not allowed: " + (data.reason || ""));
+            showToast(
+              sgT("toast_topic_not_allowed") + ": " + (data.reason || ""),
+            );
             submitBtn.disabled = false;
-            submitBtn.textContent = "Submit";
+            submitBtn.textContent = sgT("submit");
             return;
           }
 
@@ -890,17 +896,19 @@
             langSelect.value,
             contactCheckbox.checked,
           ).then(function () {
-            showToast(
-              "Suggestion submitted! It will be reviewed before publishing.",
-            );
+            showToast(sgT("toast_suggestion_submitted"));
             close();
             fetchSuggestions();
           });
         })
         .catch(function (err) {
-          showToast("Failed to submit: " + (err.message || "Unknown error"));
+          showToast(
+            sgT("toast_submit_failed") +
+              ": " +
+              (err.message || sgT("unknown_error")),
+          );
           submitBtn.disabled = false;
-          submitBtn.textContent = "Submit";
+          submitBtn.textContent = sgT("submit");
         });
     });
   }
@@ -1457,19 +1465,21 @@
 
         var btn = this;
         btn.disabled = true;
-        btn.textContent = "Posting...";
+        btn.textContent = sgT("btn_posting");
 
         submitComment(suggestionId, text)
           .then(function () {
-            showToast("Comment posted");
+            showToast(sgT("toast_comment_posted"));
             fetchSuggestions();
           })
           .catch(function (err) {
             showToast(
-              "Failed to post comment: " + (err.message || "Unknown error"),
+              sgT("toast_post_comment_failed") +
+                ": " +
+                (err.message || sgT("unknown_error")),
             );
             btn.disabled = false;
-            btn.textContent = "Post";
+            btn.textContent = sgT("postComment");
           });
       });
     }
