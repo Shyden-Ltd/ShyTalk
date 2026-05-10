@@ -1083,7 +1083,7 @@ function renderWarningItem(w, uid) {
 }
 
 export async function revokeWarning(uid, warningId, deduction, btn) {
-  if (!confirm("Revoke this warning? +" + deduction + " GCS will be restored.")) return;
+  if (!confirm(window.tAdminFmt("confirm_revoke_warning", { deduction }))) return;
   btn.disabled = true; btn.textContent = "...";
   try {
     await apiCall("POST", "/api/user/" + uid + "/warnings/" + warningId + "/revoke");
@@ -1226,7 +1226,7 @@ export async function resetPinLockout() {
 }
 
 export async function revokeBiometricKey(uniqueId, deviceId) {
-  if (!confirm("Revoke biometric key for device " + deviceId + "?")) return;
+  if (!confirm(window.tAdminFmt("confirm_revoke_biometric", { deviceId }))) return;
   try {
     await apiCall("DELETE", `/api/user/${uniqueId}/biometric-keys/${deviceId}`);
     showToast("Biometric key revoked");
@@ -1308,7 +1308,7 @@ export function wireModerationListeners() {
     if (!reason) { showToast("Select a reason", "error"); return; }
     const severity = parseInt(document.querySelector('input[name="direct-warn-severity"]:checked')?.value || "3");
     const adminNote = $("#direct-warn-note")?.value?.trim() || undefined;
-    if (!confirm("Issue a warning for \"" + reason + "\" (severity " + severity + ", -" + severity * 5 + " GCS)?")) return;
+    if (!confirm(window.tAdminFmt("confirm_issue_warning", { reason, severity, deduction: severity * 5 }))) return;
     directWarnBtn.disabled = true; directWarnBtn.textContent = "Issuing...";
     try {
       const result = await apiCall("POST", `/api/user/${currentUid}/warn`, { reason, severity, adminNote });
@@ -1329,13 +1329,13 @@ export function wireModerationListeners() {
     const reason = prompt("Enter reason for account deletion (optional):"); if (reason === null) return;
     if (!confirm(window.tAdmin("confirm_schedule_deletion"))) return;
     try { await apiCall("POST", `/api/user/${currentUid}/delete`, { reason }); alert(window.tAdmin("alert_deletion_scheduled")); const freshData = await apiCall("GET", `/api/user/${currentUid}`); populateDeletionSection(freshData); }
-    catch (err) { alert("Failed to schedule deletion: " + (err.message || err)); }
+    catch (err) { alert(window.tAdminFmt("alert_schedule_deletion_failed", { error: err.message || err })); }
   });
   const cancelDeletionBtn = $("#cancel-deletion-btn");
   if (cancelDeletionBtn) cancelDeletionBtn.addEventListener("click", async () => {
     if (!confirm(window.tAdmin("confirm_cancel_deletion"))) return;
     try { await apiCall("POST", `/api/user/${currentUid}/cancel-delete`); alert(window.tAdmin("alert_deletion_cancelled")); const freshData = await apiCall("GET", `/api/user/${currentUid}`); populateDeletionSection(freshData); }
-    catch (err) { alert("Failed to cancel deletion: " + (err.message || err)); }
+    catch (err) { alert(window.tAdminFmt("alert_cancel_deletion_failed", { error: err.message || err })); }
   });
   // Reset device binding
   const resetDeviceBtn = document.getElementById("reset-device-binding-btn");
@@ -1858,7 +1858,7 @@ export function wireBansListeners() {
       const devices = devicesData.devices || [];
       const lastDevice = devices.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0))[0];
       if (!lastDevice || !lastDevice.lastIp) { showToast("No IP address found", "error"); return; }
-      if (!confirm("Ban IP " + lastDevice.lastIp + "?")) return;
+      if (!confirm(window.tAdminFmt("confirm_ban_ip", { ip: lastDevice.lastIp }))) return;
       const reason = prompt("Reason (optional):") || "";
       // Returns pms: { failed, total } per admin-bans.js POST /admin/bans/network.
       const result = await apiCall("POST", "/api/admin/bans/network", { type: "ip", value: lastDevice.lastIp, reason, linkedUniqueId: currentUid });
@@ -1880,7 +1880,7 @@ export function wireBansListeners() {
   if (viewLogsBtn) viewLogsBtn.addEventListener("click", () => { if (!currentUid) return; const logsUserFilter = $("#log-filter-userId"); if (logsUserFilter) logsUserFilter.value = currentUid; _switchTab("logs"); });
   // Identity graph suspend/unsuspend (tabular version)
   const igSuspendBtn = $("#ig-suspend-btn");
-  if (igSuspendBtn) igSuspendBtn.addEventListener("click", async () => { if (!currentUid) return; const duration = $("#ig-duration-picker")?.value; const scope = $("#ig-scope-picker")?.value; if (!confirm("Suspend identity graph for this user (" + duration + ", " + scope + ")?")) return; try { await apiCall("PUT", `/api/admin/bans/graph/${currentUid}`, { action: "suspend", duration, scope }); showToast("Identity graph suspended", "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } });
+  if (igSuspendBtn) igSuspendBtn.addEventListener("click", async () => { if (!currentUid) return; const duration = $("#ig-duration-picker")?.value; const scope = $("#ig-scope-picker")?.value; if (!confirm(window.tAdminFmt("confirm_suspend_identity_graph", { duration, scope }))) return; try { await apiCall("PUT", `/api/admin/bans/graph/${currentUid}`, { action: "suspend", duration, scope }); showToast("Identity graph suspended", "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } });
   const igUnsuspendBtn = $("#ig-unsuspend-btn");
   if (igUnsuspendBtn) igUnsuspendBtn.addEventListener("click", async () => { if (!currentUid) return; if (!confirm(window.tAdmin("confirm_unsuspend_identity_graph"))) return; try { await apiCall("PUT", `/api/admin/bans/graph/${currentUid}`, { action: "unsuspend" }); showToast("Identity graph unsuspended", "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } });
 }
