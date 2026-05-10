@@ -1334,14 +1334,14 @@ export function wireModerationListeners() {
   const cancelDeletionBtn = $("#cancel-deletion-btn");
   if (cancelDeletionBtn) cancelDeletionBtn.addEventListener("click", async () => {
     if (!confirm(window.tAdmin("confirm_cancel_deletion"))) return;
-    try { await apiCall("POST", `/api/user/${currentUid}/cancel-delete`); alert("Account deletion cancelled."); const freshData = await apiCall("GET", `/api/user/${currentUid}`); populateDeletionSection(freshData); }
+    try { await apiCall("POST", `/api/user/${currentUid}/cancel-delete`); alert(window.tAdmin("alert_deletion_cancelled")); const freshData = await apiCall("GET", `/api/user/${currentUid}`); populateDeletionSection(freshData); }
     catch (err) { alert("Failed to cancel deletion: " + (err.message || err)); }
   });
   // Reset device binding
   const resetDeviceBtn = document.getElementById("reset-device-binding-btn");
   if (resetDeviceBtn) resetDeviceBtn.addEventListener("click", async () => {
     if (!currentUid) { showToast("No user loaded", "error"); return; }
-    if (!confirm("Remove all device bindings for this user?")) return;
+    if (!confirm(window.tAdmin("confirm_remove_all_device_bindings"))) return;
     resetDeviceBtn.disabled = true; resetDeviceBtn.textContent = "Resetting...";
     try { const result = await apiCall("POST", `/api/cleanup/device-binding/${currentUid}`); showToast("Removed " + (result.deleted || 0) + " device binding(s)", "success"); populateDeviceBindingCard(currentUid); }
     catch (err) { showToast("Failed: " + err.message, "error"); }
@@ -1653,13 +1653,13 @@ export async function populateBansSection(uid) {
     const deviceBans = bansData.deviceBans || [];
     if (bansDeviceList) {
       if (deviceBans.length === 0) { bansDeviceList.innerHTML = '<div style="color:var(--text2);font-size:12px;font-style:italic;">No device bans</div>'; }
-      else { bansDeviceList.textContent = ""; deviceBans.forEach(b => { const item = document.createElement("div"); item.className = "ban-item"; item.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;"; const info = document.createElement("div"); info.className = "ban-item-info"; info.style.flex = "1"; const idSpan = document.createElement("span"); idSpan.textContent = b.deviceId || b.id; const detailSpan = document.createElement("span"); detailSpan.className = "ban-item-type"; detailSpan.textContent = (b.reason || "No reason") + " | " + (b.duration || "permanent") + (b.autoApplied ? " (auto)" : ""); info.appendChild(idSpan); info.appendChild(detailSpan); item.appendChild(info); const removeBtn = document.createElement("button"); removeBtn.textContent = "Remove"; removeBtn.style.cssText = "padding:4px 10px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;background:var(--danger);color:#fff;white-space:nowrap;"; removeBtn.addEventListener("click", async () => { if (!confirm("Remove this device ban?")) return; try { await apiCall("DELETE", "/api/admin/bans/device/" + encodeURIComponent(b.deviceId || b.id)); showToast("Device ban removed", "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } }); item.appendChild(removeBtn); bansDeviceList.appendChild(item); }); }
+      else { bansDeviceList.textContent = ""; deviceBans.forEach(b => { const item = document.createElement("div"); item.className = "ban-item"; item.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;"; const info = document.createElement("div"); info.className = "ban-item-info"; info.style.flex = "1"; const idSpan = document.createElement("span"); idSpan.textContent = b.deviceId || b.id; const detailSpan = document.createElement("span"); detailSpan.className = "ban-item-type"; detailSpan.textContent = (b.reason || "No reason") + " | " + (b.duration || "permanent") + (b.autoApplied ? " (auto)" : ""); info.appendChild(idSpan); info.appendChild(detailSpan); item.appendChild(info); const removeBtn = document.createElement("button"); removeBtn.textContent = "Remove"; removeBtn.style.cssText = "padding:4px 10px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;background:var(--danger);color:#fff;white-space:nowrap;"; removeBtn.addEventListener("click", async () => { if (!confirm(window.tAdmin("confirm_remove_device_ban"))) return; try { await apiCall("DELETE", "/api/admin/bans/device/" + encodeURIComponent(b.deviceId || b.id)); showToast("Device ban removed", "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } }); item.appendChild(removeBtn); bansDeviceList.appendChild(item); }); }
     }
     // Network bans
     const networkBans = bansData.networkBans || [];
     if (bansNetworkList) {
       if (networkBans.length === 0) { bansNetworkList.innerHTML = '<div style="color:var(--text2);font-size:12px;font-style:italic;">No network bans</div>'; }
-      else { bansNetworkList.textContent = ""; networkBans.forEach(b => { const item = document.createElement("div"); item.className = "ban-item"; item.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;"; const info = document.createElement("div"); info.className = "ban-item-info"; info.style.flex = "1"; const valSpan = document.createElement("span"); valSpan.textContent = (b.value || b.id) + " (" + (b.type || "ip") + ")"; const detailSpan = document.createElement("span"); detailSpan.className = "ban-item-type"; detailSpan.textContent = (b.reason || "No reason") + " | " + (b.duration || "permanent") + (b.autoApplied ? " (auto)" : ""); info.appendChild(valSpan); info.appendChild(detailSpan); item.appendChild(info); const removeBtn = document.createElement("button"); removeBtn.textContent = "Remove"; removeBtn.style.cssText = "padding:4px 10px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;background:var(--danger);color:#fff;white-space:nowrap;"; removeBtn.addEventListener("click", async () => { if (!confirm("Remove this network ban?")) return; try { await apiCall("DELETE", "/api/admin/bans/network/" + encodeURIComponent(b.id)); showToast("Network ban removed", "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } }); item.appendChild(removeBtn); bansNetworkList.appendChild(item); }); }
+      else { bansNetworkList.textContent = ""; networkBans.forEach(b => { const item = document.createElement("div"); item.className = "ban-item"; item.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;"; const info = document.createElement("div"); info.className = "ban-item-info"; info.style.flex = "1"; const valSpan = document.createElement("span"); valSpan.textContent = (b.value || b.id) + " (" + (b.type || "ip") + ")"; const detailSpan = document.createElement("span"); detailSpan.className = "ban-item-type"; detailSpan.textContent = (b.reason || "No reason") + " | " + (b.duration || "permanent") + (b.autoApplied ? " (auto)" : ""); info.appendChild(valSpan); info.appendChild(detailSpan); item.appendChild(info); const removeBtn = document.createElement("button"); removeBtn.textContent = "Remove"; removeBtn.style.cssText = "padding:4px 10px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;background:var(--danger);color:#fff;white-space:nowrap;"; removeBtn.addEventListener("click", async () => { if (!confirm(window.tAdmin("confirm_remove_network_ban"))) return; try { await apiCall("DELETE", "/api/admin/bans/network/" + encodeURIComponent(b.id)); showToast("Network ban removed", "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } }); item.appendChild(removeBtn); bansNetworkList.appendChild(item); }); }
     }
     // Bound devices
     const devices = devicesData.devices || [];
@@ -1800,7 +1800,7 @@ export function wireBansListeners() {
           populateBansSection(currentUid);
         } catch (err) { showToast(err.message, "error"); }
       } else if (action === "unban") {
-        if (!confirm("Unban this device?")) return;
+        if (!confirm(window.tAdmin("confirm_unban_device"))) return;
         try {
           await apiCall("DELETE", `/api/admin/bans/device/${deviceId}`);
           showToast("Device unbanned", "success");
@@ -1812,7 +1812,7 @@ export function wireBansListeners() {
   const banAllBtn = $("#bans-ban-all-devices");
   if (banAllBtn) banAllBtn.addEventListener("click", async () => {
     if (!currentUid) return;
-    if (!confirm("Ban all devices for this user?")) return;
+    if (!confirm(window.tAdmin("confirm_ban_all_devices"))) return;
     const reason = prompt("Reason (optional):") || "";
     try {
       const devicesData = await apiCall("GET", `/api/admin/devices/user/${currentUid}`);
@@ -1869,7 +1869,7 @@ export function wireBansListeners() {
   const unbanAllBtn = $("#bans-unban-all");
   if (unbanAllBtn) unbanAllBtn.addEventListener("click", async () => {
     if (!currentUid) return;
-    if (!confirm("Remove all bans for this user?")) return;
+    if (!confirm(window.tAdmin("confirm_remove_all_bans"))) return;
     try {
       const result = await apiCall("POST", `/api/admin/bans/unban-all/${currentUid}`);
       window.PartialFailureToast?.showResultToast(showToast, result, "Removed " + (result.removed || 0) + " ban(s)");
@@ -1882,7 +1882,7 @@ export function wireBansListeners() {
   const igSuspendBtn = $("#ig-suspend-btn");
   if (igSuspendBtn) igSuspendBtn.addEventListener("click", async () => { if (!currentUid) return; const duration = $("#ig-duration-picker")?.value; const scope = $("#ig-scope-picker")?.value; if (!confirm("Suspend identity graph for this user (" + duration + ", " + scope + ")?")) return; try { await apiCall("PUT", `/api/admin/bans/graph/${currentUid}`, { action: "suspend", duration, scope }); showToast("Identity graph suspended", "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } });
   const igUnsuspendBtn = $("#ig-unsuspend-btn");
-  if (igUnsuspendBtn) igUnsuspendBtn.addEventListener("click", async () => { if (!currentUid) return; if (!confirm("Unsuspend identity graph for this user?")) return; try { await apiCall("PUT", `/api/admin/bans/graph/${currentUid}`, { action: "unsuspend" }); showToast("Identity graph unsuspended", "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } });
+  if (igUnsuspendBtn) igUnsuspendBtn.addEventListener("click", async () => { if (!currentUid) return; if (!confirm(window.tAdmin("confirm_unsuspend_identity_graph"))) return; try { await apiCall("PUT", `/api/admin/bans/graph/${currentUid}`, { action: "unsuspend" }); showToast("Identity graph unsuspended", "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } });
 }
 
 export function wireTempIdListeners() {
@@ -1891,7 +1891,7 @@ export function wireTempIdListeners() {
   const applyBtn = document.getElementById("temp-id-apply");
   if (applyBtn) applyBtn.addEventListener("click", async () => { if (!currentUid) return; const id = parseInt(document.getElementById("temp-id-input")?.value); const expiryVal = document.getElementById("temp-id-expiry")?.value; if (!id || id < 10000000) { showToast("ID must be at least 10000000", "error"); return; } if (!expiryVal) { showToast("Set an expiry date", "error"); return; } const expiryDate = new Date(expiryVal).getTime(); if (expiryDate <= Date.now()) { showToast("Expiry must be in the future", "error"); return; } try { await apiCall("POST", `/api/admin/users/${currentUid}/temp-id`, { tempUniqueId: id, expiryDate }); showToast("Temporary ID applied", "success"); const currentEl = document.getElementById("temp-id-current"); if (currentEl) currentEl.innerHTML = "Active temp ID: <strong>" + escapeHtml(String(id)) + "</strong> (expires " + escapeHtml(new Date(expiryDate).toLocaleString()) + ")"; const resultEl = document.getElementById("temp-id-check-result"); if (resultEl) resultEl.textContent = ""; } catch (err) { showToast(err.message || "Failed to apply temp ID", "error"); } });
   const clearBtn = document.getElementById("temp-id-clear");
-  if (clearBtn) clearBtn.addEventListener("click", async () => { if (!currentUid) return; if (!confirm("Clear the temporary ID?")) return; try { await apiCall("DELETE", `/api/admin/users/${currentUid}/temp-id`); showToast("Temporary ID cleared", "success"); const inputEl = document.getElementById("temp-id-input"); if (inputEl) inputEl.value = ""; const expiryEl = document.getElementById("temp-id-expiry"); if (expiryEl) expiryEl.value = ""; const currentEl = document.getElementById("temp-id-current"); if (currentEl) currentEl.textContent = "No temporary ID set"; const resultEl = document.getElementById("temp-id-check-result"); if (resultEl) resultEl.textContent = ""; } catch (err) { showToast(err.message || "Failed to clear temp ID", "error"); } });
+  if (clearBtn) clearBtn.addEventListener("click", async () => { if (!currentUid) return; if (!confirm(window.tAdmin("confirm_clear_temp_id"))) return; try { await apiCall("DELETE", `/api/admin/users/${currentUid}/temp-id`); showToast("Temporary ID cleared", "success"); const inputEl = document.getElementById("temp-id-input"); if (inputEl) inputEl.value = ""; const expiryEl = document.getElementById("temp-id-expiry"); if (expiryEl) expiryEl.value = ""; const currentEl = document.getElementById("temp-id-current"); if (currentEl) currentEl.textContent = "No temporary ID set"; const resultEl = document.getElementById("temp-id-check-result"); if (resultEl) resultEl.textContent = ""; } catch (err) { showToast(err.message || "Failed to clear temp ID", "error"); } });
 }
 
 export function wirePreviewListeners() {
