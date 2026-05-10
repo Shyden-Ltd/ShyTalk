@@ -160,7 +160,7 @@ async function doSearchFinal() {
   if (!q) return;
   await _flushNotifications();
   searchBtnEl.disabled = true;
-  searchBtnEl.textContent = "Searching...";
+  searchBtnEl.textContent = window.tAdmin("btn_searching");
   userFormEl.classList.remove("visible");
   document.getElementById("user-subtabs").style.display = "none";
   document.getElementById("profile-preview").style.display = "none";
@@ -174,7 +174,7 @@ async function doSearchFinal() {
     sessionStorage.removeItem("admin_user_search");
   }
   searchBtnEl.disabled = false;
-  searchBtnEl.textContent = "Search";
+  searchBtnEl.textContent = window.tAdmin("btn_search");
 }
 
 /**
@@ -432,7 +432,7 @@ export async function populateForm(data) {
     } else if (field === "email") {
       realEmail = val ?? "";
       emailRevealed = false;
-      if (emailToggle) emailToggle.textContent = "Show";
+      if (emailToggle) emailToggle.textContent = window.tAdmin("btn_email_show");
       if (emailInput) { emailInput.value = maskEmail(realEmail); emailInput.readOnly = true; }
     } else {
       el.value = val ?? "";
@@ -508,7 +508,7 @@ export function showFieldFeedback(fieldEl, status, previousValue) {
 
   if (status === "saving") {
     const text = document.createElement("span");
-    text.textContent = "Saving\u2026";
+    text.textContent = window.tAdmin("btn_email_saving");
     feedback.appendChild(text);
     feedback.classList.add("visible");
     container.appendChild(feedback);
@@ -523,7 +523,7 @@ export function showFieldFeedback(fieldEl, status, previousValue) {
     if (previousValue !== undefined) {
       const undoLink = document.createElement("span");
       undoLink.className = "undo-link";
-      undoLink.textContent = "Undo";
+      undoLink.textContent = window.tAdmin("btn_undo");
       undoLink.addEventListener("click", () => undoFieldSave(fieldEl, previousValue));
       feedback.appendChild(undoLink);
     }
@@ -600,7 +600,7 @@ export async function autoSaveField(fieldEl) {
   if (field === "displayName" && (typeof current !== "string" || current.trim().length === 0)) {
     fieldEl.classList.add("field-save-failed");
     showFieldFeedback(fieldEl, "failed");
-    showToast("Display name cannot be empty", "error");
+    showToast(window.tAdmin("toast_display_name_empty"), "error");
     return;
   }
 
@@ -707,7 +707,7 @@ export async function undoFieldSave(fieldEl, previousValue) {
     }
 
     showFieldFeedback(fieldEl, "saved");
-    showToast("Undo successful");
+    showToast(window.tAdmin("toast_undo_successful"));
   } catch (err) {
     fieldEl.classList.remove("field-saving");
     showFieldFeedback(fieldEl, "failed");
@@ -836,7 +836,7 @@ export function wireEmailAndClearButtons() {
         realEmail = "";
         if (emailInput) { emailInput.value = ""; emailInput.readOnly = false; }
         emailRevealed = true;
-        if (emailToggle) emailToggle.textContent = "Hide";
+        if (emailToggle) emailToggle.textContent = window.tAdmin("btn_email_hide");
         autoSaveField(emailInput);
         return;
       }
@@ -859,7 +859,7 @@ export function wireEmailAndClearButtons() {
       if (!val) return;
       if (!listWidgetData[field]) listWidgetData[field] = [];
       const exists = listWidgetData[field].some((item) => item.replace(/\s*\(.*\)$/, "") === val);
-      if (exists) { showToast("Already in list", "error"); return; }
+      if (exists) { showToast(window.tAdmin("toast_already_in_list"), "error"); return; }
       listWidgetData[field].push(val);
       addInput.value = "";
       renderListWidget(field);
@@ -1029,7 +1029,7 @@ export async function loadWarningHistory(uid, append) {
     _warningLastTimestamp = null;
     const ld = document.createElement("div");
     ld.style.cssText = "color:var(--text2);font-size:13px;font-style:italic;";
-    ld.textContent = "Loading...";
+    ld.textContent = window.tAdmin("msg_loading");
     warningHistoryList.appendChild(ld);
   }
   try {
@@ -1042,7 +1042,7 @@ export async function loadWarningHistory(uid, append) {
     if (warnings.length === 0 && !append) {
       const ed = document.createElement("div");
       ed.style.cssText = "color:var(--text2);font-size:13px;font-style:italic;";
-      ed.textContent = "No warnings";
+      ed.textContent = window.tAdmin("msg_no_warnings");
       warningHistoryList.appendChild(ed);
       if (warningLoadMoreBtn) warningLoadMoreBtn.style.display = "none";
       return;
@@ -1073,7 +1073,7 @@ function renderWarningItem(w, uid) {
   header.appendChild(left);
   const right = document.createElement("div"); right.style.cssText = "display:flex;align-items:center;gap:6px;";
   const dateSpan = document.createElement("span"); dateSpan.style.cssText = "color:var(--text2);font-size:11px;"; dateSpan.textContent = w.createdAt ? new Date(w.createdAt).toLocaleString() : ""; right.appendChild(dateSpan);
-  if (!w.revoked) { const rb = document.createElement("button"); rb.className = "btn-revoke-warning"; rb.textContent = "Revoke"; rb.addEventListener("click", () => revokeWarning(uid, w.id, w.gcsDeduction || 0, rb)); right.appendChild(rb); }
+  if (!w.revoked) { const rb = document.createElement("button"); rb.className = "btn-revoke-warning"; rb.textContent = window.tAdmin("btn_revoke"); rb.addEventListener("click", () => revokeWarning(uid, w.id, w.gcsDeduction || 0, rb)); right.appendChild(rb); }
   else { const rs = document.createElement("span"); rs.style.cssText = "color:var(--text2);font-size:11px;font-style:italic;"; rs.textContent = "Revoked"; right.appendChild(rs); }
   header.appendChild(right); item.appendChild(header);
   const reason = document.createElement("div"); reason.style.marginTop = "4px"; reason.textContent = w.reason || ""; item.appendChild(reason);
