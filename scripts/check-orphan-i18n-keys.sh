@@ -50,11 +50,18 @@ defined_keys=$(
   done | sed 's/:$//' | sort -u
 )
 
-# Aggregate every `data-i18n="key"` attribute from public HTML files.
+# Aggregate every `data-i18n="key"` AND `data-i18n-aria-label="key"`
+# attribute from public HTML files. Both forms route through the same
+# silent-no-op pattern in applyLegalTranslations + applyPortalTranslations
+# etc., so an undefined aria-label key has the same screen-reader-visible
+# regression class as an undefined visual key.
 referenced_keys=$(
-  grep -rhoE 'data-i18n="[a-z][a-z0-9_]+"' public --include='*.html' \
-    | sed -E 's/data-i18n="([^"]+)"/\1/' \
-    | sort -u
+  {
+    grep -rhoE 'data-i18n="[a-z][a-z0-9_]+"' public --include='*.html' \
+      | sed -E 's/data-i18n="([^"]+)"/\1/'
+    grep -rhoE 'data-i18n-aria-label="[a-z][a-z0-9_]+"' public --include='*.html' \
+      | sed -E 's/data-i18n-aria-label="([^"]+)"/\1/'
+  } | sort -u
 )
 
 # Diff — any HTML key not present in JS keys is an orphan.
@@ -77,7 +84,8 @@ if [ -n "$orphans" ]; then
     [ -z "$key" ] && continue
     echo "  $key"
     # Show which HTML files reference the orphan, to help the dev fix.
-    grep -rlE "data-i18n=\"${key}\"" public --include='*.html' 2>/dev/null \
+    # Match both `data-i18n="key"` and `data-i18n-aria-label="key"`.
+    grep -rlE "data-i18n(-aria-label)?=\"${key}\"" public --include='*.html' 2>/dev/null \
       | head -3 \
       | while read -r match_file; do echo "    referenced by: $match_file"; done
   done <<< "$orphans"
