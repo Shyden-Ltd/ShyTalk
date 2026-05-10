@@ -50,17 +50,20 @@ defined_keys=$(
   done | sed 's/:$//' | sort -u
 )
 
-# Aggregate every `data-i18n="key"` AND `data-i18n-aria-label="key"`
-# attribute from public HTML files. Both forms route through the same
-# silent-no-op pattern in applyLegalTranslations + applyPortalTranslations
-# etc., so an undefined aria-label key has the same screen-reader-visible
-# regression class as an undefined visual key.
+# Aggregate every `data-i18n="key"`, `data-i18n-aria-label="key"`, AND
+# `data-i18n-placeholder="key"` attribute from public HTML files. All three
+# forms route through the same silent-no-op pattern in apply*Translations
+# functions — an undefined placeholder key on a form input is just as
+# silently broken as an undefined visual or aria-label key, just less
+# visible because the inline `placeholder="..."` HTML default holds.
 referenced_keys=$(
   {
     grep -rhoE 'data-i18n="[a-z][a-z0-9_]+"' public --include='*.html' \
       | sed -E 's/data-i18n="([^"]+)"/\1/'
     grep -rhoE 'data-i18n-aria-label="[a-z][a-z0-9_]+"' public --include='*.html' \
       | sed -E 's/data-i18n-aria-label="([^"]+)"/\1/'
+    grep -rhoE 'data-i18n-placeholder="[a-z][a-z0-9_]+"' public --include='*.html' \
+      | sed -E 's/data-i18n-placeholder="([^"]+)"/\1/'
   } | sort -u
 )
 
@@ -85,7 +88,7 @@ if [ -n "$orphans" ]; then
     echo "  $key"
     # Show which HTML files reference the orphan, to help the dev fix.
     # Match both `data-i18n="key"` and `data-i18n-aria-label="key"`.
-    grep -rlE "data-i18n(-aria-label)?=\"${key}\"" public --include='*.html' 2>/dev/null \
+    grep -rlE "data-i18n(-aria-label|-placeholder)?=\"${key}\"" public --include='*.html' 2>/dev/null \
       | head -3 \
       | while read -r match_file; do echo "    referenced by: $match_file"; done
   done <<< "$orphans"
