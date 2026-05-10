@@ -128,7 +128,7 @@
   overlay.innerHTML = [
     '<div class="stl-lang-modal">',
     '  <div class="stl-lang-header" style="position:relative">',
-    '    <h2>Select Language</h2>',
+    '    <h2 data-i18n="lang_select_title">Select Language</h2>',
     '    <button class="stl-lang-close" aria-label="Close">&times;</button>',
     '    <input class="stl-lang-search" type="text" placeholder="Search languages..." aria-label="Search languages">',
     '  </div>',
@@ -156,7 +156,19 @@
       html += '<span class="check" aria-hidden="true">&#10003;</span>';
       html += '</button>';
     });
-    listEl.innerHTML = html || '<div style="padding:20px;color:#6b6480;text-align:center">No languages found</div>';
+    // Empty-state message uses LEGAL_T.footer.lang_empty_state when
+    // available so non-English locales see the localised string. Fall
+    // back to English when legal-translations.js isn't loaded (e.g.
+    // pages that don't ship legal-translations.js — in practice all
+    // shared-header pages do, but keep the fallback for safety).
+    var emptyMsg = 'No languages found';
+    try {
+      var lt = (typeof LEGAL_T !== 'undefined') ? LEGAL_T : null;
+      if (lt && lt.footer && lt.footer[getLanguage()] && lt.footer[getLanguage()].lang_empty_state) {
+        emptyMsg = lt.footer[getLanguage()].lang_empty_state;
+      }
+    } catch (_e) { /* ignore */ }
+    listEl.innerHTML = html || '<div style="padding:20px;color:#6b6480;text-align:center">' + emptyMsg + '</div>';
   }
 
   function openModal() {
