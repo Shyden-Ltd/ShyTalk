@@ -108,6 +108,8 @@ var PORTAL_T = {
     aria_secret_key: 'TOTP secret key',
     aria_copy_secret: 'Copy secret key',
     aria_profile_avatar: 'Profile avatar',
+    suspended_reason_label: 'Reason:',
+    default_user_name: 'User',
   },
 
   // ─── Arabic ───
@@ -215,6 +217,8 @@ var PORTAL_T = {
     aria_secret_key: 'مفتاح TOTP السري',
     aria_copy_secret: 'نسخ المفتاح السري',
     aria_profile_avatar: 'صورة الملف الشخصي',
+    suspended_reason_label: 'السبب:',
+    default_user_name: 'المستخدم',
   },
 
   // ─── German ───
@@ -310,6 +314,8 @@ var PORTAL_T = {
     aria_secret_key: 'TOTP-Geheimschlüssel',
     aria_copy_secret: 'Geheimschlüssel kopieren',
     aria_profile_avatar: 'Profilbild',
+    suspended_reason_label: 'Grund:',
+    default_user_name: 'Benutzer',
   },
 
   // ─── Spanish ───
@@ -405,6 +411,8 @@ var PORTAL_T = {
     aria_secret_key: 'Clave secreta TOTP',
     aria_copy_secret: 'Copiar clave secreta',
     aria_profile_avatar: 'Avatar de perfil',
+    suspended_reason_label: 'Motivo:',
+    default_user_name: 'Usuario',
   },
 
   // ─── French ───
@@ -500,6 +508,8 @@ var PORTAL_T = {
     aria_secret_key: 'Clé secrète TOTP',
     aria_copy_secret: 'Copier la clé secrète',
     aria_profile_avatar: 'Avatar du profil',
+    suspended_reason_label: 'Raison :',
+    default_user_name: 'Utilisateur',
   },
 
   // ─── Hindi ───
@@ -595,6 +605,8 @@ var PORTAL_T = {
     aria_secret_key: 'TOTP गुप्त कुंजी',
     aria_copy_secret: 'गुप्त कुंजी कॉपी करें',
     aria_profile_avatar: 'प्रोफ़ाइल अवतार',
+    suspended_reason_label: 'कारण:',
+    default_user_name: 'उपयोगकर्ता',
   },
 
   // ─── Indonesian ───
@@ -690,6 +702,8 @@ var PORTAL_T = {
     aria_secret_key: 'Kunci rahasia TOTP',
     aria_copy_secret: 'Salin kunci rahasia',
     aria_profile_avatar: 'Avatar profil',
+    suspended_reason_label: 'Alasan:',
+    default_user_name: 'Pengguna',
   },
 
   // ─── Italian ───
@@ -785,6 +799,8 @@ var PORTAL_T = {
     aria_secret_key: 'Chiave segreta TOTP',
     aria_copy_secret: 'Copia chiave segreta',
     aria_profile_avatar: 'Avatar del profilo',
+    suspended_reason_label: 'Motivo:',
+    default_user_name: 'Utente',
   },
 
   // ─── Japanese ───
@@ -880,6 +896,8 @@ var PORTAL_T = {
     aria_secret_key: 'TOTPシークレットキー',
     aria_copy_secret: 'シークレットキーをコピー',
     aria_profile_avatar: 'プロフィールアバター',
+    suspended_reason_label: '理由：',
+    default_user_name: 'ユーザー',
   },
 
   // ─── Khmer ───
@@ -987,6 +1005,8 @@ var PORTAL_T = {
     aria_secret_key: 'សោសម្ងាត់ TOTP',
     aria_copy_secret: 'ចម្លងសោសម្ងាត់',
     aria_profile_avatar: 'រូបតំណាងប្រវត្តិរូប',
+    suspended_reason_label: 'មូលហេតុ:',
+    default_user_name: 'អ្នកប្រើប្រាស់',
   },
 
   // ─── Korean ───
@@ -1082,6 +1102,8 @@ var PORTAL_T = {
     aria_secret_key: 'TOTP 비밀 키',
     aria_copy_secret: '비밀 키 복사',
     aria_profile_avatar: '프로필 아바타',
+    suspended_reason_label: '사유:',
+    default_user_name: '사용자',
   },
 
   // ─── Dutch ───
@@ -1177,6 +1199,8 @@ var PORTAL_T = {
     aria_secret_key: 'TOTP geheime sleutel',
     aria_copy_secret: 'Geheime sleutel kopiëren',
     aria_profile_avatar: 'Profielafbeelding',
+    suspended_reason_label: 'Reden:',
+    default_user_name: 'Gebruiker',
   },
 
   // ─── Polish ───
@@ -1272,6 +1296,8 @@ var PORTAL_T = {
     aria_secret_key: 'Tajny klucz TOTP',
     aria_copy_secret: 'Kopiuj tajny klucz',
     aria_profile_avatar: 'Awatar profilu',
+    suspended_reason_label: 'Powód:',
+    default_user_name: 'Użytkownik',
   },
 
   // ─── Portuguese ───
@@ -1367,6 +1393,8 @@ var PORTAL_T = {
     aria_secret_key: 'Chave secreta TOTP',
     aria_copy_secret: 'Copiar chave secreta',
     aria_profile_avatar: 'Avatar do perfil',
+    suspended_reason_label: 'Motivo:',
+    default_user_name: 'Usuário',
   },
 
   // ─── Russian ───
@@ -1462,6 +1490,8 @@ var PORTAL_T = {
     aria_secret_key: 'Секретный ключ TOTP',
     aria_copy_secret: 'Скопировать секретный ключ',
     aria_profile_avatar: 'Аватар профиля',
+    suspended_reason_label: 'Причина:',
+    default_user_name: 'Пользователь',
   },
 
   // ─── Swedish ───
@@ -1557,6 +1587,8 @@ var PORTAL_T = {
     aria_secret_key: 'TOTP-hemlig nyckel',
     aria_copy_secret: 'Kopiera hemlig nyckel',
     aria_profile_avatar: 'Profilbild',
+    suspended_reason_label: 'Orsak:',
+    default_user_name: 'Användare',
   },
 
   // ─── Thai ───
@@ -1652,6 +1684,8 @@ var PORTAL_T = {
     aria_secret_key: 'คีย์ลับ TOTP',
     aria_copy_secret: 'คัดลอกคีย์ลับ',
     aria_profile_avatar: 'รูปโปรไฟล์',
+    suspended_reason_label: 'เหตุผล:',
+    default_user_name: 'ผู้ใช้',
   },
 
   // ─── Turkish ───
@@ -1747,6 +1781,8 @@ var PORTAL_T = {
     aria_secret_key: 'TOTP gizli anahtarı',
     aria_copy_secret: 'Gizli anahtarı kopyala',
     aria_profile_avatar: 'Profil avatarı',
+    suspended_reason_label: 'Sebep:',
+    default_user_name: 'Kullanıcı',
   },
 
   // ─── Ukrainian ───
@@ -1842,6 +1878,8 @@ var PORTAL_T = {
     aria_secret_key: 'Секретний ключ TOTP',
     aria_copy_secret: 'Копіювати секретний ключ',
     aria_profile_avatar: 'Аватар профілю',
+    suspended_reason_label: 'Причина:',
+    default_user_name: 'Користувач',
   },
 
   // ─── Vietnamese ───
@@ -1937,6 +1975,8 @@ var PORTAL_T = {
     aria_secret_key: 'Khóa bí mật TOTP',
     aria_copy_secret: 'Sao chép khóa bí mật',
     aria_profile_avatar: 'Ảnh đại diện hồ sơ',
+    suspended_reason_label: 'Lý do:',
+    default_user_name: 'Người dùng',
   },
 
   // ─── Chinese (Simplified) ───
@@ -2032,6 +2072,8 @@ var PORTAL_T = {
     aria_secret_key: 'TOTP 密钥',
     aria_copy_secret: '复制密钥',
     aria_profile_avatar: '个人资料头像',
+    suspended_reason_label: '原因：',
+    default_user_name: '用户',
   },
 
 };

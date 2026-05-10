@@ -52,6 +52,26 @@
     return el.innerHTML;
   }
 
+  // Translation lookup that reads the user's currently-selected portal
+  // language from ShyTalkLanguage / localStorage, falls back to en. Used
+  // by JS-side renderers that build textContent dynamically (welcome
+  // greeting, suspension reason prefix, etc.) — these are NOT covered
+  // by applyPortalTranslations's [data-i18n] walk because the JS
+  // overwrites textContent after that walk runs.
+  function getCurrentLang() {
+    if (window.ShyTalkLanguage && typeof window.ShyTalkLanguage.get === 'function') {
+      return window.ShyTalkLanguage.get();
+    }
+    try { return localStorage.getItem('shytalk_language') || 'en'; }
+    catch (_e) { return 'en'; }
+  }
+  function t(key) {
+    var T = window.PORTAL_T || {};
+    var lang = getCurrentLang();
+    var dict = T[lang] || T.en || {};
+    return dict[key] !== undefined ? dict[key] : (T.en && T.en[key]) || key;
+  }
+
   function hideAll() {
     var sections = document.querySelectorAll('.portal-section');
     for (var i = 0; i < sections.length; i++) {
@@ -624,7 +644,7 @@
   function renderSuspension(profile) {
     var reasonEl = $('suspended-reason');
     if (reasonEl && profile.suspensionReason) {
-      reasonEl.textContent = 'Reason: ' + profile.suspensionReason;
+      reasonEl.textContent = t('suspended_reason_label') + ' ' + profile.suspensionReason;
     }
 
     var endDateEl = $('suspended-end-date');
@@ -632,7 +652,7 @@
     if (endDateEl && endValueEl && profile.suspensionEndDate) {
       try {
         var date = new Date(profile.suspensionEndDate);
-        endValueEl.textContent = date.toLocaleDateString(undefined, {
+        endValueEl.textContent = date.toLocaleDateString(getCurrentLang(), {
           year: 'numeric',
           month: 'long',
           day: 'numeric',
@@ -654,7 +674,9 @@
     // Welcome message
     var welcomeEl = $('dashboard-welcome');
     if (welcomeEl) {
-      welcomeEl.textContent = 'Welcome back, ' + escapeHtml(profile.displayName || 'User');
+      // Note: textContent assignment auto-escapes — escapeHtml here is
+      // belt-and-braces but not strictly necessary (textContent is safe).
+      welcomeEl.textContent = t('dashboard_welcome') + ', ' + (profile.displayName || t('default_user_name'));
     }
 
     // Panel cards (admin-only panels)
