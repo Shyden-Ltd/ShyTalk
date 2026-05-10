@@ -102,13 +102,13 @@
 
   var PHASE_OPTIONS = [
     { value: "", label: sgT("allPhases") },
-    { value: "compliance", label: "Compliance & Legal" },
-    { value: "platform", label: "Platform Foundation" },
-    { value: "revenue", label: "Revenue Engine" },
-    { value: "social", label: "Core Social" },
-    { value: "qol", label: "Quality of Life" },
-    { value: "entertainment", label: "Entertainment" },
-    { value: "support", label: "Support & Specialised" },
+    { value: "compliance", label: sgT("phaseCompliance") },
+    { value: "platform", label: sgT("phasePlatform") },
+    { value: "revenue", label: sgT("phaseRevenue") },
+    { value: "social", label: sgT("phaseSocial") },
+    { value: "qol", label: sgT("phaseQol") },
+    { value: "entertainment", label: sgT("phaseEntertainment") },
+    { value: "support", label: sgT("phaseSupport") },
   ];
 
   var state = {
