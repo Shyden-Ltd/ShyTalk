@@ -631,7 +631,7 @@ export async function autoSaveField(fieldEl) {
     fieldEl.classList.remove("field-saving");
     fieldEl.classList.add("field-save-failed");
     showFieldFeedback(fieldEl, "failed");
-    showToast("Auto-save failed: " + err.message, "error");
+    showToast(window.tAdminFmt("toast_autosave_failed", { error: err.message }), "error");
   }
 }
 
@@ -657,7 +657,7 @@ export async function autoSaveEconomyField(fieldName) {
     el.classList.remove("field-saving");
     el.classList.add("field-save-failed");
     showFieldFeedback(el, "failed");
-    showToast("Auto-save failed: " + err.message, "error");
+    showToast(window.tAdminFmt("toast_autosave_failed", { error: err.message }), "error");
   }
 }
 
@@ -711,7 +711,7 @@ export async function undoFieldSave(fieldEl, previousValue) {
   } catch (err) {
     fieldEl.classList.remove("field-saving");
     showFieldFeedback(fieldEl, "failed");
-    showToast("Undo failed: " + err.message, "error");
+    showToast(window.tAdminFmt("toast_undo_failed", { error: err.message }), "error");
   }
 }
 
@@ -909,8 +909,8 @@ export function populateSuspensionSection(data) {
   if (suspensionSection) suspensionSection.style.display = "block";
   if (data.isSuspended) {
     const since = data.suspensionStartDate ? new Date(data.suspensionStartDate).toLocaleString() : "unknown";
-    const until = data.suspensionEndDate ? new Date(data.suspensionEndDate).toLocaleString() : "permanent";
-    if (suspensionStatus) { suspensionStatus.className = "suspension-status suspended"; suspensionStatus.textContent = "Suspended since " + since + ", until " + until + ". Reason: " + (data.suspensionReason || "No reason provided"); }
+    const until = data.suspensionEndDate ? new Date(data.suspensionEndDate).toLocaleString() : window.tAdmin("msg_permanent");
+    if (suspensionStatus) { suspensionStatus.className = "suspension-status suspended"; suspensionStatus.textContent = window.tAdminFmt("status_suspended_badge", { since, until, reason: data.suspensionReason || window.tAdmin("msg_no_reason_provided") }); }
     if (suspendBtn) suspendBtn.style.display = "none";
     if (unsuspendBtn) unsuspendBtn.style.display = "";
     const preSuspensionInfo = $("#pre-suspension-info");
@@ -929,7 +929,7 @@ export function populateSuspensionSection(data) {
       } else if (preSuspensionCover) { preSuspensionCover.style.display = "none"; }
     } else if (preSuspensionInfo) { preSuspensionInfo.style.display = "none"; }
   } else {
-    if (suspensionStatus) { suspensionStatus.className = "suspension-status not-suspended"; suspensionStatus.textContent = "Not Suspended"; }
+    if (suspensionStatus) { suspensionStatus.className = "suspension-status not-suspended"; suspensionStatus.textContent = window.tAdmin("status_not_suspended"); }
     if (suspendBtn) suspendBtn.style.display = "";
     if (unsuspendBtn) unsuspendBtn.style.display = "none";
     const preSuspensionInfo = $("#pre-suspension-info");
@@ -951,7 +951,7 @@ export function populateDeletionSection(data) {
     const executeDate = new Date(data.deletionExecuteAt).toLocaleDateString();
     const msRemaining = data.deletionExecuteAt - Date.now();
     const daysRemaining = Math.max(0, Math.ceil(msRemaining / 86400000));
-    if (deletionStatusBadge) { deletionStatusBadge.textContent = "Deletion scheduled \u2014 " + daysRemaining + " days remaining (" + executeDate + ")"; deletionStatusBadge.style.display = "block"; }
+    if (deletionStatusBadge) { deletionStatusBadge.textContent = window.tAdminFmt("status_deletion_scheduled", { days: daysRemaining, date: executeDate }); deletionStatusBadge.style.display = "block"; }
     if (deletionNotScheduled) deletionNotScheduled.style.display = "none";
     if (scheduleDeletionBtn) scheduleDeletionBtn.style.display = "none";
     if (cancelDeletionBtn) cancelDeletionBtn.style.display = "";
@@ -1069,7 +1069,7 @@ function renderWarningItem(w, uid) {
   const header = document.createElement("div"); header.className = "warning-item-header";
   const left = document.createElement("div");
   const badge = document.createElement("span"); badge.className = "warning-source-badge " + (w.source || "direct"); badge.textContent = w.source || "direct"; left.appendChild(badge);
-  const sev = document.createElement("span"); sev.style.cssText = "margin-left:8px;color:var(--text2);font-size:12px;"; sev.textContent = "Severity " + w.severity + " (-" + (w.gcsDeduction || 0) + " GCS)"; left.appendChild(sev);
+  const sev = document.createElement("span"); sev.style.cssText = "margin-left:8px;color:var(--text2);font-size:12px;"; sev.textContent = window.tAdminFmt("status_severity_gcs", { severity: w.severity, deduction: w.gcsDeduction || 0 }); left.appendChild(sev);
   header.appendChild(left);
   const right = document.createElement("div"); right.style.cssText = "display:flex;align-items:center;gap:6px;";
   const dateSpan = document.createElement("span"); dateSpan.style.cssText = "color:var(--text2);font-size:11px;"; dateSpan.textContent = w.createdAt ? new Date(w.createdAt).toLocaleString() : ""; right.appendChild(dateSpan);
