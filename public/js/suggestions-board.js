@@ -32,11 +32,11 @@
 
   var STATUS_OPTIONS = [
     { value: "", label: sgT("allStatuses") },
-    { value: "pending", label: "Pending" },
-    { value: "accepted", label: "Accepted" },
-    { value: "planned", label: "Planned" },
-    { value: "completed", label: "Completed" },
-    { value: "rejected", label: "Rejected" },
+    { value: "pending", label: sgT("pending") },
+    { value: "accepted", label: sgT("accepted") },
+    { value: "planned", label: sgT("planned") },
+    { value: "completed", label: sgT("completed") },
+    { value: "rejected", label: sgT("rejected") },
   ];
 
   var TAG_OPTIONS = [
