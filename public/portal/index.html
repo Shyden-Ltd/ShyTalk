@@ -20,7 +20,7 @@
 <main id="portal-app">
 
   <!-- Loading spinner (shown first) -->
-  <section id="loading-section" class="portal-section portal-section--narrow" aria-label="Loading">
+  <section id="loading-section" class="portal-section portal-section--narrow" aria-label="Loading" data-i18n-aria-label="aria_loading">
     <div class="spinner" role="status">
       <span class="sr-only" data-i18n="loading">Loading...</span>
     </div>
@@ -128,7 +128,7 @@
       <h1 class="portal-heading" data-i18n="enroll_heading">Set up two-factor authentication</h1>
       <p class="portal-subtitle" data-i18n="enroll_subtitle">Scan the QR code with your authenticator app, or enter the key manually.</p>
 
-      <div id="enroll-qr" class="qr-container" aria-label="QR code for TOTP setup"></div>
+      <div id="enroll-qr" class="qr-container" aria-label="QR code for TOTP setup" data-i18n-aria-label="aria_qr_code"></div>
 
       <div class="manual-key-row">
         <label for="enroll-manual-key" class="sr-only">TOTP secret key</label>
@@ -138,8 +138,9 @@
           class="input input--mono"
           readonly
           aria-label="TOTP secret key"
+          data-i18n-aria-label="aria_secret_key"
         >
-        <button type="button" id="enroll-copy-btn" class="btn btn--small" aria-label="Copy secret key" data-i18n="enroll_copy">Copy</button>
+        <button type="button" id="enroll-copy-btn" class="btn btn--small" aria-label="Copy secret key" data-i18n-aria-label="aria_copy_secret" data-i18n="enroll_copy">Copy</button>
       </div>
 
       <form id="enroll-form">
@@ -364,7 +365,7 @@
       <h1 class="portal-heading" data-i18n="profile_heading">Profile</h1>
 
       <div class="profile-info">
-        <div class="profile-avatar" id="profile-avatar" aria-label="Profile avatar"></div>
+        <div class="profile-avatar" id="profile-avatar" aria-label="Profile avatar" data-i18n-aria-label="aria_profile_avatar"></div>
         <div class="profile-details">
           <div class="profile-field">
             <span class="profile-label" data-i18n="profile_display_name">Display Name</span>

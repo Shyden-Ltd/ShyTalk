@@ -103,6 +103,11 @@ var PORTAL_T = {
     reauth_cancel: 'Cancel',
     reauth_confirm: 'Confirm',
     modal_close: 'OK',
+    aria_loading: 'Loading',
+    aria_qr_code: 'QR code for TOTP setup',
+    aria_secret_key: 'TOTP secret key',
+    aria_copy_secret: 'Copy secret key',
+    aria_profile_avatar: 'Profile avatar',
   },
 
   // ─── Arabic ───
@@ -205,6 +210,11 @@ var PORTAL_T = {
     reauth_cancel: 'إلغاء',
     reauth_confirm: 'تأكيد',
     modal_close: 'حسنًا',
+    aria_loading: 'جارٍ التحميل',
+    aria_qr_code: 'رمز الاستجابة السريعة لإعداد TOTP',
+    aria_secret_key: 'مفتاح TOTP السري',
+    aria_copy_secret: 'نسخ المفتاح السري',
+    aria_profile_avatar: 'صورة الملف الشخصي',
   },
 
   // ─── German ───
@@ -295,6 +305,11 @@ var PORTAL_T = {
     reauth_cancel: 'Abbrechen',
     reauth_confirm: 'Bestätigen',
     modal_close: 'OK',
+    aria_loading: 'Wird geladen',
+    aria_qr_code: 'QR-Code für TOTP-Einrichtung',
+    aria_secret_key: 'TOTP-Geheimschlüssel',
+    aria_copy_secret: 'Geheimschlüssel kopieren',
+    aria_profile_avatar: 'Profilbild',
   },
 
   // ─── Spanish ───
@@ -385,6 +400,11 @@ var PORTAL_T = {
     reauth_cancel: 'Cancelar',
     reauth_confirm: 'Confirmar',
     modal_close: 'Aceptar',
+    aria_loading: 'Cargando',
+    aria_qr_code: 'Código QR para configuración TOTP',
+    aria_secret_key: 'Clave secreta TOTP',
+    aria_copy_secret: 'Copiar clave secreta',
+    aria_profile_avatar: 'Avatar de perfil',
   },
 
   // ─── French ───
@@ -475,6 +495,11 @@ var PORTAL_T = {
     reauth_cancel: 'Annuler',
     reauth_confirm: 'Confirmer',
     modal_close: 'OK',
+    aria_loading: 'Chargement',
+    aria_qr_code: 'Code QR pour la configuration TOTP',
+    aria_secret_key: 'Clé secrète TOTP',
+    aria_copy_secret: 'Copier la clé secrète',
+    aria_profile_avatar: 'Avatar du profil',
   },
 
   // ─── Hindi ───
@@ -565,6 +590,11 @@ var PORTAL_T = {
     reauth_cancel: 'रद्द करें',
     reauth_confirm: 'पुष्टि करें',
     modal_close: 'ठीक है',
+    aria_loading: 'लोड हो रहा है',
+    aria_qr_code: 'TOTP सेटअप के लिए QR कोड',
+    aria_secret_key: 'TOTP गुप्त कुंजी',
+    aria_copy_secret: 'गुप्त कुंजी कॉपी करें',
+    aria_profile_avatar: 'प्रोफ़ाइल अवतार',
   },
 
   // ─── Indonesian ───
@@ -655,6 +685,11 @@ var PORTAL_T = {
     reauth_cancel: 'Batal',
     reauth_confirm: 'Konfirmasi',
     modal_close: 'OK',
+    aria_loading: 'Memuat',
+    aria_qr_code: 'Kode QR untuk pengaturan TOTP',
+    aria_secret_key: 'Kunci rahasia TOTP',
+    aria_copy_secret: 'Salin kunci rahasia',
+    aria_profile_avatar: 'Avatar profil',
   },
 
   // ─── Italian ───
@@ -745,6 +780,11 @@ var PORTAL_T = {
     reauth_cancel: 'Annulla',
     reauth_confirm: 'Conferma',
     modal_close: 'OK',
+    aria_loading: 'Caricamento',
+    aria_qr_code: 'Codice QR per la configurazione TOTP',
+    aria_secret_key: 'Chiave segreta TOTP',
+    aria_copy_secret: 'Copia chiave segreta',
+    aria_profile_avatar: 'Avatar del profilo',
   },
 
   // ─── Japanese ───
@@ -835,6 +875,11 @@ var PORTAL_T = {
     reauth_cancel: 'キャンセル',
     reauth_confirm: '確認',
     modal_close: 'OK',
+    aria_loading: '読み込み中',
+    aria_qr_code: 'TOTPセットアップ用QRコード',
+    aria_secret_key: 'TOTPシークレットキー',
+    aria_copy_secret: 'シークレットキーをコピー',
+    aria_profile_avatar: 'プロフィールアバター',
   },
 
   // ─── Khmer ───
@@ -937,6 +982,11 @@ var PORTAL_T = {
     reauth_cancel: 'បោះបង់',
     reauth_confirm: 'បញ្ជាក់',
     modal_close: 'យល់ព្រម',
+    aria_loading: 'កំពុងផ្ទុក',
+    aria_qr_code: 'លេខកូដ QR សម្រាប់ការដំឡើង TOTP',
+    aria_secret_key: 'សោសម្ងាត់ TOTP',
+    aria_copy_secret: 'ចម្លងសោសម្ងាត់',
+    aria_profile_avatar: 'រូបតំណាងប្រវត្តិរូប',
   },
 
   // ─── Korean ───
@@ -1027,6 +1077,11 @@ var PORTAL_T = {
     reauth_cancel: '취소',
     reauth_confirm: '확인',
     modal_close: '확인',
+    aria_loading: '로드 중',
+    aria_qr_code: 'TOTP 설정용 QR 코드',
+    aria_secret_key: 'TOTP 비밀 키',
+    aria_copy_secret: '비밀 키 복사',
+    aria_profile_avatar: '프로필 아바타',
   },
 
   // ─── Dutch ───
@@ -1117,6 +1172,11 @@ var PORTAL_T = {
     reauth_cancel: 'Annuleren',
     reauth_confirm: 'Bevestigen',
     modal_close: 'OK',
+    aria_loading: 'Laden',
+    aria_qr_code: 'QR-code voor TOTP-installatie',
+    aria_secret_key: 'TOTP geheime sleutel',
+    aria_copy_secret: 'Geheime sleutel kopiëren',
+    aria_profile_avatar: 'Profielafbeelding',
   },
 
   // ─── Polish ───
@@ -1207,6 +1267,11 @@ var PORTAL_T = {
     reauth_cancel: 'Anuluj',
     reauth_confirm: 'Potwierdź',
     modal_close: 'OK',
+    aria_loading: 'Ładowanie',
+    aria_qr_code: 'Kod QR do konfiguracji TOTP',
+    aria_secret_key: 'Tajny klucz TOTP',
+    aria_copy_secret: 'Kopiuj tajny klucz',
+    aria_profile_avatar: 'Awatar profilu',
   },
 
   // ─── Portuguese ───
@@ -1297,6 +1362,11 @@ var PORTAL_T = {
     reauth_cancel: 'Cancelar',
     reauth_confirm: 'Confirmar',
     modal_close: 'OK',
+    aria_loading: 'Carregando',
+    aria_qr_code: 'Código QR para configuração TOTP',
+    aria_secret_key: 'Chave secreta TOTP',
+    aria_copy_secret: 'Copiar chave secreta',
+    aria_profile_avatar: 'Avatar do perfil',
   },
 
   // ─── Russian ───
@@ -1387,6 +1457,11 @@ var PORTAL_T = {
     reauth_cancel: 'Отмена',
     reauth_confirm: 'Подтвердить',
     modal_close: 'ОК',
+    aria_loading: 'Загрузка',
+    aria_qr_code: 'QR-код для настройки TOTP',
+    aria_secret_key: 'Секретный ключ TOTP',
+    aria_copy_secret: 'Скопировать секретный ключ',
+    aria_profile_avatar: 'Аватар профиля',
   },
 
   // ─── Swedish ───
@@ -1477,6 +1552,11 @@ var PORTAL_T = {
     reauth_cancel: 'Avbryt',
     reauth_confirm: 'Bekräfta',
     modal_close: 'OK',
+    aria_loading: 'Laddar',
+    aria_qr_code: 'QR-kod för TOTP-konfiguration',
+    aria_secret_key: 'TOTP-hemlig nyckel',
+    aria_copy_secret: 'Kopiera hemlig nyckel',
+    aria_profile_avatar: 'Profilbild',
   },
 
   // ─── Thai ───
@@ -1567,6 +1647,11 @@ var PORTAL_T = {
     reauth_cancel: 'ยกเลิก',
     reauth_confirm: 'ยืนยัน',
     modal_close: 'ตกลง',
+    aria_loading: 'กำลังโหลด',
+    aria_qr_code: 'รหัส QR สำหรับการตั้งค่า TOTP',
+    aria_secret_key: 'คีย์ลับ TOTP',
+    aria_copy_secret: 'คัดลอกคีย์ลับ',
+    aria_profile_avatar: 'รูปโปรไฟล์',
   },
 
   // ─── Turkish ───
@@ -1657,6 +1742,11 @@ var PORTAL_T = {
     reauth_cancel: 'İptal',
     reauth_confirm: 'Onayla',
     modal_close: 'Tamam',
+    aria_loading: 'Yükleniyor',
+    aria_qr_code: 'TOTP kurulumu için QR kodu',
+    aria_secret_key: 'TOTP gizli anahtarı',
+    aria_copy_secret: 'Gizli anahtarı kopyala',
+    aria_profile_avatar: 'Profil avatarı',
   },
 
   // ─── Ukrainian ───
@@ -1747,6 +1837,11 @@ var PORTAL_T = {
     reauth_cancel: 'Скасувати',
     reauth_confirm: 'Підтвердити',
     modal_close: 'OK',
+    aria_loading: 'Завантаження',
+    aria_qr_code: 'QR-код для налаштування TOTP',
+    aria_secret_key: 'Секретний ключ TOTP',
+    aria_copy_secret: 'Копіювати секретний ключ',
+    aria_profile_avatar: 'Аватар профілю',
   },
 
   // ─── Vietnamese ───
@@ -1837,6 +1932,11 @@ var PORTAL_T = {
     reauth_cancel: 'Hủy',
     reauth_confirm: 'Xác nhận',
     modal_close: 'OK',
+    aria_loading: 'Đang tải',
+    aria_qr_code: 'Mã QR để thiết lập TOTP',
+    aria_secret_key: 'Khóa bí mật TOTP',
+    aria_copy_secret: 'Sao chép khóa bí mật',
+    aria_profile_avatar: 'Ảnh đại diện hồ sơ',
   },
 
   // ─── Chinese (Simplified) ───
@@ -1927,6 +2027,11 @@ var PORTAL_T = {
     reauth_cancel: '取消',
     reauth_confirm: '确认',
     modal_close: '确定',
+    aria_loading: '加载中',
+    aria_qr_code: 'TOTP 设置二维码',
+    aria_secret_key: 'TOTP 密钥',
+    aria_copy_secret: '复制密钥',
+    aria_profile_avatar: '个人资料头像',
   },
 
 };
@@ -1951,6 +2056,15 @@ function applyPortalTranslations(lang) {
   document.querySelectorAll('[data-i18n-placeholder]').forEach(function(el) {
     var key = el.getAttribute('data-i18n-placeholder');
     if (t[key] !== undefined) el.placeholder = t[key];
+  });
+
+  // Screen-reader aria-label translations. Without this, sighted users
+  // get fully-translated portal but assistive-tech users still hear
+  // English "Loading", "QR code for TOTP setup", etc. Same pattern as
+  // legal-translations.js + event-translations.js (PR #589, PR #593).
+  document.querySelectorAll('[data-i18n-aria-label]').forEach(function(el) {
+    var key = el.getAttribute('data-i18n-aria-label');
+    if (t[key] !== undefined) el.setAttribute('aria-label', t[key]);
   });
 
   document.documentElement.lang = lang;
