@@ -15,7 +15,7 @@ on:
 
 permissions:
   contents: write
-  pull-requests: read
+  pull-requests: write
 
 concurrency:
   group: release-main
@@ -26,8 +26,17 @@ env:
 
 # Releases are now manual: merge small PRs to main freely; cut a Release
 # only when a stable batch is ready by triggering this workflow from the
-# Actions tab. Each release aggregates ALL merged-PR titles since the
-# previous tag into the release notes (no per-merge release commits).
+# Actions tab.
+#
+# This workflow used to push the version-bump commit DIRECTLY to main.
+# That broke 2026-05-10 once classic branch protection started requiring
+# the PR Gate aggregator (`Detect Changes`, `Analyze JavaScript`,
+# `PR Gate`) on every commit landing on main — direct pushes can never
+# satisfy `PR Gate` because that's a `pull_request`-only aggregator. Now
+# we open a release PR with auto-merge enabled instead. The PR runs the
+# full required-check pipeline, auto-merges when green, and the
+# release-tag.yml workflow then creates the tag + GitHub Release in
+# response to the merged commit on main.
 #
 # Dev-build distribution stays automatic — deploy-dev.yml injects a
 # unique iOS CFBundleVersion from GITHUB_RUN_NUMBER so TestFlight uploads
@@ -35,8 +44,8 @@ env:
 # from the same run number for the same reason.
 
 jobs:
-  prepare-release:
-    name: Prepare Release
+  open-release-pr:
+    name: Open Release PR
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -51,7 +60,7 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
           # Need full history to walk back to the previous release tag
-          # for the changelog aggregation step below.
+          # for the release-notes generation step below.
           fetch-depth: 0
 
       - name: Guard against double-fired releases
@@ -71,6 +80,16 @@ jobs:
             echo "::error::HEAD is already a release commit ('$LATEST_SUBJECT'). Refusing to bump on top of an existing release. If this was intentional (e.g. publishing a same-content re-tag), do it manually."
             exit 1
           fi
+          # Also guard against an open release PR. Two open release PRs
+          # would race each other through CI; whichever auto-merges
+          # second would carry an outdated version bump.
+          OPEN_RELEASE_PRS=$(gh pr list --state open --search 'in:title chore: release v' --json number --jq 'length')
+          if [ "${OPEN_RELEASE_PRS:-0}" -gt 0 ]; then
+            echo "::error::An open release PR already exists. Wait for it to merge (or close it) before opening another. Run 'gh pr list --state open --search \"in:title chore: release v\"' to find it."
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: Resolve bump type from input
         id: bump
@@ -272,109 +291,101 @@ jobs:
           cat "$NOTES_FILE"
           echo "-----------------------------------"
 
-      - name: Commit version bump
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Capture the SHA we expect HEAD~1 to point at after the bump.
-          # `git pull --rebase` updates the local `origin/main` ref to
-          # the freshly-fetched tip, so `git rev-parse origin/main`
-          # AFTER the pull would always equal HEAD~1 — making any post-
-          # pull comparison against origin/main vacuous. The only
-          # reliable witness of "did rebase pull in unrelated commits"
-          # is the origin/main SHA captured BEFORE the pull. If post-
-          # rebase HEAD~1 doesn't match it, the rebase replayed our
-          # bump on top of someone else's commits — and the changelog
-          # (computed from LAST_TAG..PRE_BUMP_HEAD earlier) won't
-          # mention them.
-          PRE_PULL_ORIGIN=$(git rev-parse origin/main)
-          git add app/build.gradle.kts app/src/main/play/release-notes/en-US/internal.txt app/src/main/play/release-notes/en-US/default.txt
-          git commit -m "chore: release v${{ steps.version.outputs.version }}"
-          # `set -euo pipefail` would abort on a rebase conflict with a
-          # generic "Process completed with exit code 1" annotation that
-          # gives the operator no indication WHY. Wrap the pull so we
-          # can surface a clear, action-oriented error if it fails.
-          if ! git pull --rebase origin main; then
-            echo "::error::git pull --rebase origin main failed — likely a conflict with concurrent commits on main. The release notes / version bump touched the same lines as another merge. Re-trigger the Release workflow once main has stabilised; the regenerated changelog will pick up the new commits cleanly."
-            exit 1
-          fi
-          POST_REBASE_BASE=$(git rev-parse HEAD~1)
-          if [ "$POST_REBASE_BASE" != "$PRE_PULL_ORIGIN" ]; then
-            echo "::error::Rebase pulled in unrelated commits (HEAD~1=$POST_REBASE_BASE, expected $PRE_PULL_ORIGIN — the origin/main tip captured BEFORE the pull). The release tag would attach to commits the changelog doesn't describe. Re-run the workflow to regenerate the changelog against the new main tip."
-            exit 1
-          fi
-          # Wrap push so a remote rejection (branch protection rule, force-
-          # push needed, network blip) emits a clear ::error:: annotation
-          # instead of the generic "Process completed with exit code 1".
-          if ! git push; then
-            echo "::error::git push failed — could be branch protection rule rejection, the remote moved between the rebase and the push, or a transient network issue. The version bump commit IS local; re-trigger the Release workflow once the cause is clear."
-            exit 1
-          fi
-          # Verify the bump landed at HEAD. `git pull --rebase` can race with
-          # other commits on main and silently produce a HEAD whose
-          # versionName doesn't match what we just bumped — leading to a tag
-          # that points at code with the wrong version. `|| true` lets the
-          # is-empty guard fire with a clear error if rebase ate the
-          # versionName line entirely (vs. set -e aborting on the grep).
-          PUSHED_VERSION=$(awk -F'"' '/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"/ {print $2; exit}' app/build.gradle.kts || true)
-          if [ "$PUSHED_VERSION" != "${{ steps.version.outputs.version }}" ]; then
-            echo "::error::HEAD versionName is '$PUSHED_VERSION' but expected '${{ steps.version.outputs.version }}' — rebase likely lost the bump commit"
-            exit 1
-          fi
-
-      - name: Create GitHub release
+      - name: Create release branch and open PR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
-          COMMIT_SHA=$(git rev-parse HEAD)
+          BRANCH="release/v${VERSION}"
           NOTES_FILE="${{ steps.notes.outputs.notes_file }}"
-          # The version-bump commit is ALREADY on origin/main from the
-          # previous step. If `gh release create` fails (rate limit, 5xx,
-          # token scope issue, transient blip), we don't auto-retry —
-          # re-running this workflow would be blocked by the double-
-          # fired-release guard. Surface a single-line ::error::
-          # (multi-line annotations don't render) plus full recovery
-          # instructions in the step output and job summary so the
-          # operator can manually complete the release.
-          if ! gh release create "v${VERSION}" \
-            --target "$COMMIT_SHA" \
-            --title "v${VERSION}" \
-            --notes-file "$NOTES_FILE"; then
-            echo "::error::gh release create failed for v${VERSION}. The version bump is on main but no tag/release exists. See step output + job summary for manual-recovery command."
-            {
-              echo ""
-              echo "============================================================"
-              echo "MANUAL RECOVERY REQUIRED"
-              echo "============================================================"
-              echo "The version bump for v${VERSION} is at commit ${COMMIT_SHA}"
-              echo "on origin/main, but the GitHub Release was not created."
-              echo "Re-running this workflow will fail the double-fired-release"
-              echo "guard. Run locally on a fresh clone of main:"
-              echo ""
-              echo "  gh release create v${VERSION} \\"
-              echo "    --target ${COMMIT_SHA} \\"
-              echo "    --title v${VERSION} \\"
-              echo "    --notes-file -<<'NOTES'"
-              cat "$NOTES_FILE"
-              echo "NOTES"
-              echo ""
-              echo "============================================================"
-            } >> "$GITHUB_STEP_SUMMARY"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Create branch from current main and commit the bump + Play
+          # Store release notes. The branch name embeds the version so
+          # concurrent releases (should they ever happen despite the
+          # double-fired guard) wouldn't collide.
+          git checkout -b "$BRANCH"
+          git add app/build.gradle.kts \
+                  app/src/main/play/release-notes/en-US/internal.txt \
+                  app/src/main/play/release-notes/en-US/default.txt
+          git commit -m "chore: release v${VERSION}"
+
+          # Push to origin. Branch protection on main does NOT apply to
+          # release/* branches, so this push is unconditional. The push
+          # uses the release app token, which lets the resulting PR
+          # trigger downstream workflows (pr-checks.yml etc) — using
+          # GITHUB_TOKEN here would suppress those triggers per
+          # GitHub's loop-prevention design.
+          if ! git push --set-upstream origin "$BRANCH"; then
+            echo "::error::git push to release branch '$BRANCH' failed. The version bump is local only — re-run this workflow once the issue is resolved."
             exit 1
           fi
-          echo "Created release v${VERSION} at ${COMMIT_SHA}"
 
-          # Job summary for easy copy-paste
+          # PR body uses the same release notes that will eventually go
+          # to the GitHub Release. release-tag.yml will REGENERATE notes
+          # against the post-merge HEAD (which may include other PRs
+          # that landed between this PR opening and merging), so the
+          # body here is informational rather than authoritative — but
+          # it lets reviewers see what's expected.
+          PR_BODY_FILE=$(mktemp)
           {
             echo "## Release v${VERSION}"
+            echo ""
+            echo "**Bump type**: ${{ steps.bump.outputs.type }}"
+            echo ""
+            echo "Auto-generated release PR. CI will run the full required-check pipeline; once green, this PR auto-merges and \`release-tag.yml\` creates the GitHub Release + tag in response."
+            echo ""
+            echo "---"
+            echo ""
+            cat "$NOTES_FILE"
+            echo ""
+            echo "---"
+            echo ""
+            echo "_If this PR fails CI: investigate the failure, push fixes to \`${BRANCH}\` (NOT \`main\`), and re-trigger auto-merge. To abandon this release entirely, close the PR and delete the branch._"
+          } > "$PR_BODY_FILE"
+
+          # Create PR. We use --label release-bump so a follow-up
+          # workflow could choose to skip heavy non-required jobs for
+          # release bumps (future optimisation; not implemented yet).
+          PR_URL=$(gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "chore: release v${VERSION}" \
+            --body-file "$PR_BODY_FILE" \
+            --label release-bump 2>&1) || PR_CREATE_FAILED=$?
+          if [ "${PR_CREATE_FAILED:-0}" -ne 0 ]; then
+            # Some failure modes (e.g. label doesn't exist yet) leave
+            # the branch pushed but no PR. Surface a clear instruction.
+            echo "::error::gh pr create failed for ${BRANCH}. The branch is pushed; create the PR manually: gh pr create --base main --head ${BRANCH} --title 'chore: release v${VERSION}' --body-file <notes>"
+            exit 1
+          fi
+          PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+          echo "Opened PR #${PR_NUMBER}: ${PR_URL}"
+
+          # Enable auto-merge with squash strategy. The squashed commit
+          # message defaults to the PR title (`chore: release vX.Y.Z`),
+          # which is exactly what release-tag.yml's trigger pattern
+          # matches. Auto-merge fires once all required checks pass.
+          if ! gh pr merge "$PR_NUMBER" --auto --squash; then
+            echo "::error::gh pr merge --auto --squash failed for PR #${PR_NUMBER}. The PR is open but auto-merge is not enabled — enable it manually via the PR UI."
+            exit 1
+          fi
+          echo "Auto-merge (squash) enabled on PR #${PR_NUMBER}"
+
+          # Job summary for easy copy-paste / status visibility.
+          {
+            echo "## Release PR Opened: v${VERSION}"
             echo ""
             echo "| | |"
             echo "|---|---|"
             echo "| **Version** | \`v${VERSION}\` |"
             echo "| **Bump** | ${{ steps.bump.outputs.type }} |"
-            echo "| **Commit** | \`${COMMIT_SHA:0:10}\` |"
-            echo "| **Release** | [v${VERSION}](${{ github.server_url }}/${{ github.repository }}/releases/tag/v${VERSION}) |"
+            echo "| **Branch** | \`${BRANCH}\` |"
+            echo "| **PR** | [#${PR_NUMBER}](${PR_URL}) |"
+            echo "| **Auto-merge** | enabled (squash) |"
+            echo ""
+            echo "Once CI passes, the PR will auto-merge and \`release-tag.yml\` will create the GitHub Release + tag."
           } >> "$GITHUB_STEP_SUMMARY"

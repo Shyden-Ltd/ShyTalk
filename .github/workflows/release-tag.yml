@@ -1,0 +1,239 @@
+name: Release Tag
+
+# Fires when a release-bump PR (opened by release.yml) auto-merges to
+# main. Creates the git tag and GitHub Release in response. Splits the
+# work from release.yml because branch protection requires PRs for all
+# changes to main — release.yml can't push to main directly, so the
+# tag-and-release work has to happen AFTER the PR merges.
+#
+# Trigger: any push to main. The first step short-circuits unless the
+# pushed commit's subject matches `chore: release vX.Y.Z`. This makes
+# the workflow resilient to manual operations: if someone hand-rolls a
+# release commit (e.g. an emergency hotfix without going through
+# release.yml), this workflow will still tag + release it.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+# Share concurrency with release.yml. release.yml exits ~3min after
+# starting (it just opens the PR; auto-merge handles the rest), and
+# release-tag.yml only fires once the PR's squashed commit hits main —
+# typically 30+min later. So queueing is rare but the slot is reserved
+# correctly when it does happen.
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  tag-and-release:
+    name: Tag and Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Inspect commit subject
+        id: inspect
+        env:
+          # Pass head_commit.message through an env var rather than
+          # interpolating into the shell directly. github.event values
+          # are attacker-controlled (anyone with merge access can craft
+          # a commit message with shell-metachar payloads); inline
+          # interpolation would let `chore: release v$(rm -rf /)` run
+          # arbitrary code on the runner.
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          # Take only the first line — head_commit.message is the
+          # FULL commit message including body, not just the subject.
+          # Quoting the env var protects against word-splitting if a
+          # commit subject contains shell metachars (it doesn't run as
+          # code thanks to the env-var indirection above, but we still
+          # want to handle weird subjects gracefully).
+          SUBJECT_FIRST_LINE=$(printf '%s\n' "$HEAD_COMMIT_MESSAGE" | head -1)
+          echo "Latest commit subject: '$SUBJECT_FIRST_LINE'"
+
+          if echo "$SUBJECT_FIRST_LINE" | grep -qE '^chore: release v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            VERSION=$(echo "$SUBJECT_FIRST_LINE" | sed -E 's/^chore: release v([0-9]+\.[0-9]+\.[0-9]+)$/\1/')
+            echo "is_release=true" >> "$GITHUB_OUTPUT"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "Detected release commit for v${VERSION}"
+          else
+            echo "is_release=false" >> "$GITHUB_OUTPUT"
+            echo "Not a release commit — exiting early."
+          fi
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        if: steps.inspect.outputs.is_release == 'true'
+        with:
+          # Need full history to walk back to the previous release tag
+          # for the changelog aggregation step below.
+          fetch-depth: 0
+
+      - name: Verify tag does not already exist
+        if: steps.inspect.outputs.is_release == 'true'
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.inspect.outputs.version }}"
+          # If a tag already exists for this version, something is
+          # wrong — either release.yml's double-fired guard let a
+          # duplicate through, or someone tagged manually. Refuse to
+          # silently overwrite.
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            EXISTING_SHA=$(git rev-parse "v${VERSION}")
+            echo "::error::Tag v${VERSION} already exists at ${EXISTING_SHA}. Refusing to retag. Investigate: this commit's subject indicated a fresh release, but a tag for this version is already present."
+            exit 1
+          fi
+          echo "Tag v${VERSION} does not yet exist — safe to create."
+
+      - name: Verify HEAD versionName matches commit subject
+        if: steps.inspect.outputs.is_release == 'true'
+        run: |
+          set -euo pipefail
+          EXPECTED="${{ steps.inspect.outputs.version }}"
+          ACTUAL=$(awk -F'"' '/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"/ {print $2; exit}' app/build.gradle.kts || true)
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::HEAD versionName is '$ACTUAL' but commit subject promises '$EXPECTED'. Refusing to tag a mismatched commit. Investigate: did someone amend the version-bump commit, or land a non-release commit between the release PR opening and merging?"
+            exit 1
+          fi
+          echo "Verified: HEAD versionName '$ACTUAL' matches commit subject 'v${EXPECTED}'"
+
+      - name: Generate release notes from PRs since last tag
+        id: notes
+        if: steps.inspect.outputs.is_release == 'true'
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.inspect.outputs.version }}"
+          NOTES_FILE=$(mktemp)
+
+          # Walk back to the previous release tag. Mirror the logic in
+          # release.yml so behaviour is consistent — release.yml's PR
+          # body and this workflow's release notes use the same source.
+          # Subtle difference: release.yml computed notes BEFORE the
+          # release-bump commit existed, while this workflow runs AFTER.
+          # That means the changelog from this workflow may include
+          # additional PRs that merged between the release PR opening
+          # and merging. That's correct — the release notes reflect
+          # what's actually in the released code.
+          LAST_TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            RANGE="${LAST_TAG}..HEAD"
+            echo "Aggregating commits since ${LAST_TAG}"
+          else
+            if [ -n "$(git tag -l)" ]; then
+              echo "::error::Tags exist but none match 'v*' — refusing to generate full-history changelog. Verify your tag naming or pass an explicit base."
+              git tag -l | head -10
+              exit 1
+            fi
+            RANGE=""
+            echo "No prior release tag found — aggregating all commits"
+          fi
+
+          # First-parent walk on main; allowlist of feat/fix/perf
+          # Conventional-Commits prefixes; reverts summarised separately.
+          # See release.yml for the rationale on each filter choice.
+          # shellcheck disable=SC2086
+          ALL_LINES=$(git log $RANGE --first-parent --pretty=format:'%s')
+          USER_FACING=$(echo "$ALL_LINES" \
+            | { grep -E '^(feat|fix|perf)(\(.+\))?:' || [ $? -eq 1 ]; } \
+            | sed -E 's/^[a-z]+(\([^)]*\))?: //')
+          REVERTS=$(echo "$ALL_LINES" \
+            | { grep -E '^revert(\(.+\))?:' || [ $? -eq 1 ]; } \
+            | sed -E 's/^revert(\([^)]*\))?: //')
+          if [ -z "$LAST_TAG" ]; then
+            USER_FACING=$(echo "$USER_FACING" | head -50)
+            REVERTS=$(echo "$REVERTS" | head -10)
+          fi
+
+          {
+            echo "## v${VERSION}"
+            echo ""
+            if [ -n "$USER_FACING" ]; then
+              echo "### What's new"
+              echo ""
+              echo "$USER_FACING" | while IFS= read -r line; do
+                cleaned=$(echo "$line" | sed -E 's/[[:space:]]*\(#[0-9]+\)[[:space:]]*$//')
+                echo "- ${cleaned}"
+              done
+            elif [ -z "$REVERTS" ]; then
+              echo "Internal release with no user-facing changes."
+            fi
+            if [ -n "$REVERTS" ]; then
+              echo ""
+              echo "### Reverted"
+              echo ""
+              echo "$REVERTS" | while IFS= read -r line; do
+                cleaned=$(echo "$line" | sed -E 's/[[:space:]]*\(#[0-9]+\)[[:space:]]*$//')
+                echo "- ${cleaned}"
+              done
+            fi
+          } > "$NOTES_FILE"
+
+          echo "notes_file=$NOTES_FILE" >> "$GITHUB_OUTPUT"
+
+          echo "----- Generated release notes -----"
+          cat "$NOTES_FILE"
+          echo "-----------------------------------"
+
+      - name: Create GitHub release
+        if: steps.inspect.outputs.is_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.inspect.outputs.version }}"
+          COMMIT_SHA=$(git rev-parse HEAD)
+          NOTES_FILE="${{ steps.notes.outputs.notes_file }}"
+
+          # gh release create both creates the tag (via --target) AND
+          # publishes the GitHub Release in one atomic operation. If
+          # this fails (rate limit, 5xx, token scope issue, transient
+          # blip), no auto-retry — the merged release commit is on
+          # main but no tag/release exists. Surface a single-line
+          # ::error:: (multi-line annotations don't render) plus full
+          # recovery instructions in the step output and job summary so
+          # the operator can manually complete the release.
+          if ! gh release create "v${VERSION}" \
+            --target "$COMMIT_SHA" \
+            --title "v${VERSION}" \
+            --notes-file "$NOTES_FILE"; then
+            echo "::error::gh release create failed for v${VERSION}. The release commit is on main at ${COMMIT_SHA} but no tag/release exists. See step output + job summary for manual-recovery command."
+            {
+              echo ""
+              echo "============================================================"
+              echo "MANUAL RECOVERY REQUIRED"
+              echo "============================================================"
+              echo "The release commit for v${VERSION} is at ${COMMIT_SHA}"
+              echo "on origin/main, but the GitHub Release was not created."
+              echo "Re-running this workflow on the same SHA will succeed if"
+              echo "the underlying issue (rate limit, scope) is resolved."
+              echo "Otherwise run locally on a fresh clone of main:"
+              echo ""
+              echo "  gh release create v${VERSION} \\"
+              echo "    --target ${COMMIT_SHA} \\"
+              echo "    --title v${VERSION} \\"
+              echo "    --notes-file -<<'NOTES'"
+              cat "$NOTES_FILE"
+              echo "NOTES"
+              echo ""
+              echo "============================================================"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "Created release v${VERSION} at ${COMMIT_SHA}"
+
+          {
+            echo "## Release v${VERSION}"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Version** | \`v${VERSION}\` |"
+            echo "| **Commit** | \`${COMMIT_SHA:0:10}\` |"
+            echo "| **Release** | [v${VERSION}](${{ github.server_url }}/${{ github.repository }}/releases/tag/v${VERSION}) |"
+          } >> "$GITHUB_STEP_SUMMARY"

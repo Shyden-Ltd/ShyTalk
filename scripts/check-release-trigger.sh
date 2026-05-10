@@ -121,4 +121,63 @@ if [ -f "$DEPLOY_DEV_YML" ]; then
   fi
 fi
 
-echo "✓ release.yml is workflow_dispatch-only; deploy-dev.yml injects unique iOS build number."
+# Verify the PR-based release shape (Option A from 2026-05-10's
+# release-bug fix). Direct push from CI to main is blocked by classic
+# branch protection's `PR Gate` required check (a `pull_request`-only
+# aggregator that no direct push can ever satisfy). release.yml must
+# instead:
+#   1. Open a PR with the version-bump commit on a release/* branch
+#   2. Enable auto-merge so the PR squashes into main once CI passes
+#   3. release-tag.yml then reacts to the squashed commit and creates
+#      the tag + GitHub Release
+#
+# Without these, the next manual Release dispatch would rediscover the
+# 2026-05-10 GH013 failure.
+
+# Reject any `git push` line in release.yml that pushes to main. We
+# match `git push` followed by anything that includes `main` either as
+# a direct refspec or `HEAD:main`. Pushes to `release/v*` branches are
+# the only allowed shape — those don't trip branch protection.
+# `grep -P` for a Perl-compatible negative-match pattern would be
+# cleaner but isn't portable; use a two-step grep instead.
+if grep -nE 'git push' "$RELEASE_YML" | grep -qE '\bmain\b|HEAD:main'; then
+  echo "::error::release.yml contains a 'git push' targeting main. Direct pushes to main from CI are blocked by branch protection's PR Gate aggregator. Push to release/* branches only and let auto-merge handle the merge."
+  grep -nE 'git push' "$RELEASE_YML"
+  exit 1
+fi
+
+# Verify release.yml uses the PR-based flow.
+if ! grep -qE 'gh pr create' "$RELEASE_YML"; then
+  echo "::error::release.yml does not contain 'gh pr create' — it should open a release PR rather than push directly."
+  exit 1
+fi
+if ! grep -qE 'gh pr merge.*--auto' "$RELEASE_YML"; then
+  echo "::error::release.yml does not enable auto-merge ('gh pr merge --auto'). Without auto-merge the release PR would sit indefinitely waiting for human action."
+  exit 1
+fi
+
+# Verify the companion workflow exists and is wired correctly.
+RELEASE_TAG_YML=".github/workflows/release-tag.yml"
+if [ ! -f "$RELEASE_TAG_YML" ]; then
+  echo "::error::$RELEASE_TAG_YML not found. The PR-based release flow needs a separate workflow that fires AFTER the release PR merges to create the tag + GitHub Release. Without it, releases would land on main but no tag/release would ever be created."
+  exit 1
+fi
+# release-tag.yml must trigger on push to main.
+if ! grep -qE '^[[:space:]]+- main$' "$RELEASE_TAG_YML"; then
+  echo "::error::$RELEASE_TAG_YML must trigger on push to main (look for 'branches: [main]' or '- main')."
+  exit 1
+fi
+# It must short-circuit on non-release commits — match the release-
+# commit subject pattern. Without this guard it would try to tag every
+# commit on main.
+if ! grep -qE 'chore: release v' "$RELEASE_TAG_YML"; then
+  echo "::error::$RELEASE_TAG_YML does not look for the 'chore: release v' commit subject pattern. Without that guard it would attempt to tag every push to main."
+  exit 1
+fi
+# It must call gh release create.
+if ! grep -qE 'gh release create' "$RELEASE_TAG_YML"; then
+  echo "::error::$RELEASE_TAG_YML does not call 'gh release create' — the workflow would never publish a GitHub Release."
+  exit 1
+fi
+
+echo "✓ release.yml is workflow_dispatch-only and uses PR-based flow; release-tag.yml fires on release commits; deploy-dev.yml injects unique iOS build number."
