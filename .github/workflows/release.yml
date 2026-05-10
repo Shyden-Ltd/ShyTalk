@@ -88,6 +88,21 @@ jobs:
             echo "::error::An open release PR already exists. Wait for it to merge (or close it) before opening another. Run 'gh pr list --state open --search \"in:title chore: release v\"' to find it."
             exit 1
           fi
+          # Guard against orphan release branches left by a failed
+          # previous run. The "no-force-push-anywhere" ruleset blocks
+          # branch deletion, so an aborted run can leave release/vX.Y.Z
+          # behind — and the next dispatch would try to push to the
+          # same branch, hit branch-already-exists, and fail. Refuse
+          # to proceed; the operator must manually delete the orphan
+          # via the GitHub UI (or temporarily lift the deletion rule).
+          ORPHAN_RELEASE_BRANCHES=$(gh api repos/${{ github.repository }}/branches --paginate --jq '.[].name | select(startswith("release/v"))')
+          if [ -n "$ORPHAN_RELEASE_BRANCHES" ]; then
+            echo "::error::Orphan release branch(es) detected on origin — likely from a previous failed run."
+            echo "Branches: $ORPHAN_RELEASE_BRANCHES"
+            echo "Action: Delete via the GitHub UI (Settings > Branches > <branch> > Delete) and re-trigger this workflow."
+            echo "If branch protection blocks the UI delete, lift the no-force-push-anywhere ruleset's 'deletion' rule briefly, then re-enable."
+            exit 1
+          fi
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
@@ -347,19 +362,30 @@ jobs:
             echo "_If this PR fails CI: investigate the failure, push fixes to \`${BRANCH}\` (NOT \`main\`), and re-trigger auto-merge. To abandon this release entirely, close the PR and delete the branch._"
           } > "$PR_BODY_FILE"
 
-          # Create PR. We use --label release-bump so a follow-up
-          # workflow could choose to skip heavy non-required jobs for
-          # release bumps (future optimisation; not implemented yet).
+          # Create PR. We deliberately do NOT pass --label here:
+          # gh pr create requires the label to pre-exist in the repo
+          # and aborts with "could not add label" on miss, which would
+          # leave us with a pushed branch but no PR (the failure mode
+          # we hit on 2026-05-10 with a `release-bump` label that had
+          # never been created). Plain unlabelled PRs are robust and
+          # the release-tag.yml trigger keys off the commit subject,
+          # not a label.
+          # Capture combined stdout+stderr so on failure we can echo
+          # the actual gh error (the tail typically contains the GH
+          # API's reason: branch protection, permissions, label miss,
+          # etc.) — without this echo the operator sees only the
+          # generic "::error::gh pr create failed" annotation.
           PR_URL=$(gh pr create \
             --base main \
             --head "$BRANCH" \
             --title "chore: release v${VERSION}" \
-            --body-file "$PR_BODY_FILE" \
-            --label release-bump 2>&1) || PR_CREATE_FAILED=$?
+            --body-file "$PR_BODY_FILE" 2>&1) || PR_CREATE_FAILED=$?
           if [ "${PR_CREATE_FAILED:-0}" -ne 0 ]; then
-            # Some failure modes (e.g. label doesn't exist yet) leave
-            # the branch pushed but no PR. Surface a clear instruction.
-            echo "::error::gh pr create failed for ${BRANCH}. The branch is pushed; create the PR manually: gh pr create --base main --head ${BRANCH} --title 'chore: release v${VERSION}' --body-file <notes>"
+            echo "::error::gh pr create failed for ${BRANCH}. See gh output below + manual recovery command."
+            echo "----- gh pr create output -----"
+            echo "$PR_URL"
+            echo "-------------------------------"
+            echo "Manual recovery: gh pr create --base main --head ${BRANCH} --title 'chore: release v${VERSION}' --body-file <notes>"
             exit 1
           fi
           PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
