@@ -156,6 +156,25 @@ if ! grep -qE 'gh pr merge.*--auto' "$RELEASE_YML"; then
   exit 1
 fi
 
+# The release commit MUST be created server-side via GraphQL
+# `createCommitOnBranch`, NOT via `git commit` + `git push`. The latter
+# produces UNSIGNED commits regardless of token, which the
+# `required_signatures` rule on ruleset 12613584 blocks from being
+# squash-merged into main. We hit this exact failure mode on 2026-05-10
+# with PR #608 (release/v0.97.6 stuck MERGEABLE/BLOCKED with all
+# checks green; gh api revealed `verified: false, reason: "unsigned"`).
+if ! grep -qE 'createCommitOnBranch' "$RELEASE_YML"; then
+  echo "::error::release.yml does not use GraphQL 'createCommitOnBranch' — release commits would be unsigned and blocked by branch protection's required_signatures rule. Use the GraphQL mutation, not 'git commit' + 'git push'."
+  exit 1
+fi
+# Confirm we're NOT also doing a plain `git commit` of the release
+# bump — that would either be dead code OR produce a parallel unsigned
+# commit that races the signed one.
+if grep -qE '^[[:space:]]+git commit -m "chore: release v' "$RELEASE_YML"; then
+  echo "::error::release.yml still contains 'git commit -m \"chore: release v...\"' — that produces an unsigned commit. Remove it; createCommitOnBranch is the source of truth."
+  exit 1
+fi
+
 # Verify the companion workflow exists and is wired correctly.
 RELEASE_TAG_YML=".github/workflows/release-tag.yml"
 if [ ! -f "$RELEASE_TAG_YML" ]; then

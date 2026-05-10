@@ -311,7 +311,86 @@ jobs:
           cat "$NOTES_FILE"
           echo "-----------------------------------"
 
-      - name: Create release branch and open PR
+      - name: Create release branch and signed commit via GraphQL
+        id: create_commit
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          BRANCH="release/v${VERSION}"
+          PARENT_SHA=$(git rev-parse HEAD)
+
+          # We deliberately do NOT use `git commit` + `git push` here.
+          # That path produces UNSIGNED commits regardless of the App
+          # token used to push, because git's commit-signing depends on
+          # local GPG/SSH key configuration that doesn't exist in CI.
+          # Branch protection ruleset 12613584 has `required_signatures`
+          # enabled, so unsigned release commits get blocked from being
+          # squash-merged into main — exactly the failure mode we hit
+          # with PR #608 (the v0.97.6 release). The PR appears as
+          # MERGEABLE/BLOCKED with all checks green and no clear reason
+          # in the GitHub UI; only `gh api repos/X/pulls/N/commits`
+          # reveals `verified: false, reason: "unsigned"`.
+          #
+          # GitHub's GraphQL `createCommitOnBranch` mutation creates
+          # commits server-side that are automatically signed as the
+          # authenticated GitHub App identity. That's the only path
+          # to signed commits from a workflow without a configured
+          # GPG/SSH key in CI.
+
+          # Step 1: Create the release branch (empty, points at main's
+          # current HEAD). createCommitOnBranch requires the branch to
+          # exist before adding commits to it.
+          if ! gh api -X POST "repos/${{ github.repository }}/git/refs" \
+                -f "ref=refs/heads/${BRANCH}" \
+                -f "sha=${PARENT_SHA}" > /tmp/refs-response.json 2>&1; then
+            echo "::error::Failed to create branch ${BRANCH} via REST API."
+            cat /tmp/refs-response.json
+            exit 1
+          fi
+          echo "Created branch ${BRANCH} at ${PARENT_SHA}"
+
+          # Step 2: Build the GraphQL mutation payload. Use jq to
+          # safely encode file contents (base64) and construct the
+          # JSON. --rawfile reads the file verbatim; @base64 in jq
+          # produces RFC-4648-compliant output that GraphQL accepts
+          # without padding/newline issues.
+          ADDITIONS=$(jq -n \
+            --rawfile c1 app/build.gradle.kts \
+            --rawfile c2 app/src/main/play/release-notes/en-US/internal.txt \
+            --rawfile c3 app/src/main/play/release-notes/en-US/default.txt \
+            '[
+              {path: "app/build.gradle.kts", contents: ($c1|@base64)},
+              {path: "app/src/main/play/release-notes/en-US/internal.txt", contents: ($c2|@base64)},
+              {path: "app/src/main/play/release-notes/en-US/default.txt", contents: ($c3|@base64)}
+            ]')
+
+          PAYLOAD=$(jq -n \
+            --arg repo "${{ github.repository }}" \
+            --arg branch "${BRANCH}" \
+            --arg oid "${PARENT_SHA}" \
+            --arg msg "chore: release v${VERSION}" \
+            --argjson additions "$ADDITIONS" \
+            '{
+              query: "mutation($repo: String!, $branch: String!, $oid: GitObjectID!, $msg: String!, $additions: [FileAddition!]!) { createCommitOnBranch(input: { branch: { repositoryNameWithOwner: $repo, branchName: $branch }, expectedHeadOid: $oid, fileChanges: { additions: $additions }, message: { headline: $msg } }) { commit { oid url } } }",
+              variables: {repo: $repo, branch: $branch, oid: $oid, msg: $msg, additions: $additions}
+            }')
+
+          # Step 3: Submit the mutation. gh api graphql --input - reads
+          # the full request body from stdin (query + variables), which
+          # handles complex variable types (FileAddition[]) cleanly.
+          RESPONSE=$(echo "$PAYLOAD" | gh api graphql --input -)
+          COMMIT_OID=$(echo "$RESPONSE" | jq -r '.data.createCommitOnBranch.commit.oid // empty')
+          if [ -z "$COMMIT_OID" ]; then
+            echo "::error::createCommitOnBranch mutation failed — response below."
+            echo "$RESPONSE" | jq .
+            exit 1
+          fi
+          echo "Created signed commit ${COMMIT_OID} on ${BRANCH}"
+          echo "commit_oid=${COMMIT_OID}" >> "$GITHUB_OUTPUT"
+
+      - name: Open release PR
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
@@ -319,30 +398,6 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           BRANCH="release/v${VERSION}"
           NOTES_FILE="${{ steps.notes.outputs.notes_file }}"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # Create branch from current main and commit the bump + Play
-          # Store release notes. The branch name embeds the version so
-          # concurrent releases (should they ever happen despite the
-          # double-fired guard) wouldn't collide.
-          git checkout -b "$BRANCH"
-          git add app/build.gradle.kts \
-                  app/src/main/play/release-notes/en-US/internal.txt \
-                  app/src/main/play/release-notes/en-US/default.txt
-          git commit -m "chore: release v${VERSION}"
-
-          # Push to origin. Branch protection on main does NOT apply to
-          # release/* branches, so this push is unconditional. The push
-          # uses the release app token, which lets the resulting PR
-          # trigger downstream workflows (pr-checks.yml etc) — using
-          # GITHUB_TOKEN here would suppress those triggers per
-          # GitHub's loop-prevention design.
-          if ! git push --set-upstream origin "$BRANCH"; then
-            echo "::error::git push to release branch '$BRANCH' failed. The version bump is local only — re-run this workflow once the issue is resolved."
-            exit 1
-          fi
 
           # PR body uses the same release notes that will eventually go
           # to the GitHub Release. release-tag.yml will REGENERATE notes
