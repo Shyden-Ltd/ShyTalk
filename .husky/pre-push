@@ -105,9 +105,13 @@ fi
 
 echo "Running SonarCloud pre-push scan..."
 
-# Express API tests with coverage
+# Express API tests with coverage. The `--experimental-vm-modules` flag is
+# needed since express-api/src/utils/data-export-builder.js uses dynamic
+# `import('archiver')` (archiver v8 is ESM-only); Jest's default CJS VM
+# rejects `import()` callbacks without that flag. Mirrors the npm `test`
+# script in express-api/package.json so both call sites stay in sync.
 echo "  → Express tests with coverage..."
-cd express-api && npx jest --coverage --coverageReporters=lcov --forceExit --silent 2>/dev/null
+cd express-api && node --experimental-vm-modules node_modules/.bin/jest --coverage --coverageReporters=lcov --forceExit --silent 2>/dev/null
 cd ..
 
 # Kotlin JVM tests (for coverage reports)

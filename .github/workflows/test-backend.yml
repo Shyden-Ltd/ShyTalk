@@ -44,7 +44,13 @@ jobs:
           cache: 'npm'
 
       - name: Run Express API tests with coverage
-        run: cd express-api && npm ci && npx jest --coverage --coverageReporters=html --forceExit
+        # `--experimental-vm-modules` lets Jest's CJS VM resolve dynamic
+        # `import()` callbacks — required since data-export-builder.js uses
+        # `import('archiver')` (archiver v8 is ESM-only). Mirrors the
+        # `test` script in express-api/package.json.
+        run: |
+          cd express-api && npm ci
+          node --experimental-vm-modules node_modules/.bin/jest --coverage --coverageReporters=html --forceExit
 
       - name: Write metadata.json
         if: always()
