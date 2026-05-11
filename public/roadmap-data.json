@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-09",
+  "lastUpdated": "2026-05-11",
   "currentlyWorkingOn": [
     {
       "name": "Age-gating per feature",
@@ -40,7 +40,7 @@
       },
       "status": "in-progress",
       "progress": {
-        "done": 3,
+        "done": 4,
         "total": 19
       },
       "features": [
@@ -136,7 +136,7 @@
         {
           "name": "Gift-blocked-but-profile-viewable gap",
           "description": "block-list integrity bug: blocked user can still view profile + see public gifts even though they can't send",
-          "status": "planned",
+          "status": "done",
           "i18n": {}
         },
         {
