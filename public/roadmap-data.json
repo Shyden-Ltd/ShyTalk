@@ -6,12 +6,6 @@
       "description": "separate age gates for voice rooms / gifting / DMs-with-strangers. Currently single 13+ gate at signup; needs per-feature age sensitivity",
       "phase": "Safety & Compliance",
       "i18n": {}
-    },
-    {
-      "name": "`resolveReport` partial-failure flag surfacing",
-      "description": "admin UI must show per-sub-action failures (`warning.failed`, `suspension.failed`, `auditLog.failed`, `pms.failed`, `cascade`) currently swallowed by `Resource<Unit>`. Mostly DONE for admin-bans / economy / devices / warn / backpack PMs (PRs #385, #392, #393). Remaining: re-audit `resolveReport` itself + `reportMessage` / `reportUser` paths and any iOS admin surface when added",
-      "phase": "Platform & iOS",
-      "i18n": {}
     }
   ],
   "phases": [
@@ -647,7 +641,7 @@
       },
       "status": "in-progress",
       "progress": {
-        "done": 14,
+        "done": 15,
         "total": 17
       },
       "features": [
@@ -737,7 +731,7 @@
         {
           "name": "`resolveReport` partial-failure flag surfacing",
           "description": "admin UI must show per-sub-action failures (`warning.failed`, `suspension.failed`, `auditLog.failed`, `pms.failed`, `cascade`) currently swallowed by `Resource<Unit>`. Mostly DONE for admin-bans / economy / devices / warn / backpack PMs (PRs #385, #392, #393). Remaining: re-audit `resolveReport` itself + `reportMessage` / `reportUser` paths and any iOS admin surface when added",
-          "status": "in-progress",
+          "status": "done",
           "i18n": {}
         },
         {
