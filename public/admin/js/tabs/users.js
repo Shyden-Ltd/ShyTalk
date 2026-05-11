@@ -1221,7 +1221,7 @@ export async function resetPinLockout() {
     showToast(window.tAdmin("toast_pin_lockout_reset"));
     loadSecurityPanel();
   } catch (err) {
-    showToast("Failed: " + err.message, "error");
+    showToast(window.tAdminFmt("toast_action_failed", { error: err.message }), "error");
   }
 }
 
@@ -1232,7 +1232,7 @@ export async function revokeBiometricKey(uniqueId, deviceId) {
     showToast(window.tAdmin("toast_biometric_revoked"));
     loadSecurityPanel();
   } catch (err) {
-    showToast("Failed: " + err.message, "error");
+    showToast(window.tAdminFmt("toast_action_failed", { error: err.message }), "error");
   }
 }
 
@@ -1248,7 +1248,7 @@ export function wireModerationListeners() {
   const suspendBtn = $("#suspend-btn");
   if (suspendBtn) suspendBtn.addEventListener("click", async () => {
     const reason = $("#suspend-reason")?.value?.trim();
-    if (!reason) { showToast("Reason is required", "error"); return; }
+    if (!reason) { showToast(window.tAdmin("toast_reason_required"), "error"); return; }
     const endDateVal = $("#suspend-end-date")?.value;
     const endDate = endDateVal ? new Date(endDateVal).toISOString() : null;
     const canAppeal = $("#suspend-can-appeal")?.checked;
@@ -1305,11 +1305,11 @@ export function wireModerationListeners() {
   if (directWarnBtn) directWarnBtn.addEventListener("click", async () => {
     if (!currentUid) return;
     const reason = $("#direct-warn-reason")?.value;
-    if (!reason) { showToast("Select a reason", "error"); return; }
+    if (!reason) { showToast(window.tAdmin("toast_select_reason"), "error"); return; }
     const severity = parseInt(document.querySelector('input[name="direct-warn-severity"]:checked')?.value || "3");
     const adminNote = $("#direct-warn-note")?.value?.trim() || undefined;
     if (!confirm(window.tAdminFmt("confirm_issue_warning", { reason, severity, deduction: severity * 5 }))) return;
-    directWarnBtn.disabled = true; directWarnBtn.textContent = "Issuing...";
+    directWarnBtn.disabled = true; directWarnBtn.textContent = window.tAdmin("btn_issuing");
     try {
       const result = await apiCall("POST", `/api/user/${currentUid}/warn`, { reason, severity, adminNote });
       // Surface partial-failure: the warning PM may have failed silently.
@@ -1321,7 +1321,7 @@ export function wireModerationListeners() {
       if ($("#direct-warn-note")) $("#direct-warn-note").value = "";
     }
     catch (err) { showToast(err.message, "error"); }
-    finally { directWarnBtn.disabled = false; directWarnBtn.textContent = "Issue Warning"; }
+    finally { directWarnBtn.disabled = false; directWarnBtn.textContent = window.tAdmin("btn_issue_warning"); }
   });
   // Account deletion
   const scheduleDeletionBtn = $("#schedule-deletion-btn");
@@ -1340,11 +1340,11 @@ export function wireModerationListeners() {
   // Reset device binding
   const resetDeviceBtn = document.getElementById("reset-device-binding-btn");
   if (resetDeviceBtn) resetDeviceBtn.addEventListener("click", async () => {
-    if (!currentUid) { showToast("No user loaded", "error"); return; }
+    if (!currentUid) { showToast(window.tAdmin("toast_no_user_loaded"), "error"); return; }
     if (!confirm(window.tAdmin("confirm_remove_all_device_bindings"))) return;
-    resetDeviceBtn.disabled = true; resetDeviceBtn.textContent = "Resetting...";
-    try { const result = await apiCall("POST", `/api/cleanup/device-binding/${currentUid}`); showToast("Removed " + (result.deleted || 0) + " device binding(s)", "success"); populateDeviceBindingCard(currentUid); }
-    catch (err) { showToast("Failed: " + err.message, "error"); }
+    resetDeviceBtn.disabled = true; resetDeviceBtn.textContent = window.tAdmin("btn_resetting");
+    try { const result = await apiCall("POST", `/api/cleanup/device-binding/${currentUid}`); showToast(window.tAdminFmt("toast_device_bindings_removed", { count: result.deleted || 0 }), "success"); populateDeviceBindingCard(currentUid); }
+    catch (err) { showToast(window.tAdminFmt("toast_action_failed", { error: err.message }), "error"); }
     finally { resetDeviceBtn.disabled = false; resetDeviceBtn.textContent = "Reset Device Binding"; }
   });
 }
@@ -1848,7 +1848,7 @@ export function wireBansListeners() {
         showToast(`Banned ${fulfilled.length} device(s)`, "success");
       }
       populateBansSection(currentUid);
-    } catch (err) { showToast("Failed: " + err.message, "error"); }
+    } catch (err) { showToast(window.tAdminFmt("toast_action_failed", { error: err.message }), "error"); }
   });
   const banIpBtn = $("#bans-ban-last-ip");
   if (banIpBtn) banIpBtn.addEventListener("click", async () => {
@@ -1864,7 +1864,7 @@ export function wireBansListeners() {
       const result = await apiCall("POST", "/api/admin/bans/network", { type: "ip", value: lastDevice.lastIp, reason, linkedUniqueId: currentUid });
       window.PartialFailureToast?.showResultToast(showToast, result, "IP banned");
       populateBansSection(currentUid);
-    } catch (err) { showToast("Failed: " + err.message, "error"); }
+    } catch (err) { showToast(window.tAdminFmt("toast_action_failed", { error: err.message }), "error"); }
   });
   const unbanAllBtn = $("#bans-unban-all");
   if (unbanAllBtn) unbanAllBtn.addEventListener("click", async () => {
@@ -1874,7 +1874,7 @@ export function wireBansListeners() {
       const result = await apiCall("POST", `/api/admin/bans/unban-all/${currentUid}`);
       window.PartialFailureToast?.showResultToast(showToast, result, "Removed " + (result.removed || 0) + " ban(s)");
       populateBansSection(currentUid);
-    } catch (err) { showToast("Failed: " + err.message, "error"); }
+    } catch (err) { showToast(window.tAdminFmt("toast_action_failed", { error: err.message }), "error"); }
   });
   const viewLogsBtn = $("#bans-view-logs");
   if (viewLogsBtn) viewLogsBtn.addEventListener("click", () => { if (!currentUid) return; const logsUserFilter = $("#log-filter-userId"); if (logsUserFilter) logsUserFilter.value = currentUid; _switchTab("logs"); });
