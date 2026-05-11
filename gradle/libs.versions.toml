@@ -2,7 +2,7 @@
 agp = "9.2.0"
 kotlin = "2.4.0-Beta2" # Beta required: K/N 2.3.x has AutoboxingTransformer crash blocking iOS linking. Upgrade to stable when 2.4.0 releases.
 composeMultiplatform = "1.10.3"
-composeBom = "2026.04.01"
+composeBom = "2026.05.00"
 coreKtx = "1.18.0"
 lifecycleRuntimeKtx = "2.10.0"
 activityCompose = "1.13.0"
