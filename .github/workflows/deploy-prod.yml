@@ -1,13 +1,34 @@
 name: Deploy To Prod
-# Deploy a specific release tag to production
+# Deploy a release tag, branch, or commit hash to production.
+#
+# Default behavior preserved: when ref-type=tag, this works exactly
+# like the old `release-tag` input. branch/commit deploy is new and
+# allows hotfix workflows that don't go through the Release tag flow.
+#
+# All downstream jobs receive a canonical commit SHA from
+# validate-release.outputs.commit-sha, so a push to the source branch
+# between jobs can't produce a racy split-SHA deploy.
 
 on:
   workflow_dispatch:
     inputs:
-      release-tag:
-        description: 'Release tag to deploy (e.g. v0.55.0)'
+      ref-type:
+        description: 'What kind of ref to deploy'
+        type: choice
+        options:
+          - tag
+          - branch
+          - commit
+        default: tag
+        required: true
+      ref:
+        description: 'Tag (e.g. v0.55.0), branch name, or full 40-char commit SHA'
         type: string
         required: true
+      allow-non-main:
+        description: 'Allow deploying refs NOT on main (emergency hotfix branches; default off — safer)'
+        type: boolean
+        default: false
       backend:
         description: 'Deploy Express API to prod'
         type: boolean
@@ -38,37 +59,107 @@ env:
 
 jobs:
   validate-release:
-    name: Validate Release Tag
+    name: Validate Deploy Ref
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
+      commit-sha: ${{ steps.validate.outputs.commit-sha }}
       version: ${{ steps.validate.outputs.version }}
+      display-ref: ${{ steps.validate.outputs.display-ref }}
     steps:
+      # Checkout default branch HEAD with full history — the validate
+      # step uses git plumbing to resolve the requested ref to a
+      # canonical commit SHA. We deliberately do NOT pin `ref:` to the
+      # input here, because a) for branch refs we need `origin/<branch>`
+      # not the raw name, and b) the working tree contents don't matter
+      # at this step — only git history does.
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ inputs.release-tag }}
           fetch-depth: 0
 
-      - name: Validate tag exists and is on main
+      - name: Resolve ref to canonical commit SHA + validate
         id: validate
         env:
-          TAG: ${{ inputs.release-tag }}
+          REF_TYPE: ${{ inputs.ref-type }}
+          REF: ${{ inputs.ref }}
+          ALLOW_NON_MAIN: ${{ inputs.allow-non-main }}
         run: |
           set -euo pipefail
-          if ! git tag -l "$TAG" | grep -q "$TAG"; then
-            echo "::error::Tag $TAG does not exist"
-            exit 1
+          case "$REF_TYPE" in
+            tag)
+              if ! git tag -l "$REF" | grep -qx "$REF"; then
+                echo "::error::Tag '$REF' does not exist"
+                exit 1
+              fi
+              COMMIT_SHA=$(git rev-parse "refs/tags/$REF^{commit}")
+              # Tag-derived version: strip leading 'v' (existing convention).
+              VERSION="${REF#v}"
+              DISPLAY="$REF"
+              ;;
+            branch)
+              if ! git rev-parse --verify "refs/remotes/origin/$REF" >/dev/null 2>&1; then
+                echo "::error::Branch '$REF' does not exist on origin"
+                exit 1
+              fi
+              COMMIT_SHA=$(git rev-parse "refs/remotes/origin/$REF^{commit}")
+              # Branch deploys don't have a corresponding semver tag, so
+              # parse versionName from app/build.gradle.kts at that commit.
+              # This drives iOS CFBundleShortVersionString + Play release
+              # name (see deploy-android-prod / deploy-ios-prod).
+              VERSION=$(git show "$COMMIT_SHA:app/build.gradle.kts" | awk -F'"' '/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"/ {print $2; exit}')
+              if [ -z "$VERSION" ]; then
+                echo "::error::Could not parse versionName from app/build.gradle.kts at $COMMIT_SHA"
+                exit 1
+              fi
+              DISPLAY="branch $REF @ ${COMMIT_SHA:0:7}"
+              ;;
+            commit)
+              if ! echo "$REF" | grep -qE '^[0-9a-f]{40}$'; then
+                echo "::error::Commit input must be a full 40-char hex SHA (got '$REF'). Short SHAs are ambiguous and aren't supported here."
+                exit 1
+              fi
+              if ! git cat-file -e "$REF^{commit}" 2>/dev/null; then
+                echo "::error::Commit $REF does not exist in this repo (did you forget to push?)"
+                exit 1
+              fi
+              COMMIT_SHA="$REF"
+              VERSION=$(git show "$COMMIT_SHA:app/build.gradle.kts" | awk -F'"' '/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"/ {print $2; exit}')
+              if [ -z "$VERSION" ]; then
+                echo "::error::Could not parse versionName from app/build.gradle.kts at $COMMIT_SHA"
+                exit 1
+              fi
+              DISPLAY="commit ${COMMIT_SHA:0:7}"
+              ;;
+            *)
+              echo "::error::Invalid ref-type '$REF_TYPE' (expected: tag | branch | commit)"
+              exit 1
+              ;;
+          esac
+
+          # Prod hygiene: by default, refuse to deploy code that's not
+          # already on main. The operator can bypass this for emergency
+          # hotfix branches by setting allow-non-main=true at dispatch
+          # time. When bypassed, print a loud warning so the run log
+          # makes the choice visible during post-deploy review.
+          if [ "$ALLOW_NON_MAIN" = "true" ]; then
+            if ! git merge-base --is-ancestor "$COMMIT_SHA" origin/main; then
+              echo "::warning::$DISPLAY ($COMMIT_SHA) is NOT on origin/main — deploying off-main code at operator's explicit request (allow-non-main=true). iOS CFBundleVersion may collide with previously-uploaded TestFlight builds if versionCode wasn't bumped at this ref."
+            else
+              echo "Note: allow-non-main=true was set but $DISPLAY is on main anyway — no effect."
+            fi
+          else
+            if ! git merge-base --is-ancestor "$COMMIT_SHA" origin/main; then
+              echo "::error::$DISPLAY ($COMMIT_SHA) is not an ancestor of origin/main. Refusing to deploy off-main code to prod. Re-trigger with allow-non-main=true to bypass (intended for emergency hotfix branches)."
+              exit 1
+            fi
           fi
-          # Hard fail (not warn) if the tag isn't on main. Prod hygiene: only
-          # deploy code that's been merged to main. Don't suppress stderr
-          # from git merge-base — a typo'd tag should produce a real error.
-          if ! git merge-base --is-ancestor "$TAG" origin/main; then
-            echo "::error::Tag $TAG is not an ancestor of origin/main. Refusing to deploy off-main code to prod."
-            exit 1
-          fi
-          VERSION="${TAG#v}"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Deploying release $TAG (version $VERSION)"
+
+          {
+            echo "commit-sha=$COMMIT_SHA"
+            echo "version=$VERSION"
+            echo "display-ref=$DISPLAY"
+          } >> "$GITHUB_OUTPUT"
+          echo "Deploying $DISPLAY (commit $COMMIT_SHA, version $VERSION)"
 
   # ── Build Android (shared by deploy + smoke test) ──────────
   build-android:
@@ -80,7 +171,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ inputs.release-tag }}
+          ref: ${{ needs.validate-release.outputs.commit-sha }}
 
       - uses: ./.github/actions/setup-jdk-gradle
 
@@ -126,7 +217,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ inputs.release-tag }}
+          ref: ${{ needs.validate-release.outputs.commit-sha }}
 
       - uses: ./.github/actions/setup-node
 
@@ -151,15 +242,18 @@ jobs:
           tar czf /tmp/api.tar.gz --exclude='node_modules' --exclude='.env' .
           scp /tmp/api.tar.gz ubuntu@213.35.98.160:/tmp/
           # See deploy-dev.yml for rationale on .deployed-sha + pm2 --update-env.
-          # The release tag's commit SHA (resolved via git rev-parse) is what we
-          # actually deployed — github.sha here resolves to the workflow's HEAD,
-          # which is the release-tag's commit because checkout used `ref: ${{ inputs.release-tag }}`.
-          ssh ubuntu@213.35.98.160 "cd ~/shytalk-api && tar xzf /tmp/api.tar.gz && echo '${{ github.sha }}' > .deployed-sha && npm install --omit=dev && DEPLOYED_SHA='${{ github.sha }}' pm2 restart shytalk-api --update-env"
+          # We use the validate-release output (canonical commit SHA the deploy
+          # was authorised for) rather than `github.sha`. The latter resolves to
+          # the workflow's trigger commit (default-branch HEAD at dispatch
+          # time), which for branch/commit deploys is NOT the same as the
+          # checked-out deploy ref — using it would write a misleading SHA to
+          # .deployed-sha and pass the health check while serving different code.
+          ssh ubuntu@213.35.98.160 "cd ~/shytalk-api && tar xzf /tmp/api.tar.gz && echo '${{ needs.validate-release.outputs.commit-sha }}' > .deployed-sha && npm install --omit=dev && DEPLOYED_SHA='${{ needs.validate-release.outputs.commit-sha }}' pm2 restart shytalk-api --update-env"
 
       - name: Verify prod API health
         run: |
           set -euo pipefail
-          EXPECTED_SHA='${{ github.sha }}'
+          EXPECTED_SHA='${{ needs.validate-release.outputs.commit-sha }}'
           for i in 1 2 3 4 5; do
             sleep 5
             body=$(curl -sf -m 10 https://api.shytalk.shyden.co.uk/api/health || echo "")
@@ -207,7 +301,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ inputs.release-tag }}
+          ref: ${{ needs.validate-release.outputs.commit-sha }}
 
       - uses: ./.github/actions/setup-node
 
@@ -290,7 +384,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ inputs.release-tag }}
+          ref: ${{ needs.validate-release.outputs.commit-sha }}
 
       # Pre-cleanup: scrub any signing material left behind by a PRIOR
       # crashed run on the persistent self-hosted Mac. See deploy-dev.yml
@@ -618,7 +712,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ inputs.release-tag }}
+          ref: ${{ needs.validate-release.outputs.commit-sha }}
 
       - uses: ./.github/actions/setup-jdk-gradle
 
@@ -721,7 +815,8 @@ jobs:
       - name: Create critical issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ inputs.release-tag }}
+          DISPLAY_REF: ${{ needs.validate-release.outputs.display-ref }}
+          COMMIT_SHA: ${{ needs.validate-release.outputs.commit-sha }}
           BACKEND: ${{ needs.deploy-backend-prod.result }}
           WEB: ${{ needs.deploy-web-prod.result }}
           ANDROID: ${{ needs.deploy-android-prod.result }}
@@ -745,7 +840,8 @@ jobs:
           {
             echo "## Production Deploy Failed"
             echo ""
-            echo "**Release:** ${TAG}"
+            echo "**Ref:** ${DISPLAY_REF}"
+            echo "**Commit:** ${COMMIT_SHA}"
             echo "**Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
             echo ""
             echo "### Failed components"
@@ -753,11 +849,11 @@ jobs:
             echo ""
             echo "### Immediate action required"
             echo "1. Check the deploy job logs for the failure reason"
-            echo "2. Fix the issue and re-run deploy-prod with the same tag"
-            echo "3. Verify production matches the expected release"
+            echo "2. Fix the issue and re-run deploy-prod with the same ref"
+            echo "3. Verify production matches the expected ref"
             echo "4. Close this issue once resolved"
           } > "$BODY_FILE"
           gh issue create \
-            --title "CRITICAL: Production deploy failed for ${TAG}" \
+            --title "CRITICAL: Production deploy failed for ${DISPLAY_REF}" \
             --label "critical,prod-desync" \
             --body-file "$BODY_FILE"
