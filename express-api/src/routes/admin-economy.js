@@ -19,15 +19,19 @@ const { generateId, now } = require('../utils/helpers');
 const { sendSystemPm } = require('../utils/system-pm');
 const log = require('../utils/log');
 
-// Every route in this file is admin-only — gate by path prefix.
-const adminGuard = async (req, res, next) => {
-  if (await requireAdmin(req, res)) return;
-  next();
-};
-router.use('/users', adminGuard);
+// Admin enforcement: per-handler `requireAdmin`. The earlier
+// `router.use('/users', adminGuard)` form matched every `/users...` URL —
+// colliding with users.js (profile, follow, etc.), economy.js (gift-wall),
+// and any future sibling file under the heavily-shared `/users` namespace.
+// It worked by route-registration order only: non-admin /users routes
+// register first in src/index.js, so the prefix guard only caught
+// fall-through. Inline guards match the convention used across the rest
+// of the admin route surface and remove the order-dependent guarantee.
+// See project-cross-router-guard-followups.md.
 
 // ── Economy snapshot ──
 router.get('/users/:uniqueId/economy', async (req, res) => {
+  if (await requireAdmin(req, res)) return;
   try {
     const snap = await db.doc(`users/${req.params.uniqueId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
@@ -57,6 +61,7 @@ router.get('/users/:uniqueId/economy', async (req, res) => {
 
 // ── Adjust balance (coins or beans) ──
 router.post('/users/:uniqueId/adjust-balance', async (req, res) => {
+  if (await requireAdmin(req, res)) return;
   try {
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
@@ -141,6 +146,7 @@ router.post('/users/:uniqueId/adjust-balance', async (req, res) => {
 
 // ── Set backpack item quantity (admin) ──
 router.post('/users/:uniqueId/backpack', async (req, res) => {
+  if (await requireAdmin(req, res)) return;
   try {
     const body = req.body;
     if (!body?.giftId) return res.status(400).json({ error: 'giftId required' });
@@ -203,6 +209,7 @@ router.post('/users/:uniqueId/backpack', async (req, res) => {
 
 // ── Get luck + pity ──
 router.get('/users/:uniqueId/luck', async (req, res) => {
+  if (await requireAdmin(req, res)) return;
   try {
     const snap = await db.doc(`users/${req.params.uniqueId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
@@ -223,6 +230,7 @@ router.get('/users/:uniqueId/luck', async (req, res) => {
 
 // ── Update luck/pity ──
 router.post('/users/:uniqueId/luck', async (req, res) => {
+  if (await requireAdmin(req, res)) return;
   try {
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
@@ -268,6 +276,7 @@ router.post('/users/:uniqueId/luck', async (req, res) => {
 
 // ── Transaction history (admin view — any user) ──
 router.get('/users/:uniqueId/transactions', async (req, res) => {
+  if (await requireAdmin(req, res)) return;
   try {
     const limit = Math.min(Number.parseInt(req.query.limit, 10) || 50, 200);
     const filterType = req.query.type;
@@ -296,6 +305,7 @@ router.get('/users/:uniqueId/transactions', async (req, res) => {
 
 // ── Gacha guarantee: check ──
 router.get('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
+  if (await requireAdmin(req, res)) return;
   try {
     const snap = await db.doc(`users/${req.params.uniqueId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
@@ -337,6 +347,7 @@ router.get('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
 
 // ── Gacha guarantee: set ──
 router.post('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
+  if (await requireAdmin(req, res)) return;
   try {
     const body = req.body;
     if (!body?.giftId) return res.status(400).json({ error: 'giftId required' });
@@ -374,6 +385,7 @@ router.post('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
 
 // ── Gacha guarantee: revoke ──
 router.delete('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
+  if (await requireAdmin(req, res)) return;
   try {
     await Promise.all([
       db.doc(`users/${req.params.uniqueId}`).update({ guaranteedNextPullGiftId: null }),
