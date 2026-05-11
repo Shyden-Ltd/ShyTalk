@@ -1187,8 +1187,8 @@ export async function loadSecurityPanel() {
           const row = document.createElement("div");
           row.style.cssText = "display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)";
           const info = document.createElement("div");
-          info.innerHTML = `<strong>Device:</strong> ${escapeHtml(k.deviceId)}<br>
-            <small style="color:var(--text2)">Registered: ${escapeHtml(new Date(k.createdAt).toLocaleString())}</small>`;
+          info.innerHTML = `<strong>${window.tAdmin("bio_device_label")}</strong> ${escapeHtml(k.deviceId)}<br>
+            <small style="color:var(--text2)">${window.tAdmin("bio_registered_label")} ${escapeHtml(new Date(k.createdAt).toLocaleString())}</small>`;
           const btn = document.createElement("button");
           btn.className = "btn btn-danger btn-sm";
           btn.textContent = window.tAdmin("btn_revoke");
@@ -1326,7 +1326,7 @@ export function wireModerationListeners() {
   // Account deletion
   const scheduleDeletionBtn = $("#schedule-deletion-btn");
   if (scheduleDeletionBtn) scheduleDeletionBtn.addEventListener("click", async () => {
-    const reason = prompt("Enter reason for account deletion (optional):"); if (reason === null) return;
+    const reason = prompt(window.tAdmin("prompt_deletion_reason")); if (reason === null) return;
     if (!confirm(window.tAdmin("confirm_schedule_deletion"))) return;
     try { await apiCall("POST", `/api/user/${currentUid}/delete`, { reason }); alert(window.tAdmin("alert_deletion_scheduled")); const freshData = await apiCall("GET", `/api/user/${currentUid}`); populateDeletionSection(freshData); }
     catch (err) { alert(window.tAdminFmt("alert_schedule_deletion_failed", { error: err.message || err })); }
@@ -1813,7 +1813,7 @@ export function wireBansListeners() {
   if (banAllBtn) banAllBtn.addEventListener("click", async () => {
     if (!currentUid) return;
     if (!confirm(window.tAdmin("confirm_ban_all_devices"))) return;
-    const reason = prompt("Reason (optional):") || "";
+    const reason = prompt(window.tAdmin("prompt_ban_reason")) || "";
     try {
       const devicesData = await apiCall("GET", `/api/admin/devices/user/${currentUid}`);
       const devices = devicesData.devices || [];
@@ -1837,10 +1837,10 @@ export function wireBansListeners() {
       // actionable), then PM failures, then success count.
       const segments = [];
       if (rejected.length > 0) {
-        segments.push(`${rejected.length}/${devices.length} ban call(s) failed (first: ${rejected[0].reason?.message || "unknown"})`);
+        segments.push(window.tAdminFmt("segment_ban_call_failed", { count: rejected.length, total: devices.length, error: rejected[0].reason?.message || "unknown" }));
       }
       if (aggregatePmFailed > 0) {
-        segments.push(`${aggregatePmFailed}/${aggregatePmTotal} PMs failed`);
+        segments.push(window.tAdminFmt("segment_pm_failed", { count: aggregatePmFailed, total: aggregatePmTotal }));
       }
       if (segments.length > 0) {
         showToast(window.tAdminFmt("toast_partial_retry", { summary: segments.join("; ") }), "error");
@@ -1859,10 +1859,10 @@ export function wireBansListeners() {
       const lastDevice = devices.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0))[0];
       if (!lastDevice || !lastDevice.lastIp) { showToast(window.tAdmin("toast_no_ip_found"), "error"); return; }
       if (!confirm(window.tAdminFmt("confirm_ban_ip", { ip: lastDevice.lastIp }))) return;
-      const reason = prompt("Reason (optional):") || "";
+      const reason = prompt(window.tAdmin("prompt_ban_reason")) || "";
       // Returns pms: { failed, total } per admin-bans.js POST /admin/bans/network.
       const result = await apiCall("POST", "/api/admin/bans/network", { type: "ip", value: lastDevice.lastIp, reason, linkedUniqueId: currentUid });
-      window.PartialFailureToast?.showResultToast(showToast, result, "IP banned");
+      window.PartialFailureToast?.showResultToast(showToast, result, window.tAdmin("toast_ip_banned"));
       populateBansSection(currentUid);
     } catch (err) { showToast(window.tAdminFmt("toast_action_failed", { error: err.message }), "error"); }
   });
@@ -1880,9 +1880,9 @@ export function wireBansListeners() {
   if (viewLogsBtn) viewLogsBtn.addEventListener("click", () => { if (!currentUid) return; const logsUserFilter = $("#log-filter-userId"); if (logsUserFilter) logsUserFilter.value = currentUid; _switchTab("logs"); });
   // Identity graph suspend/unsuspend (tabular version)
   const igSuspendBtn = $("#ig-suspend-btn");
-  if (igSuspendBtn) igSuspendBtn.addEventListener("click", async () => { if (!currentUid) return; const duration = $("#ig-duration-picker")?.value; const scope = $("#ig-scope-picker")?.value; if (!confirm(window.tAdminFmt("confirm_suspend_identity_graph", { duration, scope }))) return; try { await apiCall("PUT", `/api/admin/bans/graph/${currentUid}`, { action: "suspend", duration, scope }); showToast("Identity graph suspended", "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } });
+  if (igSuspendBtn) igSuspendBtn.addEventListener("click", async () => { if (!currentUid) return; const duration = $("#ig-duration-picker")?.value; const scope = $("#ig-scope-picker")?.value; if (!confirm(window.tAdminFmt("confirm_suspend_identity_graph", { duration, scope }))) return; try { await apiCall("PUT", `/api/admin/bans/graph/${currentUid}`, { action: "suspend", duration, scope }); showToast(window.tAdmin("toast_identity_graph_suspended"), "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } });
   const igUnsuspendBtn = $("#ig-unsuspend-btn");
-  if (igUnsuspendBtn) igUnsuspendBtn.addEventListener("click", async () => { if (!currentUid) return; if (!confirm(window.tAdmin("confirm_unsuspend_identity_graph"))) return; try { await apiCall("PUT", `/api/admin/bans/graph/${currentUid}`, { action: "unsuspend" }); showToast("Identity graph unsuspended", "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } });
+  if (igUnsuspendBtn) igUnsuspendBtn.addEventListener("click", async () => { if (!currentUid) return; if (!confirm(window.tAdmin("confirm_unsuspend_identity_graph"))) return; try { await apiCall("PUT", `/api/admin/bans/graph/${currentUid}`, { action: "unsuspend" }); showToast(window.tAdmin("toast_identity_graph_unsuspended"), "success"); populateBansSection(currentUid); } catch (err) { showToast(err.message, "error"); } });
 }
 
 export function wireTempIdListeners() {
