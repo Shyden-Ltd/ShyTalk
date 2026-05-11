@@ -288,6 +288,21 @@ async function updateGiftRankings(recipientId, giftId, quantity) {
 // ─── Shared gift helpers ─────────────────────────────────────────
 // (block-check helpers live in ../utils/block-check — imported above)
 
+/**
+ * Load the target user doc and refuse with 403 if they have blocked
+ * the caller (C7). Returns false when 403 was sent — caller must
+ * `return` immediately to avoid double-send. Returns true to continue.
+ */
+async function refuseIfTargetBlocksViewer(req, res) {
+  const snap = await db.doc(`users/${req.params.uniqueId}`).get();
+  const target = snap.exists ? snap.data() : null;
+  if (viewerIsBlocked(req.auth.uniqueId, target)) {
+    res.status(403).json({ error: 'Cannot view content of users who have blocked you' });
+    return false;
+  }
+  return true;
+}
+
 /** Compute daily reward from config and streak. */
 function computeDailyReward(config, newStreak, isSuperShy) {
   const milestoneRewards = config.milestoneRewards || {};
@@ -1879,15 +1894,8 @@ router.get('/users/:uniqueId/backpack', async (req, res) => {
 router.get('/users/:uniqueId/gift-wall', async (req, res) => {
   try {
     // C7 (block-list integrity): a user who has been blocked by the
-    // target must not be able to see the target's gift wall. We load
-    // the target user doc to consult blockedUserIds — one extra read
-    // per gift-wall view, which is acceptable since these are profile-
-    // page interactions, not feed reads.
-    const targetSnap = await db.doc(`users/${req.params.uniqueId}`).get();
-    const targetUser = targetSnap.exists ? targetSnap.data() : null;
-    if (viewerIsBlocked(req.auth.uniqueId, targetUser)) {
-      return res.status(403).json({ error: 'Cannot view content of users who have blocked you' });
-    }
+    // target must not be able to see the target's gift wall.
+    if (!(await refuseIfTargetBlocksViewer(req, res))) return;
 
     const snap = await db.collection(`users/${req.params.uniqueId}/giftWall`).get();
     const results = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -1903,11 +1911,7 @@ router.get('/users/:uniqueId/gift-wall/:giftId/senders', async (req, res) => {
   try {
     // C7: same block check as the parent gift-wall list — the sender
     // list is a strict subset of gift-wall data.
-    const targetSnap = await db.doc(`users/${req.params.uniqueId}`).get();
-    const targetUser = targetSnap.exists ? targetSnap.data() : null;
-    if (viewerIsBlocked(req.auth.uniqueId, targetUser)) {
-      return res.status(403).json({ error: 'Cannot view content of users who have blocked you' });
-    }
+    if (!(await refuseIfTargetBlocksViewer(req, res))) return;
 
     const docSnap = await db
       .doc(`users/${req.params.uniqueId}/giftWall/${req.params.giftId}`)
