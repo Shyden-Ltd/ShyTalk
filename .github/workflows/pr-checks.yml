@@ -175,7 +175,8 @@ jobs:
           echo "{\"passed\":0,\"failed\":0,\"total\":0,\"date\":\"${DATE}\",\"runUrl\":\"${RUN_URL}\",\"suite\":\"kotlin\",\"env\":\"pr\"}" > kotlin-report/metadata.json
 
       - name: Deploy Kotlin report to GitHub Pages
-        if: always()
+        # See test-backend.yml for dependabot read-only GITHUB_TOKEN rationale.
+        if: always() && github.actor != 'dependabot[bot]'
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
