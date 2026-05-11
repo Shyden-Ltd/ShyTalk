@@ -124,6 +124,12 @@ jobs:
       - uses: ./.github/actions/decode-keystore
         with:
           keystore-base64: ${{ secrets.KEYSTORE_BASE64 }}
+          # Dependabot PRs run with a read-only token and zero secret access,
+          # so KEYSTORE_BASE64 is empty. The localDebug variant we test uses
+          # Android's auto-generated debug keystore, not this one — but the
+          # action errors out when both secret and fallback are absent.
+          # Mirrors the same opt-in already present in pr-checks.yml.
+          fallback-debug: 'true'
 
       - name: Enable KVM
         run: |
