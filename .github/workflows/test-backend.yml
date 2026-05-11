@@ -60,7 +60,13 @@ jobs:
           echo "{\"passed\":${PASSED},\"failed\":${FAILED},\"total\":${TOTAL},\"date\":\"${DATE}\",\"runUrl\":\"${RUN_URL}\",\"suite\":\"express\",\"env\":\"${REPORT_ENV}\"}" > express-api/coverage/metadata.json
 
       - name: Deploy Express report to GitHub Pages
-        if: always()
+        # Skip for dependabot PRs: GitHub enforces a read-only
+        # GITHUB_TOKEN on dependabot-authored workflow runs (security
+        # tightening from 2021), so peaceiris/actions-gh-pages can't
+        # push to gh-pages and fails the whole job. Test reports for
+        # dependency bumps aren't load-bearing — the test results
+        # themselves are still visible in the run logs.
+        if: always() && github.actor != 'dependabot[bot]'
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
