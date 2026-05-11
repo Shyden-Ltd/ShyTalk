@@ -93,20 +93,45 @@ jobs:
             echo "::error::An open release PR already exists. Wait for it to merge (or close it) before opening another. Run 'gh pr list --state open --search \"in:title chore: release v\"' to find it."
             exit 1
           fi
-          # Guard against orphan release branches left by a failed
-          # previous run. The "no-force-push-anywhere" ruleset blocks
-          # branch deletion, so an aborted run can leave release/vX.Y.Z
-          # behind — and the next dispatch would try to push to the
-          # same branch, hit branch-already-exists, and fail. Refuse
-          # to proceed; the operator must manually delete the orphan
-          # via the GitHub UI (or temporarily lift the deletion rule).
+          # Handle orphan release branches left by a failed previous
+          # run. The "no-force-push-anywhere" ruleset blocks branch
+          # deletion for most actors, so an aborted run leaves
+          # release/vX.Y.Z behind — and the next dispatch would hit
+          # branch-already-exists when it tried to create the branch.
+          #
+          # Strategy: if no open PR is using the orphan branch as its
+          # head, the orphan is genuinely stale (no operator state to
+          # preserve). Attempt API deletion. The deletion only succeeds
+          # if the workflow's GitHub App is on the ruleset's bypass
+          # list — if it isn't, fall back to the old behavior (error
+          # out with manual recovery instructions).
+          #
+          # If an open PR DOES reference the orphan branch, the prior
+          # run got far enough to open the PR but it hasn't merged.
+          # Refuse to delete — that's operator state.
           ORPHAN_RELEASE_BRANCHES=$(gh api repos/${{ github.repository }}/branches --paginate --jq '.[].name | select(startswith("release/v"))')
           if [ -n "$ORPHAN_RELEASE_BRANCHES" ]; then
-            echo "::error::Orphan release branch(es) detected on origin — likely from a previous failed run."
-            echo "Branches: $ORPHAN_RELEASE_BRANCHES"
-            echo "Action: Delete via the GitHub UI (Settings > Branches > <branch> > Delete) and re-trigger this workflow."
-            echo "If branch protection blocks the UI delete, lift the no-force-push-anywhere ruleset's 'deletion' rule briefly, then re-enable."
-            exit 1
+            echo "Orphan release branch(es) detected — attempting auto-cleanup."
+            # `for x in $var` does NOT create a subshell, so `exit 1`
+            # inside the loop actually aborts the outer script. We
+            # deliberately avoid `... | while read` here for that
+            # reason.
+            for branch in $ORPHAN_RELEASE_BRANCHES; do
+              OPEN_PR_COUNT=$(gh pr list --state open --head "$branch" --json number --jq 'length')
+              if [ "${OPEN_PR_COUNT:-0}" -gt 0 ]; then
+                echo "::error::Orphan release branch '$branch' has an open PR — refusing to auto-delete (operator state). Close or merge the PR first, then re-trigger."
+                exit 1
+              fi
+              if gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$branch" 2>/tmp/delete-err; then
+                echo "Auto-deleted orphan release branch: $branch"
+              else
+                echo "::error::Failed to auto-delete orphan branch '$branch' via API. The workflow's GitHub App likely isn't in the no-force-push-anywhere ruleset's bypass list."
+                echo "Fix forward: add the Release app to the ruleset's bypass list (Settings > Rulesets > no-force-push-anywhere > Bypass list), OR delete the orphan branch manually via the GitHub UI (Settings > Branches > $branch > Delete) and re-trigger."
+                echo "API error output:"
+                cat /tmp/delete-err
+                exit 1
+              fi
+            done
           fi
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
