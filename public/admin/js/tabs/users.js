@@ -1255,7 +1255,7 @@ export function wireModerationListeners() {
     suspendBtn.disabled = true;
     try {
       const result = await apiCall("POST", `/api/user/${currentUid}/suspend`, { reason, endDate, canAppeal });
-      window.PartialFailureToast?.showResultToast(showToast, result, "User suspended");
+      window.PartialFailureToast?.showResultToast(showToast, result, window.tAdmin("toast_user_suspended"));
       const data = await apiCall("GET", `/api/user/${currentUid}`);
       await populateFormFull(data);
     } catch (err) { showToast(err.message, "error"); }
@@ -1271,7 +1271,7 @@ export function wireModerationListeners() {
     unsuspendBtn.disabled = true;
     try {
       const result = await apiCall("POST", `/api/user/${currentUid}/unsuspend`);
-      window.PartialFailureToast?.showResultToast(showToast, result, "User unsuspended");
+      window.PartialFailureToast?.showResultToast(showToast, result, window.tAdmin("toast_user_unsuspended"));
       const data = await apiCall("GET", `/api/user/${currentUid}`);
       await populateFormFull(data);
     } catch (err) { showToast(err.message, "error"); }
@@ -1313,8 +1313,8 @@ export function wireModerationListeners() {
     try {
       const result = await apiCall("POST", `/api/user/${currentUid}/warn`, { reason, severity, adminNote });
       // Surface partial-failure: the warning PM may have failed silently.
-      window.PartialFailureToast?.showResultToast(showToast, result, "Warning issued successfully");
-      if (result.autoEscalateSuggested) showToast("This user has 5+ warnings. Consider suspending.", "error");
+      window.PartialFailureToast?.showResultToast(showToast, result, window.tAdmin("toast_warning_issued_successfully"));
+      if (result.autoEscalateSuggested) showToast(window.tAdmin("toast_auto_escalate_5_warnings"), "error");
       const data = await apiCall("GET", `/api/user/${currentUid}`);
       populateGcsSection(data); loadWarningHistory(currentUid, false); loadReportHistory(currentUid);
       if ($("#direct-warn-reason")) $("#direct-warn-reason").value = "";
@@ -1345,7 +1345,7 @@ export function wireModerationListeners() {
     resetDeviceBtn.disabled = true; resetDeviceBtn.textContent = window.tAdmin("btn_resetting");
     try { const result = await apiCall("POST", `/api/cleanup/device-binding/${currentUid}`); showToast(window.tAdminFmt("toast_device_bindings_removed", { count: result.deleted || 0 }), "success"); populateDeviceBindingCard(currentUid); }
     catch (err) { showToast(window.tAdminFmt("toast_action_failed", { error: err.message }), "error"); }
-    finally { resetDeviceBtn.disabled = false; resetDeviceBtn.textContent = "Reset Device Binding"; }
+    finally { resetDeviceBtn.disabled = false; resetDeviceBtn.textContent = window.tAdmin("btn_reset_device_binding"); }
   });
 }
 export function wireSecurityGlobals() {
@@ -1843,9 +1843,9 @@ export function wireBansListeners() {
         segments.push(`${aggregatePmFailed}/${aggregatePmTotal} PMs failed`);
       }
       if (segments.length > 0) {
-        showToast(`Partial: ${segments.join("; ")}. Please retry the failed step.`, "error");
+        showToast(window.tAdminFmt("toast_partial_retry", { summary: segments.join("; ") }), "error");
       } else {
-        showToast(`Banned ${fulfilled.length} device(s)`, "success");
+        showToast(window.tAdminFmt("toast_banned_n_devices", { count: fulfilled.length }), "success");
       }
       populateBansSection(currentUid);
     } catch (err) { showToast(window.tAdminFmt("toast_action_failed", { error: err.message }), "error"); }
@@ -1857,7 +1857,7 @@ export function wireBansListeners() {
       const devicesData = await apiCall("GET", `/api/admin/devices/user/${currentUid}`);
       const devices = devicesData.devices || [];
       const lastDevice = devices.sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0))[0];
-      if (!lastDevice || !lastDevice.lastIp) { showToast("No IP address found", "error"); return; }
+      if (!lastDevice || !lastDevice.lastIp) { showToast(window.tAdmin("toast_no_ip_found"), "error"); return; }
       if (!confirm(window.tAdminFmt("confirm_ban_ip", { ip: lastDevice.lastIp }))) return;
       const reason = prompt("Reason (optional):") || "";
       // Returns pms: { failed, total } per admin-bans.js POST /admin/bans/network.
@@ -1872,7 +1872,7 @@ export function wireBansListeners() {
     if (!confirm(window.tAdmin("confirm_remove_all_bans"))) return;
     try {
       const result = await apiCall("POST", `/api/admin/bans/unban-all/${currentUid}`);
-      window.PartialFailureToast?.showResultToast(showToast, result, "Removed " + (result.removed || 0) + " ban(s)");
+      window.PartialFailureToast?.showResultToast(showToast, result, window.tAdminFmt("toast_removed_n_bans", { count: result.removed || 0 }));
       populateBansSection(currentUid);
     } catch (err) { showToast(window.tAdminFmt("toast_action_failed", { error: err.message }), "error"); }
   });
