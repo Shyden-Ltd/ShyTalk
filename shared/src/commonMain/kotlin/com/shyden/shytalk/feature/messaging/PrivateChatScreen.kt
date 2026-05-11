@@ -31,7 +31,6 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -41,12 +40,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -70,6 +67,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.MessageEdit
 import com.shyden.shytalk.core.model.PrivateMessage
+import com.shyden.shytalk.core.ui.ReportMessageDialog
 import com.shyden.shytalk.core.ui.StyledDisplayName
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.Constants
@@ -994,66 +992,6 @@ fun PrivateChatScreen(
         onDismiss = { viewModel.dismissAgeRestrictionDialog() },
         onVerifyNow = onNavigateToAgeVerification,
         onContactSupport = { viewModel.dismissAgeRestrictionDialog() },
-    )
-}
-
-private val reportReasons = listOf("Spam", "Harassment", "Inappropriate Content", "Other")
-
-@Composable
-private fun ReportMessageDialog(
-    onDismiss: () -> Unit,
-    onSubmit: (reason: String, description: String) -> Unit,
-) {
-    var selectedReason by remember { mutableStateOf(reportReasons[0]) }
-    var description by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.report_message)) },
-        text = {
-            Column {
-                Text(
-                    text = stringResource(Res.string.report_message_prompt),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                reportReasons.forEach { reason ->
-                    Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { selectedReason = reason }
-                                .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(
-                            selected = selectedReason == reason,
-                            onClick = { selectedReason = reason },
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = reason, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = description,
-                    onValueChange = { description = it },
-                    placeholder = { Text(stringResource(Res.string.additional_details_optional)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    maxLines = 3,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onSubmit(selectedReason, description) }) {
-                Text(stringResource(Res.string.submit_report))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(Res.string.cancel))
-            }
-        },
     )
 }
 

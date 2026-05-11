@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -112,6 +113,7 @@ fun MessageBubble(
     onTapUser: () -> Unit,
     onInvite: () -> Unit,
     onEditMessage: (() -> Unit)? = null,
+    onReportMessage: (() -> Unit)? = null,
     onTranslate: (() -> Unit)? = null,
     translatedText: String? = null,
     aliases: Map<String, String> = emptyMap(),
@@ -230,13 +232,22 @@ fun MessageBubble(
                                 MaterialTheme.colorScheme.surfaceVariant
                             },
                         modifier =
-                            if (isSelf && onEditMessage != null) {
-                                Modifier.combinedClickable(
-                                    onClick = {},
-                                    onLongClick = onEditMessage,
-                                )
-                            } else {
-                                Modifier
+                            when {
+                                isSelf && onEditMessage != null ->
+                                    Modifier
+                                        .combinedClickable(
+                                            onClick = {},
+                                            onLongClick = onEditMessage,
+                                        ).testTag("room_msg_editTarget_${message.messageId}")
+
+                                !isSelf && onReportMessage != null ->
+                                    Modifier
+                                        .combinedClickable(
+                                            onClick = {},
+                                            onLongClick = onReportMessage,
+                                        ).testTag("room_msg_reportTarget_${message.messageId}")
+
+                                else -> Modifier
                             },
                     ) {
                         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {

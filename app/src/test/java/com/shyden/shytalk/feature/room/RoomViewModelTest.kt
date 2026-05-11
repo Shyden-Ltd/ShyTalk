@@ -3406,6 +3406,155 @@ class RoomViewModelTest {
             assertFalse(viewModel.uiState.value.isSubmittingReport)
         }
 
+    // ===== reportMessage Tests =====
+    //
+    // B3 (Room message reporting, UK OSA). Mirrors PrivateChatViewModel.reportMessage
+    // but adapted to the room's conversationId = roomId convention and the room's
+    // Message type. Server-side contract is identical (POST /api/reports).
+    //
+    // The four tests below cover: happy path field passing, missing target user
+    // (corrupted message), repository failure surfaces in uiState, and the
+    // server-trusted "no evidence on message reports" invariant (storage
+    // repository must NOT be called — different from reportUser).
+
+    @Test
+    fun `reportMessage - success passes roomId as conversationId and message fields`() =
+        roomTest {
+            val targetUid = "sender-7"
+            val targetUser = TestData.createTestUser(uid = targetUid, displayName = "Bad Actor")
+            coEvery { userRepository.getUser(targetUid) } returns Resource.Success(targetUser)
+            coEvery {
+                reportRepository.reportMessage(
+                    reporterId = any(),
+                    reporterName = any(),
+                    reporterUniqueId = any(),
+                    reportedUserId = any(),
+                    reportedUserName = any(),
+                    reportedUserUniqueId = any(),
+                    conversationId = any(),
+                    messageId = any(),
+                    messageText = any(),
+                    reason = any(),
+                    description = any(),
+                )
+            } returns Resource.Success(Unit)
+
+            viewModel = createViewModel()
+            emitRoomAsOwner()
+            advanceUntilIdle()
+
+            val message =
+                Message(
+                    messageId = "msg-42",
+                    senderId = targetUid,
+                    senderName = "Bad Actor",
+                    text = "offensive content",
+                    type = MessageType.TEXT,
+                )
+
+            viewModel.reportMessage(message, "Harassment", "context")
+            advanceUntilIdle()
+
+            // conversationId MUST be the roomId, not "" (the reportUser convention).
+            // Server uses conversationId to scope per-room moderation queries — a
+            // blank value silently drops room reports out of the per-room admin view.
+            coVerify {
+                reportRepository.reportMessage(
+                    reporterId = currentUserId,
+                    reporterName = "Current User",
+                    reporterUniqueId = any(),
+                    reportedUserId = targetUid,
+                    reportedUserName = "Bad Actor",
+                    reportedUserUniqueId = any(),
+                    conversationId = "room-1",
+                    messageId = "msg-42",
+                    messageText = "offensive content",
+                    reason = "Harassment",
+                    description = "context",
+                )
+            }
+            // Same uiState flag as reportUser — RoomScreen's LaunchedEffect already
+            // surfaces report_thank_you on this transition, so reusing the flag
+            // avoids a second snackbar wire-up.
+            assertTrue(viewModel.uiState.value.reportSubmitted)
+            assertFalse(viewModel.uiState.value.isSubmittingReport)
+        }
+
+    @Test
+    fun `reportMessage - never calls storageRepository (no evidence on message reports)`() =
+        roomTest {
+            val targetUid = "sender-8"
+            val targetUser = TestData.createTestUser(uid = targetUid, displayName = "Sender")
+            coEvery { userRepository.getUser(targetUid) } returns Resource.Success(targetUser)
+            coEvery {
+                reportRepository.reportMessage(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns Resource.Success(Unit)
+
+            viewModel = createViewModel()
+            emitRoomAsOwner()
+            advanceUntilIdle()
+
+            viewModel.reportMessage(
+                Message(messageId = "m-1", senderId = targetUid, senderName = "Sender", text = "x", type = MessageType.TEXT),
+                "Spam",
+                "",
+            )
+            advanceUntilIdle()
+
+            // Message reports do not upload evidence (unlike reportUser). If a future
+            // refactor accidentally couples them, this regression test catches the
+            // resulting wasted R2 PUT on every room report.
+            coVerify(exactly = 0) { storageRepository.uploadImage(any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun `reportMessage - error when sender resolution fails sets reportError`() =
+        roomTest {
+            val targetUid = "ghost-sender"
+            coEvery { userRepository.getUser(targetUid) } returns Resource.Error("Not found")
+
+            viewModel = createViewModel()
+            emitRoomAsOwner()
+            advanceUntilIdle()
+
+            viewModel.reportMessage(
+                Message(messageId = "m-2", senderId = targetUid, senderName = "Ghost", text = "x", type = MessageType.TEXT),
+                "Spam",
+                "",
+            )
+            advanceUntilIdle()
+
+            assertEquals("Could not submit report", viewModel.uiState.value.reportError)
+            assertFalse(viewModel.uiState.value.reportSubmitted)
+            assertFalse(viewModel.uiState.value.isSubmittingReport)
+        }
+
+    @Test
+    fun `reportMessage - repository failure surfaces reportError`() =
+        roomTest {
+            val targetUid = "sender-9"
+            val targetUser = TestData.createTestUser(uid = targetUid, displayName = "Sender")
+            coEvery { userRepository.getUser(targetUid) } returns Resource.Success(targetUser)
+            coEvery {
+                reportRepository.reportMessage(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns Resource.Error("backend down")
+
+            viewModel = createViewModel()
+            emitRoomAsOwner()
+            advanceUntilIdle()
+
+            viewModel.reportMessage(
+                Message(messageId = "m-3", senderId = targetUid, senderName = "Sender", text = "bad", type = MessageType.TEXT),
+                "Other",
+                "long context that exceeds nothing",
+            )
+            advanceUntilIdle()
+
+            assertEquals("Failed to submit report", viewModel.uiState.value.reportError)
+            assertFalse(viewModel.uiState.value.reportSubmitted)
+            assertFalse(viewModel.uiState.value.isSubmittingReport)
+        }
+
     // ===== editMessage Tests =====
 
     @Test

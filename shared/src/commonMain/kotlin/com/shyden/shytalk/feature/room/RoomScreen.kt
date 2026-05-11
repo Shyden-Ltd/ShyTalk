@@ -53,6 +53,7 @@ import com.shyden.shytalk.core.model.Broadcast
 import com.shyden.shytalk.core.model.BroadcastType
 import com.shyden.shytalk.core.model.Gift
 import com.shyden.shytalk.core.model.GiftEvent
+import com.shyden.shytalk.core.model.Message
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.model.SeatState
@@ -201,6 +202,11 @@ fun RoomScreen(
     var pmStickerResultHandler by remember { mutableStateOf<((ByteArray) -> Unit)?>(null) }
     val reportEvidenceList = remember { mutableListOf<Pair<ByteArray, String>>() }
     var reportEvidenceVersion by remember { mutableStateOf(0) }
+    // B3 — room message reporting: holds the message the user long-pressed,
+    // null while no dialog open. Distinct state from reportEvidenceList (user
+    // reports) because room MESSAGE reports do not collect evidence — the
+    // message text + messageId IS the evidence.
+    var reportingRoomMessage by remember { mutableStateOf<Message?>(null) }
     var isCompressingEvidence by remember { mutableStateOf(false) }
 
     val evidenceScope = rememberCoroutineScope()
@@ -750,6 +756,7 @@ fun RoomScreen(
                                 aliases = uiState.aliases,
                                 translations = uiState.translations,
                                 onTranslateMessage = { viewModel.translateMessage(it) },
+                                onReportMessage = { msg -> reportingRoomMessage = msg },
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
@@ -1250,4 +1257,18 @@ fun RoomScreen(
         onVerifyNow = onNavigateToAgeVerification,
         onContactSupport = { gachaViewModel.dismissAgeRestrictionDialog() },
     )
+
+    // B3 — room message report dialog (UK OSA per-message reporting).
+    // Shown when a non-self TEXT message is long-pressed. The dialog itself
+    // lives in core/ui so DM and room use one identical surface; only the
+    // VM hop differs (RoomViewModel.reportMessage vs PrivateChatViewModel).
+    reportingRoomMessage?.let { msg ->
+        com.shyden.shytalk.core.ui.ReportMessageDialog(
+            onDismiss = { reportingRoomMessage = null },
+            onSubmit = { reason, description ->
+                viewModel.reportMessage(msg, reason, description)
+                reportingRoomMessage = null
+            },
+        )
+    }
 }

@@ -1804,6 +1804,67 @@ class RoomViewModel(
         _uiState.update { it.copy(reportSubmitted = false, reportError = null) }
     }
 
+    /**
+     * Report a specific room chat message (B3 — UK OSA per-message reporting).
+     *
+     * Differs from [reportUser] in three deliberate ways: (a) no evidence upload
+     * (the message text + messageId are the evidence), (b) conversationId is the
+     * roomId so per-room admin filters scope correctly, (c) the sender is resolved
+     * from `message.senderId` rather than a tap target.
+     */
+    fun reportMessage(
+        message: Message,
+        reason: String,
+        description: String,
+    ) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isSubmittingReport = true, reportError = null) }
+
+            val currentUser =
+                userCache[_uiState.value.currentUserId]
+                    ?: when (val result = userRepository.getUser(_uiState.value.currentUserId)) {
+                        is Resource.Success -> result.data
+                        else -> null
+                    }
+            val targetUser =
+                userCache[message.senderId]
+                    ?: when (val result = userRepository.getUser(message.senderId)) {
+                        is Resource.Success -> result.data
+                        else -> null
+                    }
+            if (currentUser == null || targetUser == null) {
+                _uiState.update { it.copy(isSubmittingReport = false, reportError = "Could not submit report") }
+                return@launch
+            }
+
+            when (
+                reportRepository.reportMessage(
+                    reporterId = currentUser.uid,
+                    reporterName = currentUser.displayName,
+                    reporterUniqueId = currentUser.uniqueId,
+                    reportedUserId = targetUser.uid,
+                    reportedUserName = targetUser.displayName,
+                    reportedUserUniqueId = targetUser.uniqueId,
+                    conversationId = roomId,
+                    messageId = message.messageId,
+                    messageText = message.text,
+                    reason = reason,
+                    description = description,
+                )
+            ) {
+                is Resource.Success -> {
+                    _uiState.update { it.copy(isSubmittingReport = false, reportSubmitted = true) }
+                }
+
+                is Resource.Error -> {
+                    _uiState.update { it.copy(isSubmittingReport = false, reportError = "Failed to submit report") }
+                }
+
+                is Resource.Loading -> Unit
+            }
+        }
+    }
+
     // --- Notification Queue ---
 
     private fun enqueueNotification(notification: RoomNotification) {
