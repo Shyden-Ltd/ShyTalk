@@ -16,7 +16,14 @@
  * @returns {Promise<{buffer: Buffer, partial: boolean, failedSections: string[]}>}
  */
 
-const archiver = require('archiver');
+// archiver v8 is ESM-only and exports named class constructors instead of a
+// callable factory (the v7 shape `archiver('zip', opts)` is gone). The rest
+// of express-api (and the Jest runner) remains CommonJS, so we can't
+// `require()` v8 directly — use a cached dynamic import. `import()` is
+// available in CJS, and the consuming function is already async. The
+// promise resolves once per process; subsequent builds await the
+// already-settled value at effectively zero cost.
+const zipArchivePromise = import('archiver').then((m) => m.ZipArchive);
 const { db } = require('./firebase');
 const { queryDocs } = require('./firestore-helpers');
 const log = require('./log');
@@ -323,9 +330,10 @@ async function buildDataExport(uniqueId) {
   };
 
   // Build ZIP
+  const ZipArchive = await zipArchivePromise;
   const buffer = await new Promise((resolve, reject) => {
     const chunks = [];
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    const archive = new ZipArchive({ zlib: { level: 9 } });
 
     archive.on('data', (chunk) => chunks.push(chunk));
     archive.on('end', () => resolve(Buffer.concat(chunks)));

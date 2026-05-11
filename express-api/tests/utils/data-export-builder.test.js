@@ -122,6 +122,26 @@ describe('buildDataExport', () => {
     expect(result.buffer.length).toBeGreaterThan(0);
   });
 
+  test('returns a valid ZIP archive (PK signature + EOCD record)', async () => {
+    // Catches behavioural regressions across archiver major bumps — a Buffer
+    // length check passes even if archiver silently emits a gzip stream or a
+    // raw text dump. Verifying the structural ZIP markers instead pins the
+    // contract: "what comes out is a parseable archive".
+    mockDocGet.mockResolvedValue({ exists: true, data: () => testUser });
+    queryDocs.mockResolvedValue([]);
+    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+
+    const { buffer } = await buildDataExport('10000001');
+
+    // Local-file-header signature at the start: 50 4B 03 04
+    expect(buffer.slice(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+    // End-of-central-directory record (EOCD) signature 50 4B 05 06 lives in
+    // the last 22+ bytes; search the trailing 64KB to tolerate the variable
+    // ZIP comment. If this signature is missing, finalize() did not flush.
+    const tail = buffer.slice(Math.max(0, buffer.length - 65557));
+    expect(tail.indexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]))).toBeGreaterThan(-1);
+  });
+
   test('strips sensitive fields from profile', async () => {
     mockDocGet.mockResolvedValue({
       exists: true,
