@@ -83,6 +83,12 @@ beforeEach(() => {
   jest.clearAllMocks();
   economyRouter._resetConfigCache();
   mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
+  // C7: gift-wall + gift-wall/senders now load the target user doc to
+  // check `blockedUserIds` before returning data. Default the doc mock
+  // to "user exists, has not blocked anyone" so tests that don't care
+  // about block state still pass. Tests that explicitly mock mockDocGet
+  // (e.g. gift-wall senders) override this.
+  mockDocGet.mockResolvedValue({ exists: true, data: () => ({ blockedUserIds: [] }) });
 });
 
 function createApp(uniqueId = 'user-A') {
@@ -198,6 +204,29 @@ describe('GET /api/users/:uniqueId/gift-wall', () => {
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body).toHaveLength(0);
   });
+
+  // C7: gift-wall view must refuse to serve content when the target has
+  // blocked the caller. Critical for block-list integrity — without
+  // this, blocked users keep seeing their blocker's gifts indefinitely.
+  test('C7: returns 403 when target has blocked the viewer', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ blockedUserIds: ['user-A'] }),
+    });
+    // Even if the gift wall has data, the route must short-circuit
+    // before reading the subcollection — assert it does so by ensuring
+    // mockCollectionGet (the gift-wall fetcher) is never called.
+    mockCollectionGet = jest.fn().mockResolvedValue({
+      empty: false,
+      docs: [{ id: 'gift-1', data: () => ({ giftId: 'gift-rose' }) }],
+    });
+
+    const app = createApp('user-A');
+    const res = await request(app).get('/api/users/user-B/gift-wall').expect(403);
+
+    expect(res.body.error).toMatch(/blocked/i);
+    expect(mockCollectionGet).not.toHaveBeenCalled();
+  });
 });
 
 describe('GET /api/users/:uniqueId/gift-wall/:giftId/senders', () => {
@@ -247,5 +276,25 @@ describe('GET /api/users/:uniqueId/gift-wall/:giftId/senders', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body).toHaveLength(0);
+  });
+
+  // C7: senders list is a strict subset of gift-wall data, so the same
+  // block guard applies. Without this, a blocked user could enumerate
+  // who sent gifts to the blocker even though the parent gift-wall
+  // list is hidden.
+  test('C7: returns 403 when target has blocked the viewer', async () => {
+    // First mockDocGet call is for the user doc (block check); the
+    // second would be for the gift-wall doc but we expect the route to
+    // short-circuit. mockResolvedValueOnce is used for the user doc so
+    // any follow-up call falls back to the beforeEach default.
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ blockedUserIds: ['user-A'] }),
+    });
+
+    const app = createApp('user-A');
+    const res = await request(app).get('/api/users/user-B/gift-wall/gift-rose/senders').expect(403);
+
+    expect(res.body.error).toMatch(/blocked/i);
   });
 });

@@ -405,6 +405,40 @@ describe('POST /api/users/:uniqueId/record-visit', () => {
       .send({ visitorId: '10000999' })
       .expect(403);
   });
+
+  // C7: a blocked visitor must not silently tick the target's stalker
+  // counter — otherwise blocking is observably useless. Returns 200 to
+  // avoid leaking block state to the client, but `recorded: false` lets
+  // tests assert the no-op.
+  test('C7: silent no-op when target has blocked the visitor', async () => {
+    getDoc.mockResolvedValueOnce({ blockedUserIds: [10000002] });
+    const app = createApp('firebase-uid-visitor', 10000002);
+
+    const res = await request(app)
+      .post('/api/users/10000099/record-visit')
+      .send({ visitorId: '10000002' })
+      .expect(200);
+
+    expect(res.body).toEqual({ success: true, recorded: false });
+    expect(mockBatchSet).not.toHaveBeenCalled();
+    expect(mockBatchUpdate).not.toHaveBeenCalled();
+    expect(mockBatchCommit).not.toHaveBeenCalled();
+  });
+
+  test('C7: handles string/numeric id mismatch in blockedUserIds', async () => {
+    // Firestore may store blocked IDs as strings depending on which
+    // client wrote them; the helper coerces both sides to strings.
+    getDoc.mockResolvedValueOnce({ blockedUserIds: ['10000002'] });
+    const app = createApp('firebase-uid-visitor', 10000002);
+
+    const res = await request(app)
+      .post('/api/users/10000099/record-visit')
+      .send({ visitorId: '10000002' })
+      .expect(200);
+
+    expect(res.body.recorded).toBe(false);
+    expect(mockBatchCommit).not.toHaveBeenCalled();
+  });
 });
 
 // ─── GET /api/users/:uniqueId — PII stripping ──────────────────
@@ -566,5 +600,50 @@ describe('GET /api/users/:uniqueId', () => {
 
     const app = createApp('firebase-uid-A', 10000001);
     await request(app).get('/api/users/99999999').expect(404);
+  });
+
+  // C7: a user who has been blocked by the target must not see their
+  // profile. Returns 403 (matches gift-send semantics for blocked
+  // interactions); the client renders the blocked-state UI on this.
+  test('C7: returns 403 when target has blocked the viewer', async () => {
+    getDoc.mockResolvedValueOnce({
+      uniqueId: 10000099,
+      displayName: 'Target',
+      blockedUserIds: [10000001],
+    });
+
+    const app = createApp('firebase-uid-A', 10000001);
+    const res = await request(app).get('/api/users/10000099').expect(403);
+
+    expect(res.body.error).toMatch(/blocked/i);
+  });
+
+  test('C7: allows viewing own profile even if own id is in own blockedUserIds', async () => {
+    // Defensive edge case: blocking yourself is impossible via the
+    // client UI, but if the doc is ever corrupted in this way the user
+    // must still be able to see their own profile to recover.
+    getDoc.mockResolvedValueOnce({
+      uniqueId: 10000001,
+      displayName: 'Self',
+      blockedUserIds: [10000001],
+    });
+
+    const app = createApp('firebase-uid-A', 10000001);
+    const res = await request(app).get('/api/users/10000001').expect(200);
+
+    expect(res.body.displayName).toBe('Self');
+  });
+
+  test('C7: allows viewing when target has not blocked the viewer', async () => {
+    getDoc.mockResolvedValueOnce({
+      uniqueId: 10000099,
+      displayName: 'Target',
+      blockedUserIds: [99999999],
+    });
+
+    const app = createApp('firebase-uid-A', 10000001);
+    const res = await request(app).get('/api/users/10000099').expect(200);
+
+    expect(res.body.displayName).toBe('Target');
   });
 });

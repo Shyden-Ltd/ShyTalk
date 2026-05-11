@@ -28,6 +28,7 @@ const { clearSuspensionCache, updateUniqueIdCache } = require('../middleware/aut
 const { sendEmail } = require('../utils/email');
 const { buildDeletionScheduledEmail } = require('../utils/email-templates');
 const { sendFcmToTokens } = require('../utils/fcm');
+const { viewerIsBlocked } = require('../utils/block-check');
 
 const VALID_PROVIDERS = ['google', 'apple', 'email'];
 const MIN_UNIQUE_ID = 10000000;
@@ -285,6 +286,17 @@ router.get('/users/:uniqueId', async (req, res) => {
   try {
     const user = await getDoc(`users/${req.params.uniqueId}`);
     if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // C7 (block-list integrity): the target user must not be visible
+    // to a viewer they have blocked. Returns 403 — the client already
+    // handles 403 from interaction endpoints (gift-send) the same way.
+    // Allowed exception: the user looking at their own profile.
+    if (
+      String(req.auth.uniqueId) !== String(req.params.uniqueId) &&
+      viewerIsBlocked(req.auth.uniqueId, user)
+    ) {
+      return res.status(403).json({ error: 'Cannot view content of users who have blocked you' });
+    }
 
     user.blockedUserIds = user.blockedUserIds || [];
     user.followingIds = user.followingIds || [];
@@ -882,6 +894,18 @@ router.post('/users/:uniqueId/record-visit', async (req, res) => {
     if (req.params.uniqueId === visitorId) return res.json({ success: true }); // don't stalk yourself
 
     const profileUniqueId = req.params.uniqueId;
+
+    // C7: blocked viewers must not tick the stalker counter on the
+    // target's profile (otherwise blocking is observably useless —
+    // the blocker keeps getting "X new visitors" notifications driven
+    // by a user they've already chosen to disengage from). Return 200
+    // with success:true so the client treats the call as completed,
+    // avoiding a retry loop or a UI signal that reveals block state.
+    const targetUser = await getDoc(`users/${profileUniqueId}`);
+    if (viewerIsBlocked(visitorId, targetUser)) {
+      return res.json({ success: true, recorded: false });
+    }
+
     const stalkerPath = `users/${profileUniqueId}/stalkers/${visitorId}`;
     const existing = await getDoc(stalkerPath);
     const timestamp = now();
