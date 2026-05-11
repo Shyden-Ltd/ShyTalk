@@ -190,7 +190,7 @@ fun ChatPanel(
                                 null
                             },
                         onReportMessage =
-                            if (!isSelf && message.type == com.shyden.shytalk.core.model.MessageType.TEXT && message.senderId != "system") {
+                            if (isRoomMessageReportable(isSelf = isSelf, type = message.type, senderId = message.senderId)) {
                                 { onReportMessage(message) }
                             } else {
                                 null
