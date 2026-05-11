@@ -1391,7 +1391,7 @@ export async function loadBackpack(uid) {
   while (container.firstChild) container.removeChild(container.firstChild);
   const loading = document.createElement("p");
   loading.style.cssText = "color:var(--text2);grid-column:1/-1;text-align:center;";
-  loading.textContent = "Loading backpack...";
+  loading.textContent = window.tAdmin("msg_loading_backpack");
   container.appendChild(loading);
   _backpackEdits = {};
   try {
@@ -1423,7 +1423,7 @@ export function renderBackpack() {
   if (filtered.length === 0) {
     const empty = document.createElement("div");
     empty.style.cssText = "grid-column:1/-1;text-align:center;color:var(--text2);padding:24px;";
-    empty.textContent = _backpackItems.length === 0 ? "Backpack is empty" : "No matching gifts";
+    empty.textContent = _backpackItems.length === 0 ? window.tAdmin("msg_backpack_empty") : window.tAdmin("msg_no_matching_gifts");
     container.appendChild(empty); return;
   }
   filtered.forEach(function(item) {
@@ -1459,7 +1459,7 @@ export async function autoSaveBackpackItem(giftId, newQty, originalQty) {
     delete _backpackEdits[giftId]; renderBackpack();
     const name = gift ? gift.name : giftId;
     if (newQty <= 0) showToast(name + " removed (was " + originalQty + ")"); else showToast(name + ": " + originalQty + " \u2192 " + newQty);
-  } catch (err) { showToast("Failed to save: " + err.message, "error"); }
+  } catch (err) { showToast(window.tAdminFmt("toast_failed_to_save", { error: err.message }), "error"); }
 }
 
 export function populateCategoryFilter() {
@@ -1484,9 +1484,9 @@ function showClearAllConfirmation() {
   const cancelBtn = document.createElement("button"); cancelBtn.style.cssText = "padding:8px 20px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:14px;"; cancelBtn.textContent = "Cancel";
   cancelBtn.addEventListener("click", function() { document.body.removeChild(overlay); }); btnRow.appendChild(cancelBtn);
   const confirmBtn = document.createElement("button"); confirmBtn.style.cssText = "padding:8px 20px;background:var(--danger);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;opacity:0.5;"; confirmBtn.disabled = true;
-  let countdown = 5; confirmBtn.textContent = "Confirm (" + countdown + ")";
-  const timer = setInterval(function() { countdown--; if (countdown <= 0) { clearInterval(timer); confirmBtn.disabled = false; confirmBtn.style.opacity = "1"; confirmBtn.textContent = "Confirm Clear All"; } else { confirmBtn.textContent = "Confirm (" + countdown + ")"; } }, 1000);
-  confirmBtn.addEventListener("click", async function() { if (confirmBtn.disabled) return; clearInterval(timer); confirmBtn.disabled = true; confirmBtn.textContent = "Clearing..."; await clearAllBackpack(); document.body.removeChild(overlay); });
+  let countdown = 5; confirmBtn.textContent = window.tAdminFmt("btn_confirming", { countdown });
+  const timer = setInterval(function() { countdown--; if (countdown <= 0) { clearInterval(timer); confirmBtn.disabled = false; confirmBtn.style.opacity = "1"; confirmBtn.textContent = window.tAdmin("btn_confirm_clear_all"); } else { confirmBtn.textContent = window.tAdminFmt("btn_confirming", { countdown }); } }, 1000);
+  confirmBtn.addEventListener("click", async function() { if (confirmBtn.disabled) return; clearInterval(timer); confirmBtn.disabled = true; confirmBtn.textContent = window.tAdmin("btn_clearing"); await clearAllBackpack(); document.body.removeChild(overlay); });
   btnRow.appendChild(confirmBtn); dialog.appendChild(btnRow); overlay.appendChild(dialog);
   overlay.addEventListener("click", function(e) { if (e.target === overlay) { clearInterval(timer); document.body.removeChild(overlay); } });
   document.body.appendChild(overlay);
@@ -1496,7 +1496,7 @@ async function clearAllBackpack() {
   let cleared = 0, errors = 0;
   for (const item of _backpackItems) { try { await apiCall("POST", "/api/users/" + currentUid + "/backpack", { giftId: item.giftId, quantity: 0, silent: true }); cleared++; } catch (err) { errors++; } }
   _backpackItems = []; _backpackEdits = {}; renderBackpack();
-  if (errors > 0) showToast("Cleared " + cleared + ", failed " + errors, "error"); else showToast("Backpack cleared (" + cleared + " items removed)");
+  if (errors > 0) showToast(window.tAdminFmt("toast_cleared_with_errors", { cleared, errors }), "error"); else showToast(window.tAdminFmt("toast_backpack_cleared", { count: cleared }));
 }
 
 export function wireEconomyListeners() {
