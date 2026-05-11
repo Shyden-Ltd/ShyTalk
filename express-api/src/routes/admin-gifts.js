@@ -10,18 +10,22 @@ const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { requireAdmin } = require('../middleware/auth');
 
-// Phase 2H finding #2 dedup: scope admin guard by path prefix.
-const _adminGuardWrapper = async (req, res, next) => {
-  if (await requireAdmin(req, res)) return;
-  next();
-};
-router.use('/gifts', _adminGuardWrapper);
+// Admin enforcement: per-handler `requireAdmin` instead of the earlier
+// `router.use('/gifts', adminGuard)` prefix mount. The prefix form matched
+// every `/gifts...` URL — including any future public GET handlers a sibling
+// file (suggestions.js, subscriptions.js, etc.) might add. config.js owns
+// the public GET /gifts handlers today and is registered first in index.js,
+// so route order saves us — but order is a fragile guarantee. Moving the
+// guard inline narrows it to exactly these 3 handlers. Matches the in-handler
+// pattern used across the rest of the admin route surface
+// (see project-cross-router-guard-followups.md).
 
 const { generateId, now } = require('../utils/helpers');
 const log = require('../utils/log');
 
 // ── Create gift ──
 router.post('/gifts', async (req, res) => {
+  if (await requireAdmin(req, res)) return;
   try {
     const body = req.body;
     if (!body?.name || body.coinValue === null || body.coinValue === undefined) {
@@ -64,6 +68,7 @@ router.post('/gifts', async (req, res) => {
 
 // ── Update gift ──
 router.put('/gifts/:id', async (req, res) => {
+  if (await requireAdmin(req, res)) return;
   try {
     const body = req.body;
     if (!body) return res.status(400).json({ error: 'Invalid JSON body' });
@@ -109,6 +114,7 @@ router.put('/gifts/:id', async (req, res) => {
 
 // ── Delete gift ──
 router.delete('/gifts/:id', async (req, res) => {
+  if (await requireAdmin(req, res)) return;
   try {
     await Promise.all([
       db.doc(`gifts/${req.params.id}`).delete(),
