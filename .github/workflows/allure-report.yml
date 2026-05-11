@@ -169,8 +169,11 @@ jobs:
           echo "Report size: $(du -sh allure-report | cut -f1)"
 
       - name: Deploy report to GitHub Pages
-        # See test-backend.yml for dependabot read-only GITHUB_TOKEN rationale.
-        if: steps.check-existing.outputs.skip != 'true' && github.actor != 'dependabot[bot]'
+        # See test-backend.yml for full rationale: skip on dependabot
+        # PRs (read-only token + gh-pages race condition). Guard on
+        # github.head_ref so a merge commit added by a human doesn't
+        # bypass the skip (github.actor would resolve to the human).
+        if: steps.check-existing.outputs.skip != 'true' && !startsWith(github.head_ref, 'dependabot/')
         uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
