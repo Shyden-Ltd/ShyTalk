@@ -1509,7 +1509,7 @@ export function wireEconomyListeners() {
     if (!currentUid) return;
     const op = $("#eco-coins-op")?.value;
     const amount = parseInt($("#eco-coins-amount")?.value) || 0;
-    if (amount <= 0) { showToast("Enter a positive amount", "error"); return; }
+    if (amount <= 0) { showToast(window.tAdmin("toast_enter_positive_amount"), "error"); return; }
     try {
       const result = await apiCall("POST", `/api/users/${currentUid}/adjust-balance`, { currency: "COINS", amount, operation: op });
       _ecoCoins = result.newBalance;
@@ -1517,7 +1517,7 @@ export function wireEconomyListeners() {
       const ca = $("#eco-coins-amount"); if (ca) ca.value = "";
       window.PartialFailureToast?.showResultToast(
         showToast, result,
-        (op === "add" ? "Added" : "Deducted") + " " + amount + " coins (now " + _ecoCoins + ")",
+        window.tAdminFmt(op === "add" ? "toast_coins_added" : "toast_coins_deducted", { amount, balance: _ecoCoins }),
       );
     } catch (err) { showToast(err.message, "error"); }
   });
@@ -1526,7 +1526,7 @@ export function wireEconomyListeners() {
     if (!currentUid) return;
     const op = $("#eco-beans-op")?.value;
     const amount = parseInt($("#eco-beans-amount")?.value) || 0;
-    if (amount <= 0) { showToast("Enter a positive amount", "error"); return; }
+    if (amount <= 0) { showToast(window.tAdmin("toast_enter_positive_amount"), "error"); return; }
     try {
       const result = await apiCall("POST", `/api/users/${currentUid}/adjust-balance`, { currency: "BEANS", amount, operation: op });
       _ecoBeans = result.newBalance;
@@ -1534,7 +1534,7 @@ export function wireEconomyListeners() {
       const ba = $("#eco-beans-amount"); if (ba) ba.value = "";
       window.PartialFailureToast?.showResultToast(
         showToast, result,
-        (op === "add" ? "Added" : "Deducted") + " " + amount + " beans (now " + _ecoBeans + ")",
+        window.tAdminFmt(op === "add" ? "toast_beans_added" : "toast_beans_deducted", { amount, balance: _ecoBeans }),
       );
     } catch (err) { showToast(err.message, "error"); }
   });
@@ -1544,20 +1544,20 @@ export function wireEconomyListeners() {
   if (addBtn) addBtn.addEventListener("click", async () => {
     const giftId = $("#backpack-gift-select")?.value;
     const qty = parseInt($("#backpack-qty")?.value) || 0;
-    if (!giftId || !currentUid || qty <= 0) { showToast("Select a gift and enter a quantity", "error"); return; }
+    if (!giftId || !currentUid || qty <= 0) { showToast(window.tAdmin("toast_select_gift_qty"), "error"); return; }
     try {
       const existing = _backpackItems.find(i => i.giftId === giftId);
       const newQty = (existing ? existing.quantity : 0) + qty;
       const giftInfo = _giftCatalog.find(g => g.id === giftId);
       const result = await apiCall("POST", `/api/users/${currentUid}/backpack`, { giftId, quantity: newQty, giftName: giftInfo ? giftInfo.name : giftId });
-      window.PartialFailureToast?.showResultToast(showToast, result, "Added " + qty + " (total now " + newQty + ")");
+      window.PartialFailureToast?.showResultToast(showToast, result, window.tAdminFmt("toast_gift_added", { qty, total: newQty }));
       loadBackpack(currentUid);
       const bpQty = $("#backpack-qty"); if (bpQty) bpQty.value = "1";
       const bpSel = $("#backpack-gift-select"); if (bpSel) bpSel.value = "";
     } catch (err) { showToast(err.message, "error"); }
   });
   const clearBtn = $("#backpack-clear-btn");
-  if (clearBtn) clearBtn.addEventListener("click", () => { if (_backpackItems.length === 0) { showToast("Backpack is already empty", "error"); return; } showClearAllConfirmation(); });
+  if (clearBtn) clearBtn.addEventListener("click", () => { if (_backpackItems.length === 0) { showToast(window.tAdmin("toast_backpack_empty_already"), "error"); return; } showClearAllConfirmation(); });
   const txLoadBtn = $("#tx-load-btn");
   if (txLoadBtn) txLoadBtn.addEventListener("click", async () => { if (!currentUid) return; const typeFilter = $("#tx-type-filter")?.value; const txList = $("#tx-list"); if (!txList) return; txList.innerHTML = '<p style="color:var(--text2)">Loading...</p>'; try { const url = typeFilter ? `/api/users/${currentUid}/transactions?type=${typeFilter}` : `/api/users/${currentUid}/transactions`; const data = await apiCall("GET", url); const txs = Array.isArray(data) ? data : (data.transactions || []); if (txs.length === 0) { txList.innerHTML = '<p style="color:var(--text2)">No transactions found</p>'; } else { txList.innerHTML = txs.map(tx => { const date = tx.timestamp ? escapeHtml(new Date(tx.timestamp).toLocaleString()) : "\u2014"; const details = tx.details || tx.giftName || ""; return '<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><div style="display:flex;justify-content:space-between"><span style="color:var(--accent)">' + escapeHtml(tx.type) + '</span><span style="color:var(--text2)">' + date + '</span></div><div>' + (tx.amount > 0 ? "+" : "") + escapeHtml(String(tx.amount)) + " " + escapeHtml(tx.currency || "COINS") + " \u2192 Balance: " + escapeHtml(String(tx.balanceAfter ?? "?")) + "</div>" + (details ? '<div style="color:var(--text2)">' + escapeHtml(details) + "</div>" : "") + "</div>"; }).join(""); } } catch (err) { txList.innerHTML = '<p style="color:var(--danger)">' + escapeHtml(err.message) + "</p>"; } });
 }
@@ -1817,7 +1817,7 @@ export function wireBansListeners() {
     try {
       const devicesData = await apiCall("GET", `/api/admin/devices/user/${currentUid}`);
       const devices = devicesData.devices || [];
-      if (devices.length === 0) { showToast("No devices to ban", "error"); return; }
+      if (devices.length === 0) { showToast(window.tAdmin("toast_no_devices_to_ban"), "error"); return; }
       // Promise.allSettled so a single failed device-ban (HTTP 4xx/5xx)
       // doesn't reject the whole batch. Promise.all would mask both how
       // many devices got banned AND any per-call PM failures.
