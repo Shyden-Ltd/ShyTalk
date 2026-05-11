@@ -21,9 +21,9 @@
     ]
   },
   "devDependencies": {
-    "@firebase/rules-unit-testing": "^5.0.0",
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@playwright/test": "^1.59.1",
-    "allure-playwright": "^3.7.1",
+    "allure-playwright": "^3.7.2",
     "firebase": "^12.12.1",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
