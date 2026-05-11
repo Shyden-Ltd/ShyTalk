@@ -121,6 +121,12 @@ jobs:
     name: Deploy Backend to Prod
     needs: [validate-release]
     if: inputs.backend
+    # Repo-owner approval gate (configured via GitHub Environments).
+    # The `prod-backend` environment must exist with the repo owner
+    # listed as a required reviewer — see PR description for one-time
+    # setup. Without the environment + reviewers, the job would run
+    # un-gated (environments default to empty reviewers when auto-created).
+    environment: prod-backend
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -202,6 +208,7 @@ jobs:
       always() &&
       inputs.web &&
       (needs.deploy-backend-prod.result == 'success' || needs.deploy-backend-prod.result == 'skipped')
+    environment: prod-web
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -237,6 +244,7 @@ jobs:
       always() &&
       inputs.android &&
       (needs.deploy-backend-prod.result == 'success' || needs.deploy-backend-prod.result == 'skipped')
+    environment: prod-android
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -282,6 +290,7 @@ jobs:
       always() &&
       inputs.ios &&
       (needs.deploy-backend-prod.result == 'success' || needs.deploy-backend-prod.result == 'skipped')
+    environment: prod-ios
     runs-on: [self-hosted, macOS, ARM64, shytalk-mac]
     # Bumped from 45 -> 90 on 2026-04-28: K/Native linkReleaseFrameworkIosArm64
     # plus xcodebuild archive plus App Store upload total ~50 min worst case
