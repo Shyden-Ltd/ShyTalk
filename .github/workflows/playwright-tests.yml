@@ -160,10 +160,20 @@ jobs:
         run: npm ci
 
       - name: Restore Playwright browsers from cache
+        id: pw-cache
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: ~/.cache/ms-playwright
           key: playwright-browsers-${{ needs.prepare-playwright.outputs.pw-version }}
+
+      # Fallback when the cache restore returns nothing (GitHub Actions evicts
+      # caches after 7 days of disuse, and individual blobs can also vanish if
+      # the underlying storage rotates). The prepare-playwright job has the
+      # same pattern; without this mirror the test runners had no recovery
+      # path and every test failed in 2ms with "Executable doesn't exist".
+      - name: Install Playwright browsers (cache-miss fallback)
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install
 
       - name: Cache apt packages for Playwright
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
