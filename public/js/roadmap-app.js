@@ -749,8 +749,20 @@
       bells[i].addEventListener("click", function (e) {
         e.stopPropagation();
         var auth = window.shytalkAuth;
-        if (auth && auth.currentUser && auth.profile) {
-          // Authenticated — open subscribe modal
+        var currentUser = auth && auth.currentUser;
+        var profile = auth ? auth.profile : null;
+        // Treat both states as "signed in" so the user is not asked to
+        // re-authenticate during the profile-fetch race window:
+        //   - profile is a truthy object (fully loaded, has ShyTalk account)
+        //   - profile is `null` (Firebase auth fired, profile fetch in-flight)
+        // The subscribe modal handles the loading state internally
+        // ("Loading preferences..."). Only when profile is explicitly
+        // `false` (Firebase auth but no ShyTalk account) do we fall
+        // through to the login/no-account modal. Previously this gate
+        // required BOTH currentUser AND a truthy profile, so a bell
+        // click during the race window incorrectly opened the login
+        // modal for an already-signed-in user (W1 bundled bug).
+        if (currentUser && profile !== false) {
           if (window.shytalkOpenSubscribeModal) {
             window.shytalkOpenSubscribeModal();
           }

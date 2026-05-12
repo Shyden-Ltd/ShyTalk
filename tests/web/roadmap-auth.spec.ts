@@ -1195,6 +1195,59 @@ test.describe('Roadmap Auth — Bell icon auth behaviour', () => {
     expect(await loginModal.count()).toBe(0);
   });
 
+  test('bell icon while profile still loading opens subscribe modal — NOT login modal (W1 race window)', async ({ page }) => {
+    // Reproduces the exact W1-bundled "Watch bells re-prompt sign-in"
+    // bug. When `onAuthStateChanged` fires, `roadmap-auth.js` sets
+    // `currentUser` immediately but then asynchronously fetches the
+    // ShyTalk profile from `/api/roadmap/me`. During that fetch window,
+    // `window.shytalkAuth.profile` is null. The previous bell handler
+    // required BOTH currentUser AND profile to be truthy, so a click
+    // during the race window incorrectly routed a signed-in user to
+    // the LOGIN modal — they'd be asked to sign in again despite
+    // already being signed in.
+    //
+    // Fix: trust `currentUser` alone for "signed in". The subscribe
+    // modal handles its own profile-loading state ("Loading
+    // preferences..."), so opening it during the race window is the
+    // correct UX (eventually the API call resolves and the modal
+    // shows the real content).
+    //
+    // We mock the subscribe-preferences API so the modal can fully
+    // render once profile loads — the test isn't about the API path,
+    // it's about which modal opens during the race window.
+    await page.route('**/api/roadmap/subscribe/preferences*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ preferences: {}, watchList: [] }),
+      }),
+    );
+
+    await page.evaluate(() => {
+      (window as any).shytalkAuth = {
+        ...(window as any).shytalkAuth,
+        currentUser: {
+          uid: 'test-race-456',
+          displayName: 'RaceUser',
+          getIdToken: () => Promise.resolve('fake'),
+        },
+        // Critical: profile is null (still loading), NOT undefined or false.
+        // This is the exact race-window state that produced the bug.
+        profile: null,
+      };
+    });
+
+    const bell = page.locator('[data-testid="feature-bell"]').first();
+    await bell.waitFor({ timeout: 10_000 });
+    await bell.click();
+
+    // Subscribe modal MUST appear — NOT the login modal.
+    const subscribeModal = page.locator('[data-testid="subscribe-modal"]');
+    await expect(subscribeModal).toBeVisible({ timeout: 5_000 });
+    const loginModal = page.locator('[data-testid="login-modal-overlay"]');
+    expect(await loginModal.count()).toBe(0);
+  });
+
   test('bell icon when authenticated opens subscribe modal', async ({ page }) => {
     // Simulate authenticated state with profile
     await page.evaluate(() => {
