@@ -157,6 +157,17 @@
       authStateKnown = true;
       currentUser = user;
       if (user) {
+        // Publish the Firebase auth state IMMEDIATELY (with profile still
+        // null) so click-handlers triggered before the async ShyTalk
+        // account fetch resolves can see that the user is signed in.
+        // Without this synchronous publish, `window.shytalkAuth.currentUser`
+        // stayed null until checkShyTalkAccount finished its fetch — any
+        // bell/subscribe click during that window incorrectly opened the
+        // login modal for an already-signed-in user (W1 bundled bug).
+        // The bell handler treats `profile === null` as "loading" and
+        // routes to the subscribe modal which has its own loading state.
+        shytalkProfile = null;
+        updateGlobalAuth();
         checkShyTalkAccount(user);
       } else {
         shytalkProfile = null;

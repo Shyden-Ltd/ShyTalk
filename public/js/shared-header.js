@@ -18,7 +18,16 @@
   function getAuth() {
     var auth = window.shytalkAuth;
     if (!auth) return null;
-    if (!auth.currentUser || !auth.profile) return null;
+    // Treat any non-false profile (object OR null) as "signed in" for header
+    // rendering. The Firebase auth state is reflected synchronously via
+    // updateGlobalAuth() in roadmap-auth.js; the ShyTalk profile fetch is
+    // async, so `profile === null` is the "loading" window. Requiring a
+    // truthy profile here would briefly flash the "Sign In" button to an
+    // already-signed-in user on every page load. `profile === false` is
+    // the explicit "Firebase auth but no ShyTalk account" state — treat
+    // it as unauthenticated for the header (the user can't be greeted
+    // as a ShyTalk member yet). W1 bundled bug fix.
+    if (!auth.currentUser || auth.profile === false) return null;
     return auth;
   }
 
