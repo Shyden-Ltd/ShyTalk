@@ -127,7 +127,6 @@ async function seed() {
     { admin: true },
   );
   await seedIfMissing("users/100000001", {
-    uid: "claude-test@shytalk.dev",
     firebaseUid: adminFirebaseUid,
     uniqueId: 100000001,
     displayName: "Local Admin",
@@ -144,6 +143,14 @@ async function seed() {
     blockedUserIds: [],
     followingIds: [],
     followerIds: [],
+    // C8 age-verification fields. Without these, the first sign-in on a
+    // fresh install hits the "One More Step — Select Date of Birth" gate
+    // and blocks every downstream QA flow. 1995-06-15 / age 30 keeps the
+    // user safely above every per-feature age gate (gifting / DMs /
+    // voice rooms) so seeded accounts are immediately usable.
+    dateOfBirth: "1995-06-15",
+    age: 30,
+    ageVerified: true,
     createdAt: now,
     lastSeenAt: now,
   });
@@ -164,7 +171,6 @@ async function seed() {
     "Test User",
   );
   await seedIfMissing("users/100000002", {
-    uid: "user@test.com",
     firebaseUid: userFirebaseUid,
     uniqueId: 100000002,
     displayName: "Test User",
@@ -181,6 +187,9 @@ async function seed() {
     blockedUserIds: [],
     followingIds: [],
     followerIds: [],
+    dateOfBirth: "1995-06-15",
+    age: 30,
+    ageVerified: true,
     createdAt: now,
     lastSeenAt: now,
   });

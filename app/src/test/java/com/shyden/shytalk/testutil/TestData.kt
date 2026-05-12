@@ -56,6 +56,13 @@ object TestData {
         language: String = "en",
     ) = User(
         uid = uid,
+        // Default firebaseUid to uid so the existing wave of tests (which only
+        // pass `uid = "..."`) gets a populated firebaseUid for free. Production
+        // code paths that now send `User.firebaseUid` for report endpoints
+        // (PR #651 fix) would otherwise see empty strings and the tests would
+        // need every fixture rewritten. Tests that specifically care about the
+        // uid != firebaseUid distinction can `.copy(firebaseUid = "...")` it.
+        firebaseUid = uid,
         displayName = displayName,
         blockedUserIds = blockedUserIds,
         profilePhotoUrl = profilePhotoUrl,

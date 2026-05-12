@@ -3877,6 +3877,65 @@ class RoomViewModelTest {
         }
 
     @Test
+    fun `reportMessage - reportedUserId is targetUser firebaseUid not User uid`() =
+        roomTest {
+            // Pins the server-contract fix from PR #651: `resolveUniqueId`
+            // middleware queries `users.where('firebaseUid','==',value)` so the
+            // client MUST send firebaseUid, NOT `User.uid` (which is the
+            // Firestore doc key = numeric uniqueId in this app). Without this
+            // test, a regression that swaps `targetUser.firebaseUid` back to
+            // `targetUser.uid` slips through because the default TestData
+            // fixture has uid == firebaseUid. Construct a user where they
+            // differ to detect the regression unambiguously.
+            val targetUid = "sender-id-test"
+            val targetFirebaseUid = "fb-uid-xyz-789"
+            val targetUser =
+                TestData
+                    .createTestUser(uid = targetUid, displayName = "T")
+                    .copy(firebaseUid = targetFirebaseUid)
+            coEvery { userRepository.getUser(targetUid) } returns Resource.Success(targetUser)
+            coEvery {
+                reportRepository.reportMessage(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any())
+            } returns Resource.Success(Unit)
+
+            // Same trick for the reporter (current user).
+            val reporterFirebaseUid = "fb-uid-current-456"
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(
+                    TestData
+                        .createTestUser(uid = currentUserId, displayName = "Current User")
+                        .copy(firebaseUid = reporterFirebaseUid),
+                )
+
+            viewModel = createViewModel()
+            emitRoomAsOwner()
+            advanceUntilIdle()
+
+            viewModel.reportMessage(
+                Message(messageId = "m-fb", senderId = targetUid, senderName = "T", text = "x", type = MessageType.TEXT),
+                "Spam",
+                "",
+            )
+            advanceUntilIdle()
+
+            coVerify {
+                reportRepository.reportMessage(
+                    reporterId = reporterFirebaseUid,
+                    reporterName = any(),
+                    reporterUniqueId = any(),
+                    reportedUserId = targetFirebaseUid,
+                    reportedUserName = any(),
+                    reportedUserUniqueId = any(),
+                    conversationId = any(),
+                    messageId = any(),
+                    messageText = any(),
+                    reason = any(),
+                    description = any(),
+                )
+            }
+        }
+
+    @Test
     fun `reportMessage - isSubmittingReport remains true while a previous attempt is in flight`() =
         roomTest {
             // State machine assertion: while the suspension is awaiting the repo

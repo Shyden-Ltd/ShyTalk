@@ -752,11 +752,18 @@ class PrivateChatViewModel(
             }
         viewModelScope.launch {
             when (
+                // reporterId / reportedUserId MUST be Firebase Auth UIDs — the
+                // server's resolveUniqueId queries `users.where('firebaseUid',
+                // '==', uid).limit(1)`. Using `currentUserId` (which is
+                // `resolvedUniqueId ?: firebaseUid`, almost always the uniqueId)
+                // or `message.senderId` (which is the sender's uniqueId)
+                // silently fails server resolution. Pre-existing bug fixed in
+                // the B3 wire-up cycle (PR #651).
                 reportRepository.reportMessage(
-                    reporterId = currentUserId,
+                    reporterId = currentUser?.firebaseUid ?: authRepository.currentFirebaseUid ?: "",
                     reporterName = currentUser?.displayName ?: "",
                     reporterUniqueId = currentUser?.uniqueId ?: 0L,
-                    reportedUserId = message.senderId,
+                    reportedUserId = reportedUser?.firebaseUid ?: "",
                     reportedUserName = reportedUser?.displayName ?: message.senderName,
                     reportedUserUniqueId = reportedUser?.uniqueId ?: 0L,
                     conversationId = conversationId,

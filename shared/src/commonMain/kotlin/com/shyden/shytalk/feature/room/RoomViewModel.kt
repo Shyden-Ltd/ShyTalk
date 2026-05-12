@@ -1775,10 +1775,17 @@ class RoomViewModel(
 
             when (
                 reportRepository.reportUser(
-                    reporterId = currentUser.uid,
+                    // reporterId / reportedUserId MUST be Firebase Auth UIDs —
+                    // the server's resolveUniqueId middleware queries
+                    // `users.where('firebaseUid','==',uid).limit(1)`. Passing
+                    // `User.uid` (which is the Firestore doc key = numeric
+                    // uniqueId) silently fails resolution and returns
+                    // "reportedUserId does not match any known user" — pre-existing
+                    // bug surfaced during the B3 manual-QA on PR #651.
+                    reporterId = currentUser.firebaseUid,
                     reporterName = currentUser.displayName,
                     reporterUniqueId = currentUser.uniqueId,
-                    reportedUserId = targetUser.uid,
+                    reportedUserId = targetUser.firebaseUid,
                     reportedUserName = targetUser.displayName,
                     reportedUserUniqueId = targetUser.uniqueId,
                     conversationId = "",
@@ -1838,11 +1845,12 @@ class RoomViewModel(
             }
 
             when (
+                // See reportUser above for why these are firebaseUid not uid.
                 reportRepository.reportMessage(
-                    reporterId = currentUser.uid,
+                    reporterId = currentUser.firebaseUid,
                     reporterName = currentUser.displayName,
                     reporterUniqueId = currentUser.uniqueId,
-                    reportedUserId = targetUser.uid,
+                    reportedUserId = targetUser.firebaseUid,
                     reportedUserName = targetUser.displayName,
                     reportedUserUniqueId = targetUser.uniqueId,
                     conversationId = roomId,

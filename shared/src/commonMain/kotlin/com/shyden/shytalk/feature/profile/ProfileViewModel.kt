@@ -577,11 +577,15 @@ class ProfileViewModel(
             }
 
             when (
+                // reporterId / reportedUserId MUST be Firebase Auth UIDs — the
+                // server's resolveUniqueId middleware queries
+                // `users.where('firebaseUid','==',uid).limit(1)`. Pre-existing
+                // bug fixed alongside the B3 room-report wire-up.
                 reportRepository.reportUser(
-                    reporterId = currentUser.uid,
+                    reporterId = currentUser.firebaseUid,
                     reporterName = currentUser.displayName,
                     reporterUniqueId = currentUser.uniqueId,
-                    reportedUserId = targetUser.uid,
+                    reportedUserId = targetUser.firebaseUid,
                     reportedUserName = targetUser.displayName,
                     reportedUserUniqueId = targetUser.uniqueId,
                     conversationId = "",
