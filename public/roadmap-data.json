@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-11",
+  "lastUpdated": "2026-05-12",
   "currentlyWorkingOn": [
     {
       "name": "Age-gating per feature",
@@ -34,7 +34,7 @@
       },
       "status": "in-progress",
       "progress": {
-        "done": 4,
+        "done": 5,
         "total": 19
       },
       "features": [
@@ -47,7 +47,7 @@
         {
           "name": "Room message reporting",
           "description": "UK OSA, report mechanism on every UGC screen",
-          "status": "planned",
+          "status": "done",
           "i18n": {
             "ar": {
               "n": "الإبلاغ عن الرسائل",
