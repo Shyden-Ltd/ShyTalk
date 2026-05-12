@@ -495,6 +495,61 @@ test.describe('Portal — Message Modal Structure', () => {
   });
 });
 
+test.describe('Portal — Google OAuth provider configuration (W1 bundled bug fix)', () => {
+  // Pins the fix for "re-sign-in auto-uses last Google account" — without
+  // `provider.setCustomParameters({ prompt: 'select_account' })`, Firebase
+  // returns the previously-signed-in Google account silently, removing the
+  // user's ability to pick a different one. Roadmap-auth.js already does
+  // this; portal.js was missing it (caught during W1 bundled-bug pass).
+  test('signInWithGoogle calls setCustomParameters with prompt select_account', async ({ page }) => {
+    await page.goto('/portal/');
+    const source = await page.evaluate(async () => {
+      const res = await fetch('/portal/portal.js');
+      return res.text();
+    });
+    // Source-level assertion: the literal pattern must be present in the
+    // signInWithGoogle path. A simple `select_account` substring is too
+    // broad (would also match a comment); pin the actual API call shape.
+    expect(source).toMatch(/setCustomParameters\s*\(\s*\{\s*prompt:\s*['"]select_account['"]\s*\}\s*\)/);
+  });
+
+  test('GoogleAuthProvider is configured before any sign-in call', async ({ page }) => {
+    await page.goto('/portal/');
+    const source = await page.evaluate(async () => {
+      const res = await fetch('/portal/portal.js');
+      return res.text();
+    });
+    // The setCustomParameters call MUST come after `new GoogleAuthProvider()`
+    // and BEFORE the signInWithPopup/Redirect call. Without this ordering the
+    // parameter is ignored — Firebase reads it at popup-open time. Pin the
+    // ordering by checking the substring positions in the source.
+    const providerIdx = source.indexOf('new firebase.auth.GoogleAuthProvider()');
+    const paramsIdx = source.indexOf("setCustomParameters({ prompt: 'select_account' })");
+    const popupIdx = source.indexOf('auth.signInWithPopup(provider)');
+    expect(providerIdx).toBeGreaterThan(-1);
+    expect(paramsIdx).toBeGreaterThan(providerIdx);
+    expect(popupIdx).toBeGreaterThan(paramsIdx);
+  });
+
+  test('Apple OAuthProvider intentionally does NOT pass select_account (Apple ignores Google params)', async ({ page }) => {
+    // Apple's OAuthProvider does not honour Google's `prompt` parameter.
+    // This negative test documents the asymmetry — if someone later "fixes"
+    // portal.js by setCustomParameters-ing the Apple provider too, this
+    // test will fail loudly and force the change to be a conscious one.
+    await page.goto('/portal/');
+    const source = await page.evaluate(async () => {
+      const res = await fetch('/portal/portal.js');
+      return res.text();
+    });
+    // Find the Apple sign-in function body — between `function signInWithApple` and the next `function`.
+    const appleStart = source.indexOf('function signInWithApple');
+    expect(appleStart).toBeGreaterThan(-1);
+    const appleEnd = source.indexOf('function ', appleStart + 20);
+    const appleBody = source.slice(appleStart, appleEnd === -1 ? source.length : appleEnd);
+    expect(appleBody).not.toMatch(/setCustomParameters/);
+  });
+});
+
 test.describe('Portal — Console & Environment Checks', () => {
   test('no console errors on page load', async ({ page }) => {
     const errors: string[] = [];

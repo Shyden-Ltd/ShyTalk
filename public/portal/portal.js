@@ -349,6 +349,13 @@
       await auth.setPersistence(persistence);
 
       var provider = new firebase.auth.GoogleAuthProvider();
+      // Force the Google account chooser on EVERY sign-in. Without this
+      // parameter, Firebase silently returns the previously-authorised
+      // Google account when the user has only one or has signed in here
+      // before — removing their ability to switch accounts. roadmap-auth.js
+      // already does the same (`public/js/roadmap-auth.js:195`); this
+      // brings the portal flow into parity (W1 bundled bug fix).
+      provider.setCustomParameters({ prompt: 'select_account' });
       try {
         await auth.signInWithPopup(provider);
       } catch (popupErr) {
