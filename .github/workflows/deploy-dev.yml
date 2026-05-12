@@ -605,7 +605,16 @@ jobs:
       (needs.deploy-backend-dev.result == 'success' || needs.deploy-backend-dev.result == 'skipped') &&
       (needs.deploy-web-dev.result == 'success' || needs.deploy-web-dev.result == 'skipped')
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Was 5 min; sanity-check spent ALL 5 min on a cold playwright browser
+    # download (~284 MB total: Chrome for Testing 170 MB + Headless Shell
+    # 112 MB + FFmpeg 2 MB) before the actual tests could even start.
+    # Run 25763744882 on 2026-05-12 cancelled with `##[error]The operation
+    # was canceled.` literally one second after the chromium download
+    # finished. Bumping to 10 min gives ~5 min headroom for the install,
+    # which is enough even on a slow runner; the actual tests are sub-
+    # 30s. Combined with the browser cache below, warm runs will complete
+    # well under the limit.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -636,6 +645,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Get Playwright version
+        id: pw
+        run: echo "version=$(npx playwright --version)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Playwright browsers from cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ steps.pw.outputs.version }}
+
+      # Always run — install is idempotent and self-heals stale/missing
+      # cached browsers (same pattern as `playwright-tests.yml` after the
+      # 2026-05-12 fix in PR #653). The browser cache speeds the no-op
+      # path; without the cache restore above, a cold install can use
+      # the entire 5-min sanity-check budget (incident 2026-05-12, run
+      # 25763744882 cancelled after spending all 5 min downloading).
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
 
@@ -670,7 +695,11 @@ jobs:
       needs.deploy-backend-dev.result == 'success' &&
       needs.sanity-check.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    # Same justification as sanity-check: was 8 min, but a cold playwright
+    # install can swallow 4-5 min of that on its own. Bumped to 12 min so
+    # the actual smoke tests have headroom. With the browser cache below
+    # warm runs complete much faster.
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -683,6 +712,16 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Get Playwright version
+        id: pw
+        run: echo "version=$(npx playwright --version)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Playwright browsers from cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ steps.pw.outputs.version }}
 
       - name: Install Playwright browsers
         run: npx playwright install chromium --with-deps
