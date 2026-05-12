@@ -32,6 +32,8 @@ import com.shyden.shytalk.data.repository.SeatRequestRepository
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.TranslationRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import com.shyden.shytalk.feature.report.UserReportOutcome
+import com.shyden.shytalk.feature.report.submitUserReport
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -1750,59 +1752,25 @@ class RoomViewModel(
                 return@launch
             }
 
-            // Upload evidence
-            val evidenceUrls = mutableListOf<String>()
-            for ((bytes, mimeType) in evidenceImages) {
-                when (
-                    val result =
-                        storageRepository.uploadImage(
-                            currentUser.uid,
-                            "report_evidence",
-                            bytes,
-                            mimeType,
-                        )
-                ) {
-                    is Resource.Success -> evidenceUrls.add(result.data)
-
-                    is Resource.Error -> {
-                        _uiState.update { it.copy(isSubmittingReport = false, reportError = "Failed to upload evidence") }
-                        return@launch
-                    }
-
-                    is Resource.Loading -> Unit
-                }
-            }
-
             when (
-                reportRepository.reportUser(
-                    // reporterId / reportedUserId MUST be Firebase Auth UIDs —
-                    // the server's resolveUniqueId middleware queries
-                    // `users.where('firebaseUid','==',uid).limit(1)`. Passing
-                    // `User.uid` (which is the Firestore doc key = numeric
-                    // uniqueId) silently fails resolution and returns
-                    // "reportedUserId does not match any known user" — pre-existing
-                    // bug surfaced during the B3 manual-QA on PR #651.
-                    reporterId = currentUser.firebaseUid,
-                    reporterName = currentUser.displayName,
-                    reporterUniqueId = currentUser.uniqueId,
-                    reportedUserId = targetUser.firebaseUid,
-                    reportedUserName = targetUser.displayName,
-                    reportedUserUniqueId = targetUser.uniqueId,
-                    conversationId = "",
+                submitUserReport(
+                    reportRepository = reportRepository,
+                    storageRepository = storageRepository,
+                    currentUser = currentUser,
+                    targetUser = targetUser,
                     reason = reason,
                     description = description,
-                    evidenceUrls = evidenceUrls,
+                    evidenceImages = evidenceImages,
                 )
             ) {
-                is Resource.Success -> {
+                UserReportOutcome.Success ->
                     _uiState.update { it.copy(isSubmittingReport = false, reportSubmitted = true) }
-                }
 
-                is Resource.Error -> {
+                UserReportOutcome.EvidenceUploadFailed ->
+                    _uiState.update { it.copy(isSubmittingReport = false, reportError = "Failed to upload evidence") }
+
+                UserReportOutcome.ReportSubmitFailed ->
                     _uiState.update { it.copy(isSubmittingReport = false, reportError = "Failed to submit report") }
-                }
-
-                is Resource.Loading -> Unit
             }
         }
     }

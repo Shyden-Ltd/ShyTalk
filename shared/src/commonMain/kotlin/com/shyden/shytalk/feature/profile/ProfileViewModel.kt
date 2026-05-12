@@ -19,6 +19,8 @@ import com.shyden.shytalk.data.repository.ReportRepository
 import com.shyden.shytalk.data.repository.RoomRepository
 import com.shyden.shytalk.data.repository.StorageRepository
 import com.shyden.shytalk.data.repository.UserRepository
+import com.shyden.shytalk.feature.report.UserReportOutcome
+import com.shyden.shytalk.feature.report.submitUserReport
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import kotlinx.coroutines.async
@@ -553,56 +555,35 @@ class ProfileViewModel(
                     }
                 }
 
-            // Upload evidence
-            val evidenceUrls = mutableListOf<String>()
-            for ((bytes, mimeType) in evidenceImages) {
-                when (
-                    val result =
-                        storageRepository.uploadImage(
-                            currentUser.uid,
-                            "report_evidence",
-                            bytes,
-                            mimeType,
-                        )
-                ) {
-                    is Resource.Success -> evidenceUrls.add(result.data)
-
-                    is Resource.Error -> {
-                        _uiState.update { it.copy(isSubmittingReport = false, reportError = UiText.res(Res.string.error_upload_evidence)) }
-                        return@launch
-                    }
-
-                    is Resource.Loading -> Unit
-                }
-            }
-
             when (
-                // reporterId / reportedUserId MUST be Firebase Auth UIDs — the
-                // server's resolveUniqueId middleware queries
-                // `users.where('firebaseUid','==',uid).limit(1)`. Pre-existing
-                // bug fixed alongside the B3 room-report wire-up.
-                reportRepository.reportUser(
-                    reporterId = currentUser.firebaseUid,
-                    reporterName = currentUser.displayName,
-                    reporterUniqueId = currentUser.uniqueId,
-                    reportedUserId = targetUser.firebaseUid,
-                    reportedUserName = targetUser.displayName,
-                    reportedUserUniqueId = targetUser.uniqueId,
-                    conversationId = "",
+                submitUserReport(
+                    reportRepository = reportRepository,
+                    storageRepository = storageRepository,
+                    currentUser = currentUser,
+                    targetUser = targetUser,
                     reason = reason,
                     description = description,
-                    evidenceUrls = evidenceUrls,
+                    evidenceImages = evidenceImages,
                 )
             ) {
-                is Resource.Success -> {
+                UserReportOutcome.Success ->
                     _uiState.update { it.copy(isSubmittingReport = false, reportSubmitted = true) }
-                }
 
-                is Resource.Error -> {
-                    _uiState.update { it.copy(isSubmittingReport = false, reportError = UiText.res(Res.string.error_submit_report)) }
-                }
+                UserReportOutcome.EvidenceUploadFailed ->
+                    _uiState.update {
+                        it.copy(
+                            isSubmittingReport = false,
+                            reportError = UiText.res(Res.string.error_upload_evidence),
+                        )
+                    }
 
-                is Resource.Loading -> Unit
+                UserReportOutcome.ReportSubmitFailed ->
+                    _uiState.update {
+                        it.copy(
+                            isSubmittingReport = false,
+                            reportError = UiText.res(Res.string.error_submit_report),
+                        )
+                    }
             }
         }
     }
