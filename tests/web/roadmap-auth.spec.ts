@@ -1319,4 +1319,35 @@ test.describe('Roadmap Auth — Redirect-based OAuth', () => {
     });
     expect(source).toContain('getRedirectResult');
   });
+
+  test('onAuthStateChanged publishes currentUser SYNCHRONOUSLY before the profile fetch (W1)', async ({
+    page,
+  }) => {
+    // Pin the race-window fix at the source level. The signed-in branch
+    // of `onAuthStateChanged` must call `updateGlobalAuth()` BEFORE
+    // `checkShyTalkAccount(user)`. Otherwise `window.shytalkAuth.currentUser`
+    // stays null until the API round-trip resolves — every click in
+    // that window incorrectly opens the login modal for an already-
+    // signed-in user. Without this ordering, the existing bell/header
+    // race-window tests would never reach the "currentUser truthy,
+    // profile null" state in production because the global was only
+    // published once both were known.
+    await page.goto('/roadmap.html');
+    const source = await page.evaluate(async () => {
+      const res = await fetch('/js/roadmap-auth.js');
+      return res.text();
+    });
+    // Find the onAuthStateChanged handler body and assert ordering.
+    const handlerStart = source.indexOf('auth.onAuthStateChanged(function');
+    expect(handlerStart).toBeGreaterThan(-1);
+    // Take a slice that comfortably contains the signed-in branch.
+    const slice = source.slice(handlerStart, handlerStart + 1500);
+    const updateIdx = slice.indexOf('updateGlobalAuth()');
+    const checkIdx = slice.indexOf('checkShyTalkAccount(user)');
+    expect(updateIdx).toBeGreaterThan(-1);
+    expect(checkIdx).toBeGreaterThan(-1);
+    // Critical: updateGlobalAuth must come BEFORE checkShyTalkAccount
+    // in the signed-in branch so the global publishes synchronously.
+    expect(updateIdx).toBeLessThan(checkIdx);
+  });
 });
