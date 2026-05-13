@@ -8,8 +8,12 @@ import { test, expect } from '@playwright/test';
  * - User auth state (right): avatar + name when signed in, "Sign In" when not
  * - Language selector globe button
  *
- * Intentionally excluded: /admin and /portal — both render their own custom
- * authentication UI that would conflict with the shared header.
+ * Intentionally excluded:
+ * - /admin and /portal — both render their own custom authentication UI
+ *   that would conflict with the shared header.
+ * - /events/khmer-new-year.html — a deliberately standalone seasonal
+ *   experience whose `tests/web/khmer-new-year-page.spec.ts` pins zero
+ *   navigation links in header/main.
  */
 
 const PAGES = [
@@ -21,7 +25,6 @@ const PAGES = [
   { name: 'cyber-bullying', path: '/cyber-bullying.html' },
   { name: 'do-not-sell', path: '/do-not-sell.html' },
   { name: '404', path: '/404.html' },
-  { name: 'khmer-new-year', path: '/events/khmer-new-year.html' },
 ];
 
 test.describe('Shared Header — Presence on all pages', () => {
@@ -70,11 +73,11 @@ test.describe('Shared Header — Unauthenticated state', () => {
 test.describe('Shared Header — Sign In fallback on pages without login modal', () => {
   // shared-header.js falls back to `window.location.href = '/portal/'` when
   // `window.shytalkShowLoginModal` is not registered on the host page. Only
-  // roadmap.html registers that modal hook; all event/legal/404 pages take
-  // the redirect branch. This block pins that contract on khmer-new-year so
-  // the fallback can't silently regress.
-  test('Sign In on /events/khmer-new-year.html redirects to /portal/', async ({ page }) => {
-    await page.goto('/events/khmer-new-year.html');
+  // roadmap.html registers that modal hook; all legal + 404 pages take the
+  // redirect branch. This block pins that contract on community-guidelines
+  // (a representative legal page) so the fallback can't silently regress.
+  test('Sign In on /community-guidelines.html redirects to /portal/', async ({ page }) => {
+    await page.goto('/community-guidelines.html');
     const hasModalHook = await page.evaluate(
       () => typeof (window as { shytalkShowLoginModal?: unknown }).shytalkShowLoginModal === 'function',
     );
