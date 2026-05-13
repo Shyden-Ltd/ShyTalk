@@ -82,5 +82,7 @@ class AuthRepositorySignOutContractTest {
             signOutCalled = true
             resolvedUniqueId = null
         }
+
+        override suspend fun refreshIdToken(): Resource<Unit> = Resource.Success(Unit)
     }
 }

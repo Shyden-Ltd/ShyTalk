@@ -183,7 +183,19 @@ describe('POST /api/user/:uniqueId/change-role', () => {
     expect(res.body.error).toMatch(/not found/i);
   });
 
-  it('should demote admin — call setCustomUserClaims with admin: false', async () => {
+  it('should demote admin — mint preserves uniqueId + cohort, sets admin:false', async () => {
+    // UK OSA #17 PR 2 regression guard: pre-fix this route called
+    // `setCustomUserClaims(uid, { admin: false })` which (REPLACE
+    // semantics) wiped uniqueId AND the new cohort claim. Now the
+    // route goes through `mintClaimsMerging` which fetches existing
+    // claims and spreads them. Mock `auth.getUser` to return the
+    // existing claim set so the test verifies the merge actually
+    // preserves them (not a bare-shape match that passes when
+    // customClaims is empty).
+    auth.getUser.mockResolvedValueOnce({
+      uid: 'fb-uid-admin',
+      customClaims: { uniqueId: 12345678, admin: true, cohort: 'adult' },
+    });
     mockDocGet.mockImplementation((path) => {
       if (path.startsWith('users/')) {
         return Promise.resolve({
@@ -203,7 +215,11 @@ describe('POST /api/user/:uniqueId/change-role', () => {
       .send({ userType: 'MEMBER' });
 
     expect(res.status).toBe(200);
-    expect(auth.setCustomUserClaims).toHaveBeenCalledWith('fb-uid-admin', { admin: false });
+    expect(auth.setCustomUserClaims).toHaveBeenCalledWith('fb-uid-admin', {
+      uniqueId: 12345678,
+      admin: false,
+      cohort: 'adult',
+    });
     expect(auth.revokeRefreshTokens).toHaveBeenCalledWith('fb-uid-admin');
   });
 

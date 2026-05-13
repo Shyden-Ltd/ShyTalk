@@ -188,8 +188,17 @@ describe('POST /api/users (identity-based creation)', () => {
       }),
     );
 
-    // Verify Firebase custom claims were set for Firestore security rules
-    expect(mockSetCustomUserClaims).toHaveBeenCalledWith('firebase-uid-1', { uniqueId: 10000000 });
+    // Verify Firebase custom claims were set for Firestore security
+    // rules. PR 2 (UK OSA #17) adds `cohort` to the signup mint so
+    // the rules-layer segregation gate has the claim available on
+    // first read — derived from the validated DOB.
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
+      'firebase-uid-1',
+      expect.objectContaining({
+        uniqueId: 10000000,
+        cohort: expect.stringMatching(/^(adult|minor)$/),
+      }),
+    );
   });
 
   test('increments existing counter correctly', async () => {
@@ -392,10 +401,17 @@ describe('POST /api/users/sign-in', () => {
       }),
     );
 
-    // Should set Firebase custom claims for Firestore security rules
-    expect(mockSetCustomUserClaims).toHaveBeenCalledWith('new-firebase-uid', {
-      uniqueId: 10000005,
-    });
+    // Should set Firebase custom claims for Firestore security rules.
+    // PR 2 (UK OSA #17) extends the sign-in mint with the `cohort`
+    // claim resolved from the user doc — segregation gate depends on
+    // it being present on the FIRST authenticated request.
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
+      'new-firebase-uid',
+      expect.objectContaining({
+        uniqueId: 10000005,
+        cohort: expect.stringMatching(/^(adult|minor)$/),
+      }),
+    );
   });
 
   test('returns found=false for unknown identity', async () => {

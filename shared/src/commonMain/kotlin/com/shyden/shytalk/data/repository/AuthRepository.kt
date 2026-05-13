@@ -51,4 +51,25 @@ interface AuthRepository {
     suspend fun signInWithCustomToken(token: String): Resource<String>
 
     suspend fun signOut()
+
+    /**
+     * Force-refresh the Firebase ID token (JWT).
+     *
+     * Called by [UserRepository.checkPmLockOnLogin] when the server
+     * response carries `forceTokenRefresh: true` — i.e. after the
+     * pm-lock-check route flipped the user's cohort and minted a
+     * fresh custom claim server-side. Without this round-trip the
+     * client's cached JWT carries the old cohort until Firebase's
+     * ~1h auto-refresh window closes, leaving Firestore rules-layer
+     * enforcement stale (the Express + KMP layers see the fresh
+     * field so this is degraded — not broken — but UK OSA defence
+     * in depth requires all four layers in sync).
+     *
+     * On Android: `auth.currentUser.getIdToken(forceRefresh = true)`.
+     * On iOS: GitLive equivalent via `auth.currentUser?.getIdToken(true)`.
+     * Both must surface failures as [Resource.Error] so callers can
+     * log and decide to retry — swallowing the failure as
+     * [Resource.Success] would lie about JWT state.
+     */
+    suspend fun refreshIdToken(): Resource<Unit>
 }

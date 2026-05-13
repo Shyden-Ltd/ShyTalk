@@ -104,4 +104,19 @@ class IosAuthRepositoryImpl(
         resolvedUniqueId = null
         auth.signOut()
     }
+
+    override suspend fun refreshIdToken(): Resource<Unit> =
+        firebaseCall("Failed to refresh ID token") {
+            // UK OSA #17 PR 2: GitLive's `getIdToken(forceRefresh)`
+            // mirrors the Firebase Android `getIdToken(boolean)`
+            // contract. Force-refresh after a server-side cohort
+            // flip so the rules-layer JWT picks up the new claim
+            // immediately rather than waiting ~1h for auto-refresh.
+            // `.let { }` discards the returned token string (Firebase
+            // rotates the cached JWT in place; subsequent reads pick
+            // it up) AND forces the block to return Unit so
+            // firebaseCall infers Resource<Unit>.
+            val user = auth.currentUser ?: throw IllegalStateException("No signed-in user")
+            user.getIdToken(true).let { }
+        }
 }

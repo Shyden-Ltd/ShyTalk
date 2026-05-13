@@ -337,4 +337,49 @@ class AuthRepositoryImplTest {
 
             assertTrue(result is Resource.Error)
         }
+
+    // region refreshIdToken (UK OSA #17 PR 2)
+
+    @Test
+    fun `refreshIdToken calls getIdToken with forceRefresh=true on success`() =
+        runTest {
+            val user = mockk<FirebaseUser>(relaxed = true)
+            every { auth.currentUser } returns user
+            every { user.getIdToken(true) } returns Tasks.forResult(mockk(relaxed = true))
+
+            val result = repo.refreshIdToken()
+
+            assertTrue(result is Resource.Success)
+            verify { user.getIdToken(true) }
+        }
+
+    @Test
+    fun `refreshIdToken returns Error when no signed-in user`() =
+        runTest {
+            // Edge case flagged by review: no current user → must
+            // surface as Resource.Error so the AuthViewModel caller
+            // can log + retry, not as a silent Success.
+            every { auth.currentUser } returns null
+
+            val result = repo.refreshIdToken()
+
+            assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `refreshIdToken returns Error when getIdToken fails`() =
+        runTest {
+            // Platform error (FirebaseNetworkException, quota) — must
+            // surface so the rules-layer staleness is visible.
+            val user = mockk<FirebaseUser>(relaxed = true)
+            every { auth.currentUser } returns user
+            every { user.getIdToken(true) } returns
+                Tasks.forException(RuntimeException("Network error"))
+
+            val result = repo.refreshIdToken()
+
+            assertTrue(result is Resource.Error)
+        }
+
+    // endregion
 }

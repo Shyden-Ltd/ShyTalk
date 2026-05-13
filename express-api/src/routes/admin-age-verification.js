@@ -53,11 +53,12 @@ const router = express.Router();
 // a local notification when the app is backgrounded. Best-effort —
 // failures surface via the partial-failure response shape, not a 500.
 
-const { db } = require('../utils/firebase');
+const { db, auth } = require('../utils/firebase');
 const r2 = require('../utils/r2');
 const audit = require('../utils/age-verification-audit');
 const systemPm = require('../utils/age-verification-system-pm');
 const fcmPush = require('../utils/age-verification-fcm');
+const { mintClaimsMerging, effectiveCohort } = require('../utils/firebase-claims');
 const { now } = require('../utils/helpers');
 const log = require('../utils/log');
 const { requireAdmin } = require('../middleware/auth');
@@ -346,6 +347,9 @@ router.post('/admin/age-verification/:id/modify-dob', async (req, res) => {
     let submission;
     let oldDob;
     let committed = false;
+    let targetUserData = null;
+    let targetFirebaseUid = null;
+    let newCohort = 'minor';
     await db.runTransaction(async (tx) => {
       const subRef = db.doc(`ageVerificationSubmissions/${id}`);
       const subSnap = await tx.get(subRef);
@@ -359,8 +363,10 @@ router.post('/admin/age-verification/:id/modify-dob', async (req, res) => {
 
       const userRef = db.doc(`users/${data.userId}`);
       const userSnap = await tx.get(userRef);
-      oldDob = userSnap.exists ? (userSnap.data()?.dateOfBirth ?? null) : null;
+      const userData = userSnap.exists ? userSnap.data() : null;
+      oldDob = userData?.dateOfBirth ?? null;
       const verifiedNow = isAtLeast18FromDob(newDob);
+      newCohort = verifiedNow ? 'adult' : 'minor';
 
       tx.update(subRef, {
         status: 'dob_modified',
@@ -381,7 +387,16 @@ router.post('/admin/age-verification/:id/modify-dob', async (req, res) => {
         // input). New DOB ≥18 → unlock. Same transaction so the
         // ageVerified flip and the lock state can never diverge.
         pmLocked: !verifiedNow,
+        // UK OSA #17 PR 2: cohort follows the same predicate.
+        // Same transaction so cohort + pmLocked can never diverge.
+        cohort: newCohort,
       });
+      // Capture for the post-commit claim mint. Effective-cohort
+      // computation must see the NEW cohort but the EXISTING
+      // override (admin cohortOverride survives a DOB change).
+      targetUserData = userData ? { ...userData, cohort: newCohort } : { cohort: newCohort };
+      targetFirebaseUid =
+        userData && typeof userData.firebaseUid === 'string' ? userData.firebaseUid : null;
       committed = true;
     });
 
@@ -389,6 +404,36 @@ router.post('/admin/age-verification/:id/modify-dob', async (req, res) => {
     if (submission._conflict) return res.status(409).json({ error: 'Submission already decided' });
     if (!committed)
       return res.status(500).json({ error: 'DOB modification did not commit', errorId });
+
+    // UK OSA #17 PR 2: claim mint after Firestore commits. No
+    // forceTokenRefresh round-trip — the target user is not the
+    // caller; the next sign-in's pm-lock-check round-trip catches
+    // up. Partial-failure flag surfaced for admin UI alerting.
+    //
+    // Security defense (review MEDIUM #3): when the mint fails the
+    // target user's JWT is stale relative to the new Firestore
+    // cohort. For the DOB→minor case this means a now-minor user
+    // can read adult-cohort data via the stale claim until ~1h of
+    // auto-refresh closes the window. We revoke refresh tokens on
+    // mint failure so the next ID-token request from the client
+    // must re-authenticate — and re-authentication runs through
+    // the sign-in mint, closing the gap immediately.
+    let claimMinted = false;
+    if (typeof targetFirebaseUid === 'string') {
+      try {
+        await mintClaimsMerging(targetFirebaseUid, { cohort: effectiveCohort(targetUserData) });
+        claimMinted = true;
+      } catch (_mintErr) {
+        claimMinted = false;
+        try {
+          await auth.revokeRefreshTokens(targetFirebaseUid);
+        } catch (_revokeErr) {
+          // Best-effort defence in depth — if revoke also fails,
+          // we've already surfaced claimMinted:false and the
+          // ~1h JWT TTL is the worst-case staleness window.
+        }
+      }
+    }
 
     const imageDeleted = await deleteImageBestEffort(submission.r2Key, id);
     const auditWritten = await writeAuditBestEffort(audit.logVerificationDobModified, id, {
@@ -418,6 +463,7 @@ router.post('/admin/age-verification/:id/modify-dob', async (req, res) => {
       auditWritten,
       userNotified,
       pushNotified,
+      claimMinted,
     });
   } catch (err) {
     log.error('admin-age-verification', `${errorId} failed`, { id, error: err?.message });

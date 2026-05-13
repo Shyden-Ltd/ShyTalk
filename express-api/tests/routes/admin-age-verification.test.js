@@ -28,6 +28,9 @@ const mockDocUpdate = jest.fn().mockResolvedValue();
 const mockTxGet = jest.fn();
 const mockTxUpdate = jest.fn();
 const mockCollectionGet = jest.fn();
+const mockSetCustomUserClaims = jest.fn().mockResolvedValue();
+const mockGetUser = jest.fn().mockResolvedValue({ customClaims: {} });
+const mockRevokeRefreshTokens = jest.fn().mockResolvedValue();
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
@@ -56,6 +59,11 @@ jest.mock('../../src/utils/firebase', () => ({
         set: (ref, payload) => mockTxUpdate(ref?._path, payload),
       });
     }),
+  },
+  auth: {
+    setCustomUserClaims: (...args) => mockSetCustomUserClaims(...args),
+    getUser: (...args) => mockGetUser(...args),
+    revokeRefreshTokens: (...args) => mockRevokeRefreshTokens(...args),
   },
 }));
 
@@ -428,7 +436,16 @@ describe('POST /api/admin/age-verification/:id/modify-dob', () => {
       if (path === 'users/10000050') {
         return Promise.resolve({
           exists: true,
-          data: () => ({ dateOfBirth: 946684800000, ageVerified: false }),
+          data: () => ({
+            dateOfBirth: 946684800000,
+            ageVerified: false,
+            // PR 2: route reads firebaseUid + cohort from the user
+            // doc inside the transaction so the claim mint targets
+            // the right Firebase Auth record and includes the new
+            // cohort derived from `newDob`.
+            firebaseUid: 'fb-target-uid',
+            cohort: 'adult',
+          }),
         });
       }
       return Promise.resolve({ exists: false });
@@ -530,5 +547,145 @@ describe('POST /api/admin/age-verification/:id/modify-dob', () => {
       .send({ newDob: 99999999999999, reason: 'far-future fail' })
       .expect(400);
     expect(mockTxUpdate).not.toHaveBeenCalled();
+  });
+
+  // ── UK OSA #17 PR 2: cohort + claim mint on DOB modify ─────────
+  //
+  // Admin DOB-modify is the only non-DOB-derived path that can move
+  // a user across cohorts in a single transaction. It must:
+  //   1. Write the new derived cohort to the user doc in the same
+  //      transaction as the DOB + pmLocked + ageVerified updates.
+  //   2. Mint a fresh custom claim with the new cohort, merging
+  //      with the user's existing claims (admin must survive).
+  // No `forceTokenRefresh` round-trip — the next sign-in's
+  // pm-lock-check will surface the fresh claim. (Spec § Edge cases.)
+
+  test('modify DOB to <18: writes cohort:minor + mints claim with cohort:minor', async () => {
+    const sixteenYearsAgo = new Date();
+    sixteenYearsAgo.setUTCFullYear(sixteenYearsAgo.getUTCFullYear() - 16);
+    const newDob = sixteenYearsAgo.getTime();
+
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/age-verification/sub-1/modify-dob')
+      .send({ newDob, reason: 'ID confirms minor' })
+      .expect(200);
+
+    expect(mockTxUpdate).toHaveBeenCalledWith(
+      'users/10000050',
+      expect.objectContaining({
+        dateOfBirth: newDob,
+        cohort: 'minor',
+        pmLocked: true,
+      }),
+    );
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
+      'fb-target-uid',
+      expect.objectContaining({ cohort: 'minor' }),
+    );
+  });
+
+  test('modify DOB to 18+: writes cohort:adult + mints claim with cohort:adult', async () => {
+    const dob1995 = new Date('1995-01-01T00:00:00Z').getTime();
+
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/age-verification/sub-1/modify-dob')
+      .send({ newDob: dob1995, reason: 'aged-in adult' })
+      .expect(200);
+
+    expect(mockTxUpdate).toHaveBeenCalledWith(
+      'users/10000050',
+      expect.objectContaining({
+        dateOfBirth: dob1995,
+        cohort: 'adult',
+        pmLocked: false,
+      }),
+    );
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
+      'fb-target-uid',
+      expect.objectContaining({ cohort: 'adult' }),
+    );
+  });
+
+  test('claim mint preserves an existing admin:true on the target user', async () => {
+    // Admin demoting another admin's DOB to minor. The target
+    // user's admin grant must survive the cohort claim refresh —
+    // demotion is a separate workflow.
+    mockGetUser.mockResolvedValue({
+      uid: 'fb-target-uid',
+      customClaims: { uniqueId: 10000050, admin: true },
+    });
+    const sixteenYearsAgo = new Date();
+    sixteenYearsAgo.setUTCFullYear(sixteenYearsAgo.getUTCFullYear() - 16);
+
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/age-verification/sub-1/modify-dob')
+      .send({ newDob: sixteenYearsAgo.getTime(), reason: 'preserve admin' })
+      .expect(200);
+
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith('fb-target-uid', {
+      uniqueId: 10000050,
+      admin: true,
+      cohort: 'minor',
+    });
+  });
+
+  test('mint failure does NOT roll back the Firestore DOB write (logged + flagged)', async () => {
+    // Partial-failure contract per `feedback-partial-failure-contracts`.
+    // The DOB modification is admin-attested and must commit;
+    // mint failure surfaces via a per-action flag so the admin UI
+    // can flag "decision committed, claim refresh deferred".
+    mockSetCustomUserClaims.mockRejectedValueOnce(new Error('auth/quota-exceeded'));
+    const dob1995 = new Date('1995-01-01T00:00:00Z').getTime();
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/age-verification/sub-1/modify-dob')
+      .send({ newDob: dob1995, reason: 'mint fail check' })
+      .expect(200);
+
+    expect(mockTxUpdate).toHaveBeenCalledWith(
+      'users/10000050',
+      expect.objectContaining({ dateOfBirth: dob1995 }),
+    );
+    expect(res.body.claimMinted).toBe(false);
+  });
+
+  test('mint failure on minor-down triggers revokeRefreshTokens (security defense)', async () => {
+    // Security review MEDIUM #3: if mint fails after the admin
+    // demotes a user to under-18, the target's JWT keeps the old
+    // 'adult' cohort claim for up to ~1h. Revoking refresh tokens
+    // forces the client to re-authenticate on the next ID-token
+    // request; sign-in then runs through the fresh-mint path,
+    // closing the stale-claim window.
+    mockSetCustomUserClaims.mockRejectedValueOnce(new Error('auth/quota-exceeded'));
+    const sixteenYearsAgo = new Date();
+    sixteenYearsAgo.setUTCFullYear(sixteenYearsAgo.getUTCFullYear() - 16);
+
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/age-verification/sub-1/modify-dob')
+      .send({ newDob: sixteenYearsAgo.getTime(), reason: 'mint fail revoke check' })
+      .expect(200);
+
+    expect(mockRevokeRefreshTokens).toHaveBeenCalledWith('fb-target-uid');
+  });
+
+  test('successful mint does NOT revoke refresh tokens (no spurious force re-auth)', async () => {
+    // Inverse defense: only revoke on FAILURE — a successful mint
+    // already rotated the claim server-side; forcing re-auth would
+    // be a UX regression for the happy path.
+    const sixteenYearsAgo = new Date();
+    sixteenYearsAgo.setUTCFullYear(sixteenYearsAgo.getUTCFullYear() - 16);
+
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/age-verification/sub-1/modify-dob')
+      .send({ newDob: sixteenYearsAgo.getTime(), reason: 'happy path' })
+      .expect(200);
+
+    expect(mockRevokeRefreshTokens).not.toHaveBeenCalled();
   });
 });

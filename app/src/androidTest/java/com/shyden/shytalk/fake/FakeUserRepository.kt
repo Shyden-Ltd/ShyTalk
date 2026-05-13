@@ -3,6 +3,7 @@ package com.shyden.shytalk.fake
 import com.shyden.shytalk.core.model.ProfileVisitor
 import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.data.repository.PmLockCheckResult
 import com.shyden.shytalk.data.repository.UserFlags
 import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.testdata.TestData
@@ -134,7 +135,7 @@ class FakeUserRepository : UserRepository {
 
     override suspend fun liftExpiredSuspension(userId: String): Resource<Unit> = Resource.Success(Unit)
 
-    override suspend fun checkPmLockOnLogin(userId: String): Resource<Unit> = Resource.Success(Unit)
+    override suspend fun checkPmLockOnLogin(userId: String): Resource<PmLockCheckResult> = Resource.Success(PmLockCheckResult())
 
     override suspend fun getAliases(userId: String): Resource<Map<String, String>> = Resource.Success(emptyMap())
 

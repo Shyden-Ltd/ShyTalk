@@ -28,6 +28,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -384,9 +385,25 @@ class IosUserRepositoryImpl(
             api.post("/api/users/$userId/lift-suspension")
         }
 
-    override suspend fun checkPmLockOnLogin(userId: String): Resource<Unit> =
+    override suspend fun checkPmLockOnLogin(userId: String): Resource<PmLockCheckResult> =
         firebaseCall("Failed to check PM lock state") {
-            api.post("/api/users/$userId/pm-lock-check")
+            val json = api.post("/api/users/$userId/pm-lock-check")
+
+            fun bool(key: String): Boolean = (json[key] as? JsonPrimitive)?.booleanOrNull ?: false
+
+            fun str(
+                key: String,
+                default: String,
+            ): String = (json[key] as? JsonPrimitive)?.contentOrNull ?: default
+            PmLockCheckResult(
+                pmLocked = bool("pmLocked"),
+                unlocked = bool("unlocked"),
+                alreadyCheckedToday = bool("alreadyCheckedToday"),
+                cohort = str("cohort", "minor"),
+                cohortChanged = bool("cohortChanged"),
+                forceTokenRefresh = bool("forceTokenRefresh"),
+                claimMintFailed = bool("claimMintFailed"),
+            )
         }
 
     override suspend fun setAlias(

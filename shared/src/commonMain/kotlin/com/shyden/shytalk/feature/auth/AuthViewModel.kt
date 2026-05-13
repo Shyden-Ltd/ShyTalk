@@ -535,8 +535,31 @@ class AuthViewModel(
                             // still log so a permanently-broken endpoint
                             // is visible in Sentry rather than vanishing
                             // into a silent fire-and-forget.
+                            // UK OSA #17 PR 2: pm-lock-check now also
+                            // computes / writes the segregation cohort
+                            // and mints a fresh custom claim when the
+                            // cohort flips. When the server flags
+                            // `forceTokenRefresh: true`, rotate the
+                            // Firebase ID token immediately so the
+                            // rules-layer sees the fresh cohort claim
+                            // — otherwise it lags up to ~1h.
                             when (val r = userRepository.checkPmLockOnLogin(userId)) {
-                                is Resource.Error -> logW(TAG, "PM-lock check failed (non-fatal): ${r.message}")
+                                is Resource.Error ->
+                                    logW(TAG, "PM-lock check failed (non-fatal): ${r.message}")
+
+                                is Resource.Success ->
+                                    if (r.data.forceTokenRefresh) {
+                                        when (val tr = authRepository.refreshIdToken()) {
+                                            is Resource.Error ->
+                                                logW(
+                                                    TAG,
+                                                    "Cohort token refresh failed (non-fatal): ${tr.message}",
+                                                )
+
+                                            else -> Unit
+                                        }
+                                    }
+
                                 else -> Unit
                             }
                             var needsLegal = user.acceptedLegalVersion < CURRENT_LEGAL_VERSION

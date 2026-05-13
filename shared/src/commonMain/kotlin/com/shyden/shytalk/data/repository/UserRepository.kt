@@ -94,20 +94,25 @@ interface UserRepository {
     suspend fun liftExpiredSuspension(userId: String): Resource<Unit>
 
     /**
-     * First-of-day PM-lock auto-unlock check (PR 11).
+     * First-of-day PM-lock auto-unlock + UK OSA #17 cohort check.
      *
      * Calls `POST /api/users/:uniqueId/pm-lock-check`. The server
      * reads the user doc, decides whether the user has aged into 18+
-     * since the lock was set, and writes the unlock atomically.
-     * Server-side because Firestore rules deny client writes to
-     * `pmLocked` / `lastPmLockCheck`.
+     * since the lock was set, writes the unlock + cohort flip
+     * atomically, and mints a fresh `cohort` custom claim if the
+     * cohort changed. Server-side because Firestore rules deny
+     * client writes to `pmLocked` / `lastPmLockCheck` / `cohort`.
      *
      * Throttled inside the route to one Firestore op per UTC day per
-     * user — calling this every launch is safe but cheap. Failure is
-     * non-fatal: the next launch or a counterparty's gate will surface
-     * the current state.
+     * user. Failure is non-fatal: the next launch or a counterparty's
+     * gate will surface the current state.
+     *
+     * The returned [PmLockCheckResult.forceTokenRefresh] flag tells
+     * the caller to invoke [AuthRepository.refreshIdToken] before
+     * the next Firestore read — otherwise the rules-layer sees the
+     * stale cohort claim and the cross-cohort gate lags up to ~1h.
      */
-    suspend fun checkPmLockOnLogin(userId: String): Resource<Unit>
+    suspend fun checkPmLockOnLogin(userId: String): Resource<PmLockCheckResult>
 
     suspend fun getAliases(userId: String): Resource<Map<String, String>>
 

@@ -29,6 +29,7 @@ const { sendEmail } = require('../utils/email');
 const { buildDeletionScheduledEmail } = require('../utils/email-templates');
 const { sendFcmToTokens } = require('../utils/fcm');
 const { viewerIsBlocked } = require('../utils/block-check');
+const { mintClaimsMerging, deriveCohortFromUser } = require('../utils/firebase-claims');
 
 const VALID_PROVIDERS = ['google', 'apple', 'email'];
 const MIN_UNIQUE_ID = 10000000;
@@ -189,8 +190,19 @@ router.post('/users', async (req, res) => {
       return next;
     });
 
-    // Set Firebase custom claims so Firestore security rules can use callerUniqueId()
-    await auth.setCustomUserClaims(req.auth.uid, { uniqueId: newUniqueId });
+    // Set Firebase custom claims so Firestore security rules can use
+    // callerUniqueId() AND the UK OSA #17 cohort gate. `age` was
+    // computed above from the validated DOB — cohort follows the
+    // same `>=18y` predicate as pmLocked. `skipFetch: true` because
+    // signup creates a brand-new Firebase Auth record with no
+    // existing claims; the getUser round-trip would be wasted work
+    // on the signup critical path.
+    const signupCohort = age >= 18 ? 'adult' : 'minor';
+    await mintClaimsMerging(
+      req.auth.uid,
+      { uniqueId: newUniqueId, cohort: signupCohort },
+      { skipFetch: true },
+    );
 
     // Update uid → uniqueId cache so subsequent requests resolve instantly
     updateUniqueIdCache(req.auth.uid, newUniqueId);
@@ -245,8 +257,9 @@ router.post('/users/sign-in', async (req, res) => {
     // WITHOUT mutating Firebase state. Client surfaces the suspension
     // to the user; no UID refresh, no custom claim grant.
     const userSnap = await db.doc(`users/${uniqueId}`).get();
+    let userData = null;
     if (userSnap.exists) {
-      const userData = userSnap.data();
+      userData = userSnap.data();
       const isSuspended = userData.isSuspended ?? userData.is_suspended ?? false;
       if (isSuspended) {
         log.warn('users', 'Sign-in attempt by suspended user', { uniqueId, provider });
@@ -264,8 +277,19 @@ router.post('/users/sign-in', async (req, res) => {
       lastSeenAt: now(),
     });
 
-    // Set Firebase custom claims so Firestore security rules can use callerUniqueId()
-    await auth.setCustomUserClaims(req.auth.uid, { uniqueId });
+    // Mint custom claims (UK OSA #17 PR 2). Goes through the merge
+    // helper because the user may already have other claims
+    // (`admin: true` for moderators) we must preserve. Cohort is
+    // resolved via `deriveCohortFromUser` (NOT `effectiveCohort`):
+    // we re-derive from `dateOfBirth` rather than trusting the
+    // cached `cohort` field. Defends against the narrow window
+    // where admin DOB-modified the user but pm-lock-check hasn't
+    // run yet — the cached field would lie. Override (allow-listed)
+    // still wins; falls back to `'minor'` for legacy/missing DOB.
+    await mintClaimsMerging(req.auth.uid, {
+      uniqueId,
+      cohort: deriveCohortFromUser(userData),
+    });
 
     // Update caches
     updateUniqueIdCache(req.auth.uid, uniqueId);

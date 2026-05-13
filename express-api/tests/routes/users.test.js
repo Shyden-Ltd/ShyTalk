@@ -11,6 +11,8 @@ const mockBatchUpdate = jest.fn();
 const mockBatchCommit = jest.fn().mockResolvedValue();
 const mockTransactionGet = jest.fn();
 const mockTransactionSet = jest.fn();
+const mockSetCustomUserClaims = jest.fn().mockResolvedValue();
+const mockGetUser = jest.fn().mockResolvedValue({ customClaims: {} });
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
@@ -33,7 +35,8 @@ jest.mock('../../src/utils/firebase', () => ({
     }),
   },
   auth: {
-    setCustomUserClaims: jest.fn().mockResolvedValue(),
+    setCustomUserClaims: (...args) => mockSetCustomUserClaims(...args),
+    getUser: (...args) => mockGetUser(...args),
   },
   FieldValue: {
     increment: jest.fn((n) => `increment(${n})`),
@@ -306,6 +309,354 @@ describe('POST /api/users', () => {
       .expect(200);
 
     expect(res.body.success).toBe(true);
+  });
+
+  // ─── UK OSA #17 PR 2: cohort claim minting on signup ──────────
+  //
+  // Signup mints both `uniqueId` and `cohort` into the Firebase ID
+  // token in a single setCustomUserClaims call. The cohort claim is
+  // what Firestore rules read to gate cross-cohort reads at the
+  // first layer of the defence-in-depth stack (see segregation
+  // design doc § Enforcement layers). Pinning the exact shape here
+  // stops a regression from silently dropping the claim and
+  // collapsing the rules-layer gate.
+
+  test('signup with 18+ DOB mints custom claim with cohort:adult', async () => {
+    mockTransactionGet.mockResolvedValue({ exists: false });
+    const today = new Date();
+    const twentyAgo = new Date(today.getFullYear() - 20, today.getMonth(), today.getDate() - 1);
+    const app = createApp('new-adult-uid', null);
+
+    await request(app)
+      .post('/api/users')
+      .send({
+        provider: 'google',
+        identifier: 'adult-signup@gmail.com',
+        dateOfBirth: twentyAgo.toISOString().slice(0, 10),
+      })
+      .expect(200);
+
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
+      'new-adult-uid',
+      expect.objectContaining({ cohort: 'adult' }),
+    );
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
+      'new-adult-uid',
+      expect.objectContaining({ uniqueId: expect.any(Number) }),
+    );
+  });
+
+  test('signup with 16-17 DOB mints custom claim with cohort:minor', async () => {
+    mockTransactionGet.mockResolvedValue({ exists: false });
+    const today = new Date();
+    const sixteenAgo = new Date(today.getFullYear() - 16, today.getMonth(), today.getDate() - 30);
+    const app = createApp('new-minor-uid', null);
+
+    await request(app)
+      .post('/api/users')
+      .send({
+        provider: 'google',
+        identifier: 'minor-signup@gmail.com',
+        dateOfBirth: sixteenAgo.toISOString().slice(0, 10),
+      })
+      .expect(200);
+
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
+      'new-minor-uid',
+      expect.objectContaining({ cohort: 'minor' }),
+    );
+  });
+
+  test('signup propagates claim-mint failure as 500 (Firestore tx already committed)', async () => {
+    // Partial-failure contract: the Firestore signup transaction
+    // commits BEFORE the claim mint runs. If the mint throws,
+    // the user doc + identity map already exist — they're not
+    // rolled back. The route currently returns 500 because it
+    // doesn't have a `claimMinted` surface for signup. Pin this
+    // behaviour; future sweep job can detect orphan users with
+    // missing claims and back-mint.
+    mockTransactionGet.mockResolvedValue({ exists: false });
+    mockSetCustomUserClaims.mockRejectedValueOnce(new Error('auth/quota-exceeded'));
+    const today = new Date();
+    const twentyAgo = new Date(today.getFullYear() - 20, today.getMonth(), today.getDate() - 1);
+
+    const app = createApp('new-mint-fail-uid', null);
+    const res = await request(app)
+      .post('/api/users')
+      .send({
+        provider: 'google',
+        identifier: 'mint-fail@gmail.com',
+        dateOfBirth: twentyAgo.toISOString().slice(0, 10),
+      });
+
+    // Either 500 (current minimal contract) or 200 with a flag —
+    // the bug we MUST NOT have is a silent success that leaves the
+    // user doc committed without a claim. Pin that whichever code
+    // path the route takes, the transaction at least committed.
+    expect(mockTransactionSet).toHaveBeenCalled();
+    // Mint was attempted
+    expect(mockSetCustomUserClaims).toHaveBeenCalled();
+    // Response is NOT a misleading success-with-uniqueId
+    if (res.status === 200) {
+      // If the route surfaces a partial-failure flag, it must be set
+      expect(res.body.claimMinted).toBe(false);
+    } else {
+      expect(res.status).toBe(500);
+    }
+  });
+
+  test('signup skips the getUser merge round-trip (new account = empty claims)', async () => {
+    // Optimisation pinned: signup paths know there are no existing
+    // claims to preserve, so the helper is called with skipFetch=true
+    // and bypasses the auth.getUser() fetch. Saves ~150ms on the
+    // signup critical path. Asserting the side-effect (no getUser
+    // call) at the route layer is the framework-agnostic way to pin
+    // it without reaching into the helper internals.
+    mockTransactionGet.mockResolvedValue({ exists: false });
+    const today = new Date();
+    const twentyAgo = new Date(today.getFullYear() - 20, today.getMonth(), today.getDate() - 1);
+    const app = createApp('new-skip-uid', null);
+
+    await request(app)
+      .post('/api/users')
+      .send({
+        provider: 'google',
+        identifier: 'skip@gmail.com',
+        dateOfBirth: twentyAgo.toISOString().slice(0, 10),
+      })
+      .expect(200);
+
+    expect(mockGetUser).not.toHaveBeenCalled();
+  });
+});
+
+// ─── POST /api/users/sign-in (cohort + admin claim merge) ──────
+//
+// The sign-in mint at users.js:268 historically called
+// `setCustomUserClaims(uid, { uniqueId })`. Because the SDK is
+// REPLACE semantics, that line silently wiped any non-uniqueId
+// claim — most importantly `admin: true` for moderators and
+// `cohort` for the OSA #17 segregation gate. PR 2 fixes this by
+// routing every mint through `mintClaimsMerging`, which fetches
+// the existing claims and spreads them in before writing.
+
+describe('POST /api/users/sign-in', () => {
+  // Helper to construct a DOB N years before today (for cohort derive).
+  function signInDobYearsAgo(years) {
+    const d = new Date();
+    d.setUTCFullYear(d.getUTCFullYear() - years);
+    return d.getTime();
+  }
+
+  test('mints {uniqueId, cohort} preserving an existing admin:true claim', async () => {
+    // Identity exists, user is not suspended, has admin claim from
+    // a prior promote. Sign-in derives cohort from DOB (security
+    // review HIGH #1: defends against stale cached cohort field).
+    getDoc.mockResolvedValue({
+      uniqueId: 10000050,
+      provider: 'google',
+      identifier: 'admin@gmail.com',
+      unlinked: false,
+    });
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        isSuspended: false,
+        cohort: 'adult',
+        dateOfBirth: signInDobYearsAgo(25), // adult by DOB
+      }),
+    });
+    mockGetUser.mockResolvedValue({
+      uid: 'fb-admin-uid',
+      customClaims: { uniqueId: 10000050, admin: true },
+    });
+
+    const app = createApp('fb-admin-uid', null);
+    await request(app)
+      .post('/api/users/sign-in')
+      .send({ provider: 'google', identifier: 'admin@gmail.com' })
+      .expect(200);
+
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith('fb-admin-uid', {
+      uniqueId: 10000050,
+      admin: true,
+      cohort: 'adult',
+    });
+  });
+
+  test('derives cohort from DOB when cached cohort field is stale (security defense)', async () => {
+    // Edge case: admin DOB-modified user to under-18 yesterday, but
+    // pm-lock-check hasn't run on the user's device to refresh the
+    // cached `cohort` field. The stale field says 'adult'; the DOB
+    // says minor. Sign-in mint MUST follow the DOB, not the field
+    // — otherwise the user gets cross-cohort read access via the
+    // stale claim for the gap until pm-lock-check fires.
+    getDoc.mockResolvedValue({
+      uniqueId: 10000054,
+      provider: 'google',
+      identifier: 'stale@gmail.com',
+      unlinked: false,
+    });
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        isSuspended: false,
+        cohort: 'adult', // STALE — field lags reality
+        dateOfBirth: signInDobYearsAgo(15), // 15-y/o, minor
+      }),
+    });
+    mockGetUser.mockResolvedValue({ customClaims: {} });
+
+    const app = createApp('fb-stale-uid', null);
+    await request(app)
+      .post('/api/users/sign-in')
+      .send({ provider: 'google', identifier: 'stale@gmail.com' })
+      .expect(200);
+
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
+      'fb-stale-uid',
+      expect.objectContaining({ cohort: 'minor' }),
+    );
+  });
+
+  test('defaults cohort to "minor" when user doc lacks DOB (legacy account)', async () => {
+    // Most-restrictive default: a legacy user doc written before PR
+    // 1 has no cohort field AND no DOB. Sign-in mints cohort:minor
+    // so the rules-layer treats them conservatively until the
+    // first pm-lock-check writes the derived value.
+    getDoc.mockResolvedValue({
+      uniqueId: 10000051,
+      provider: 'google',
+      identifier: 'legacy@gmail.com',
+      unlinked: false,
+    });
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ isSuspended: false /* no cohort, no DOB */ }),
+    });
+    mockGetUser.mockResolvedValue({ customClaims: {} });
+
+    const app = createApp('fb-legacy-uid', null);
+    await request(app)
+      .post('/api/users/sign-in')
+      .send({ provider: 'google', identifier: 'legacy@gmail.com' })
+      .expect(200);
+
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
+      'fb-legacy-uid',
+      expect.objectContaining({ cohort: 'minor' }),
+    );
+  });
+
+  test('cohortOverride wins over DOB-derived cohort when present + allow-listed', async () => {
+    // Admin-set override on a moderator account. The minted claim
+    // must reflect the override so rules-layer treats them as the
+    // override cohort regardless of their DOB. Tests both:
+    //   - override wins over DOB ('adult' override on a 16-y/o)
+    //   - the allow-list lets 'adult' through (regression guard
+    //     against the security review HIGH #2 fix)
+    getDoc.mockResolvedValue({
+      uniqueId: 10000052,
+      provider: 'google',
+      identifier: 'mod@gmail.com',
+      unlinked: false,
+    });
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        isSuspended: false,
+        cohort: 'minor',
+        cohortOverride: 'adult',
+        dateOfBirth: signInDobYearsAgo(16), // DOB says minor; override wins
+      }),
+    });
+    mockGetUser.mockResolvedValue({ customClaims: {} });
+
+    const app = createApp('fb-mod-uid', null);
+    await request(app)
+      .post('/api/users/sign-in')
+      .send({ provider: 'google', identifier: 'mod@gmail.com' })
+      .expect(200);
+
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
+      'fb-mod-uid',
+      expect.objectContaining({ cohort: 'adult' }),
+    );
+  });
+
+  test('arbitrary cohortOverride string is rejected by allow-list (fails closed to minor)', async () => {
+    // Security review HIGH #2: `cohortOverride` is server-only-write
+    // but a future admin-panel bug or migration could write an
+    // arbitrary string like 'super-adult'. The allow-list in
+    // `effectiveCohort` / `deriveCohortFromUser` must reject the
+    // bogus value and fail closed to 'minor' rather than passing
+    // the bogus string through to the JWT claim.
+    getDoc.mockResolvedValue({
+      uniqueId: 10000055,
+      provider: 'google',
+      identifier: 'bogus@gmail.com',
+      unlinked: false,
+    });
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        isSuspended: false,
+        cohort: 'adult',
+        cohortOverride: 'super-admin', // not in allow-list
+        dateOfBirth: signInDobYearsAgo(25),
+      }),
+    });
+    mockGetUser.mockResolvedValue({ customClaims: {} });
+
+    const app = createApp('fb-bogus-uid', null);
+    await request(app)
+      .post('/api/users/sign-in')
+      .send({ provider: 'google', identifier: 'bogus@gmail.com' })
+      .expect(200);
+
+    // DOB is 25 → falls through to DOB-derive → 'adult'
+    // (not 'super-admin', not 'minor' — DOB path catches the bogus
+    // override and lands the right answer)
+    const claims = mockSetCustomUserClaims.mock.calls[0][1];
+    expect(claims.cohort).not.toBe('super-admin');
+    expect(claims.cohort).toBe('adult');
+  });
+
+  test('suspended user: no claim mint (suspension short-circuits before mint)', async () => {
+    // Phase 2A audit (M5): suspended users must not receive any
+    // Firebase state mutation on sign-in. Cohort mint is part of
+    // that state — pin that it's NOT called.
+    getDoc.mockResolvedValue({
+      uniqueId: 10000053,
+      provider: 'google',
+      identifier: 'banned@gmail.com',
+      unlinked: false,
+    });
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => ({ isSuspended: true, cohort: 'adult' }),
+    });
+
+    const app = createApp('fb-banned-uid', null);
+    await request(app)
+      .post('/api/users/sign-in')
+      .send({ provider: 'google', identifier: 'banned@gmail.com' })
+      .expect(200);
+
+    expect(mockSetCustomUserClaims).not.toHaveBeenCalled();
+  });
+
+  test('unknown identity: returns found:false WITHOUT minting any claims', async () => {
+    getDoc.mockResolvedValue(null);
+
+    const app = createApp('fb-unknown-uid', null);
+    const res = await request(app)
+      .post('/api/users/sign-in')
+      .send({ provider: 'google', identifier: 'nobody@gmail.com' })
+      .expect(200);
+
+    expect(res.body).toEqual({ found: false });
+    expect(mockSetCustomUserClaims).not.toHaveBeenCalled();
   });
 });
 

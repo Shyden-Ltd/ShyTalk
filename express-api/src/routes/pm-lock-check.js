@@ -32,6 +32,7 @@ const express = require('express');
 const router = express.Router();
 
 const { db } = require('../utils/firebase');
+const { mintClaimsMerging, effectiveCohort } = require('../utils/firebase-claims');
 const { now } = require('../utils/helpers');
 const log = require('../utils/log');
 
@@ -65,6 +66,7 @@ router.post('/users/:uniqueId/pm-lock-check', async (req, res) => {
     const nowMs = now();
     const todayStart = utcDayStart(nowMs);
     let result = { pmLocked: false, unlocked: false, cohort: 'minor', cohortChanged: false };
+    let userDataForClaim = null;
 
     await db.runTransaction(async (tx) => {
       const userRef = db.doc(`users/${pathUniqueId}`);
@@ -124,21 +126,53 @@ router.post('/users/:uniqueId/pm-lock-check', async (req, res) => {
       // so the next call today is the same-day-throttle no-op.
       // Each field is only written if it would change — saves
       // Firestore quota on the common "minor stays minor" path.
+      //
+      // Field-vs-claim divergence (intentional): the `cohort` field
+      // written here is always the DOB-derived value. The JWT claim
+      // minted below uses `effectiveCohort` which respects
+      // `cohortOverride`. So for a moderator with override='adult'
+      // but DOB=16, the field stays 'minor' (audit trail / source
+      // of truth for the underlying age) while the claim is 'adult'
+      // (operational enforcement). Do NOT "fix" this by writing
+      // override into the field — it would erase the audit trail.
       const update = { lastPmLockCheck: nowMs };
       if (currentlyLocked !== desiredPmLocked) update.pmLocked = desiredPmLocked;
       if (currentCohort !== desiredCohort) update.cohort = desiredCohort;
       tx.update(userRef, update);
 
+      const cohortChanged = currentCohort !== desiredCohort;
+      userDataForClaim = cohortChanged ? { ...data, cohort: desiredCohort } : null;
+
       result = {
         pmLocked: desiredPmLocked,
         unlocked: currentlyLocked && !desiredPmLocked,
         cohort: desiredCohort,
-        cohortChanged: currentCohort !== desiredCohort,
+        cohortChanged,
       };
     });
 
     if (result.__notFound) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // UK OSA #17 PR 2: claim mint after Firestore commits. Field
+    // write is the source of truth; mint failure leaves the JWT
+    // stale (rules-layer lag up to the ~1h Firebase auto-refresh)
+    // but Express + KMP read the fresh field. Per the partial-
+    // failure contract, surface failures via `claimMintFailed`
+    // instead of rolling back the cohort write. The flag is the
+    // structured telemetry signal — the admin UI / dev dashboards
+    // alert on it the same way `auditWritten=false` is alerted on
+    // in admin-age-verification.
+    if (result.cohortChanged && userDataForClaim && typeof req.auth?.uid === 'string') {
+      const claimCohort = effectiveCohort(userDataForClaim);
+      try {
+        await mintClaimsMerging(req.auth.uid, { cohort: claimCohort });
+        result.forceTokenRefresh = true;
+      } catch (_mintErr) {
+        result.forceTokenRefresh = false;
+        result.claimMintFailed = true;
+      }
     }
     return res.json(result);
   } catch (err) {

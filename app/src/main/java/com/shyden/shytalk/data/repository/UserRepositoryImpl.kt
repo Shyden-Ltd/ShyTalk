@@ -88,9 +88,21 @@ class UserRepositoryImpl(
             api.post("/api/users/$userId/lift-suspension")
         }
 
-    override suspend fun checkPmLockOnLogin(userId: String): Resource<Unit> =
+    override suspend fun checkPmLockOnLogin(userId: String): Resource<PmLockCheckResult> =
         firebaseCall("Failed to check PM lock state") {
-            api.post("/api/users/$userId/pm-lock-check")
+            val json = api.post("/api/users/$userId/pm-lock-check")
+            // Defensive defaults: a server that doesn't yet ship PR 2
+            // omits these fields. `optX(default)` returns the default
+            // when the key is missing or the wrong type.
+            PmLockCheckResult(
+                pmLocked = json.optBoolean("pmLocked", false),
+                unlocked = json.optBoolean("unlocked", false),
+                alreadyCheckedToday = json.optBoolean("alreadyCheckedToday", false),
+                cohort = json.optString("cohort", "minor"),
+                cohortChanged = json.optBoolean("cohortChanged", false),
+                forceTokenRefresh = json.optBoolean("forceTokenRefresh", false),
+                claimMintFailed = json.optBoolean("claimMintFailed", false),
+            )
         }
 
     // ---- Read methods (unchanged — all use Firestore SDK) ----

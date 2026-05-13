@@ -443,8 +443,13 @@ describe('Flow: Cross-project sign-in', () => {
     // Verify firebaseUid was updated to project B's UID
     expect(store.docs[`users/${uniqueId}`].firebaseUid).toBe('firebase-uid-project-B');
 
-    // Verify custom claims were set for project B's UID
-    expect(mockSetCustomUserClaims).toHaveBeenCalledWith('firebase-uid-project-B', { uniqueId });
+    // Verify custom claims were set for project B's UID. PR 2 adds
+    // `cohort` to every sign-in mint to keep the OSA #17 segregation
+    // claim consistent with the user doc's cohort field.
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
+      'firebase-uid-project-B',
+      expect.objectContaining({ uniqueId, cohort: expect.stringMatching(/^(adult|minor)$/) }),
+    );
   });
 });
 

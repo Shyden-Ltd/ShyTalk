@@ -25,6 +25,7 @@
 
 const router = require('express').Router();
 const { db, auth, FieldValue } = require('../utils/firebase');
+const { mintClaimsMerging } = require('../utils/firebase-claims');
 const { requireAdmin, clearSuspensionCache, clearAdminClaimCache } = require('../middleware/auth');
 const { generateId, now } = require('../utils/helpers');
 const { computeDisplayScore } = require('../utils/gcs');
@@ -705,9 +706,14 @@ router.post('/user/:uniqueId/change-role', async (req, res) => {
     // Revoke all sessions
     await auth.revokeRefreshTokens(firebaseUid);
 
-    // If demoting from admin, remove admin claim
+    // If demoting from admin, remove admin claim. Use the merge
+    // helper (UK OSA #17 PR 2): pre-fix passed `{ admin: false }`
+    // directly, which is a REPLACE that wiped `uniqueId` and the
+    // new `cohort` claim along with admin. The merge preserves
+    // both — the rules-layer cohort gate would otherwise fall back
+    // to 'minor' until the next sign-in's pm-lock-check round-trip.
     if (user.isAdmin) {
-      await auth.setCustomUserClaims(firebaseUid, { admin: false });
+      await mintClaimsMerging(firebaseUid, { admin: false });
       // Drop the cached admin-claim entry immediately (Phase 2H finding #2)
       // so the next request from this uid re-fetches the live customClaims
       // and sees the demotion. Without this, the demoted admin keeps

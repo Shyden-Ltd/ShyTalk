@@ -23,6 +23,8 @@ const request = require('supertest');
 
 const mockTxGet = jest.fn();
 const mockTxUpdate = jest.fn();
+const mockSetCustomUserClaims = jest.fn().mockResolvedValue();
+const mockGetUser = jest.fn().mockResolvedValue({ customClaims: {} });
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
@@ -33,6 +35,10 @@ jest.mock('../../src/utils/firebase', () => ({
         update: (ref, payload) => mockTxUpdate(ref?._path, payload),
       });
     }),
+  },
+  auth: {
+    setCustomUserClaims: (...args) => mockSetCustomUserClaims(...args),
+    getUser: (...args) => mockGetUser(...args),
   },
 }));
 
@@ -402,11 +408,21 @@ describe('POST /api/users/:uniqueId/pm-lock-check', () => {
     );
   });
 
-  test('cohortOverride and claim-mint are NOT touched by this PR (deferred)', async () => {
-    // PR 1 scope discipline: this endpoint MUST NOT call
-    // setCustomUserClaims (deferred to PR 2). `forceTokenRefresh`
-    // MUST be false until PR 2 ships — otherwise the client
-    // refreshes a stale claim, wasting Firebase mint quota.
+  // ── Custom claim mint + forceTokenRefresh (UK OSA #17, PR 2) ─────
+  //
+  // The cohort field write (covered above in PR 1 tests) is only HALF
+  // the gate. The Firestore rules-layer reads `request.auth.token.cohort`
+  // — the custom claim — not the field. PR 2 wires the mint so the
+  // claim follows the field, AND surfaces `forceTokenRefresh: true`
+  // in the response so the client rotates its JWT before the next
+  // Firestore read. Without that round-trip the rules-layer remains
+  // stale until the 1-hour JWT auto-refresh, opening a cross-cohort
+  // read window — see segregation design doc § Edge cases.
+
+  test('mints merged cohort claim on minor→adult flip + returns forceTokenRefresh:true', async () => {
+    // 17-y/o admin moderator who has just aged in. The claim merge
+    // must preserve admin:true AND set cohort:adult. The response
+    // tells the client to drop its cached JWT and rotate.
     mockTxGet.mockResolvedValue({
       exists: true,
       data: () => ({
@@ -416,12 +432,187 @@ describe('POST /api/users/:uniqueId/pm-lock-check', () => {
         lastPmLockCheck: YESTERDAY_UTC_START,
       }),
     });
+    mockGetUser.mockResolvedValue({
+      uid: 'fb-uid',
+      customClaims: { uniqueId: 10000050, admin: true },
+    });
+
     const app = createApp();
     const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
 
-    expect(res.body.cohortChanged).toBe(true);
+    expect(res.body).toMatchObject({
+      cohort: 'adult',
+      cohortChanged: true,
+      forceTokenRefresh: true,
+    });
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith('fb-uid', {
+      uniqueId: 10000050,
+      admin: true,
+      cohort: 'adult',
+    });
+  });
+
+  test('mints merged cohort claim on adult→minor flip + returns forceTokenRefresh:true', async () => {
+    // Edge case: admin DOB-modify dropped the user under 18 since
+    // the last check. Reverse flip path — claim and field both
+    // need to march to minor.
+    mockTxGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        dateOfBirth: dobYearsAgo(17),
+        pmLocked: true,
+        cohort: 'adult',
+        lastPmLockCheck: YESTERDAY_UTC_START,
+      }),
+    });
+    mockGetUser.mockResolvedValue({
+      uid: 'fb-uid',
+      customClaims: { uniqueId: 10000050 },
+    });
+
+    const app = createApp();
+    const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
+
+    expect(res.body).toMatchObject({
+      cohort: 'minor',
+      cohortChanged: true,
+      forceTokenRefresh: true,
+    });
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
+      'fb-uid',
+      expect.objectContaining({ cohort: 'minor' }),
+    );
+  });
+
+  test('no claim mint when cohort unchanged in write branch (pmLocked-only flip)', async () => {
+    // Sub-18 user who is still minor; the write branch fires (cohort
+    // backfill or pmLocked correction) but cohort doesn't change.
+    // Minting a fresh claim here wastes Firebase quota.
+    mockTxGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        dateOfBirth: dobYearsAgo(16),
+        pmLocked: true,
+        cohort: 'minor',
+        lastPmLockCheck: YESTERDAY_UTC_START,
+      }),
+    });
+
+    const app = createApp();
+    const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
+
+    expect(res.body.cohortChanged).toBe(false);
     expect(res.body.forceTokenRefresh ?? false).toBe(false);
-    const updateArgs = mockTxUpdate.mock.calls[0][1];
-    expect(updateArgs).not.toHaveProperty('cohortOverride');
+    expect(mockSetCustomUserClaims).not.toHaveBeenCalled();
+  });
+
+  test('no claim mint on same-day throttle (idempotent skip)', async () => {
+    // Already checked today: the route returns early, no Firestore
+    // write AND no claim mint. Stops a flapping client from DOSing
+    // Firebase's claim-mint quota.
+    mockTxGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        dateOfBirth: dobYearsAgo(20),
+        pmLocked: false,
+        cohort: 'adult',
+        lastPmLockCheck: TODAY_UTC_START + 100,
+      }),
+    });
+
+    const app = createApp();
+    const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
+
+    expect(res.body.alreadyCheckedToday).toBe(true);
+    expect(res.body.forceTokenRefresh ?? false).toBe(false);
+    expect(mockSetCustomUserClaims).not.toHaveBeenCalled();
+  });
+
+  test('no claim mint on hot-path no-op (adult + unlocked, no state drift)', async () => {
+    mockTxGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        dateOfBirth: dobYearsAgo(25),
+        pmLocked: false,
+        cohort: 'adult',
+        lastPmLockCheck: null,
+      }),
+    });
+
+    const app = createApp();
+    await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
+
+    expect(mockSetCustomUserClaims).not.toHaveBeenCalled();
+  });
+
+  test('mint failure does NOT roll back the Firestore cohort write (logged, surfaced)', async () => {
+    // Partial-failure contract: the Firestore field IS the source of
+    // truth. A mint failure leaves the JWT stale (rules layer lags
+    // up to the 1-hour Firebase JWT auto-refresh) but Express + KMP
+    // read the fresh field. Per `feedback-partial-failure-contracts`,
+    // surface the failure via a per-action flag instead of a 500.
+    mockTxGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        dateOfBirth: dobYearsAgo(18),
+        pmLocked: true,
+        cohort: 'minor',
+        lastPmLockCheck: YESTERDAY_UTC_START,
+      }),
+    });
+    mockGetUser.mockResolvedValue({ customClaims: {} });
+    mockSetCustomUserClaims.mockRejectedValueOnce(new Error('auth/quota-exceeded'));
+
+    const app = createApp();
+    const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
+
+    // Field write committed regardless of mint failure
+    expect(mockTxUpdate).toHaveBeenCalledWith(
+      'users/10000050',
+      expect.objectContaining({ cohort: 'adult' }),
+    );
+    // Cohort field changed but client should NOT be told to refresh
+    // (the stale claim would refresh to the same stale value — the
+    // server-side mint failed before Firebase Auth's store updated)
+    expect(res.body.cohortChanged).toBe(true);
+    expect(res.body.forceTokenRefresh).toBe(false);
+    expect(res.body.claimMintFailed).toBe(true);
+  });
+
+  test('cohortOverride wins: claim minted with override even when DOB-derived cohort differs', async () => {
+    // Admin-set override on a moderator account. Even though the DOB
+    // would derive minor, the override pins them to adult; the claim
+    // must follow the effective (override) cohort. Setup is a
+    // 16-y/o with stored cohort='minor' but override='adult'. The
+    // cohort FIELD stays 'minor' (PR 1: cohort is DOB-derived) so
+    // cohortChanged=false on the throttle-bump path doesn't apply.
+    // We need a state where cohortChanged=true so the mint fires;
+    // give the user yesterday's last-check and a cohort='adult'
+    // stored value that doesn't match desiredCohort='minor' — the
+    // route writes minor + mints. The OVERRIDE pulls the minted
+    // claim back up to adult.
+    mockTxGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        dateOfBirth: dobYearsAgo(16),
+        pmLocked: false,
+        cohort: 'adult',
+        cohortOverride: 'adult',
+        lastPmLockCheck: YESTERDAY_UTC_START,
+      }),
+    });
+    mockGetUser.mockResolvedValue({ customClaims: { uniqueId: 10000050 } });
+
+    const app = createApp();
+    await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
+
+    // Unconditional assertion: the mint MUST fire, and the cohort
+    // MUST be the override. A conditional guard here would silently
+    // pass when the mint is broken — defeating the test's purpose.
+    expect(mockSetCustomUserClaims).toHaveBeenCalledTimes(1);
+    expect(mockSetCustomUserClaims).toHaveBeenCalledWith(
+      'fb-uid',
+      expect.objectContaining({ cohort: 'adult' }),
+    );
   });
 });

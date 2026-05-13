@@ -13,6 +13,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -319,6 +320,54 @@ class UserRepositoryImplTest {
             val result = repo.checkPmLockOnLogin("user-1")
 
             assertTrue(result is Resource.Error)
+        }
+
+    // ── UK OSA #17 PR 2: forceTokenRefresh wire field ─────────────
+    //
+    // After a cohort flip the server includes `forceTokenRefresh:
+    // true` in the response so the client knows to rotate its JWT
+    // before the next Firestore read (otherwise the rules-layer is
+    // stale until the ~1h auto-refresh window closes). Repository
+    // parses the field and surfaces it in PmLockCheckResult so the
+    // AuthViewModel caller can invoke AuthRepository.refreshIdToken.
+
+    @Test
+    fun `checkPmLockOnLogin parses forceTokenRefresh true from response`() =
+        runTest {
+            // Server response carries the flag — repo must surface
+            // it in the data shape so the caller can react.
+            val response =
+                JSONObject()
+                    .put("forceTokenRefresh", true)
+                    .put("cohort", "adult")
+                    .put("cohortChanged", true)
+            coEvery { api.post(any(), any<JSONObject>()) } returns response
+
+            val result = repo.checkPmLockOnLogin("user-1")
+
+            assertTrue(result is Resource.Success)
+            val data = (result as Resource.Success).data
+            assertTrue("forceTokenRefresh must propagate from JSON", data.forceTokenRefresh)
+            assertTrue("cohortChanged must propagate from JSON", data.cohortChanged)
+            assertEquals("adult", data.cohort)
+        }
+
+    @Test
+    fun `checkPmLockOnLogin defaults forceTokenRefresh false when field absent`() =
+        runTest {
+            // Backwards compat: a server that doesn't yet ship the
+            // PR 2 changes returns the PR 1 payload shape. Repo
+            // must default the missing field to `false` (do not
+            // refresh) — safest fallback to avoid wasting Firebase
+            // mint quota on a stale claim.
+            coEvery { api.post(any(), any<JSONObject>()) } returns JSONObject()
+
+            val result = repo.checkPmLockOnLogin("user-1")
+
+            assertTrue(result is Resource.Success)
+            val data = (result as Resource.Success).data
+            assertFalse(data.forceTokenRefresh)
+            assertFalse(data.cohortChanged)
         }
 
     // endregion

@@ -154,4 +154,16 @@ class AuthRepositoryImpl(
         resolvedUniqueId = null
         auth.signOut()
     }
+
+    override suspend fun refreshIdToken(): Resource<Unit> =
+        firebaseCall("Failed to refresh ID token") {
+            // UK OSA #17 PR 2: force-refresh after a server-side
+            // cohort flip so the rules-layer JWT picks up the new
+            // claim immediately rather than waiting for the ~1h
+            // auto-refresh. Pass `forceRefresh = true` to bypass
+            // Firebase's local cache.
+            val user = auth.currentUser ?: throw IllegalStateException("No signed-in user")
+            user.getIdToken(true).await()
+            Unit
+        }
 }

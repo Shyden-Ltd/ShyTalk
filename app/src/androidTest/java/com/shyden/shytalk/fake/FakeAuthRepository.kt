@@ -69,4 +69,6 @@ class FakeAuthRepository : AuthRepository {
         fakeAuthenticated = false
         fakeUserId = null
     }
+
+    override suspend fun refreshIdToken(): Resource<Unit> = Resource.Success(Unit)
 }

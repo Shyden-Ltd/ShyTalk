@@ -9,6 +9,7 @@ import com.shyden.shytalk.data.repository.BanStatus
 import com.shyden.shytalk.data.repository.CreateUserResult
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
+import com.shyden.shytalk.data.repository.PmLockCheckResult
 import com.shyden.shytalk.data.repository.SignInResult
 import com.shyden.shytalk.data.repository.UserFlags
 import com.shyden.shytalk.data.repository.UserRepository
@@ -85,12 +86,19 @@ class AuthViewModelIdentityTest {
         override suspend fun signInWithCustomToken(token: String): Resource<String> = signInResult
 
         var signOutShouldThrow = false
+        var refreshIdTokenCalled = false
+        var refreshIdTokenResult: Resource<Unit> = Resource.Success(Unit)
 
         override suspend fun signOut() {
             if (signOutShouldThrow) throw RuntimeException("signOut deliberately failing in test")
             signedOut = true
             resolvedUniqueId = null
             firebaseUid = null
+        }
+
+        override suspend fun refreshIdToken(): Resource<Unit> {
+            refreshIdTokenCalled = true
+            return refreshIdTokenResult
         }
     }
 
@@ -272,7 +280,7 @@ class AuthViewModelIdentityTest {
 
         override suspend fun liftExpiredSuspension(userId: String) = Resource.Success(Unit)
 
-        override suspend fun checkPmLockOnLogin(userId: String) = Resource.Success(Unit)
+        override suspend fun checkPmLockOnLogin(userId: String) = Resource.Success(PmLockCheckResult())
 
         override suspend fun getAliases(userId: String) = Resource.Success(emptyMap<String, String>())
 
