@@ -67,6 +67,25 @@ test.describe('Shared Header — Unauthenticated state', () => {
   });
 });
 
+test.describe('Shared Header — Sign In fallback on pages without login modal', () => {
+  // shared-header.js falls back to `window.location.href = '/portal/'` when
+  // `window.shytalkShowLoginModal` is not registered on the host page. Only
+  // roadmap.html registers that modal hook; all event/legal/404 pages take
+  // the redirect branch. This block pins that contract on khmer-new-year so
+  // the fallback can't silently regress.
+  test('Sign In on /events/khmer-new-year.html redirects to /portal/', async ({ page }) => {
+    await page.goto('/events/khmer-new-year.html');
+    const hasModalHook = await page.evaluate(
+      () => typeof (window as { shytalkShowLoginModal?: unknown }).shytalkShowLoginModal === 'function',
+    );
+    expect(hasModalHook).toBe(false);
+    const signInBtn = page.locator('[data-testid="header-signin-btn"]');
+    await signInBtn.waitFor({ timeout: 10_000 });
+    await signInBtn.click();
+    await page.waitForURL(/\/portal\/?$/, { timeout: 5_000 });
+  });
+});
+
 test.describe('Shared Header — Authenticated state', () => {
   test('shows user display name when authenticated', async ({ page }) => {
     await page.goto('/roadmap.html');
