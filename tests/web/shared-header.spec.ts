@@ -3,11 +3,13 @@ import { test, expect } from '@playwright/test';
 /**
  * Shared header component tests.
  *
- * The shared header appears on ALL web pages with:
+ * The shared header appears on every public marketing/legal page with:
  * - Logo (left) linking to home
  * - User auth state (right): avatar + name when signed in, "Sign In" when not
  * - Language selector globe button
- * - Consistent look across roadmap, landing, legal, portal, admin pages
+ *
+ * Intentionally excluded: /admin and /portal — both render their own custom
+ * authentication UI that would conflict with the shared header.
  */
 
 const PAGES = [
@@ -16,6 +18,10 @@ const PAGES = [
   { name: 'privacy', path: '/privacy.html' },
   { name: 'terms', path: '/terms.html' },
   { name: 'community-guidelines', path: '/community-guidelines.html' },
+  { name: 'cyber-bullying', path: '/cyber-bullying.html' },
+  { name: 'do-not-sell', path: '/do-not-sell.html' },
+  { name: '404', path: '/404.html' },
+  { name: 'khmer-new-year', path: '/events/khmer-new-year.html' },
 ];
 
 test.describe('Shared Header — Presence on all pages', () => {
