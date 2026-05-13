@@ -743,4 +743,132 @@ class UserTest {
         assertEquals(false, map["pmLocked"])
         assertNull(map["lastPmLockCheck"])
     }
+
+    // ── Segregation cohort fields (UK OSA #17) ───────────────────────
+    //
+    // Server-only-write. Mirrors the pmLocked / ageVerified contract —
+    // Firestore rules deny client writes to both `cohort` and
+    // `cohortOverride`. Default is most-restrictive "minor" so a legacy
+    // user doc missing the field surfaces as the safer cohort; the
+    // first sign-in check (pm-lock-check.js extension) corrects it
+    // when DOB indicates adult. Spec:
+    // `.project/plans/2026-05-13-age-segregation-design.md`.
+
+    @Test
+    fun `default cohort is minor and cohortOverride is null`() {
+        // Most-restrictive default. A default-constructed User must
+        // surface as minor — never as adult — so any caller that forgets
+        // to wire fromMap gets the safer cohort by default.
+        val user = User()
+        assertEquals("minor", user.cohort)
+        assertNull(user.cohortOverride)
+    }
+
+    @Test
+    fun `fromMap parses cohort and cohortOverride`() {
+        val map =
+            mapOf<String, Any?>(
+                "cohort" to "adult",
+                "cohortOverride" to "minor",
+            )
+        val user = User.fromMap(map, "u1")
+        assertEquals("adult", user.cohort)
+        assertEquals("minor", user.cohortOverride)
+    }
+
+    @Test
+    fun `fromMap defaults cohort to minor when absent`() {
+        // Legacy user docs predate UK OSA #17 and have no `cohort`
+        // field at all. They MUST surface as minor (most-restrictive),
+        // not as a hard error or an empty string — downstream cohort
+        // filters compare against the string literal "minor" / "adult"
+        // so an empty / missing default would silently bypass every
+        // gate. The first sign-in pm-lock-check writes the correct
+        // value once we have a DOB.
+        val user = User.fromMap(emptyMap(), "u1")
+        assertEquals("minor", user.cohort)
+        assertNull(user.cohortOverride)
+    }
+
+    @Test
+    fun `fromMap defaults cohort to minor when value is null`() {
+        // Distinct from "absent" — Firestore can return a doc where the
+        // key exists but the value is explicitly null (e.g. after a
+        // FieldValue.delete() write the field disappears, but during
+        // transit the SDK may surface it as null). Treat both the same
+        // way: surface as minor.
+        val map = mapOf<String, Any?>("cohort" to null)
+        val user = User.fromMap(map, "u1")
+        assertEquals("minor", user.cohort)
+    }
+
+    @Test
+    fun `fromMap handles null cohortOverride explicitly`() {
+        // The override is null when admin has not set a manual override.
+        // Round-tripping null cleanly is required so an admin "clear
+        // override" action writes `cohortOverride: null` and a
+        // subsequent read surfaces as null (not as an empty string).
+        val map = mapOf<String, Any?>("cohortOverride" to null)
+        val user = User.fromMap(map, "u1")
+        assertNull(user.cohortOverride)
+    }
+
+    @Test
+    fun `toMap round-trips cohort and cohortOverride`() {
+        val user = User(cohort = "adult", cohortOverride = "minor")
+        val map = user.toMap()
+        assertEquals("adult", map["cohort"])
+        assertEquals("minor", map["cohortOverride"])
+    }
+
+    @Test
+    fun `toMap writes explicit minor for new users (admin queryability)`() {
+        // Pin that newly-created user docs write the explicit `cohort:
+        // "minor"` field so an admin "find minor users" view on
+        // `where('cohort', '==', 'minor')` catches them. Same defence
+        // as the ageVerified pattern. Without this, default-constructed
+        // users would round-trip as cohort=null on the wire and miss
+        // the query.
+        val user = User()
+        val map = user.toMap()
+        assertEquals("minor", map["cohort"])
+        assertNull(map["cohortOverride"])
+    }
+
+    @Test
+    fun `cohort field accepts the two canonical tag strings`() {
+        // The model is intentionally a passive String parser (no enum)
+        // so a future "verified-adult" tag (Phase 2 of #17, not in
+        // scope) doesn't require a model migration. The two canonical
+        // values today are pinned here.
+        listOf("minor", "adult").forEach { tag ->
+            val user = User(cohort = tag)
+            assertEquals(tag, user.cohort)
+        }
+    }
+
+    @Test
+    fun `cohortOverride non-null takes precedence in the model contract`() {
+        // The model holds both fields verbatim — precedence is enforced
+        // at the rules / repo / server layers, NOT in the model. This
+        // pins that fact: a user with cohort=minor AND cohortOverride=
+        // adult retains BOTH values; downstream enforcement reads
+        // `cohortOverride ?: cohort`.
+        val user = User(cohort = "minor", cohortOverride = "adult")
+        assertEquals("minor", user.cohort)
+        assertEquals("adult", user.cohortOverride)
+    }
+
+    @Test
+    fun `fromMap preserves unrecognised cohort string for forward-compat tags`() {
+        // Spec § Open follow-ups names "verified-adult" as a future
+        // Phase 2 tag. The model is intentionally a passive String
+        // parser (not an enum) so a server that ships a new tag
+        // before the client updates surfaces the tag verbatim — never
+        // coerced to a wrong value, never thrown. This pins the
+        // additive rollout contract: server can lead, client follows.
+        val map = mapOf<String, Any?>("cohort" to "verified-adult")
+        val user = User.fromMap(map, "u1")
+        assertEquals("verified-adult", user.cohort)
+    }
 }

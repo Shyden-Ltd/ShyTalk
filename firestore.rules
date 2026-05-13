@@ -51,7 +51,18 @@ service cloud.firestore {
                      // re-grants PM access. Both camelCase and
                      // snake_case for the dual-read defence.
                      'pmLocked', 'lastPmLockCheck',
-                     'pm_locked', 'last_pm_lock_check']);
+                     'pm_locked', 'last_pm_lock_check',
+                     // Segregation cohort (UK OSA #17, PR 1). The
+                     // server-side first-of-day check writes `cohort`
+                     // from the same `>=18y` predicate that drives
+                     // pmLocked; a client write would let a minor
+                     // user re-tag as adult and bypass every
+                     // cross-cohort gate. cohortOverride is admin-only
+                     // (also server-only). Both camel + snake variants
+                     // denied — defence against a future legacy-compat
+                     // dual-read path that could open the gate.
+                     'cohort', 'cohortOverride',
+                     'cohort_override']);
 
       // Backpack — read own, write only via API
       match /backpack/{giftId} {

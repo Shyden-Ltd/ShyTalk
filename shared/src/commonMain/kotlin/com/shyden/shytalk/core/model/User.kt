@@ -111,6 +111,25 @@ data class User(
      * launch.
      */
     val lastPmLockCheck: Long? = null,
+    /**
+     * Segregation cohort tag (UK OSA #17). One of "minor" (< 18) or
+     * "adult" (>= 18). Server-only-write — Firestore rules deny
+     * client writes to this field. Default is most-restrictive
+     * "minor" so a legacy user doc missing the field surfaces as
+     * the safer cohort; the first sign-in pm-lock-check writes the
+     * correct value once we have a DOB. Spec:
+     * `.project/plans/2026-05-13-age-segregation-design.md`.
+     */
+    val cohort: String = "minor",
+    /**
+     * Admin-set override of [cohort] (UK OSA #17). When non-null,
+     * downstream enforcement reads `cohortOverride ?: cohort` — the
+     * override wins for every interaction gate. Only settable on
+     * accounts with `userType >= MODERATOR`; regular member accounts
+     * get a 422 from the admin-users route. Audit-logged in the
+     * same transaction as the write. Spec: see [cohort].
+     */
+    val cohortOverride: String? = null,
 ) {
     val isActivelySuspended: Boolean
         get() {
@@ -214,6 +233,8 @@ data class User(
             "ageVerificationMethod" to ageVerificationMethod,
             "pmLocked" to pmLocked,
             "lastPmLockCheck" to lastPmLockCheck,
+            "cohort" to cohort,
+            "cohortOverride" to cohortOverride,
         )
 
     companion object {
@@ -329,6 +350,8 @@ data class User(
                 ageVerificationMethod = map["ageVerificationMethod"] as? String,
                 pmLocked = map["pmLocked"].asBool(),
                 lastPmLockCheck = map["lastPmLockCheck"]?.let { timestampToMillis(it) },
+                cohort = map["cohort"] as? String ?: "minor",
+                cohortOverride = map["cohortOverride"] as? String,
             )
     }
 }

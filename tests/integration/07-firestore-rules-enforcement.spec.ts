@@ -219,6 +219,55 @@ test.describe("Integration — Firestore rules: users collection", () => {
     );
   });
 
+  test("user CANNOT self-modify segregation fields (cohort, cohortOverride)", async () => {
+    // UK OSA #17, PR 1: `cohort` and `cohortOverride` are server-only
+    // segregation tags. A successful self-write here would let a minor
+    // user re-tag themselves as adult and bypass every cross-cohort
+    // gate (discovery, follow, DM, room join) at the Firestore rules
+    // layer. Both camelCase and snake_case variants must be denied
+    // (defence in depth — matches the existing pmLocked / ageVerified
+    // dual-variant pattern at firestore.rules:53).
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const adminDb = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(adminDb, "users", "100000077"), {
+        firebaseUid: "uid-owner-seg",
+        cohort: "minor",
+      });
+    });
+
+    const owner = testEnv.authenticatedContext("uid-owner-seg");
+    const ownerDb = owner.firestore() as unknown as Firestore;
+    // Camel-case cohort flip — primary attack
+    await assertFails(
+      updateDoc(doc(ownerDb, "users", "100000077"), {
+        cohort: "adult",
+      }),
+    );
+    // Camel-case override — the bypass path admins use legitimately
+    await assertFails(
+      updateDoc(doc(ownerDb, "users", "100000077"), {
+        cohortOverride: "adult",
+      }),
+    );
+    // Snake-case variants — defence against a legacy-compat read path
+    // that would dual-read both forms (e.g. `gcsScore` / `gcs_score`).
+    await assertFails(
+      updateDoc(doc(ownerDb, "users", "100000077"), {
+        cohort_override: "adult",
+      }),
+    );
+    // Combined-field write in a single payload — `hasAny` implicitly
+    // catches this, but pinning it explicitly prevents a future rule
+    // refactor (e.g. splitting the deny list into per-field allow
+    // predicates) from silently opening the multi-field bypass path.
+    await assertFails(
+      updateDoc(doc(ownerDb, "users", "100000077"), {
+        cohort: "adult",
+        cohortOverride: "adult",
+      }),
+    );
+  });
+
   test("client CANNOT create a user doc directly (server only)", async () => {
     // Critical rule: user creation requires an atomic uniqueId
     // allocation + identity-map write that only the server can do.

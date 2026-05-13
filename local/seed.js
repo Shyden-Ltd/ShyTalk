@@ -151,6 +151,12 @@ async function seed() {
     dateOfBirth: "1995-06-15",
     age: 30,
     ageVerified: true,
+    // UK OSA #17 segregation cohort (PR 1). Seeded users are 30, so
+    // they're adults — pinning the value here lets first-sign-in QA
+    // run without the pm-lock-check having to backfill the field
+    // (which would otherwise race with downstream test assertions
+    // that read the cohort before the check writes it).
+    cohort: "adult",
     createdAt: now,
     lastSeenAt: now,
   });
@@ -190,6 +196,8 @@ async function seed() {
     dateOfBirth: "1995-06-15",
     age: 30,
     ageVerified: true,
+    // Adult cohort — see admin block above.
+    cohort: "adult",
     createdAt: now,
     lastSeenAt: now,
   });

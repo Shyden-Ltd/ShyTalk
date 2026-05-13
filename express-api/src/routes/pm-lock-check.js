@@ -5,7 +5,7 @@
  * after successful sign-in. Reads the user doc, decides whether the
  * pmLocked state should change, and writes if yes — all server-side
  * because Firestore rules deny client writes to `pmLocked` /
- * `lastPmLockCheck`.
+ * `lastPmLockCheck` / `cohort`.
  *
  * Throttling: when `lastPmLockCheck` falls in the same UTC day as
  * `now()`, we skip the Firestore write entirely. Active users only
@@ -16,6 +16,16 @@
  * trigger an unlock check on another user's behalf (would be moot
  * since rules deny direct writes anyway, but gate at the route layer
  * for defence in depth).
+ *
+ * UK OSA #17 segregation extension (PR 1): the same `>=18y` predicate
+ * that drives `pmLocked` also drives the `cohort` field ("minor" |
+ * "adult"). Re-using the `lastPmLockCheck` stamp lets both fields
+ * recompute on the same daily cadence with no second throttle. The
+ * custom-claim mint that completes the cohort transition is deferred
+ * to PR 2 — until it lands, the response carries `cohortChanged` and
+ * `cohort` but NOT `forceTokenRefresh: true` (refreshing a stale
+ * claim wastes Firebase mint quota for no behavioral change). Spec:
+ * `.project/plans/2026-05-13-age-segregation-design.md`.
  */
 
 const express = require('express');
@@ -54,7 +64,7 @@ router.post('/users/:uniqueId/pm-lock-check', async (req, res) => {
   try {
     const nowMs = now();
     const todayStart = utcDayStart(nowMs);
-    let result = { pmLocked: false, unlocked: false };
+    let result = { pmLocked: false, unlocked: false, cohort: 'minor', cohortChanged: false };
 
     await db.runTransaction(async (tx) => {
       const userRef = db.doc(`users/${pathUniqueId}`);
@@ -65,33 +75,66 @@ router.post('/users/:uniqueId/pm-lock-check', async (req, res) => {
       }
       const data = snap.data();
       const currentlyLocked = data.pmLocked === true;
+      const currentCohort = typeof data.cohort === 'string' ? data.cohort : 'minor';
       const last = typeof data.lastPmLockCheck === 'number' ? data.lastPmLockCheck : null;
       const lastDay = last !== null ? utcDayStart(last) : null;
 
-      // Already-unlocked user: no-op. Don't bump throttle (no need —
-      // next read won't change outcome unless the user gets re-locked
-      // by an admin, in which case the lock side sets the stamp).
-      if (!currentlyLocked) {
-        result = { pmLocked: false, unlocked: false };
-        return;
-      }
-
-      // Already checked today: idempotent skip.
-      if (lastDay === todayStart) {
-        result = { pmLocked: true, unlocked: false, alreadyCheckedToday: true };
-        return;
-      }
-
-      // First check of the day for a locked user. Decide.
+      // Derive desired state from DOB. Null DOB → minor + locked
+      // (most-restrictive default per spec § Edge cases).
       const eligible = isAtLeast18FromDob(data.dateOfBirth, nowMs);
-      if (eligible) {
-        tx.update(userRef, { pmLocked: false, lastPmLockCheck: nowMs });
-        result = { pmLocked: false, unlocked: true };
-      } else {
-        // Still <18, just bump throttle so we don't re-scan today
-        tx.update(userRef, { lastPmLockCheck: nowMs });
-        result = { pmLocked: true, unlocked: false };
+      const desiredPmLocked = !eligible;
+      const desiredCohort = eligible ? 'adult' : 'minor';
+
+      // Already checked today: idempotent skip. The cohort + pmLocked
+      // surfaced in the response are the CURRENT stored values, not
+      // the derived ones — between the morning and evening of the
+      // same UTC day, the field is whatever yesterday's check wrote.
+      if (lastDay === todayStart) {
+        result = {
+          pmLocked: currentlyLocked,
+          unlocked: false,
+          alreadyCheckedToday: true,
+          cohort: currentCohort,
+          cohortChanged: false,
+        };
+        return;
       }
+
+      // Hot-path no-op: adult cohort AND unlocked AND derived state
+      // matches stored state. Skip even the throttle bump — dormant
+      // adult accounts must pay zero Firestore quota. Sub-18 users
+      // and mismatched-state users fall through to the write branch
+      // (even when pmLocked is false) so cohort gets backfilled.
+      if (
+        !currentlyLocked &&
+        currentCohort === 'adult' &&
+        desiredCohort === 'adult' &&
+        !desiredPmLocked
+      ) {
+        result = {
+          pmLocked: false,
+          unlocked: false,
+          cohort: 'adult',
+          cohortChanged: false,
+        };
+        return;
+      }
+
+      // Write branch — minimal payload. Always bumps lastPmLockCheck
+      // so the next call today is the same-day-throttle no-op.
+      // Each field is only written if it would change — saves
+      // Firestore quota on the common "minor stays minor" path.
+      const update = { lastPmLockCheck: nowMs };
+      if (currentlyLocked !== desiredPmLocked) update.pmLocked = desiredPmLocked;
+      if (currentCohort !== desiredCohort) update.cohort = desiredCohort;
+      tx.update(userRef, update);
+
+      result = {
+        pmLocked: desiredPmLocked,
+        unlocked: currentlyLocked && !desiredPmLocked,
+        cohort: desiredCohort,
+        cohortChanged: currentCohort !== desiredCohort,
+      };
     });
 
     if (result.__notFound) {

@@ -59,6 +59,16 @@ function describeSeededUserInvariants(label, uniqueId, firebaseVar) {
       expect(ageMatch).not.toBeNull();
       expect(Number(ageMatch[1])).toBeGreaterThanOrEqual(18);
     });
+
+    it('has cohort: "adult" so segregation gates pass on first sign-in (UK OSA #17)', () => {
+      // PR 1 of the age-segregation initiative adds a `cohort` field to
+      // every user doc. Seeded test users are 18+ (see test above), so
+      // their cohort MUST be "adult" — otherwise the first sign-in
+      // pm-lock-check would have to flip them, and any downstream test
+      // that runs BEFORE the flip would see a stale `minor` cohort and
+      // hit the wrong discovery filter / 404 path.
+      expect(block[1]).toMatch(/\bcohort:\s*"adult"/);
+    });
   });
 }
 

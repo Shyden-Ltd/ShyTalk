@@ -134,12 +134,18 @@ describe('POST /api/users/:uniqueId/pm-lock-check', () => {
     expect(mockTxUpdate).not.toHaveBeenCalled();
   });
 
-  test('no-op for users who are not pmLocked (most common case)', async () => {
+  test('no-op for users who are not pmLocked AND already cohort=adult (hot path)', async () => {
+    // The hot-path no-op now also requires `cohort: 'adult'` — a
+    // legacy adult-user doc that predates UK OSA #17 (cohort field
+    // absent) falls through to the write branch to backfill cohort.
+    // See sibling test 'cohort backfilled from absent field ...' for
+    // that case; this test pins the all-correct-state no-op.
     mockTxGet.mockResolvedValue({
       exists: true,
       data: () => ({
         dateOfBirth: dobYearsAgo(25),
         pmLocked: false,
+        cohort: 'adult',
         lastPmLockCheck: null,
       }),
     });
@@ -148,9 +154,8 @@ describe('POST /api/users/:uniqueId/pm-lock-check', () => {
     const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
 
     expect(res.body).toMatchObject({ pmLocked: false, unlocked: false });
-    // No Firestore write at all — already-unlocked users don't need
-    // their throttle stamp bumped because the next read won't change
-    // outcome. (Would change if we ever needed to re-lock; not today.)
+    // No Firestore write at all — already-correct state means no
+    // throttle bump either, dormant adult accounts pay zero quota.
     expect(mockTxUpdate).not.toHaveBeenCalled();
   });
 
@@ -182,5 +187,241 @@ describe('POST /api/users/:uniqueId/pm-lock-check', () => {
     const app = createApp();
     const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
     expect(res.body).toMatchObject({ pmLocked: true, unlocked: false });
+  });
+
+  // ── Segregation cohort (UK OSA #17, PR 1) ──────────────────────
+  // Same first-of-day check that flips pmLocked also writes
+  // `cohort` ("minor" | "adult") derived from `>=18y`. Re-uses
+  // `lastPmLockCheck` throttle stamp. Spec:
+  // `.project/plans/2026-05-13-age-segregation-design.md`.
+
+  test('cohort flips minor→adult when sub-18 user has aged in', async () => {
+    mockTxGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        dateOfBirth: dobYearsAgo(18),
+        pmLocked: true,
+        cohort: 'minor',
+        lastPmLockCheck: YESTERDAY_UTC_START,
+      }),
+    });
+    const app = createApp();
+    const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
+
+    expect(res.body).toMatchObject({
+      pmLocked: false,
+      unlocked: true,
+      cohort: 'adult',
+      cohortChanged: true,
+    });
+    expect(mockTxUpdate).toHaveBeenCalledWith(
+      'users/10000050',
+      expect.objectContaining({
+        pmLocked: false,
+        cohort: 'adult',
+        lastPmLockCheck: 1777896000000,
+      }),
+    );
+  });
+
+  test('cohort flips adult→minor when admin DOB-modify drops user under 18', async () => {
+    mockTxGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        dateOfBirth: dobYearsAgo(17),
+        pmLocked: true,
+        cohort: 'adult',
+        lastPmLockCheck: YESTERDAY_UTC_START,
+      }),
+    });
+    const app = createApp();
+    const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
+
+    expect(res.body).toMatchObject({
+      pmLocked: true,
+      unlocked: false,
+      cohort: 'minor',
+      cohortChanged: true,
+    });
+    expect(mockTxUpdate).toHaveBeenCalledWith(
+      'users/10000050',
+      expect.objectContaining({
+        cohort: 'minor',
+        lastPmLockCheck: 1777896000000,
+      }),
+    );
+  });
+
+  test('cohort write skipped when minor user is still minor (no-op write branch)', async () => {
+    mockTxGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        dateOfBirth: dobYearsAgo(16),
+        pmLocked: true,
+        cohort: 'minor',
+        lastPmLockCheck: YESTERDAY_UTC_START,
+      }),
+    });
+    const app = createApp();
+    const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
+
+    expect(res.body).toMatchObject({
+      pmLocked: true,
+      unlocked: false,
+      cohort: 'minor',
+      cohortChanged: false,
+    });
+    const updateArgs = mockTxUpdate.mock.calls[0][1];
+    expect(updateArgs.lastPmLockCheck).toBe(1777896000000);
+    expect(updateArgs).not.toHaveProperty('pmLocked');
+    expect(updateArgs).not.toHaveProperty('cohort');
+  });
+
+  test('cohort backfilled from absent field when adult user first hits the check', async () => {
+    // Legacy 19-y/o user whose doc predates UK OSA #17 — `cohort` is
+    // missing entirely. Must backfill to adult.
+    mockTxGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        dateOfBirth: dobYearsAgo(19),
+        pmLocked: false,
+        lastPmLockCheck: YESTERDAY_UTC_START,
+      }),
+    });
+    const app = createApp();
+    const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
+
+    expect(res.body).toMatchObject({
+      pmLocked: false,
+      unlocked: false,
+      cohort: 'adult',
+      cohortChanged: true,
+    });
+    expect(mockTxUpdate).toHaveBeenCalledWith(
+      'users/10000050',
+      expect.objectContaining({ cohort: 'adult', lastPmLockCheck: 1777896000000 }),
+    );
+  });
+
+  test('already-adult unlocked user is full no-op (no write, no throttle bump)', async () => {
+    // Hot path: 25-y/o user, pmLocked=false, cohort=adult.
+    // No work needed — no doc write, no throttle bump.
+    mockTxGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        dateOfBirth: dobYearsAgo(25),
+        pmLocked: false,
+        cohort: 'adult',
+        lastPmLockCheck: null,
+      }),
+    });
+    const app = createApp();
+    const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
+
+    expect(res.body).toMatchObject({
+      pmLocked: false,
+      unlocked: false,
+      cohort: 'adult',
+      cohortChanged: false,
+    });
+    expect(mockTxUpdate).not.toHaveBeenCalled();
+  });
+
+  test('same-day throttle preserves cohort field in response', async () => {
+    mockTxGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        dateOfBirth: dobYearsAgo(20),
+        pmLocked: true,
+        cohort: 'adult',
+        lastPmLockCheck: TODAY_UTC_START + 100,
+      }),
+    });
+    const app = createApp();
+    const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
+
+    expect(res.body).toMatchObject({
+      pmLocked: true,
+      unlocked: false,
+      alreadyCheckedToday: true,
+      cohort: 'adult',
+      cohortChanged: false,
+    });
+    expect(mockTxUpdate).not.toHaveBeenCalled();
+  });
+
+  test('null DOB defaults cohort to minor (most-restrictive)', async () => {
+    // Spec § Edge cases: "User signs up with DOB unset → Treated as
+    // cohort = 'minor' — most-restrictive default."
+    mockTxGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        dateOfBirth: null,
+        pmLocked: true,
+        cohort: 'adult',
+        lastPmLockCheck: YESTERDAY_UTC_START,
+      }),
+    });
+    const app = createApp();
+    const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
+
+    expect(res.body.cohort).toBe('minor');
+    expect(res.body.cohortChanged).toBe(true);
+    expect(mockTxUpdate).toHaveBeenCalledWith(
+      'users/10000050',
+      expect.objectContaining({ cohort: 'minor', lastPmLockCheck: 1777896000000 }),
+    );
+  });
+
+  test('epoch-zero DOB (1970-01-01) computes as adult — integer-boundary sanity', async () => {
+    // Lower-edge integer DOB. 1970-01-01 epoch zero is ~56 years
+    // before the pinned `now()` → adult. Guards against any signed/
+    // unsigned arithmetic mishap in isAtLeast18FromDob's UTC age
+    // math that might mis-handle the zero / pre-epoch boundary.
+    mockTxGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        dateOfBirth: 0,
+        pmLocked: true,
+        cohort: 'minor',
+        lastPmLockCheck: YESTERDAY_UTC_START,
+      }),
+    });
+    const app = createApp();
+    const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
+
+    expect(res.body).toMatchObject({
+      pmLocked: false,
+      unlocked: true,
+      cohort: 'adult',
+      cohortChanged: true,
+    });
+    expect(mockTxUpdate).toHaveBeenCalledWith(
+      'users/10000050',
+      expect.objectContaining({ pmLocked: false, cohort: 'adult' }),
+    );
+  });
+
+  test('cohortOverride and claim-mint are NOT touched by this PR (deferred)', async () => {
+    // PR 1 scope discipline: this endpoint MUST NOT call
+    // setCustomUserClaims (deferred to PR 2). `forceTokenRefresh`
+    // MUST be false until PR 2 ships — otherwise the client
+    // refreshes a stale claim, wasting Firebase mint quota.
+    mockTxGet.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        dateOfBirth: dobYearsAgo(18),
+        pmLocked: true,
+        cohort: 'minor',
+        lastPmLockCheck: YESTERDAY_UTC_START,
+      }),
+    });
+    const app = createApp();
+    const res = await request(app).post('/api/users/10000050/pm-lock-check').expect(200);
+
+    expect(res.body.cohortChanged).toBe(true);
+    expect(res.body.forceTokenRefresh ?? false).toBe(false);
+    const updateArgs = mockTxUpdate.mock.calls[0][1];
+    expect(updateArgs).not.toHaveProperty('cohortOverride');
   });
 });
