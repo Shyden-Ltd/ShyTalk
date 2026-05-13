@@ -2167,3 +2167,144 @@ test.describe('URL & Navigation Edge Cases', () => {
     // This may use history.replaceState to update the hash
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// W1 follow-up — Race-window auth (sibling of PR #655)
+// ═══════════════════════════════════════════════════════════════
+
+test.describe('Suggestions Board — Race-window auth (W1 follow-up)', () => {
+  // The profile-fetch race window that PR #655 fixed for the bell handler
+  // (`public/js/roadmap-app.js`) and the shared header
+  // (`public/js/shared-header.js`) was also present in the suggestions
+  // board (`public/js/suggestions-board.js:hasValidAccount`). The board
+  // gates every privileged action (vote, submit, watch, comment) through
+  // `requireAuth() => getUser() && hasValidAccount()`. Pre-fix,
+  // `hasValidAccount` required `profile` to be truthy — so a click during
+  // the in-flight profile fetch (profile === null) failed the gate and
+  // incorrectly routed an already-signed-in user to the login modal.
+  // Fix mirrors PR #655: treat any non-false profile as "valid for
+  // client-side gating". The server still verifies the Firebase ID token
+  // on every privileged write (apiFetch attaches the Authorization
+  // header), so this is a UX/parity fix, not a security relaxation.
+
+  test.beforeEach(async ({ page }) => {
+    await setupSuggestionsMocks(page);
+    await page.goto('/roadmap.html');
+    // Vote-up buttons are the canonical requireAuth-gated surface; wait
+    // for one to render before manipulating auth so the click target
+    // exists at click-time.
+    await page.locator('[data-testid="vote-up-test-sug-1"]').waitFor({ timeout: 10_000 });
+  });
+
+  test('vote click while profile is loading (null) opens NO login modal', async ({ page }) => {
+    // Race-window state as published by `roadmap-auth.js` between
+    // onAuthStateChanged firing and the ShyTalk profile fetch resolving.
+    await page.evaluate(() => {
+      (window as any).shytalkAuth = {
+        ...(window as any).shytalkAuth,
+        currentUser: {
+          uid: 'test-race-sb-1',
+          displayName: 'RaceSBUser',
+          getIdToken: () => Promise.resolve('fake-token'),
+        },
+        // Critical: profile is null (loading), NOT undefined or false.
+        profile: null,
+      };
+    });
+
+    await page.locator('[data-testid="vote-up-test-sug-1"]').click();
+
+    // The login modal MUST NOT appear — the user is already signed in.
+    // The vote API is mocked to 200 (see setupSuggestionsMocks); even if
+    // the visible score doesn't update, the absence of the login modal IS
+    // the assertion we care about for the gate.
+    const loginModal = page.locator('[data-testid="login-modal-overlay"]');
+    await expect(loginModal).toHaveCount(0, { timeout: 1500 });
+  });
+
+  test('vote click when fully authenticated (profile is an object) opens NO login modal', async ({ page }) => {
+    // Preserved behavior: the non-race "happy path". Pins the
+    // object-profile branch of `hasValidAccount` so a future inversion of
+    // the comparison (`auth.profile === false` instead of `!== false`)
+    // is loudly rejected here, not silently in production.
+    await page.evaluate(() => {
+      (window as any).shytalkAuth = {
+        ...(window as any).shytalkAuth,
+        currentUser: {
+          uid: 'test-auth-sb',
+          displayName: 'AuthUser',
+          getIdToken: () => Promise.resolve('fake-token'),
+        },
+        profile: { uniqueId: 1001, displayName: 'AuthUser' },
+      };
+    });
+
+    await page.locator('[data-testid="vote-up-test-sug-1"]').click();
+
+    const loginModal = page.locator('[data-testid="login-modal-overlay"]');
+    await expect(loginModal).toHaveCount(0, { timeout: 1500 });
+  });
+
+  test('vote click when profile is explicitly false (no ShyTalk account) STILL opens login modal', async ({ page }) => {
+    // Negative-pin: `profile === false` means the user has a Firebase
+    // identity but no corresponding ShyTalk account — the gate MUST close
+    // to route them to sign-up. Without this asymmetry, a future
+    // "simplification" replacing `profile !== false` with `profile != null`
+    // would silently let no-account users hit privileged paths
+    // client-side (server still rejects, but UX would be broken).
+    await page.evaluate(() => {
+      (window as any).shytalkAuth = {
+        ...(window as any).shytalkAuth,
+        currentUser: {
+          uid: 'test-no-shytalk-account',
+          displayName: 'NoAccount',
+          getIdToken: () => Promise.resolve('fake-token'),
+        },
+        profile: false,
+      };
+    });
+
+    await page.locator('[data-testid="vote-up-test-sug-1"]').click();
+
+    const loginModal = page.locator('[data-testid="login-modal-overlay"]');
+    await expect(loginModal).toBeVisible({ timeout: 3_000 });
+  });
+
+  test('vote click when signed out (currentUser null) STILL opens login modal', async ({ page }) => {
+    // Negative-pin: the `getUser()` half of the combined gate. Profile
+    // contract aside, null currentUser means truly signed out and the
+    // requireAuth short-circuit MUST fire regardless of profile state.
+    await page.evaluate(() => {
+      (window as any).shytalkAuth = {
+        ...(window as any).shytalkAuth,
+        currentUser: null,
+        profile: null,
+      };
+    });
+
+    await page.locator('[data-testid="vote-up-test-sug-1"]').click();
+
+    const loginModal = page.locator('[data-testid="login-modal-overlay"]');
+    await expect(loginModal).toBeVisible({ timeout: 3_000 });
+  });
+
+  test('source-level: hasValidAccount uses `profile !== false`, not a truthy check', async ({ page }) => {
+    // Pins the fix at source level so a future "cleanup" that reverts to
+    // `!!(auth && auth.profile)` is rejected here. Mirrors source-pin
+    // tests in portal-auth.spec.ts (PR #654) and roadmap-auth.spec.ts
+    // (PR #655). Source-level pinning is necessary because the runtime
+    // behavior with the OLD code looks identical when the test sets
+    // profile to an object — only the race-window state (profile=null)
+    // distinguishes them, and even then the difference is gate-only.
+    const source = await page.evaluate(async () => {
+      const res = await fetch('/js/suggestions-board.js');
+      return res.text();
+    });
+    // Positive pin: the new comparison must appear inside the
+    // hasValidAccount function body.
+    expect(source).toMatch(/function\s+hasValidAccount\s*\(\s*\)\s*\{[\s\S]*?auth\.profile\s*!==\s*false[\s\S]*?\}/);
+    // Negative pin: the old truthy-check anti-pattern must NOT be
+    // present anywhere in the file (catches partial reverts too).
+    expect(source).not.toMatch(/return\s+!!\(\s*window\.shytalkAuth\s*&&\s*window\.shytalkAuth\.profile\s*\)\s*;/);
+  });
+});

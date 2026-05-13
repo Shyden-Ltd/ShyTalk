@@ -155,7 +155,18 @@
   }
 
   function hasValidAccount() {
-    return !!(window.shytalkAuth && window.shytalkAuth.profile);
+    // Tri-state profile contract (PR #655, see roadmap-auth.js):
+    //   null   = Firebase auth fired, ShyTalk profile fetch in-flight (loading)
+    //   object = full profile loaded
+    //   false  = Firebase auth but no ShyTalk account
+    // Treat any non-false profile as "valid for client-side gating" so a
+    // click during the profile-fetch race window does not incorrectly route
+    // an already-signed-in user to the login modal. The server still verifies
+    // the Firebase ID token on every privileged write (apiFetch attaches the
+    // Authorization header) — this is a UX/parity fix, never a security
+    // relaxation. Pairs with roadmap-app.js bell handler + shared-header.js.
+    var auth = window.shytalkAuth;
+    return !!(auth && auth.profile !== false);
   }
 
   function getToken() {
