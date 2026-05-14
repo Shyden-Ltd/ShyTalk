@@ -31,6 +31,7 @@ import { test, expect } from "./fixtures/scenarios";
  */
 
 const API_BASE = process.env.API_BASE_URL || "http://localhost:3000";
+const TEST_API_KEY = process.env.TEST_API_KEY || "local-test-key";
 
 /**
  * Decode the payload of a JWT (3-part dot-separated string) without
@@ -56,7 +57,23 @@ test.describe("Integration — LiveKit token issuance", () => {
     api,
     sender,
   }) => {
+    // UK OSA #17 PR 7 — pre-create the room doc so the cohort gate in
+    // `/api/livekit/token` (which now looks up `rooms/{roomName}`)
+    // finds a matching cohort. The test caller has no `cohort` claim
+    // minted on their JWT, so `cohortFromClaim` resolves them to
+    // 'minor'; the room is stamped 'minor' too via test-helpers'
+    // default (see express-api/src/routes/test-helpers.js).
     const roomName = `int-test-room-${Date.now()}`;
+    const setupRes = await api.post(`${API_BASE}/api/test/setup`, {
+      headers: {
+        "X-Test-API-Key": TEST_API_KEY,
+        "Content-Type": "application/json",
+      },
+      data: {
+        rooms: [{ id: roomName, name: "LiveKit token test", ownerId: String(sender.uniqueId) }],
+      },
+    });
+    expect(setupRes.ok(), `setup: ${setupRes.status()}: ${await setupRes.text()}`).toBe(true);
 
     const res = await api.post(`${API_BASE}/api/livekit/token`, {
       headers: {

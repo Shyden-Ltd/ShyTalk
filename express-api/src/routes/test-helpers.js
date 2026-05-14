@@ -112,13 +112,26 @@ router.post('/test/setup', async (req, res) => {
 
     // Create test rooms
     for (const roomSpec of spec.rooms || []) {
-      const roomId = `${testRunId}_room_${generateId()}`;
+      // UK OSA #17 PR 7 — accept an explicit `id` so integration tests
+      // that need to call `/api/livekit/token` with a known roomName
+      // (the gate now looks up `rooms/{roomName}`) can pre-create the
+      // doc deterministically. Auto-generate otherwise.
+      const roomId = roomSpec.id || `${testRunId}_room_${generateId()}`;
       const ownerId = roomSpec.ownerId || (created.users[0]?.uid ?? testRunId);
       const roomData = {
         id: roomId,
         name: `[TEST] ${roomSpec.name || 'Room'}`,
         ownerId,
         status: roomSpec.status || 'ACTIVE',
+        // PR 7 — cohort field is required at the firestore.rules layer
+        // for client-side creates; the Admin SDK bypasses rules, but
+        // we still stamp the field so the LiveKit gate finds a value
+        // and the rules-layer read gate (PR 3) gives the test caller
+        // legitimate access. Default 'minor' matches a test user with
+        // no cohort claim minted on their JWT (`cohortFromClaim`
+        // defaults to 'minor'). Tests that need adult rooms can pass
+        // `cohort: 'adult'` in the spec.
+        cohort: roomSpec.cohort || 'minor',
         createdAt: now,
         _testRun: testRunId,
       };
