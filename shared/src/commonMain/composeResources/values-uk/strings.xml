@@ -480,6 +480,7 @@
     <string name="attach_evidence">Додайте докази</string>
     <!-- google-translated 2026-05-04 -->
     <string name="cant_message_user">Ви не можете надіслати повідомлення цьому користувачеві</string>
+    <string name="group_frozen_banner">This group has been preserved but no new members can be added, as part of a recent change to how ShyTalk organises accounts.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pm_locked_other_user_notice">Ви не можете надіслати повідомлення цій особі, оскільки ми вважаємо, що їй менше 18 років.</string>
     <!-- google-translated 2026-05-04 -->

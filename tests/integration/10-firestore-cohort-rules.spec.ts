@@ -1460,3 +1460,671 @@ test.describe("Integration — rooms join gate (cross-cohort + third-party-id-sm
     );
   });
 });
+
+// ───────────────────────────────────────────────────────────────
+// UK OSA #17 PR 8 — Conversation create-time gate + group freeze
+// ───────────────────────────────────────────────────────────────
+//
+// PR 3 (above) pins the cross-cohort READ gate via the
+// `crossCohortAtMigration` flag. PR 8 closes the create + add holes:
+//
+//   • Caller MUST be in `participantIds` on create (no proxy creation
+//     — an attacker could otherwise spawn DMs between two victims).
+//   • 1:1 create requires the OTHER participant's CURRENT cohort
+//     (read at create time via a single `get()`) matches the caller's
+//     JWT claim. Cross-cohort DM creation is blocked client-side
+//     without an Express broker endpoint.
+//   • Group create requires the stamped `cohort` field matches the
+//     caller's claim. Per-member validation is deferred to the add
+//     path (one `get()` per add is tractable; N-get on create is not
+//     within the 10-get-per-eval limit for large groups).
+//   • Participant ADD on update (group growth) checks each new id's
+//     cohort, AND is blocked entirely when `frozenAtMigration: true`.
+//   • Member REMOVAL (shrinkage) and non-participantIds updates
+//     (lastMessage, groupName) remain allowed even on frozen groups —
+//     freeze is "no growth," not "no edits."
+
+test.describe("Integration — cohort gate: conversations create-time bind", () => {
+  test("adult caller CAN create 1:1 with another adult", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "users", "200000400"), { cohort: "adult" });
+      await setDoc(doc(db, "users", "200000401"), { cohort: "adult" });
+    });
+    const caller = testEnv.authenticatedContext("uid-create-1to1-ok", {
+      uniqueId: "200000400",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertSucceeds(
+      setDoc(doc(db, "conversations", "dm_400_401"), {
+        participantIds: ["200000400", "200000401"],
+        isGroup: false,
+        createdAt: Date.now(),
+      }),
+    );
+  });
+
+  test("adult caller CANNOT create 1:1 with a minor (cross-cohort blocked)", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "users", "200000402"), { cohort: "adult" });
+      await setDoc(doc(db, "users", "200000403"), { cohort: "minor" });
+    });
+    const caller = testEnv.authenticatedContext("uid-create-1to1-bad", {
+      uniqueId: "200000402",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "conversations", "dm_402_403"), {
+        participantIds: ["200000402", "200000403"],
+        isGroup: false,
+        createdAt: Date.now(),
+      }),
+    );
+  });
+
+  test("caller NOT in participantIds CANNOT create (no proxy creation)", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "users", "200000404"), { cohort: "adult" });
+      await setDoc(doc(db, "users", "200000405"), { cohort: "adult" });
+    });
+    const eve = testEnv.authenticatedContext("uid-create-proxy-eve", {
+      uniqueId: "200000499",
+      cohort: "adult",
+    });
+    const db = eve.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "conversations", "dm_404_405"), {
+        // Eve isn't a participant — must be rejected.
+        participantIds: ["200000404", "200000405"],
+        isGroup: false,
+      }),
+    );
+  });
+
+  test("group create with cohort field matching caller's claim is allowed", async () => {
+    const caller = testEnv.authenticatedContext("uid-group-create-ok", {
+      uniqueId: "200000406",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertSucceeds(
+      setDoc(doc(db, "conversations", "group-ok-1"), {
+        participantIds: ["200000406"],
+        isGroup: true,
+        groupName: "My group",
+        cohort: "adult",
+      }),
+    );
+  });
+
+  test("group create with cohort field mismatching caller's claim is rejected (forging defence)", async () => {
+    const caller = testEnv.authenticatedContext("uid-group-create-bad", {
+      uniqueId: "200000407",
+      cohort: "minor",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "conversations", "group-bad-1"), {
+        participantIds: ["200000407"],
+        isGroup: true,
+        groupName: "Forged",
+        cohort: "adult", // claim says minor — must reject
+      }),
+    );
+  });
+
+  test("group create missing cohort field is rejected", async () => {
+    const caller = testEnv.authenticatedContext("uid-group-create-nocohort", {
+      uniqueId: "200000408",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "conversations", "group-nocohort-1"), {
+        participantIds: ["200000408"],
+        isGroup: true,
+        groupName: "Missing tag",
+        // no cohort
+      }),
+    );
+  });
+});
+
+test.describe("Integration — conversation participant ADD gate + frozenAtMigration freeze", () => {
+  test("group admin CAN add a same-cohort participant (single-add)", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "users", "200000410"), { cohort: "adult" });
+      await setDoc(doc(db, "users", "200000411"), { cohort: "adult" });
+      await setDoc(doc(db, "conversations", "group-add-ok"), {
+        participantIds: ["200000410"],
+        isGroup: true,
+        groupName: "G",
+        cohort: "adult",
+      });
+    });
+    const caller = testEnv.authenticatedContext("uid-add-ok", {
+      uniqueId: "200000410",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertSucceeds(
+      updateDoc(doc(db, "conversations", "group-add-ok"), {
+        participantIds: ["200000410", "200000411"],
+      }),
+    );
+  });
+
+  test("group admin CANNOT add a cross-cohort participant", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "users", "200000412"), { cohort: "adult" });
+      await setDoc(doc(db, "users", "200000413"), { cohort: "minor" });
+      await setDoc(doc(db, "conversations", "group-add-bad"), {
+        participantIds: ["200000412"],
+        isGroup: true,
+        cohort: "adult",
+      });
+    });
+    const caller = testEnv.authenticatedContext("uid-add-bad", {
+      uniqueId: "200000412",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      updateDoc(doc(db, "conversations", "group-add-bad"), {
+        participantIds: ["200000412", "200000413"],
+      }),
+    );
+  });
+
+  test("group admin CANNOT add ANY participant when frozenAtMigration is true", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "users", "200000414"), { cohort: "adult" });
+      await setDoc(doc(db, "users", "200000415"), { cohort: "adult" });
+      await setDoc(doc(db, "conversations", "group-frozen-1"), {
+        participantIds: ["200000414"],
+        isGroup: true,
+        cohort: "adult",
+        frozenAtMigration: true,
+      });
+    });
+    const caller = testEnv.authenticatedContext("uid-frozen-add", {
+      uniqueId: "200000414",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      updateDoc(doc(db, "conversations", "group-frozen-1"), {
+        participantIds: ["200000414", "200000415"],
+      }),
+    );
+  });
+
+  test("group admin CAN remove a participant from a frozenAtMigration group (shrinkage allowed)", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "conversations", "group-frozen-shrink"), {
+        participantIds: ["200000416", "200000417"],
+        isGroup: true,
+        cohort: "adult",
+        frozenAtMigration: true,
+      });
+    });
+    const caller = testEnv.authenticatedContext("uid-frozen-shrink", {
+      uniqueId: "200000416",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertSucceeds(
+      updateDoc(doc(db, "conversations", "group-frozen-shrink"), {
+        participantIds: ["200000416"],
+      }),
+    );
+  });
+
+  test("group admin CAN update non-participant fields on a frozen group (lastMessage, etc.)", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "conversations", "group-frozen-lastmsg"), {
+        participantIds: ["200000418", "200000419"],
+        isGroup: true,
+        cohort: "adult",
+        frozenAtMigration: true,
+      });
+    });
+    const caller = testEnv.authenticatedContext("uid-frozen-lastmsg", {
+      uniqueId: "200000418",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertSucceeds(
+      updateDoc(doc(db, "conversations", "group-frozen-lastmsg"), {
+        lastMessage: {
+          text: "still chatting",
+          senderId: "200000418",
+          createdAt: Date.now(),
+        },
+        lastMessageAt: Date.now(),
+      }),
+    );
+  });
+
+  test("group admin CANNOT bulk-add multiple participants in one update (one-at-a-time invariant)", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "users", "200000420"), { cohort: "adult" });
+      await setDoc(doc(db, "users", "200000421"), { cohort: "adult" });
+      await setDoc(doc(db, "users", "200000422"), { cohort: "adult" });
+      await setDoc(doc(db, "conversations", "group-bulk-add"), {
+        participantIds: ["200000420"],
+        isGroup: true,
+        cohort: "adult",
+      });
+    });
+    const caller = testEnv.authenticatedContext("uid-bulk-add", {
+      uniqueId: "200000420",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      updateDoc(doc(db, "conversations", "group-bulk-add"), {
+        participantIds: ["200000420", "200000421", "200000422"],
+      }),
+    );
+  });
+});
+
+test.describe("Integration — messages.create gate (1:1 cross-cohort migration freeze)", () => {
+  test("participant CANNOT create message on a 1:1 flagged crossCohortAtMigration", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "conversations", "dm_msg_blocked"), {
+        participantIds: ["200000430", "200000431"],
+        crossCohortAtMigration: true,
+      });
+    });
+    const caller = testEnv.authenticatedContext("uid-msg-blocked", {
+      uniqueId: "200000430",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "conversations", "dm_msg_blocked", "messages", "m1"), {
+        senderId: "200000430",
+        text: "should not land",
+        createdAt: Date.now(),
+      }),
+    );
+  });
+
+  test("participant CAN create message on a non-flagged 1:1", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "conversations", "dm_msg_ok"), {
+        participantIds: ["200000432", "200000433"],
+      });
+    });
+    const caller = testEnv.authenticatedContext("uid-msg-ok", {
+      uniqueId: "200000432",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertSucceeds(
+      setDoc(doc(db, "conversations", "dm_msg_ok", "messages", "m1"), {
+        senderId: "200000432",
+        text: "hi",
+        createdAt: Date.now(),
+      }),
+    );
+  });
+
+  test("participant CAN create message on a frozen GROUP (frozen ≠ message-block for groups)", async () => {
+    // Per design § Migration (line 137): existing members keep
+    // read+write access to frozen groups. The freeze is participant-
+    // list only.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "conversations", "group-frozen-msg"), {
+        participantIds: ["200000434", "200000435"],
+        isGroup: true,
+        cohort: "adult",
+        frozenAtMigration: true,
+      });
+    });
+    const caller = testEnv.authenticatedContext("uid-frozen-msg", {
+      uniqueId: "200000434",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertSucceeds(
+      setDoc(doc(db, "conversations", "group-frozen-msg", "messages", "m1"), {
+        senderId: "200000434",
+        text: "still here",
+        createdAt: Date.now(),
+      }),
+    );
+  });
+});
+
+// ───────────────────────────────────────────────────────────────
+// UK OSA #17 PR 8 — Migration-flag immutability + server-only fields
+// + create-time defences against pre-emptive flag stamping
+// ───────────────────────────────────────────────────────────────
+//
+// These tests defend the server-only contract on `crossCohortAtMigration`,
+// `frozenAtMigration`, and `frozenAtMigrationAt`. The migration script
+// (run via Admin SDK) is the only legitimate writer. Without the
+// rules-side immutability + create-stamp block, a participant can:
+//   (1) clear `crossCohortAtMigration` to un-hide a migrated 1:1,
+//   (2) set `crossCohortAtMigration` to grief a counterpart by
+//       hiding a thread they share,
+//   (3) clear `frozenAtMigration` on a group to un-freeze it, then
+//       bulk-add cross-cohort members (two-step attack),
+//   (4) pre-emptively stamp the flags on a NEW conversation at a
+//       deterministic dm_<a>_<b> ID, denying the legitimate pair
+//       from ever opening that thread (subsequent same-id create
+//       collides; the existing flagged doc denies all reads).
+
+test.describe("Integration — conversation migration-flag immutability", () => {
+  test("participant CANNOT clear crossCohortAtMigration on a flagged 1:1 (un-hide attack)", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "conversations", "dm_flag_clear"), {
+        participantIds: ["200000440", "200000441"],
+        crossCohortAtMigration: true,
+        frozenAtMigration: true,
+      });
+    });
+    // Note: participant can't READ the flagged conv (PR 3 rule) but
+    // can still SUBMIT an update — rules evaluate against the
+    // server-side resource. Test that the update is rejected even
+    // though caller is in participantIds.
+    const caller = testEnv.authenticatedContext("uid-flag-clear", {
+      uniqueId: "200000440",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      updateDoc(doc(db, "conversations", "dm_flag_clear"), {
+        crossCohortAtMigration: false,
+      }),
+    );
+  });
+
+  test("participant CANNOT set crossCohortAtMigration on a non-flagged thread (grief attack)", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "conversations", "dm_flag_set"), {
+        participantIds: ["200000442", "200000443"],
+      });
+    });
+    const caller = testEnv.authenticatedContext("uid-flag-set", {
+      uniqueId: "200000442",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      updateDoc(doc(db, "conversations", "dm_flag_set"), {
+        crossCohortAtMigration: true,
+      }),
+    );
+  });
+
+  test("participant CANNOT clear frozenAtMigration on a frozen group (two-step bulk-add precursor)", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "conversations", "group-frozen-unfreeze"), {
+        participantIds: ["200000444", "200000445"],
+        isGroup: true,
+        cohort: "adult",
+        frozenAtMigration: true,
+      });
+    });
+    const caller = testEnv.authenticatedContext("uid-unfreeze", {
+      uniqueId: "200000444",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      updateDoc(doc(db, "conversations", "group-frozen-unfreeze"), {
+        frozenAtMigration: false,
+      }),
+    );
+  });
+
+  test("participant CANNOT set frozenAtMigration=true on an unfrozen group (self-freeze attack)", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "conversations", "group-self-freeze"), {
+        participantIds: ["200000446", "200000447"],
+        isGroup: true,
+        cohort: "adult",
+      });
+    });
+    const caller = testEnv.authenticatedContext("uid-self-freeze", {
+      uniqueId: "200000446",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      updateDoc(doc(db, "conversations", "group-self-freeze"), {
+        frozenAtMigration: true,
+      }),
+    );
+  });
+
+  test("participant CANNOT mutate frozenAtMigrationAt timestamp", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "conversations", "group-ts-tamper"), {
+        participantIds: ["200000448", "200000449"],
+        isGroup: true,
+        cohort: "adult",
+        frozenAtMigration: true,
+        frozenAtMigrationAt: 1000000000,
+      });
+    });
+    const caller = testEnv.authenticatedContext("uid-ts-tamper", {
+      uniqueId: "200000448",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      updateDoc(doc(db, "conversations", "group-ts-tamper"), {
+        frozenAtMigrationAt: 2000000000,
+      }),
+    );
+  });
+});
+
+test.describe("Integration — conversation create cannot stamp migration flags", () => {
+  test("caller CANNOT stamp crossCohortAtMigration=true on a NEW 1:1 (pre-empt grief)", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "users", "200000450"), { cohort: "adult" });
+      await setDoc(doc(db, "users", "200000451"), { cohort: "adult" });
+    });
+    const caller = testEnv.authenticatedContext("uid-stamp-cross", {
+      uniqueId: "200000450",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "conversations", "dm_450_451"), {
+        participantIds: ["200000450", "200000451"],
+        isGroup: false,
+        crossCohortAtMigration: true,
+      }),
+    );
+  });
+
+  test("caller CANNOT stamp frozenAtMigration=true on a NEW group (pre-empt self-freeze)", async () => {
+    const caller = testEnv.authenticatedContext("uid-stamp-frozen", {
+      uniqueId: "200000452",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "conversations", "group-stamp-frozen"), {
+        participantIds: ["200000452"],
+        isGroup: true,
+        cohort: "adult",
+        frozenAtMigration: true,
+      }),
+    );
+  });
+});
+
+test.describe("Integration — conversation create structural defences", () => {
+  test("group create with >1 participants is rejected (bulk-seed defence)", async () => {
+    // Per design — group must be created with caller alone, then
+    // members added one-at-a-time via update where the per-add
+    // cohort gate fires. Bulk-seed at create would slip cross-cohort
+    // members past the per-add validation.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "users", "200000460"), { cohort: "adult" });
+      await setDoc(doc(db, "users", "200000461"), { cohort: "adult" });
+    });
+    const caller = testEnv.authenticatedContext("uid-bulk-seed", {
+      uniqueId: "200000460",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "conversations", "group-bulk-seed"), {
+        participantIds: ["200000460", "200000461"],
+        isGroup: true,
+        cohort: "adult",
+      }),
+    );
+  });
+
+  test("group create with non-enum cohort value is rejected", async () => {
+    const caller = testEnv.authenticatedContext("uid-bad-cohort", {
+      uniqueId: "200000462",
+      cohort: "verified-adult", // claim is non-enum (future drift)
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "conversations", "group-bad-cohort"), {
+        participantIds: ["200000462"],
+        isGroup: true,
+        cohort: "verified-adult",
+      }),
+    );
+  });
+
+  test("1:1 create with duplicate caller-id participantIds is rejected", async () => {
+    // Defensive — if both participantIds were the caller, the rules'
+    // removeAll(caller) would return [] and the .data.cohort read
+    // would error. The explicit distinct-participants check makes
+    // the rule semantics clear.
+    const caller = testEnv.authenticatedContext("uid-dup-self", {
+      uniqueId: "200000463",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "conversations", "dm_dup_self"), {
+        participantIds: ["200000463", "200000463"],
+        isGroup: false,
+      }),
+    );
+  });
+
+  test("1:1 create with missing OTHER user doc is rejected (fail-closed)", async () => {
+    // The cohort-check `get()` resolves to null when the other doc
+    // doesn't exist — rules evaluator returns false (deny). Pins the
+    // fail-closed default; a future refactor that changes the
+    // null-handling semantics would break this test.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "users", "200000464"), { cohort: "adult" });
+      // user 200000465 deliberately not seeded
+    });
+    const caller = testEnv.authenticatedContext("uid-missing-other", {
+      uniqueId: "200000464",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "conversations", "dm_464_465"), {
+        participantIds: ["200000464", "200000465"],
+        isGroup: false,
+      }),
+    );
+  });
+});
+
+test.describe("Integration — flagged conversation subcollection write propagation", () => {
+  test("participant CANNOT write userSettings on a flagged 1:1 (write-side flag propagation)", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "conversations", "dm_us_write_blocked"), {
+        participantIds: ["200000470", "200000471"],
+        crossCohortAtMigration: true,
+      });
+    });
+    const caller = testEnv.authenticatedContext("uid-us-write", {
+      uniqueId: "200000470",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(
+        doc(db, "conversations", "dm_us_write_blocked", "userSettings", "200000470"),
+        { unreadCount: 0, isHidden: true },
+      ),
+    );
+  });
+
+  test("participant CAN write userSettings on a non-flagged conversation", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "conversations", "dm_us_write_ok"), {
+        participantIds: ["200000472", "200000473"],
+      });
+    });
+    const caller = testEnv.authenticatedContext("uid-us-write-ok", {
+      uniqueId: "200000472",
+      cohort: "adult",
+    });
+    const db = caller.firestore() as unknown as Firestore;
+    await assertSucceeds(
+      setDoc(
+        doc(db, "conversations", "dm_us_write_ok", "userSettings", "200000472"),
+        { unreadCount: 0, isHidden: false },
+      ),
+    );
+  });
+
+  test("admin/mod CANNOT write mutes on a flagged conversation", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "conversations", "group_mutes_blocked"), {
+        participantIds: ["200000474", "200000475"],
+        groupAdminIds: ["200000474"],
+        groupModIds: [],
+        crossCohortAtMigration: true,
+      });
+    });
+    const admin = testEnv.authenticatedContext("uid-mutes-admin", {
+      uniqueId: "200000474",
+      cohort: "adult",
+    });
+    const db = admin.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(
+        doc(db, "conversations", "group_mutes_blocked", "mutes", "200000475"),
+        { mutedAt: Date.now(), mutedBy: "200000474" },
+      ),
+    );
+  });
+});

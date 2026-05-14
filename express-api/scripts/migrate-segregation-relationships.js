@@ -154,6 +154,44 @@ function formatRelationshipRemovedPm({ counterpartyDisplayName }) {
   ].join('\n');
 }
 
+// UK OSA #17 PR 8 — sibling for 1:1 conversation hide. Same
+// load-bearing copy contract as PR 6 / PR 7 (cohort-agnostic body,
+// shared "recent change to how ShyTalk organises accounts" phrase).
+// Block-bypass: when the recipient previously blocked the
+// counterparty, caller passes `null` so the blocked displayName is
+// not resurfaced.
+function formatConversationHiddenPm({ counterpartyDisplayName } = {}) {
+  const safe = sanitiseDisplayName(counterpartyDisplayName);
+  const subject = safe ?? 'another user';
+  return [
+    `Your thread with ${subject} has been preserved but cannot continue, as part of a recent change to how ShyTalk organises accounts.`,
+    '',
+    "This is automatic and doesn't reflect anything either of you did. New messages can't be sent here, and the thread no longer appears in your inbox.",
+    '',
+    "If you don't recognise the name, this just means a past conversation has been tidied up.",
+  ].join('\n');
+}
+
+// UK OSA #17 PR 8 — sibling for group freeze. Sent to every existing
+// group member individually (no in-group system message — that would
+// require a new helper, and a per-member PM keeps the dispatch
+// idempotent + uses the existing sendSystemPm pipeline). The PM body
+// names the group and signals the "preserved but cannot grow further"
+// contract from the design doc. Cohort-agnostic — the recipient
+// already knows their own cohort, so any cohort vocabulary would let
+// them deduce which member's cohort caused the freeze.
+function formatGroupFrozenPm({ groupName } = {}) {
+  const safe = sanitiseDisplayName(groupName);
+  const subject = safe ?? 'a group';
+  return [
+    `The group "${subject}" has been preserved but no new members can be added, as part of a recent change to how ShyTalk organises accounts.`,
+    '',
+    "You can still read and post in the group. This is automatic and doesn't reflect anything you did.",
+    '',
+    'New groups you create or join from now on will be unaffected.',
+  ].join('\n');
+}
+
 // UK OSA #17 PR 7 — sibling of `formatRelationshipRemovedPm` for
 // room eviction. Reuses `sanitiseDisplayName` (same sanitisation
 // contract: HTML brackets stripped, C0/C1 + bidi + ZW chars purged,
@@ -660,6 +698,294 @@ async function applyRoomMigration({ dryRun, scan } = {}) {
   };
 }
 
+// ──────────────────────────────────────────────────────────────────
+// UK OSA #17 PR 8 — Conversation migration (1:1 hide + group freeze)
+// ──────────────────────────────────────────────────────────────────
+//
+// Two outcomes:
+//
+//   • 1:1 cross-cohort (DM): set BOTH `crossCohortAtMigration: true`
+//     AND `frozenAtMigration: true`. The first flag is the load-
+//     bearing rules-side hide (firestore.rules denies reads on the
+//     parent conv doc + every subcollection when set, per PR 3). The
+//     `frozenAtMigration` flag is a semantic marker — useful when the
+//     client can read the doc (admin tools, migration-paused window)
+//     so the "no further messages" intent is visible in the data.
+//
+//   • Group cross-cohort: set ONLY `frozenAtMigration: true`. Per the
+//     design doc (line 137), existing members keep read+write access
+//     to the frozen thread. The freeze is participant-list only — no
+//     new members can be added (rules-side gate). NOT setting the
+//     `crossCohortAtMigration` flag here is deliberate: setting it
+//     would orphan the group from the list (it'd be hidden from every
+//     member's inbox), defeating the "preserved but cannot grow"
+//     semantics.
+//
+// Block-bypass: 1:1 PMs swap in "another user" when the recipient
+// previously blocked the counterparty (mirrors PR 6 follow-edge
+// migration). Group PMs are cohort-agnostic and address every member
+// individually — no in-group system message (would require a new
+// helper; per-member PM reuses the existing sendSystemPm pipeline).
+
+const SCAN_CONVO_1TO1_SURFACE = 'scripts/migrate-segregation-conversations-1to1';
+const SCAN_CONVO_GROUP_SURFACE = 'scripts/migrate-segregation-conversations-group';
+
+function classifyConversation(convData, userIndex) {
+  const participantIds = Array.isArray(convData?.participantIds) ? convData.participantIds : [];
+  if (participantIds.length < 2) return { kind: 'skip' };
+
+  const cohorts = participantIds.map((pid) => {
+    const u = userIndex.get(String(pid));
+    return u?.cohort ?? 'minor';
+  });
+  const distinct = new Set(cohorts);
+  if (distinct.size === 1) return { kind: 'same-cohort' };
+
+  // isGroup is the discriminator — a 2-member group remains a group,
+  // not a 1:1 (different freeze semantics: groups keep list visibility
+  // and read+write; 1:1 gets hidden + write-locked).
+  if (convData?.isGroup) {
+    return { kind: 'cross-cohort-group', participantIds };
+  }
+  if (participantIds.length === 2) {
+    return { kind: 'cross-cohort-1to1', participantIds };
+  }
+  // 1:1-shaped but >2 participants (data corruption: isGroup=false
+  // with >2 ids). Treat as a group so the freeze semantics apply (the
+  // 1:1 hide path assumes exactly 2 participants for the PM dispatch).
+  return { kind: 'cross-cohort-group', participantIds };
+}
+
+async function scanCrossCohortConversations() {
+  const [usersSnap, convsSnap] = await Promise.all([
+    db.collection('users').get(),
+    db.collection('conversations').get(),
+  ]);
+
+  // Reuse the same user-index shape as the follow-edge + room scans
+  // (cohort + displayName + blockedUserIds). Single pass over the
+  // users collection — the conversation walk reads from this map only.
+  const userIndex = new Map();
+  for (const doc of usersSnap.docs) {
+    const data = doc.data();
+    userIndex.set(doc.id, {
+      cohort: effectiveCohort(data),
+      displayName: data?.displayName ?? null,
+      blockedUserIds: Array.isArray(data?.blockedUserIds) ? data.blockedUserIds : [],
+    });
+  }
+
+  const oneToOneEntries = [];
+  const groupEntries = [];
+  let preservedConversationsCount = 0;
+  let alreadyFlaggedCount = 0;
+  let skippedConversationsCount = 0;
+
+  for (const doc of convsSnap.docs) {
+    const data = doc.data() || {};
+    const cls = classifyConversation(data, userIndex);
+    if (cls.kind === 'skip') {
+      skippedConversationsCount += 1;
+      continue;
+    }
+    if (cls.kind === 'same-cohort') {
+      preservedConversationsCount += 1;
+      continue;
+    }
+
+    // Idempotence: re-running on already-migrated convs must be a
+    // no-op. 1:1 requires BOTH flags set; group requires just the
+    // freeze flag. If only one of the 1:1 flags is set, treat as
+    // not-yet-flagged so the apply pass re-runs and completes the
+    // pair (defence against partially-applied prior runs).
+    if (cls.kind === 'cross-cohort-1to1') {
+      if (data.crossCohortAtMigration === true && data.frozenAtMigration === true) {
+        alreadyFlaggedCount += 1;
+        continue;
+      }
+    } else if (cls.kind === 'cross-cohort-group') {
+      if (data.frozenAtMigration === true) {
+        alreadyFlaggedCount += 1;
+        continue;
+      }
+    }
+
+    if (cls.kind === 'cross-cohort-1to1') {
+      const [aId, bId] = cls.participantIds.map(String);
+      const aEntry = userIndex.get(aId);
+      const bEntry = userIndex.get(bId);
+      oneToOneEntries.push({
+        conversationId: doc.id,
+        participantIds: [aId, bId],
+        participantCohorts: [aEntry?.cohort ?? 'minor', bEntry?.cohort ?? 'minor'],
+        participantDisplayNames: [aEntry?.displayName ?? null, bEntry?.displayName ?? null],
+        blockedBetween: [
+          (aEntry?.blockedUserIds ?? []).some((id) => String(id) === bId),
+          (bEntry?.blockedUserIds ?? []).some((id) => String(id) === aId),
+        ],
+      });
+    } else {
+      groupEntries.push({
+        conversationId: doc.id,
+        groupName: data.groupName ?? null,
+        participantIds: cls.participantIds.map(String),
+      });
+    }
+  }
+
+  return {
+    oneToOneEntries,
+    groupEntries,
+    affectedOneToOneCount: oneToOneEntries.length,
+    affectedGroupCount: groupEntries.length,
+    preservedConversationsCount,
+    alreadyFlaggedCount,
+    skippedConversationsCount,
+  };
+}
+
+async function applyConversationMigration({ dryRun, scan } = {}) {
+  const effectiveScan = scan ?? (await scanCrossCohortConversations());
+  if (dryRun) {
+    return {
+      ...effectiveScan,
+      pmDispatchFailures: 0,
+      pmDispatchFailedRecipients: [],
+      segregationEventFailures: 0,
+    };
+  }
+
+  let pmDispatchFailures = 0;
+  const pmDispatchFailedRecipients = [];
+  let segregationEventFailures = 0;
+  const ranAt = Date.now();
+
+  // Phase A — 1:1 cross-cohort: set both flags, audit, PM both sides.
+  for (const entry of effectiveScan.oneToOneEntries) {
+    await db.runTransaction(async (txn) => {
+      txn.update(db.doc(`conversations/${entry.conversationId}`), {
+        crossCohortAtMigration: true,
+        frozenAtMigration: true,
+        frozenAtMigrationAt: ranAt,
+      });
+    });
+
+    // Audit: one row per 1:1 (the two participants are symmetric; one
+    // row captures the pair). source = first participant; the analytics
+    // join key is `targetConversationId`, which lets downstream queries
+    // count distinct migrated threads regardless of source/target
+    // direction.
+    try {
+      await db.collection(SEGREGATION_EVENTS_COLLECTION).add({
+        sourceUniqueId: entry.participantIds[0],
+        sourceCohort: entry.participantCohorts[0],
+        targetUniqueId: entry.participantIds[1],
+        targetCohort: entry.participantCohorts[1],
+        targetConversationId: entry.conversationId,
+        surface: SCAN_CONVO_1TO1_SURFACE,
+        action: 'conversation_1to1_hidden',
+        timestamp: ranAt,
+        requestId: null,
+      });
+    } catch (err) {
+      segregationEventFailures += 1;
+      log.warn('migrate-seg-conversations', 'segregationEvents write failed (1:1)', {
+        conversationId: entry.conversationId,
+        error: err?.message,
+      });
+    }
+
+    // PMs — one per side, with block-bypass per side. Same idempotence
+    // contract as PR 6: a re-run after PM failure is safe because the
+    // flag-set transaction is idempotent (re-writing the same flag is
+    // a no-op) and the scan filters out fully-flagged convs.
+    const [aBlocked, bBlocked] = entry.blockedBetween;
+    const pmToA = formatConversationHiddenPm({
+      counterpartyDisplayName: aBlocked ? null : entry.participantDisplayNames[1],
+    });
+    const pmToB = formatConversationHiddenPm({
+      counterpartyDisplayName: bBlocked ? null : entry.participantDisplayNames[0],
+    });
+    try {
+      await sendSystemPm(entry.participantIds[0], pmToA);
+    } catch (err) {
+      pmDispatchFailures += 1;
+      pmDispatchFailedRecipients.push(entry.participantIds[0]);
+      log.warn('migrate-seg-conversations', 'PM dispatch failed (1:1)', {
+        recipient: entry.participantIds[0],
+        error: err?.message,
+      });
+    }
+    try {
+      await sendSystemPm(entry.participantIds[1], pmToB);
+    } catch (err) {
+      pmDispatchFailures += 1;
+      pmDispatchFailedRecipients.push(entry.participantIds[1]);
+      log.warn('migrate-seg-conversations', 'PM dispatch failed (1:1)', {
+        recipient: entry.participantIds[1],
+        error: err?.message,
+      });
+    }
+  }
+
+  // Phase B — group freeze: set frozenAtMigration only (NOT
+  // crossCohortAtMigration — keep group visible), audit once per
+  // group, PM every member individually.
+  for (const entry of effectiveScan.groupEntries) {
+    await db.runTransaction(async (txn) => {
+      txn.update(db.doc(`conversations/${entry.conversationId}`), {
+        frozenAtMigration: true,
+        frozenAtMigrationAt: ranAt,
+      });
+    });
+
+    try {
+      await db.collection(SEGREGATION_EVENTS_COLLECTION).add({
+        sourceUniqueId: '0',
+        sourceCohort: 'mixed',
+        targetUniqueId: entry.conversationId,
+        targetConversationId: entry.conversationId,
+        surface: SCAN_CONVO_GROUP_SURFACE,
+        action: 'group_frozen',
+        timestamp: ranAt,
+        requestId: null,
+      });
+    } catch (err) {
+      segregationEventFailures += 1;
+      log.warn('migrate-seg-conversations', 'segregationEvents write failed (group)', {
+        conversationId: entry.conversationId,
+        error: err?.message,
+      });
+    }
+
+    // One PM per group member. Skip non-integer ids (system / corrupt
+    // entries) to mirror the PR 7 room migration defence — sendSystemPm
+    // doesn't validate ids itself.
+    const body = formatGroupFrozenPm({ groupName: entry.groupName });
+    for (const pid of entry.participantIds) {
+      if (!isPositiveIntegerString(pid)) continue;
+      try {
+        await sendSystemPm(pid, body);
+      } catch (err) {
+        pmDispatchFailures += 1;
+        pmDispatchFailedRecipients.push(pid);
+        log.warn('migrate-seg-conversations', 'PM dispatch failed (group)', {
+          conversationId: entry.conversationId,
+          recipient: pid,
+          error: err?.message,
+        });
+      }
+    }
+  }
+
+  return {
+    ...effectiveScan,
+    pmDispatchFailures,
+    pmDispatchFailedRecipients,
+    segregationEventFailures,
+  };
+}
+
 async function writeSnapshot(scan) {
   const ts = new Date().toISOString().replace(/[:.]/g, '-');
   const dir = path.resolve(__dirname, '../migration-snapshots');
@@ -754,6 +1080,16 @@ async function main() {
     staleParticipantCount: roomScan.staleParticipantCount,
   });
 
+  // Phase 3: conversation migration (PR 8) — 1:1 hide + group freeze.
+  const convoScan = await scanCrossCohortConversations();
+  log.info('migrate-seg-relationships', 'Conversation scan complete', {
+    affectedOneToOneCount: convoScan.affectedOneToOneCount,
+    affectedGroupCount: convoScan.affectedGroupCount,
+    preservedConversationsCount: convoScan.preservedConversationsCount,
+    alreadyFlaggedCount: convoScan.alreadyFlaggedCount,
+    skippedConversationsCount: convoScan.skippedConversationsCount,
+  });
+
   if (dryRun) {
     log.info('migrate-seg-relationships', 'Dry-run complete — no writes performed');
     return;
@@ -778,6 +1114,16 @@ async function main() {
     pmDispatchFailedRecipients: roomResult.pmDispatchFailedRecipients,
     segregationEventFailures: roomResult.segregationEventFailures,
   });
+
+  const convoResult = await applyConversationMigration({ dryRun: false, scan: convoScan });
+  log.info('migrate-seg-relationships', 'Conversation migration complete', {
+    affectedOneToOneCount: convoResult.affectedOneToOneCount,
+    affectedGroupCount: convoResult.affectedGroupCount,
+    alreadyFlaggedCount: convoResult.alreadyFlaggedCount,
+    pmDispatchFailures: convoResult.pmDispatchFailures,
+    pmDispatchFailedRecipients: convoResult.pmDispatchFailedRecipients,
+    segregationEventFailures: convoResult.segregationEventFailures,
+  });
 }
 
 if (require.main === module) {
@@ -795,10 +1141,14 @@ if (require.main === module) {
 module.exports = {
   scanCrossCohortEdges,
   scanCrossCohortRooms,
+  scanCrossCohortConversations,
   applyMigration,
   applyRoomMigration,
+  applyConversationMigration,
   formatRelationshipRemovedPm,
   formatRoomEjectionPm,
+  formatConversationHiddenPm,
+  formatGroupFrozenPm,
   effectiveCohort,
   sanitiseDisplayName,
   isPositiveIntegerString,

@@ -481,6 +481,7 @@
     <string name="attach_evidence">साक्ष्य संलग्न करें</string>
     <!-- google-translated 2026-05-04 -->
     <string name="cant_message_user">आप इस उपयोगकर्ता को संदेश नहीं भेज सकते</string>
+    <string name="group_frozen_banner">This group has been preserved but no new members can be added, as part of a recent change to how ShyTalk organises accounts.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pm_locked_other_user_notice">आप इस व्यक्ति को संदेश नहीं भेज सकते क्योंकि हमारा मानना ​​है कि उनकी आयु 18 वर्ष से कम है।</string>
     <!-- google-translated 2026-05-04 -->

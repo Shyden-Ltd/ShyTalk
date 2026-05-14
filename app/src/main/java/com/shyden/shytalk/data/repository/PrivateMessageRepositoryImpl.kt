@@ -455,6 +455,7 @@ class PrivateMessageRepositoryImpl(
 
     override suspend fun createGroupConversation(
         creatorId: String,
+        cohort: String,
         participantIds: List<String>,
         groupName: String,
         groupDescription: String?,
@@ -467,9 +468,15 @@ class PrivateMessageRepositoryImpl(
         firebaseCall("Failed to create group conversation") {
             val docRef = firestore.collection("conversations").document()
             val now = System.currentTimeMillis()
+            // UK OSA #17 PR 8 — create with creator alone (size==1) so
+            // the rules-side gate passes; then add each additional
+            // participant via arrayUnion which fires the per-add cohort
+            // get() in firestore.rules. Bulk-seed at create would slip
+            // cross-cohort ids past validation.
+            val initialParticipantIds = listOf(creatorId)
             val data =
                 mutableMapOf<String, Any?>(
-                    "participantIds" to participantIds,
+                    "participantIds" to initialParticipantIds,
                     "isGroup" to true,
                     "groupName" to groupName,
                     "createdBy" to creatorId,
@@ -481,18 +488,32 @@ class PrivateMessageRepositoryImpl(
                     "permissions" to permissions.toMap(),
                     "systemMessageConfig" to systemMessageConfig.toMap(),
                     "modNotifyMode" to "ALL_ADMINS",
+                    // Bound by firestore.rules to the caller's JWT
+                    // cohort claim; immutable post-create.
+                    "cohort" to cohort,
                 )
             groupDescription?.let { data["groupDescription"] = it }
             groupPhotoUrl?.let { data["groupPhotoUrl"] = it }
             docRef.set(data).await()
-            // Create userSettings docs for all participants with unreadCount: 0
+            // Add remaining members one-at-a-time. Per-add failures
+            // don't abort the call — a partial group is more useful
+            // than aborted; the creator can re-add later.
+            val extraParticipantIds = participantIds.filter { it != creatorId }
+            val finalParticipantIds = mutableListOf(creatorId)
+            for (pid in extraParticipantIds) {
+                runCatching {
+                    docRef.update("participantIds", FieldValue.arrayUnion(pid)).await()
+                    finalParticipantIds.add(pid)
+                }
+            }
             val batch = firestore.batch()
-            for (pid in participantIds) {
+            for (pid in finalParticipantIds) {
                 val settingsRef = docRef.collection("userSettings").document(pid)
                 batch.set(settingsRef, mapOf("unreadCount" to 0, "userId" to pid))
             }
             batch.commit().await()
-            Conversation.fromMap(data, docRef.id)
+            val finalData = data.toMutableMap().apply { put("participantIds", finalParticipantIds.toList()) }
+            Conversation.fromMap(finalData, docRef.id)
         }
 
     override suspend fun addGroupParticipant(

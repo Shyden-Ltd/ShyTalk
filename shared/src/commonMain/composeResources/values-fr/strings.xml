@@ -480,6 +480,7 @@
     <string name="attach_evidence">Joindre des preuves</string>
     <!-- google-translated 2026-05-04 -->
     <string name="cant_message_user">Vous ne pouvez pas envoyer de message à cet utilisateur</string>
+    <string name="group_frozen_banner">This group has been preserved but no new members can be added, as part of a recent change to how ShyTalk organises accounts.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pm_locked_other_user_notice">Vous ne pouvez pas envoyer de message à cette personne car nous pensons qu\'elle a moins de 18 ans.</string>
     <!-- google-translated 2026-05-04 -->

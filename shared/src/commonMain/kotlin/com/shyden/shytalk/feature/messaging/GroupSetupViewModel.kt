@@ -209,10 +209,27 @@ class GroupSetupViewModel(
                     .keys
                     .toList()
 
+            // UK OSA #17 PR 8 — fetch the caller's cohort to stamp on
+            // the new group. The firestore.rules layer binds the
+            // value to the server-signed JWT claim. We fall back to
+            // "minor" (most restrictive) on lookup failure — matches
+            // the PR 7 room-create pattern.
+            val cohort =
+                when (val userResult = userRepository.getUser(currentUserId)) {
+                    is Resource.Success -> {
+                        val user = userResult.data
+                        val override = user.cohortOverride
+                        if (override == "adult" || override == "minor") override else user.cohort
+                    }
+
+                    else -> "minor"
+                }
+
             when (
                 val result =
                     pmRepository.createGroupConversation(
                         creatorId = currentUserId,
+                        cohort = cohort,
                         participantIds = (listOf(currentUserId) + state.selectedUsers.map { it.uid }).distinct(),
                         groupName = state.groupName.trim(),
                         groupDescription = state.groupDescription.trim().ifBlank { null },

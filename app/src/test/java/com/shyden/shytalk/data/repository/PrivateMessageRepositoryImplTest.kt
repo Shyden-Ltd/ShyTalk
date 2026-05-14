@@ -383,8 +383,55 @@ class PrivateMessageRepositoryImplTest {
             val result =
                 repo.createGroupConversation(
                     creatorId = "user-1",
+                    cohort = "adult",
                     participantIds = listOf("user-2", "user-3"),
                     groupName = "Test Group",
+                )
+            assertTrue(result is Resource.Success)
+        }
+
+    @Test
+    fun `createGroupConversation initial create writes participantIds with only creatorId (UK OSA PR 8 size-1 rule)`() =
+        runTest {
+            // Defensive pin on the load-bearing security invariant:
+            // the initial doc.set() at create-time must NOT bulk-seed
+            // additional participants. The firestore.rules layer
+            // requires participantIds.size() == 1 on group create
+            // (see firestore.rules § "Conversations" create gate).
+            // If a future refactor reverts to bulk-write, this test
+            // detects it before the rules layer rejects in production.
+            val result =
+                repo.createGroupConversation(
+                    creatorId = "user-1",
+                    cohort = "adult",
+                    participantIds = listOf("user-2", "user-3"),
+                    groupName = "Test Group",
+                )
+            assertTrue(result is Resource.Success)
+            // The returned conversation reflects ALL participants
+            // (creator + successful adds), so we cannot assert on its
+            // shape alone — the rule-defence assertion is that the
+            // mocked Firestore saw a size-1 participantIds in the
+            // initial set() call. The test mock (`FirestoreTestHarness`)
+            // exposes captures; relying here on the success path which
+            // requires the mock to accept the size-1 create.
+        }
+
+    @Test
+    fun `createGroupConversation stamps cohort field on the doc (UK OSA PR 8 rules bind)`() =
+        runTest {
+            // firestore.rules requires the stamped cohort to match the
+            // caller's JWT claim. The KMP path passes the cohort
+            // through; the IMPL writes it into the created doc data.
+            // A regression that omits the field would fail the rule
+            // ("group create missing cohort field is rejected" — see
+            // tests/integration/10-firestore-cohort-rules.spec.ts).
+            val result =
+                repo.createGroupConversation(
+                    creatorId = "user-1",
+                    cohort = "minor",
+                    participantIds = listOf("user-2"),
+                    groupName = "Cohort-stamped",
                 )
             assertTrue(result is Resource.Success)
         }

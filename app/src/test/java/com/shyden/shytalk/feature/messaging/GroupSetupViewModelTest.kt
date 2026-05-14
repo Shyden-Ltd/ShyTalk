@@ -237,7 +237,9 @@ class GroupSetupViewModelTest {
 
             assertFalse(vm.uiState.value.isCreating)
             assertNull(vm.uiState.value.createdConversationId)
-            coVerify(exactly = 0) { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+            coVerify(
+                exactly = 0,
+            ) { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
         }
 
     @Test
@@ -274,7 +276,7 @@ class GroupSetupViewModelTest {
                     isGroup = true,
                     groupName = "Test Group",
                 )
-            coEvery { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
+            coEvery { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
                 Resource.Success(mockConversation)
 
             val vm = createViewModel("u1")
@@ -303,7 +305,7 @@ class GroupSetupViewModelTest {
                     conversationId = "new-conv-2",
                     isGroup = true,
                 )
-            coEvery { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
+            coEvery { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
                 Resource.Success(mockConversation)
 
             val vm = createViewModel("u1")
@@ -476,7 +478,9 @@ class GroupSetupViewModelTest {
 
             assertFalse(vm.uiState.value.isCreating)
             assertNull(vm.uiState.value.createdConversationId)
-            coVerify(exactly = 0) { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+            coVerify(
+                exactly = 0,
+            ) { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
         }
 
     @Test
@@ -494,7 +498,7 @@ class GroupSetupViewModelTest {
                     isGroup = true,
                     groupName = "Study Group",
                 )
-            coEvery { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
+            coEvery { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
                 Resource.Success(mockConversation)
 
             val vm = createViewModel("u1,u2")
@@ -531,7 +535,9 @@ class GroupSetupViewModelTest {
             assertTrue(vm.uiState.value.error is UiText.Res)
             assertFalse(vm.uiState.value.isCreating)
             assertNull(vm.uiState.value.createdConversationId)
-            coVerify(exactly = 0) { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+            coVerify(
+                exactly = 0,
+            ) { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
         }
 
     @Test
@@ -541,7 +547,7 @@ class GroupSetupViewModelTest {
                 Resource.Success(
                     listOf(TestData.createTestUser(uid = "u1")),
                 )
-            coEvery { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
+            coEvery { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
                 Resource.Error("Server error")
 
             val vm = createViewModel("u1")

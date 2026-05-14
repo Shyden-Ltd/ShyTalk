@@ -32,6 +32,7 @@
 
 const mockUsersGet = jest.fn();
 const mockRoomsGet = jest.fn();
+const mockConversationsGet = jest.fn();
 const mockSegregationEventsAdd = jest.fn();
 const mockRunTransaction = jest.fn();
 const mockBatchUpdate = jest.fn();
@@ -46,6 +47,7 @@ jest.mock('../../src/utils/firebase', () => ({
     collection: jest.fn((name) => {
       if (name === 'users') return { get: mockUsersGet };
       if (name === 'rooms') return { get: mockRoomsGet };
+      if (name === 'conversations') return { get: mockConversationsGet };
       if (name === 'segregationEvents') {
         return { add: mockSegregationEventsAdd };
       }
@@ -82,10 +84,14 @@ jest.mock('fs', () => ({
 const {
   scanCrossCohortEdges,
   scanCrossCohortRooms,
+  scanCrossCohortConversations,
   applyMigration,
   applyRoomMigration,
+  applyConversationMigration,
   formatRelationshipRemovedPm,
   formatRoomEjectionPm,
+  formatConversationHiddenPm,
+  formatGroupFrozenPm,
   sanitiseDisplayName,
   isPositiveIntegerString,
   writeSnapshot,
@@ -1514,6 +1520,692 @@ describe('formatRoomEjectionPm', () => {
   });
 });
 
+// ══════════════════════════════════════════════════════════════════
+// UK OSA #17 PR 8 — Conversation migration (1:1 hide + group freeze)
+// ══════════════════════════════════════════════════════════════════
+
+// ──────────────────────────────────────────────────────────────────
+// Conversation fixture builders
+// ──────────────────────────────────────────────────────────────────
+
+function convDoc(
+  id,
+  {
+    participantIds = [],
+    isGroup = false,
+    groupName = null,
+    crossCohortAtMigration,
+    frozenAtMigration,
+  } = {},
+) {
+  const data = {
+    id,
+    participantIds,
+    isGroup,
+  };
+  if (groupName !== null) data.groupName = groupName;
+  if (crossCohortAtMigration !== undefined) data.crossCohortAtMigration = crossCohortAtMigration;
+  if (frozenAtMigration !== undefined) data.frozenAtMigration = frozenAtMigration;
+  return { id: String(id), data: () => data, _data: data };
+}
+
+function seedConversations(convs) {
+  mockConversationsGet.mockResolvedValue({ docs: convs });
+}
+
+// Default — most tests want zero rooms in the index so the room scan
+// doesn't pollute their docs. Tests that DO seed rooms call
+// seedRooms() themselves and override this.
+beforeEach(() => {
+  mockConversationsGet.mockResolvedValue({ docs: [] });
+});
+
+// ──────────────────────────────────────────────────────────────────
+// scanCrossCohortConversations
+// ──────────────────────────────────────────────────────────────────
+
+describe('scanCrossCohortConversations', () => {
+  test('classifies a 1:1 adult↔minor conversation as cross-cohort 1:1', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult', displayName: 'Alice' }),
+      userDoc(200, { cohort: 'minor', displayName: 'Bob' }),
+    ]);
+    seedConversations([convDoc('dm_100_200', { participantIds: ['100', '200'], isGroup: false })]);
+
+    const scan = await scanCrossCohortConversations();
+
+    expect(scan.oneToOneEntries).toHaveLength(1);
+    expect(scan.groupEntries).toHaveLength(0);
+    expect(scan.oneToOneEntries[0]).toMatchObject({
+      conversationId: 'dm_100_200',
+      participantIds: ['100', '200'],
+      participantCohorts: ['adult', 'minor'],
+      participantDisplayNames: ['Alice', 'Bob'],
+    });
+    expect(scan.affectedOneToOneCount).toBe(1);
+    expect(scan.affectedGroupCount).toBe(0);
+  });
+
+  test('classifies a cross-cohort group as group (not 1:1) regardless of size', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult' }),
+      userDoc(200, { cohort: 'minor' }),
+      userDoc(201, { cohort: 'adult' }),
+    ]);
+    seedConversations([
+      convDoc('g1', {
+        participantIds: ['100', '200', '201'],
+        isGroup: true,
+        groupName: 'Hangout',
+      }),
+    ]);
+
+    const scan = await scanCrossCohortConversations();
+
+    expect(scan.oneToOneEntries).toHaveLength(0);
+    expect(scan.groupEntries).toHaveLength(1);
+    expect(scan.groupEntries[0]).toMatchObject({
+      conversationId: 'g1',
+      groupName: 'Hangout',
+      participantIds: ['100', '200', '201'],
+    });
+    expect(scan.affectedGroupCount).toBe(1);
+  });
+
+  test('preserves same-cohort 1:1 and same-cohort groups', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult' }),
+      userDoc(101, { cohort: 'adult' }),
+      userDoc(102, { cohort: 'adult' }),
+    ]);
+    seedConversations([
+      convDoc('dm_100_101', { participantIds: ['100', '101'] }),
+      convDoc('g1', { participantIds: ['100', '101', '102'], isGroup: true, groupName: 'Same' }),
+    ]);
+
+    const scan = await scanCrossCohortConversations();
+
+    expect(scan.oneToOneEntries).toHaveLength(0);
+    expect(scan.groupEntries).toHaveLength(0);
+    expect(scan.preservedConversationsCount).toBe(2);
+  });
+
+  test('counts already-flagged 1:1 conversations as alreadyFlagged (idempotent)', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedConversations([
+      convDoc('dm_100_200', {
+        participantIds: ['100', '200'],
+        crossCohortAtMigration: true,
+        frozenAtMigration: true,
+      }),
+    ]);
+
+    const scan = await scanCrossCohortConversations();
+
+    expect(scan.oneToOneEntries).toHaveLength(0);
+    expect(scan.alreadyFlaggedCount).toBe(1);
+  });
+
+  test('counts already-flagged frozen groups as alreadyFlagged (idempotent)', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedConversations([
+      convDoc('g1', {
+        participantIds: ['100', '200'],
+        isGroup: true,
+        frozenAtMigration: true,
+      }),
+    ]);
+
+    const scan = await scanCrossCohortConversations();
+
+    expect(scan.groupEntries).toHaveLength(0);
+    expect(scan.alreadyFlaggedCount).toBe(1);
+  });
+
+  test('treats participants absent from users index as "minor" (fail-closed)', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' })]);
+    seedConversations([convDoc('dm_100_999', { participantIds: ['100', '999'] })]);
+
+    const scan = await scanCrossCohortConversations();
+
+    expect(scan.oneToOneEntries).toHaveLength(1);
+    expect(scan.oneToOneEntries[0].participantCohorts).toEqual(['adult', 'minor']);
+  });
+
+  test('skips conversations with <2 participants (data corruption)', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' })]);
+    seedConversations([
+      convDoc('lonely', { participantIds: ['100'] }),
+      convDoc('empty', { participantIds: [] }),
+    ]);
+
+    const scan = await scanCrossCohortConversations();
+
+    expect(scan.oneToOneEntries).toHaveLength(0);
+    expect(scan.groupEntries).toHaveLength(0);
+    expect(scan.skippedConversationsCount).toBe(2);
+  });
+
+  test('records block-bypass flags when a side previously blocked the other', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult', displayName: 'Alice', blocked: [200] }),
+      userDoc(200, { cohort: 'minor', displayName: 'Bob' }),
+    ]);
+    seedConversations([convDoc('dm_100_200', { participantIds: ['100', '200'] })]);
+
+    const scan = await scanCrossCohortConversations();
+
+    expect(scan.oneToOneEntries[0].blockedBetween).toEqual([true, false]);
+  });
+
+  test('treats 2-participant isGroup=true as group, not 1:1', async () => {
+    // Edge case: small group of 2. The classifier should follow
+    // isGroup, not participantIds.length — a 2-member group remains a
+    // group (frozenAtMigration only) and does NOT get the 1:1 hide
+    // flag (crossCohortAtMigration would orphan it from the list-rules
+    // path designed for 1:1 DMs).
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedConversations([
+      convDoc('tiny_group', {
+        participantIds: ['100', '200'],
+        isGroup: true,
+        groupName: 'Just Us',
+      }),
+    ]);
+
+    const scan = await scanCrossCohortConversations();
+
+    expect(scan.oneToOneEntries).toHaveLength(0);
+    expect(scan.groupEntries).toHaveLength(1);
+  });
+
+  test('treats absent isGroup field as 1:1 for 2-participant conv (default falsy)', async () => {
+    // Backward-compat: pre-PR-8 conversation docs may lack the
+    // isGroup field. For 2 participants, the classifier treats this
+    // as 1:1 (the historical default) and the migration applies the
+    // 1:1 hide flag pair. If a future schema migration adds an
+    // explicit `isGroup: false`, this test continues to pass.
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    // Note: convDoc omits the isGroup field by default (not even
+    // setting it to false) since the helper uses the default arg.
+    mockConversationsGet.mockResolvedValue({
+      docs: [
+        {
+          id: 'legacy_dm',
+          data: () => ({ participantIds: ['100', '200'] }),
+        },
+      ],
+    });
+
+    const scan = await scanCrossCohortConversations();
+
+    expect(scan.oneToOneEntries).toHaveLength(1);
+    expect(scan.oneToOneEntries[0].conversationId).toBe('legacy_dm');
+    expect(scan.groupEntries).toHaveLength(0);
+  });
+
+  test('treats isGroup=false with >2 participants as group (data-corruption fallback)', async () => {
+    // Corruption: isGroup:false yet 3+ participants. The 1:1 hide
+    // flow assumes exactly 2 participants for the PM dispatch; the
+    // corruption fallback routes these into the group path so the
+    // freeze flag is set + every member gets a PM (and no 1:1 path
+    // tries to index into participantIds[2] with undefined cohort).
+    seedUsers([
+      userDoc(100, { cohort: 'adult' }),
+      userDoc(101, { cohort: 'adult' }),
+      userDoc(200, { cohort: 'minor' }),
+    ]);
+    mockConversationsGet.mockResolvedValue({
+      docs: [
+        {
+          id: 'corrupt_three_no_group',
+          data: () => ({
+            participantIds: ['100', '101', '200'],
+            isGroup: false, // contradicts size
+          }),
+        },
+      ],
+    });
+
+    const scan = await scanCrossCohortConversations();
+
+    expect(scan.oneToOneEntries).toHaveLength(0);
+    expect(scan.groupEntries).toHaveLength(1);
+    expect(scan.groupEntries[0].conversationId).toBe('corrupt_three_no_group');
+    expect(scan.groupEntries[0].participantIds).toEqual(['100', '101', '200']);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────
+// applyConversationMigration
+// ──────────────────────────────────────────────────────────────────
+
+describe('applyConversationMigration', () => {
+  beforeEach(() => {
+    mockRunTransaction.mockImplementation(async (fn) => {
+      const txn = {
+        get: jest.fn(),
+        update: jest.fn(),
+        set: jest.fn(),
+        delete: jest.fn(),
+      };
+      return fn(txn);
+    });
+  });
+
+  test('dry-run reports counts without invoking transactions, PMs, or audit', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedConversations([convDoc('dm_100_200', { participantIds: ['100', '200'] })]);
+
+    const result = await applyConversationMigration({ dryRun: true });
+
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+    expect(mockSendSystemPm).not.toHaveBeenCalled();
+    expect(mockSegregationEventsAdd).not.toHaveBeenCalled();
+    expect(result.affectedOneToOneCount).toBe(1);
+  });
+
+  test('commit mode sets BOTH crossCohortAtMigration AND frozenAtMigration on 1:1', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedConversations([convDoc('dm_100_200', { participantIds: ['100', '200'] })]);
+
+    const mockUpdate = jest.fn();
+    mockRunTransaction.mockImplementationOnce(async (fn) => fn({ update: mockUpdate }));
+
+    await applyConversationMigration({ dryRun: false });
+
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    const [, patch] = mockUpdate.mock.calls[0];
+    expect(patch.crossCohortAtMigration).toBe(true);
+    expect(patch.frozenAtMigration).toBe(true);
+    expect(typeof patch.frozenAtMigrationAt).toBe('number');
+  });
+
+  test('commit mode sets ONLY frozenAtMigration on cross-cohort group (no crossCohortAtMigration)', async () => {
+    // Design: groups keep read/write for existing members but cannot
+    // grow. Setting crossCohortAtMigration would hide the group from
+    // the list (defeating "preserved but cannot grow further"). The
+    // group's freeze is participant-list only.
+    seedUsers([
+      userDoc(100, { cohort: 'adult' }),
+      userDoc(200, { cohort: 'minor' }),
+      userDoc(201, { cohort: 'adult' }),
+    ]);
+    seedConversations([
+      convDoc('g1', {
+        participantIds: ['100', '200', '201'],
+        isGroup: true,
+        groupName: 'Hangout',
+      }),
+    ]);
+
+    const mockUpdate = jest.fn();
+    mockRunTransaction.mockImplementationOnce(async (fn) => fn({ update: mockUpdate }));
+
+    await applyConversationMigration({ dryRun: false });
+
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    const [, patch] = mockUpdate.mock.calls[0];
+    expect(patch.frozenAtMigration).toBe(true);
+    expect(patch.crossCohortAtMigration).toBeUndefined();
+  });
+
+  test('commit mode dispatches a PM to BOTH 1:1 participants', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult', displayName: 'Alice' }),
+      userDoc(200, { cohort: 'minor', displayName: 'Bob' }),
+    ]);
+    seedConversations([convDoc('dm_100_200', { participantIds: ['100', '200'] })]);
+
+    await applyConversationMigration({ dryRun: false });
+
+    expect(mockSendSystemPm).toHaveBeenCalledTimes(2);
+    const recipients = mockSendSystemPm.mock.calls.map((c) => c[0]).sort();
+    expect(recipients).toEqual(['100', '200']);
+  });
+
+  test('1:1 PM applies block-bypass — recipient who blocked the other gets generic counterparty', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult', displayName: 'Alice', blocked: [200] }),
+      userDoc(200, { cohort: 'minor', displayName: 'Bob' }),
+    ]);
+    seedConversations([convDoc('dm_100_200', { participantIds: ['100', '200'] })]);
+
+    await applyConversationMigration({ dryRun: false });
+
+    const callByRecipient = new Map(mockSendSystemPm.mock.calls.map((c) => [c[0], c[1]]));
+    // 100 blocked 200 → 100's PM must NOT contain "Bob"
+    expect(callByRecipient.get('100')).not.toContain('Bob');
+    // 200 did not block 100 → 200's PM names Alice
+    expect(callByRecipient.get('200')).toContain('Alice');
+  });
+
+  test('commit mode dispatches one PM per group member (informing every member)', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult' }),
+      userDoc(200, { cohort: 'minor' }),
+      userDoc(201, { cohort: 'adult' }),
+    ]);
+    seedConversations([
+      convDoc('g1', {
+        participantIds: ['100', '200', '201'],
+        isGroup: true,
+        groupName: 'Hangout',
+      }),
+    ]);
+
+    await applyConversationMigration({ dryRun: false });
+
+    expect(mockSendSystemPm).toHaveBeenCalledTimes(3);
+    const recipients = mockSendSystemPm.mock.calls.map((c) => c[0]).sort();
+    expect(recipients).toEqual(['100', '200', '201']);
+  });
+
+  test('group PM body contains the group name', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedConversations([
+      convDoc('g1', {
+        participantIds: ['100', '200'],
+        isGroup: true,
+        groupName: 'Movie Club',
+      }),
+    ]);
+
+    await applyConversationMigration({ dryRun: false });
+
+    for (const call of mockSendSystemPm.mock.calls) {
+      expect(call[1]).toContain('Movie Club');
+    }
+  });
+
+  test('writes a segregationEvents audit row per 1:1 + per cross-cohort group', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult' }),
+      userDoc(200, { cohort: 'minor' }),
+      userDoc(201, { cohort: 'adult' }),
+    ]);
+    seedConversations([
+      convDoc('dm_100_200', { participantIds: ['100', '200'] }),
+      convDoc('g1', {
+        participantIds: ['100', '200', '201'],
+        isGroup: true,
+        groupName: 'Hangout',
+      }),
+    ]);
+
+    await applyConversationMigration({ dryRun: false });
+
+    expect(mockSegregationEventsAdd).toHaveBeenCalledTimes(2);
+    const surfaces = mockSegregationEventsAdd.mock.calls.map((c) => c[0].surface).sort();
+    expect(surfaces).toEqual([
+      'scripts/migrate-segregation-conversations-1to1',
+      'scripts/migrate-segregation-conversations-group',
+    ]);
+    const actions = mockSegregationEventsAdd.mock.calls.map((c) => c[0].action).sort();
+    expect(actions).toEqual(['conversation_1to1_hidden', 'group_frozen']);
+  });
+
+  test('1:1 audit row pins source/target cohorts + conversation id', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedConversations([convDoc('dm_100_200', { participantIds: ['100', '200'] })]);
+
+    await applyConversationMigration({ dryRun: false });
+
+    expect(mockSegregationEventsAdd).toHaveBeenCalledTimes(1);
+    const audit = mockSegregationEventsAdd.mock.calls[0][0];
+    expect(audit).toMatchObject({
+      sourceUniqueId: '100',
+      sourceCohort: 'adult',
+      targetUniqueId: '200',
+      targetCohort: 'minor',
+      targetConversationId: 'dm_100_200',
+      action: 'conversation_1to1_hidden',
+    });
+    expect(typeof audit.timestamp).toBe('number');
+  });
+
+  test('idempotent — second commit on already-migrated convs is a no-op', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedConversations([
+      convDoc('dm_100_200', {
+        participantIds: ['100', '200'],
+        crossCohortAtMigration: true,
+        frozenAtMigration: true,
+      }),
+    ]);
+
+    const result = await applyConversationMigration({ dryRun: false });
+
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+    expect(mockSendSystemPm).not.toHaveBeenCalled();
+    expect(mockSegregationEventsAdd).not.toHaveBeenCalled();
+    expect(result.affectedOneToOneCount).toBe(0);
+    expect(result.alreadyFlaggedCount).toBe(1);
+  });
+
+  test('per-conversation transaction failure surfaces but does NOT corrupt prior convs', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult' }),
+      userDoc(101, { cohort: 'adult' }),
+      userDoc(200, { cohort: 'minor' }),
+      userDoc(201, { cohort: 'minor' }),
+    ]);
+    seedConversations([
+      convDoc('dm_100_200', { participantIds: ['100', '200'] }),
+      convDoc('dm_101_201', { participantIds: ['101', '201'] }),
+    ]);
+
+    mockRunTransaction
+      .mockImplementationOnce(async (fn) => fn({ update: jest.fn() })) // first ok
+      .mockImplementationOnce(async () => {
+        throw new Error('contention');
+      });
+
+    await expect(applyConversationMigration({ dryRun: false })).rejects.toThrow('contention');
+    expect(mockRunTransaction).toHaveBeenCalledTimes(2);
+  });
+
+  test('PM dispatch failure does NOT roll back flag-set transaction', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedConversations([convDoc('dm_100_200', { participantIds: ['100', '200'] })]);
+    mockSendSystemPm.mockRejectedValueOnce(new Error('PM service down'));
+
+    const result = await applyConversationMigration({ dryRun: false });
+
+    expect(result.pmDispatchFailures).toBe(1);
+    expect(mockRunTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  test('segregationEvents write failure does NOT block PM or flag write', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedConversations([convDoc('dm_100_200', { participantIds: ['100', '200'] })]);
+    mockSegregationEventsAdd.mockRejectedValueOnce(new Error('quota exhausted'));
+
+    const result = await applyConversationMigration({ dryRun: false });
+
+    expect(result.segregationEventFailures).toBe(1);
+    expect(mockSendSystemPm).toHaveBeenCalled();
+    expect(mockRunTransaction).toHaveBeenCalled();
+  });
+
+  test('accepts a pre-computed scan, does not double-scan', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedConversations([convDoc('dm_100_200', { participantIds: ['100', '200'] })]);
+    const scan = await scanCrossCohortConversations();
+    mockConversationsGet.mockClear();
+    mockUsersGet.mockClear();
+
+    await applyConversationMigration({ dryRun: false, scan });
+
+    expect(mockConversationsGet).not.toHaveBeenCalled();
+    expect(mockUsersGet).not.toHaveBeenCalled();
+  });
+
+  test('group PM dispatch failure tracks each failed recipient', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult' }),
+      userDoc(200, { cohort: 'minor' }),
+      userDoc(201, { cohort: 'adult' }),
+    ]);
+    seedConversations([
+      convDoc('g1', {
+        participantIds: ['100', '200', '201'],
+        isGroup: true,
+        groupName: 'X',
+      }),
+    ]);
+    // Fail PM for 200 only.
+    mockSendSystemPm.mockImplementation(async (recipient) => {
+      if (recipient === '200') throw new Error('PM down for 200');
+    });
+
+    const result = await applyConversationMigration({ dryRun: false });
+
+    expect(result.pmDispatchFailures).toBe(1);
+    expect(result.pmDispatchFailedRecipients).toEqual(['200']);
+  });
+
+  test('group PMs skip non-integer participant ids (data corruption defence)', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedConversations([
+      convDoc('g1', {
+        participantIds: ['100', '200', 'SHYTALK_SYSTEM', 'not-a-number'],
+        isGroup: true,
+        groupName: 'Mixed',
+      }),
+    ]);
+
+    await applyConversationMigration({ dryRun: false });
+
+    const recipients = mockSendSystemPm.mock.calls.map((c) => c[0]).sort();
+    expect(recipients).toEqual(['100', '200']);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────
+// formatConversationHiddenPm — cohort-agnostic PM for 1:1 hide
+// ──────────────────────────────────────────────────────────────────
+
+describe('formatConversationHiddenPm', () => {
+  test('includes the sanitised counterparty displayName when provided', () => {
+    const body = formatConversationHiddenPm({ counterpartyDisplayName: 'Alice' });
+    expect(body).toContain('Alice');
+  });
+
+  test('falls back to "another user" when displayName is null (block-bypass)', () => {
+    const body = formatConversationHiddenPm({ counterpartyDisplayName: null });
+    expect(body).toContain('another user');
+    expect(body).not.toContain('null');
+  });
+
+  test('falls back when displayName is whitespace-only', () => {
+    const body = formatConversationHiddenPm({ counterpartyDisplayName: '   ' });
+    expect(body).toContain('another user');
+  });
+
+  test('strips raw HTML brackets + ampersand (XSS defence)', () => {
+    const body = formatConversationHiddenPm({
+      counterpartyDisplayName: '<script>alert(1)</script> & evil',
+    });
+    expect(body).not.toContain('<script>');
+    expect(body).not.toContain('</script>');
+    expect(body).not.toContain('&');
+  });
+
+  test('truncates very long displayNames', () => {
+    const body = formatConversationHiddenPm({ counterpartyDisplayName: 'A'.repeat(500) });
+    const firstLine = body.split('\n')[0];
+    expect(firstLine.length).toBeLessThan(200);
+    expect(firstLine).toContain('…');
+  });
+
+  test('is cohort-agnostic — no cohort vocabulary anywhere in body', () => {
+    const body = formatConversationHiddenPm({ counterpartyDisplayName: 'Alice' });
+    expect(body).not.toMatch(/\badult\b/i);
+    expect(body).not.toMatch(/\bminor\b/i);
+    expect(body).not.toMatch(/\bage\b/i);
+    expect(body).not.toMatch(/\bcohort\b/i);
+    expect(body).not.toMatch(/\bsegregation\b/i);
+    expect(body).not.toMatch(/under 18/i);
+    expect(body).not.toMatch(/over 18/i);
+    expect(body).not.toMatch(/younger/i);
+    expect(body).not.toMatch(/older/i);
+    expect(body).not.toMatch(/\bteen\b/i);
+    expect(body).not.toMatch(/\bkid\b/i);
+    expect(body).not.toMatch(/\bdifferent group\b/i);
+    expect(body).not.toMatch(/\bnot in the same\b/i);
+  });
+
+  test('includes the load-bearing cohort-agnostic phrase (positive pin)', () => {
+    const body = formatConversationHiddenPm({ counterpartyDisplayName: 'Alice' });
+    expect(body).toContain('recent change to how ShyTalk organises accounts');
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────
+// formatGroupFrozenPm — cohort-agnostic PM for group freeze
+// ──────────────────────────────────────────────────────────────────
+
+describe('formatGroupFrozenPm', () => {
+  test('includes the sanitised group name when provided', () => {
+    const body = formatGroupFrozenPm({ groupName: 'Movie Club' });
+    expect(body).toContain('Movie Club');
+  });
+
+  test('falls back to "a group" when groupName is null', () => {
+    const body = formatGroupFrozenPm({ groupName: null });
+    expect(body).toContain('a group');
+    expect(body).not.toContain('null');
+  });
+
+  test('falls back when groupName is whitespace-only', () => {
+    const body = formatGroupFrozenPm({ groupName: '   ' });
+    expect(body).toContain('a group');
+  });
+
+  test('strips raw HTML brackets + ampersand (XSS defence)', () => {
+    const body = formatGroupFrozenPm({ groupName: '<b>Evil</b> & co' });
+    expect(body).not.toContain('<b>');
+    expect(body).not.toContain('</b>');
+    expect(body).not.toContain('&');
+  });
+
+  test('truncates very long group names', () => {
+    const body = formatGroupFrozenPm({ groupName: 'G'.repeat(500) });
+    const firstLine = body.split('\n')[0];
+    expect(firstLine.length).toBeLessThan(200);
+    expect(firstLine).toContain('…');
+  });
+
+  test('mentions that no new members can be added (load-bearing semantics)', () => {
+    // Positive pin on the phrase that signals the "preserved but
+    // cannot grow further" contract per the design doc. Copy edits
+    // may rephrase but must keep the no-new-members signal.
+    const body = formatGroupFrozenPm({ groupName: 'Movie Club' });
+    expect(body.toLowerCase()).toMatch(/new members|cannot grow|cannot be added/);
+  });
+
+  test('is cohort-agnostic — no cohort vocabulary anywhere in body', () => {
+    const body = formatGroupFrozenPm({ groupName: 'Movie Club' });
+    expect(body).not.toMatch(/\badult\b/i);
+    expect(body).not.toMatch(/\bminor\b/i);
+    expect(body).not.toMatch(/\bage\b/i);
+    expect(body).not.toMatch(/\bcohort\b/i);
+    expect(body).not.toMatch(/\bsegregation\b/i);
+    expect(body).not.toMatch(/under 18/i);
+    expect(body).not.toMatch(/over 18/i);
+    expect(body).not.toMatch(/younger/i);
+    expect(body).not.toMatch(/older/i);
+    expect(body).not.toMatch(/\bteen\b/i);
+    expect(body).not.toMatch(/\bkid\b/i);
+  });
+
+  test('includes the load-bearing cohort-agnostic phrase (positive pin)', () => {
+    const body = formatGroupFrozenPm({ groupName: 'Movie Club' });
+    expect(body).toContain('recent change to how ShyTalk organises accounts');
+  });
+});
+
 // ──────────────────────────────────────────────────────────────────
 // determineMode — CLI flag parser
 // ──────────────────────────────────────────────────────────────────
@@ -1643,10 +2335,14 @@ describe('module exports', () => {
     const mod = require('../../scripts/migrate-segregation-relationships');
     expect(typeof mod.scanCrossCohortEdges).toBe('function');
     expect(typeof mod.scanCrossCohortRooms).toBe('function');
+    expect(typeof mod.scanCrossCohortConversations).toBe('function');
     expect(typeof mod.applyMigration).toBe('function');
     expect(typeof mod.applyRoomMigration).toBe('function');
+    expect(typeof mod.applyConversationMigration).toBe('function');
     expect(typeof mod.formatRelationshipRemovedPm).toBe('function');
     expect(typeof mod.formatRoomEjectionPm).toBe('function');
+    expect(typeof mod.formatConversationHiddenPm).toBe('function');
+    expect(typeof mod.formatGroupFrozenPm).toBe('function');
     expect(typeof mod.sanitiseDisplayName).toBe('function');
     expect(typeof mod.isPositiveIntegerString).toBe('function');
     expect(typeof mod.writeSnapshot).toBe('function');

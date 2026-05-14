@@ -481,6 +481,7 @@
     <string name="attach_evidence">إرفاق الأدلة</string>
     <!-- google-translated 2026-05-04 -->
     <string name="cant_message_user">لا يمكنك مراسلة هذا المستخدم</string>
+    <string name="group_frozen_banner">This group has been preserved but no new members can be added, as part of a recent change to how ShyTalk organises accounts.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pm_locked_other_user_notice">لا يمكنك مراسلة هذا الشخص لأننا نعتقد أن عمره أقل من 18 عامًا.</string>
     <!-- google-translated 2026-05-04 -->

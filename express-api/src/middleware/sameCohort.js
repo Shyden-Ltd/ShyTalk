@@ -129,8 +129,21 @@ async function writeSegregationEvent(evt) {
 
 // Test-only: reset the dedup store between tests so per-test
 // expectations on segregationEvents writes are independent.
-function _resetAuditDedup() {
-  auditDedup.reset();
-}
+//
+// SECURITY: gate the export behind a test-env check. Reachable from a
+// production route file (via `require` of this middleware) would let a
+// route inadvertently — or maliciously — wipe the dedup window, which
+// would let an attacker spam the audit collection without throttling
+// (DoS the Spark-tier Firestore quota; corrupt the signal admins read).
+// The export is a no-op outside Jest / explicit test env.
+const _resetAuditDedup =
+  process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined
+    ? function _resetAuditDedupTestOnly() {
+        auditDedup.reset();
+      }
+    : function _resetAuditDedupNoop() {
+        // Intentional no-op outside tests. The dedup store is the
+        // load-bearing audit-DoS defence in production.
+      };
 
 module.exports = { requireSameCohort, writeSegregationEvent, _resetAuditDedup };

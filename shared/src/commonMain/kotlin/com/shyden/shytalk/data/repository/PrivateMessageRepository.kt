@@ -111,9 +111,20 @@ interface PrivateMessageRepository {
         query: String,
     ): Resource<List<PrivateMessage>>
 
+    /**
+     * UK OSA #17 PR 8 — the `cohort` parameter is bound by
+     * `firestore.rules` to the creator's JWT cohort claim. Mismatch
+     * fails the create. The rule additionally requires
+     * `participantIds.size() == 1` at create — the implementation
+     * MUST therefore (1) create the doc with just the creator, then
+     * (2) add each additional participant one-at-a-time via update
+     * (which fires the per-add cohort gate). Bulk-create with
+     * cross-cohort members is structurally closed at the rules layer.
+     */
     @Suppress("kotlin:S107")
     suspend fun createGroupConversation(
         creatorId: String,
+        cohort: String,
         participantIds: List<String>,
         groupName: String,
         groupDescription: String? = null,

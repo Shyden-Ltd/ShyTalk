@@ -10,15 +10,49 @@ const { db, rtdb, FieldValue } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
 const { sendFcmToTokens, cleanupInvalidTokens } = require('../utils/fcm');
 const { requireSameCohort } = require('../middleware/sameCohort');
+const { isLiveAdmin } = require('../middleware/auth');
+const { auditAdminFlagBypass } = require('../utils/segregation-audit');
 const log = require('../utils/log');
 
 /**
- * UK OSA #17 PR 4 — for 1:1 conversations, returns true (and sends a
- * 404) if the caller and the other participant are cross-cohort.
- * Group conversations are deferred to PR 8 (frozen-at-migration
- * gate); they skip this helper.
+ * UK OSA #17 PR 4 + PR 8 — combined gate for conversation reads.
+ *
+ * Two gate paths, in order:
+ *
+ *   1. (PR 8) `crossCohortAtMigration: true` → 404 regardless of
+ *      current cohorts. Set by the migration script on 1:1 cross-
+ *      cohort threads. The flag is the load-bearing rules-side hide
+ *      (firestore.rules denies reads on the parent + every
+ *      subcollection when set, per PR 3); Express mirrors the 404
+ *      as defence in depth. Admin callers are exempt (live-admin
+ *      re-check, same pattern as `requireSameCohort`) — moderators
+ *      need cross-cohort visibility for forensics. No audit row is
+ *      written here: the migration already wrote one per migrated
+ *      thread, and a per-request audit on a known-blocked thread
+ *      would be noise.
+ *
+ *   2. (PR 4) Runtime cohort gate — 1:1 only. Looks up the OTHER
+ *      participant's current cohort and 404s if it mismatches the
+ *      caller's. Group conversations skip both gates (the freeze
+ *      semantics for groups are participant-list only — existing
+ *      members keep read+write per design doc § "Migration").
  */
 async function gateCrossCohortConversation(req, res, conv) {
+  if (conv?.crossCohortAtMigration === true) {
+    // Admin re-check matches requireSameCohort's pattern (60s
+    // adminClaimCache, demoted-admin defence). Honoured here so a
+    // mod can read a hidden thread for an appeal without bypassing
+    // the rest of the gate machinery.
+    if (req?.auth?.token?.admin === true) {
+      const liveAdmin = req?.auth?.uid ? await isLiveAdmin(req.auth.uid) : false;
+      if (liveAdmin) {
+        auditAdminFlagBypass(req, String(req?.params?.id ?? ''));
+        return false;
+      }
+    }
+    res.status(404).json({ error: 'Not found' });
+    return true;
+  }
   if (conv?.isGroup) return false;
   const participantIds = (conv?.participantIds || []).map(String);
   if (participantIds.length !== 2) return false;

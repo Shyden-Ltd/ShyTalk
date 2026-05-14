@@ -51,6 +51,13 @@ data class Conversation(
     val systemMessageConfig: SystemMessageConfig = SystemMessageConfig(),
     val modNotifyMode: String = "ALL_ADMINS",
     val settings: ConversationSettings? = null,
+    // UK OSA #17 PR 8 — segregation migration freeze flag (server-only).
+    // Set on cross-cohort threads at migration. For groups, the conv
+    // stays visible to existing members but no new members can join
+    // (rules-side gate). UI surfaces a banner so members see the
+    // "preserved but cannot grow" semantics. PR 12 wires the KMP
+    // filter that hides flagged 1:1s from the list.
+    val frozenAtMigration: Boolean = false,
 ) {
     val isOneOnOne: Boolean get() = !isGroup
 
@@ -70,6 +77,13 @@ data class Conversation(
             else -> GroupRole.MEMBER
         }
 
+    // Note: `frozenAtMigration` is DELIBERATELY omitted from
+    // `toMap()` — it is a server-only flag, set by the migration
+    // script via Admin SDK and immutable from clients per
+    // firestore.rules. Including it here would let any client
+    // round-trip + write-back clobber the flag (resetting a frozen
+    // group to unfrozen during a benign edit). The omission is
+    // pinned by `ConversationBusinessTest.fromMap` / toMap tests.
     fun toMap(): Map<String, Any?> =
         buildMap {
             put("conversationId", conversationId)
@@ -141,6 +155,7 @@ data class Conversation(
                     (map["settings"] as? Map<String, Any?>)?.let { s ->
                         ConversationSettings.fromMap(s, s["userId"] as? String ?: "")
                     },
+                frozenAtMigration = map["frozenAtMigration"].asBool(),
             )
     }
 }

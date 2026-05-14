@@ -146,6 +146,7 @@ class FakePrivateMessageRepository : PrivateMessageRepository {
 
     override suspend fun createGroupConversation(
         creatorId: String,
+        cohort: String,
         participantIds: List<String>,
         groupName: String,
         groupDescription: String?,

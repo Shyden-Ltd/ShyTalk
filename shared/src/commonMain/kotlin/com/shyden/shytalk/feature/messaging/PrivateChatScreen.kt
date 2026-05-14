@@ -427,6 +427,28 @@ fun PrivateChatScreen(
                 }
             }
 
+            // UK OSA #17 PR 8 — frozenAtMigration banner.
+            // Surfaces "preserved but cannot grow further" semantics on
+            // groups where the segregation migration set the freeze.
+            // The 1:1 case is hidden from the list entirely (PR 12 KMP
+            // filter + PR 3 rules) so this branch fires mainly for
+            // groups, with the same copy serving the rare direct-nav
+            // 1:1 case as defensive fallback. Informational tone
+            // (tertiaryContainer), not error.
+            if (uiState.conversation?.frozenAtMigration == true) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().testTag("privateChat_frozenBanner"),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                ) {
+                    Text(
+                        text = stringResource(Res.string.group_frozen_banner),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
+            }
+
             // Search bar
             if (uiState.isSearching) {
                 Surface(

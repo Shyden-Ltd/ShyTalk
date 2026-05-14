@@ -311,9 +311,93 @@ service cloud.firestore {
       allow list: if request.auth != null
                   && string(callerUniqueId()) in resource.data.participantIds
                   && resource.data.get('crossCohortAtMigration', false) != true;
-      allow create: if request.auth != null;
+      // UK OSA #17 PR 8 — create gate. Caller MUST be in
+      // participantIds (no proxy creation), MUST NOT stamp the
+      // server-only migration flags (defence against pre-emptive
+      // griefing via flagged-thread create on deterministic
+      // dm_<a>_<b> IDs), AND:
+      //   • 1:1 (size == 2 and isGroup != true): exactly 2 distinct
+      //     participants, and the OTHER participant's current cohort
+      //     claim must match the caller's. The other-id is derived by
+      //     removing the caller from participantIds — a single
+      //     `get()` resolves the cohort. Caller's cohort comes from
+      //     the server-signed JWT claim (PR 2), so client-side cohort
+      //     forging requires forging the JWT — which they cannot.
+      //   • Group (isGroup == true): the stamped `cohort` field must
+      //     equal the caller's claim AND be in the enum
+      //     ['adult','minor'] (future-cohort-name corruption
+      //     defence). The group MUST be created with the caller as
+      //     the SOLE participant (size == 1) — additional members
+      //     are added one-at-a-time via the update path, where the
+      //     per-add cohort gate fires. Rules cannot iterate
+      //     participantIds within the 10-get-per-eval budget, so
+      //     bulk-create with cross-cohort members is closed
+      //     structurally by forcing single-member create.
+      allow create: if request.auth != null
+        && string(callerUniqueId()) in request.resource.data.participantIds
+        && request.resource.data.get('crossCohortAtMigration', false) == false
+        && request.resource.data.get('frozenAtMigration', false) == false
+        && (
+          request.resource.data.get('isGroup', false) == true
+            ? (
+              request.resource.data.get('cohort', '')
+                == request.auth.token.get('cohort', 'minor')
+              && request.resource.data.get('cohort', '') in ['adult', 'minor']
+              && request.resource.data.participantIds.size() == 1
+            )
+            : (
+              request.resource.data.participantIds.size() == 2
+              && request.resource.data.participantIds[0]
+                 != request.resource.data.participantIds[1]
+              && get(/databases/$(database)/documents/users/$(
+                   request.resource.data.participantIds.removeAll([string(callerUniqueId())])[0]
+                 )).data.get('cohort', 'minor')
+                 == request.auth.token.get('cohort', 'minor')
+            )
+        );
+      // UK OSA #17 PR 8 — update gate. Caller must be a participant,
+      // AND:
+      //   • Migration flags (crossCohortAtMigration, frozenAtMigration,
+      //     frozenAtMigrationAt) are SERVER-ONLY — clients cannot
+      //     mutate them (set, clear, or change). Migration writes
+      //     via Admin SDK which bypasses these rules. Without this
+      //     `hasNone` guard, a participant could clear
+      //     crossCohortAtMigration to un-hide a migrated 1:1, or set
+      //     it to grief a counterpart, or clear frozenAtMigration to
+      //     unfreeze a group then bulk-add members.
+      //   • Participant-list growth is constrained:
+      //       - `frozenAtMigration: true` blocks ALL participant
+      //         additions ("preserved but cannot grow further").
+      //       - Growth limited to one id per update (the
+      //         `removeAll(...).size() <= 1` cap) — bulk-add in a
+      //         single update would slip cross-cohort ids past the
+      //         per-add cohort `get()`.
+      //       - The added id's current cohort must match the
+      //         caller's JWT claim.
+      // Removals (size == 0) and non-participantIds changes are
+      // unaffected — members can leave / be kicked from frozen
+      // groups, and lastMessage / groupName updates flow.
       allow update: if request.auth != null
-                    && string(callerUniqueId()) in resource.data.participantIds;
+        && string(callerUniqueId()) in resource.data.participantIds
+        && !request.resource.data.diff(resource.data).affectedKeys()
+             .hasAny(['crossCohortAtMigration', 'frozenAtMigration', 'frozenAtMigrationAt'])
+        && (
+          request.resource.data.participantIds == resource.data.participantIds
+          || (
+            resource.data.get('frozenAtMigration', false) != true
+            && request.resource.data.participantIds
+                 .removeAll(resource.data.participantIds).size() <= 1
+            && (
+              request.resource.data.participantIds
+                .removeAll(resource.data.participantIds).size() == 0
+              || get(/databases/$(database)/documents/users/$(
+                   request.resource.data.participantIds
+                     .removeAll(resource.data.participantIds)[0]
+                 )).data.get('cohort', 'minor')
+                 == request.auth.token.get('cohort', 'minor')
+            )
+          )
+        );
 
       // Subcollection reads MUST propagate the `crossCohortAtMigration`
       // flag from the parent conversation doc — otherwise a participant
@@ -321,12 +405,21 @@ service cloud.firestore {
       // parent doc but can still read messages / edits / userSettings /
       // mutes / mod_log directly by path, leaking the full thread
       // contents. UK OSA #17 — PR 3.
+      //
+      // UK OSA #17 PR 8 — `create` MUST also propagate the flag:
+      // without the migration-flag check on messages.create, a
+      // participant in a flagged 1:1 thread could still POST messages
+      // by direct Firestore SDK, bypassing the Express route gate.
+      // The flag's full contract per design § Migration is "no further
+      // messages can be sent" — the rules layer enforces this so the
+      // Express route is defence-in-depth, not the load-bearing gate.
       match /messages/{messageId} {
         allow read: if request.auth != null
           && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
           && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
         allow create: if request.auth != null
-          && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+          && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
+          && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
         allow update, delete: if request.auth != null
           && (string(callerUniqueId()) == resource.data.senderId
               || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds
@@ -337,16 +430,23 @@ service cloud.firestore {
             && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
             && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
           allow create: if request.auth != null
-            && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+            && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
+            && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
         }
       }
 
-      // User-specific conversation settings — own settings, or participant can init others during group creation
+      // User-specific conversation settings — own settings, or participant can init others during group creation.
+      // UK OSA #17 PR 8 — `write` MUST propagate crossCohortAtMigration
+      // (sibling of the `read` gate one line up). Otherwise a
+      // participant in a migration-hidden 1:1 can still mute/unmute,
+      // toggle preferences, etc. inside the locked thread — a
+      // data-hygiene leak and potential observable-side-channel.
       match /userSettings/{settingsId} {
         allow read: if request.auth != null
           && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
           && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
         allow write: if request.auth != null
+          && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true
           && (string(callerUniqueId()) == settingsId
               || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds);
       }
@@ -357,12 +457,18 @@ service cloud.firestore {
           && string(callerUniqueId()) == settingsId;
       }
 
-      // Mutes — participants read, admins/mods can mute/unmute members
+      // Mutes — participants read, admins/mods can mute/unmute members.
+      // UK OSA #17 PR 8 — `write` MUST propagate crossCohortAtMigration
+      // (sibling of the `read` gate). Otherwise an admin/mod in a
+      // hidden cross-cohort group can still mute members, leaking
+      // observable state writes into a thread the rules layer says
+      // does not exist for the affected participants.
       match /mutes/{muteId} {
         allow read: if request.auth != null
           && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
           && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
         allow write: if request.auth != null
+          && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true
           && (string(callerUniqueId()) == muteId
               || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds
               || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupModIds);

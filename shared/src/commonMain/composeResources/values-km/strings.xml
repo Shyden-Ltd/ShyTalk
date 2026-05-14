@@ -495,6 +495,7 @@
     <string name="attach_evidence">ភ្ជាប់ភស្តុតាង</string>
     <!-- google-translated 2026-05-04 -->
     <string name="cant_message_user">អ្នកមិនអាចផ្ញើសារទៅកាន់អ្នកប្រើប្រាស់នេះបានទេ។</string>
+    <string name="group_frozen_banner">This group has been preserved but no new members can be added, as part of a recent change to how ShyTalk organises accounts.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="pm_locked_other_user_notice">អ្នកមិនអាចផ្ញើសារទៅកាន់បុគ្គលនេះបានទេ ដោយសារយើងជឿថាពួកគេមានអាយុក្រោម 18 ឆ្នាំ។</string>
     <!-- google-translated 2026-05-04 -->

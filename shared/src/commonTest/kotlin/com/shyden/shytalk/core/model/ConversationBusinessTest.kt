@@ -110,4 +110,75 @@ class ConversationBusinessTest {
             )
         assertEquals(GroupRole.MEMBER, conversation.roleOf("regular-user"))
     }
+
+    // ── frozenAtMigration (UK OSA #17 PR 8) ──────────────────────────────
+
+    @Test
+    fun `frozenAtMigration defaults to false`() {
+        // Defensive default — clients that pre-date the field land in
+        // the no-banner path. Setting the default to true would render
+        // the frozen banner on every existing conversation immediately
+        // after rollout.
+        val conversation = Conversation()
+        assertEquals(false, conversation.frozenAtMigration)
+    }
+
+    @Test
+    fun `fromMap reads frozenAtMigration when present`() {
+        val conv =
+            Conversation.fromMap(
+                mapOf(
+                    "participantIds" to listOf("100", "200"),
+                    "frozenAtMigration" to true,
+                ),
+                "convo-1",
+            )
+        assertTrue(conv.frozenAtMigration)
+    }
+
+    @Test
+    fun `fromMap defaults frozenAtMigration to false when absent`() {
+        // Backward-compat: every pre-PR-8 conv doc lacks the field.
+        // `asBool()` on null returns false — the safe default that
+        // keeps existing convs out of the freeze banner path.
+        val conv =
+            Conversation.fromMap(
+                mapOf("participantIds" to listOf("100", "200")),
+                "convo-1",
+            )
+        assertEquals(false, conv.frozenAtMigration)
+    }
+
+    @Test
+    fun `fromMap reads frozenAtMigration false explicitly`() {
+        val conv =
+            Conversation.fromMap(
+                mapOf(
+                    "participantIds" to listOf("100", "200"),
+                    "frozenAtMigration" to false,
+                ),
+                "convo-1",
+            )
+        assertEquals(false, conv.frozenAtMigration)
+    }
+
+    @Test
+    fun `toMap deliberately omits frozenAtMigration (server-only flag immutability defence)`() {
+        // The flag is set ONLY by the migration script via Admin SDK.
+        // If `toMap()` included the flag, every benign client write
+        // (groupName edit, etc.) would round-trip the value back to
+        // Firestore — and a client that constructed a Conversation
+        // with `frozenAtMigration=false` (the default) and wrote it
+        // back via `toMap()` would clobber a previously-frozen flag
+        // to false. firestore.rules independently blocks this on
+        // update, but the data-model-layer defence is the first line.
+        val conv =
+            Conversation(
+                conversationId = "convo-1",
+                participantIds = listOf("100", "200"),
+                isGroup = true,
+                frozenAtMigration = true,
+            )
+        assertEquals(false, conv.toMap().containsKey("frozenAtMigration"))
+    }
 }
