@@ -675,13 +675,13 @@ describe('sanitiseDisplayName', () => {
   });
 
   test('strips zero-width / joiner / non-joiner code points', () => {
-    expect(sanitiseDisplayName('A​lice')).toBe('Alice');
-    expect(sanitiseDisplayName('A‍lice')).toBe('Alice');
+    expect(sanitiseDisplayName('A\u200Blice')).toBe('Alice');
+    expect(sanitiseDisplayName('A\u200Dlice')).toBe('Alice');
   });
 
   test('strips bidi-override code points (RTL spoofing defence)', () => {
-    expect(sanitiseDisplayName('Alice‮Bob')).toBe('AliceBob');
-    expect(sanitiseDisplayName('‭Evil‬')).toBe('Evil');
+    expect(sanitiseDisplayName('Alice\u202EBob')).toBe('AliceBob');
+    expect(sanitiseDisplayName('\u202DEvil\u202C')).toBe('Evil');
   });
 
   test('collapses newlines / tabs to single space (injection defence)', () => {
