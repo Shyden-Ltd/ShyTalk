@@ -1077,3 +1077,386 @@ test.describe("Integration — cohort gates: null-cohort doc edge cases", () => 
     await assertSucceeds(getDoc(doc(callerDb, "giftRankings", "gr-legacy-2")));
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// UK OSA #17 PR 7 — Room create-time cohort gate + immutability
+// ═══════════════════════════════════════════════════════════════════
+//
+// PR 3 (above) pins the cross-cohort READ gate; PR 7 pins the
+// CREATE-time gate (cohort must match the caller's JWT claim) and
+// the IMMUTABILITY of `cohort` post-create.
+//
+// Why both — defence in depth. PR 7's KMP client stamps the field
+// at create-time, but a malicious client could trivially omit or
+// forge the value. The rules-layer bind to `request.auth.token`
+// means the JWT (server-signed via custom claim mint, PR 2) is the
+// only source of truth. Without immutability on update, even a
+// correctly-stamped create can be undone by a flip-update later.
+
+import { updateDoc } from "firebase/firestore";
+
+test.describe("Integration — cohort gate: rooms create-time bind", () => {
+  test("adult caller CAN create a room with cohort=adult", async () => {
+    const adult = testEnv.authenticatedContext("uid-adult-create", {
+      uniqueId: "200000200",
+      cohort: "adult",
+    });
+    const db = adult.firestore() as unknown as Firestore;
+    await assertSucceeds(
+      setDoc(doc(db, "rooms", "room-create-1"), {
+        ownerId: "200000200",
+        cohort: "adult",
+        participantIds: ["200000200"],
+        state: "ACTIVE",
+      }),
+    );
+  });
+
+  test("minor caller CAN create a room with cohort=minor", async () => {
+    const minor = testEnv.authenticatedContext("uid-minor-create", {
+      uniqueId: "200000201",
+      cohort: "minor",
+    });
+    const db = minor.firestore() as unknown as Firestore;
+    await assertSucceeds(
+      setDoc(doc(db, "rooms", "room-create-2"), {
+        ownerId: "200000201",
+        cohort: "minor",
+        participantIds: ["200000201"],
+        state: "ACTIVE",
+      }),
+    );
+  });
+
+  test("adult caller CANNOT create a room tagged cohort=minor (forging defence)", async () => {
+    const adult = testEnv.authenticatedContext("uid-adult-create-2", {
+      uniqueId: "200000202",
+      cohort: "adult",
+    });
+    const db = adult.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "rooms", "room-create-3"), {
+        ownerId: "200000202",
+        cohort: "minor", // claim says adult — mismatch must reject
+        participantIds: ["200000202"],
+        state: "ACTIVE",
+      }),
+    );
+  });
+
+  test("minor caller CANNOT create a room tagged cohort=adult (forging defence)", async () => {
+    const minor = testEnv.authenticatedContext("uid-minor-create-2", {
+      uniqueId: "200000203",
+      cohort: "minor",
+    });
+    const db = minor.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "rooms", "room-create-4"), {
+        ownerId: "200000203",
+        cohort: "adult", // claim says minor — mismatch must reject
+        participantIds: ["200000203"],
+        state: "ACTIVE",
+      }),
+    );
+  });
+
+  test("missing cohort field on create is rejected", async () => {
+    const adult = testEnv.authenticatedContext("uid-adult-create-3", {
+      uniqueId: "200000204",
+      cohort: "adult",
+    });
+    const db = adult.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "rooms", "room-create-5"), {
+        ownerId: "200000204",
+        // no cohort
+        participantIds: ["200000204"],
+        state: "ACTIVE",
+      }),
+    );
+  });
+
+  test("invalid cohort value (string not in allow-list) is rejected", async () => {
+    const adult = testEnv.authenticatedContext("uid-adult-create-4", {
+      uniqueId: "200000205",
+      cohort: "adult",
+    });
+    const db = adult.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "rooms", "room-create-6"), {
+        ownerId: "200000205",
+        cohort: "super-adult", // not 'adult' or 'minor'
+        participantIds: ["200000205"],
+        state: "ACTIVE",
+      }),
+    );
+  });
+
+  test("ownerId must equal callerUniqueId (no proxy rooms)", async () => {
+    const adult = testEnv.authenticatedContext("uid-adult-create-5", {
+      uniqueId: "200000206",
+      cohort: "adult",
+    });
+    const db = adult.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "rooms", "room-create-7"), {
+        ownerId: "999999999", // someone else
+        cohort: "adult",
+        participantIds: ["200000206"],
+        state: "ACTIVE",
+      }),
+    );
+  });
+
+  test("null-cohort caller defaults to minor — can create cohort=minor room", async () => {
+    const legacy = testEnv.authenticatedContext("uid-no-cohort-claim", {
+      uniqueId: "200000207",
+      // no cohort claim — rules default to 'minor'
+    });
+    const db = legacy.firestore() as unknown as Firestore;
+    await assertSucceeds(
+      setDoc(doc(db, "rooms", "room-create-8"), {
+        ownerId: "200000207",
+        cohort: "minor",
+        participantIds: ["200000207"],
+        state: "ACTIVE",
+      }),
+    );
+  });
+
+  test("null-cohort caller CANNOT create cohort=adult room (default minor binds tight)", async () => {
+    const legacy = testEnv.authenticatedContext("uid-no-cohort-claim-2", {
+      uniqueId: "200000208",
+    });
+    const db = legacy.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "rooms", "room-create-9"), {
+        ownerId: "200000208",
+        cohort: "adult",
+        participantIds: ["200000208"],
+        state: "ACTIVE",
+      }),
+    );
+  });
+});
+
+test.describe("Integration — cohort gate: rooms cohort immutability", () => {
+  test("owner CANNOT flip cohort on existing room", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "rooms", "room-flip-1"), {
+        ownerId: "200000210",
+        cohort: "minor",
+        participantIds: ["200000210"],
+        state: "ACTIVE",
+      });
+    });
+    const owner = testEnv.authenticatedContext("uid-flip-owner", {
+      uniqueId: "200000210",
+      cohort: "minor",
+    });
+    const db = owner.firestore() as unknown as Firestore;
+    await assertFails(
+      updateDoc(doc(db, "rooms", "room-flip-1"), { cohort: "adult" }),
+    );
+  });
+
+  test("participant CANNOT flip cohort on a room they joined", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "rooms", "room-flip-2"), {
+        ownerId: "200000211",
+        cohort: "adult",
+        participantIds: ["200000211", "200000212"],
+        state: "ACTIVE",
+      });
+    });
+    const participant = testEnv.authenticatedContext("uid-flip-participant", {
+      uniqueId: "200000212",
+      cohort: "adult",
+    });
+    const db = participant.firestore() as unknown as Firestore;
+    await assertFails(
+      updateDoc(doc(db, "rooms", "room-flip-2"), { cohort: "minor" }),
+    );
+  });
+
+  test("owner CAN update unrelated fields without touching cohort", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "rooms", "room-flip-3"), {
+        ownerId: "200000213",
+        cohort: "adult",
+        participantIds: ["200000213"],
+        state: "ACTIVE",
+        name: "Old Name",
+      });
+    });
+    const owner = testEnv.authenticatedContext("uid-flip-owner-2", {
+      uniqueId: "200000213",
+      cohort: "adult",
+    });
+    const db = owner.firestore() as unknown as Firestore;
+    await assertSucceeds(
+      updateDoc(doc(db, "rooms", "room-flip-3"), { name: "New Name" }),
+    );
+  });
+
+  test("joining user CAN add self to participantIds without touching cohort", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "rooms", "room-flip-4"), {
+        ownerId: "200000214",
+        cohort: "adult",
+        participantIds: ["200000214"],
+        firstJoinTimestamps: {},
+        state: "ACTIVE",
+      });
+    });
+    const joiner = testEnv.authenticatedContext("uid-joiner", {
+      uniqueId: "200000215",
+      cohort: "adult",
+    });
+    const db = joiner.firestore() as unknown as Firestore;
+    await assertSucceeds(
+      updateDoc(doc(db, "rooms", "room-flip-4"), {
+        participantIds: ["200000214", "200000215"],
+      }),
+    );
+  });
+
+  test("joining user CANNOT smuggle a cohort flip alongside the participant add", async () => {
+    // Without the cohort-immutable check, a join-update could carry
+    // a cohort flip "free" because the affectedKeys allow-list
+    // (participantIds + firstJoinTimestamps) only enforces what the
+    // caller CAN write, not what they CAN'T write. Adding cohort to
+    // affectedKeys would break that allow-list. This test pins the
+    // composite defence.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "rooms", "room-flip-5"), {
+        ownerId: "200000216",
+        cohort: "minor",
+        participantIds: ["200000216"],
+        firstJoinTimestamps: {},
+        state: "ACTIVE",
+      });
+    });
+    const malicious = testEnv.authenticatedContext("uid-flip-smuggle", {
+      uniqueId: "200000217",
+      cohort: "adult",
+    });
+    const db = malicious.firestore() as unknown as Firestore;
+    await assertFails(
+      updateDoc(doc(db, "rooms", "room-flip-5"), {
+        participantIds: ["200000216", "200000217"],
+        cohort: "adult",
+      }),
+    );
+  });
+});
+
+test.describe("Integration — rooms join gate (cross-cohort + third-party-id-smuggling)", () => {
+  test("cross-cohort caller CANNOT add self to participantIds via update", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "rooms", "room-join-1"), {
+        ownerId: "200000300",
+        cohort: "adult",
+        participantIds: ["200000300"],
+        firstJoinTimestamps: {},
+        state: "ACTIVE",
+      });
+    });
+    const minor = testEnv.authenticatedContext("uid-join-minor", {
+      uniqueId: "200000301",
+      cohort: "minor",
+    });
+    const db = minor.firestore() as unknown as Firestore;
+    await assertFails(
+      updateDoc(doc(db, "rooms", "room-join-1"), {
+        participantIds: ["200000300", "200000301"],
+      }),
+    );
+  });
+
+  test("same-cohort caller CAN add self to participantIds via update", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "rooms", "room-join-2"), {
+        ownerId: "200000302",
+        cohort: "adult",
+        participantIds: ["200000302"],
+        firstJoinTimestamps: {},
+        state: "ACTIVE",
+      });
+    });
+    const adult = testEnv.authenticatedContext("uid-join-adult", {
+      uniqueId: "200000303",
+      cohort: "adult",
+    });
+    const db = adult.firestore() as unknown as Firestore;
+    await assertSucceeds(
+      updateDoc(doc(db, "rooms", "room-join-2"), {
+        participantIds: ["200000302", "200000303"],
+      }),
+    );
+  });
+
+  test("SECURITY: joining caller CANNOT smuggle a third-party uniqueId into participantIds", async () => {
+    // Without the +1 element / removeAll-self shape check, an
+    // attacker could write `participantIds: [...existing, self,
+    // victim]` and drag a third-party uniqueId into the room.
+    // Downstream queries would then expose that victim's id to
+    // other participants via the room doc.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "rooms", "room-join-3"), {
+        ownerId: "200000304",
+        cohort: "adult",
+        participantIds: ["200000304"],
+        firstJoinTimestamps: {},
+        state: "ACTIVE",
+      });
+    });
+    const attacker = testEnv.authenticatedContext("uid-join-attacker", {
+      uniqueId: "200000305",
+      cohort: "adult",
+    });
+    const db = attacker.firestore() as unknown as Firestore;
+    await assertFails(
+      updateDoc(doc(db, "rooms", "room-join-3"), {
+        // attacker + victim (victim uniqueId 200000306 — not the caller)
+        participantIds: ["200000304", "200000305", "200000306"],
+      }),
+    );
+  });
+
+  test("SECURITY: joining caller CANNOT add a different uniqueId in place of self", async () => {
+    // Same-shape attack: caller is uniqueId 305 but writes only the
+    // owner + a non-self uniqueId into participantIds. The "caller
+    // in new participantIds" condition would fail, but a buggy rule
+    // (e.g., one that compares the added set to "any string") would
+    // pass. This is the inverse of the smuggling test above.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore() as unknown as Firestore;
+      await setDoc(doc(db, "rooms", "room-join-4"), {
+        ownerId: "200000307",
+        cohort: "adult",
+        participantIds: ["200000307"],
+        firstJoinTimestamps: {},
+        state: "ACTIVE",
+      });
+    });
+    const attacker = testEnv.authenticatedContext("uid-join-attacker-2", {
+      uniqueId: "200000308",
+      cohort: "adult",
+    });
+    const db = attacker.firestore() as unknown as Firestore;
+    await assertFails(
+      updateDoc(doc(db, "rooms", "room-join-4"), {
+        participantIds: ["200000307", "200000309"], // someone else, not caller
+      }),
+    );
+  });
+});

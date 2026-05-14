@@ -11,9 +11,24 @@ interface RoomRepository {
 
     suspend fun getRoom(roomId: String): Resource<ChatRoom>
 
+    /**
+     * UK OSA #17 PR 7 — `cohort` is bound to the caller's JWT custom
+     * claim by the firestore.rules layer (`request.resource.data.cohort
+     * == request.auth.token.cohort`). The KMP client stamps the value
+     * from the local [User.cohort] field; the rules then verify that
+     * value matches the signed claim, so client-side cohort forging
+     * cannot succeed without ALSO forging the JWT (impossible without
+     * the service-account key).
+     *
+     * Must be `"adult"` or `"minor"`; any other value fails the rules
+     * gate. Pass `"minor"` as the fail-closed default when the local
+     * user's cohort is unknown — this avoids a regression vs the
+     * pre-PR-7 behaviour where minor users could create rooms freely.
+     */
     suspend fun createRoom(
         name: String,
         ownerId: String,
+        cohort: String,
     ): Resource<String>
 
     suspend fun joinRoom(

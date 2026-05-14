@@ -13,6 +13,7 @@ import com.shyden.shytalk.data.remote.WorkerApiClient
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.Assert.assertTrue
@@ -89,7 +90,7 @@ class RoomRepositoryImplTest {
     @Test
     fun `createRoom returns Success with roomId`() =
         runTest {
-            val result = repo.createRoom("My Room", "owner-1")
+            val result = repo.createRoom("My Room", "owner-1", "adult")
             assertTrue(result is Resource.Success)
         }
 
@@ -98,8 +99,35 @@ class RoomRepositoryImplTest {
         runTest {
             every { mockDocRef.set(any()) } returns Tasks.forException(RuntimeException("Network error"))
 
-            val result = repo.createRoom("My Room", "owner-1")
+            val result = repo.createRoom("My Room", "owner-1", "adult")
             assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `createRoom stamps cohort field on the room doc`() =
+        runTest {
+            // UK OSA #17 PR 7 — firestore.rules requires
+            // `request.resource.data.cohort == request.auth.token.cohort`
+            // at create-time. If this stamp is missing, the rules layer
+            // rejects the write and the user sees a generic "permission
+            // denied" with no UI affordance for recovery. This test
+            // pins the stamp so a future refactor can't silently drop
+            // it.
+            val captured = slot<Map<String, Any?>>()
+            every { mockDocRef.set(capture(captured)) } returns Tasks.forResult(null)
+
+            repo.createRoom("My Room", "owner-1", "adult")
+            assertTrue(captured.captured["cohort"] == "adult")
+        }
+
+    @Test
+    fun `createRoom stamps minor cohort verbatim`() =
+        runTest {
+            val captured = slot<Map<String, Any?>>()
+            every { mockDocRef.set(capture(captured)) } returns Tasks.forResult(null)
+
+            repo.createRoom("Kids Room", "owner-2", "minor")
+            assertTrue(captured.captured["cohort"] == "minor")
         }
 
     // endregion

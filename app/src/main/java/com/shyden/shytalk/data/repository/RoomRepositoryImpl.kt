@@ -94,6 +94,7 @@ class RoomRepositoryImpl(
     override suspend fun createRoom(
         name: String,
         ownerId: String,
+        cohort: String,
     ): Resource<String> =
         firebaseCall("Failed to create room") {
             val roomId = firestore.collection("rooms").document().id
@@ -122,6 +123,9 @@ class RoomRepositoryImpl(
                     "firstJoinTimestamps" to emptyMap<String, Any>(),
                     "allTimeHostIds" to emptyList<String>(),
                     "allTimeSeatUserIds" to listOf(ownerId),
+                    // UK OSA #17 PR 7 — bound by firestore.rules to the
+                    // caller's JWT cohort claim; immutable post-create.
+                    "cohort" to cohort,
                 )
             firestore.document("rooms/$roomId").set(roomData).await()
             firestore.document("users/$ownerId").update("currentRoomId", roomId).await()

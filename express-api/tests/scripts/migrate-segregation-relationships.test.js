@@ -31,6 +31,7 @@
  */
 
 const mockUsersGet = jest.fn();
+const mockRoomsGet = jest.fn();
 const mockSegregationEventsAdd = jest.fn();
 const mockRunTransaction = jest.fn();
 const mockBatchUpdate = jest.fn();
@@ -44,6 +45,7 @@ jest.mock('../../src/utils/firebase', () => ({
   db: {
     collection: jest.fn((name) => {
       if (name === 'users') return { get: mockUsersGet };
+      if (name === 'rooms') return { get: mockRoomsGet };
       if (name === 'segregationEvents') {
         return { add: mockSegregationEventsAdd };
       }
@@ -79,8 +81,11 @@ jest.mock('fs', () => ({
 
 const {
   scanCrossCohortEdges,
+  scanCrossCohortRooms,
   applyMigration,
+  applyRoomMigration,
   formatRelationshipRemovedPm,
+  formatRoomEjectionPm,
   sanitiseDisplayName,
   isPositiveIntegerString,
   writeSnapshot,
@@ -831,6 +836,684 @@ describe('formatRelationshipRemovedPm', () => {
   });
 });
 
+// ══════════════════════════════════════════════════════════════════
+// UK OSA #17 PR 7 — Room migration (extends PR 6 scan/apply pattern)
+// ══════════════════════════════════════════════════════════════════
+
+// ──────────────────────────────────────────────────────────────────
+// Room fixture builders
+// ──────────────────────────────────────────────────────────────────
+
+function roomDoc(
+  id,
+  { cohort, ownerId, name = `room-${id}`, state = 'ACTIVE', participantIds = [], seats = {} } = {},
+) {
+  const data = {
+    id,
+    name,
+    ownerId,
+    state,
+    participantIds,
+    seats,
+  };
+  if (cohort !== undefined) data.cohort = cohort;
+  return { id: String(id), data: () => data, _data: data };
+}
+
+function seedRooms(rooms) {
+  mockRoomsGet.mockResolvedValue({ docs: rooms });
+}
+
+function seatFor(userId) {
+  return { userId, state: 'OCCUPIED', isMuted: false };
+}
+
+// ──────────────────────────────────────────────────────────────────
+// scanCrossCohortRooms
+// ──────────────────────────────────────────────────────────────────
+
+describe('scanCrossCohortRooms', () => {
+  test('identifies mismatched participants in a tagged room', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult' }),
+      userDoc(200, { cohort: 'minor' }),
+      userDoc(201, { cohort: 'adult' }),
+    ]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', '200', '201'],
+        seats: { 0: seatFor('100'), 1: seatFor('200') },
+      }),
+    ]);
+
+    const scan = await scanCrossCohortRooms();
+    expect(scan.roomEntries).toHaveLength(1);
+    const entry = scan.roomEntries[0];
+    expect(entry.roomId).toBe('R1');
+    expect(entry.roomCohort).toBe('adult');
+    expect(entry.mismatchedParticipants).toHaveLength(1);
+    expect(entry.mismatchedParticipants[0]).toMatchObject({
+      participantId: '200',
+      participantCohort: 'minor',
+      seatIndex: '1',
+    });
+    expect(scan.affectedRoomsCount).toBe(1);
+    expect(scan.affectedParticipantsCount).toBe(1);
+  });
+
+  test('preserves rooms where all participants share the room cohort', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(101, { cohort: 'adult' })]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', '101'],
+      }),
+    ]);
+
+    const scan = await scanCrossCohortRooms();
+    expect(scan.affectedRoomsCount).toBe(0);
+    expect(scan.affectedParticipantsCount).toBe(0);
+    expect(scan.preservedParticipantsCount).toBe(2);
+  });
+
+  test('infers room cohort from owner when room.cohort is missing (legacy room)', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedRooms([
+      roomDoc('R1', {
+        // no cohort field — pre-PR-7 legacy room
+        ownerId: '100',
+        participantIds: ['100', '200'],
+      }),
+    ]);
+
+    const scan = await scanCrossCohortRooms();
+    expect(scan.roomEntries).toHaveLength(1);
+    const entry = scan.roomEntries[0];
+    expect(entry.roomCohort).toBe('adult');
+    expect(entry.needsCohortBackfill).toBe(true);
+    expect(entry.mismatchedParticipants).toHaveLength(1);
+    expect(entry.mismatchedParticipants[0].participantId).toBe('200');
+    expect(scan.legacyRoomsCount).toBe(1);
+  });
+
+  test('skips non-ACTIVE rooms (closed rooms cannot evict participants)', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        state: 'CLOSED',
+        participantIds: ['100', '200'],
+      }),
+    ]);
+
+    const scan = await scanCrossCohortRooms();
+    expect(scan.roomEntries).toHaveLength(0);
+    expect(scan.skippedRoomsCount).toBe(1);
+  });
+
+  test('skips ownerless rooms (legacy data corruption — admin cleanup target)', async () => {
+    seedUsers([userDoc(200, { cohort: 'minor' })]);
+    seedRooms([
+      roomDoc('R1', {
+        ownerId: null,
+        participantIds: ['200'],
+      }),
+    ]);
+
+    const scan = await scanCrossCohortRooms();
+    expect(scan.roomEntries).toHaveLength(0);
+    expect(scan.skippedRoomsCount).toBe(1);
+  });
+
+  test('skips rooms whose owner is missing from the users index', async () => {
+    seedUsers([userDoc(200, { cohort: 'minor' })]);
+    seedRooms([
+      roomDoc('R1', {
+        ownerId: '999',
+        participantIds: ['200'],
+      }),
+    ]);
+
+    const scan = await scanCrossCohortRooms();
+    expect(scan.roomEntries).toHaveLength(0);
+    expect(scan.skippedRoomsCount).toBe(1);
+  });
+
+  test('treats missing participant cohort as "minor" (fail-closed default)', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult' }),
+      // u200 — no cohort field set
+      {
+        id: '200',
+        data: () => ({ id: 200, displayName: 'legacy', blockedUserIds: [] }),
+      },
+    ]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', '200'],
+      }),
+    ]);
+
+    const scan = await scanCrossCohortRooms();
+    expect(scan.roomEntries[0].mismatchedParticipants).toHaveLength(1);
+    expect(scan.roomEntries[0].mismatchedParticipants[0].participantCohort).toBe('minor');
+  });
+
+  test('honours participant cohortOverride', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult' }),
+      userDoc(200, { cohort: 'adult', cohortOverride: 'minor' }),
+    ]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', '200'],
+      }),
+    ]);
+
+    const scan = await scanCrossCohortRooms();
+    expect(scan.roomEntries[0].mismatchedParticipants).toHaveLength(1);
+    expect(scan.roomEntries[0].mismatchedParticipants[0].participantId).toBe('200');
+    expect(scan.roomEntries[0].mismatchedParticipants[0].participantCohort).toBe('minor');
+  });
+
+  test('skips non-integer participant ids in array (defence against corruption)', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' })]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', 'SHYTALK_SYSTEM', 'not-a-number'],
+      }),
+    ]);
+
+    const scan = await scanCrossCohortRooms();
+    expect(scan.roomEntries).toHaveLength(0); // no mismatches
+    expect(scan.staleParticipantCount).toBe(2);
+  });
+
+  test('identifies multiple mismatched participants in one room', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult' }),
+      userDoc(200, { cohort: 'minor' }),
+      userDoc(201, { cohort: 'minor' }),
+      userDoc(202, { cohort: 'adult' }),
+    ]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', '200', '201', '202'],
+      }),
+    ]);
+
+    const scan = await scanCrossCohortRooms();
+    expect(scan.roomEntries[0].mismatchedParticipants).toHaveLength(2);
+    expect(scan.roomEntries[0].mismatchedParticipants.map((p) => p.participantId).sort()).toEqual([
+      '200',
+      '201',
+    ]);
+    expect(scan.affectedParticipantsCount).toBe(2);
+  });
+
+  test('owner is never flagged as a mismatched participant (skipped by design)', async () => {
+    // Even if room.cohort drifted, the owner stays — they ARE the
+    // room. The cohort tag is treated as authoritative for *other*
+    // participants only. Drift is a separate ops concern.
+    // Add a real mismatch (300=minor) so the room ends up in
+    // roomEntries; the assertion targets owner-exclusion from the
+    // mismatch list, not whether the room is scanned at all.
+    seedUsers([
+      userDoc(100, { cohort: 'minor' }),
+      userDoc(200, { cohort: 'adult' }),
+      userDoc(300, { cohort: 'minor' }),
+    ]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult', // drifted (owner became minor)
+        ownerId: '100',
+        participantIds: ['100', '200', '300'],
+      }),
+    ]);
+
+    const scan = await scanCrossCohortRooms();
+    const mismatches = scan.roomEntries[0].mismatchedParticipants.map((p) => p.participantId);
+    expect(mismatches).not.toContain('100');
+    // 300 is the genuine cross-cohort mismatch
+    expect(mismatches).toContain('300');
+  });
+
+  test('records the participant seat index when they hold a seat', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', '200'],
+        seats: {
+          0: seatFor('100'),
+          3: seatFor('200'),
+        },
+      }),
+    ]);
+
+    const scan = await scanCrossCohortRooms();
+    expect(scan.roomEntries[0].mismatchedParticipants[0].seatIndex).toBe('3');
+  });
+
+  test('records null seatIndex when the participant has no seat (lobby)', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', '200'],
+        seats: { 0: seatFor('100') },
+      }),
+    ]);
+
+    const scan = await scanCrossCohortRooms();
+    expect(scan.roomEntries[0].mismatchedParticipants[0].seatIndex).toBeNull();
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────
+// applyRoomMigration
+// ──────────────────────────────────────────────────────────────────
+
+describe('applyRoomMigration', () => {
+  beforeEach(() => {
+    // Default: transactions resolve. Each test that needs failure
+    // re-overrides mockRunTransaction.
+    mockRunTransaction.mockImplementation(async (fn) => {
+      const txn = {
+        get: jest.fn(),
+        update: jest.fn(),
+        set: jest.fn(),
+        delete: jest.fn(),
+      };
+      return fn(txn);
+    });
+  });
+
+  test('dry-run reports counts without invoking transactions, PMs, or audit', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', '200'],
+      }),
+    ]);
+
+    const result = await applyRoomMigration({ dryRun: true });
+
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+    expect(mockSendSystemPm).not.toHaveBeenCalled();
+    expect(mockSegregationEventsAdd).not.toHaveBeenCalled();
+    expect(result.affectedParticipantsCount).toBe(1);
+    expect(result.affectedRoomsCount).toBe(1);
+  });
+
+  test('commit mode evicts mismatched participant via transaction', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', '200'],
+        seats: { 0: seatFor('100'), 3: seatFor('200') },
+      }),
+    ]);
+
+    // Capture the updates patch so we can assert the arrayRemove
+    // contains the evicted participant (the load-bearing op for the
+    // gate).
+    const mockUpdate = jest.fn();
+    mockRunTransaction.mockImplementationOnce(async (fn) => fn({ update: mockUpdate }));
+
+    await applyRoomMigration({ dryRun: false });
+
+    expect(mockRunTransaction).toHaveBeenCalledTimes(1);
+    const [, patch] = mockUpdate.mock.calls[0];
+    expect(patch.participantIds).toEqual({ __op: 'arrayRemove', vals: ['200'] });
+  });
+
+  test('SECURITY: multi-mismatch — all evicted ids appear in a single arrayRemove call', async () => {
+    // Regression test for the `FieldValue.arrayRemove` accumulator
+    // bug: assigning `updates.participantIds = arrayRemove(id)` per
+    // mismatched participant in a loop would overwrite the prior
+    // sentinel, leaving only the LAST participant evicted. Multi-
+    // mismatch rooms would silently retain N-1 cross-cohort ids in
+    // `participantIds`. The fix: pass all ids as varargs to ONE
+    // arrayRemove call.
+    seedUsers([
+      userDoc(100, { cohort: 'adult' }),
+      userDoc(200, { cohort: 'minor' }),
+      userDoc(201, { cohort: 'minor' }),
+      userDoc(202, { cohort: 'minor' }),
+    ]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', '200', '201', '202'],
+      }),
+    ]);
+
+    const mockUpdate = jest.fn();
+    mockRunTransaction.mockImplementationOnce(async (fn) => fn({ update: mockUpdate }));
+
+    await applyRoomMigration({ dryRun: false });
+
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    const [, patch] = mockUpdate.mock.calls[0];
+    // All three mismatched ids in a single arrayRemove.
+    expect(patch.participantIds).toEqual({
+      __op: 'arrayRemove',
+      vals: expect.arrayContaining(['200', '201', '202']),
+    });
+    expect(patch.participantIds.vals).toHaveLength(3);
+  });
+
+  test('pure-backfill: room with only same-cohort participants gets cohort written, no eviction', async () => {
+    // Legacy room (no cohort field), owner = adult, all participants
+    // adult. Migration should backfill cohort='adult' but not evict
+    // anyone. Tests the `needsBackfill: true, mismatchedParticipants:
+    // []` code path which the multi-mismatch test does not exercise.
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(101, { cohort: 'adult' })]);
+    seedRooms([
+      roomDoc('R1', {
+        // no cohort field
+        ownerId: '100',
+        participantIds: ['100', '101'],
+      }),
+    ]);
+
+    const mockUpdate = jest.fn();
+    mockRunTransaction.mockImplementationOnce(async (fn) => fn({ update: mockUpdate }));
+
+    const result = await applyRoomMigration({ dryRun: false });
+
+    expect(mockRunTransaction).toHaveBeenCalledTimes(1);
+    expect(result.cohortBackfilledRoomsCount).toBe(1);
+    expect(result.affectedParticipantsCount).toBe(0);
+    const [, patch] = mockUpdate.mock.calls[0];
+    expect(patch.cohort).toBe('adult');
+    expect(patch.participantIds).toBeUndefined();
+  });
+
+  test('commit mode backfills room.cohort when legacy room had no field', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedRooms([
+      roomDoc('R1', {
+        // no cohort — owner is adult → infer 'adult'
+        ownerId: '100',
+        participantIds: ['100', '200'],
+      }),
+    ]);
+
+    const result = await applyRoomMigration({ dryRun: false });
+    expect(result.cohortBackfilledRoomsCount).toBe(1);
+  });
+
+  test('commit mode dispatches one system PM to the evicted participant', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult', displayName: 'Alice' }),
+      userDoc(200, { cohort: 'minor', displayName: 'Bob' }),
+    ]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        name: 'The Library',
+        participantIds: ['100', '200'],
+      }),
+    ]);
+
+    await applyRoomMigration({ dryRun: false });
+    expect(mockSendSystemPm).toHaveBeenCalledTimes(1);
+    const [recipient, body] = mockSendSystemPm.mock.calls[0];
+    expect(recipient).toBe('200');
+    expect(body).toContain('The Library');
+  });
+
+  test('commit mode writes a segregationEvents audit row per evicted participant', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult' }),
+      userDoc(200, { cohort: 'minor' }),
+      userDoc(201, { cohort: 'minor' }),
+    ]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', '200', '201'],
+      }),
+    ]);
+
+    await applyRoomMigration({ dryRun: false });
+    expect(mockSegregationEventsAdd).toHaveBeenCalledTimes(2);
+    const audit0 = mockSegregationEventsAdd.mock.calls[0][0];
+    // sourceCohort = the participant's cohort (the entity being
+    // evicted); targetCohort = the room's cohort. Mirrors the
+    // follow-edge migration's `sourceCohort: edge.fromCohort` —
+    // "source" is the actor, "target" is the destination. The
+    // `targetRoomId` field is explicit for downstream analytics
+    // queries that need to discriminate room-target events from
+    // user-target events without parsing `surface`.
+    expect(audit0).toMatchObject({
+      surface: 'scripts/migrate-segregation-rooms',
+      action: 'room_eviction',
+      sourceCohort: 'minor',
+      targetCohort: 'adult',
+      targetUniqueId: 'R1',
+      targetRoomId: 'R1',
+    });
+    expect(typeof audit0.timestamp).toBe('number');
+  });
+
+  test('PM body is cohort-agnostic (no cohort vocabulary)', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult', displayName: 'Owner' }),
+      userDoc(200, { cohort: 'minor' }),
+    ]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        name: 'Some Room',
+        participantIds: ['100', '200'],
+      }),
+    ]);
+
+    await applyRoomMigration({ dryRun: false });
+    const body = mockSendSystemPm.mock.calls[0][1];
+    expect(body).not.toMatch(/\badult\b/i);
+    expect(body).not.toMatch(/\bminor\b/i);
+    expect(body).not.toMatch(/\bage\b/i);
+  });
+
+  test('idempotent — second commit on already-migrated rooms is a no-op', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    // First pass: room had cross-cohort. After eviction, the room has
+    // only same-cohort. Second seed reflects that state.
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100'], // post-eviction
+      }),
+    ]);
+    const result = await applyRoomMigration({ dryRun: false });
+    expect(result.affectedParticipantsCount).toBe(0);
+    expect(mockRunTransaction).not.toHaveBeenCalled();
+    expect(mockSendSystemPm).not.toHaveBeenCalled();
+  });
+
+  test('per-room transaction failure surfaces but does NOT corrupt prior rooms', async () => {
+    seedUsers([
+      userDoc(100, { cohort: 'adult' }),
+      userDoc(101, { cohort: 'adult' }),
+      userDoc(200, { cohort: 'minor' }),
+      userDoc(201, { cohort: 'minor' }),
+    ]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', '200'],
+      }),
+      roomDoc('R2', {
+        cohort: 'adult',
+        ownerId: '101',
+        participantIds: ['101', '201'],
+      }),
+    ]);
+
+    mockRunTransaction
+      .mockImplementationOnce(async (fn) => fn({ update: jest.fn() })) // R1 ok
+      .mockImplementationOnce(async () => {
+        throw new Error('R2 contention');
+      });
+
+    await expect(applyRoomMigration({ dryRun: false })).rejects.toThrow('R2 contention');
+    // R1's transaction did fire (already-applied edits are durable —
+    // arrayRemove is idempotent on rerun).
+    expect(mockRunTransaction).toHaveBeenCalledTimes(2);
+  });
+
+  test('PM dispatch failure does NOT roll back the eviction transaction', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', '200'],
+      }),
+    ]);
+    mockSendSystemPm.mockRejectedValueOnce(new Error('PM service down'));
+
+    const result = await applyRoomMigration({ dryRun: false });
+    expect(result.pmDispatchFailures).toBe(1);
+    expect(result.pmDispatchFailedRecipients).toEqual(['200']);
+    // Eviction still ran (one transaction)
+    expect(mockRunTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  test('segregationEvents write failure does NOT roll back eviction or block PM', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', '200'],
+      }),
+    ]);
+    mockSegregationEventsAdd.mockRejectedValueOnce(new Error('quota exhausted'));
+
+    const result = await applyRoomMigration({ dryRun: false });
+    expect(result.segregationEventFailures).toBe(1);
+    expect(mockSendSystemPm).toHaveBeenCalled();
+    expect(mockRunTransaction).toHaveBeenCalled();
+  });
+
+  test('accepts a pre-computed scan, does not double-scan', async () => {
+    seedUsers([userDoc(100, { cohort: 'adult' }), userDoc(200, { cohort: 'minor' })]);
+    seedRooms([
+      roomDoc('R1', {
+        cohort: 'adult',
+        ownerId: '100',
+        participantIds: ['100', '200'],
+      }),
+    ]);
+    const scan = await scanCrossCohortRooms();
+    mockRoomsGet.mockClear();
+    mockUsersGet.mockClear();
+
+    await applyRoomMigration({ dryRun: false, scan });
+    expect(mockRoomsGet).not.toHaveBeenCalled();
+    expect(mockUsersGet).not.toHaveBeenCalled();
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────
+// formatRoomEjectionPm — cohort-agnostic PM template
+// ──────────────────────────────────────────────────────────────────
+
+describe('formatRoomEjectionPm', () => {
+  test('includes the sanitised room name in the body', () => {
+    const body = formatRoomEjectionPm({ roomName: 'The Library' });
+    expect(body).toContain('The Library');
+  });
+
+  test('falls back to "a room" when roomName is null', () => {
+    const body = formatRoomEjectionPm({ roomName: null });
+    expect(body).not.toContain('null');
+    expect(body).toContain('a room');
+  });
+
+  test('falls back when roomName is whitespace-only', () => {
+    const body = formatRoomEjectionPm({ roomName: '   ' });
+    expect(body).toContain('a room');
+  });
+
+  test('escapes raw HTML / ampersand in roomName (XSS defence)', () => {
+    const body = formatRoomEjectionPm({
+      roomName: '<script>alert(1)</script> & evil',
+    });
+    expect(body).not.toContain('<');
+    expect(body).not.toContain('>');
+    expect(body).not.toContain('&');
+  });
+
+  test('strips control chars from roomName', () => {
+    // Use String.fromCharCode for NUL (0) + BEL (7) so the
+    // source file stays ESLint-clean (no-control-regex) while
+    // still exercising the sanitiser's C0-strip contract.
+    const body = formatRoomEjectionPm({
+      roomName: 'Lib' + String.fromCharCode(0) + 'rary' + String.fromCharCode(7),
+    });
+    expect(body).toContain('Library');
+    expect(body).not.toMatch(new RegExp(String.fromCharCode(0)));
+    expect(body).not.toMatch(new RegExp(String.fromCharCode(7)));
+  });
+
+  test('truncates very long room names', () => {
+    const body = formatRoomEjectionPm({ roomName: 'A'.repeat(500) });
+    const firstLine = body.split('\n')[0];
+    expect(firstLine.length).toBeLessThan(200);
+    expect(firstLine).toContain('…');
+  });
+
+  test('is cohort-agnostic — no cohort vocabulary anywhere in body', () => {
+    const body = formatRoomEjectionPm({ roomName: 'The Library' });
+    expect(body).not.toMatch(/\badult\b/i);
+    expect(body).not.toMatch(/\bminor\b/i);
+    expect(body).not.toMatch(/\bage\b/i);
+    expect(body).not.toMatch(/under 18/i);
+    expect(body).not.toMatch(/over 18/i);
+    expect(body).not.toMatch(/younger/i);
+    expect(body).not.toMatch(/older/i);
+    expect(body).not.toMatch(/\bteen\b/i);
+    expect(body).not.toMatch(/\bkid\b/i);
+    expect(body).not.toMatch(/\bdifferent group\b/i);
+    expect(body).not.toMatch(/\bnot in the same\b/i);
+  });
+
+  test('includes the load-bearing cohort-agnostic phrase (positive pin)', () => {
+    const body = formatRoomEjectionPm({ roomName: 'The Library' });
+    expect(body).toContain('recent change to how ShyTalk organises accounts');
+  });
+});
+
 // ──────────────────────────────────────────────────────────────────
 // determineMode — CLI flag parser
 // ──────────────────────────────────────────────────────────────────
@@ -959,8 +1642,11 @@ describe('module exports', () => {
   test('exposes the documented public surface', () => {
     const mod = require('../../scripts/migrate-segregation-relationships');
     expect(typeof mod.scanCrossCohortEdges).toBe('function');
+    expect(typeof mod.scanCrossCohortRooms).toBe('function');
     expect(typeof mod.applyMigration).toBe('function');
+    expect(typeof mod.applyRoomMigration).toBe('function');
     expect(typeof mod.formatRelationshipRemovedPm).toBe('function');
+    expect(typeof mod.formatRoomEjectionPm).toBe('function');
     expect(typeof mod.sanitiseDisplayName).toBe('function');
     expect(typeof mod.isPositiveIntegerString).toBe('function');
     expect(typeof mod.writeSnapshot).toBe('function');

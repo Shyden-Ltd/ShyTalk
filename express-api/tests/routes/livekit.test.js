@@ -2,8 +2,21 @@ const express = require('express');
 const request = require('supertest');
 
 // ─── Must mock firebase/log before any route require ─────────────
+// Default room doc: cohort 'adult' so tests that don't override get
+// a same-cohort match (default identity is adult uniqueId 12345 +
+// adult cohort claim — see `createApp`). Tests that need different
+// scenarios re-stub `mockRoomGet` per-test. UK OSA #17 PR 7 wired
+// in the room-lookup + cohort gate inside `/api/livekit/token`.
+const mockRoomGet = jest.fn();
+const mockDoc = jest.fn(() => ({ get: mockRoomGet }));
+const mockAdd = jest.fn();
+const mockCollection = jest.fn(() => ({ add: mockAdd }));
+
 jest.mock('../../src/utils/firebase', () => ({
-  db: {},
+  db: {
+    doc: (...args) => mockDoc(...args),
+    collection: (...args) => mockCollection(...args),
+  },
   admin: { firestore: () => ({}) },
 }));
 jest.mock('../../src/utils/log', () => ({
@@ -49,6 +62,17 @@ beforeEach(() => {
     apiSecret: 'test-secret',
   });
   mockToJwt.mockResolvedValue('mock-jwt-token');
+  // Default room doc: cohort 'minor'. `createApp` doesn't set a
+  // cohort claim on req.auth.token, so `cohortFromClaim` defaults
+  // the caller to 'minor' — match that with a 'minor' room so the
+  // gate passes by default. Cohort-mismatch scenarios live in
+  // `livekit-cohort.test.js`; this file pins the pre-PR-7 token
+  // contract (granted, region, identity, etc.) plus a baseline of
+  // continued-to-work cases after PR 7's gate is wired in.
+  mockRoomGet.mockResolvedValue({
+    exists: true,
+    data: () => ({ cohort: 'minor' }),
+  });
 });
 
 // ─── App setup ───────────────────────────────────────────────────

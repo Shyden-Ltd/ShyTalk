@@ -323,7 +323,29 @@ class HomeViewModel(
         _uiState.update { it.copy(isLoading = true, error = null, lastRoomName = name) }
         viewModelScope.launch { userRepository.updateProfile(userId, mapOf("lastRoomName" to name)) }
 
-        when (val result = roomRepository.createRoom(name, userId)) {
+        // UK OSA #17 PR 7 — fetch the caller's cohort to stamp on the
+        // new room. The firestore.rules layer binds this value to the
+        // server-signed JWT claim, so a client cannot create a room
+        // tagged with the wrong cohort. We fall back to "minor" if the
+        // user lookup fails: most-restrictive default per the OSA
+        // "fail closed when ambiguous" rule.
+        //
+        // `cohortOverride` (admin-set) takes precedence over `cohort`
+        // — the JWT claim is server-minted from `effectiveCohort`
+        // which honours the override, so the stamped value MUST match
+        // or the firestore.rules create-bind rejects.
+        val cohort =
+            when (val userResult = userRepository.getUser(userId)) {
+                is Resource.Success -> {
+                    val user = userResult.data
+                    val override = user.cohortOverride
+                    if (override == "adult" || override == "minor") override else user.cohort
+                }
+
+                else -> "minor"
+            }
+
+        when (val result = roomRepository.createRoom(name, userId, cohort)) {
             is Resource.Success -> {
                 logI(TAG, "Room created: id=${result.data}")
                 _uiState.update { it.copy(isLoading = false, createdRoomId = result.data) }
