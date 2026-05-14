@@ -143,6 +143,17 @@ app.use('/api/economy/backpack-send', writeLimiter);
 /* istanbul ignore next -- bootstrap mount; behaviour tested in isolated route + middleware tests */
 app.use('/api/notifications', writeLimiter);
 app.use('/api/translate', writeLimiter);
+// UK OSA #17 PR 5: cohort enumeration / activity-tracking defence.
+// Both new endpoints fan-out to indexed Firestore queries; the search
+// numeric branch additionally fires segregationEvents audit writes on
+// every cross-cohort miss. 30/min/user prevents brute-force uniqueId
+// scans and name-prefix bigram sweeps. writeLimiter intentionally has
+// no admin bypass — the admin panel uses dedicated admin-* routes and
+// should not be browsing the public discovery surface.
+/* istanbul ignore next -- bootstrap mount; behaviour tested in isolated route + middleware tests */
+app.use('/api/users/discover', writeLimiter);
+/* istanbul ignore next -- bootstrap mount; behaviour tested in isolated route + middleware tests */
+app.use('/api/users/search', writeLimiter);
 
 // Strictest limits on sensitive operations
 app.use('/api/economy/purchase', sensitiveLimiter);

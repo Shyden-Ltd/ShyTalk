@@ -29,12 +29,103 @@ const { sendEmail } = require('../utils/email');
 const { buildDeletionScheduledEmail } = require('../utils/email-templates');
 const { sendFcmToTokens } = require('../utils/fcm');
 const { viewerIsBlocked } = require('../utils/block-check');
-const { mintClaimsMerging, deriveCohortFromUser } = require('../utils/firebase-claims');
+const {
+  mintClaimsMerging,
+  deriveCohortFromUser,
+  cohortFromClaim,
+  effectiveCohort,
+} = require('../utils/firebase-claims');
 const { requireSameCohort } = require('../middleware/sameCohort');
 
 const VALID_PROVIDERS = ['google', 'apple', 'email'];
 const MIN_UNIQUE_ID = 10000000;
 const MAX_IDENTIFIERS_PER_PROVIDER = 5;
+
+// UK OSA #17 PR 5 — Discovery + search: shared limits and field hygiene.
+const DISCOVERY_LIMIT = 50;
+// 3-char minimum on Express defence-in-depth path: combined with the
+// 30/min writeLimiter this raises brute-force prefix enumeration from
+// ~22 min (bigram, 676 prefixes) to ~9.4 hr (trigram, 17,576 prefixes)
+// at the rate cap. PR 5 security-review MEDIUM. Existing iOS client
+// queries Firestore directly (gated by PR 3 rules), so the API-level
+// min-char does not alter end-user typeahead UX.
+const SEARCH_MIN_QUERY_CHARS = 3;
+const SEARCH_MAX_QUERY_CHARS = 50;
+// Highest BMP code point — canonical Firestore prefix-range upper bound.
+const PREFIX_UPPER_SENTINEL = '\uf8ff';
+
+/**
+ * Strip fields that must never leave the server. Applied uniformly to
+ * every user payload returned from this router so the discovery, search,
+ * and profile-view endpoints share a single source of truth and cannot
+ * drift apart.
+ *
+ * `cohort` and `cohortOverride` are stripped on top of the original
+ * sensitive set: a caller's same-cohort gate already implies they know
+ * their own bucket, and exposing `cohortOverride` would surface a
+ * moderator-action side channel (PR 5 security-review MEDIUM).
+ *
+ * Mutates and returns the input for compactness inside `.map` chains.
+ */
+function stripSensitiveFields(user) {
+  if (!user || typeof user !== 'object') return user;
+  delete user.gcsScore;
+  delete user.gcsLastDeductionAt;
+  delete user.gcsDisplayScore;
+  delete user.warningCount;
+  delete user.warningIssuedAt;
+  delete user.hasNewWarning;
+  delete user.pinHash;
+  delete user.fcmTokens;
+  delete user.firebaseUid;
+  delete user.email;
+  delete user.dateOfBirth;
+  delete user.deletionScheduledAt;
+  delete user.deletionReason;
+  delete user.deletionExecuteAt;
+  delete user.cohort;
+  delete user.cohortOverride;
+  if (Array.isArray(user.providers)) {
+    user.providers = user.providers.map(({ identifier: _identifier, ...rest }) => rest);
+  }
+  return user;
+}
+
+/**
+ * List-helpers: shape the per-doc shared filtering used by both
+ * `/users/discover` and the `/users/search` displayName branch. Returns
+ * `null` when the doc should be dropped (self, cross-effective-cohort,
+ * blocked-by-target). Otherwise returns the strip-sanitised doc.
+ *
+ * Defence layers in order:
+ *   1. Self-exclude   — caller never appears in their own results.
+ *   2. effectiveCohort gate — guards against `cohort` field drift vs
+ *      `cohortOverride`. The Firestore `where('cohort', '==', x)`
+ *      narrowed the candidate set; this is the correctness backstop
+ *      against the cache-field semantics documented in firebase-claims.js.
+ *   3. viewerIsBlocked — preserves the C7 block-list-integrity invariant
+ *      that `GET /users/:uniqueId` enforces; the new list endpoints
+ *      MUST NOT bypass it (PR 5 security-review HIGH).
+ */
+function shapeForViewer(callerUniqueId, callerCohort, data) {
+  if (!data) return null;
+  if (data.uniqueId === callerUniqueId) return null;
+  if (effectiveCohort(data) !== callerCohort) return null;
+  if (viewerIsBlocked(callerUniqueId, data)) return null;
+  return stripSensitiveFields(data);
+}
+
+/**
+ * Search disambiguator. A query is treated as a uniqueId lookup only
+ * when it is a positive integer ≥ MIN_UNIQUE_ID. Anything else falls
+ * through to the displayName-prefix branch — so e.g. "100" or "abc123"
+ * never short-circuits the cohort-filtered name search.
+ */
+function looksLikeUniqueId(q) {
+  if (!/^[1-9]\d*$/.test(q)) return false;
+  const n = Number(q);
+  return Number.isSafeInteger(n) && n >= MIN_UNIQUE_ID;
+}
 
 // ─── Helper: ownership check ────────────────────────────────────
 
@@ -304,6 +395,108 @@ router.post('/users/sign-in', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// GET /api/users/discover — Same-cohort discovery feed
+// ═══════════════════════════════════════════════════════════════════
+// UK OSA #17 PR 5. Registered BEFORE `/users/:uniqueId` so the literal
+// "discover" path segment doesn't get captured as a uniqueId param.
+// Filters at the Firestore query level via the `(cohort, lastSeenAt)`
+// composite index so cross-cohort users are never serialised at all,
+// even before the response-layer sanitisation runs.
+
+router.get('/users/discover', async (req, res) => {
+  try {
+    const callerCohort = cohortFromClaim(req);
+    const snap = await db
+      .collection('users')
+      .where('cohort', '==', callerCohort)
+      .orderBy('lastSeenAt', 'desc')
+      .limit(DISCOVERY_LIMIT)
+      .get();
+
+    const users = [];
+    for (const doc of snap.docs) {
+      const shaped = shapeForViewer(req.auth.uniqueId, callerCohort, doc.data());
+      if (shaped) users.push(shaped);
+    }
+    res.json({ users });
+  } catch (err) {
+    log.error('users', 'GET /users/discover failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// GET /api/users/search?q=... — Same-cohort search
+// ═══════════════════════════════════════════════════════════════════
+// Two branches, auto-routed by query shape:
+//   • numeric q ≥ MIN_UNIQUE_ID → exact uniqueId fetch + requireSameCohort.
+//     Cross-cohort returns the existence-hiding 404 + segregationEvents
+//     audit just like every other interaction endpoint (the PR 4
+//     contract is preserved end-to-end here).
+//   • everything else          → displayName prefix range gated by
+//     `where('cohort','==',callerCohort)`. The cohort `where` clause
+//     is the same Firestore-query-level enforcement as discovery.
+
+router.get('/users/search', async (req, res) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    if (!q) return res.status(400).json({ error: 'q required' });
+    if (q.length < SEARCH_MIN_QUERY_CHARS) {
+      return res
+        .status(400)
+        .json({ error: `q must be at least ${SEARCH_MIN_QUERY_CHARS} characters` });
+    }
+    if (q.length > SEARCH_MAX_QUERY_CHARS) {
+      return res
+        .status(400)
+        .json({ error: `q must be at most ${SEARCH_MAX_QUERY_CHARS} characters` });
+    }
+
+    if (looksLikeUniqueId(q)) {
+      // Numeric branch: single-doc lookup + same-cohort gate.
+      // `requireSameCohort` writes the existence-hiding 404 + audit on
+      // miss too — so when `target` is null and `!isSelf`, the middleware
+      // already sent the 404 and we returned above. The `if (!target)`
+      // below is reachable only on the self-search-of-own-missing-id
+      // path (caller asks for their own uniqueId, doc somehow absent).
+      const target = await getDoc(`users/${q}`);
+      const isSelf = String(req.auth.uniqueId) === q;
+      if (!isSelf && (await requireSameCohort(req, res, q, () => target))) {
+        return;
+      }
+      if (!target) return res.status(404).json({ error: 'Not found' });
+      // Block-list integrity: blocked viewer must not retrieve target
+      // profile (matches `GET /users/:uniqueId` semantics; self bypasses).
+      if (!isSelf && viewerIsBlocked(req.auth.uniqueId, target)) {
+        return res.status(403).json({ error: 'Cannot view content of users who have blocked you' });
+      }
+      stripSensitiveFields(target);
+      return res.json({ users: [target] });
+    }
+
+    // displayName prefix branch.
+    const callerCohort = cohortFromClaim(req);
+    const snap = await db
+      .collection('users')
+      .where('cohort', '==', callerCohort)
+      .where('displayName', '>=', q)
+      .where('displayName', '<', q + PREFIX_UPPER_SENTINEL)
+      .limit(DISCOVERY_LIMIT)
+      .get();
+
+    const users = [];
+    for (const doc of snap.docs) {
+      const shaped = shapeForViewer(req.auth.uniqueId, callerCohort, doc.data());
+      if (shaped) users.push(shaped);
+    }
+    res.json({ users });
+  } catch (err) {
+    log.error('users', 'GET /users/search failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // GET /api/users/:uniqueId — Get user profile
 // ═══════════════════════════════════════════════════════════════════
 
@@ -333,28 +526,9 @@ router.get('/users/:uniqueId', async (req, res) => {
     user.followingIds = user.followingIds || [];
     user.followerIds = user.followerIds || [];
 
-    // Strip admin-only fields
-    delete user.gcsScore;
-    delete user.gcsLastDeductionAt;
-    delete user.gcsDisplayScore;
-    delete user.warningCount;
-    delete user.warningIssuedAt;
-    delete user.hasNewWarning;
-
-    // Strip sensitive / PII fields
-    delete user.pinHash;
-    delete user.fcmTokens;
-    delete user.firebaseUid;
-    delete user.email;
-    delete user.dateOfBirth;
-
-    // Strip deletion fields (only visible to owner via /deletion-status)
-    delete user.deletionScheduledAt;
-    delete user.deletionReason;
-    delete user.deletionExecuteAt;
-    if (Array.isArray(user.providers)) {
-      user.providers = user.providers.map(({ identifier: _identifier, ...rest }) => rest);
-    }
+    // Strip admin-only / PII / deletion / cohort fields. Single source of
+    // truth shared with /users/discover and /users/search.
+    stripSensitiveFields(user);
 
     res.json(user);
   } catch (err) {
