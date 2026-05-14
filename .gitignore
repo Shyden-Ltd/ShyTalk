@@ -53,6 +53,9 @@ playwright-errors.log
 # Migration scripts (one-time use)
 scripts/migrate-*.mjs
 
+# Migration snapshots — contain displayName + cohort tags (PII-adjacent)
+express-api/migration-snapshots/
+
 # Archived Cloud Functions (deleted from project)
 functions-archive/
 

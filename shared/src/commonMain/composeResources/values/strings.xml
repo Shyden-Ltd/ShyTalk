@@ -982,4 +982,7 @@
     <string name="age_verif_test_env_label">Test environment</string>
     <string name="age_verif_test_env_warning">Upload any image — this is a test environment, real IDs are not required and not stored long-term.</string>
 
+    <!-- UK OSA #17 PR 6: cohort-segregation relationship-removed system PM body. NOT REFERENCED by Kotlin/Swift code today — this entry is the canonical English source-of-truth for the copy that the Express migration script (express-api/scripts/migrate-segregation-relationships.js) currently hardcodes. PR 14 will add server-side locale awareness at PM-dispatch time and switch the migration to look this string up; the remaining 19 locale translations ship in PR 14 alongside that wiring. Copy is intentionally cohort-agnostic — "a recent change to how ShyTalk organises accounts" rather than "you are in different groups" — so the recipient cannot infer the counterparty's cohort. -->
+    <string name="age_seg_relationship_removed_pm">Your follow link with %1$s has been removed as part of a recent change to how ShyTalk organises accounts.\n\nThis is automatic; it doesn\'t reflect anything either of you did, and the original link can\'t be restored from here.\n\nIf you don\'t recognise the name, this just means a past connection has been tidied up.</string>
+
 </resources>
