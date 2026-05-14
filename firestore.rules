@@ -9,10 +9,49 @@ service cloud.firestore {
       return request.auth.token.uniqueId;
     }
 
+    // ── Helper: cohort gate (UK OSA #17 — age-based segregation) ──
+    // Compares the caller's `cohort` claim (set by Express on sign-in
+    // / signup / admin-DOB-modify per PR 2) to `resource.data.cohort`
+    // of the doc being read. Null on either side defaults to 'minor'
+    // — the rollout-safety knob. While PR 1's per-user backfill and
+    // PR 2's claim-mint are still propagating across active sessions,
+    // legacy callers + legacy docs both resolve to 'minor' and the
+    // gate stays open. Once both sides catch up the gate tightens
+    // automatically with no rules-rev needed.
+    //
+    // Helper is intentionally zero-arg: Firestore rules scope
+    // `resource` to whichever doc the surrounding `match` block is
+    // evaluating, so the same helper works for users / rooms /
+    // stalkers / giftRankings without parameterisation.
+    function cohortMatchesCaller() {
+      return request.auth.token.get('cohort', 'minor')
+          == resource.data.get('cohort', 'minor');
+    }
+
+    // ── Helper: admin claim with safe default ────────────────────
+    // Firestore rules throw (not return false) on property access
+    // when the key is absent. `request.auth.token.admin == true`
+    // is safe only when admin existence is guaranteed on every
+    // success path. New cohort gates evaluate admin AFTER own-doc
+    // and AFTER cohort, so a non-admin caller would otherwise crash
+    // the rule. Use `.get('admin', false)` for the safe default.
+    function isAdmin() {
+      return request.auth.token.get('admin', false) == true;
+    }
+
     // ── Users (keyed by uniqueId, not Firebase UID) ──────────────
     match /users/{uniqueId} {
-      // Any authenticated user can read profiles
-      allow read: if request.auth != null;
+      // Authed users can read profiles in their own cohort. Own-doc
+      // and admin reads bypass the gate (own-doc carve-out handles
+      // the age-up race: at midnight the user's `cohort` field flips
+      // before the client force-refreshes its token, so the stale
+      // claim doesn't match the new doc cohort — the carve-out lets
+      // the app keep rendering its own profile screen while the
+      // claim catches up). UK OSA #17 — PR 3.
+      allow read: if request.auth != null
+        && (callerUniqueId() == int(uniqueId)
+            || cohortMatchesCaller()
+            || isAdmin());
       // Owner can update non-economy fields — verified via firebaseUid field
       allow create: if false; // API only (atomic uniqueId + identity map)
       allow update: if request.auth != null
@@ -77,9 +116,20 @@ service cloud.firestore {
         allow write: if false;
       }
 
-      // Gift Wall — auth read, write only via API
+      // Gift Wall — same-cohort auth read, write only via API.
+      // Subcollection rules do NOT inherit from the parent users gate;
+      // they must re-evaluate cohort explicitly. Without this, a
+      // minor could read the gift wall (= public received-gift list,
+      // including sender uniqueIds + gift types + timestamps) of any
+      // adult profile by direct path, bypassing the parent user-doc
+      // cohort gate. UK OSA #17 — PR 3.
       match /giftWall/{giftId} {
-        allow read: if request.auth != null;
+        allow read: if request.auth != null
+          && (callerUniqueId() == int(uniqueId)
+              || isAdmin()
+              || request.auth.token.get('cohort', 'minor')
+                 == get(/databases/$(database)/documents/users/$(uniqueId))
+                    .data.get('cohort', 'minor'));
         allow write: if false;
       }
 
@@ -90,10 +140,17 @@ service cloud.firestore {
         allow write: if false;
       }
 
-      // Stalkers (profile visitors) — owner reads, visitors create own entry
+      // Stalkers (profile visitors) — owner reads, visitors create own entry.
+      // Cohort gate layers ON TOP of the owner-only gate. Pre-segregation
+      // visits could leave cross-cohort entries on a profile; the gate
+      // hides them post-PR3 even from the owner. Defence-in-depth: the
+      // discovery + profile-view gates above SHOULD already prevent
+      // cross-cohort visits, but the rules layer guarantees correctness
+      // if any higher gate slips. UK OSA #17 — PR 3.
       match /stalkers/{visitorId} {
         allow read: if request.auth != null
-          && callerUniqueId() == int(uniqueId);
+          && callerUniqueId() == int(uniqueId)
+          && cohortMatchesCaller();
         allow create: if request.auth != null
           && string(callerUniqueId()) == visitorId;
         allow update, delete: if false;
@@ -123,7 +180,12 @@ service cloud.firestore {
 
     // ── Rooms ────────────────────────────────────────────────────
     match /rooms/{roomId} {
-      allow read: if request.auth != null;
+      // Same-cohort read gate. Admin bypass for moderation. Room
+      // create writes `cohort` from the owner's resolved cohort at
+      // creation time (PR 4 server-side); rooms never change cohort
+      // after create, so this is a one-shot tag. UK OSA #17 — PR 3.
+      allow read: if request.auth != null
+        && (cohortMatchesCaller() || isAdmin());
       allow create: if request.auth != null;
       // Update: owner, current participant, or new user joining (adding themselves to participantIds/firstJoinTimestamps only)
       // ownerId and participantIds store String uniqueIds; callerUniqueId() is a Number (custom claim).
@@ -138,12 +200,18 @@ service cloud.firestore {
       allow delete: if request.auth != null
         && string(callerUniqueId()) == resource.data.ownerId;
 
-      // Room chat messages — read open to all authed users (room is
-      // public-read by design); CREATE must be a participant or the
-      // owner. Without this gate, any authenticated user could spam
-      // arbitrary rooms via direct Firestore writes bypassing the API.
+      // Room chat messages — same-cohort read (must mirror the parent
+      // rooms cohort gate so a known roomId can't bypass discovery).
+      // CREATE must be a participant or the owner. Without this gate,
+      // any authenticated user could spam arbitrary rooms via direct
+      // Firestore writes bypassing the API.
+      // UK OSA #17 — PR 3 added the read-side cohort gate.
       match /messages/{messageId} {
-        allow read: if request.auth != null;
+        allow read: if request.auth != null
+          && (isAdmin()
+              || request.auth.token.get('cohort', 'minor')
+                 == get(/databases/$(database)/documents/rooms/$(roomId))
+                    .data.get('cohort', 'minor'));
         allow create: if request.auth != null
           && (string(callerUniqueId()) == get(/databases/$(database)/documents/rooms/$(roomId)).data.ownerId
               || string(callerUniqueId()) in get(/databases/$(database)/documents/rooms/$(roomId)).data.participantIds);
@@ -152,11 +220,19 @@ service cloud.firestore {
       }
 
       // Seat requests — owner can approve/deny, requester can cancel own.
+      // Same-cohort read gate — must mirror the parent rooms gate so a
+      // cross-cohort caller can't enumerate seat-request metadata
+      // (who's queueing for which room) by direct path.
       // SECURITY: create MUST bind userId to the caller; otherwise any
       // authed user could file a seat request attributed to ANOTHER
       // user, causing the room owner to promote the wrong account.
+      // UK OSA #17 — PR 3 added the read-side cohort gate.
       match /seatRequests/{requestId} {
-        allow read: if request.auth != null;
+        allow read: if request.auth != null
+          && (isAdmin()
+              || request.auth.token.get('cohort', 'minor')
+                 == get(/databases/$(database)/documents/rooms/$(roomId))
+                    .data.get('cohort', 'minor'));
         allow create: if request.auth != null
           && request.resource.data.userId == string(callerUniqueId());
         allow update: if request.auth != null
@@ -171,17 +247,33 @@ service cloud.firestore {
     // guessing or enumerating conversation IDs (deterministic id
     // format: `dm_<smallerUid>_<largerUid>` is trivial to construct).
     match /conversations/{conversationId} {
+      // Cohort gate for conversations is structural rather than tag-
+      // based: pre-segregation DMs / groups between an adult and a
+      // minor get `crossCohortAtMigration: true` set at migration.
+      // The participants-membership rule still passes, but the
+      // additional gate locks the read so the parties no longer see
+      // history. New post-PR-3 conversations never get the flag
+      // (their creation flow rejects cross-cohort pairs). UK OSA #17.
       allow get: if request.auth != null
-                  && string(callerUniqueId()) in resource.data.participantIds;
+                  && string(callerUniqueId()) in resource.data.participantIds
+                  && resource.data.get('crossCohortAtMigration', false) != true;
       allow list: if request.auth != null
-                  && string(callerUniqueId()) in resource.data.participantIds;
+                  && string(callerUniqueId()) in resource.data.participantIds
+                  && resource.data.get('crossCohortAtMigration', false) != true;
       allow create: if request.auth != null;
       allow update: if request.auth != null
                     && string(callerUniqueId()) in resource.data.participantIds;
 
+      // Subcollection reads MUST propagate the `crossCohortAtMigration`
+      // flag from the parent conversation doc — otherwise a participant
+      // in a flagged cross-cohort thread is blocked from reading the
+      // parent doc but can still read messages / edits / userSettings /
+      // mutes / mod_log directly by path, leaking the full thread
+      // contents. UK OSA #17 — PR 3.
       match /messages/{messageId} {
         allow read: if request.auth != null
-          && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+          && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
+          && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
         allow create: if request.auth != null
           && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
         allow update, delete: if request.auth != null
@@ -191,7 +283,8 @@ service cloud.firestore {
 
         match /edits/{editId} {
           allow read: if request.auth != null
-            && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+            && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
+            && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
           allow create: if request.auth != null
             && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
         }
@@ -200,7 +293,8 @@ service cloud.firestore {
       // User-specific conversation settings — own settings, or participant can init others during group creation
       match /userSettings/{settingsId} {
         allow read: if request.auth != null
-          && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+          && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
+          && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
         allow write: if request.auth != null
           && (string(callerUniqueId()) == settingsId
               || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds);
@@ -215,7 +309,8 @@ service cloud.firestore {
       // Mutes — participants read, admins/mods can mute/unmute members
       match /mutes/{muteId} {
         allow read: if request.auth != null
-          && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+          && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
+          && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
         allow write: if request.auth != null
           && (string(callerUniqueId()) == muteId
               || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds
@@ -225,7 +320,8 @@ service cloud.firestore {
       // Mod log — participants read, admins/mods create
       match /mod_log/{logId} {
         allow read: if request.auth != null
-          && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+          && string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds
+          && get(/databases/$(database)/documents/conversations/$(conversationId)).data.get('crossCohortAtMigration', false) != true;
         allow create: if request.auth != null
           && (string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupAdminIds
               || string(callerUniqueId()) in get(/databases/$(database)/documents/conversations/$(conversationId)).data.groupModIds);
@@ -264,9 +360,14 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // ── Gift rankings — auth read, server write ──────────────────
+    // ── Gift rankings — same-cohort auth read, server write ──────
+    // Server (PR 4+) writes one ranking doc per (giftId, cohort) pair
+    // tagged with `cohort`. Cohort gate lets adults see adult rankings
+    // and minors see minor rankings only. Admin bypass for ops/moderation.
+    // UK OSA #17 — PR 3.
     match /giftRankings/{giftId} {
-      allow read: if request.auth != null;
+      allow read: if request.auth != null
+        && (cohortMatchesCaller() || isAdmin());
       allow write: if false;
     }
 
@@ -519,6 +620,19 @@ service cloud.firestore {
     // Admin reads via the Express admin route (which uses Firebase
     // Admin SDK; rules are bypassed).
     match /ageVerificationSubmissions/{submissionId} {
+      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow write: if false;
+    }
+
+    // ── Segregation events — admin read, server write ────────────
+    // UK OSA #17 — PR 3. Audit log for every cross-cohort enforcement
+    // action: the Express `requireSameCohort` middleware (PR 4) emits
+    // a doc per blocked request (route, actor cohort, target cohort,
+    // outcome). Admin reads via the admin panel for compliance
+    // reporting. Writes are server-only — even admin sessions must
+    // route through Express so the payload shape is canonical and
+    // actor/route/cohort fields are server-controlled.
+    match /segregationEvents/{evtId} {
       allow read: if request.auth != null && request.auth.token.admin == true;
       allow write: if false;
     }
