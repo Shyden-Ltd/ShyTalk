@@ -382,20 +382,25 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data).affectedKeys()
              .hasAny(['crossCohortAtMigration', 'frozenAtMigration', 'frozenAtMigrationAt'])
         && (
-          request.resource.data.participantIds == resource.data.participantIds
+          // No growth (shrinkage, no-op, or non-participantIds-only
+          // edit): always allowed. `new.removeAll(old).size() == 0`
+          // means new is a subset of old — covers both unchanged and
+          // shrinkage. Frozen groups can shrink (members can leave /
+          // be kicked); only growth is gated.
+          request.resource.data.participantIds
+            .removeAll(resource.data.participantIds).size() == 0
           || (
+            // Growth path: blocked when frozen, one-at-a-time,
+            // cohort-matched. Bulk cross-cohort adds would slip past
+            // the per-add `get()` if size were unbounded.
             resource.data.get('frozenAtMigration', false) != true
             && request.resource.data.participantIds
-                 .removeAll(resource.data.participantIds).size() <= 1
-            && (
-              request.resource.data.participantIds
-                .removeAll(resource.data.participantIds).size() == 0
-              || get(/databases/$(database)/documents/users/$(
-                   request.resource.data.participantIds
-                     .removeAll(resource.data.participantIds)[0]
-                 )).data.get('cohort', 'minor')
-                 == request.auth.token.get('cohort', 'minor')
-            )
+                 .removeAll(resource.data.participantIds).size() == 1
+            && get(/databases/$(database)/documents/users/$(
+                 request.resource.data.participantIds
+                   .removeAll(resource.data.participantIds)[0]
+               )).data.get('cohort', 'minor')
+               == request.auth.token.get('cohort', 'minor')
           )
         );
 

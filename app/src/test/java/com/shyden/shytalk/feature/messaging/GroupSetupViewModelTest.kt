@@ -585,4 +585,181 @@ class GroupSetupViewModelTest {
 
             assertEquals(0, vm.uiState.value.ownedGroupCount)
         }
+
+    // ===== UK OSA #17 PR 8 — cohort fetch on group create =====
+
+    @Test
+    fun `createGroup uses caller cohort (adult) on createGroupConversation call`() =
+        runTest {
+            // The firestore.rules layer binds the stamped cohort to
+            // the JWT claim. The ViewModel fetches the creator's
+            // effective cohort and passes it through; a regression
+            // that dropped the cohort parameter would silently break
+            // group creation at the rules layer.
+            coEvery { userRepository.getUsers(listOf("u1")) } returns
+                Resource.Success(listOf(TestData.createTestUser(uid = "u1")))
+            coEvery { userRepository.getUser("me") } returns
+                Resource.Success(TestData.createTestUser(uid = "me").copy(cohort = "adult"))
+            coEvery { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
+                Resource.Success(
+                    com.shyden.shytalk.core.model.Conversation(
+                        conversationId = "g1",
+                        isGroup = true,
+                    ),
+                )
+
+            val vm = createViewModel("u1")
+            advanceUntilIdle()
+
+            vm.setGroupName("Adult Group")
+            vm.createGroup()
+            advanceUntilIdle()
+
+            coVerify {
+                pmRepository.createGroupConversation(
+                    creatorId = "me",
+                    cohort = "adult",
+                    participantIds = any(),
+                    groupName = "Adult Group",
+                    groupDescription = any(),
+                    groupPhotoUrl = any(),
+                    adminIds = any(),
+                    modIds = any(),
+                    permissions = any(),
+                    systemMessageConfig = any(),
+                )
+            }
+        }
+
+    @Test
+    fun `createGroup uses cohortOverride when set (overrides user cohort)`() =
+        runTest {
+            // Admin-set cohortOverride takes precedence over the
+            // user's `cohort` field — matches the server-side
+            // `effectiveCohort` helper. Without honouring the
+            // override, an adult user demoted to minor via admin
+            // action could still create adult groups.
+            coEvery { userRepository.getUsers(listOf("u1")) } returns
+                Resource.Success(listOf(TestData.createTestUser(uid = "u1")))
+            coEvery { userRepository.getUser("me") } returns
+                Resource.Success(
+                    TestData.createTestUser(uid = "me").copy(cohort = "adult").copy(cohortOverride = "minor"),
+                )
+            coEvery { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
+                Resource.Success(
+                    com.shyden.shytalk.core.model.Conversation(
+                        conversationId = "g1",
+                        isGroup = true,
+                    ),
+                )
+
+            val vm = createViewModel("u1")
+            advanceUntilIdle()
+
+            vm.setGroupName("Override Group")
+            vm.createGroup()
+            advanceUntilIdle()
+
+            coVerify {
+                pmRepository.createGroupConversation(
+                    creatorId = any(),
+                    cohort = "minor",
+                    participantIds = any(),
+                    groupName = any(),
+                    groupDescription = any(),
+                    groupPhotoUrl = any(),
+                    adminIds = any(),
+                    modIds = any(),
+                    permissions = any(),
+                    systemMessageConfig = any(),
+                )
+            }
+        }
+
+    @Test
+    fun `createGroup falls back to minor when getUser fails (fail-closed default)`() =
+        runTest {
+            // Per design (mirrors HomeViewModel.createRoom): if the
+            // user lookup fails, stamp the most-restrictive cohort.
+            // A more permissive default would let a transient error
+            // open the gate.
+            coEvery { userRepository.getUsers(listOf("u1")) } returns
+                Resource.Success(listOf(TestData.createTestUser(uid = "u1")))
+            coEvery { userRepository.getUser("me") } returns Resource.Error("Network down")
+            coEvery { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
+                Resource.Success(
+                    com.shyden.shytalk.core.model.Conversation(
+                        conversationId = "g1",
+                        isGroup = true,
+                    ),
+                )
+
+            val vm = createViewModel("u1")
+            advanceUntilIdle()
+
+            vm.setGroupName("Failed-Lookup Group")
+            vm.createGroup()
+            advanceUntilIdle()
+
+            coVerify {
+                pmRepository.createGroupConversation(
+                    creatorId = any(),
+                    cohort = "minor",
+                    participantIds = any(),
+                    groupName = any(),
+                    groupDescription = any(),
+                    groupPhotoUrl = any(),
+                    adminIds = any(),
+                    modIds = any(),
+                    permissions = any(),
+                    systemMessageConfig = any(),
+                )
+            }
+        }
+
+    @Test
+    fun `createGroup ignores invalid cohortOverride (uses user cohort instead)`() =
+        runTest {
+            // Defensive — only 'adult' or 'minor' are valid cohort
+            // values. If admin storage corruption produces
+            // `cohortOverride: 'verified-adult'`, the ViewModel must
+            // ignore it and fall back to `user.cohort` rather than
+            // stamping a non-enum value that firestore.rules would
+            // reject.
+            coEvery { userRepository.getUsers(listOf("u1")) } returns
+                Resource.Success(listOf(TestData.createTestUser(uid = "u1")))
+            coEvery { userRepository.getUser("me") } returns
+                Resource.Success(
+                    TestData.createTestUser(uid = "me").copy(cohort = "adult").copy(cohortOverride = "verified-adult"),
+                )
+            coEvery { pmRepository.createGroupConversation(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns
+                Resource.Success(
+                    com.shyden.shytalk.core.model.Conversation(
+                        conversationId = "g1",
+                        isGroup = true,
+                    ),
+                )
+
+            val vm = createViewModel("u1")
+            advanceUntilIdle()
+
+            vm.setGroupName("Invalid Override")
+            vm.createGroup()
+            advanceUntilIdle()
+
+            coVerify {
+                pmRepository.createGroupConversation(
+                    creatorId = any(),
+                    cohort = "adult",
+                    participantIds = any(),
+                    groupName = any(),
+                    groupDescription = any(),
+                    groupPhotoUrl = any(),
+                    adminIds = any(),
+                    modIds = any(),
+                    permissions = any(),
+                    systemMessageConfig = any(),
+                )
+            }
+        }
 }
