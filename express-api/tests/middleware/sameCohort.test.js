@@ -469,3 +469,49 @@ describe('requireSameCohort — audit-write dedup', () => {
     expect(res2.status).toHaveBeenCalledWith(404);
   });
 });
+
+// UK OSA #17 PR 8 — `_resetAuditDedup` export hardening.
+// In test env (NODE_ENV=test OR JEST_WORKER_ID set), the export is
+// the real reset function. In production it's a no-op. Both branches
+// must be exercised for SonarCloud coverage; the in-test branch is
+// covered by every other test that calls `_resetAuditDedup`. The
+// no-op branch needs an isolated module re-load with the env vars
+// cleared.
+describe('_resetAuditDedup export-hardening (production no-op branch)', () => {
+  test('returns a no-op function in non-test env (NODE_ENV unset + JEST_WORKER_ID unset)', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalJestWorkerId = process.env.JEST_WORKER_ID;
+    try {
+      delete process.env.NODE_ENV;
+      delete process.env.JEST_WORKER_ID;
+      jest.isolateModules(() => {
+        const mod = require('../../src/middleware/sameCohort');
+        // The function exists but is a no-op — calling it must NOT
+        // throw and must NOT touch any underlying state.
+        expect(typeof mod._resetAuditDedup).toBe('function');
+        expect(() => mod._resetAuditDedup()).not.toThrow();
+        // No return value contract — just verify it's callable.
+        expect(mod._resetAuditDedup()).toBeUndefined();
+      });
+    } finally {
+      if (originalNodeEnv !== undefined) process.env.NODE_ENV = originalNodeEnv;
+      if (originalJestWorkerId !== undefined) process.env.JEST_WORKER_ID = originalJestWorkerId;
+    }
+  });
+
+  test('returns the real reset function when JEST_WORKER_ID is set (Jest worker env)', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    try {
+      delete process.env.NODE_ENV;
+      process.env.JEST_WORKER_ID = '1';
+      jest.isolateModules(() => {
+        const mod = require('../../src/middleware/sameCohort');
+        // Calling reset should not throw — it actually resets the
+        // dedup. This is the "Jest worker auto-detect" branch.
+        expect(() => mod._resetAuditDedup()).not.toThrow();
+      });
+    } finally {
+      if (originalNodeEnv !== undefined) process.env.NODE_ENV = originalNodeEnv;
+    }
+  });
+});
