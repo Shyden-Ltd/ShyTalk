@@ -9,7 +9,27 @@ const router = require('express').Router();
 const { db, rtdb, FieldValue } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
 const { sendFcmToTokens, cleanupInvalidTokens } = require('../utils/fcm');
+const { requireSameCohort } = require('../middleware/sameCohort');
 const log = require('../utils/log');
+
+/**
+ * UK OSA #17 PR 4 — for 1:1 conversations, returns true (and sends a
+ * 404) if the caller and the other participant are cross-cohort.
+ * Group conversations are deferred to PR 8 (frozen-at-migration
+ * gate); they skip this helper.
+ */
+async function gateCrossCohortConversation(req, res, conv) {
+  if (conv?.isGroup) return false;
+  const participantIds = (conv?.participantIds || []).map(String);
+  if (participantIds.length !== 2) return false;
+  const callerId = String(req.auth.uniqueId);
+  const otherId = participantIds.find((p) => p !== callerId);
+  if (!otherId) return false;
+  return requireSameCohort(req, res, otherId, async () => {
+    const snap = await db.doc(`users/${otherId}`).get();
+    return snap.exists ? snap.data() : null;
+  });
+}
 
 const DEFAULT_MESSAGE_LIMIT = 50;
 const MAX_MESSAGE_LIMIT = 200;
@@ -158,10 +178,13 @@ router.get('/conversations/:id/messages', async (req, res) => {
     // Verify the requester is a participant
     const convSnap = await db.doc(`conversations/${req.params.id}`).get();
     if (!convSnap.exists) return res.status(404).json({ error: 'Conversation not found' });
-    const participantIds = convSnap.data().participantIds || [];
+    const conv = convSnap.data();
+    const participantIds = conv.participantIds || [];
     if (!participantIds.map(String).includes(String(req.auth.uniqueId))) {
       return res.status(403).json({ error: 'Not a participant of this conversation' });
     }
+
+    if (await gateCrossCohortConversation(req, res, conv)) return;
 
     const limit = Math.min(
       Number.parseInt(req.query.limit, 10) || DEFAULT_MESSAGE_LIMIT,
@@ -230,6 +253,9 @@ router.post('/conversations/:id/messages', async (req, res) => {
     if (!participantIds.includes(senderId)) {
       return res.status(403).json({ error: 'Not a participant of this conversation' });
     }
+
+    if (await gateCrossCohortConversation(req, res, convDoc)) return;
+
     const recipientIds = participantIds.filter((pid) => pid !== senderId);
     const isGroup = !!convDoc.isGroup;
     const groupName = convDoc.groupName || null;

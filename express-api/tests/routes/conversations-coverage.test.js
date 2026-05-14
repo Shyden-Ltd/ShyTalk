@@ -96,6 +96,10 @@ beforeEach(() => {
   mockDocUpdate.mockResolvedValue();
   mockRtdbSet.mockResolvedValue();
   mockSendFcmToTokens.mockResolvedValue([]);
+  // PR 4: cross-cohort middleware fetches the other 1:1 participant.
+  // Default to empty-but-existing user doc so the gate evaluates
+  // 'minor' vs 'minor' (fail-closed) and allows the request.
+  mockDocGet.mockImplementation(() => Promise.resolve({ exists: true, data: () => ({}) }));
 });
 
 // ─── App setup ───────────────────────────────────────────────────

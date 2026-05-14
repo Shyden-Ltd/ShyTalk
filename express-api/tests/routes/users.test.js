@@ -708,7 +708,12 @@ describe('POST /api/users/:uniqueId/record-visit', () => {
   });
 
   test('creates new stalker doc with lastVisitedAt field', async () => {
-    getDoc.mockResolvedValue(null); // new visitor
+    // PR 4: target user fetch for cross-cohort gate happens BEFORE
+    // stalker subdoc fetch. Differentiate by path: target user exists
+    // with no cohort (→ 'minor'); stalker subdoc null = new visit.
+    getDoc.mockImplementation((path) =>
+      path === 'users/10000099' ? Promise.resolve({}) : Promise.resolve(null),
+    );
     const app = createApp('firebase-uid-visitor', 10000002);
 
     await request(app)

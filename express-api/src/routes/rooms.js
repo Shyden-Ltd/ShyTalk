@@ -9,6 +9,7 @@ const router = require('express').Router();
 const { db, rtdb } = require('../utils/firebase');
 const { generateId, now } = require('../utils/helpers');
 const { sendFcmToTokens, cleanupInvalidTokens } = require('../utils/fcm');
+const { requireSameCohort } = require('../middleware/sameCohort');
 const log = require('../utils/log');
 
 const MAX_USER_NAME_LENGTH = 50;
@@ -50,6 +51,13 @@ router.post('/rooms/:roomId/invites/send', async (req, res) => {
     if (!roomSnap.exists) return res.status(404).json({ error: 'Room not found' });
     const room = roomSnap.data();
 
+    // UK OSA #17 PR 4 — fetch invitee up front for the cross-cohort
+    // gate; the FCM block reuses the same doc.
+    const inviteeSnap = await db.doc(`users/${inviteeId}`).get();
+    const inviteeDoc = inviteeSnap.exists ? inviteeSnap.data() : null;
+    const blocked = await requireSameCohort(req, res, inviteeId, () => inviteeDoc);
+    if (blocked) return;
+
     // Update pendingInvites on the room doc (matches Android client field name)
     const pendingInvites = room.pendingInvites || {};
     pendingInvites[inviteeId] = {
@@ -61,11 +69,7 @@ router.post('/rooms/:roomId/invites/send', async (req, res) => {
 
     // Send FCM push to invitee
     try {
-      const [inviteeSnap, inviterSnap] = await Promise.all([
-        db.doc(`users/${inviteeId}`).get(),
-        db.doc(`users/${body.invitedBy}`).get(),
-      ]);
-      const inviteeDoc = inviteeSnap.exists ? inviteeSnap.data() : null;
+      const inviterSnap = await db.doc(`users/${body.invitedBy}`).get();
       const tokens = inviteeDoc?.fcmTokens || [];
       if (tokens.length > 0) {
         const roomName = room.name || 'a room';
@@ -118,6 +122,25 @@ router.post('/rooms/:roomId/seat-requests', async (req, res) => {
 
     log.info('rooms', 'Creating seat request', { roomId, userId: uniqueId, seatIndex });
 
+    // UK OSA #17 PR 4 — fetch room + owner up front for the cross-
+    // cohort gate; reused later in the FCM push block.
+    const roomSnap = await db.doc(`rooms/${roomId}`).get();
+    if (!roomSnap.exists) return res.status(404).json({ error: 'Room not found' });
+    const room = roomSnap.data();
+
+    // A room without an `ownerId` cannot resolve a cohort for the
+    // gate (cohort stand-in = owner cohort until PR 7). Refuse the
+    // action rather than letting the API-layer gate fall through —
+    // the Firestore rules layer (PR 3) is a backstop, not the only
+    // line of defence.
+    if (!room?.ownerId) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+    const ownerSnap = await db.doc(`users/${room.ownerId}`).get();
+    const ownerDoc = ownerSnap.exists ? ownerSnap.data() : null;
+    const blocked = await requireSameCohort(req, res, room.ownerId, () => ownerDoc);
+    if (blocked) return;
+
     // Check for existing pending request
     const existingSnap = await db
       .collection(`rooms/${roomId}/seatRequests`)
@@ -151,13 +174,9 @@ router.post('/rooms/:roomId/seat-requests', async (req, res) => {
       resolvedAt: null,
     });
 
-    // Send FCM push to room owner
+    // Send FCM push to room owner (reusing the up-front fetched docs)
     try {
-      const roomSnap = await db.doc(`rooms/${roomId}`).get();
-      const room = roomSnap.exists ? roomSnap.data() : null;
       if (room?.ownerId) {
-        const ownerSnap = await db.doc(`users/${room.ownerId}`).get();
-        const ownerDoc = ownerSnap.exists ? ownerSnap.data() : null;
         const tokens = ownerDoc?.fcmTokens || [];
         if (tokens.length > 0) {
           const invalidTokens = await sendFcmToTokens(tokens, {

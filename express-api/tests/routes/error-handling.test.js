@@ -388,8 +388,20 @@ describe('rooms: POST /api/rooms/:roomId/seat-requests returns 500 on Firestore 
 
     jest.mock('../../src/utils/firebase', () => ({
       db: {
-        doc: jest.fn(() => ({
-          get: jest.fn().mockResolvedValue({ exists: false, data: () => ({}) }),
+        // PR 4: rooms.js hoists the room + owner doc fetches above
+        // the collection.get call we want to throw. Make those fetches
+        // succeed (path-aware) so execution actually reaches the
+        // throwing collection.get.
+        doc: jest.fn((path) => ({
+          get: jest
+            .fn()
+            .mockResolvedValue(
+              path?.startsWith('rooms/')
+                ? { exists: true, data: () => ({ ownerId: 'owner-abc', name: 'R' }) }
+                : path?.startsWith('users/')
+                  ? { exists: true, data: () => ({}) }
+                  : { exists: false, data: () => ({}) },
+            ),
           update: jest.fn().mockResolvedValue(),
           set: jest.fn().mockResolvedValue(),
         })),

@@ -118,10 +118,31 @@ function deriveCohortFromUser(userData, nowMs = Date.now()) {
   return 'minor';
 }
 
+/**
+ * Reads the cohort custom-claim off the verified Firebase ID token
+ * attached to a request by `middleware/auth.js`. Fail-closed to
+ * `'minor'` (most-restrictive) when the claim is missing or invalid —
+ * mirrors `effectiveCohort` / `deriveCohortFromUser` so all three
+ * "cohort resolvers" present one defensive contract to callers.
+ *
+ * A stripped or malformed claim is treated as a minor caller; this
+ * restricts the attacker to minor↔minor interactions and surfaces a
+ * meaningful `sourceCohort: 'minor'` signal in `segregationEvents`
+ * (vs. the harder-to-aggregate `undefined`).
+ */
+function cohortFromClaim(req) {
+  const claim = req?.auth?.token?.cohort;
+  if (typeof claim === 'string' && VALID_COHORTS.has(claim)) {
+    return claim;
+  }
+  return 'minor';
+}
+
 module.exports = {
   mintClaimsMerging,
   effectiveCohort,
   deriveCohortFromUser,
   isAtLeast18FromDob,
+  cohortFromClaim,
   VALID_COHORTS,
 };

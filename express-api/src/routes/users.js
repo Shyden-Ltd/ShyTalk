@@ -30,6 +30,7 @@ const { buildDeletionScheduledEmail } = require('../utils/email-templates');
 const { sendFcmToTokens } = require('../utils/fcm');
 const { viewerIsBlocked } = require('../utils/block-check');
 const { mintClaimsMerging, deriveCohortFromUser } = require('../utils/firebase-claims');
+const { requireSameCohort } = require('../middleware/sameCohort');
 
 const VALID_PROVIDERS = ['google', 'apple', 'email'];
 const MIN_UNIQUE_ID = 10000000;
@@ -309,16 +310,22 @@ router.post('/users/sign-in', async (req, res) => {
 router.get('/users/:uniqueId', async (req, res) => {
   try {
     const user = await getDoc(`users/${req.params.uniqueId}`);
-    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    // UK OSA #17 PR 4 — cross-cohort profile views return 404 with
+    // existence-hiding body (`{ error: 'Not found' }`), byte-identical
+    // to the legitimate "missing target" 404. Self-view bypasses the
+    // gate (caller's own profile is always visible).
+    const isSelf = String(req.auth.uniqueId) === String(req.params.uniqueId);
+    if (!isSelf && (await requireSameCohort(req, res, req.params.uniqueId, () => user))) {
+      return;
+    }
+    if (!user) return res.status(404).json({ error: 'Not found' });
 
     // C7 (block-list integrity): the target user must not be visible
     // to a viewer they have blocked. Returns 403 — the client already
     // handles 403 from interaction endpoints (gift-send) the same way.
     // Allowed exception: the user looking at their own profile.
-    if (
-      String(req.auth.uniqueId) !== String(req.params.uniqueId) &&
-      viewerIsBlocked(req.auth.uniqueId, user)
-    ) {
+    if (!isSelf && viewerIsBlocked(req.auth.uniqueId, user)) {
       return res.status(403).json({ error: 'Cannot view content of users who have blocked you' });
     }
 
@@ -807,12 +814,16 @@ router.post('/users/:uniqueId/follow', async (req, res) => {
       return res.status(400).json({ error: 'Cannot follow yourself' });
     }
 
-    // Verify target user exists. Pre-fix would let the batch write
-    // fail with a Firestore error and return 500; with the validation
-    // here, the API returns the correct 404 contract.
+    // Verify target user exists + UK OSA #17 PR 4 cross-cohort gate.
+    // requireSameCohort returns 404 with `{ error: 'Not found' }` for
+    // both missing-target AND cross-cohort cases (existence-hiding).
     const targetSnap = await db.doc(`users/${targetId}`).get();
-    if (!targetSnap.exists) {
-      return res.status(404).json({ error: 'Target user not found' });
+    if (
+      await requireSameCohort(req, res, targetId, () =>
+        targetSnap.exists ? targetSnap.data() : null,
+      )
+    ) {
+      return;
     }
 
     const batch = db.batch();
@@ -843,9 +854,32 @@ router.post('/users/:uniqueId/follow', async (req, res) => {
 router.post('/users/:uniqueId/unfollow', async (req, res) => {
   try {
     const body = req.body;
-    const targetId = body?.targetUserId;
-    if (!targetId) return res.status(400).json({ error: 'targetUserId required' });
+    const rawTargetId = body?.targetUserId;
+    if (!rawTargetId) return res.status(400).json({ error: 'targetUserId required' });
     if (requireOwner(req, res)) return;
+
+    // Strict integer validation (mirrors follow handler — Phase 2A
+    // audit H3). `Number.parseInt('123abc', 10) === 123` silently
+    // truncates, then arrayRemove(123) poisons followingIds.
+    const targetId = Number.parseInt(String(rawTargetId), 10);
+    if (!Number.isInteger(targetId) || targetId <= 0) {
+      return res.status(400).json({ error: 'targetUserId must be a positive integer' });
+    }
+    if (String(targetId) !== String(rawTargetId).trim()) {
+      return res.status(400).json({ error: 'targetUserId must be a positive integer' });
+    }
+
+    // UK OSA #17 PR 4 — cross-cohort unfollow returns 404 (existence-hiding).
+    // Even though PR 6 migration revokes cross-cohort follows server-side,
+    // a stale client retry must not leak existence of the cross-cohort user.
+    if (
+      await requireSameCohort(req, res, targetId, async () => {
+        const snap = await db.doc(`users/${Number(targetId)}`).get();
+        return snap.exists ? snap.data() : null;
+      })
+    ) {
+      return;
+    }
 
     const uniqueId = req.params.uniqueId;
     const batch = db.batch();
@@ -876,9 +910,29 @@ router.post('/users/:uniqueId/unfollow', async (req, res) => {
 router.post('/users/:uniqueId/remove-follower', async (req, res) => {
   try {
     const body = req.body;
-    const followerId = body?.followerUserId;
-    if (!followerId) return res.status(400).json({ error: 'followerUserId required' });
+    const rawFollowerId = body?.followerUserId;
+    if (!rawFollowerId) return res.status(400).json({ error: 'followerUserId required' });
     if (requireOwner(req, res)) return;
+
+    // Strict integer validation — same NaN-poisoning defence as follow.
+    const followerId = Number.parseInt(String(rawFollowerId), 10);
+    if (!Number.isInteger(followerId) || followerId <= 0) {
+      return res.status(400).json({ error: 'followerUserId must be a positive integer' });
+    }
+    if (String(followerId) !== String(rawFollowerId).trim()) {
+      return res.status(400).json({ error: 'followerUserId must be a positive integer' });
+    }
+
+    // UK OSA #17 PR 4 — cross-cohort remove-follower returns 404
+    // (existence-hiding); mirrors unfollow.
+    if (
+      await requireSameCohort(req, res, followerId, async () => {
+        const snap = await db.doc(`users/${Number(followerId)}`).get();
+        return snap.exists ? snap.data() : null;
+      })
+    ) {
+      return;
+    }
 
     const uniqueId = req.params.uniqueId;
     const batch = db.batch();
@@ -926,6 +980,13 @@ router.post('/users/:uniqueId/record-visit', async (req, res) => {
     // with success:true so the client treats the call as completed,
     // avoiding a retry loop or a UI signal that reveals block state.
     const targetUser = await getDoc(`users/${profileUniqueId}`);
+
+    // UK OSA #17 PR 4 cross-cohort gate. Same guard-pattern as
+    // requireOwner / requireAdmin: returns true when it has already
+    // sent the response (404 existence-hiding), so caller returns.
+    const blocked = await requireSameCohort(req, res, profileUniqueId, () => targetUser);
+    if (blocked) return;
+
     if (viewerIsBlocked(visitorId, targetUser)) {
       return res.json({ success: true, recorded: false });
     }

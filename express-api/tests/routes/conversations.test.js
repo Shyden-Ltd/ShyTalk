@@ -55,6 +55,13 @@ jest.mock('../../src/utils/helpers', () => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // PR 4: the cross-cohort middleware fetches the other participant's
+  // user doc for 1:1 convs. Default to an empty-but-existing doc so
+  // the gate evaluates 'minor' vs 'minor' (fail-closed caller cohort
+  // since these tests don't set req.auth.token.cohort) and allows the
+  // request through. Tests that need specific doc content keep using
+  // mockResolvedValueOnce — those drain before the default fires.
+  mockDocGet.mockImplementation(() => Promise.resolve({ exists: true, data: () => ({}) }));
 });
 
 // ─── App setup ───────────────────────────────────────────────────

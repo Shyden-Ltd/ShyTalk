@@ -487,17 +487,29 @@ describe('POST /api/economy/daily-reward response contract', () => {
 describe('POST /api/rooms/:roomId/seat-requests response contract', () => {
   const { db } = require('../../src/utils/firebase');
 
+  // PR 4: room + owner fetches were hoisted out of the FCM block.
+  // Set up path-aware mocks: room exists, owner exists with no cohort
+  // (→ 'minor' matches the fail-closed caller cohort), gate allows.
+  function setupRoomMocks() {
+    mockDocGet.mockImplementation((path) => {
+      if (path?.startsWith('rooms/')) {
+        return Promise.resolve({
+          exists: true,
+          data: () => ({ ownerId: 10000099, name: 'Room' }),
+        });
+      }
+      return Promise.resolve({ exists: true, data: () => ({}) });
+    });
+  }
+
   it('returns requestId as a string on success', async () => {
-    // No existing pending request
+    setupRoomMocks();
     const mockChain = {
       where: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
       get: jest.fn().mockResolvedValue({ empty: true }),
     };
     db.collection.mockReturnValueOnce(mockChain);
-
-    // Room doc (for FCM - fire-and-forget)
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
 
     const app = createApp(10000001);
     const res = await request(app)
@@ -510,6 +522,7 @@ describe('POST /api/rooms/:roomId/seat-requests response contract', () => {
   });
 
   it('returns requestId when an existing pending request is updated', async () => {
+    setupRoomMocks();
     const existingReqId = 'existing-req-id';
     const mockChain = {
       where: jest.fn().mockReturnThis(),
@@ -577,6 +590,11 @@ describe('POST /api/conversations/:id/messages response contract', () => {
           exists: true,
           data: () => conversationFixture,
         });
+      }
+      // PR 4: cohort-gate user fetch — return empty doc → 'minor'
+      // matches the fail-closed caller, gate allows.
+      if (path.startsWith('users/')) {
+        return Promise.resolve({ exists: true, data: () => ({}) });
       }
       return Promise.resolve({ exists: false, data: () => null });
     });

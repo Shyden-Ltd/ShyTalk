@@ -243,23 +243,27 @@ describe('POST /api/rooms/:roomId/invites/send', () => {
     expect(mockSendFcmToTokens).not.toHaveBeenCalled();
   });
 
-  test('skips FCM when invitee does not exist', async () => {
+  test('missing invitee returns 404 (PR 4 existence-hiding) — no FCM, no invite write', async () => {
+    // Pre-PR 4 this was a silent 200 + "skip FCM" — the missing-target
+    // signal leaks invitee existence to the caller. PR 4 enforces the
+    // cross-cohort middleware's existence-hiding contract: missing
+    // target user → 404 `{ error: 'Not found' }`, no side effects.
     mockDocGet
       .mockResolvedValueOnce({
         exists: true,
         data: () => ({ name: 'Room', pendingInvites: {} }),
       })
-      .mockResolvedValueOnce({
-        exists: false,
-      });
+      .mockResolvedValueOnce({ exists: false });
 
     const app = createApp('user-A');
-    await request(app)
+    const res = await request(app)
       .post('/api/rooms/room-1/invites/send')
-      .send({ userId: 'user-B', invitedBy: 'user-A' })
-      .expect(200);
+      .send({ userId: 'user-B', invitedBy: 'user-A' });
 
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'Not found' });
     expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    expect(mockDocUpdate).not.toHaveBeenCalled();
   });
 
   test('uses "Someone" when inviter displayName is missing', async () => {
@@ -620,21 +624,25 @@ describe('POST /api/rooms/:roomId/seat-requests', () => {
     expect(mockCleanupInvalidTokens).toHaveBeenCalledWith(['bad'], 'owner-1');
   });
 
-  test('skips FCM when room has no ownerId', async () => {
+  test('rooms without ownerId are refused (404) — PR 4 cohort-resolution requirement', async () => {
+    // Pre-PR 4: silently allowed (created seat-request, skipped FCM).
+    // Post-PR 4: cohort gate requires a resolvable owner; refuse rather
+    // than fall through to the Firestore rules backstop. Code-review C3.
     mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-
     mockDocGet.mockResolvedValue({
       exists: true,
       data: () => ({ name: 'Ownerless Room' }), // No ownerId
     });
 
     const app = createApp('requester-1');
-    await request(app)
+    const res = await request(app)
       .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Bob', seatIndex: 1 })
-      .expect(200);
+      .send({ userName: 'Bob', seatIndex: 1 });
 
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'Room not found' });
     expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    expect(mockDocSet).not.toHaveBeenCalled();
   });
 
   test('skips FCM when owner has no tokens', async () => {
@@ -659,41 +667,44 @@ describe('POST /api/rooms/:roomId/seat-requests', () => {
     expect(mockSendFcmToTokens).not.toHaveBeenCalled();
   });
 
-  test('skips FCM when owner doc does not exist', async () => {
+  test('missing owner doc returns 404 (PR 4 existence-hiding)', async () => {
+    // Pre-PR 4: silently created seat-request, skipped FCM, returned
+    // 200. Post-PR 4: middleware sees null target → 404 existence-
+    // hiding. Seat-request never created.
     mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-
     mockDocGet
       .mockResolvedValueOnce({
         exists: true,
         data: () => ({ ownerId: 'owner-1', name: 'Room' }),
       })
-      .mockResolvedValueOnce({
-        exists: false,
-      });
+      .mockResolvedValueOnce({ exists: false });
 
     const app = createApp('requester-1');
-    await request(app)
+    const res = await request(app)
       .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Bob', seatIndex: 1 })
-      .expect(200);
+      .send({ userName: 'Bob', seatIndex: 1 });
 
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual({ error: 'Not found' });
     expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    expect(mockDocSet).not.toHaveBeenCalled();
   });
 
-  test('skips FCM when room doc does not exist (for FCM lookup)', async () => {
+  test('missing room doc returns 404 up front (no seat-request created)', async () => {
+    // Pre-PR 4: handler created the seat-request, then discovered no
+    // room in the FCM block and silently 200'd. Post-PR 4: room fetch
+    // is hoisted; missing room → 404 before any side effects.
     mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-
-    mockDocGet.mockResolvedValue({
-      exists: false,
-    });
+    mockDocGet.mockResolvedValue({ exists: false });
 
     const app = createApp('requester-1');
-    await request(app)
+    const res = await request(app)
       .post('/api/rooms/room-1/seat-requests')
-      .send({ userName: 'Bob', seatIndex: 1 })
-      .expect(200);
+      .send({ userName: 'Bob', seatIndex: 1 });
 
+    expect(res.status).toBe(404);
     expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    expect(mockDocSet).not.toHaveBeenCalled();
   });
 
   test('uses "a room" as roomName fallback in seat request FCM', async () => {
@@ -778,6 +789,14 @@ describe('POST /api/rooms/:roomId/seat-requests', () => {
   // --- Top-level catch block (lines 186-193) ---
 
   test('returns 500 when seat request creation throws', async () => {
+    // PR 4 hoisted the room+owner fetches to the top — pre-stage them
+    // here so execution reaches the collection lookup that throws.
+    mockDocGet
+      .mockResolvedValueOnce({
+        exists: true,
+        data: () => ({ ownerId: 'owner-1', name: 'Room' }),
+      })
+      .mockResolvedValueOnce({ exists: true, data: () => ({}) });
     mockCollectionGet.mockRejectedValue(new Error('Firestore timeout'));
 
     const app = createApp('requester-1');

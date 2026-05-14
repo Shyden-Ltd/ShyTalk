@@ -39,6 +39,7 @@ const {
   effectiveCohort,
   deriveCohortFromUser,
   isAtLeast18FromDob,
+  cohortFromClaim,
   VALID_COHORTS,
 } = require('../../src/utils/firebase-claims');
 
@@ -270,5 +271,34 @@ describe('VALID_COHORTS allow-list', () => {
     expect(VALID_COHORTS.has('minor')).toBe(true);
     expect(VALID_COHORTS.has('Adult')).toBe(false);
     expect(VALID_COHORTS.has('verified-adult')).toBe(false);
+  });
+});
+
+describe('cohortFromClaim', () => {
+  test('returns claim when it is an allow-listed cohort', () => {
+    expect(cohortFromClaim({ auth: { token: { cohort: 'adult' } } })).toBe('adult');
+    expect(cohortFromClaim({ auth: { token: { cohort: 'minor' } } })).toBe('minor');
+  });
+
+  test('fail-closed to "minor" when claim is missing', () => {
+    expect(cohortFromClaim({ auth: { token: {} } })).toBe('minor');
+    expect(cohortFromClaim({ auth: {} })).toBe('minor');
+    expect(cohortFromClaim({})).toBe('minor');
+    expect(cohortFromClaim(null)).toBe('minor');
+    expect(cohortFromClaim(undefined)).toBe('minor');
+  });
+
+  test('fail-closed to "minor" for non-string / invalid claim values', () => {
+    expect(cohortFromClaim({ auth: { token: { cohort: null } } })).toBe('minor');
+    expect(cohortFromClaim({ auth: { token: { cohort: 42 } } })).toBe('minor');
+    expect(cohortFromClaim({ auth: { token: { cohort: true } } })).toBe('minor');
+    expect(cohortFromClaim({ auth: { token: { cohort: '' } } })).toBe('minor');
+  });
+
+  test('fail-closed to "minor" for strings not in the allow-list (case-sensitive)', () => {
+    expect(cohortFromClaim({ auth: { token: { cohort: 'Adult' } } })).toBe('minor');
+    expect(cohortFromClaim({ auth: { token: { cohort: 'ADULT' } } })).toBe('minor');
+    expect(cohortFromClaim({ auth: { token: { cohort: 'verified-adult' } } })).toBe('minor');
+    expect(cohortFromClaim({ auth: { token: { cohort: 'staff' } } })).toBe('minor');
   });
 });

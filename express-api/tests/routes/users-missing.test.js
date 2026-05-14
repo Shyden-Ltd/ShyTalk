@@ -315,6 +315,8 @@ describe('POST /api/users/:uniqueId/follow', () => {
   it('returns 404 when target user does not exist', async () => {
     // Pre-fix: target-doesnt-exist caused a 500 (Firestore batch
     // update on non-existent doc). Now returns the correct 404.
+    // PR 4 changed the body to `{ error: 'Not found' }` so missing-
+    // target and cross-cohort 404s share an existence-hiding shape.
     mockDocGet.mockResolvedValueOnce({ exists: false });
     const app = createApp('uid-A', 10000001);
     const res = await request(app)
@@ -322,7 +324,7 @@ describe('POST /api/users/:uniqueId/follow', () => {
       .send({ targetUserId: 99999999 });
 
     expect(res.status).toBe(404);
-    expect(res.body.error).toMatch(/target user not found/i);
+    expect(res.body).toEqual({ error: 'Not found' });
   });
 });
 
@@ -347,6 +349,10 @@ describe('POST /api/users/:uniqueId/unfollow', () => {
   });
 
   it('returns 200 and removes follow relationship on success', async () => {
+    // PR 4: unfollow now fetches the target's user doc for the
+    // cross-cohort gate. Mock target as existing with no cohort
+    // (effectiveCohort → 'minor', matches the fail-closed caller).
+    mockDocGet.mockResolvedValueOnce({ exists: true, data: () => ({}) });
     const app = createApp('uid-A', 10000001);
     const res = await request(app)
       .post('/api/users/10000001/unfollow')
@@ -382,6 +388,10 @@ describe('POST /api/users/:uniqueId/remove-follower', () => {
   });
 
   it('returns 200 and removes follower relationship on success', async () => {
+    // PR 4: remove-follower now fetches the follower's user doc for
+    // the cross-cohort gate. Mock as existing same-cohort (no cohort
+    // field → 'minor', matches fail-closed caller).
+    mockDocGet.mockResolvedValueOnce({ exists: true, data: () => ({}) });
     const app = createApp('uid-A', 10000001);
     const res = await request(app)
       .post('/api/users/10000001/remove-follower')
