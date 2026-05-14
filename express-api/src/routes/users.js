@@ -116,6 +116,30 @@ function shapeForViewer(callerUniqueId, callerCohort, data) {
 }
 
 /**
+ * Run a same-cohort list query and respond with the shaped + filtered
+ * results. Single source of truth for both `/users/discover` and the
+ * `/users/search` displayName branch — eliminates the result-aggregation
+ * duplication those routes would otherwise share.
+ *
+ * `queryBuilder` receives the users collection ref and the caller's
+ * resolved cohort, returns a Firestore query (without `.limit()` — the
+ * helper applies `DISCOVERY_LIMIT` consistently).
+ */
+async function respondWithSameCohortUsers(req, res, queryBuilder) {
+  const callerCohort = cohortFromClaim(req);
+  const snap = await queryBuilder(db.collection('users'), callerCohort)
+    .limit(DISCOVERY_LIMIT)
+    .get();
+
+  const users = [];
+  for (const doc of snap.docs) {
+    const shaped = shapeForViewer(req.auth.uniqueId, callerCohort, doc.data());
+    if (shaped) users.push(shaped);
+  }
+  res.json({ users });
+}
+
+/**
  * Search disambiguator. A query is treated as a uniqueId lookup only
  * when it is a positive integer ≥ MIN_UNIQUE_ID. Anything else falls
  * through to the displayName-prefix branch — so e.g. "100" or "abc123"
@@ -405,20 +429,9 @@ router.post('/users/sign-in', async (req, res) => {
 
 router.get('/users/discover', async (req, res) => {
   try {
-    const callerCohort = cohortFromClaim(req);
-    const snap = await db
-      .collection('users')
-      .where('cohort', '==', callerCohort)
-      .orderBy('lastSeenAt', 'desc')
-      .limit(DISCOVERY_LIMIT)
-      .get();
-
-    const users = [];
-    for (const doc of snap.docs) {
-      const shaped = shapeForViewer(req.auth.uniqueId, callerCohort, doc.data());
-      if (shaped) users.push(shaped);
-    }
-    res.json({ users });
+    await respondWithSameCohortUsers(req, res, (col, cohort) =>
+      col.where('cohort', '==', cohort).orderBy('lastSeenAt', 'desc'),
+    );
   } catch (err) {
     log.error('users', 'GET /users/discover failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
@@ -475,21 +488,12 @@ router.get('/users/search', async (req, res) => {
     }
 
     // displayName prefix branch.
-    const callerCohort = cohortFromClaim(req);
-    const snap = await db
-      .collection('users')
-      .where('cohort', '==', callerCohort)
-      .where('displayName', '>=', q)
-      .where('displayName', '<', q + PREFIX_UPPER_SENTINEL)
-      .limit(DISCOVERY_LIMIT)
-      .get();
-
-    const users = [];
-    for (const doc of snap.docs) {
-      const shaped = shapeForViewer(req.auth.uniqueId, callerCohort, doc.data());
-      if (shaped) users.push(shaped);
-    }
-    res.json({ users });
+    await respondWithSameCohortUsers(req, res, (col, cohort) =>
+      col
+        .where('cohort', '==', cohort)
+        .where('displayName', '>=', q)
+        .where('displayName', '<', q + PREFIX_UPPER_SENTINEL),
+    );
   } catch (err) {
     log.error('users', 'GET /users/search failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
