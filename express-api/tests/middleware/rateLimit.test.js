@@ -65,6 +65,20 @@ function createSensitiveApp() {
   return app;
 }
 
+function createAdminCohortApp(authToken) {
+  const { adminCohortLimiter } = freshLimiters();
+  const app = express();
+  if (authToken) {
+    app.use((req, _res, next) => {
+      req.auth = { uid: 'caller-1', token: authToken };
+      next();
+    });
+  }
+  app.use(adminCohortLimiter);
+  app.post('/cohort-override', (req, res) => res.json({ success: true }));
+  return app;
+}
+
 // ─── Tests ───────────────────────────────────────────────────────
 
 describe('generalLimiter', () => {
@@ -174,6 +188,61 @@ describe('sensitiveLimiter', () => {
     const app = createSensitiveApp();
     const res = await request(app).post('/report').expect(200);
 
+    expect(res.headers['ratelimit-policy']).toBeDefined();
+    expect(res.headers['ratelimit']).toBeDefined();
+  });
+});
+
+describe('adminCohortLimiter', () => {
+  // Security review HIGH: cohort-override must NOT honour the admin-skip
+  // that generalLimiter/sensitiveLimiter both grant. A compromised admin
+  // token otherwise loops the route, polluting adminAuditLog and burning
+  // Firestore write quota. These tests are the regression guard.
+
+  test('allows requests under the 5/min cap', async () => {
+    const app = createAdminCohortApp({ admin: true });
+    const res = await request(app).post('/cohort-override').expect(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  test('returns 429 when admin token exceeds the cap (no admin-skip)', async () => {
+    const app = createAdminCohortApp({ admin: true });
+
+    // Burn the 5/min budget — admin token should NOT skip the limiter
+    await Promise.all(Array.from({ length: 5 }, () => request(app).post('/cohort-override')));
+
+    const res = await request(app).post('/cohort-override').expect(429);
+    expect(res.body.error).toBe('Rate limit exceeded for cohort override');
+  });
+
+  test('non-admin token also hits 429 after 5 (limiter applies uniformly)', async () => {
+    const app = createAdminCohortApp({ admin: false });
+
+    await Promise.all(Array.from({ length: 5 }, () => request(app).post('/cohort-override')));
+
+    await request(app).post('/cohort-override').expect(429);
+  });
+
+  test('logs WARN with caller uid when limit is hit', async () => {
+    const app = createAdminCohortApp({ admin: true });
+
+    await Promise.all(Array.from({ length: 5 }, () => request(app).post('/cohort-override')));
+
+    await request(app).post('/cohort-override').expect(429);
+
+    expect(freshLog().warn).toHaveBeenCalledWith(
+      'rateLimit',
+      'Cohort override rate limit hit',
+      expect.objectContaining({
+        uid: 'caller-1',
+        path: '/cohort-override',
+      }),
+    );
+  });
+
+  test('returns draft-7 rate limit headers', async () => {
+    const app = createAdminCohortApp({ admin: true });
+    const res = await request(app).post('/cohort-override').expect(200);
     expect(res.headers['ratelimit-policy']).toBeDefined();
     expect(res.headers['ratelimit']).toBeDefined();
   });

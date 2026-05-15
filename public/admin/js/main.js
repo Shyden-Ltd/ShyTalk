@@ -88,6 +88,7 @@ const _tabPaths = {
   'starting-screens': '/admin/js/tabs/starting-screens.js',
   suggestions: '/admin/js/tabs/suggestions.js',
   'audit-log': '/admin/js/tabs/audit-log.js',
+  'age-segregation': '/admin/js/tabs/age-segregation.js',
 };
 // Load all tab modules in parallel and register them once loaded.
 // Using Promise.allSettled ensures all modules are available before
@@ -173,7 +174,7 @@ async function initTabModule(tabId) {
 const TAB_IDS = [
   'users', 'appeals', 'reports', 'gifts', 'economy', 'maintenance',
   'monitor', 'banners', 'funfacts', 'backups', 'logs', 'devices',
-  'starting-screens', 'suggestions', 'audit-log',
+  'starting-screens', 'suggestions', 'audit-log', 'age-segregation',
 ];
 
 // Panel ID for each tab (maps tab ID → DOM panel element ID)
@@ -193,6 +194,7 @@ const PANEL_MAP = {
   'starting-screens': 'starting-screens-panel',
   suggestions:        'suggestions-panel',
   'audit-log':        'audit-log-panel',
+  'age-segregation':  'age-segregation-panel',
 };
 
 let currentTab = 'users';

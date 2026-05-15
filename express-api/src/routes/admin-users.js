@@ -25,7 +25,7 @@
 
 const router = require('express').Router();
 const { db, auth, FieldValue } = require('../utils/firebase');
-const { mintClaimsMerging } = require('../utils/firebase-claims');
+const { mintClaimsMerging, VALID_COHORTS } = require('../utils/firebase-claims');
 const { requireAdmin, clearSuspensionCache, clearAdminClaimCache } = require('../middleware/auth');
 const { generateId, now } = require('../utils/helpers');
 const { computeDisplayScore } = require('../utils/gcs');
@@ -735,6 +735,213 @@ router.post('/user/:uniqueId/change-role', async (req, res) => {
       error: err.message,
     });
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════
+// COHORT OVERRIDE + STATS (UK OSA #17 PR 13)
+// ══════════════════════════════════════════════════════════════
+
+const COHORT_OVERRIDE_REASON_MAX = 500;
+
+// Target-account gate. The override is the admin's escape hatch for
+// staff/MC/test accounts whose recorded DOB is a placeholder or whose
+// segregation cohort needs manual pinning. Permitting it on a regular
+// MEMBER would let an admin (or a compromised admin session) launder a
+// minor account into the adult cohort and so circumvent the OSA gate
+// for ordinary users — the very threat segregation is meant to stop.
+// The predicate accepts non-MEMBER `userType` OR `isAdmin === true`;
+// anything else (including missing/undefined userType) is treated as a
+// regular member and rejected with a typed 422.
+function isOverrideAllowedTarget(user) {
+  if (!user) return false;
+  if (user.isAdmin === true) return true;
+  const t = user.userType ?? user.user_type;
+  return typeof t === 'string' && t.length > 0 && t !== 'MEMBER';
+}
+
+router.post('/user/:uniqueId/cohort-override', async (req, res) => {
+  try {
+    if (await requireAdmin(req, res)) return;
+
+    const { override, reason } = req.body || {};
+
+    if (override !== null && !VALID_COHORTS.has(override)) {
+      return res
+        .status(400)
+        .json({ error: "Invalid override. Must be 'adult', 'minor', or null." });
+    }
+    if (typeof reason !== 'string' || reason.trim().length === 0) {
+      return res.status(400).json({ error: 'reason is required.' });
+    }
+    if (reason.length > COHORT_OVERRIDE_REASON_MAX) {
+      return res
+        .status(400)
+        .json({ error: `reason exceeds max length of ${COHORT_OVERRIDE_REASON_MAX}.` });
+    }
+
+    const uniqueId = req.params.uniqueId;
+    const userRef = db.doc(`users/${uniqueId}`);
+
+    let userFirebaseUid = null;
+    let previousOverride = null;
+    let effectiveCohortAfter = null;
+
+    try {
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(userRef);
+        if (!snap.exists) {
+          const err = new Error('User not found');
+          err.code = 'NOT_FOUND';
+          throw err;
+        }
+        const user = snap.data();
+
+        if (!isOverrideAllowedTarget(user)) {
+          const err = new Error('Cannot override regular user');
+          err.code = 'CANNOT_OVERRIDE_REGULAR_USER';
+          throw err;
+        }
+
+        userFirebaseUid = user.firebaseUid || null;
+        previousOverride = user.cohortOverride ?? null;
+
+        if (override !== null) {
+          effectiveCohortAfter = override;
+        } else if (typeof user.cohort === 'string' && VALID_COHORTS.has(user.cohort)) {
+          effectiveCohortAfter = user.cohort;
+        } else {
+          // Fail-closed to the most restrictive cohort when DOB-derived
+          // cohort is also missing/invalid; the next pm-lock-check sign-in
+          // will recompute correctly from DOB.
+          effectiveCohortAfter = 'minor';
+        }
+
+        // Same-transaction commit: field update + audit row. If the audit
+        // write throws, the field update is rolled back by the Firestore
+        // transaction — the regulatory contract that every override has a
+        // paper trail before it becomes observable. Both rows share the
+        // same `ts` so an auditor can join the user-doc update timestamp
+        // to the audit-log row's createdAt exactly (review I2).
+        const ts = now();
+        tx.update(userRef, {
+          cohortOverride: override === null ? FieldValue.delete() : override,
+          cohortOverrideUpdatedAt: ts,
+        });
+        tx.set(db.doc(`adminAuditLog/${generateId()}`), {
+          adminId: req.auth.uid,
+          action: override === null ? 'COHORT_OVERRIDE_CLEAR' : 'COHORT_OVERRIDE_SET',
+          targetUserId: uniqueId,
+          override,
+          previousOverride,
+          reason: reason.trim(),
+          createdAt: ts,
+        });
+      });
+    } catch (err) {
+      if (err && err.code === 'NOT_FOUND') {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      if (err && err.code === 'CANNOT_OVERRIDE_REGULAR_USER') {
+        return res.status(422).json({
+          error: {
+            code: 'CANNOT_OVERRIDE_REGULAR_USER',
+            message: 'Cohort override can only be applied to staff or admin accounts.',
+          },
+        });
+      }
+      throw err;
+    }
+
+    // Claim mint runs AFTER the transaction. A failure here is
+    // recoverable: the override is in the user doc, the next sign-in's
+    // pm-lock-check will re-mint the claim with the right cohort. We
+    // surface the failure as `forceTokenRefresh: false` so the admin UI
+    // can show a partial-failure banner instead of misleading the
+    // operator into thinking the user is already on the new cohort.
+    let forceTokenRefresh = false;
+    if (userFirebaseUid) {
+      try {
+        await mintClaimsMerging(userFirebaseUid, { cohort: effectiveCohortAfter });
+        forceTokenRefresh = true;
+      } catch (mintErr) {
+        // Real mint failure — Firebase Auth side rejected the claim update.
+        // Distinct `reason: 'mint_error'` so SIEM rules can page on this without
+        // also firing on the benign `unbackfilled` path below.
+        log.warn('admin-users', 'cohort-override claim mint failed', {
+          uniqueId,
+          reason: 'mint_error',
+          error: mintErr.message,
+        });
+      }
+    } else {
+      // Legitimately possible: a user doc created before the firebaseUid
+      // backfill won't have the field. The override doc-write succeeded;
+      // the user will pick up the new cohort claim on their next sign-in's
+      // pm-lock-check call. Logged at WARN so ops can see the rate of
+      // unbackfilled users hitting this path (review C1), but with a
+      // distinct `reason: 'unbackfilled'` discriminator so SIEM rules
+      // can differentiate this expected condition from a real mint failure.
+      log.warn('admin-users', 'cohort-override skipped claim mint (missing firebaseUid)', {
+        uniqueId,
+        reason: 'unbackfilled',
+      });
+    }
+
+    log.info('admin-users', 'cohortOverride set', {
+      adminId: req.auth.uid,
+      targetUniqueId: uniqueId,
+      override,
+      previousOverride,
+    });
+
+    return res.json({
+      success: true,
+      forceTokenRefresh,
+      effectiveCohort: effectiveCohortAfter,
+    });
+  } catch (err) {
+    log.error('admin-users', 'cohort-override failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Aggregated cohort distribution for the admin panel dashboard.
+// Uses count() aggregation queries so Firestore read cost is flat (one
+// billable read per aggregation, regardless of user-collection size).
+router.get('/admin/cohort-stats', async (req, res) => {
+  try {
+    if (await requireAdmin(req, res)) return;
+
+    const users = db.collection('users');
+    const [adultSnap, minorSnap, ovAdultSnap, ovMinorSnap, totalSnap] = await Promise.all([
+      users.where('cohort', '==', 'adult').count().get(),
+      users.where('cohort', '==', 'minor').count().get(),
+      users.where('cohortOverride', '==', 'adult').count().get(),
+      users.where('cohortOverride', '==', 'minor').count().get(),
+      users.count().get(),
+    ]);
+
+    const adult = adultSnap.data().count || 0;
+    const minor = minorSnap.data().count || 0;
+    const overrideAdult = ovAdultSnap.data().count || 0;
+    const overrideMinor = ovMinorSnap.data().count || 0;
+    const total = totalSnap.data().count || 0;
+    // Defence against transient data drift where the count-by-cohort
+    // queries see a different sub-set than the total count (e.g. a doc
+    // briefly without a cohort field). Clamp to >= 0 so the admin UI
+    // never renders a negative "missing" count.
+    const missing = Math.max(0, total - adult - minor);
+
+    return res.json({
+      counts: { adult, minor, overrideAdult, overrideMinor, total, missing },
+    });
+  } catch (err) {
+    log.error('admin-users', 'cohort-stats failed', { error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 

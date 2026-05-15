@@ -67,6 +67,7 @@ test.describe("Admin Panel", () => {
       "tab-logs",
       "tab-devices",
       "tab-starting-screens",
+      "tab-age-segregation",
     ];
     for (const tabId of expectedTabs) {
       const tab = page.locator(`#${tabId}`);

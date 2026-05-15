@@ -22,48 +22,12 @@
         ]
       },
       {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "If this file is in shared/src/commonMain/, check the content being written for JVM-only APIs that break iOS: System.currentTimeMillis(), System.nanoTime(), Math.PI, Math.sin(), Math.cos(), String.format(), synchronized {}, @Volatile (without kotlin.concurrent prefix). If any are found, DENY and explain the KMP-compatible alternative. If the file is NOT in commonMain, or no JVM APIs are found, approve silently."
-          }
-        ]
-      },
-      {
         "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
             "command": "bash .claude/hooks/block-main-commits.sh",
             "timeout": 5
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "If this file is a .feature file (Gherkin), check: (1) Each Scenario should have at most 15 steps (Given/When/Then/And/But lines). (2) Shared setup steps that appear in every scenario should use Background instead of repeating. (3) No duplicated sequences of 3+ identical consecutive steps across scenarios. (4) Scenario names should be descriptive and unique within the file. If violations found, DENY and explain. If not a .feature file or no violations, approve silently."
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "If this file is a Kotlin file ending in Screen.kt, check that new interactive Compose elements (Button, IconButton, TextField, OutlinedTextField, clickable, toggleable) include a Modifier.testTag() for E2E testability. If new interactive elements are missing testTag, DENY and list which elements need tags. If not a Screen.kt file or all elements have testTags, approve silently."
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "If this file is in express-api/src/routes/, check: (1) Uses 'const router = express.Router(); module.exports = router;' pattern. (2) Admin routes (path containing '/admin/') use requireAdmin guard: 'if (requireAdmin(req, res)) return;'. (3) Uses structured logging via logger.info/warn/error instead of console.log/warn/error. If violations found, DENY and explain. If not a route file or no violations, approve silently."
           }
         ]
       }

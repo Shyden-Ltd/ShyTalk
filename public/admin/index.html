@@ -2917,6 +2917,41 @@
         /* --- Suggestions Panel --- */
         #suggestions-panel { display: none; }
         #suggestions-panel.visible { display: block; }
+        #age-segregation-panel { display: none; }
+        #age-segregation-panel.visible { display: block; }
+        #age-seg-confirm-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+        #age-seg-confirm-modal .age-seg-confirm-dialog {
+            background: var(--surface);
+            border-radius: 8px;
+            padding: 20px;
+            max-width: 460px;
+            width: 90%;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+        #age-seg-result[data-status="success"] {
+            background: rgba(40, 200, 120, 0.12);
+            border: 1px solid #28c878;
+            color: #28c878;
+            padding: 10px 14px;
+            border-radius: 6px;
+            margin-top: 12px;
+        }
+        #age-seg-result[data-status="error"] {
+            background: rgba(231, 76, 60, 0.12);
+            border: 1px solid #e74c3c;
+            color: #e74c3c;
+            padding: 10px 14px;
+            border-radius: 6px;
+            margin-top: 12px;
+        }
 
         .suggestions-status-bar {
           display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: center;
@@ -3135,6 +3170,7 @@
             <button class="tab-btn" id="tab-starting-screens" data-i18n="tab_starting_screens">Starting Screens</button>
             <button class="tab-btn" id="tab-suggestions" data-i18n="tab_suggestions" aria-label="Suggestions">Suggestions<span class="tab-badge" id="suggestions-badge" aria-hidden="true" style="display:none;background:var(--danger);color:#fff;font-size:11px;padding:1px 6px;border-radius:99px;margin-left:6px;">0</span></button>
             <button class="tab-btn" id="tab-audit-log" data-i18n="tab_audit_log">Audit Log</button>
+            <button class="tab-btn" id="tab-age-segregation" data-i18n="tab_age_segregation">Age Segregation</button>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
             <button class="alert-bell" id="alert-bell" title="Alerts" aria-label="Alerts">&#128276;<span class="alert-bell-badge" id="alert-bell-badge" style="display:none;">0</span></button>
@@ -5107,6 +5143,86 @@
             <div id="audit-log-empty" style="display:none;padding:24px;text-align:center;color:var(--text2);font-size:14px;">No audit log entries.</div>
             <button id="audit-log-load-more" style="display:none;margin-top:12px;padding:8px 16px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px;font-size:13px;cursor:pointer;">Load more</button>
         </div><!-- end #audit-log-panel -->
+
+        <!-- Age Segregation Panel (UK OSA #17 PR 13) -->
+        <div id="age-segregation-panel">
+            <h2 style="margin-bottom: 8px;" data-i18n="age_seg_title">Age Segregation</h2>
+            <p style="color:var(--text2);font-size:13px;margin-bottom:16px;" data-i18n="age_seg_subtitle">Cohort distribution and override controls for UK OSA compliance.</p>
+
+            <!-- Stats section -->
+            <section data-testid="ageSeg_stats" style="padding:16px;background:var(--surface2);border-radius:8px;margin-bottom:20px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                    <h3 style="margin:0;" data-i18n="age_seg_stats_heading">Cohort Distribution</h3>
+                    <button id="age-seg-refresh-btn" data-i18n="age_seg_refresh">Refresh</button>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">
+                    <div>
+                        <div style="font-size:12px;color:var(--text2);" data-i18n="age_seg_adult">Adult</div>
+                        <div data-testid="ageSeg_stat_adult" id="age-seg-stat-adult" style="font-size:22px;font-weight:700;">—</div>
+                    </div>
+                    <div>
+                        <div style="font-size:12px;color:var(--text2);" data-i18n="age_seg_minor">Minor</div>
+                        <div data-testid="ageSeg_stat_minor" id="age-seg-stat-minor" style="font-size:22px;font-weight:700;">—</div>
+                    </div>
+                    <div>
+                        <div style="font-size:12px;color:var(--text2);" data-i18n="age_seg_missing">Missing cohort</div>
+                        <div data-testid="ageSeg_stat_missing" id="age-seg-stat-missing" style="font-size:22px;font-weight:700;">—</div>
+                    </div>
+                    <div>
+                        <div style="font-size:12px;color:var(--text2);" data-i18n="age_seg_total">Total users</div>
+                        <div data-testid="ageSeg_stat_total" id="age-seg-stat-total" style="font-size:22px;font-weight:700;">—</div>
+                    </div>
+                    <div>
+                        <div style="font-size:12px;color:var(--text2);" data-i18n="age_seg_override_adult">Override → adult</div>
+                        <div data-testid="ageSeg_stat_overrideAdult" id="age-seg-stat-override-adult" style="font-size:22px;font-weight:700;">—</div>
+                    </div>
+                    <div>
+                        <div style="font-size:12px;color:var(--text2);" data-i18n="age_seg_override_minor">Override → minor</div>
+                        <div data-testid="ageSeg_stat_overrideMinor" id="age-seg-stat-override-minor" style="font-size:22px;font-weight:700;">—</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Override form -->
+            <section data-testid="ageSeg_override" style="padding:16px;background:var(--surface2);border-radius:8px;">
+                <h3 style="margin:0 0 12px 0;" data-i18n="age_seg_override_heading">Cohort Override</h3>
+                <p style="font-size:13px;color:var(--text2);margin-bottom:14px;" data-i18n="age_seg_override_note">Overrides bypass the DOB-derived cohort. Only allowed on staff or admin accounts. Every change is audit-logged with the supplied reason.</p>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:12px;">
+                    <div>
+                        <label for="age-seg-target-uid" style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;" data-i18n="age_seg_target_label">Target user ID</label>
+                        <input type="number" id="age-seg-target-uid" style="width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;">
+                    </div>
+                    <div>
+                        <label for="age-seg-override-value" style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;" data-i18n="age_seg_override_value_label">New cohort</label>
+                        <select id="age-seg-override-value" style="width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;min-height:36px;">
+                            <option value="" data-i18n="age_seg_pick">— pick —</option>
+                            <option value="adult" data-i18n="age_seg_adult">Adult</option>
+                            <option value="minor" data-i18n="age_seg_minor">Minor</option>
+                            <option value="__clear__" data-i18n="age_seg_clear">Clear override</option>
+                        </select>
+                    </div>
+                </div>
+                <div style="margin-bottom:12px;">
+                    <label for="age-seg-reason" style="display:block;font-size:12px;color:var(--text2);margin-bottom:4px;" data-i18n="age_seg_reason_label">Reason (required, ≤500 chars)</label>
+                    <textarea id="age-seg-reason" rows="3" maxlength="500" style="width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-size:13px;resize:vertical;"></textarea>
+                </div>
+                <button id="age-seg-apply-btn" disabled data-i18n="age_seg_apply">Apply Override</button>
+                <div data-testid="ageSeg_result" id="age-seg-result" role="status" style="display:none;"></div>
+            </section>
+
+            <!-- Confirm modal -->
+            <div data-testid="ageSeg_confirmModal" id="age-seg-confirm-modal">
+                <div class="age-seg-confirm-dialog">
+                    <h3 style="margin:0 0 12px 0;" data-i18n="age_seg_confirm_title">Confirm cohort override</h3>
+                    <p data-i18n="age_seg_confirm_body">This change is audit-logged and may force a token refresh on the target user. Review the details before confirming.</p>
+                    <div id="age-seg-confirm-summary" style="font-family:monospace;font-size:13px;padding:10px;background:var(--surface2);border-radius:4px;margin:12px 0;"></div>
+                    <div style="display:flex;gap:8px;justify-content:flex-end;">
+                        <button data-testid="ageSeg_confirmCancel" id="age-seg-confirm-cancel" data-i18n="age_seg_cancel">Cancel</button>
+                        <button data-testid="ageSeg_confirmOk" id="age-seg-confirm-ok" data-i18n="age_seg_confirm_ok">Confirm</button>
+                    </div>
+                </div>
+            </div>
+        </div><!-- end #age-segregation-panel -->
 
         <!-- Fun Fact Add/Edit Dialog -->
         <div id="funfact-dialog-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">

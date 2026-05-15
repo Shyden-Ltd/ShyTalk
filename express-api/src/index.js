@@ -5,7 +5,12 @@ const express = require('express');
 const helmet = require('helmet');
 const corsMiddleware = require('./middleware/cors');
 const { authMiddleware } = require('./middleware/auth');
-const { generalLimiter, writeLimiter, sensitiveLimiter } = require('./middleware/rateLimit');
+const {
+  generalLimiter,
+  writeLimiter,
+  sensitiveLimiter,
+  adminCohortLimiter,
+} = require('./middleware/rateLimit');
 const portalRoutes = require('./routes/portal');
 const { portalLimiter, recoveryLimiter } = require('./middleware/rateLimit');
 const { startCronJobs } = require('./cron');
@@ -173,6 +178,12 @@ app.use('/api/users/:uniqueId/pm-lock-check', sensitiveLimiter);
 // a malicious client from spamming submissions or harvesting upload
 // URLs.
 app.use('/api/age-verification', sensitiveLimiter);
+
+// Cohort override — caps an admin (NO admin skip) at 5/min. A compromised
+// admin token can otherwise loop the route, polluting adminAuditLog,
+// burning Firestore write quota, and triggering a setCustomUserClaims
+// storm. 5/min is well above legitimate manual-moderation cadence.
+app.use('/api/user/:uniqueId/cohort-override', adminCohortLimiter);
 
 // Portal rate limiter (no admin exemption) — skip for recovery routes
 app.use('/api/portal', (req, res, next) => {

@@ -74,6 +74,92 @@ describe('apiCall', () => {
     await expect(apiCall('GET', '/api/broken')).rejects.toThrow('HTTP 500');
   });
 
+  test('5c. attaches status (but not body) to thrown error for string-error responses', async () => {
+    mockFetchError(400, { error: 'Invalid input' });
+    try {
+      await apiCall('POST', '/api/users', { name: '' });
+      throw new Error('expected apiCall to throw');
+    } catch (err) {
+      expect(err.message).toBe('Invalid input');
+      expect(err.status).toBe(400);
+      // Narrow contract: full body is NOT attached for ad-hoc string errors —
+      // limits blast radius if a caller ever logs `err.body` to a tracker.
+      expect(err.body).toBeUndefined();
+      // No typed code → err.code must be absent
+      expect(err.code).toBeUndefined();
+    }
+  });
+
+  test('5d. extracts message and whitelisted code from nested error object (typed-error route)', async () => {
+    const wireBody = {
+      error: {
+        code: 'CANNOT_OVERRIDE_REGULAR_USER',
+        message: 'Cohort override can only be applied to staff or admin accounts.',
+      },
+    };
+    mockFetchError(422, wireBody);
+    try {
+      await apiCall('POST', '/api/admin/users/u1/cohort-override', { cohort: 'minor' });
+      throw new Error('expected apiCall to throw');
+    } catch (err) {
+      // Message is extracted from nested .error.message — NOT stringified to "[object Object]"
+      expect(err.message).toBe('Cohort override can only be applied to staff or admin accounts.');
+      expect(err.message).not.toContain('[object Object]');
+      // Caller branches on the whitelisted err.code field, not err.body traversal
+      expect(err.status).toBe(422);
+      expect(err.code).toBe('CANNOT_OVERRIDE_REGULAR_USER');
+      // Full body intentionally NOT attached — callers use the whitelisted fields
+      expect(err.body).toBeUndefined();
+    }
+  });
+
+  test('5e. falls back to HTTP status when nested error has neither string nor message field', async () => {
+    // Edge case: error is an object but missing both string fallback and .message
+    mockFetchError(500, { error: { code: 'UNKNOWN_FAILURE' } });
+    try {
+      await apiCall('GET', '/api/broken');
+      throw new Error('expected apiCall to throw');
+    } catch (err) {
+      expect(err.message).toBe('HTTP 500');
+      expect(err.status).toBe(500);
+      // Whitelisted code still surfaces even when message is absent
+      expect(err.code).toBe('UNKNOWN_FAILURE');
+      expect(err.body).toBeUndefined();
+    }
+  });
+
+  test('5f. handles null/non-object body without crashing on field extraction', async () => {
+    // Defensive: server could return `null` JSON (unusual but valid)
+    global.fetch.mockResolvedValue({
+      ok: false,
+      status: 502,
+      headers: { get: () => 'application/json' },
+      json: () => Promise.resolve(null),
+    });
+    try {
+      await apiCall('GET', '/api/upstream');
+      throw new Error('expected apiCall to throw');
+    } catch (err) {
+      expect(err.message).toBe('HTTP 502');
+      expect(err.status).toBe(502);
+      expect(err.code).toBeUndefined();
+      expect(err.body).toBeUndefined();
+    }
+  });
+
+  test('5g. ignores non-string code on typed error (avoids leaking arbitrary types via err.code)', async () => {
+    // Hostile/buggy server returns { error: { code: <object> } } — extraction must reject non-strings
+    mockFetchError(500, { error: { code: { evil: 'payload' }, message: 'boom' } });
+    try {
+      await apiCall('GET', '/api/edge');
+      throw new Error('expected apiCall to throw');
+    } catch (err) {
+      expect(err.message).toBe('boom');
+      expect(err.status).toBe(500);
+      expect(err.code).toBeUndefined();
+    }
+  });
+
   test('6. throws when response content-type is not JSON', async () => {
     global.fetch.mockResolvedValue({
       ok: true,

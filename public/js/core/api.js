@@ -36,6 +36,25 @@ export async function apiCall(method, path, body, { signal, skipTabAbort } = {})
     throw new Error(`HTTP ${res.status}: server returned non-JSON response`);
   }
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  if (!res.ok) {
+    // Whitelist specific structured fields onto the thrown Error so callers
+    // can branch on typed-error codes (e.g. `err.code === 'CANNOT_OVERRIDE_REGULAR_USER'`)
+    // without exposing the whole server response. Attaching the full body would
+    // broaden the blast radius of any future code that logs `err.body` to a
+    // third-party tracker or renders it into the DOM. `Error`'s constructor
+    // stringifies object args to "[object Object]" so we extract fields explicitly.
+    const errorField = data && data.error;
+    const isTypedError = errorField && typeof errorField === 'object';
+    const message =
+      (typeof errorField === 'string' && errorField) ||
+      (isTypedError && typeof errorField.message === 'string' && errorField.message) ||
+      `HTTP ${res.status}`;
+    const err = new Error(message);
+    err.status = res.status;
+    if (isTypedError && typeof errorField.code === 'string') {
+      err.code = errorField.code;
+    }
+    throw err;
+  }
   return data;
 }

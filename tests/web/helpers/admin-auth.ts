@@ -53,7 +53,7 @@ const TAB_PANEL_MAP: Record<string, string> = {
   Monitor: 'monitor-panel', Banners: 'banners-panel', 'Fun Facts': 'funfacts-panel',
   Backups: 'backups-panel', Logs: 'logs-panel', Devices: 'devices-panel',
   'Starting Screens': 'starting-screens-panel', Suggestions: 'suggestions-panel',
-  'Audit Log': 'audit-log-panel',
+  'Audit Log': 'audit-log-panel', 'Age Segregation': 'age-segregation-panel',
 };
 
 export async function navigateToTab(page: Page, tabName: string): Promise<void> {

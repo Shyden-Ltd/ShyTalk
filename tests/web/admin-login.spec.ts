@@ -76,7 +76,7 @@ test.describe('Admin Login Flow', () => {
     await expect(page.locator('#dashboard-screen')).toBeVisible({ timeout: 15_000 });
   });
 
-  test('all 12 tab buttons visible after login', async ({ page }) => {
+  test('all 13 tab buttons visible after login', async ({ page }) => {
     test.skip(!ADMIN_EMAIL, 'ADMIN_EMAIL env var not set');
     await loginWith(page, ADMIN_EMAIL, ADMIN_PASSWORD);
     await expect(page.locator('#dashboard-screen')).toBeVisible({ timeout: 30_000 });
@@ -85,6 +85,7 @@ test.describe('Admin Login Flow', () => {
       'Users', 'Appeals', 'Reports', 'Gifts',
       'Economy', 'Maintenance', 'Spin Monitor', 'Banners',
       'Fun Facts', 'Backups', 'Logs', 'Devices',
+      'Age Segregation',
     ];
     for (const tabName of expectedTabs) {
       await expect(page.locator('.tab-bar .tab-btn', { hasText: tabName })).toBeVisible();

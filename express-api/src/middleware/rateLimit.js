@@ -71,6 +71,29 @@ const sensitiveLimiter = rateLimit({
   },
 });
 
+// Cohort override: 5 per minute per admin — NO admin skip. Cohort changes
+// drive custom-claim re-mint AND a transactional audit-log write; an admin
+// loop here pollutes adminAuditLog and burns Firestore write quota. Caps the
+// blast radius of a compromised/rogue admin token to ~300 ops/hour, which
+// is well above legitimate moderation volume (manual case-by-case review).
+const adminCohortLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  keyGenerator,
+  validate: false,
+  skip: () => isNonProd(),
+  handler: (req, res) => {
+    log.warn('rateLimit', 'Cohort override rate limit hit', {
+      uid: req.auth?.uid,
+      ip: req.ip,
+      path: req.originalUrl,
+    });
+    res.status(429).json({ error: 'Rate limit exceeded for cohort override' });
+  },
+});
+
 // Portal routes: 60 per minute per user — NO admin skip (prevents
 // admin tokens from flooding checkRevoked calls via authMiddlewareStrict)
 const portalLimiter = rateLimit({
@@ -161,6 +184,7 @@ module.exports = {
   generalLimiter,
   writeLimiter,
   sensitiveLimiter,
+  adminCohortLimiter,
   portalLimiter,
   recoveryLimiter,
   // Test-only export so suite can pin LRU eviction without standing up the
