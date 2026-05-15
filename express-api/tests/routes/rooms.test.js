@@ -194,6 +194,7 @@ describe('POST /api/rooms/:roomId/invites/send', () => {
         invitedBy: 'user-A',
         inviterName: 'Alice',
       }),
+      { senderUniqueId: 'user-A', recipientUniqueId: 'user-B' },
     );
   });
 
@@ -292,6 +293,7 @@ describe('POST /api/rooms/:roomId/invites/send', () => {
     expect(mockSendFcmToTokens).toHaveBeenCalledWith(
       ['tok-1'],
       expect.objectContaining({ inviterName: 'Someone' }),
+      { senderUniqueId: 'user-A', recipientUniqueId: 'user-B' },
     );
   });
 
@@ -320,6 +322,7 @@ describe('POST /api/rooms/:roomId/invites/send', () => {
     expect(mockSendFcmToTokens).toHaveBeenCalledWith(
       ['tok-1'],
       expect.objectContaining({ inviterName: 'Someone' }),
+      { senderUniqueId: 'user-A', recipientUniqueId: 'user-B' },
     );
   });
 
@@ -349,6 +352,7 @@ describe('POST /api/rooms/:roomId/invites/send', () => {
     expect(mockSendFcmToTokens).toHaveBeenCalledWith(
       ['tok-1'],
       expect.objectContaining({ roomName: 'a room' }),
+      { senderUniqueId: 'user-A', recipientUniqueId: 'user-B' },
     );
   });
 
@@ -597,6 +601,7 @@ describe('POST /api/rooms/:roomId/seat-requests', () => {
         requesterName: 'Bob',
         seatIndex: '3',
       }),
+      { senderUniqueId: 'requester-1', recipientUniqueId: 'owner-1' },
     );
   });
 
@@ -731,6 +736,7 @@ describe('POST /api/rooms/:roomId/seat-requests', () => {
     expect(mockSendFcmToTokens).toHaveBeenCalledWith(
       ['tok-1'],
       expect.objectContaining({ roomName: 'a room' }),
+      { senderUniqueId: 'requester-1', recipientUniqueId: 'owner-1' },
     );
   });
 
@@ -755,6 +761,7 @@ describe('POST /api/rooms/:roomId/seat-requests', () => {
     expect(mockSendFcmToTokens).toHaveBeenCalledWith(
       ['tok-1'],
       expect.objectContaining({ requesterName: '' }),
+      { senderUniqueId: 'requester-1', recipientUniqueId: 'owner-1' },
     );
   });
 

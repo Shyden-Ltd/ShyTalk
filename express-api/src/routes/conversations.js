@@ -178,7 +178,10 @@ async function sendMessageNotifications(
         showPreview: String(showPreview),
       };
 
-      const invalidTokens = await sendFcmToTokens(user.fcmTokens, data);
+      const invalidTokens = await sendFcmToTokens(user.fcmTokens, data, {
+        senderUniqueId: senderId,
+        recipientUniqueId: recipientId,
+      });
       if (invalidTokens.length > 0) {
         await cleanupInvalidTokens(invalidTokens, recipientId);
       }

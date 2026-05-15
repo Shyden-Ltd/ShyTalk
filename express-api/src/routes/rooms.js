@@ -77,13 +77,17 @@ router.post('/rooms/:roomId/invites/send', async (req, res) => {
           ? inviterSnap.data().displayName || 'Someone'
           : 'Someone';
 
-        const invalidTokens = await sendFcmToTokens(tokens, {
-          type: 'ROOM_INVITE',
-          roomId,
-          roomName,
-          invitedBy: body.invitedBy,
-          inviterName,
-        });
+        const invalidTokens = await sendFcmToTokens(
+          tokens,
+          {
+            type: 'ROOM_INVITE',
+            roomId,
+            roomName,
+            invitedBy: body.invitedBy,
+            inviterName,
+          },
+          { senderUniqueId: body.invitedBy, recipientUniqueId: inviteeId },
+        );
 
         if (invalidTokens.length > 0) {
           await cleanupInvalidTokens(invalidTokens, inviteeId);
@@ -179,14 +183,18 @@ router.post('/rooms/:roomId/seat-requests', async (req, res) => {
       if (room?.ownerId) {
         const tokens = ownerDoc?.fcmTokens || [];
         if (tokens.length > 0) {
-          const invalidTokens = await sendFcmToTokens(tokens, {
-            type: 'SEAT_REQUEST',
-            roomId,
-            roomName: room.name || 'a room',
-            requesterId: uniqueId,
-            requesterName: userName || '',
-            seatIndex: String(seatIndex),
-          });
+          const invalidTokens = await sendFcmToTokens(
+            tokens,
+            {
+              type: 'SEAT_REQUEST',
+              roomId,
+              roomName: room.name || 'a room',
+              requesterId: uniqueId,
+              requesterName: userName || '',
+              seatIndex: String(seatIndex),
+            },
+            { senderUniqueId: uniqueId, recipientUniqueId: room.ownerId },
+          );
 
           if (invalidTokens.length > 0) {
             await cleanupInvalidTokens(invalidTokens, room.ownerId);

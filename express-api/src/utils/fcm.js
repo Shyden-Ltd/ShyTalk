@@ -6,6 +6,8 @@
 
 const { messaging, db, FieldValue } = require('./firebase');
 const log = require('./log');
+const { effectiveCohort } = require('./firebase-claims');
+const { auditFcmCohortDrop } = require('./segregation-audit');
 
 // Local-mode FCM capture buffer for integration tests.
 // In NODE_ENV=local the route never contacts real FCM — we record the
@@ -29,12 +31,81 @@ function captureLocal(tokens, data) {
 }
 
 /**
+ * UK OSA #17 PR 11 — defence-in-depth cohort filter at the FCM
+ * dispatcher. Returns true when the push must be silently dropped
+ * (cross-cohort, fail-closed on read errors). Returns false when the
+ * push is safe to send (same cohort, or filter is not opt-in for this
+ * call). System / admin / self pushes opt out by passing no IDs and
+ * keep their existing behavior — no Firestore reads, no filter cost.
+ *
+ * Timing note: opt-in callers pay two parallel Firestore reads (sender
+ * + recipient). Both reads happen regardless of cohort outcome, so the
+ * SAME-cohort and CROSS-cohort paths are timing-symmetric — an
+ * attacker observing dispatch latency cannot distinguish "allowed" vs
+ * "dropped". The only timing signal is "filter opted in" vs "legacy
+ * caller" (one round-trip pair vs zero), which corresponds to the
+ * already-public call-site distinction (user→user vs system).
+ */
+async function isCrossCohortDispatch(senderUniqueId, recipientUniqueId) {
+  const senderId = String(senderUniqueId);
+  const recipientId = String(recipientUniqueId);
+  let senderCohort;
+  let recipientCohort;
+  try {
+    const [senderSnap, recipientSnap] = await Promise.all([
+      db.doc(`users/${senderId}`).get(),
+      db.doc(`users/${recipientId}`).get(),
+    ]);
+    if (!senderSnap.exists || !recipientSnap.exists) {
+      // Fail-closed: a missing user doc is exactly the kind of state
+      // the upstream gate may not have caught. Dropping costs at most
+      // one missed push; allowing it could leak presence.
+      return true;
+    }
+    senderCohort = effectiveCohort(senderSnap.data());
+    recipientCohort = effectiveCohort(recipientSnap.data());
+  } catch (err) {
+    log.error('fcm', 'cohort lookup failed; dropping push (fail-closed)', {
+      error: err?.message || String(err),
+    });
+    return true;
+  }
+  if (senderCohort === recipientCohort) return false;
+  // Fire-and-forget — auditFcmCohortDrop swallows write errors.
+  auditFcmCohortDrop({
+    sourceUniqueId: senderId,
+    sourceCohort: senderCohort,
+    targetUniqueId: recipientId,
+    targetCohort: recipientCohort,
+  });
+  return true;
+}
+
+/**
  * Send a data-only FCM message to multiple tokens via Firebase Admin SDK.
  * All values are stringified (FCM data messages require string values).
  * Returns a list of invalid tokens that should be cleaned up.
+ *
+ * Optional `{ senderUniqueId, recipientUniqueId }` opts the call into
+ * the UK OSA #17 PR 11 cohort filter — when both are provided and
+ * distinct, cross-cohort pairs are silently dropped at dispatch.
  */
-async function sendFcmToTokens(tokens, data) {
+async function sendFcmToTokens(tokens, data, { senderUniqueId, recipientUniqueId } = {}) {
   if (!tokens || tokens.length === 0) return [];
+
+  if (
+    senderUniqueId !== undefined &&
+    senderUniqueId !== null &&
+    recipientUniqueId !== undefined &&
+    recipientUniqueId !== null &&
+    String(senderUniqueId) !== String(recipientUniqueId) &&
+    (await isCrossCohortDispatch(senderUniqueId, recipientUniqueId))
+  ) {
+    // Silent drop. No local-mode capture (cross-cohort drops must not
+    // pollute integration-test buffers — tests assert "no payload"
+    // means "no payload", not "captured but flagged").
+    return [];
+  }
 
   if (process.env.NODE_ENV === 'local') {
     captureLocal(tokens, data);

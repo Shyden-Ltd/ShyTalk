@@ -417,6 +417,15 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
     await new Promise((r) => setTimeout(r, 100));
 
     expect(mockSendFcmToTokens).toHaveBeenCalled();
+    // UK OSA #17 PR 11 — the DM push must thread sender + recipient
+    // identities so the FCM dispatcher's cohort filter can fire as a
+    // last line of defence. Asserting the shape here pins the contract
+    // against future refactors that might drop the third argument.
+    const fcmCall = mockSendFcmToTokens.mock.calls[0];
+    expect(fcmCall[2]).toEqual({
+      senderUniqueId: 'user-A',
+      recipientUniqueId: 'user-B',
+    });
     expect(mockCleanupInvalidTokens).toHaveBeenCalledWith(['token-invalid'], expect.any(String));
   });
 
