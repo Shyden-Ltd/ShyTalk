@@ -26,6 +26,7 @@ const router = require('express').Router();
 const { db, FieldValue } = require('../utils/firebase');
 const { generateId, now, todayStr, yesterdayStr } = require('../utils/helpers');
 const { requireAdmin } = require('../middleware/auth');
+const { requireSameCohort } = require('../middleware/sameCohort');
 const log = require('../utils/log');
 const { verifyProductPurchase, verifySubscription } = require('../utils/playStore');
 const { verifyApplePurchase } = require('../utils/appleStore');
@@ -781,7 +782,7 @@ router.post('/economy/gift', async (req, res) => {
     if (!gift) return res.status(404).json({ error: 'Gift not found' });
     if (!bpItem || (bpItem.quantity || 0) < quantity)
       return res.status(402).json({ error: 'Insufficient items in backpack' });
-    if (!recipient) return res.status(404).json({ error: 'Recipient not found' });
+    if (await requireSameCohort(req, res, recipientId, () => recipient)) return;
 
     const blockError = checkBlockRelationship(sender, recipient, uniqueId, recipientId);
     if (blockError) {
@@ -927,7 +928,9 @@ router.post('/economy/gift-direct', async (req, res) => {
     const recipient = recipientSnap.exists ? recipientSnap.data() : null;
 
     if (!gift) return res.status(404).json({ error: 'Gift not found' });
-    if (!recipient) return res.status(404).json({ error: 'Recipient not found' });
+    // UK OSA #17 PR 9 — cohort gate. Collapses missing-recipient and
+    // cross-cohort branches into a byte-identical 404 'Not found'.
+    if (await requireSameCohort(req, res, recipientId, () => recipient)) return;
 
     const blockError = checkBlockRelationship(sender, recipient, uniqueId, recipientId);
     if (blockError) {
@@ -1095,7 +1098,25 @@ router.post('/economy/gift-batch', async (req, res) => {
     // Validate recipient docs exist before starting
     const recipientSnaps = await Promise.all(recipientIds.map((id) => db.doc(`users/${id}`).get()));
     const validRecipients = recipientIds.filter((_, i) => recipientSnaps[i].exists);
-    if (validRecipients.length === 0) return res.status(404).json({ error: 'No valid recipients' });
+    // PR 9 — existence-hiding: same body as the cross-cohort gate's
+    // 404 so the attacker can't distinguish "all recipients absent"
+    // from "at least one cross-cohort recipient".
+    if (validRecipients.length === 0) return res.status(404).json({ error: 'Not found' });
+
+    // UK OSA #17 PR 9 — cohort gate (per-recipient, whole-batch refusal
+    // on cross-cohort OR missing). We deliberately do NOT silently skip
+    // missing recipients here (unlike the block-check loop below): block
+    // is a user-controllable signal so leaking via 403 is acceptable,
+    // but cohort is an age-derived attribute OSA #17 specifically
+    // protects. Skipping missing would let an attacker use a known same-
+    // cohort "carrier" alongside a target to binary-test "target exists
+    // AND is cross-cohort" via the 200 vs 404 split. So: any non-
+    // deliverable recipient (cross-cohort OR missing) refuses the whole
+    // batch with a byte-identical 404 'Not found'.
+    for (let i = 0; i < recipientIds.length; i++) {
+      const recipientData = recipientSnaps[i].exists ? recipientSnaps[i].data() : null;
+      if (await requireSameCohort(req, res, recipientIds[i], () => recipientData)) return;
+    }
 
     // Check block relationships — UK OSA requires blocking prevents ALL contact
     for (let i = 0; i < recipientIds.length; i++) {
@@ -1230,7 +1251,9 @@ router.post('/economy/backpack-send', async (req, res) => {
     const sender = senderSnap.exists ? senderSnap.data() : null;
     const recipient = recipientSnap.exists ? recipientSnap.data() : null;
     if (!sender) return res.status(404).json({ error: 'Sender not found' });
-    if (!recipient) return res.status(404).json({ error: 'Recipient not found' });
+    // UK OSA #17 PR 9 — cohort gate. Collapses missing-recipient and
+    // cross-cohort branches into a byte-identical 404 'Not found'.
+    if (await requireSameCohort(req, res, recipientId, () => recipient)) return;
 
     const blockError = checkBlockRelationship(sender, recipient, uniqueId, recipientId);
     if (blockError) {

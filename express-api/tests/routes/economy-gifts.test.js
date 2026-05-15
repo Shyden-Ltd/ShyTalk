@@ -257,7 +257,10 @@ describe('POST /api/economy/gift', () => {
       .send({ recipientId: 'user-B', giftId: 'gift-rose' });
 
     expect(res.status).toBe(404);
-    expect(res.body.error).toMatch(/recipient not found/i);
+    // PR 9 — existence-hiding: missing-recipient and cross-cohort both
+    // return byte-identical `{ error: 'Not found' }` so the recipient's
+    // existence cannot be inferred from the response shape.
+    expect(res.body).toEqual({ error: 'Not found' });
   });
 
   // ── Happy path ────────────────────────────────────────────────────

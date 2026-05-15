@@ -294,7 +294,8 @@ describe('POST /api/economy/gift-direct — additional coverage', () => {
       .send({ recipientId: 'user-B', giftId: 'gift-rose' });
 
     expect(res.status).toBe(404);
-    expect(res.body.error).toMatch(/recipient not found/i);
+    // PR 9 — existence-hiding: byte-identical to the cross-cohort 404.
+    expect(res.body).toEqual({ error: 'Not found' });
   });
 
   test('returns 403 when sender blocked recipient (lines 795-799)', async () => {
@@ -463,7 +464,10 @@ describe('POST /api/economy/gift-batch — additional coverage', () => {
       .send({ recipientIds: ['user-B', 'user-C'], giftId: 'gift-rose', quantity: 1 });
 
     expect(res.status).toBe(404);
-    expect(res.body.error).toMatch(/no valid recipients/i);
+    // PR 9 — existence-hiding: the all-missing-recipients short-circuit
+    // returns the same byte-identical body as the cross-cohort gate so
+    // an attacker can't distinguish "none exist" from "≥1 cross-cohort".
+    expect(res.body).toEqual({ error: 'Not found' });
   });
 
   test('returns 403 when one recipient has blocked sender (lines 951-955)', async () => {
@@ -622,7 +626,8 @@ describe('POST /api/economy/backpack-send — additional coverage', () => {
       .send({ recipientId: 'user-B' });
 
     expect(res.status).toBe(404);
-    expect(res.body.error).toMatch(/recipient not found/i);
+    // PR 9 — existence-hiding: byte-identical to the cross-cohort 404.
+    expect(res.body).toEqual({ error: 'Not found' });
   });
 
   test('returns 403 when sender blocked recipient (lines 1087-1091)', async () => {
