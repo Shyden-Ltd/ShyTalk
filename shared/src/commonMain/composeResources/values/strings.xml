@@ -992,4 +992,25 @@
     <!-- UK OSA #17 PR 12: cohort-segregation placeholder label used by Compose UI to render a generic "unavailable" tile when the cross-cohort filter (CrossCohortPolicy.PLACEHOLDER) drops an item from a list. English-only in this PR; remaining 19 locales ship in PR 14 with the locale-awareness sweep. Cohort-agnostic by construction — must never name "minor" / "adult" / age, since the placeholder is rendered to the OTHER cohort and would otherwise leak the dropped item's cohort. -->
     <string name="age_seg_unavailable">Unavailable</string>
 
+    <!-- UK OSA #17 PR 14: cross-cohort profile 404-cover copy. Rendered when an opaque cohort-mismatch error surfaces from any user-fetch path. Cohort-agnostic — copy must not name "minor" / "adult" / age, since the renderer cannot know which side of the boundary the viewer is on. Sibling of age_seg_room_unavailable. -->
+    <string name="age_seg_user_unavailable">This user is unavailable.</string>
+
+    <!-- UK OSA #17 PR 14: cross-cohort room 404-cover copy. Rendered when a room read returns a cohort-mismatch error. Cohort-agnostic by construction — see age_seg_user_unavailable sibling for the same constraint rationale. -->
+    <string name="age_seg_room_unavailable">This room is unavailable.</string>
+
+    <!-- UK OSA #17 PR 14: generic cross-cohort write-blocked toast surfaced for any same-cohort middleware rejection that doesn\'t have a more specific 404 cover (e.g., follow / gift / room join in flight when the viewer\'s cohort flips). Intentionally vague — does not reveal cohort boundary as the failure cause. -->
+    <string name="age_seg_cross_cohort_blocked_toast">This action isn\'t available for your account.</string>
+
+    <!-- UK OSA #17 PR 14: system PM dispatched when a cross-cohort 1:1 thread is hidden by the migration script (express-api/scripts/migrate-segregation-relationships.js line ~167). %1$s = sanitised counterparty display name. Same cohort-agnostic voice as age_seg_relationship_removed_pm — server-side locale lookup ships in a follow-up PR; this is the canonical English source-of-truth. -->
+    <string name="age_seg_thread_hidden_pm">Your thread with %1$s has been preserved but cannot continue, as part of a recent change to how ShyTalk organises accounts.\n\nThis is automatic; nothing you sent before is lost. New messages can\'t be exchanged in this thread, but you can still start fresh conversations with people in your usual circle.</string>
+
+    <!-- UK OSA #17 PR 14: banner displayed inside a group conversation when the group has been frozen by the migration script for containing mixed-cohort members. Distinct from a PM — this is the in-conversation persistent banner shown to every remaining member. Brief, cohort-agnostic. -->
+    <string name="age_seg_group_frozen_banner">This group can\'t accept new members or messages following a recent change to how ShyTalk organises accounts.</string>
+
+    <!-- UK OSA #17 PR 14: welcome system PM dispatched on the first sign-in after a user\'s minor→adult cohort flip (DOB-derived, lazy at sign-in via pm-lock-check.js). No reveal of WHY the cohort flipped — copy assumes the user knows their own birthday. -->
+    <string name="age_seg_age_up_welcome_pm">Welcome — your account has moved into the wider ShyTalk circle.\n\nYou\'ll start seeing more people in discovery and lists from now on. Previous connections that were tidied up while your account was in the smaller circle can\'t be restored automatically, but you can re-add anyone you\'d like to follow.</string>
+
+    <!-- UK OSA #17 PR 14: system PM dispatched when an admin lowers a user\'s DOB through admin-age-verification.js and the resulting cohort flips downward (adult→minor). Distinct from age_up_welcome_pm — the user did not initiate this and may be surprised. Copy is plain-spoken about what changed (visibility scope) without naming "minor"; routes the user to support for disputes. -->
+    <string name="age_seg_age_down_admin_pm">Your account details have been updated by ShyTalk staff. As a result, the people and rooms visible to you have been narrowed to a smaller circle.\n\nIf you think this is a mistake, contact support and we\'ll review it.</string>
+
 </resources>

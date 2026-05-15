@@ -1695,4 +1695,24 @@
     <string name="age_verif_test_env_warning">Herhangi bir görsel yükleyin — bu bir test ortamıdır, gerçek kimlikler gerekli değildir ve uzun süre saklanmaz.</string>
     <!-- google-translated 2026-05-09 -->
     <string name="success_report_resolved_with_issues">Rapor çözümlendi ancak bazı işlemler tamamlanmadı. Yönetici web panelini kontrol edin ve gerektiğinde yeniden deneyin.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_relationship_removed_pm">%1$s ile takip bağlantınız, ShyTalk\'un hesapları düzenleme biçiminde yakın zamanda yapılan bir değişikliğin parçası olarak kaldırıldı.\n\nBu otomatiktir; ikinizin de yaptığı hiçbir şeyi yansıtmıyor ve orijinal bağlantı buradan geri yüklenemez.\n\nAdını tanımıyorsanız bu yalnızca geçmişteki bir bağlantının düzeltildiği anlamına gelir.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_removed_pm">ShyTalk\'un hesapları düzenleme biçiminde yakın zamanda yapılan bir değişikliğin parçası olarak %1$s\'den çıkarıldınız.\n\nBu otomatiktir ve yaptığınız hiçbir şeyi yansıtmaz. Oda gayet iyi; yeni düzenlemeye göre sizi burada tutamayız.\n\nHer zamanki gibi başka odalar oluşturabilir veya başka odalara katılabilirsiniz.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_unavailable">Kullanılamıyor</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_user_unavailable">Bu kullanıcıya ulaşılamıyor.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_unavailable">Bu oda müsait değil.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_cross_cohort_blocked_toast">Bu işlem hesabınızda kullanılamıyor.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_thread_hidden_pm">%1$s ile olan ileti diziniz korundu ancak ShyTalk\'un hesapları düzenleme biçiminde yakın zamanda yapılan bir değişikliğin parçası olarak devam edemiyor.\n\nBu otomatiktir; daha önce gönderdiğiniz hiçbir şey kaybolmaz. Bu mesaj dizisinde yeni mesaj alışverişi yapılamaz ancak yine de her zamanki çevrenizdeki kişilerle yeni sohbetler başlatabilirsiniz.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_group_frozen_banner">ShyTalk\'un hesapları düzenleme biçiminde yakın zamanda yapılan bir değişiklik nedeniyle bu grup yeni üyeleri veya mesajları kabul edemez.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_up_welcome_pm">Hoş geldiniz — hesabınız daha geniş ShyTalk çevresine taşındı.\n\nBundan sonra keşiflerde ve listelerde daha fazla kişi görmeye başlayacaksınız. Hesabınız daha küçük bir çevredeyken düzenlenen önceki bağlantılar otomatik olarak geri yüklenemez, ancak takip etmek istediğiniz kişileri yeniden ekleyebilirsiniz.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_down_admin_pm">Hesap bilgileriniz ShyTalk personeli tarafından güncellendi. Sonuç olarak, görebileceğiniz kişiler ve odalar daha küçük bir çevreye daraltıldı.\n\nBunun bir hata olduğunu düşünüyorsanız destek ekibiyle iletişime geçin, biz de durumu inceleyelim.</string>
 </resources>

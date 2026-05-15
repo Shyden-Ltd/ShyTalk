@@ -1695,4 +1695,24 @@
     <string name="age_verif_test_env_warning">任意の画像をアップロードします。これはテスト環境であり、実際の ID は必要なく、長期保存されません。</string>
     <!-- google-translated 2026-05-09 -->
     <string name="success_report_resolved_with_issues">レポートは解決されましたが、一部のアクションは完了しませんでした。管理 Web パネルを確認し、必要に応じて再試行してください。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_relationship_removed_pm">ShyTalk によるアカウントの整理方法に対する最近の変更の一環として、%1$s のフォロー リンクが削除されました。\n\nこれは自動です。どちらの操作も反映されておらず、ここから元のリンクを復元することはできません。\n\n名前が分からない場合、これは単に過去の接続が整理されたことを意味します。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_removed_pm">ShyTalk によるアカウントの整理方法に対する最近の変更の一環として、あなたは %1$s から削除されました。\n\nこれは自動的であり、あなたが行った操作は反映されません。部屋自体は大丈夫です。新しい取り決めでは、あなたをそこに留めておくことはできません。\n\n通常の方法で他のルームを作成したり、他のルームに参加したりすることはできます。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_unavailable">利用不可</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_user_unavailable">このユーザーは利用できません。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_unavailable">この部屋は利用できません。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_cross_cohort_blocked_toast">このアクションはあなたのアカウントでは使用できません。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_thread_hidden_pm">ShyTalk によるアカウントの整理方法に対する最近の変更の一環として、%1$s を含むスレッドは保存されていますが、続行できません。\n\nこれは自動です。以前に送信したものは何も失われません。このスレッドでは新しいメッセージを交換することはできませんが、いつものサークルの人々と新鮮な会話を始めることはできます。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_group_frozen_banner">ShyTalk のアカウントの整理方法が最近変更されたため、このグループは新しいメンバーやメッセージを受け入れることができません。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_up_welcome_pm">ようこそ — あなたのアカウントは、より幅広い ShyTalk サークルに移動しました。\n\n今後、検出やリストにさらに多くの人が表示されるようになります。アカウントが小さいサークルに属していたときに整理された以前のつながりは、自動的に復元することはできませんが、フォローしたい人を再度追加することはできます。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_down_admin_pm">アカウントの詳細は ShyTalk スタッフによって更新されました。その結果、表示されるユーザーと部屋はより小さな円に狭められました。\n\nこれが間違いだと思われる場合は、サポートにご連絡ください。確認させていただきます。</string>
 </resources>

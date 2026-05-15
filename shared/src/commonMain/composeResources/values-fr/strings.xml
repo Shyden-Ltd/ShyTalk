@@ -1691,4 +1691,24 @@
     <string name="age_verif_test_env_warning">Téléchargez n\'importe quelle image : il s\'agit d\'un environnement de test, les véritables identifiants ne sont pas requis et ne sont pas stockés à long terme.</string>
     <!-- google-translated 2026-05-09 -->
     <string name="success_report_resolved_with_issues">Rapport résolu, mais certaines actions n\'ont pas abouti. Vérifiez le panneau Web d\'administration et réessayez si nécessaire.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_relationship_removed_pm">Votre lien de suivi avec %1$s a été supprimé dans le cadre d\'un changement récent dans la façon dont ShyTalk organise les comptes.\n\nC\'est automatique ; cela ne reflète rien de ce que vous avez fait, et le lien d\'origine ne peut pas être restauré à partir d\'ici.\n\nSi vous ne reconnaissez pas le nom, cela signifie simplement qu\'une connexion passée a été corrigée.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_removed_pm">Vous avez été supprimé de %1$s dans le cadre d\'un changement récent dans la façon dont ShyTalk organise les comptes.\n\nCela est automatique et ne reflète rien de ce que vous avez fait. La chambre elle-même est bien ; nous ne pouvons tout simplement pas vous y garder avec le nouvel arrangement.\n\nVous pouvez toujours créer ou rejoindre d\'autres salles de votre manière habituelle.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_unavailable">Indisponible</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_user_unavailable">Cet utilisateur n\'est pas disponible.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_unavailable">Cette salle n\'est pas disponible.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_cross_cohort_blocked_toast">Cette action n\'est pas disponible pour votre compte.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_thread_hidden_pm">Votre fil de discussion avec %1$s a été conservé mais ne peut pas continuer, dans le cadre d\'un changement récent dans la façon dont ShyTalk organise les comptes.\n\nC\'est automatique ; rien de ce que vous avez envoyé auparavant n’est perdu. Les nouveaux messages ne peuvent pas être échangés dans ce fil de discussion, mais vous pouvez toujours démarrer de nouvelles conversations avec des personnes de votre cercle habituel.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_group_frozen_banner">Ce groupe ne peut pas accepter de nouveaux membres ou de nouveaux messages suite à un changement récent dans la manière dont ShyTalk organise les comptes.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_up_welcome_pm">Bienvenue — votre compte a rejoint le cercle ShyTalk plus large.\n\nVous commencerez à voir plus de personnes dans les découvertes et les listes à partir de maintenant. Les connexions précédentes qui ont été rétablies alors que votre compte se trouvait dans le cercle plus petit ne peuvent pas être restaurées automatiquement, mais vous pouvez rajouter toute personne que vous souhaitez suivre.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_down_admin_pm">Les détails de votre compte ont été mis à jour par le personnel de ShyTalk. Par conséquent, les personnes et les salles visibles ont été réduites à un cercle plus petit.\n\nSi vous pensez qu\'il s\'agit d\'une erreur, contactez l\'assistance et nous l\'examinerons.</string>
 </resources>

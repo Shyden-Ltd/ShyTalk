@@ -1694,4 +1694,24 @@
     <string name="age_verif_test_env_warning">Ladda upp vilken bild som helst – det här är en testmiljö, riktiga ID:n krävs inte och lagras inte på lång sikt.</string>
     <!-- google-translated 2026-05-09 -->
     <string name="success_report_resolved_with_issues">Rapporten löstes, men vissa åtgärder slutfördes inte. Kontrollera adminwebbpanelen och försök igen vid behov.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_relationship_removed_pm">Din följlänk med %1$s har tagits bort som en del av en nyligen genomförd ändring av hur ShyTalk organiserar konton.\n\nDetta är automatiskt; det återspeglar inget som någon av er gjorde, och den ursprungliga länken kan inte återställas härifrån.\n\nOm du inte känner igen namnet betyder det bara att en tidigare anslutning har städats.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_removed_pm">Du har tagits bort från %1$s som en del av en nyligen genomförd ändring av hur ShyTalk organiserar konton.\n\nDetta är automatiskt och återspeglar inte något du har gjort. Rummet självt är bra; vi kan bara inte behålla dig i det under det nya arrangemanget.\n\nDu kan fortfarande skapa eller gå med i andra rum på ditt vanliga sätt.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_unavailable">Inte tillgänglig</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_user_unavailable">Den här användaren är inte tillgänglig.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_unavailable">Detta rum är inte tillgängligt.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_cross_cohort_blocked_toast">Den här åtgärden är inte tillgänglig för ditt konto.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_thread_hidden_pm">Din tråd med %1$s har bevarats men kan inte fortsätta, som en del av en nyligen genomförd ändring av hur ShyTalk organiserar konton.\n\nDetta är automatiskt; inget du skickat tidigare går förlorat. Nya meddelanden kan inte utbytas i den här tråden, men du kan fortfarande starta nya konversationer med personer i din vanliga cirkel.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_group_frozen_banner">Den här gruppen kan inte acceptera nya medlemmar eller meddelanden efter en nyligen genomförd förändring av hur ShyTalk organiserar konton.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_up_welcome_pm">Välkommen – ditt konto har flyttat in i den bredare ShyTalk-cirkeln.\n\nDu kommer att börja se fler personer i upptäckter och listor från och med nu. Tidigare anslutningar som städats medan ditt konto var i den mindre cirkeln kan inte återställas automatiskt, men du kan lägga till vem du vill följa igen.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_down_admin_pm">Dina kontouppgifter har uppdaterats av ShyTalks personal. Som ett resultat har de personer och rum som är synliga för dig begränsats till en mindre cirkel.\n\nOm du tror att detta är ett misstag, kontakta supporten så granskar vi det.</string>
 </resources>

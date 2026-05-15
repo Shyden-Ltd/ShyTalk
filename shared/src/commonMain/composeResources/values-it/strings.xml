@@ -1695,4 +1695,24 @@
     <string name="age_verif_test_env_warning">Carica qualsiasi immagine: questo è un ambiente di test, gli ID reali non sono richiesti e non vengono archiviati a lungo termine.</string>
     <!-- google-translated 2026-05-09 -->
     <string name="success_report_resolved_with_issues">Il report è stato risolto, ma alcune azioni non sono state completate. Controlla il pannello web di amministrazione e riprova se necessario.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_relationship_removed_pm">Il tuo collegamento Segui con %1$s è stato rimosso come parte di una recente modifica al modo in cui ShyTalk organizza gli account.\n\nQuesto è automatico; non riflette nulla di ciò che avete fatto e il collegamento originale non può essere ripristinato da qui.\n\nSe non riconosci il nome, significa semplicemente che una connessione passata è stata riordinata.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_removed_pm">Sei stato rimosso da %1$s come parte di una recente modifica al modo in cui ShyTalk organizza gli account.\n\nQuesto è automatico e non riflette nulla di ciò che hai fatto. La stanza in sé va bene; semplicemente non possiamo trattenerti con il nuovo accordo.\n\nPuoi comunque creare o unirti ad altre stanze nel tuo solito modo.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_unavailable">Non disponibile</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_user_unavailable">Questo utente non è disponibile.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_unavailable">Questa stanza non è disponibile.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_cross_cohort_blocked_toast">Questa azione non è disponibile per il tuo account.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_thread_hidden_pm">La tua discussione con %1$s è stata conservata ma non può continuare, come parte di una recente modifica al modo in cui ShyTalk organizza gli account.\n\nQuesto è automatico; nulla di ciò che hai inviato prima è perso. Non è possibile scambiare nuovi messaggi in questo thread, ma puoi comunque avviare nuove conversazioni con persone nella tua cerchia abituale.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_group_frozen_banner">Questo gruppo non può accettare nuovi membri o messaggi a seguito di una recente modifica al modo in cui ShyTalk organizza gli account.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_up_welcome_pm">Benvenuto: il tuo account è stato spostato nel circolo più ampio di ShyTalk.\n\nD\'ora in poi inizierai a vedere più persone nella scoperta e negli elenchi. Le connessioni precedenti che sono state riordinate mentre il tuo account era nella cerchia più piccola non possono essere ripristinate automaticamente, ma puoi aggiungere nuovamente chiunque desideri seguire.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_down_admin_pm">I dettagli del tuo account sono stati aggiornati dallo staff di ShyTalk. Di conseguenza, le persone e le stanze virtuali visibili per te sono state ristrette a una cerchia più piccola.\n\nSe ritieni che si tratti di un errore, contatta l\'assistenza e lo esamineremo.</string>
 </resources>

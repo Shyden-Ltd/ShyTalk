@@ -1695,4 +1695,24 @@
     <string name="age_verif_test_env_warning">Cargue cualquier imagen: este es un entorno de prueba, no se requieren identificaciones reales y no se almacenan a largo plazo.</string>
     <!-- google-translated 2026-05-09 -->
     <string name="success_report_resolved_with_issues">Informe resuelto, pero algunas acciones no se completaron. Consulte el panel web de administración y vuelva a intentarlo según sea necesario.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_relationship_removed_pm">Tu enlace de seguimiento con %1$s se eliminó como parte de un cambio reciente en la forma en que ShyTalk organiza las cuentas.\n\nEsto es automático; no refleja nada de lo que ninguno de los dos hizo y el enlace original no se puede restaurar desde aquí.\n\nSi no reconoce el nombre, esto solo significa que se ha arreglado una conexión anterior.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_removed_pm">Te eliminaron de %1$s como parte de un cambio reciente en la forma en que ShyTalk organiza las cuentas.\n\nEsto es automático y no refleja nada de lo que hiciste. La habitación en sí está bien; simplemente no podemos mantenerte en ella bajo el nuevo acuerdo.\n\nAún puedes crear o unirte a otras salas de la forma habitual.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_unavailable">Indisponible</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_user_unavailable">Este usuario no está disponible.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_unavailable">Esta habitación no está disponible.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_cross_cohort_blocked_toast">Esta acción no está disponible para su cuenta.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_thread_hidden_pm">Su hilo con %1$s se ha conservado pero no puede continuar, como parte de un cambio reciente en la forma en que ShyTalk organiza las cuentas.\n\nEsto es automático; nada de lo que enviaste antes se pierde. No se pueden intercambiar mensajes nuevos en este hilo, pero aún puedes iniciar nuevas conversaciones con personas de tu círculo habitual.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_group_frozen_banner">Este grupo no puede aceptar nuevos miembros ni mensajes debido a un cambio reciente en la forma en que ShyTalk organiza las cuentas.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_up_welcome_pm">Bienvenido: tu cuenta se ha movido al círculo más amplio de ShyTalk.\n\nComenzarás a ver más personas en descubrimientos y listas a partir de ahora. Las conexiones anteriores que se arreglaron mientras tu cuenta estaba en el círculo más pequeño no se pueden restaurar automáticamente, pero puedes volver a agregar a cualquier persona que quieras seguir.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_down_admin_pm">Los detalles de su cuenta han sido actualizados por el personal de ShyTalk. Como resultado, las personas y salas visibles para usted se han reducido a un círculo más pequeño.\n\nSi cree que se trata de un error, comuníquese con el soporte técnico y lo revisaremos.</string>
 </resources>

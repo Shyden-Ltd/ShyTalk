@@ -1693,4 +1693,24 @@
     <string name="age_verif_test_env_warning">Laden Sie ein beliebiges Bild hoch – dies ist eine Testumgebung, echte IDs sind nicht erforderlich und werden nicht langfristig gespeichert.</string>
     <!-- google-translated 2026-05-09 -->
     <string name="success_report_resolved_with_issues">Der Bericht wurde gelöst, aber einige Aktionen wurden nicht abgeschlossen. Überprüfen Sie das Admin-Webpanel und versuchen Sie es bei Bedarf erneut.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_relationship_removed_pm">Ihr Follow-Link mit %1$s wurde im Rahmen einer kürzlichen Änderung an der Art und Weise, wie ShyTalk Konten organisiert, entfernt.\n\nDies geschieht automatisch; Es spiegelt nichts wider, was einer von Ihnen getan hat, und der ursprüngliche Link kann von hier aus nicht wiederhergestellt werden.\n\nWenn Sie den Namen nicht kennen, bedeutet dies nur, dass eine frühere Verbindung bereinigt wurde.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_removed_pm">Sie wurden im Rahmen einer kürzlichen Änderung an der Art und Weise, wie ShyTalk Konten organisiert, aus %1$s entfernt.\n\nDies geschieht automatisch und spiegelt nichts wider, was Sie getan haben. Das Zimmer selbst ist in Ordnung; Wir können Sie mit der neuen Regelung einfach nicht darin behalten.\n\nSie können weiterhin wie gewohnt andere Räume erstellen oder ihnen beitreten.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_unavailable">Nicht verfügbar</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_user_unavailable">Dieser Benutzer ist nicht verfügbar.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_unavailable">Dieses Zimmer ist nicht verfügbar.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_cross_cohort_blocked_toast">Diese Aktion ist für Ihr Konto nicht verfügbar.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_thread_hidden_pm">Ihr Thread mit %1$s wurde beibehalten, kann aber nicht fortgesetzt werden, da ShyTalk kürzlich Änderungen an der Organisation von Konten vorgenommen hat.\n\nDies geschieht automatisch; Nichts, was Sie zuvor gesendet haben, geht verloren. In diesem Thread können keine neuen Nachrichten ausgetauscht werden, aber Sie können trotzdem neue Gespräche mit Personen in Ihrem gewohnten Kreis beginnen.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_group_frozen_banner">Diese Gruppe kann aufgrund einer kürzlichen Änderung an der Art und Weise, wie ShyTalk Konten organisiert, keine neuen Mitglieder oder Nachrichten akzeptieren.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_up_welcome_pm">Willkommen – Ihr Konto wurde in den größeren ShyTalk-Kreis verschoben.\n\nVon nun an werden Ihnen mehr Personen in Discovery und Listen angezeigt. Frühere Verbindungen, die aufgeräumt wurden, während Ihr Konto im kleineren Kreis war, können nicht automatisch wiederhergestellt werden. Sie können jedoch jeden, dem Sie folgen möchten, erneut hinzufügen.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_down_admin_pm">Ihre Kontodaten wurden von ShyTalk-Mitarbeitern aktualisiert. Dadurch wurden die für Sie sichtbaren Personen und Räume auf einen kleineren Kreis eingegrenzt.\n\nWenn Sie der Meinung sind, dass dies ein Fehler ist, kontaktieren Sie den Support und wir werden ihn überprüfen.</string>
 </resources>

@@ -1695,4 +1695,24 @@
     <string name="age_verif_test_env_warning">Tải lên bất kỳ hình ảnh nào - đây là môi trường thử nghiệm, không yêu cầu ID thực và không được lưu trữ lâu dài.</string>
     <!-- google-translated 2026-05-09 -->
     <string name="success_report_resolved_with_issues">Báo cáo đã được giải quyết nhưng một số hành động chưa hoàn tất. Kiểm tra bảng quản trị web và thử lại nếu cần.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_relationship_removed_pm">Liên kết theo dõi của bạn với %1$s đã bị xóa do một phần thay đổi gần đây về cách ShyTalk tổ chức các tài khoản.\n\nĐiều này là tự động; nó không phản ánh bất cứ điều gì bạn đã làm và không thể khôi phục liên kết ban đầu từ đây.\n\nNếu bạn không nhận ra tên, điều này chỉ có nghĩa là kết nối trong quá khứ đã được dọn dẹp.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_removed_pm">Bạn đã bị xóa khỏi %1$s do thay đổi gần đây về cách ShyTalk tổ chức các tài khoản.\n\nViệc này là tự động và không phản ánh bất kỳ điều gì bạn đã làm. Căn phòng vẫn ổn; chúng tôi không thể giữ bạn ở lại theo cách sắp xếp mới.\n\nBạn vẫn có thể tạo hoặc tham gia các phòng khác theo cách thông thường của mình.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_unavailable">Không có sẵn</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_user_unavailable">Người dùng này không có sẵn.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_unavailable">Phòng này không có sẵn.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_cross_cohort_blocked_toast">Hành động này không có sẵn cho tài khoản của bạn.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_thread_hidden_pm">Chuỗi của bạn với %1$s đã được giữ nguyên nhưng không thể tiếp tục, do một phần của thay đổi gần đây về cách ShyTalk tổ chức các tài khoản.\n\nĐiều này là tự động; không có gì bạn gửi trước đó bị mất. Không thể trao đổi tin nhắn mới trong chuỗi này nhưng bạn vẫn có thể bắt đầu cuộc trò chuyện mới với những người trong vòng kết nối thông thường của mình.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_group_frozen_banner">Nhóm này không thể chấp nhận thành viên hoặc tin nhắn mới sau thay đổi gần đây về cách ShyTalk tổ chức tài khoản.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_up_welcome_pm">Xin chào — tài khoản của bạn đã chuyển sang vòng kết nối ShyTalk rộng hơn.\n\nTừ giờ trở đi, bạn sẽ bắt đầu thấy nhiều người hơn trong danh sách và khám phá. Các kết nối trước đây đã được sắp xếp gọn gàng khi tài khoản của bạn nằm trong vòng kết nối nhỏ hơn không thể được khôi phục tự động nhưng bạn có thể thêm lại bất kỳ ai mà bạn muốn theo dõi.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_down_admin_pm">Thông tin tài khoản của bạn đã được nhân viên ShyTalk cập nhật. Do đó, những người và phòng hiển thị với bạn đã bị thu hẹp thành một vòng kết nối nhỏ hơn.\n\nNếu bạn cho rằng đây là sự nhầm lẫn, hãy liên hệ với bộ phận hỗ trợ và chúng tôi sẽ xem xét vấn đề đó.</string>
 </resources>

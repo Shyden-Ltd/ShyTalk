@@ -1695,4 +1695,24 @@
     <string name="age_verif_test_env_warning">Upload een afbeelding – dit is een testomgeving, echte ID’s zijn niet vereist en worden niet langdurig bewaard.</string>
     <!-- google-translated 2026-05-09 -->
     <string name="success_report_resolved_with_issues">Rapport opgelost, maar sommige acties zijn niet voltooid. Controleer het beheerderswebpaneel en probeer het indien nodig opnieuw.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_relationship_removed_pm">Je volglink met %1$s is verwijderd als onderdeel van een recente wijziging in de manier waarop ShyTalk accounts organiseert.\n\nDit gebeurt automatisch; het geeft niets weer van wat jullie beiden hebben gedaan, en de oorspronkelijke link kan vanaf hier niet worden hersteld.\n\nAls je de naam niet herkent, betekent dit alleen dat een eerdere verbinding is hersteld.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_removed_pm">Je bent verwijderd uit %1$s als onderdeel van een recente wijziging in de manier waarop ShyTalk accounts organiseert.\n\nDit gebeurt automatisch en weerspiegelt niets van wat je hebt gedaan. De kamer zelf is prima; onder de nieuwe regeling kunnen we je er gewoon niet in houden.\n\nJe kunt nog steeds op de gebruikelijke manier andere kamers maken of eraan deelnemen.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_unavailable">Niet beschikbaar</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_user_unavailable">Deze gebruiker is niet beschikbaar.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_unavailable">Deze kamer is niet beschikbaar.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_cross_cohort_blocked_toast">Deze actie is niet beschikbaar voor uw account.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_thread_hidden_pm">Je gesprek met %1$s is bewaard gebleven, maar kan niet doorgaan, als onderdeel van een recente wijziging in de manier waarop ShyTalk accounts organiseert.\n\nDit gebeurt automatisch; niets dat u eerder hebt verzonden, gaat verloren. Nieuwe berichten kunnen niet worden uitgewisseld in deze thread, maar je kunt nog steeds nieuwe gesprekken beginnen met mensen in je gebruikelijke kring.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_group_frozen_banner">Deze groep kan geen nieuwe leden of berichten accepteren na een recente wijziging in de manier waarop ShyTalk accounts organiseert.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_up_welcome_pm">Welkom: je account is in de bredere ShyTalk-kring terechtgekomen.\n\nVanaf nu zul je meer mensen in ontdekkingen en lijsten zien. Eerdere verbindingen die zijn hersteld terwijl uw account zich in de kleinere kring bevond, kunnen niet automatisch worden hersteld, maar u kunt wel iedereen die u wilt volgen opnieuw toevoegen.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_down_admin_pm">Uw accountgegevens zijn bijgewerkt door medewerkers van ShyTalk. Als gevolg hiervan zijn de voor u zichtbare mensen en kamers beperkt tot een kleinere kring.\n\nAls u denkt dat dit een vergissing is, neem dan contact op met de ondersteuning, zodat we dit kunnen beoordelen.</string>
 </resources>

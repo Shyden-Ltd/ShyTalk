@@ -1695,4 +1695,24 @@
     <string name="age_verif_test_env_warning">Prześlij dowolny obraz — jest to środowisko testowe, prawdziwe identyfikatory nie są wymagane i nie są przechowywane długoterminowo.</string>
     <!-- google-translated 2026-05-09 -->
     <string name="success_report_resolved_with_issues">Raport został rozwiązany, ale niektóre działania nie zostały ukończone. Sprawdź panel administracyjny i spróbuj ponownie, jeśli zajdzie taka potrzeba.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_relationship_removed_pm">Twój link do obserwowania %1$s został usunięty w ramach niedawnej zmiany w sposobie organizacji kont przez ShyTalk.\n\nDziała się to automatycznie; nie odzwierciedla to żadnych działań żadnego z Was i nie można stąd przywrócić oryginalnego linku.\n\nJeśli nie rozpoznajesz nazwy, oznacza to po prostu, że poprzednie połączenie zostało uporządkowane.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_removed_pm">Zostałeś usunięty z %1$s w ramach niedawnej zmiany w sposobie organizacji kont przez ShyTalk.\n\nTo dzieje się automatycznie i nie odzwierciedla niczego, co zrobiłeś. Sam pokój jest w porządku; po prostu nie możemy Cię w nim zatrzymać w nowym układzie.\n\nNadal możesz tworzyć inne pokoje lub dołączać do nich w zwykły sposób.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_unavailable">Nie płynny</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_user_unavailable">Ten użytkownik jest niedostępny.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_unavailable">Pokój ten jest niedostępny.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_cross_cohort_blocked_toast">Ta czynność nie jest dostępna na Twoim koncie.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_thread_hidden_pm">Twój wątek z %1$s został zachowany, ale nie może być kontynuowany w ramach niedawnej zmiany w sposobie organizacji kont przez ShyTalk.\n\nDziała się to automatycznie; nic, co wysłałeś wcześniej, nie zostanie utracone. W tym wątku nie można wymieniać nowych wiadomości, ale nadal możesz rozpoczynać nowe rozmowy z osobami ze swojego zwykłego kręgu.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_group_frozen_banner">Ta grupa nie może przyjmować nowych członków ani wiadomości w związku z niedawną zmianą w sposobie organizacji kont przez ShyTalk.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_up_welcome_pm">Witamy — Twoje konto zostało przeniesione do szerszego kręgu ShyTalk.\n\nOd teraz zaczniesz widzieć więcej osób w odkrywaniu i na listach. Poprzednie połączenia, które zostały uporządkowane, gdy Twoje konto znajdowało się w mniejszym kręgu, nie mogą zostać przywrócone automatycznie, ale możesz ponownie dodać dowolną osobę, którą chcesz obserwować.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_down_admin_pm">Dane Twojego konta zostały zaktualizowane przez pracowników ShyTalk. W rezultacie widoczne dla Ciebie osoby i pokoje zostały zawężone do mniejszego kręgu.\n\nJeśli uważasz, że to pomyłka, skontaktuj się z pomocą techniczną, a my to sprawdzimy.</string>
 </resources>

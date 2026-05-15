@@ -1695,4 +1695,24 @@
     <string name="age_verif_test_env_warning">上传任何图像 - 这是一个测试环境，不需要真实 ID，也不会长期存储。</string>
     <!-- google-translated 2026-05-09 -->
     <string name="success_report_resolved_with_issues">报告已解决，但某些操作未完成。检查管理 Web 面板并根据需要重试。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_relationship_removed_pm">作为 ShyTalk 组织帐户方式最近更改的一部分，您的 %1$s 关注链接已被删除。\n\n这是自动的；它不反映你们所做的任何事情，并且无法从这里恢复原始链接。\n\n如果您不认识该名称，这仅意味着过去的连接已被清理。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_removed_pm">作为最近 ShyTalk 组织帐户方式更改的一部分，您已从 %1$s 中删除。\n\n这是自动的，不会反映您所做的任何操作。房间本身很好；我们只是无法按照新的安排让您留在其中。\n\n您仍然可以按照常规方式创建或加入其他房间。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_unavailable">不可用</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_user_unavailable">该用户不可用。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_unavailable">此房间不可使用。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_cross_cohort_blocked_toast">您的帐户无法执行此操作。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_thread_hidden_pm">作为 ShyTalk 组织帐户方式最近更改的一部分，您与 %1$s 的讨论已被保留，但无法继续。\n\n这是自动的；您之前发送的任何内容都不会丢失。无法在此线程中交换新消息，但您仍然可以与平常圈子中的人开始新的对话。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_group_frozen_banner">由于最近 ShyTalk 组织帐户的方式发生更改，此群组无法接受新成员或消息。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_up_welcome_pm">欢迎 — 您的帐户已进入更广泛的 ShyTalk 圈子。\n\n从现在开始，您将开始在发现和列表中看到更多的人。当您的帐户处于较小圈子时，之前清理的联系人无法自动恢复，但您可以重新添加您想要关注的任何人。</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_down_admin_pm">ShyTalk 工作人员已更新您的帐户详细信息。因此，您可见的人员和房间已缩小到较小的圈子。\n\n如果您认为这是一个错误，请联系支持人员，我们将进行审核。</string>
 </resources>

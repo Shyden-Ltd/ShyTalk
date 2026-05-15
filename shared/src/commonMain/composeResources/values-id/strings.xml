@@ -1695,4 +1695,24 @@
     <string name="age_verif_test_env_warning">Unggah gambar apa pun — ini adalah lingkungan pengujian, ID asli tidak diperlukan dan tidak disimpan dalam jangka panjang.</string>
     <!-- google-translated 2026-05-09 -->
     <string name="success_report_resolved_with_issues">Laporan terselesaikan, namun beberapa tindakan tidak selesai. Periksa panel web admin dan coba lagi sesuai kebutuhan.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_relationship_removed_pm">Tautan ikuti Anda dengan %1$s telah dihapus sebagai bagian dari perubahan terbaru pada cara ShyTalk mengatur akun.\n\nIni otomatis; itu tidak mencerminkan apa pun yang Anda lakukan, dan tautan asli tidak dapat dipulihkan dari sini.\n\nJika Anda tidak mengenali namanya, ini berarti koneksi sebelumnya telah dirapikan.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_removed_pm">Anda telah dikeluarkan dari %1$s sebagai bagian dari perubahan terbaru pada cara ShyTalk mengatur akun.\n\nIni otomatis dan tidak mencerminkan apa pun yang Anda lakukan. Ruangan itu sendiri baik-baik saja; kami tidak bisa membiarkan Anda tetap berada di dalamnya berdasarkan pengaturan baru.\n\nAnda masih dapat membuat atau bergabung dengan ruangan lain seperti biasa.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_unavailable">Tidak tersedia</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_user_unavailable">Pengguna ini tidak tersedia.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_room_unavailable">Ruangan ini tidak tersedia.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_cross_cohort_blocked_toast">Tindakan ini tidak tersedia untuk akun Anda.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_thread_hidden_pm">Rangkaian pesan Anda dengan %1$s telah disimpan tetapi tidak dapat dilanjutkan, sebagai bagian dari perubahan terbaru pada cara ShyTalk mengatur akun.\n\nIni otomatis; tidak ada yang Anda kirim sebelumnya yang hilang. Pesan baru tidak dapat dipertukarkan di rangkaian pesan ini, namun Anda masih dapat memulai percakapan baru dengan orang-orang di lingkaran biasa Anda.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_group_frozen_banner">Grup ini tidak dapat menerima anggota atau pesan baru setelah adanya perubahan terkini pada cara ShyTalk mengatur akun.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_up_welcome_pm">Selamat datang — akun Anda telah berpindah ke lingkaran ShyTalk yang lebih luas.\n\nAnda akan mulai melihat lebih banyak orang dalam penemuan dan daftar mulai sekarang. Koneksi sebelumnya yang dirapikan saat akun Anda berada di lingkaran yang lebih kecil tidak dapat dipulihkan secara otomatis, namun Anda dapat menambahkan kembali siapa pun yang ingin Anda ikuti.</string>
+    <!-- google-translated 2026-05-15 -->
+    <string name="age_seg_age_down_admin_pm">Detail akun Anda telah diperbarui oleh staf ShyTalk. Akibatnya, orang dan ruangan yang terlihat oleh Anda telah dipersempit menjadi lingkaran yang lebih kecil.\n\nJika menurut Anda ini adalah kesalahan, hubungi dukungan dan kami akan meninjaunya.</string>
 </resources>
