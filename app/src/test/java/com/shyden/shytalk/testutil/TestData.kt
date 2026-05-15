@@ -54,8 +54,12 @@ object TestData {
         suspensionAppealStatus: String? = null,
         isSuperShy: Boolean = false,
         language: String = "en",
+        cohort: String = "minor",
+        cohortOverride: String? = null,
     ) = User(
         uid = uid,
+        cohort = cohort,
+        cohortOverride = cohortOverride,
         // Default firebaseUid to uid so the existing wave of tests (which only
         // pass `uid = "..."`) gets a populated firebaseUid for free. Production
         // code paths that now send `User.firebaseUid` for report endpoints

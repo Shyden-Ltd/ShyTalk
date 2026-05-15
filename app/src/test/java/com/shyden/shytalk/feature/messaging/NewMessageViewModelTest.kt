@@ -370,4 +370,75 @@ class NewMessageViewModelTest {
                     .isEmpty(),
             )
         }
+
+    // ===== UK OSA #17 PR 12 — client-side cohort gate =====
+
+    @Test
+    fun `adult viewer drops cross-cohort users from availableUsers`() =
+        runTest {
+            val currentUser =
+                TestData.createTestUser(
+                    uid = "me",
+                    cohort = "adult",
+                    followerIds = setOf("adult-pal", "minor-pal"),
+                    followingIds = emptySet(),
+                )
+            coEvery { userRepository.getUser("me") } returns Resource.Success(currentUser)
+            coEvery { userRepository.getUsers(any()) } returns
+                Resource.Success(
+                    listOf(
+                        TestData.createTestUser(uid = "adult-pal", cohort = "adult"),
+                        TestData.createTestUser(uid = "minor-pal", cohort = "minor"),
+                    ),
+                )
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("adult-pal"),
+                vm.uiState.value.availableUsers
+                    .map { it.uid },
+            )
+        }
+
+    @Test
+    fun `adult viewer drops cross-cohort recent users`() =
+        runTest {
+            val currentUser =
+                TestData.createTestUser(
+                    uid = "me",
+                    cohort = "adult",
+                    followerIds = setOf("adult-pal"),
+                )
+            coEvery { userRepository.getUser("me") } returns Resource.Success(currentUser)
+            // First call is loadAvailableUsers → followerIds, second is
+            // recent users by ID. Loosen the matcher: same mock for both.
+            coEvery { userRepository.getUsers(any()) } returns
+                Resource.Success(
+                    listOf(
+                        TestData.createTestUser(uid = "adult-pal", cohort = "adult"),
+                        TestData.createTestUser(uid = "minor-pal", cohort = "minor"),
+                    ),
+                )
+            // Force a recent-conversations list with a minor counterparty.
+            every { pmRepository.getConversations("me") } returns
+                flowOf(
+                    listOf(
+                        TestData.createTestConversation(
+                            conversationId = "recent-1",
+                            participantIds = listOf("me", "minor-pal"),
+                        ),
+                    ),
+                )
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            // minor-pal should not appear in recentUsers (cohort filter)
+            assertTrue(
+                vm.uiState.value.recentUsers
+                    .none { it.uid == "minor-pal" },
+            )
+        }
 }

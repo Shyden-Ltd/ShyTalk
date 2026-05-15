@@ -825,6 +825,95 @@ class ConversationListViewModelTest {
             )
         }
 
+    // ===== UK OSA #17 PR 12 — client-side cohort gate =====
+
+    @Test
+    fun `1-to-1 conversation with cross-cohort other user is dropped`() =
+        runTest {
+            // Adult viewer; the 1:1 counterparty is a minor → drop.
+            val currentUser = TestData.createTestUser(uid = currentUserId, cohort = "adult")
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(currentUser)
+            coEvery { userRepository.getUsers(any()) } returns
+                Resource.Success(
+                    listOf(TestData.createTestUser(uid = "minor-buddy", cohort = "minor")),
+                )
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            conversationsFlow.emit(
+                listOf(
+                    TestData.createTestConversation(
+                        conversationId = "conv-cross",
+                        participantIds = listOf(currentUserId, "minor-buddy"),
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertTrue(
+                vm.uiState.value.conversations
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun `1-to-1 conversation with frozenAtMigration is dropped`() =
+        runTest {
+            // PR 8 frozen migration flag on a 1:1 thread → drop.
+            val currentUser = TestData.createTestUser(uid = currentUserId, cohort = "adult")
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(currentUser)
+            coEvery { userRepository.getUsers(any()) } returns
+                Resource.Success(
+                    listOf(TestData.createTestUser(uid = "buddy", cohort = "adult")),
+                )
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            conversationsFlow.emit(
+                listOf(
+                    TestData
+                        .createTestConversation(
+                            conversationId = "conv-frozen",
+                            participantIds = listOf(currentUserId, "buddy"),
+                        ).copy(frozenAtMigration = true),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertTrue(
+                vm.uiState.value.conversations
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun `same-cohort 1-to-1 conversation is kept`() =
+        runTest {
+            val currentUser = TestData.createTestUser(uid = currentUserId, cohort = "adult")
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(currentUser)
+            coEvery { userRepository.getUsers(any()) } returns
+                Resource.Success(
+                    listOf(TestData.createTestUser(uid = "buddy-adult", cohort = "adult")),
+                )
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            conversationsFlow.emit(
+                listOf(
+                    TestData.createTestConversation(
+                        conversationId = "conv-ok",
+                        participantIds = listOf(currentUserId, "buddy-adult"),
+                    ),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertEquals(1, vm.uiState.value.conversations.size)
+        }
+
     // ===== clearError =====
 
     @Test

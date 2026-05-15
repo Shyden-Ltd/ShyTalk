@@ -57,6 +57,12 @@ class HomeViewModelTest {
         every { userRepository.userUpdates } returns MutableSharedFlow()
         coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
         coEvery { roomRepository.findActiveRoomByOwner(any()) } returns null
+        // UK OSA #17 PR 12 — the cohort gate fails closed when the viewer's
+        // User doc cannot be resolved. Provide a baseline mock so every test
+        // sees a same-cohort viewer by default; tests can `coEvery` override
+        // for adult-viewer / null-viewer scenarios.
+        coEvery { userRepository.getUser(currentUserId) } returns
+            Resource.Success(TestData.createTestUser(uid = currentUserId))
     }
 
     @After
@@ -790,5 +796,167 @@ class HomeViewModelTest {
 
             assertFalse(vm.uiState.value.showReplaceRoomConfirmation)
             assertNull(vm.uiState.value.pendingRoomName)
+        }
+
+    // ===== UK OSA #17 PR 12 — client-side cohort gate =====
+
+    @Test
+    fun `adult viewer sees only adult-owned rooms when batch is mixed`() =
+        runTest {
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(TestData.createTestUser(uid = currentUserId, cohort = "adult"))
+            coEvery { userRepository.getUsers(any()) } returns
+                Resource.Success(
+                    listOf(
+                        TestData.createTestUser(uid = "owner-adult", cohort = "adult"),
+                        TestData.createTestUser(uid = "owner-minor", cohort = "minor"),
+                    ),
+                )
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            roomsFlow.emit(
+                listOf(
+                    TestData.createTestRoom(roomId = "r-adult", ownerId = "owner-adult"),
+                    TestData.createTestRoom(roomId = "r-minor", ownerId = "owner-minor"),
+                ),
+            )
+            advanceUntilIdle()
+
+            val rooms = vm.uiState.value.rooms
+            assertEquals(1, rooms.size)
+            assertEquals("r-adult", rooms[0].roomId)
+        }
+
+    @Test
+    fun `minor viewer drops adult-owned room`() =
+        runTest {
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(TestData.createTestUser(uid = currentUserId, cohort = "minor"))
+            coEvery { userRepository.getUsers(any()) } returns
+                Resource.Success(
+                    listOf(TestData.createTestUser(uid = "owner-adult", cohort = "adult")),
+                )
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            roomsFlow.emit(listOf(TestData.createTestRoom(ownerId = "owner-adult")))
+            advanceUntilIdle()
+
+            assertTrue(
+                vm.uiState.value.rooms
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun `cohort gate fails closed when viewer User cannot be resolved`() =
+        runTest {
+            // Both batch and direct getUser fallback return Error → viewer
+            // unresolvable → drop all rooms (fail-closed, matches
+            // ConversationListViewModel for OSA consistency).
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Error("fetch failed")
+            coEvery { userRepository.getUsers(any()) } returns
+                Resource.Success(
+                    listOf(TestData.createTestUser(uid = "owner-1", cohort = "minor")),
+                )
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            roomsFlow.emit(listOf(TestData.createTestRoom(ownerId = "owner-1")))
+            advanceUntilIdle()
+
+            assertTrue(
+                vm.uiState.value.rooms
+                    .isEmpty(),
+            )
+        }
+
+    @Test
+    fun `cohortOverride on viewer is honoured by the gate`() =
+        runTest {
+            // Stored cohort is "minor" but admin override uplifts to "adult".
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(
+                    TestData.createTestUser(
+                        uid = currentUserId,
+                        cohort = "minor",
+                        cohortOverride = "adult",
+                    ),
+                )
+            coEvery { userRepository.getUsers(any()) } returns
+                Resource.Success(
+                    listOf(TestData.createTestUser(uid = "owner-adult", cohort = "adult")),
+                )
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            roomsFlow.emit(listOf(TestData.createTestRoom(ownerId = "owner-adult")))
+            advanceUntilIdle()
+
+            assertEquals(1, vm.uiState.value.rooms.size)
+        }
+
+    @Test
+    fun `cross-cohort seated user is redacted from seatUsers map`() =
+        runTest {
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(TestData.createTestUser(uid = currentUserId, cohort = "adult"))
+            // Owner is adult (so room passes gate), but a seated user is
+            // a minor → must be dropped from seatUsers (defense-in-depth
+            // for mid-session cohort flips).
+            val seats =
+                ChatRoom.DEFAULT_SEATS
+                    .toMutableMap()
+                    .apply {
+                        this["0"] =
+                            com.shyden.shytalk.core.model.Seat(
+                                userId = "owner-adult",
+                                state = com.shyden.shytalk.core.model.SeatState.OCCUPIED,
+                            )
+                        this["1"] =
+                            com.shyden.shytalk.core.model.Seat(
+                                userId = "seat-minor",
+                                state = com.shyden.shytalk.core.model.SeatState.OCCUPIED,
+                            )
+                    }
+            coEvery { userRepository.getUsers(any()) } returns
+                Resource.Success(
+                    listOf(
+                        TestData.createTestUser(uid = "owner-adult", cohort = "adult"),
+                        TestData.createTestUser(uid = "seat-minor", cohort = "minor"),
+                    ),
+                )
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            roomsFlow.emit(
+                listOf(TestData.createTestRoom(roomId = "r1", ownerId = "owner-adult", seats = seats)),
+            )
+            advanceUntilIdle()
+
+            assertEquals(1, vm.uiState.value.rooms.size)
+            assertTrue("seat-minor" !in vm.uiState.value.seatUsers)
+            assertTrue("owner-adult" in vm.uiState.value.seatUsers)
+        }
+
+    @Test
+    fun `doCreateRoom uses effectiveCohort with invalid cohort falling back to minor`() =
+        runTest {
+            // Corrupted Firestore cohort field — must NOT be passed
+            // straight through to createRoom; effectiveCohort fails
+            // closed to "minor".
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(
+                    TestData.createTestUser(uid = currentUserId, cohort = "corrupted"),
+                )
+            val vm = createViewModel()
+            advanceUntilIdle()
+            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Success("rid")
+
+            vm.createRoom("My Room")
+            advanceUntilIdle()
+
+            coVerify { roomRepository.createRoom("My Room", currentUserId, "minor") }
         }
 }

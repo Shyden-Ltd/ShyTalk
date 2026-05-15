@@ -989,4 +989,7 @@
     <!-- UK OSA #17 PR 7: cohort-segregation room-ejection system PM body. Sibling of age_seg_relationship_removed_pm — same English-only-in-this-PR contract; remaining 19 locales ship in PR 14 alongside server-side locale awareness. The %1$s placeholder is the (sanitised) room name. Copy reuses the load-bearing "a recent change to how ShyTalk organises accounts" phrase so the user-facing voice is consistent across PR 6 + PR 7 ejection paths. Cohort-agnostic by construction — see formatRoomEjectionPm test for the full denylist. -->
     <string name="age_seg_room_removed_pm">You\'ve been removed from %1$s as part of a recent change to how ShyTalk organises accounts.\n\nThis is automatic and doesn\'t reflect anything you did. The room itself is fine; we just can\'t keep you in it under the new arrangement.\n\nYou can still create or join other rooms in your usual way.</string>
 
+    <!-- UK OSA #17 PR 12: cohort-segregation placeholder label used by Compose UI to render a generic "unavailable" tile when the cross-cohort filter (CrossCohortPolicy.PLACEHOLDER) drops an item from a list. English-only in this PR; remaining 19 locales ship in PR 14 with the locale-awareness sweep. Cohort-agnostic by construction — must never name "minor" / "adult" / age, since the placeholder is rendered to the OTHER cohort and would otherwise leak the dropped item's cohort. -->
+    <string name="age_seg_unavailable">Unavailable</string>
+
 </resources>

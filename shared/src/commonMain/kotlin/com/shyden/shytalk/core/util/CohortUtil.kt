@@ -1,5 +1,6 @@
 package com.shyden.shytalk.core.util
 
+import com.shyden.shytalk.core.model.User
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
@@ -12,8 +13,34 @@ import kotlin.time.Instant
 const val COHORT_MINOR: String = "minor"
 const val COHORT_ADULT: String = "adult"
 
+/** Allow-list of accepted cohort strings — anything else fails closed to minor. */
+private val VALID_COHORTS: Set<String> = setOf(COHORT_MINOR, COHORT_ADULT)
+
 /** Age at which a user crosses from minor to adult cohort. */
 const val ADULT_AGE_THRESHOLD: Int = 18
+
+/**
+ * KMP mirror of `express-api/src/utils/firebase-claims.js::effectiveCohort`.
+ * Resolution order:
+ *   1. `cohortOverride` if allow-listed (admin-set, audit-logged)
+ *   2. `cohort` if allow-listed (DOB-derived by pm-lock-check)
+ *   3. `"minor"` — most-restrictive default
+ *
+ * Keep in lock-step with the Express helper. Divergence means a user
+ * the server filters out is still visible client-side (or vice versa).
+ */
+fun effectiveCohort(
+    cohort: String,
+    cohortOverride: String?,
+): String {
+    if (cohortOverride != null && cohortOverride in VALID_COHORTS) return cohortOverride
+    if (cohort in VALID_COHORTS) return cohort
+    return COHORT_MINOR
+}
+
+/** Convenience: resolve the effective cohort for a [User] doc. */
+val User.effectiveCohort: String
+    get() = effectiveCohort(cohort, cohortOverride)
 
 /**
  * Map a date-of-birth to the segregation cohort tag, evaluated in UTC.

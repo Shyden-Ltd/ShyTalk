@@ -855,4 +855,110 @@ class FollowListViewModelTest {
 
             assertFalse(vm.uiState.value.isSuperShy)
         }
+
+    // ===== UK OSA #17 PR 12 — client-side cohort gate =====
+
+    @Test
+    fun `adult viewer's followers list drops minor follower`() =
+        runTest {
+            // Adult viewer's own profile, minor follower must be filtered out.
+            val profileUser =
+                TestData.createTestUser(
+                    uid = currentUserId,
+                    cohort = "adult",
+                    followerIds = setOf("follower-adult", "follower-minor"),
+                )
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(profileUser)
+            coEvery { userRepository.getUsers(any()) } returns
+                Resource.Success(
+                    listOf(
+                        TestData.createTestUser(uid = "follower-adult", cohort = "adult"),
+                        TestData.createTestUser(uid = "follower-minor", cohort = "minor"),
+                    ),
+                )
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            val followerUids =
+                vm.uiState.value.followers
+                    .map { it.uid }
+            assertEquals(listOf("follower-adult"), followerUids)
+        }
+
+    @Test
+    fun `cross-cohort stalker is dropped from both stalkers list and stalkerUsers map`() =
+        runTest {
+            val profileUser =
+                TestData.createTestUser(
+                    uid = currentUserId,
+                    cohort = "adult",
+                    followerIds = emptySet(),
+                    followingIds = emptySet(),
+                )
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Success(profileUser)
+            coEvery { userRepository.getUsers(emptyList()) } returns Resource.Success(emptyList())
+            coEvery { userRepository.getStalkers(currentUserId) } returns
+                Resource.Success(
+                    listOf(
+                        TestData.createTestProfileVisitor(visitorId = "visitor-adult"),
+                        TestData.createTestProfileVisitor(visitorId = "visitor-minor"),
+                    ),
+                )
+            // Stalker users are fetched via a separate getUsers(visitorIds) call.
+            coEvery { userRepository.getUsers(listOf("visitor-adult", "visitor-minor")) } returns
+                Resource.Success(
+                    listOf(
+                        TestData.createTestUser(uid = "visitor-adult", cohort = "adult"),
+                        TestData.createTestUser(uid = "visitor-minor", cohort = "minor"),
+                    ),
+                )
+
+            val vm = createViewModel(initialTab = "stalkers")
+            advanceUntilIdle()
+
+            assertTrue("visitor-minor" !in vm.uiState.value.stalkerUsers)
+            assertTrue("visitor-adult" in vm.uiState.value.stalkerUsers)
+            assertEquals(
+                listOf("visitor-adult"),
+                vm.uiState.value.stalkers
+                    .map { it.visitorId },
+            )
+        }
+
+    @Test
+    fun `viewer null on non-own list fails closed to empty followers and following`() =
+        runTest {
+            // Viewing another user's profile, but our own User getUser
+            // returns Error → viewer null → fail-closed (lists empty).
+            val otherUserId = "other-user"
+            val otherProfile =
+                TestData.createTestUser(
+                    uid = otherUserId,
+                    cohort = "adult",
+                    followerIds = setOf("follower-1"),
+                    followingIds = setOf("following-1"),
+                )
+            coEvery { userRepository.getUser(otherUserId) } returns Resource.Success(otherProfile)
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Error("fetch failed")
+            coEvery { userRepository.getUsers(any()) } returns
+                Resource.Success(
+                    listOf(
+                        TestData.createTestUser(uid = "follower-1"),
+                        TestData.createTestUser(uid = "following-1"),
+                    ),
+                )
+
+            val vm = createViewModel(profileUid = otherUserId)
+            advanceUntilIdle()
+
+            assertTrue(
+                vm.uiState.value.followers
+                    .isEmpty(),
+            )
+            assertTrue(
+                vm.uiState.value.following
+                    .isEmpty(),
+            )
+        }
 }

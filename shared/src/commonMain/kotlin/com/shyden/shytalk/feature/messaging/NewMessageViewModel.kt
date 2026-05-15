@@ -6,6 +6,7 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.UiText
+import com.shyden.shytalk.core.util.filterSameCohortAs
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.PrivateMessageRepository
@@ -48,6 +49,15 @@ class NewMessageViewModel(
     private val currentUserId: String = authRepository.currentUserId ?: ""
     private var searchJob: Job? = null
 
+    /**
+     * UK OSA #17 PR 12 — cached viewer doc for the client-side cohort
+     * filter. Set by [loadAvailableUsers] (which already fetches it for
+     * `followerIds + followingIds`). Other loaders use it via
+     * [filterSameCohortAs] to apply HIDE policy to picker rows: there is
+     * no UX value in showing un-messageable cross-cohort users.
+     */
+    private var viewerUser: User? = null
+
     init {
         logI(TAG, "Initializing new message screen")
         loadAvailableUsers()
@@ -68,6 +78,7 @@ class NewMessageViewModel(
                         return@launch
                     }
                 }
+            viewerUser = currentUser
 
             val allIds =
                 (currentUser.followerIds + currentUser.followingIds)
@@ -81,10 +92,12 @@ class NewMessageViewModel(
 
             when (val result = userRepository.getUsers(allIds)) {
                 is Resource.Success -> {
+                    // Defence-in-depth cohort filter (HIDE policy on picker)
+                    val sameCohort = result.data.filterSameCohortAs(currentUser)
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            availableUsers = result.data.sortedBy { u -> u.displayName.lowercase() },
+                            availableUsers = sameCohort.sortedBy { u -> u.displayName.lowercase() },
                         )
                     }
                 }
@@ -114,7 +127,11 @@ class NewMessageViewModel(
                             // Maintain the order from recentUserIds
                             val usersMap = result.data.associateBy { it.uid }
                             val ordered = recentUserIds.mapNotNull { usersMap[it] }
-                            _uiState.update { it.copy(recentUsers = ordered) }
+                            // Defence-in-depth: drop cross-cohort recent
+                            // users. Fall back to empty when viewer not
+                            // yet loaded — fail-closed for picker rows.
+                            val filtered = viewerUser?.let { ordered.filterSameCohortAs(it) } ?: emptyList()
+                            _uiState.update { it.copy(recentUsers = filtered) }
                         }
 
                         else -> Unit
@@ -180,10 +197,14 @@ class NewMessageViewModel(
                 _uiState.update { it.copy(isSearchingAll = true) }
                 when (val result = pmRepository.searchUsers(query, currentUserId)) {
                     is Resource.Success -> {
+                        // Defence-in-depth cohort filter on search results
+                        // (server already filters via PR 5 — this is the
+                        // client mirror for tampered-build/stale-cache).
+                        val filtered = viewerUser?.let { result.data.filterSameCohortAs(it) } ?: emptyList()
                         _uiState.update {
                             it.copy(
                                 isSearchingAll = false,
-                                allUsersSearchResults = result.data,
+                                allUsersSearchResults = filtered,
                             )
                         }
                     }

@@ -6,10 +6,13 @@ import com.shyden.shytalk.core.model.Banner
 import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.util.COHORT_MINOR
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.core.util.effectiveCohort
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
+import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.RoomRepository
@@ -147,12 +150,21 @@ class HomeViewModel(
             userRepository.userUpdates.collect { updatedUser ->
                 if (updatedUser.uid in userCache) {
                     cacheUser(updatedUser.uid, updatedUser)
+                    val viewer = userCache[currentUserId]
                     _uiState.update { state ->
+                        // UK OSA #17 PR 12 — re-apply the seat-user
+                        // cohort redaction after every user-update so a
+                        // mid-session cohort flip (admin override / age-
+                        // up) immediately drops the user from the seat
+                        // map. Without this, a cross-cohort identity
+                        // would linger on the home screen until the
+                        // next manual refresh.
+                        val nextMap =
+                            state.seatUsers.let { map ->
+                                if (updatedUser.uid in map) map + (updatedUser.uid to updatedUser) else map
+                            }
                         state.copy(
-                            seatUsers =
-                                state.seatUsers.let { map ->
-                                    if (updatedUser.uid in map) map + (updatedUser.uid to updatedUser) else map
-                                },
+                            seatUsers = viewer?.let { redactCrossCohortSeatUsers(nextMap, it) } ?: nextMap,
                         )
                     }
                 }
@@ -221,7 +233,11 @@ class HomeViewModel(
     private suspend fun filterAndEmitRooms() {
         val userId = currentUserId ?: return
 
-        // Collect all user IDs we need: owners + seated users (lazy sequences)
+        // Collect all user IDs we need: owners + seated users (lazy sequences).
+        // The viewer's own User is fetched via a separate getUser(userId) call
+        // below — keeping it off the batch path avoids an extra getUsers call
+        // during the init-time empty-rooms pass that pinned existing test
+        // assertions on the exact `getUsers` invocation count.
         val ownerIds = allRooms.asSequence().map { it.ownerId }.toSet()
         val seatedUserIds =
             allRooms
@@ -246,8 +262,39 @@ class HomeViewModel(
             }
         }
 
+        // UK OSA #17 PR 12 — guarantee the viewer's User is cached
+        // before the cohort gate runs. A viewer browsing rooms without
+        // owning or sitting in any won't be present in the batch fetch
+        // above, so we fall back to a direct getUser(userId) here.
+        // Without this fallback, the cohort gate fails closed and the
+        // user would see an empty home screen on every cold start.
+        if (userId !in userCache) {
+            when (val result = userRepository.getUser(userId)) {
+                is Resource.Success -> cacheUser(userId, result.data)
+                else -> Unit
+            }
+        }
+
+        // UK OSA #17 PR 12 — client-side defence-in-depth cohort gate.
+        // Server already filters cross-cohort rooms out of the active
+        // listing; this guard catches stale offline-cache rooms and
+        // deep-linked rooms that bypassed the listing filter.
+        // Fail-CLOSED when the viewer's User doc cannot be resolved
+        // (batch + getUser fallback both failed). The same fail-closed
+        // posture is used by ConversationListViewModel.loadConversation
+        // Details for OSA consistency: a minor viewer must never see
+        // adult rooms, even on a transient Firestore hiccup.
+        val viewerUser = userCache[userId]
+        val cohortGated =
+            if (viewerUser == null) {
+                logW(TAG, "Cohort gate fail-closed — viewer User not resolvable; emitting empty room list")
+                emptyList()
+            } else {
+                filterRoomsByCohort(allRooms, viewerUser, userCache)
+            }
+
         val filtered =
-            allRooms
+            cohortGated
                 .filter { room ->
                     // Exclude closed rooms (safety net — query should already filter these)
                     if (room.state == com.shyden.shytalk.core.model.RoomState.CLOSED) return@filter false
@@ -271,11 +318,22 @@ class HomeViewModel(
                     }.toSet()
             }
 
+        // Redact cross-cohort seat users — defence-in-depth so any
+        // mid-session cohort flip (admin override, age-up) does not
+        // expose foreign-cohort identities to the viewer.
+        val filteredSeatUsers = userCache.filterKeys { key -> key in filteredSeatedUserIds }
+        val redactedSeatUsers =
+            if (viewerUser != null) {
+                redactCrossCohortSeatUsers(filteredSeatUsers, viewerUser)
+            } else {
+                filteredSeatUsers
+            }
+
         _uiState.update {
             it.copy(
                 rooms = filtered,
                 isLoading = false,
-                seatUsers = userCache.filterKeys { key -> key in filteredSeatedUserIds },
+                seatUsers = redactedSeatUsers,
             )
         }
     }
@@ -334,15 +392,16 @@ class HomeViewModel(
         // — the JWT claim is server-minted from `effectiveCohort`
         // which honours the override, so the stamped value MUST match
         // or the firestore.rules create-bind rejects.
+        // UK OSA #17 PR 12 — route through the central
+        // `User.effectiveCohort` extension so an invalid `cohort` field
+        // also fails closed to "minor" (the prior inline check honoured
+        // override but accepted any `cohort` string, even a corrupted
+        // Firestore value, which would be rejected by the rules-layer
+        // create-bind and surface as a confusing error to the user).
         val cohort =
             when (val userResult = userRepository.getUser(userId)) {
-                is Resource.Success -> {
-                    val user = userResult.data
-                    val override = user.cohortOverride
-                    if (override == "adult" || override == "minor") override else user.cohort
-                }
-
-                else -> "minor"
+                is Resource.Success -> userResult.data.effectiveCohort
+                else -> COHORT_MINOR
             }
 
         when (val result = roomRepository.createRoom(name, userId, cohort)) {

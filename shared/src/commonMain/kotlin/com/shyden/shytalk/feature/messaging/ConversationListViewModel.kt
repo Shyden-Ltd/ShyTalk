@@ -8,6 +8,7 @@ import com.shyden.shytalk.core.model.User
 import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.ModerationFilter
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.core.util.effectiveCohort
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
@@ -168,7 +169,7 @@ class ConversationListViewModel(
         }
 
         // Show conversations with inline settings — no background refresh needed
-        val conversationsWithDetails = buildConversationList(conversations, blockedByMe)
+        val conversationsWithDetails = buildConversationList(conversations, blockedByMe, currentUser)
         emitSortedConversations(conversationsWithDetails)
     }
 
@@ -176,8 +177,10 @@ class ConversationListViewModel(
     private fun buildConversationList(
         conversations: List<Conversation>,
         blockedByMe: Set<String>,
-    ): List<ConversationWithUser> =
-        conversations.mapNotNull { conversation ->
+        currentUser: User,
+    ): List<ConversationWithUser> {
+        val viewerCohort = currentUser.effectiveCohort
+        return conversations.mapNotNull { conversation ->
             val settings = settingsCache[conversation.conversationId]
 
             // Filter hidden conversations (unless a new message arrived after hiding)
@@ -199,15 +202,29 @@ class ConversationListViewModel(
                     groupPhotoUrl = conversation.groupPhotoUrl,
                 )
             } else {
+                // UK OSA #17 PR 12 — drop migration-frozen 1:1 threads.
+                // PR 8 set frozenAtMigration on cross-cohort 1:1 threads
+                // at the regulatory rollout; the comment on Conversation
+                // states the KMP filter lands in PR 12 (this PR).
+                if (conversation.frozenAtMigration) return@mapNotNull null
+
                 val otherUserId = conversation.otherUserId(currentUserId) ?: return@mapNotNull null
                 val otherUser = userCache[otherUserId]
 
-                // Skip blocking checks for system user
+                // Skip blocking + cohort checks for the system user — system
+                // notifications must reach every account regardless of cohort.
                 val isSystemConversation = otherUserId == Constants.SYSTEM_USER_ID
                 if (!isSystemConversation) {
                     val blockedByTarget = otherUser?.blockedUserIds?.contains(currentUserId) == true
                     val isBlocked = otherUserId in blockedByMe || blockedByTarget
                     if (isBlocked) return@mapNotNull null
+
+                    // Defence-in-depth: drop any cross-cohort 1:1 thread
+                    // that escaped the PR 8 migration (stale offline cache
+                    // / deep-link / age-up after thread was cached).
+                    if (otherUser != null && otherUser.effectiveCohort != viewerCohort) {
+                        return@mapNotNull null
+                    }
                 }
 
                 ConversationWithUser(
@@ -218,6 +235,7 @@ class ConversationListViewModel(
                 )
             }
         }
+    }
 
     private fun emitSortedConversations(list: List<ConversationWithUser>) {
         val sorted =
