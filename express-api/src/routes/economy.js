@@ -25,8 +25,10 @@ const crypto = require('node:crypto');
 const router = require('express').Router();
 const { db, FieldValue } = require('../utils/firebase');
 const { generateId, now, todayStr, yesterdayStr } = require('../utils/helpers');
-const { requireAdmin } = require('../middleware/auth');
+const { requireAdmin, isLiveAdmin } = require('../middleware/auth');
 const { requireSameCohort } = require('../middleware/sameCohort');
+const { effectiveCohort, cohortFromClaim } = require('../utils/firebase-claims');
+const { filterListByCohort } = require('../utils/cohort-filter');
 const log = require('../utils/log');
 const { verifyProductPurchase, verifySubscription } = require('../utils/playStore');
 const { verifyApplePurchase } = require('../utils/appleStore');
@@ -157,20 +159,29 @@ async function addBroadcast(data) {
  * field — the receivedCount remains accurate, which is the
  * primary-display value.
  */
-async function updateGiftWall(recipientId, giftId, senderId, quantity) {
+async function updateGiftWall(recipientId, giftId, senderId, quantity, senderCohort) {
   const wallRef = db.doc(`users/${recipientId}/giftWall/${giftId}`);
   const wallSnap = await wallRef.get();
   const wallDoc = wallSnap.exists ? wallSnap.data() : null;
 
   const senders = wallDoc?.senders || [];
 
-  // Update or add sender (best-effort — see function header)
+  // Update or add sender (best-effort — see function header). PR 10:
+  // stamp the sender's cohort on the entry so the read path can apply
+  // the inner-list filter without a per-entry live lookup. Existing
+  // pre-PR-10 entries that lack `cohort` are also backfilled on next
+  // send — the legacy-fallback in cohort-filter.js handles the rest.
   const existingSender = senders.find((s) => s.senderId === senderId);
   if (existingSender) {
     existingSender.sendCount = (existingSender.sendCount || 0) + quantity;
     existingSender.lastSentAt = now();
+    if (senderCohort && !existingSender.cohort) {
+      existingSender.cohort = senderCohort;
+    }
   } else {
-    senders.push({ senderId, sendCount: quantity, lastSentAt: now() });
+    const entry = { senderId, sendCount: quantity, lastSentAt: now() };
+    if (senderCohort) entry.cohort = senderCohort;
+    senders.push(entry);
   }
 
   // Sort senders by count descending, keep top 50
@@ -236,27 +247,36 @@ async function writeRoomGiftMessage(roomId, senderId, senderName, text, giftId, 
  * concurrent updates can drop entries — but the totalSent counter
  * remains accurate.
  */
-async function updateGiftRankings(recipientId, giftId, quantity) {
+async function updateGiftRankings(recipientId, giftId, quantity, recipientCohort) {
   try {
     const rankRef = db.doc(`giftRankings/${giftId}`);
     const rankSnap = await rankRef.get();
     const rankDoc = rankSnap.exists ? rankSnap.data() : {};
     const rankings = rankDoc.rankings || [];
 
-    // Find or add recipient in rankings
+    // Find or add recipient in rankings. PR 10: stamp the recipient's
+    // cohort so the read path can filter cross-cohort entries without
+    // a per-entry live lookup. Pre-PR-10 entries lacking `cohort` are
+    // backfilled on next send; legacy-fallback in cohort-filter.js
+    // handles unrewritten rows.
     const existing = rankings.find((r) => r.userId === recipientId);
     if (existing) {
       existing.count = (existing.count || 0) + quantity;
+      if (recipientCohort && !existing.cohort) {
+        existing.cohort = recipientCohort;
+      }
     } else {
       // Get recipient display info
       const userSnap = await db.doc(`users/${recipientId}`).get();
       const user = userSnap.exists ? userSnap.data() : {};
-      rankings.push({
+      const entry = {
         userId: recipientId,
         count: quantity,
         displayName: userField(user, 'displayName', 'display_name') || '',
         profilePhotoUrl: userField(user, 'profilePhotoUrl', 'profile_photo_url') || '',
-      });
+      };
+      if (recipientCohort) entry.cohort = recipientCohort;
+      rankings.push(entry);
     }
 
     // Sort by count descending, keep top 100
@@ -288,21 +308,6 @@ async function updateGiftRankings(recipientId, giftId, quantity) {
 
 // ─── Shared gift helpers ─────────────────────────────────────────
 // (block-check helpers live in ../utils/block-check — imported above)
-
-/**
- * Load the target user doc and refuse with 403 if they have blocked
- * the caller (C7). Returns false when 403 was sent — caller must
- * `return` immediately to avoid double-send. Returns true to continue.
- */
-async function refuseIfTargetBlocksViewer(req, res) {
-  const snap = await db.doc(`users/${req.params.uniqueId}`).get();
-  const target = snap.exists ? snap.data() : null;
-  if (viewerIsBlocked(req.auth.uniqueId, target)) {
-    res.status(403).json({ error: 'Cannot view content of users who have blocked you' });
-    return false;
-  }
-  return true;
-}
 
 /** Compute daily reward from config and streak. */
 function computeDailyReward(config, newStreak, isSuperShy) {
@@ -784,6 +789,12 @@ router.post('/economy/gift', async (req, res) => {
       return res.status(402).json({ error: 'Insufficient items in backpack' });
     if (await requireSameCohort(req, res, recipientId, () => recipient)) return;
 
+    // PR 10: snapshot cohorts for write-time stamping on rankings + wall.
+    // Sender cohort comes from the JWT claim (single source of truth used
+    // by the gate above); recipient cohort comes from their user doc.
+    const senderCohort = cohortFromClaim(req);
+    const recipientCohort = effectiveCohort(recipient);
+
     const blockError = checkBlockRelationship(sender, recipient, uniqueId, recipientId);
     if (blockError) {
       log.warn('economy', 'Gift blocked: sender/recipient blocked', {
@@ -815,7 +826,7 @@ router.post('/economy/gift', async (req, res) => {
     });
 
     // Update recipient gift wall
-    await updateGiftWall(recipientId, giftId, uniqueId, quantity);
+    await updateGiftWall(recipientId, giftId, uniqueId, quantity, senderCohort);
 
     // Credit beans (atomic increment to avoid race conditions)
     await db.doc(`users/${recipientId}`).update({ shyBeans: FieldValue.increment(beanReward) });
@@ -895,7 +906,7 @@ router.post('/economy/gift', async (req, res) => {
     }
 
     // Update gift rankings incrementally
-    await updateGiftRankings(recipientId, giftId, quantity);
+    await updateGiftRankings(recipientId, giftId, quantity, recipientCohort);
 
     res.json({ success: true, beanReward, giftName: gift.name, quantity });
   } catch (err) {
@@ -931,6 +942,10 @@ router.post('/economy/gift-direct', async (req, res) => {
     // UK OSA #17 PR 9 — cohort gate. Collapses missing-recipient and
     // cross-cohort branches into a byte-identical 404 'Not found'.
     if (await requireSameCohort(req, res, recipientId, () => recipient)) return;
+
+    // PR 10: snapshot cohorts for write-time stamping.
+    const senderCohort = cohortFromClaim(req);
+    const recipientCohort = effectiveCohort(recipient);
 
     const blockError = checkBlockRelationship(sender, recipient, uniqueId, recipientId);
     if (blockError) {
@@ -973,7 +988,7 @@ router.post('/economy/gift-direct', async (req, res) => {
     }
 
     // Gift wall
-    await updateGiftWall(recipientId, giftId, uniqueId, quantity);
+    await updateGiftWall(recipientId, giftId, uniqueId, quantity, senderCohort);
 
     // Beans (atomic)
     await db.doc(`users/${recipientId}`).update({ shyBeans: FieldValue.increment(beanReward) });
@@ -1037,7 +1052,7 @@ router.post('/economy/gift-direct', async (req, res) => {
     }
 
     // Update gift rankings incrementally
-    await updateGiftRankings(recipientId, giftId, quantity);
+    await updateGiftRankings(recipientId, giftId, quantity, recipientCohort);
 
     res.json({ success: true, beanReward, giftName: gift.name, coinsSpent: totalCost, quantity });
   } catch (err) {
@@ -1118,6 +1133,13 @@ router.post('/economy/gift-batch', async (req, res) => {
       if (await requireSameCohort(req, res, recipientIds[i], () => recipientData)) return;
     }
 
+    // PR 10: sender cohort is constant across the batch; recipient
+    // cohort varies and is computed per-iteration below. Same-cohort
+    // is already enforced for every recipient above, so in practice
+    // senderCohort === recipientCohort for every iteration — we still
+    // pass both explicitly so the stamping logic is straightforward.
+    const senderCohort = cohortFromClaim(req);
+
     // Check block relationships — UK OSA requires blocking prevents ALL contact
     for (let i = 0; i < recipientIds.length; i++) {
       if (!recipientSnaps[i].exists) continue;
@@ -1160,10 +1182,11 @@ router.post('/economy/gift-batch', async (req, res) => {
       const recipientBeans = userField(recipient, 'shyBeans', 'shy_beans') || 0;
 
       const beanReward = Math.floor(coinValue * config.beanConversionRate * quantity);
+      const recipientCohort = effectiveCohort(recipient);
 
       // Gift wall + beans (atomic) + transaction
-      await updateGiftWall(recipientId, giftId, uniqueId, quantity);
-      await updateGiftRankings(recipientId, giftId, quantity);
+      await updateGiftWall(recipientId, giftId, uniqueId, quantity, senderCohort);
+      await updateGiftRankings(recipientId, giftId, quantity, recipientCohort);
       await db.doc(`users/${recipientId}`).update({ shyBeans: FieldValue.increment(beanReward) });
 
       const recipientTxId = generateId();
@@ -1255,6 +1278,10 @@ router.post('/economy/backpack-send', async (req, res) => {
     // cross-cohort branches into a byte-identical 404 'Not found'.
     if (await requireSameCohort(req, res, recipientId, () => recipient)) return;
 
+    // PR 10: snapshot cohorts for write-time stamping on each item.
+    const senderCohort = cohortFromClaim(req);
+    const recipientCohort = effectiveCohort(recipient);
+
     const blockError = checkBlockRelationship(sender, recipient, uniqueId, recipientId);
     if (blockError) {
       log.warn('economy', 'Gift blocked: sender/recipient blocked', {
@@ -1295,8 +1322,8 @@ router.post('/economy/backpack-send', async (req, res) => {
       totalBeanReward += beanReward;
 
       // Gift wall + rankings
-      await updateGiftWall(recipientId, item.giftId, uniqueId, qty);
-      await updateGiftRankings(recipientId, item.giftId, qty);
+      await updateGiftWall(recipientId, item.giftId, uniqueId, qty, senderCohort);
+      await updateGiftRankings(recipientId, item.giftId, qty, recipientCohort);
     }
 
     // Atomic: bean credit + ALL backpack deletes in the same batch.
@@ -1916,9 +1943,22 @@ router.get('/users/:uniqueId/backpack', async (req, res) => {
 // ── Gift wall ──
 router.get('/users/:uniqueId/gift-wall', async (req, res) => {
   try {
+    // PR 10 — outer cohort gate. The target's gift wall is itself a
+    // user-owned list, so cross-cohort callers get the byte-identical
+    // 404 existence-hider. Target doc is fetched once and shared with
+    // the block check below.
+    const targetSnap = await db.doc(`users/${req.params.uniqueId}`).get();
+    const target = targetSnap.exists ? targetSnap.data() : null;
+
+    if (await requireSameCohort(req, res, req.params.uniqueId, () => target)) return;
+
     // C7 (block-list integrity): a user who has been blocked by the
-    // target must not be able to see the target's gift wall.
-    if (!(await refuseIfTargetBlocksViewer(req, res))) return;
+    // target must not be able to see the target's gift wall. Runs
+    // AFTER the cohort gate so 403 only fires for same-cohort blocks
+    // (cross-cohort would have already returned 404).
+    if (target && viewerIsBlocked(req.auth.uniqueId, target)) {
+      return res.status(403).json({ error: 'Cannot view content of users who have blocked you' });
+    }
 
     const snap = await db.collection(`users/${req.params.uniqueId}/giftWall`).get();
     const results = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -1932,17 +1972,38 @@ router.get('/users/:uniqueId/gift-wall', async (req, res) => {
 // ── Gift wall senders ──
 router.get('/users/:uniqueId/gift-wall/:giftId/senders', async (req, res) => {
   try {
+    // PR 10 — outer cohort gate (mirrors the gift-wall handler above).
+    const targetSnap = await db.doc(`users/${req.params.uniqueId}`).get();
+    const target = targetSnap.exists ? targetSnap.data() : null;
+
+    if (await requireSameCohort(req, res, req.params.uniqueId, () => target)) return;
+
     // C7: same block check as the parent gift-wall list — the sender
     // list is a strict subset of gift-wall data.
-    if (!(await refuseIfTargetBlocksViewer(req, res))) return;
+    if (target && viewerIsBlocked(req.auth.uniqueId, target)) {
+      return res.status(403).json({ error: 'Cannot view content of users who have blocked you' });
+    }
 
     const docSnap = await db
       .doc(`users/${req.params.uniqueId}/giftWall/${req.params.giftId}`)
       .get();
     const senders = docSnap.exists ? docSnap.data().senders || [] : [];
+
+    // PR 10 — inner cohort filter. Admin (live-verified) bypasses the
+    // filter to retain moderation visibility. Otherwise each sender's
+    // cohort comes from a stamped `cohort` field (PR 10 write-time) or
+    // falls back to a per-entry users/<id> lookup for legacy rows. The
+    // deleted-user case is dropped explicitly so a deleted account
+    // can't leak as a same-minor-cohort entry to minor callers.
+    const isAdmin = req?.auth?.token?.admin === true && Boolean(await isLiveAdmin(req.auth.uid));
+
+    const filtered = isAdmin
+      ? senders.slice()
+      : await filterListByCohort(senders, cohortFromClaim(req), 'senderId');
+
     // Sort by sendCount descending
-    senders.sort((a, b) => (b.sendCount || 0) - (a.sendCount || 0));
-    res.json(senders);
+    filtered.sort((a, b) => (b.sendCount || 0) - (a.sendCount || 0));
+    res.json(filtered);
   } catch (err) {
     log.error('economy', 'GET /users/:uniqueId/gift-wall/:giftId/senders failed', {
       error: err.message,

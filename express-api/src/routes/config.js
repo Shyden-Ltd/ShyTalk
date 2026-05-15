@@ -16,7 +16,9 @@
 const crypto = require('node:crypto');
 const router = require('express').Router();
 const { db } = require('../utils/firebase');
-const { requireAdmin } = require('../middleware/auth');
+const { requireAdmin, isLiveAdmin } = require('../middleware/auth');
+const { cohortFromClaim } = require('../utils/firebase-claims');
+const { filterListByCohort } = require('../utils/cohort-filter');
 const { queryDocs } = require('../utils/firestore-helpers');
 const log = require('../utils/log');
 
@@ -811,13 +813,25 @@ router.get('/broadcasts', async (req, res) => {
 });
 
 // -- Get gift rankings --
+// PR 10 (UK OSA #17) — inner cohort filter. Entries are stamped at write
+// time by economy.js updateGiftRankings; legacy entries pre-PR-10 fall
+// back to a per-entry users/<id> lookup (cohort-filter.js). Admin
+// (live-verified) bypasses the filter. `totalSent` is preserved as a
+// global stat — only the per-user rankings array is cohort-restricted.
 router.get('/gift-rankings/:giftId', async (req, res) => {
   try {
     const snap = await db.doc(`giftRankings/${req.params.giftId}`).get();
     const doc = snap.exists ? snap.data() : null;
+    const allRankings = doc?.rankings || [];
+
+    const isAdmin = req?.auth?.token?.admin === true && Boolean(await isLiveAdmin(req.auth?.uid));
+
+    const rankings = isAdmin
+      ? allRankings
+      : await filterListByCohort(allRankings, cohortFromClaim(req), 'userId');
 
     return res.json({
-      rankings: doc?.rankings || [],
+      rankings,
       totalSent: doc?.totalSent || 0,
       lastUpdated: doc?.lastUpdated || null,
     });

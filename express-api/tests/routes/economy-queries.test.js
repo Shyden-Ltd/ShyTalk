@@ -254,7 +254,13 @@ describe('GET /api/users/:uniqueId/gift-wall/:giftId/senders', () => {
   });
 
   test('returns empty array when gift wall doc does not exist', async () => {
-    mockDocGet.mockResolvedValue({ exists: false });
+    // PR 10: the cohort gate fetches the target user doc before the
+    // wall-doc lookup. Stage the user doc as existing so the gate
+    // passes, then let the global override return exists:false for
+    // the subsequent wall-doc fetch.
+    mockDocGet
+      .mockResolvedValueOnce({ exists: true, data: () => ({ blockedUserIds: [] }) })
+      .mockResolvedValue({ exists: false });
 
     const app = createApp('user-A');
     const res = await request(app).get('/api/users/user-B/gift-wall/gift-rose/senders');

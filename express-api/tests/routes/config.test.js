@@ -36,6 +36,10 @@ jest.mock('../../src/utils/firebase', () => ({
 
 jest.mock('../../src/middleware/auth', () => ({
   requireAdmin: jest.fn(() => false), // default: allow admin
+  // PR 10: gift-rankings route live-verifies admin to bypass the
+  // inner cohort filter. Default to true so admin-token tests retain
+  // their original full-list behavior.
+  isLiveAdmin: jest.fn().mockResolvedValue(true),
 }));
 
 beforeEach(() => {
