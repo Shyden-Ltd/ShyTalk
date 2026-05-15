@@ -37,6 +37,13 @@ const FIREBASE_API_KEY = process.env.SMOKE_FIREBASE_API_KEY;
 const SMOKE_EMAIL = process.env.SMOKE_TEST_EMAIL;
 const SMOKE_PASSWORD = process.env.SMOKE_TEST_PASSWORD;
 const DEV_BASIC_AUTH_PASSWORD = process.env.DEV_BASIC_AUTH_PASSWORD;
+// UK OSA #17 PR 7 added a same-cohort gate to `/api/livekit/token` that
+// reads `rooms/{roomName}` and 404s if the doc is absent (existence-
+// hiding). The smoke suite mints a token against a real Firestore room
+// doc (created via Firestore REST API as the smoke user), so we need
+// the project ID for the REST endpoint URL. Default keeps the suite
+// runnable against dev without a per-job override.
+const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || "shytalk-dev";
 // Target user the smoke account follows/unfollows during the journey
 // test. MUST be a different uniqueId than the smoke account (the route
 // rejects self-follow with 400). On dev, uniqueId 10000008/10000009
@@ -67,6 +74,7 @@ if (DEV_BASIC_AUTH_PASSWORD) {
 interface SmokeAuth {
   api: APIRequestContext;
   idToken: string;
+  refreshToken: string;
   uniqueId: number;
   targetUniqueId: number;
 }
@@ -93,7 +101,12 @@ test.beforeAll(async () => {
   }
   const signInBody = await signIn.json();
   const idToken: string = signInBody.idToken;
+  const refreshToken: string = signInBody.refreshToken;
   expect(idToken, "idToken returned").toBeTruthy();
+  expect(
+    refreshToken,
+    "refreshToken returned (needed to refresh claims after Express sign-in)",
+  ).toBeTruthy();
 
   // 2. Sign in to Express — exchanges the Firebase token for the
   //    server-side `uniqueId`. Catches the firebaseUid → uniqueId
@@ -140,7 +153,7 @@ test.beforeAll(async () => {
     "SMOKE_TARGET_UNIQUE_ID must differ from smoke account uniqueId — follow rejects self-follow",
   ).not.toBe(uniqueId);
 
-  smoke = { api, idToken, uniqueId, targetUniqueId };
+  smoke = { api, idToken, refreshToken, uniqueId, targetUniqueId };
 });
 
 test.afterAll(async () => {
@@ -468,11 +481,130 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
   // livekit-region.js, dev should configure all regions to the same
   // LiveKit instance, so this is fine.
 
+  // UK OSA #17 PR 7 added a same-cohort gate on `/api/livekit/token`
+  // that requires `rooms/{roomName}` to exist in Firestore AND have a
+  // matching `cohort` field. Pre-create a real room doc owned by the
+  // smoke user, with the cohort claim from the user's JWT (defaults
+  // 'minor' to match the rules-layer fallback). Cleaned up after the
+  // suite. We use Firestore REST (not Admin SDK) so the write goes
+  // through the rules layer — same as a real iOS/Android client — and
+  // a regression in the rooms create rule fails this test loudly.
+  let smokeRoomName: string;
+
+  // Token forcibly refreshed in beforeAll so the JWT carries the
+  // latest custom claims (uniqueId + cohort) that Express sign-in or
+  // pm-lock-check may have minted after the initial Firebase Auth
+  // sign-in. Firestore rules read claims from the JWT directly (no
+  // server-side claim lookup), so a stale token would fail the
+  // rooms-create rule even when the underlying claim *is* set.
+  let livekitFreshIdToken: string;
+
+  test.beforeAll(async () => {
+    // 1. Refresh the token via Firebase Identity secureToken endpoint.
+    //    This is the same call iOS/Android clients make via
+    //    `getIdToken(forceRefresh = true)` and is the only way to
+    //    surface server-side claim updates into the JWT.
+    const refreshRes = await smoke.api.post(
+      `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`,
+      {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        form: { grant_type: "refresh_token", refresh_token: smoke.refreshToken },
+      },
+    );
+    expect(
+      refreshRes.ok(),
+      `Token refresh must succeed (${refreshRes.status()}: ${await refreshRes.text()})`,
+    ).toBe(true);
+    const refreshBody = await refreshRes.json();
+    // securetoken endpoint returns id_token (snake_case), distinct
+    // from signInWithPassword's idToken (camelCase).
+    livekitFreshIdToken = refreshBody.id_token;
+    expect(
+      livekitFreshIdToken,
+      "id_token returned from securetoken refresh",
+    ).toBeTruthy();
+
+    // 2. Decode the fresh JWT to read the cohort claim. Match the
+    //    firestore.rules fallback exactly: `token.get('cohort',
+    //    'minor')` — accounts with no cohort claim are treated as
+    //    'minor' by the rules layer, and the LiveKit gate uses the
+    //    same fallback (`effectiveCohort` / `cohortFromClaim`), so
+    //    stamping 'minor' on the room keeps everything consistent.
+    smokeRoomName = `smoke-livekit-${Date.now()}`;
+    const jwtParts = livekitFreshIdToken.split(".");
+    const jwtPayload = JSON.parse(
+      Buffer.from(jwtParts[1], "base64url").toString(),
+    );
+    const cohort = jwtPayload.cohort === "adult" ? "adult" : "minor";
+
+    // 3. Create the room doc via Firestore REST as the smoke user —
+    //    same path as a real iOS/Android client. The
+    //    rooms-create rule (firestore.rules) enforces:
+    //      • request.resource.data.cohort == request.auth.token.cohort
+    //      • cohort ∈ {'adult', 'minor'}
+    //      • String(callerUniqueId) == request.resource.data.ownerId
+    //    If any rule check fails the response is 403.
+    const docUrl =
+      `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms?documentId=${smokeRoomName}`;
+    const writeRes = await smoke.api.post(docUrl, {
+      headers: {
+        Authorization: `Bearer ${livekitFreshIdToken}`,
+        "Content-Type": "application/json",
+      },
+      data: {
+        // Firestore REST `fields` syntax — typed values per the v1
+        // Document protobuf. We stamp the fields the rooms-create
+        // rule reads (cohort, ownerId) and a few minimum others that
+        // the LiveKit token gate doesn't touch but help operators
+        // identify the doc during cleanup investigations.
+        fields: {
+          cohort: { stringValue: cohort },
+          ownerId: { stringValue: String(smoke.uniqueId) },
+          name: { stringValue: `[SMOKE] LiveKit test room` },
+          state: { stringValue: "ACTIVE" },
+          createdAt: { integerValue: String(Date.now()) },
+        },
+      },
+    });
+    if (!writeRes.ok()) {
+      throw new Error(
+        `Firestore REST write to rooms/${smokeRoomName} failed ` +
+          `(${writeRes.status()}): ${await writeRes.text()}. ` +
+          `Verify FIREBASE_PROJECT_ID="${FIREBASE_PROJECT_ID}" matches the ` +
+          `dev Firebase project, that the smoke account has \`uniqueId\` ` +
+          `+ \`cohort\` custom claims minted (run pm-lock-check or re-sign-in ` +
+          `as the smoke user), and that the rooms-create rule still permits ` +
+          `owner=self + cohort=claim writes.`,
+      );
+    }
+  });
+
+  test.afterAll(async () => {
+    if (!smokeRoomName) return;
+    // Best-effort cleanup. A leftover smoke room is harmless (it has
+    // cohort=smoke-cohort, ownerId=smoke and no participants ever
+    // join it), but we delete to keep the dev project tidy across
+    // many CI runs. Use the SAME fresh token from beforeAll so the
+    // rules-layer delete check (owner-only) passes.
+    const docUrl =
+      `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms/${smokeRoomName}`;
+    await smoke.api
+      .delete(docUrl, {
+        headers: {
+          Authorization: `Bearer ${livekitFreshIdToken || smoke.idToken}`,
+        },
+      })
+      .catch(() => {
+        /* swallow — afterAll cleanup must not fail the run */
+      });
+  });
+
   test("POST /api/livekit/token returns a signed JWT with correct grants", async () => {
-    // Ephemeral roomName — every run uses a new value so we can assert
-    // the JWT's `video.room` claim equals exactly what we asked for.
-    // No state side-effect: tokens are stateless until used to connect.
-    const roomName = `smoke-${Date.now()}`;
+    // Use the pre-created same-cohort room (beforeAll above) so the
+    // PR 7 cohort gate matches. We still assert the JWT's `video.room`
+    // claim equals exactly what we asked for, so a regression in the
+    // grant-stamping path is caught.
+    const roomName = smokeRoomName;
 
     const res = await smoke.api.post(`${API_BASE}/api/livekit/token`, {
       headers: authedHeaders(),

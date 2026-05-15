@@ -764,6 +764,12 @@ jobs:
           SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
           SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
           SMOKE_TARGET_UNIQUE_ID: ${{ secrets.SMOKE_TARGET_UNIQUE_ID }}
+          # Firestore REST URL needs the project ID — not a secret
+          # (the project ID is referenced openly in firebase deploy
+          # steps in this same workflow at the firebase-project key).
+          # The LiveKit smoke test pre-creates a same-cohort room doc
+          # via Firestore REST per UK OSA #17 PR 7's gate requirement.
+          FIREBASE_PROJECT_ID: shytalk-dev
           # Smoke spec only hits API + Firebase Auth REST. No web
           # surface, so DEV_BASIC_AUTH_PASSWORD is not required here.
         run: npx playwright test tests/web/dev-smoke.spec.ts --project=chromium --reporter=list
