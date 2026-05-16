@@ -545,6 +545,11 @@ if (require.main === module) {
     console.log('Applying social graph...');
     await applySocialGraph(buildSocialGraphWrites(personas), ctx);
     console.log('PROVISION_ALL_OK count=' + personas.length);
+    // firebase-admin keeps the event loop alive via idle HTTP/2 keep-alive
+    // connections and metric-export timers. Force-exit so callers that
+    // chain the next step (e.g. dev-runner-bootstrap.sh Phase 4) don't
+    // wedge waiting for a graceful drain that never comes.
+    process.exit(0);
   })().catch((e) => {
     console.error('PROVISION_FAIL', e?.message || e);
     process.exit(1);

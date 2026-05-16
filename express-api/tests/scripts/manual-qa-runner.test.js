@@ -1259,3 +1259,152 @@ describe('State-seed end-to-end via runFeatureFile', () => {
     expect(findings).toEqual([]);
   });
 });
+
+// ── PR-E: OSA Background verbs (the cycle-1 finding gap) ───────────
+
+describe('OSA Background verbs (cycle 1 findings)', () => {
+  function withSignInFetch() {
+    return jest.fn(async (url) => {
+      if (typeof url === 'string' && url.includes('signInWithPassword')) {
+        const idToken =
+          'h.' +
+          Buffer.from(JSON.stringify({ uniqueId: 50000010, admin: false })).toString('base64url') +
+          '.s';
+        return {
+          status: 200,
+          json: async () => ({ idToken, refreshToken: 'r', localId: 'f' }),
+        };
+      }
+      if (typeof url === 'string' && url.endsWith('/api/health')) {
+        return { status: 200, json: async () => ({ ok: true }) };
+      }
+      return { status: 500, text: async () => '{}' };
+    });
+  }
+
+  test('sign-in tolerates "with cohort=X" qualifier', async () => {
+    const ctx = makeCtx({ fetch: withSignInFetch() });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'Hayato [P-06] is signed in on Android with cohort=adult (DOB=2007-01-01 in users doc)',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.sessions.get('Hayato')).toBeDefined();
+  });
+
+  test('sign-in tolerates "AND on <Platform>" multi-device form', async () => {
+    const ctx = makeCtx({ fetch: withSignInFetch() });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'Vexa [P-07] is signed in on Web Chromium AND on Android (same Firebase user)',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.sessions.get('Vexa')).toBeDefined();
+  });
+
+  test('sign-in tolerates trailing parenthetical context', async () => {
+    const ctx = makeCtx({ fetch: withSignInFetch() });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'Marcus [P-04] is signed in on Android (same-cohort minor) at the "discovery" screen',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('migration-state precondition passes when ops/segregation-migration exists', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDb({
+        'ops/segregation-migration': { lastMigrationRunAt: Date.now() },
+      }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'the dev environment migration ran at least once (lastMigrationRunAt is set in "ops/segregation-migration")',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('migration-state precondition fails when ops doc is missing', async () => {
+    const ctx = makeCtx({ db: makeFakeDb({}) });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'the dev environment migration ran at least once (lastMigrationRunAt is set in "ops/segregation-migration")',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/migration|ops\/segregation-migration|never run/i);
+  });
+
+  test('LiveKit Docker precondition is a no-op for dev target', async () => {
+    const ctx = makeCtx({ target: 'dev' });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'the LiveKit Docker container is running on ws://localhost:7880',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('LiveKit Docker precondition passes for local (MVP — no actual WS probe)', async () => {
+    const ctx = makeCtx({ target: 'local' });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'the LiveKit Docker container is running on ws://localhost:7880',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe('OSA Background verbs end-to-end via runFeatureFile', () => {
+  test('all four fixture scenarios pass against a seeded fake', async () => {
+    const fetchOk = jest.fn(async (url) => {
+      if (typeof url === 'string' && url.includes('signInWithPassword')) {
+        const idToken =
+          'h.' + Buffer.from(JSON.stringify({ uniqueId: 50000010 })).toString('base64url') + '.s';
+        return {
+          status: 200,
+          json: async () => ({ idToken, refreshToken: 'r', localId: 'f' }),
+        };
+      }
+      if (typeof url === 'string' && url.endsWith('/api/health')) {
+        return { status: 200, json: async () => ({ ok: true }) };
+      }
+      return { status: 500, text: async () => '{}' };
+    });
+    const ctx = makeCtx({
+      target: 'dev',
+      fetch: fetchOk,
+      db: makeFakeDb({
+        'users/50000010': { uniqueId: 50000010, cohort: 'adult' },
+        'ops/segregation-migration': { lastMigrationRunAt: 1700000000000 },
+      }),
+    });
+    const { findings, scenarioReports } = await runFeatureFile(
+      path.join(FIXTURE_DIR, 'sample-osa-background.feature'),
+      ctx,
+    );
+    for (const sr of scenarioReports) {
+      expect(sr.status).toBe('pass');
+    }
+    expect(findings).toEqual([]);
+  });
+});

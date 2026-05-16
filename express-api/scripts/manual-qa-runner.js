@@ -207,6 +207,44 @@ const matchers = [
       return { ok: true };
     },
   },
+  // OSA migration-state precondition (j19). The dev environment migration is
+  // a one-shot script whose terminal-state side-effect is a doc at
+  // `ops/segregation-migration` carrying `lastMigrationRunAt`. j19 scenarios
+  // assume that state and verify the post-migration invariants.
+  {
+    pattern:
+      /^the dev environment migration ran at least once \(lastMigrationRunAt is set in "([^"]+)"\)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
+      const docPath = m[1];
+      const snap = await ctx.db.doc(docPath).get();
+      if (!snap.exists) {
+        return {
+          ok: false,
+          error: `migration never run: "${docPath}" does not exist`,
+        };
+      }
+      const data = snap.data();
+      if (!data.lastMigrationRunAt) {
+        return {
+          ok: false,
+          error: `migration ops/segregation-migration exists but lacks lastMigrationRunAt`,
+        };
+      }
+      return { ok: true };
+    },
+  },
+  // LiveKit Docker precondition (j09). For local target, this would probe
+  // ws://localhost:7880; for dev/prod, dev uses real LiveKit at
+  // livekit-eu.shytalk.shyden.co.uk and this verb is informational only.
+  // MVP: no-op pass for all targets — actual websocket probe is future work
+  // (track via a follow-up issue if the j09 contract needs strict liveness).
+  {
+    pattern: /^the LiveKit Docker container is running on ws:\/\/[^\s]+$/,
+    async handler(_m, _ctx) {
+      return { ok: true };
+    },
+  },
   {
     pattern: /^the device locale is "([a-z]{2})"$/,
     async handler(m, ctx) {
@@ -221,9 +259,20 @@ const matchers = [
   // treats platform as informational only: the same Firebase identity is used
   // regardless of the asserted client platform. The `at the "X" screen`
   // suffix is a UI hint that the runner ignores in MVP.
+  //
+  // PR-E loosens the trailing context to also tolerate:
+  //   - `with cohort=adult` qualifier (informational — actual cohort comes
+  //     from the JWT custom claim once signed in)
+  //   - `AND on <Other Platform>` multi-device clause (informational —
+  //     runner signs the same Firebase user in once)
+  //   - parenthetical informational notes like `(same Firebase user)`,
+  //     `(same-cohort minor)`, `(DOB=2007-01-01 in users doc)`
+  //
+  // The strategy is permissive consumption: anything after `is signed in`
+  // that doesn't drive a distinct API call is treated as documentation.
   {
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is signed in(?:\s+on\s+\w+(?:\s+\w+){0,2})?(?:\s+\(no admin claim\))?(?:\s+at\s+the\s+"[^"]+"\s+screen)?$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is signed in(?:\s+on\s+\w+(?:\s+\w+){0,2})?(?:\s+AND\s+on\s+\w+(?:\s+\w+){0,2})?(?:\s+with\s+cohort=\w+)?(?:\s+\([^)]*\))?(?:\s+\(no admin claim\))?(?:\s+at\s+the\s+"[^"]+"\s+screen)?$/,
     async handler(m, ctx) {
       const name = m[1];
       const personas = loadPersonas();
