@@ -293,6 +293,128 @@ describe('executeStep', () => {
     expect(ctx.sessions.get('Alice').customClaims.uniqueId).toBe(50000010);
   });
 
+  test('persona sign-in matches "on <Platform>" suffix (single-word)', async () => {
+    const idToken =
+      'aaa.' + Buffer.from(JSON.stringify({ uniqueId: 50000010 })).toString('base64url') + '.bbb';
+    const ctx = makeCtx({
+      fetch: jest.fn(async () => ({
+        status: 200,
+        json: async () => ({ idToken, refreshToken: 'r', localId: 'f' }),
+      })),
+    });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice [P-02] is signed in on Android' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.sessions.get('Alice')).toBeDefined();
+  });
+
+  test('persona sign-in matches multi-word platform ("Web Chromium", "iOS Sim")', async () => {
+    const idToken =
+      'aaa.' + Buffer.from(JSON.stringify({ uniqueId: 50000040 })).toString('base64url') + '.bbb';
+    const ctx = makeCtx({
+      fetch: jest.fn(async () => ({
+        status: 200,
+        json: async () => ({ idToken, refreshToken: 'r', localId: 'f' }),
+      })),
+    });
+    const r1 = await executeStep(
+      { kind: 'Given', text: 'Vexa [P-07] is signed in on Web Chromium' },
+      ctx,
+    );
+    expect(r1.ok).toBe(true);
+    const r2 = await executeStep(
+      { kind: 'Given', text: 'Ines [P-11] is signed in on iOS Sim' },
+      ctx,
+    );
+    expect(r2.ok).toBe(true);
+  });
+
+  test('decoded JWT payload — dotted-path field equality passes', async () => {
+    const payload = Buffer.from(
+      JSON.stringify({ video: { room: 'ra1' }, metadata: { cohort: 'adult' } }),
+    ).toString('base64url');
+    const token = 'h.' + payload + '.s';
+    const ctx = makeCtx();
+    ctx.lastResponse = { body: { token } };
+    const r1 = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the decoded JWT payload has field "metadata.cohort" equal to "adult"',
+      },
+      ctx,
+    );
+    expect(r1.ok).toBe(true);
+    const r2 = await executeStep(
+      { kind: 'Then', text: 'the decoded JWT payload has field "video.room" equal to "ra1"' },
+      ctx,
+    );
+    expect(r2.ok).toBe(true);
+  });
+
+  test('decoded JWT payload — wrong claim fails with both expected + actual', async () => {
+    const payload = Buffer.from(JSON.stringify({ metadata: { cohort: 'minor' } })).toString(
+      'base64url',
+    );
+    const token = 'h.' + payload + '.s';
+    const ctx = makeCtx();
+    ctx.lastResponse = { body: { token } };
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the decoded JWT payload has field "metadata.cohort" equal to "adult"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('adult');
+    expect(r.error).toContain('minor');
+  });
+
+  test('decoded JWT payload — missing token field produces actionable error', async () => {
+    const ctx = makeCtx();
+    ctx.lastResponse = { body: { somethingElse: 'x' } };
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the decoded JWT payload has field "metadata.cohort" equal to "adult"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no token field/i);
+  });
+
+  test('decoded JWT payload — falls back to idToken and accessToken fields', async () => {
+    const payload = Buffer.from(JSON.stringify({ uid: 'x' })).toString('base64url');
+    const token = 'h.' + payload + '.s';
+    const ctx = makeCtx();
+    ctx.lastResponse = { body: { idToken: token } };
+    const r = await executeStep(
+      { kind: 'Then', text: 'the decoded JWT payload has field "uid" equal to "x"' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('persona sign-in matches `at the "X" screen` suffix', async () => {
+    const idToken =
+      'aaa.' + Buffer.from(JSON.stringify({ uniqueId: 50000010 })).toString('base64url') + '.bbb';
+    const ctx = makeCtx({
+      fetch: jest.fn(async () => ({
+        status: 200,
+        json: async () => ({ idToken, refreshToken: 'r', localId: 'f' }),
+      })),
+    });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice [P-02] is signed in on Android at the "discovery" screen' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.sessions.get('Alice')).toBeDefined();
+  });
+
   test('API request stores lastResponse with parsed body', async () => {
     const idToken =
       'aaa.' + Buffer.from(JSON.stringify({ uniqueId: 50000010 })).toString('base64url') + '.bbb';

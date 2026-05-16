@@ -216,8 +216,14 @@ const matchers = [
   },
 
   // ── Persona sign-in ──
+  // Accepts an optional `on <Platform>` clause (bounded {0,2} repetition to
+  // handle multi-word platforms — see PR-C state-seed matcher). The runner
+  // treats platform as informational only: the same Firebase identity is used
+  // regardless of the asserted client platform. The `at the "X" screen`
+  // suffix is a UI hint that the runner ignores in MVP.
   {
-    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is signed in(?:\s+\(no admin claim\))?$/,
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is signed in(?:\s+on\s+\w+(?:\s+\w+){0,2})?(?:\s+\(no admin claim\))?(?:\s+at\s+the\s+"[^"]+"\s+screen)?$/,
     async handler(m, ctx) {
       const name = m[1];
       const personas = loadPersonas();
@@ -432,6 +438,36 @@ const matchers = [
       return { ok: true };
     },
   },
+  // ── JWT payload introspection ──
+  // Decodes the `token` field of the most-recent response body and asserts on
+  // a dotted-path field within the payload. Used for verifying LiveKit access
+  // tokens carry the correct cohort / room claims (OSA #17 Fill-2).
+  {
+    pattern: /^the decoded JWT payload has field "([^"]+)" equal to (.+)$/,
+    async handler(m, ctx) {
+      const dottedPath = m[1];
+      const expected = parseLiteral(m[2].trim());
+      const body = ctx.lastResponse?.body;
+      if (!body) return { ok: false, error: 'no prior response body to decode' };
+      const token = body.token || body.idToken || body.accessToken;
+      if (!token) {
+        return {
+          ok: false,
+          error: 'no token field in response body (expected one of: token, idToken, accessToken)',
+        };
+      }
+      const payload = decodeJwtPayload(token);
+      const actual = dottedPath.split('.').reduce((acc, k) => (acc ? acc[k] : undefined), payload);
+      if (actual !== expected) {
+        return {
+          ok: false,
+          error: `JWT payload field "${dottedPath}" was ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`,
+        };
+      }
+      return { ok: true };
+    },
+  },
+
   // ── State-seed (mutating) ──
   // Writes a single field on the persona's user doc. Used in Background steps
   // and in adversarial-precondition setup. Merge semantics — sibling fields
