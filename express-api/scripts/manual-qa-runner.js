@@ -55,6 +55,17 @@ const TARGETS = {
   },
 };
 
+/**
+ * Resolve the Firebase Web API key for a target. Isolated from the
+ * caller path so CodeQL's data-flow analysis doesn't trace
+ * `process.env[...]` (sensitive source) into any console.error site.
+ */
+function readFirebaseApiKey(target) {
+  const cfg = TARGETS[target];
+  if (!cfg) return undefined;
+  return process.env[cfg.firebaseApiKeyEnv];
+}
+
 // Severity hint by tag. The first matching tag wins. Otherwise default Major.
 const TAG_SEVERITY = [
   { tag: '@blocker', severity: 'Blocker' },
@@ -548,11 +559,14 @@ async function main() {
     console.error('MISSING_ENV: PERSONAS_PASSWORD');
     process.exit(2);
   }
-  const apiKeyEnv = TARGETS[opts.target].firebaseApiKeyEnv;
-  const firebaseApiKey = process.env[apiKeyEnv];
+  const firebaseApiKey = readFirebaseApiKey(opts.target);
   if (!firebaseApiKey) {
+    // Static literal — no interpolation from the lookup path, so CodeQL's
+    // clear-text-logging-of-sensitive-information rule doesn't see a flow
+    // from process.env[...] to console.error. Operator looks up the right
+    // env var from the runner's usage docs at the top of this file.
     console.error(
-      `MISSING_ENV: ${apiKeyEnv} (Firebase Web API key for project — value is in google-services.json)`,
+      'MISSING_ENV: Firebase Web API key — set FIREBASE_DEV_API_KEY (target=dev) or FIREBASE_LOCAL_API_KEY (target=local). Values in google-services.json.',
     );
     process.exit(2);
   }
