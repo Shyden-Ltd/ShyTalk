@@ -432,6 +432,33 @@ const matchers = [
       return { ok: true };
     },
   },
+  {
+    pattern: /^the database has (\d+) entries in "([^"]+)" matching \{(.*)\}$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
+      const expected = parseInt(m[1], 10);
+      const colPath = m[2];
+      const predicateText = m[3].trim();
+      let predicate;
+      try {
+        predicate = parseJsonishPredicate(predicateText);
+      } catch (e) {
+        return { ok: false, error: `predicate parse error: ${e.message}` };
+      }
+      const snap = await ctx.db.collection(colPath).get();
+      const docs = (snap.docs || []).map((d) => d.data());
+      const matching = docs.filter((doc) =>
+        Object.entries(predicate).every(([k, v]) => doc[k] === v),
+      );
+      if (matching.length !== expected) {
+        return {
+          ok: false,
+          error: `collection "${colPath}" had ${matching.length} entries matching predicate (=${JSON.stringify(predicate)}), expected ${expected}`,
+        };
+      }
+      return { ok: true };
+    },
+  },
 ];
 
 // ── Step execution ──────────────────────────────────────────────────
@@ -545,6 +572,63 @@ function parseLiteral(raw) {
   if (/^-?\d+\.\d+$/.test(raw)) return parseFloat(raw);
   if (raw.startsWith('"') && raw.endsWith('"')) return raw.slice(1, -1);
   return raw;
+}
+
+/**
+ * Parse a jsonish predicate (the inner text between { and }) into an object.
+ * Tokenises by commas while respecting double-quoted strings — values that
+ * contain commas (e.g. `body: "hi adam, welcome"`) parse correctly.
+ *
+ * Throws on:
+ *  - unresolved placeholders like `{newUniqueId}` (no quotes; literal var ref)
+ *    so the operator gets an actionable error pointing at the missing
+ *    variable-resolution feature
+ *  - malformed key:value pairs
+ *
+ * Returns an object with parsed key→value pairs (string keys; values typed
+ * via parseLiteral).
+ */
+function parseJsonishPredicate(text) {
+  const out = {};
+  if (text === '' || text === undefined) return out;
+  const pairs = [];
+  let buf = '';
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' && text[i - 1] !== '\\') inString = !inString;
+    if (c === ',' && !inString) {
+      pairs.push(buf);
+      buf = '';
+      continue;
+    }
+    buf += c;
+  }
+  if (buf.trim() !== '') pairs.push(buf);
+
+  for (const raw of pairs) {
+    const trimmed = raw.trim();
+    if (trimmed === '') continue;
+    // Split on the first colon outside a quoted string.
+    let colonIdx = -1;
+    let q = false;
+    for (let i = 0; i < trimmed.length; i++) {
+      if (trimmed[i] === '"' && trimmed[i - 1] !== '\\') q = !q;
+      if (trimmed[i] === ':' && !q) {
+        colonIdx = i;
+        break;
+      }
+    }
+    if (colonIdx === -1) throw new Error(`malformed pair (no colon): "${trimmed}"`);
+    const key = trimmed.slice(0, colonIdx).trim();
+    const valRaw = trimmed.slice(colonIdx + 1).trim();
+    // Detect unresolved placeholder {name} — bare identifier in braces.
+    if (/^\{[A-Za-z_][\w]*\}$/.test(valRaw)) {
+      throw new Error(`unresolved placeholder ${valRaw} (variable resolution not yet implemented)`);
+    }
+    out[key] = parseLiteral(valRaw);
+  }
+  return out;
 }
 
 function formatReport(allFindings, allScenarioReports, target, cycleNumber) {
@@ -685,6 +769,7 @@ module.exports = {
   decodeJwtPayload,
   pickField,
   parseLiteral,
+  parseJsonishPredicate,
   formatReport,
   TARGETS,
 };

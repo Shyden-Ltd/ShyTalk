@@ -19,6 +19,7 @@ const {
   decodeJwtPayload,
   pickField,
   parseLiteral,
+  parseJsonishPredicate,
   executeStep,
   runFeatureFile,
 } = require('../../scripts/manual-qa-runner');
@@ -168,6 +169,68 @@ describe('parseLiteral', () => {
   });
   test('bare strings', () => {
     expect(parseLiteral('bareword')).toBe('bareword');
+  });
+});
+
+// ── parseJsonishPredicate ──────────────────────────────────────────
+
+describe('parseJsonishPredicate', () => {
+  test('empty input returns empty object', () => {
+    expect(parseJsonishPredicate('')).toEqual({});
+  });
+
+  test('single key:value pair', () => {
+    expect(parseJsonishPredicate('action: "blocked"')).toEqual({ action: 'blocked' });
+  });
+
+  test('multiple pairs, mixed types', () => {
+    expect(
+      parseJsonishPredicate(
+        'action: "blocked", sourceId: 50000040, targetId: 60000010, reason: "cohort_mismatch"',
+      ),
+    ).toEqual({
+      action: 'blocked',
+      sourceId: 50000040,
+      targetId: 60000010,
+      reason: 'cohort_mismatch',
+    });
+  });
+
+  test('quoted-string value containing a comma is NOT split mid-string', () => {
+    expect(
+      parseJsonishPredicate('senderId: 50000010, body: "hi adam, welcome to shytalk"'),
+    ).toEqual({
+      senderId: 50000010,
+      body: 'hi adam, welcome to shytalk',
+    });
+  });
+
+  test('boolean and null literals', () => {
+    expect(parseJsonishPredicate('frozen: true, deleted: false, parent: null')).toEqual({
+      frozen: true,
+      deleted: false,
+      parent: null,
+    });
+  });
+
+  test('unresolved placeholder throws actionable error', () => {
+    expect(() => parseJsonishPredicate('targetId: {newUniqueId}')).toThrow(
+      /placeholder.*newUniqueId/i,
+    );
+  });
+
+  test('malformed pair (missing colon) throws', () => {
+    expect(() => parseJsonishPredicate('not_a_pair')).toThrow(/no colon/i);
+  });
+
+  test('handles trailing whitespace', () => {
+    expect(parseJsonishPredicate('a: 1  ,  b: 2  ')).toEqual({ a: 1, b: 2 });
+  });
+
+  test('quoted string with internal colon does not split key', () => {
+    expect(parseJsonishPredicate('url: "https://example.com:8080/x"')).toEqual({
+      url: 'https://example.com:8080/x',
+    });
   });
 });
 
@@ -728,5 +791,233 @@ describe('Firestore matchers end-to-end via runFeatureFile', () => {
     );
     expect(unhappyArray).toBeDefined();
     expect(unhappyArray.severity).toBe('Blocker'); // @regression
+  });
+});
+
+// ── Firestore bulk-query matcher (v2) — stubbed db ────────────────
+
+// Fake Firestore: extend to support .collection(path).get() returning docs.
+function makeFakeDbWithCollections(collections = {}, docs = {}) {
+  return {
+    doc: (docPath) => ({
+      get: async () => {
+        const data = docs[docPath];
+        return { exists: data !== undefined, data: () => data };
+      },
+    }),
+    collection: (colPath) => ({
+      get: async () => ({
+        docs: (collections[colPath] || []).map((d, i) => ({
+          id: d._id || `auto-${i}`,
+          data: () => d,
+        })),
+      }),
+    }),
+  };
+}
+
+describe('Firestore bulk-query matcher (entries-matching)', () => {
+  test('passes when actual count equals expected', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDbWithCollections({
+        auditLog: [
+          { action: 'blocked', sourceId: 50000010, targetId: 60000010, reason: 'cohort_mismatch' },
+          { action: 'blocked', sourceId: 50000040, targetId: 60000010, reason: 'cohort_mismatch' },
+        ],
+      }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has 1 entries in "auditLog" matching {action: "blocked", sourceId: 50000010, targetId: 60000010, reason: "cohort_mismatch"}',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('passes when expected count is zero and predicate filters everything out', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDbWithCollections({
+        auditLog: [{ action: 'blocked' }, { action: 'blocked' }],
+      }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has 0 entries in "auditLog" matching {action: "device.ban"}',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('fails when count drifts', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDbWithCollections({
+        auditLog: [{ action: 'blocked' }, { action: 'blocked' }],
+      }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has 5 entries in "auditLog" matching {action: "blocked"}',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('2');
+    expect(r.error).toContain('5');
+  });
+
+  test('predicate filters by ALL keys (AND semantics)', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDbWithCollections({
+        auditLog: [
+          { action: 'blocked', sourceId: 1 },
+          { action: 'blocked', sourceId: 2 },
+          { action: 'other', sourceId: 1 },
+        ],
+      }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has 1 entries in "auditLog" matching {action: "blocked", sourceId: 1}',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('empty predicate counts every doc in the collection', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDbWithCollections({
+        auditLog: [{ a: 1 }, { b: 2 }, { c: 3 }],
+      }),
+    });
+    const r = await executeStep(
+      { kind: 'Then', text: 'the database has 3 entries in "auditLog" matching {}' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('subcollection path with slashes works', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDbWithCollections({
+        'users/50000010/gifts': [{ giftId: 'rose' }, { giftId: 'rose' }, { giftId: 'crown' }],
+      }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has 2 entries in "users/50000010/gifts" matching {giftId: "rose"}',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('fails with explicit error when ctx.db is missing', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has 1 entries in "auditLog" matching {action: "blocked"}',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/db|firestore|admin/i);
+  });
+
+  test('numeric and string predicate values both supported', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDbWithCollections({
+        auditLog: [
+          { action: 'blocked', sourceId: 50000010 },
+          { action: 'blocked', sourceId: '50000010' }, // wrong type — should NOT match
+        ],
+      }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has 1 entries in "auditLog" matching {sourceId: 50000010}',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('predicate with placeholder {var} reports an actionable error', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDbWithCollections({ auditLog: [] }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has 1 entries in "auditLog" matching {targetId: 50000010, sourceId: {newUniqueId}}',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/placeholder|unresolved|newUniqueId/i);
+  });
+});
+
+describe('Firestore bulk-query end-to-end via runFeatureFile', () => {
+  function fetchOk() {
+    return jest.fn(async (url) => {
+      if (typeof url === 'string' && url.includes('signInWithPassword')) {
+        const idToken =
+          'h.' +
+          Buffer.from(JSON.stringify({ uniqueId: 50000010, admin: false })).toString('base64url') +
+          '.s';
+        return {
+          status: 200,
+          json: async () => ({ idToken, refreshToken: 'rt', localId: 'fb-1' }),
+        };
+      }
+      if (typeof url === 'string' && url.endsWith('/api/health')) {
+        return { status: 200, json: async () => ({ ok: true }) };
+      }
+      return { status: 500, text: async () => '{}' };
+    });
+  }
+
+  test('happy collection state — positive, zero, and subcollection scenarios all pass', async () => {
+    const ctx = makeCtx({
+      fetch: fetchOk(),
+      db: makeFakeDbWithCollections({
+        auditLog: [
+          { action: 'blocked', sourceId: 50000010, targetId: 60000010, reason: 'cohort_mismatch' },
+          { action: 'age_verification.approve', targetId: 50000010, adminId: 90000001 },
+          { action: 'something_else' },
+        ],
+        'users/50000010/gifts': [{ giftId: 'rose' }, { giftId: 'rose' }, { giftId: 'crown' }],
+      }),
+    });
+    const { findings, scenarioReports } = await runFeatureFile(
+      path.join(FIXTURE_DIR, 'sample-firestore-queries.feature'),
+      ctx,
+    );
+    const positive = scenarioReports.find(
+      (s) => s.scenario === 'count matching the expected positive value passes',
+    );
+    expect(positive.status).toBe('pass');
+    const zero = scenarioReports.find(
+      (s) => s.scenario === 'count matching zero passes when collection has no matches',
+    );
+    expect(zero.status).toBe('pass');
+    const sub = scenarioReports.find(
+      (s) => s.scenario === 'subcollection path works (slash-separated)',
+    );
+    expect(sub.status).toBe('pass');
+    // The drift scenario expects 5 but the seeded collection only has 1 'blocked' entry.
+    const drift = findings.find((f) => f.scenario === 'count drift produces a finding');
+    expect(drift).toBeDefined();
+    expect(drift.severity).toBe('Blocker');
   });
 });
