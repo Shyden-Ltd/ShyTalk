@@ -17,9 +17,9 @@ Feature: Fixture OSA background verbs
     Then the database has document "users/50000010" with field "uniqueId" equal to 50000010
 
   @blocker
-  Scenario: migration-state precondition passes when ops doc exists
+  Scenario: migration-state precondition passes when data invariants hold
     Given the dev environment migration ran at least once (lastMigrationRunAt is set in "ops/segregation-migration")
-    Then the database has document "ops/segregation-migration" with field "lastMigrationRunAt" equal to 1700000000000
+    Then the database has document "users/50000010" with field "uniqueId" equal to 50000010
 
   @regression
   Scenario: livekit-docker precondition is a no-op against dev/prod

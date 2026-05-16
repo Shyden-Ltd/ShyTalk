@@ -631,6 +631,31 @@ describe('runFeatureFile end-to-end (stubbed fetch)', () => {
 
 // ── Firestore-read matchers (v2) — stubbed db ──────────────────────
 
+// Probe-friendly fake db: supports `.collection(name).get()` returning all
+// rows, and `.collection('rooms').where('state', '==', 'OPEN').get()` filter.
+// Used by the OSA invariant probe tests.
+function makeProbeDb({ users = [], rooms = [], conversations = [] } = {}) {
+  const makeSnap = (rows) => ({
+    forEach: (cb) => rows.forEach((r) => cb({ data: () => r, id: r._id || 'x' })),
+    size: rows.length,
+  });
+  return {
+    collection: (name) => {
+      const all = { users, rooms, conversations }[name] || [];
+      return {
+        get: async () => makeSnap(all),
+        where: (field, op, value) => ({
+          get: async () => {
+            if (op !== '==') throw new Error('unsupported op');
+            return makeSnap(all.filter((r) => r[field] === value));
+          },
+        }),
+      };
+    },
+    doc: () => ({ get: async () => ({ exists: false }) }),
+  };
+}
+
 function makeFakeDb(docs = {}) {
   return {
     doc: (docPath) => ({
@@ -1320,10 +1345,16 @@ describe('OSA Background verbs (cycle 1 findings)', () => {
     expect(r.ok).toBe(true);
   });
 
-  test('migration-state precondition passes when ops/segregation-migration exists', async () => {
+  test('migration-state precondition passes when data invariants are clean', async () => {
     const ctx = makeCtx({
-      db: makeFakeDb({
-        'ops/segregation-migration': { lastMigrationRunAt: Date.now() },
+      db: makeProbeDb({
+        users: [
+          { uniqueId: 50000010, cohort: 'adult', followingIds: [50000020], followerIds: [] },
+          { uniqueId: 50000020, cohort: 'adult', followingIds: [], followerIds: [50000010] },
+          { uniqueId: 60000010, cohort: 'minor', followingIds: [], followerIds: [] },
+        ],
+        rooms: [],
+        conversations: [],
       }),
     });
     const r = await executeStep(
@@ -1336,17 +1367,132 @@ describe('OSA Background verbs (cycle 1 findings)', () => {
     expect(r.ok).toBe(true);
   });
 
-  test('migration-state precondition fails when ops doc is missing', async () => {
-    const ctx = makeCtx({ db: makeFakeDb({}) });
+  test('migration-state precondition fails when cross-cohort follow edges exist', async () => {
+    const ctx = makeCtx({
+      db: makeProbeDb({
+        users: [
+          { uniqueId: 50000010, cohort: 'adult', followingIds: [60000010] },
+          { uniqueId: 60000010, cohort: 'minor', followerIds: [50000010] },
+        ],
+        rooms: [],
+        conversations: [],
+      }),
+    });
     const r = await executeStep(
       {
         kind: 'Given',
-        text: 'the dev environment migration ran at least once (lastMigrationRunAt is set in "ops/segregation-migration")',
+        text: 'the dev environment migration ran at least once',
       },
       ctx,
     );
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/migration|ops\/segregation-migration|never run/i);
+    expect(r.error).toMatch(/cross-cohort followingIds/);
+  });
+
+  test('migration-state precondition fails when OPEN room has mixed-cohort participants', async () => {
+    const ctx = makeCtx({
+      db: makeProbeDb({
+        users: [
+          { uniqueId: 50000010, cohort: 'adult' },
+          { uniqueId: 60000010, cohort: 'minor' },
+        ],
+        rooms: [{ state: 'OPEN', cohort: 'adult', participantIds: [50000010, 60000010] }],
+        conversations: [],
+      }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'the dev environment migration ran at least once',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/mixed-cohort OPEN rooms/);
+  });
+
+  test('migration-state precondition fails when cross-cohort conversation is not frozen', async () => {
+    const ctx = makeCtx({
+      db: makeProbeDb({
+        users: [
+          { uniqueId: 50000010, cohort: 'adult' },
+          { uniqueId: 60000010, cohort: 'minor' },
+        ],
+        rooms: [],
+        conversations: [{ participantIds: [50000010, 60000010], frozen: false }],
+      }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'the dev environment migration ran at least once',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/unfrozen cross-cohort conversations/);
+  });
+
+  test('migration-state precondition treats SHYTALK_OFFICIAL as exempt', async () => {
+    // Officia (uniqueId=1) has cross-cohort follow edges by design.
+    const ctx = makeCtx({
+      db: makeProbeDb({
+        users: [
+          {
+            uniqueId: 1,
+            cohort: 'adult',
+            userType: 'SHYTALK_OFFICIAL',
+            isOfficial: true,
+            followingIds: [60000010],
+            followerIds: [60000010],
+          },
+          { uniqueId: 50000010, cohort: 'adult' },
+          { uniqueId: 60000010, cohort: 'minor' },
+        ],
+        rooms: [],
+        conversations: [],
+      }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'the dev environment migration ran at least once',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('migration-state precondition result is cached on ctx (avoids re-scanning)', async () => {
+    const fakeUsers = jest.fn(async () => ({
+      forEach: (cb) => {
+        cb({ data: () => ({ uniqueId: 50000010, cohort: 'adult' }) });
+      },
+    }));
+    const fakeRoomsQuery = { get: jest.fn(async () => ({ forEach: () => {}, size: 0 })) };
+    const ctx = makeCtx({
+      db: {
+        collection: (name) => {
+          if (name === 'users') return { get: fakeUsers };
+          if (name === 'rooms') return { where: () => fakeRoomsQuery };
+          if (name === 'conversations')
+            return { get: jest.fn(async () => ({ forEach: () => {} })) };
+          return { get: jest.fn(async () => ({ forEach: () => {} })) };
+        },
+        doc: () => ({ get: async () => ({ exists: false }) }),
+      },
+    });
+    const r1 = await executeStep(
+      { kind: 'Given', text: 'the dev environment migration ran at least once' },
+      ctx,
+    );
+    expect(r1.ok).toBe(true);
+    const r2 = await executeStep(
+      { kind: 'Given', text: 'the dev environment migration ran at least once' },
+      ctx,
+    );
+    expect(r2.ok).toBe(true);
+    expect(fakeUsers).toHaveBeenCalledTimes(1); // cached
   });
 
   test('LiveKit Docker precondition is a no-op for dev target', async () => {
@@ -1390,14 +1536,26 @@ describe('OSA Background verbs end-to-end via runFeatureFile', () => {
       }
       return { status: 500, text: async () => '{}' };
     });
-    const ctx = makeCtx({
-      target: 'dev',
-      fetch: fetchOk,
-      db: makeFakeDb({
-        'users/50000010': { uniqueId: 50000010, cohort: 'adult' },
-        'ops/segregation-migration': { lastMigrationRunAt: 1700000000000 },
-      }),
+    // Hybrid db: supports doc().get() for read assertions AND
+    // collection().get()/.where() for the probe-based migration matcher.
+    const docStore = {
+      'users/50000010': { uniqueId: 50000010, cohort: 'adult' },
+    };
+    const probeDb = makeProbeDb({
+      users: [{ uniqueId: 50000010, cohort: 'adult' }],
+      rooms: [],
+      conversations: [],
     });
+    const hybridDb = {
+      doc: (docPath) => ({
+        get: async () => ({
+          exists: docStore[docPath] !== undefined,
+          data: () => docStore[docPath],
+        }),
+      }),
+      collection: probeDb.collection,
+    };
+    const ctx = makeCtx({ target: 'dev', fetch: fetchOk, db: hybridDb });
     const { findings, scenarioReports } = await runFeatureFile(
       path.join(FIXTURE_DIR, 'sample-osa-background.feature'),
       ctx,

@@ -207,31 +207,45 @@ const matchers = [
       return { ok: true };
     },
   },
-  // OSA migration-state precondition (j19). The dev environment migration is
-  // a one-shot script whose terminal-state side-effect is a doc at
-  // `ops/segregation-migration` carrying `lastMigrationRunAt`. j19 scenarios
-  // assume that state and verify the post-migration invariants.
+  // OSA migration-state precondition (j19) — PROBE-BASED.
+  //
+  // Earlier versions checked an `ops/segregation-migration` marker doc.
+  // That coupling was fragile: the actual migration scripts never wrote
+  // such a marker, so the precondition failed even when the data invariants
+  // it was meant to imply were satisfied.
+  //
+  // The probe-based approach asks the data directly: "do the 4 OSA
+  // post-migration invariants hold?" If yes, the migration must have run
+  // (or the data never had cohort violations to begin with). This works
+  // identically against dev and prod, requires no bookkeeping write, and
+  // catches data drift if a future migration partially fails.
+  //
+  // Invariants checked:
+  //  1. No user has any cross-cohort entry in followingIds (excl. Officia)
+  //  2. No user has any cross-cohort entry in followerIds (excl. Officia)
+  //  3. No OPEN room has participants of mixed cohorts
+  //  4. Every conversation between mixed-cohort users has frozen=true
+  //
+  // Result is cached on `ctx._migrationVerified` so j19's 6 scenarios
+  // don't repeat the full collection scan.
   {
-    pattern:
-      /^the dev environment migration ran at least once \(lastMigrationRunAt is set in "([^"]+)"\)$/,
-    async handler(m, ctx) {
+    pattern: /^the dev environment migration ran at least once(?:\s+\(.*\))?$/,
+    async handler(_m, ctx) {
       if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
-      const docPath = m[1];
-      const snap = await ctx.db.doc(docPath).get();
-      if (!snap.exists) {
-        return {
-          ok: false,
-          error: `migration never run: "${docPath}" does not exist`,
-        };
+      if (ctx._migrationVerified !== undefined) {
+        return ctx._migrationVerified.ok
+          ? { ok: true }
+          : { ok: false, error: ctx._migrationVerified.error };
       }
-      const data = snap.data();
-      if (!data.lastMigrationRunAt) {
-        return {
-          ok: false,
-          error: `migration ops/segregation-migration exists but lacks lastMigrationRunAt`,
-        };
+      try {
+        const result = await probeOsaInvariants(ctx.db);
+        ctx._migrationVerified = result;
+        return result.ok ? { ok: true } : { ok: false, error: result.error };
+      } catch (e) {
+        const result = { ok: false, error: `probe failed: ${e.message || e}` };
+        ctx._migrationVerified = result;
+        return result;
       }
-      return { ok: true };
     },
   },
   // LiveKit Docker precondition (j09). For local target, this would probe
@@ -672,6 +686,79 @@ function pickField(obj, field) {
   return undefined;
 }
 
+/**
+ * Probe the 4 OSA post-migration invariants directly against Firestore.
+ * Returns { ok: true } if all clean, { ok: false, error: '...' } with a
+ * specific violation summary otherwise.
+ *
+ * Read-only — never writes. Used by the j19 migration-state precondition.
+ */
+async function probeOsaInvariants(db) {
+  const usersSnap = await db.collection('users').get();
+  const cohortMap = new Map();
+  const users = [];
+  usersSnap.forEach((d) => {
+    const data = d.data() || {};
+    users.push(data);
+    if (data?.uniqueId !== undefined && data?.uniqueId !== null && data.cohort) {
+      cohortMap.set(String(data.uniqueId), data.cohort);
+    }
+  });
+
+  let crossFollowing = 0;
+  let crossFollower = 0;
+  for (const u of users) {
+    // SHYTALK_OFFICIAL is exempt from cohort follow-edge cleanup.
+    if (u.userType === 'SHYTALK_OFFICIAL' || u.isOfficial) continue;
+    if (!u.cohort) continue;
+    for (const targetId of u.followingIds || []) {
+      const c = cohortMap.get(String(targetId));
+      if (c && c !== u.cohort) crossFollowing++;
+    }
+    for (const sourceId of u.followerIds || []) {
+      const c = cohortMap.get(String(sourceId));
+      if (c && c !== u.cohort) crossFollower++;
+    }
+  }
+
+  const roomsSnap = await db.collection('rooms').where('state', '==', 'OPEN').get();
+  let mixedRooms = 0;
+  roomsSnap.forEach((d) => {
+    const data = d.data() || {};
+    if (!data.cohort) return;
+    const conflicting = (data.participantIds || []).filter((pid) => {
+      const c = cohortMap.get(String(pid));
+      return c && c !== data.cohort;
+    });
+    if (conflicting.length > 0) mixedRooms++;
+  });
+
+  const convsSnap = await db.collection('conversations').get();
+  let unfrozenCross = 0;
+  convsSnap.forEach((d) => {
+    const data = d.data() || {};
+    const cohorts = new Set();
+    for (const pid of data.participantIds || []) {
+      const c = cohortMap.get(String(pid));
+      if (c) cohorts.add(c);
+    }
+    if (cohorts.size > 1 && data.frozen !== true) unfrozenCross++;
+  });
+
+  const violations = [];
+  if (crossFollowing > 0) violations.push(`${crossFollowing} cross-cohort followingIds`);
+  if (crossFollower > 0) violations.push(`${crossFollower} cross-cohort followerIds`);
+  if (mixedRooms > 0) violations.push(`${mixedRooms} mixed-cohort OPEN rooms`);
+  if (unfrozenCross > 0) violations.push(`${unfrozenCross} unfrozen cross-cohort conversations`);
+  if (violations.length > 0) {
+    return {
+      ok: false,
+      error: `OSA invariants violated: ${violations.join('; ')}`,
+    };
+  }
+  return { ok: true };
+}
+
 function parseLiteral(raw) {
   if (raw === 'true') return true;
   if (raw === 'false') return false;
@@ -878,6 +965,7 @@ module.exports = {
   pickField,
   parseLiteral,
   parseJsonishPredicate,
+  probeOsaInvariants,
   formatReport,
   TARGETS,
 };
