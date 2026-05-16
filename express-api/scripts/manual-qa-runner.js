@@ -379,6 +379,59 @@ const matchers = [
       return { ok: true };
     },
   },
+
+  // ── Firestore read assertions (v2) ──
+  // ctx.db is a Firestore Admin SDK instance (provided in main()) or a Map-
+  // backed stub in tests. Handlers below treat the doc()->get() shape as the
+  // common surface and never reach for fields beyond .exists / .data().
+  {
+    pattern: /^the database has document "([^"]+)" with field "([^"]+)" equal to (.+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
+      const docPath = m[1];
+      const field = m[2];
+      const expected = parseLiteral(m[3].trim());
+      const snap = await ctx.db.doc(docPath).get();
+      if (!snap.exists) {
+        return { ok: false, error: `document "${docPath}" does not exist` };
+      }
+      const actual = snap.data()?.[field];
+      if (actual !== expected) {
+        return {
+          ok: false,
+          error: `field "${field}" on "${docPath}" was ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`,
+        };
+      }
+      return { ok: true };
+    },
+  },
+  {
+    pattern: /^the database has document "([^"]+)" with field "([^"]+)" containing (.+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
+      const docPath = m[1];
+      const field = m[2];
+      const needle = parseLiteral(m[3].trim());
+      const snap = await ctx.db.doc(docPath).get();
+      if (!snap.exists) {
+        return { ok: false, error: `document "${docPath}" does not exist` };
+      }
+      const actual = snap.data()?.[field];
+      if (!Array.isArray(actual)) {
+        return {
+          ok: false,
+          error: `field "${field}" on "${docPath}" was ${JSON.stringify(actual)}, expected an array`,
+        };
+      }
+      if (!actual.includes(needle)) {
+        return {
+          ok: false,
+          error: `field "${field}" on "${docPath}" (=${JSON.stringify(actual)}) does not contain ${JSON.stringify(needle)}`,
+        };
+      }
+      return { ok: true };
+    },
+  },
 ];
 
 // ── Step execution ──────────────────────────────────────────────────
@@ -571,6 +624,12 @@ async function main() {
     process.exit(2);
   }
 
+  // Lazy require — keeps the test surface free of firebase-admin side effects.
+  // The util initialises Admin SDK using GOOGLE_APPLICATION_CREDENTIALS for
+  // dev/prod or the emulator host for local. Operator must export the
+  // service-account creds for dev target before running.
+  const { db } = require('../src/utils/firebase');
+
   const ctx = {
     target: opts.target,
     apiBase: TARGETS[opts.target].apiBase,
@@ -580,6 +639,7 @@ async function main() {
     lastResponse: null,
     locale: 'en',
     fetch: globalThis.fetch,
+    db,
   };
 
   const files = opts.journey

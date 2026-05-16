@@ -443,3 +443,290 @@ describe('runFeatureFile end-to-end (stubbed fetch)', () => {
     expect(wrongStatus.error).toContain('999');
   });
 });
+
+// ── Firestore-read matchers (v2) — stubbed db ──────────────────────
+
+function makeFakeDb(docs = {}) {
+  return {
+    doc: (docPath) => ({
+      get: async () => {
+        const data = docs[docPath];
+        return {
+          exists: data !== undefined,
+          data: () => data,
+        };
+      },
+    }),
+  };
+}
+
+describe('Firestore doc-field equal-to matcher', () => {
+  test('passes when string field matches', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDb({ 'users/50000010': { cohort: 'adult', uniqueId: 50000010 } }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "users/50000010" with field "cohort" equal to "adult"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('passes when numeric field matches', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDb({ 'users/50000010': { cohort: 'adult', uniqueId: 50000010 } }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "users/50000010" with field "uniqueId" equal to 50000010',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('fails when string field drifts', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDb({ 'users/50000010': { cohort: 'minor' } }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "users/50000010" with field "cohort" equal to "adult"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('cohort');
+    expect(r.error).toContain('minor');
+    expect(r.error).toContain('adult');
+  });
+
+  test('fails loudly when doc is missing — does NOT silently pass', async () => {
+    const ctx = makeCtx({ db: makeFakeDb({}) });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "users/99999999" with field "cohort" equal to "adult"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/does not exist|missing|not found/i);
+  });
+
+  test('fails with explicit error when ctx.db is not initialized', async () => {
+    const ctx = makeCtx(); // no db
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "users/1" with field "cohort" equal to "adult"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/db|firestore|admin/i);
+  });
+
+  test('handles boolean literal', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDb({ 'users/50000010': { isAgeVerified: true } }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "users/50000010" with field "isAgeVerified" equal to true',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe('Firestore doc-field containing matcher (array membership)', () => {
+  test('passes when array contains the numeric element', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDb({
+        'users/50000010': { followingIds: [50000020, 50000060, 50000040] },
+      }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "users/50000010" with field "followingIds" containing 50000060',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('passes when array contains the string element', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDb({
+        'rooms/r1': { participantIds: ['fb-uid-a', 'fb-uid-b'] },
+      }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "rooms/r1" with field "participantIds" containing "fb-uid-b"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('fails when element is absent', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDb({ 'users/50000010': { followingIds: [50000020, 50000040] } }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "users/50000010" with field "followingIds" containing 60000010',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('followingIds');
+    expect(r.error).toContain('60000010');
+  });
+
+  test('fails when field is not an array', async () => {
+    const ctx = makeCtx({
+      db: makeFakeDb({ 'users/50000010': { followingIds: 'not-an-array' } }),
+    });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "users/50000010" with field "followingIds" containing 60000010',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/array|not.*array|type/i);
+  });
+
+  test('fails loudly when doc is missing', async () => {
+    const ctx = makeCtx({ db: makeFakeDb({}) });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "users/99999999" with field "followingIds" containing 1',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/does not exist|missing|not found/i);
+  });
+});
+
+describe('Firestore matchers end-to-end via runFeatureFile', () => {
+  function makeFetchAndDb(docs) {
+    return {
+      fetch: jest.fn(async (url) => {
+        if (typeof url === 'string' && url.includes('signInWithPassword')) {
+          const idToken =
+            'h.' +
+            Buffer.from(JSON.stringify({ uniqueId: 50000010, admin: false })).toString(
+              'base64url',
+            ) +
+            '.s';
+          return {
+            status: 200,
+            json: async () => ({ idToken, refreshToken: 'rt', localId: 'fb-1' }),
+          };
+        }
+        if (typeof url === 'string' && url.endsWith('/api/health')) {
+          return { status: 200, json: async () => ({ ok: true }) };
+        }
+        return { status: 500, text: async () => '{}' };
+      }),
+      db: makeFakeDb(docs),
+    };
+  }
+
+  test('happy-path scenario with correct doc data passes', async () => {
+    const ctx = makeCtx(
+      makeFetchAndDb({
+        'users/50000010': {
+          cohort: 'adult',
+          uniqueId: 50000010,
+          followingIds: [50000020, 50000060],
+        },
+      }),
+    );
+    const { findings, scenarioReports } = await runFeatureFile(
+      path.join(FIXTURE_DIR, 'sample-firestore-reads.feature'),
+      ctx,
+    );
+    const happyReport = scenarioReports.find(
+      (s) => s.scenario === 'doc-field equality assertion passes when field matches',
+    );
+    expect(happyReport.status).toBe('pass');
+    const happyFindings = findings.filter((f) => f.scenario === happyReport.scenario);
+    expect(happyFindings).toEqual([]);
+  });
+
+  test('drifted-field scenario produces a Blocker finding (regression-grade)', async () => {
+    const ctx = makeCtx(
+      makeFetchAndDb({
+        'users/50000010': {
+          cohort: 'adult',
+          uniqueId: 50000010,
+          followingIds: [50000020, 50000060],
+        },
+      }),
+    );
+    const { findings } = await runFeatureFile(
+      path.join(FIXTURE_DIR, 'sample-firestore-reads.feature'),
+      ctx,
+    );
+    const drift = findings.find(
+      (f) => f.scenario === 'doc-field equality assertion fails when field drifts',
+    );
+    expect(drift).toBeDefined();
+    expect(drift.severity).toBe('Blocker');
+    expect(drift.error).toMatch(/cohort/);
+  });
+
+  test('missing-doc scenario surfaces a finding (no silent pass)', async () => {
+    const ctx = makeCtx(makeFetchAndDb({ 'users/50000010': { cohort: 'adult' } }));
+    const { findings } = await runFeatureFile(
+      path.join(FIXTURE_DIR, 'sample-firestore-reads.feature'),
+      ctx,
+    );
+    const missing = findings.find(
+      (f) => f.scenario === 'missing doc is a finding (not a silent pass)',
+    );
+    expect(missing).toBeDefined();
+  });
+
+  test('array-containing happy and unhappy paths both classified correctly', async () => {
+    const ctx = makeCtx(
+      makeFetchAndDb({
+        'users/50000010': {
+          cohort: 'adult',
+          followingIds: [50000020, 50000060],
+        },
+      }),
+    );
+    const { findings, scenarioReports } = await runFeatureFile(
+      path.join(FIXTURE_DIR, 'sample-firestore-reads.feature'),
+      ctx,
+    );
+    const happyArray = scenarioReports.find(
+      (s) => s.scenario === 'array-field containing assertion passes when element is present',
+    );
+    expect(happyArray.status).toBe('pass');
+    const unhappyArray = findings.find(
+      (f) => f.scenario === 'array-field containing assertion fails when element is absent',
+    );
+    expect(unhappyArray).toBeDefined();
+    expect(unhappyArray.severity).toBe('Blocker'); // @regression
+  });
+});
