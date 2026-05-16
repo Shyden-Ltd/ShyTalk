@@ -76,6 +76,32 @@ object BuildVariant {
     val googleWebClientId: String? get() = holder.googleWebClientId
 
     /**
+     * Whether the "Dev Sign-In" shortcut on SignInScreen should be
+     * available on this build. Derives from credential presence rather
+     * than a separate flag so the gate fails closed: a build without
+     * baked credentials never renders the button (no UI affordance to
+     * tap → silent no-op even on a Frida runtime flip).
+     *
+     * Matrix:
+     *   - local flavor: credentials hardcoded → true
+     *   - dev flavor: credentials read from `DEV_QA_EMAIL`/`DEV_QA_PASSWORD`
+     *     env vars / gradle props at build time. Default empty → false.
+     *     Operator opts in by passing them to `gradlew assembleDevDebug`.
+     *   - prod flavor: credentials always empty → false (defence-in-depth
+     *     vs. a misconfigured build that somehow set BYPASS_DEVICE_CHECKS
+     *     in a prod APK).
+     *
+     * Distinct from [isLocalEmulator] which gates LiveKit URL fallback +
+     * Firebase emulator wiring. A dev-flavor build is NOT a local emulator
+     * — it talks to real dev Firebase + a deployed LiveKit instance — so
+     * widening `isLocalEmulator` would silently rewire those paths.
+     */
+    val isDevSignInAvailable: Boolean
+        get() =
+            !holder.localDevEmail.isNullOrEmpty() &&
+                !holder.localDevPassword.isNullOrEmpty()
+
+    /**
      * iOS-only stable per-device identifier, eagerly computed in
      * `iOSApp.swift` and passed in via `KoinHelper.doInitKoin`. The Koin
      * factory at `IosPlatformModule.kt`'s `named("deviceId")` reads from

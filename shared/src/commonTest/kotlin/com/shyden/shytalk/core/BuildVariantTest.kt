@@ -500,4 +500,80 @@ class BuildVariantTest {
         BuildVariant.initApiBaseUrl(null)
         assertNull(BuildVariant.apiBaseUrl)
     }
+
+    // ── isDevSignInAvailable matrix ──
+    // Derived flag — true iff BOTH localDevEmail and localDevPassword are
+    // non-empty. The two-input AND defeats half-configured builds (e.g.
+    // CI env set DEV_QA_EMAIL but not DEV_QA_PASSWORD) and gives a single
+    // fail-closed property for the SignInScreen gate to read.
+
+    @Test
+    fun `isDevSignInAvailable false when both credentials empty`() {
+        BuildVariant.initLocalEmulator(value = false)
+        assertFalse(
+            BuildVariant.isDevSignInAvailable,
+            "default-empty state must NEVER expose Dev Sign-In on prod builds",
+        )
+    }
+
+    @Test
+    fun `isDevSignInAvailable false when only email is set`() {
+        BuildVariant.initLocalEmulator(value = false, devEmail = "qa@example", devPassword = "")
+        assertFalse(
+            BuildVariant.isDevSignInAvailable,
+            "half-configured build (email but no password) must NOT expose Dev Sign-In",
+        )
+    }
+
+    @Test
+    fun `isDevSignInAvailable false when only password is set`() {
+        BuildVariant.initLocalEmulator(value = false, devEmail = "", devPassword = "pw")
+        assertFalse(
+            BuildVariant.isDevSignInAvailable,
+            "half-configured build (password but no email) must NOT expose Dev Sign-In",
+        )
+    }
+
+    @Test
+    fun `isDevSignInAvailable true when both credentials are present`() {
+        BuildVariant.initLocalEmulator(
+            value = false,
+            devEmail = "qa@example",
+            devPassword = "pw",
+        )
+        assertTrue(
+            BuildVariant.isDevSignInAvailable,
+            "both credentials present must expose Dev Sign-In regardless of isLocalEmulator",
+        )
+    }
+
+    @Test
+    fun `isDevSignInAvailable independent of isLocalEmulator flag`() {
+        // Dev flavor case: real Firebase, not the emulator (isLocalEmulator=false)
+        // BUT credentials provided via env vars → button must render.
+        BuildVariant.initLocalEmulator(
+            value = false,
+            devEmail = "dev-qa@shytalk.example",
+            devPassword = "pw",
+        )
+        assertTrue(BuildVariant.isDevSignInAvailable)
+        assertFalse(BuildVariant.isLocalEmulator)
+    }
+
+    @Test
+    fun `isDevSignInAvailable returns false after credentials are cleared`() {
+        BuildVariant.initLocalEmulator(
+            value = true,
+            devEmail = "qa@example",
+            devPassword = "pw",
+        )
+        assertTrue(BuildVariant.isDevSignInAvailable)
+
+        // Subsequent init without credentials must reset the derived flag.
+        BuildVariant.initLocalEmulator(value = false)
+        assertFalse(
+            BuildVariant.isDevSignInAvailable,
+            "clearing credentials must reset the derived flag (no lingering true)",
+        )
+    }
 }

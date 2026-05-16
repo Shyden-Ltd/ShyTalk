@@ -399,20 +399,28 @@ fun SignInScreen(
             // Spacer(modifier = Modifier.height(12.dp))
             // EmailSignInButton(onClick = onNavigateToEmail)
 
-            // Dev-only sign-in for local emulator testing. The outer flag
-            // hides the button on dev / prod; the inner re-check + empty
-            // credential probes are defence-in-depth against a Frida-style
-            // runtime flip and a misconfigured non-local build that somehow
-            // rendered the button.
-            if (BuildVariant.isLocalEmulator) {
+            // Dev sign-in shortcut. The outer flag (BuildVariant.isDevSignInAvailable)
+            // hides the button on prod and on dev builds that don't have
+            // DEV_QA_EMAIL/PASSWORD baked in at build time. The inner
+            // re-check + empty-credential probes are defence-in-depth
+            // against a Frida-style runtime flip and a misconfigured build
+            // that somehow rendered the button.
+            //
+            // Available on:
+            //   - local flavor (claude-test@shytalk.dev hardcoded; uses
+            //     Firebase emulator)
+            //   - dev flavor when built with `-PDEV_QA_EMAIL=… -PDEV_QA_PASSWORD=…`
+            //     or `DEV_QA_EMAIL=… DEV_QA_PASSWORD=…` env vars (uses real
+            //     dev Firebase)
+            if (BuildVariant.isDevSignInAvailable) {
                 Spacer(modifier = Modifier.height(24.dp))
                 TextButton(
                     onClick = {
                         if (isBusy) return@TextButton
-                        if (!BuildVariant.isLocalEmulator) {
+                        if (!BuildVariant.isDevSignInAvailable) {
                             logW(
                                 "SignInScreen",
-                                "Dev sign-in guard mismatch: button rendered but isLocalEmulator=false",
+                                "Dev sign-in guard mismatch: button rendered but isDevSignInAvailable=false",
                             )
                             return@TextButton
                         }
@@ -448,7 +456,11 @@ fun SignInScreen(
                     enabled = !isBusy,
                     modifier = Modifier.testTag("dev_sign_in"),
                 ) {
-                    Text("Dev Sign-In (local only)", color = MaterialTheme.colorScheme.tertiary)
+                    // Label intentionally generic ("Dev Sign-In") rather
+                    // than naming a specific flavor — the same button now
+                    // works on both local and dev builds. The watermark
+                    // overlay still shows the actual flavor for clarity.
+                    Text("Dev Sign-In", color = MaterialTheme.colorScheme.tertiary)
                 }
             }
         }

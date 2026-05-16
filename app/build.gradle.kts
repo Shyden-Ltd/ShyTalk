@@ -57,8 +57,26 @@ android {
             buildConfigField("String", "RTDB_URL", "\"https://shytalk-dev-default-rtdb.europe-west1.firebasedatabase.app\"")
             buildConfigField("String", "EMAIL_LINK_DOMAIN", "\"dev.shytalk.shyden.co.uk\"")
             buildConfigField("String", "LOCAL_HOST", "\"\"")
-            buildConfigField("String", "LOCAL_DEV_EMAIL", "\"\"")
-            buildConfigField("String", "LOCAL_DEV_PASSWORD", "\"\"")
+            // Dev sign-in shortcut — sourced from env vars + gradle props,
+            // empty by default so a CI-built APK without the env exposes no
+            // credential. An operator building locally for QA exports:
+            //   DEV_QA_EMAIL=…  DEV_QA_PASSWORD=…  ./gradlew assembleDevDebug
+            // (or `-PDEV_QA_EMAIL=… -PDEV_QA_PASSWORD=…` on the gradle CLI).
+            // SignInScreen renders the Dev Sign-In button on dev flavor when
+            // these are non-empty (per BuildVariant.isDevSignInAvailable).
+            // The credentials must correspond to an existing dev Firebase
+            // Auth account — see scripts/seed-dev-fixtures.mjs / dev smoke
+            // account documentation for provisioning.
+            buildConfigField(
+                "String",
+                "LOCAL_DEV_EMAIL",
+                "\"${(project.findProperty("DEV_QA_EMAIL") as? String) ?: System.getenv("DEV_QA_EMAIL") ?: ""}\"",
+            )
+            buildConfigField(
+                "String",
+                "LOCAL_DEV_PASSWORD",
+                "\"${(project.findProperty("DEV_QA_PASSWORD") as? String) ?: System.getenv("DEV_QA_PASSWORD") ?: ""}\"",
+            )
         }
         create("prod") {
             dimension = "env"
