@@ -432,6 +432,29 @@ const matchers = [
       return { ok: true };
     },
   },
+  // ── State-seed (mutating) ──
+  // Writes a single field on the persona's user doc. Used in Background steps
+  // and in adversarial-precondition setup. Merge semantics — sibling fields
+  // are preserved.
+  {
+    // Platform clause is bounded: up to 3 alphanumeric tokens (Web / Android /
+    // iOS Sim / Web Chromium / Android physical). Bounded repetition keeps
+    // backtracking linear.
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?(?:\s+on\s+\w+(?:\s+\w+){0,2})?\s+has\s+(\w+)=(.+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
+      const name = m[1];
+      const personaId = m[2];
+      const field = m[3];
+      const value = parseLiteral(m[4].trim());
+      const personas = loadPersonas();
+      const p = personas.get(personaId) || personas.get(name);
+      if (!p) return { ok: false, error: `persona "${name}" not in registry` };
+      await ctx.db.doc(`users/${p.uniqueId}`).set({ [field]: value }, { merge: true });
+      return { ok: true };
+    },
+  },
   {
     pattern: /^the database has (\d+) entries in "([^"]+)" matching \{(.*)\}$/,
     async handler(m, ctx) {

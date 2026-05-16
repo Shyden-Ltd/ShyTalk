@@ -1021,3 +1021,119 @@ describe('Firestore bulk-query end-to-end via runFeatureFile', () => {
     expect(drift.severity).toBe('Blocker');
   });
 });
+
+// ── State-seed matchers (v2) — Persona has field=value ──────────────
+
+// Fake db that supports both .doc(...).get() and .doc(...).set(..., {merge}).
+// Mutations are visible to subsequent gets within the same fake instance,
+// so the runner contract "seed then assert" round-trips deterministically.
+function makeStatefulFakeDb(initialDocs = {}, initialCollections = {}) {
+  const docs = { ...initialDocs };
+  return {
+    doc: (docPath) => ({
+      get: async () => {
+        const data = docs[docPath];
+        return { exists: data !== undefined, data: () => data };
+      },
+      set: async (patch, opts = {}) => {
+        if (opts.merge) docs[docPath] = { ...(docs[docPath] || {}), ...patch };
+        else docs[docPath] = { ...patch };
+      },
+    }),
+    collection: (colPath) => ({
+      get: async () => ({
+        docs: (initialCollections[colPath] || []).map((d, i) => ({
+          id: d._id || `auto-${i}`,
+          data: () => d,
+        })),
+      }),
+    }),
+    _docs: docs, // for test assertions
+  };
+}
+
+describe('Persona state-seed matcher (Given <Persona> has <field>=<value>)', () => {
+  test('numeric value writes the field to users/<uniqueId>', async () => {
+    const db = makeStatefulFakeDb({ 'users/50000010': { cohort: 'adult' } });
+    const ctx = makeCtx({ db });
+    const r = await executeStep({ kind: 'Given', text: 'Alice [P-02] has shyCoins=1000' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(db._docs['users/50000010'].shyCoins).toBe(1000);
+    // Merge semantics — existing fields preserved.
+    expect(db._docs['users/50000010'].cohort).toBe('adult');
+  });
+
+  test('platform-suffixed form is also accepted', async () => {
+    const db = makeStatefulFakeDb({ 'users/50000010': {} });
+    const ctx = makeCtx({ db });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice [P-02] on Web has shyCoins=42' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs['users/50000010'].shyCoins).toBe(42);
+  });
+
+  test('boolean literal', async () => {
+    const db = makeStatefulFakeDb({ 'users/50000010': {} });
+    const ctx = makeCtx({ db });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice [P-02] has isAgeVerified=false' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs['users/50000010'].isAgeVerified).toBe(false);
+  });
+
+  test('quoted-string literal', async () => {
+    const db = makeStatefulFakeDb({ 'users/50000010': {} });
+    const ctx = makeCtx({ db });
+    const r = await executeStep({ kind: 'Given', text: 'Alice [P-02] has cohort="adult"' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(db._docs['users/50000010'].cohort).toBe('adult');
+  });
+
+  test('persona name without [P-XX] tag still resolves via registry', async () => {
+    const db = makeStatefulFakeDb({ 'users/50000010': {} });
+    const ctx = makeCtx({ db });
+    const r = await executeStep({ kind: 'Given', text: 'Alice has shyCoins=500' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(db._docs['users/50000010'].shyCoins).toBe(500);
+  });
+
+  test('unknown persona returns actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db });
+    const r = await executeStep({ kind: 'Given', text: 'Mxyzptlk has shyCoins=1' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona|registry|Mxyzptlk/i);
+  });
+
+  test('missing db is an explicit error', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Given', text: 'Alice has shyCoins=1' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/db|firestore|admin/i);
+  });
+});
+
+describe('State-seed end-to-end via runFeatureFile', () => {
+  test('every fixture scenario passes after seed + read round-trip', async () => {
+    const fakeFetch = jest.fn(async (url) => {
+      if (typeof url === 'string' && url.endsWith('/api/health')) {
+        return { status: 200, json: async () => ({ ok: true }) };
+      }
+      return { status: 500, text: async () => '{}' };
+    });
+    const db = makeStatefulFakeDb({ 'users/50000010': { cohort: 'adult' } });
+    const ctx = makeCtx({ fetch: fakeFetch, db });
+    const { findings, scenarioReports } = await runFeatureFile(
+      path.join(FIXTURE_DIR, 'sample-state-seed.feature'),
+      ctx,
+    );
+    for (const sr of scenarioReports) {
+      expect(sr.status).toBe('pass');
+    }
+    expect(findings).toEqual([]);
+  });
+});
