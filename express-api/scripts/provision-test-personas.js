@@ -374,10 +374,18 @@ function buildUserDoc(p, fbUid, opts = {}) {
   return doc;
 }
 
-/** Custom-claims shape — uniqueId + cohort + optional isAdmin. */
+/**
+ * Custom-claims shape — uniqueId + cohort + optional admin.
+ *
+ * Claim key is `admin` (not `isAdmin`) to match the live middleware in
+ * express-api/src/middleware/auth.js:241 which reads
+ * `customClaims?.admin === true`. The persona registry uses
+ * `isAdmin: true` as the INPUT flag for readability; the OUTPUT claim
+ * key must be `admin` or the admin middleware silently 403s.
+ */
 function buildClaims(p) {
   const claims = { uniqueId: p.uniqueId, cohort: p.cohort };
-  if (p.isAdmin) claims.isAdmin = true;
+  if (p.isAdmin) claims.admin = true;
   return claims;
 }
 

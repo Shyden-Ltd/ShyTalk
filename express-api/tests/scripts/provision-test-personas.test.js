@@ -245,17 +245,22 @@ describe('buildUserDoc', () => {
 // ── buildClaims ─────────────────────────────────────────────────────
 
 describe('buildClaims', () => {
-  test('non-admin claims include uniqueId + cohort, no isAdmin', () => {
+  test('non-admin claims include uniqueId + cohort, no admin / isAdmin', () => {
     const alice = personas.find((p) => p.id === 'P-02');
     const claims = buildClaims(alice);
     expect(claims).toEqual({ uniqueId: 50000010, cohort: 'adult' });
+    expect(claims).not.toHaveProperty('admin');
     expect(claims).not.toHaveProperty('isAdmin');
   });
 
-  test('P-12 Greta claims include isAdmin: true', () => {
+  test('P-12 Greta claims include admin: true (NOT isAdmin)', () => {
+    // Live middleware reads `customClaims?.admin === true` — the claim
+    // key must be `admin`. If this test ever asserts `isAdmin` again,
+    // every admin endpoint will silently 403 for Greta.
     const greta = personas.find((p) => p.id === 'P-12');
     const claims = buildClaims(greta);
-    expect(claims).toEqual({ uniqueId: 90000001, cohort: 'adult', isAdmin: true });
+    expect(claims).toEqual({ uniqueId: 90000001, cohort: 'adult', admin: true });
+    expect(claims).not.toHaveProperty('isAdmin');
   });
 
   test('minor persona claims still set cohort correctly', () => {
@@ -349,16 +354,18 @@ describe('upsertPersona (stubbed IO)', () => {
     expect(stubs.auth.updateUser).toHaveBeenCalledTimes(1);
   });
 
-  test('sets isAdmin claim only for P-12 Greta', async () => {
+  test('sets admin claim only for P-12 Greta (key must be `admin`, not `isAdmin`)', async () => {
     const gStubs = makeStubs();
     await upsertPersona(greta, { ...gStubs, pw });
     const gretaClaimCall = gStubs.authCalls.find((c) => c[0] === 'setClaims');
-    expect(gretaClaimCall[2]).toEqual({ uniqueId: 90000001, cohort: 'adult', isAdmin: true });
+    expect(gretaClaimCall[2]).toEqual({ uniqueId: 90000001, cohort: 'adult', admin: true });
+    expect(gretaClaimCall[2]).not.toHaveProperty('isAdmin');
 
     const alice = personas.find((p) => p.id === 'P-02');
     const aStubs = makeStubs();
     await upsertPersona(alice, { ...aStubs, pw });
     const aliceClaimCall = aStubs.authCalls.find((c) => c[0] === 'setClaims');
+    expect(aliceClaimCall[2]).not.toHaveProperty('admin');
     expect(aliceClaimCall[2]).not.toHaveProperty('isAdmin');
   });
 

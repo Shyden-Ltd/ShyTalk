@@ -1,5 +1,5 @@
-name: 'Deploy Firebase Rules'
-description: 'Deploy Firestore and/or RTDB rules to a Firebase project'
+name: 'Deploy Firebase Rules + Indexes'
+description: 'Deploy Firestore rules + composite indexes and/or RTDB rules to a Firebase project'
 inputs:
   service-account-json:
     description: 'Firebase service account JSON (secret value)'
@@ -11,6 +11,10 @@ inputs:
     description: 'Deploy Firestore rules'
     required: false
     default: 'true'
+  deploy-firestore-indexes:
+    description: 'Deploy Firestore composite indexes from firestore.indexes.json'
+    required: false
+    default: 'true'
   deploy-database:
     description: 'Deploy RTDB rules'
     required: false
@@ -18,12 +22,13 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Deploy Firebase rules
+    - name: Deploy Firebase rules + indexes
       shell: bash
       env:
         SA_JSON: ${{ inputs.service-account-json }}
         PROJECT: ${{ inputs.firebase-project }}
         DEPLOY_FIRESTORE: ${{ inputs.deploy-firestore }}
+        DEPLOY_FIRESTORE_INDEXES: ${{ inputs.deploy-firestore-indexes }}
         DEPLOY_DATABASE: ${{ inputs.deploy-database }}
       run: |
         set -euo pipefail
@@ -36,6 +41,16 @@ runs:
         export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
         if [ "$DEPLOY_FIRESTORE" = "true" ]; then
           firebase deploy --only firestore:rules --project "$PROJECT" --non-interactive
+        fi
+        if [ "$DEPLOY_FIRESTORE_INDEXES" = "true" ]; then
+          # Composite indexes declared in firestore.indexes.json. Without
+          # this step every new index landed in the repo but never reached
+          # the target project — queries that needed the index returned
+          # 500 FAILED_PRECONDITION until someone manually ran the deploy.
+          # /manual-qa cycle 1 (2026-05-16) caught this: cohort+lastSeenAt
+          # and cohort+displayName indexes were declared but never deployed
+          # to shytalk-dev, breaking /users/discover and /users/search.
+          firebase deploy --only firestore:indexes --project "$PROJECT" --non-interactive
         fi
         if [ "$DEPLOY_DATABASE" = "true" ]; then
           firebase deploy --only database --project "$PROJECT" --non-interactive
