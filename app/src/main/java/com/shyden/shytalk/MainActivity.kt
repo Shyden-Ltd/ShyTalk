@@ -42,9 +42,9 @@ import com.shyden.shytalk.core.push.verifyPushNavigation
 import com.shyden.shytalk.core.room.ActiveRoomManager
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.room.RoomService
-import com.shyden.shytalk.core.util.DeviceSecurityChecker
 import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.core.util.UnsafeDeviceGate
 import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.data.remote.StartingScreen
 import com.shyden.shytalk.data.remote.WorkerApiClient
@@ -210,7 +210,9 @@ class MainActivity : AppCompatActivity() {
                         // Don't run further checks if blocked
                         if (blockingScreen != null) return@LaunchedEffect
 
-                        isUnsafe = DeviceSecurityChecker.isUnsafe()
+                        // Anti-emulator / anti-root gate. See UnsafeDeviceGate
+                        // for the bypass logic + flavor-by-flavor matrix.
+                        isUnsafe = UnsafeDeviceGate.isBlocked()
                         when (val result = appConfigService.getLatestVersionInfo()) {
                             is Resource.Success -> {
                                 val (minVersionCode, latestVersionCode, latestVersionName) = result.data

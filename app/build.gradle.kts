@@ -53,6 +53,16 @@ android {
             buildConfigField("String", "WORKER_URL", "\"https://dev-api.shytalk.shyden.co.uk\"")
             buildConfigField("String", "LIVEKIT_SERVER_URL", "\"${System.getenv("LIVEKIT_URL") ?: ""}\"")
             buildConfigField("Boolean", "BYPASS_DEVICE_CHECKS", "false")
+            // Anti-emulator + anti-root screen gate. ON in prod by default;
+            // OFF in dev so autonomous QA + manual testers can use the
+            // Android emulator (which MainActivity blocks via
+            // DeviceSecurityChecker.isUnsafe()). Distinct from
+            // BYPASS_DEVICE_CHECKS which gates auth-stage device-binding
+            // checks. Hackability note: this is a const-folded boolean
+            // baked into the APK; defence-in-depth, not load-bearing.
+            // The real cross-cohort + suspension enforcement lives in
+            // Firestore rules + Express middleware (server-side).
+            buildConfigField("Boolean", "BYPASS_EMULATOR_GATE", "true")
             buildConfigField("String", "WEB_CLIENT_ID", "\"881846974606-kv99pjv92i6me0emb2j3uacbhnqqvfj4.apps.googleusercontent.com\"")
             buildConfigField("String", "RTDB_URL", "\"https://shytalk-dev-default-rtdb.europe-west1.firebasedatabase.app\"")
             buildConfigField("String", "EMAIL_LINK_DOMAIN", "\"dev.shytalk.shyden.co.uk\"")
@@ -66,6 +76,11 @@ android {
             buildConfigField("String", "WORKER_URL", "\"https://api.shytalk.shyden.co.uk\"")
             buildConfigField("String", "LIVEKIT_SERVER_URL", "\"${System.getenv("LIVEKIT_URL") ?: ""}\"")
             buildConfigField("Boolean", "BYPASS_DEVICE_CHECKS", "false")
+            // Anti-emulator + anti-root screen gate is ENABLED in prod —
+            // the only flavor that ships to real users. See dev flavor
+            // for hackability notes (defence-in-depth, server-side gates
+            // remain enforced regardless of this flag).
+            buildConfigField("Boolean", "BYPASS_EMULATOR_GATE", "false")
             buildConfigField("String", "WEB_CLIENT_ID", "\"517834977595-cdu78p6q7vg57utpsvtik04c195lbh8b.apps.googleusercontent.com\"")
             buildConfigField("String", "RTDB_URL", "\"https://shytalk-7ba69-default-rtdb.asia-southeast1.firebasedatabase.app\"")
             buildConfigField("String", "EMAIL_LINK_DOMAIN", "\"shytalk.shyden.co.uk\"")
@@ -98,6 +113,10 @@ android {
             // Google framework error when tapped on local builds.
             buildConfigField("String", "WEB_CLIENT_ID", "\"\"")
             buildConfigField("Boolean", "BYPASS_DEVICE_CHECKS", "true")
+            // Local flavor — emulator gate disabled (same rationale as dev:
+            // tests + manual QA need to run on the Android emulator against
+            // local Firebase emulators).
+            buildConfigField("Boolean", "BYPASS_EMULATOR_GATE", "true")
             // Dev sign-in shortcut — only present on local-emulator builds.
             // Empty on dev / prod so reverse-engineering the production APK
             // can't extract a usable seed credential. Mirrors `local/seed.js`
@@ -123,6 +142,11 @@ android {
     buildTypes {
         debug {
             buildConfigField("Boolean", "BYPASS_DEVICE_CHECKS", "true")
+            // Any *-debug build (devDebug, prodDebug, localDebug) also
+            // bypasses the emulator gate. Production users only ever get
+            // the *-release variant via Play Store, so this is a debugger-
+            // ergonomics override that never reaches end users.
+            buildConfigField("Boolean", "BYPASS_EMULATOR_GATE", "true")
         }
         release {
             isMinifyEnabled = true
