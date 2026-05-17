@@ -61,6 +61,7 @@ class AuthRepositoryRefreshIdTokenContractTest {
         override val currentUserEmail: String? = null
         override val currentFirebaseUid: String? = null
         override var resolvedUniqueId: String? = null
+        override var resolvedDisplayName: String? = null
 
         override fun getProviderInfo(): Pair<String, String>? = null
 
