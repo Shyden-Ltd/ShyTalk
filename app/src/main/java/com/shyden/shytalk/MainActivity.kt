@@ -118,6 +118,7 @@ class MainActivity : AppCompatActivity() {
             value = BuildConfig.FLAVOR == "local",
             devPassword = BuildConfig.LOCAL_DEV_PASSWORD,
             devEmail = BuildConfig.LOCAL_DEV_EMAIL,
+            devPersonasPassword = BuildConfig.DEV_QA_PERSONAS_PASSWORD,
             googleWebClientId = BuildConfig.WEB_CLIENT_ID,
         )
         // Drives the PreviewWatermark overlay — non-prod builds get a

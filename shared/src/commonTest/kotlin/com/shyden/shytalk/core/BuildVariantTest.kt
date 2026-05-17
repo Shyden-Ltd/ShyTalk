@@ -576,4 +576,94 @@ class BuildVariantTest {
             "clearing credentials must reset the derived flag (no lingering true)",
         )
     }
+
+    // ── isPersonaPickerAvailable matrix (PR B v2 — persona picker) ──
+
+    @Test
+    fun `localDevPersonasPassword defaults to null`() {
+        BuildVariant.initLocalEmulator(false)
+        assertNull(BuildVariant.localDevPersonasPassword)
+    }
+
+    @Test
+    fun `localDevPersonasPassword captures non-empty value`() {
+        BuildVariant.initLocalEmulator(value = true, devPersonasPassword = "spw")
+        assertEquals("spw", BuildVariant.localDevPersonasPassword)
+    }
+
+    @Test
+    fun `localDevPersonasPassword coerces empty string to null`() {
+        // Android's BuildConfig.DEV_QA_PERSONAS_PASSWORD is "" on prod
+        // and on dev builds without the env var. Setter must coerce
+        // so isPersonaPickerAvailable reads false uniformly.
+        BuildVariant.initLocalEmulator(value = true, devPersonasPassword = "")
+        assertNull(BuildVariant.localDevPersonasPassword)
+    }
+
+    @Test
+    fun `isPersonaPickerAvailable defaults to false`() {
+        BuildVariant.initLocalEmulator(false)
+        assertFalse(BuildVariant.isPersonaPickerAvailable)
+    }
+
+    @Test
+    fun `isPersonaPickerAvailable is true when shared password is baked`() {
+        BuildVariant.initLocalEmulator(value = true, devPersonasPassword = "spw")
+        assertTrue(BuildVariant.isPersonaPickerAvailable)
+    }
+
+    @Test
+    fun `isPersonaPickerAvailable is false when password is empty string`() {
+        BuildVariant.initLocalEmulator(value = true, devPersonasPassword = "")
+        assertFalse(
+            BuildVariant.isPersonaPickerAvailable,
+            "empty string must not enable the picker (fail-closed)",
+        )
+    }
+
+    @Test
+    fun `isPersonaPickerAvailable resets when shared password is cleared`() {
+        BuildVariant.initLocalEmulator(value = true, devPersonasPassword = "spw")
+        assertTrue(BuildVariant.isPersonaPickerAvailable)
+
+        BuildVariant.initLocalEmulator(value = false)
+        assertFalse(
+            BuildVariant.isPersonaPickerAvailable,
+            "clearing the shared password must reset the derived flag",
+        )
+    }
+
+    @Test
+    fun `picker and single-account dev sign-in are independent`() {
+        // Both can be enabled at once (local flavor); both can be disabled
+        // (prod). The derivations don't cross-pollute.
+        BuildVariant.initLocalEmulator(
+            value = true,
+            devEmail = "single@example",
+            devPassword = "sgl",
+            devPersonasPassword = "spw",
+        )
+        assertTrue(BuildVariant.isDevSignInAvailable)
+        assertTrue(BuildVariant.isPersonaPickerAvailable)
+
+        // Picker password only — single-account stays off.
+        BuildVariant.initLocalEmulator(value = true, devPersonasPassword = "spw")
+        assertFalse(
+            BuildVariant.isDevSignInAvailable,
+            "no single-account creds → single-account button hidden",
+        )
+        assertTrue(BuildVariant.isPersonaPickerAvailable)
+
+        // Single-account creds only — picker stays off.
+        BuildVariant.initLocalEmulator(
+            value = true,
+            devEmail = "single@example",
+            devPassword = "sgl",
+        )
+        assertTrue(BuildVariant.isDevSignInAvailable)
+        assertFalse(
+            BuildVariant.isPersonaPickerAvailable,
+            "no shared password → picker button hidden",
+        )
+    }
 }

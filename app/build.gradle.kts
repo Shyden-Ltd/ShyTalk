@@ -87,6 +87,24 @@ android {
                 "LOCAL_DEV_PASSWORD",
                 "\"${(project.findProperty("DEV_QA_PASSWORD") as? String) ?: System.getenv("DEV_QA_PASSWORD") ?: ""}\"",
             )
+            // Shared password for the 17 test personas (P-02..P-19) baked
+            // into dev/local builds for the in-screen persona picker. Same
+            // sourcing semantics as LOCAL_DEV_PASSWORD above but a separate
+            // value because the picker uses email-per-persona + shared
+            // password whereas the single-account shortcut uses one
+            // email/password pair. Operator-opt-in:
+            //   DEV_QA_PERSONAS_PASSWORD=<openssl rand -base64 24> \
+            //   ./gradlew assembleDevDebug
+            // Empty → picker UI never renders (fail-closed). The personas'
+            // emails are public (committed in DevPersonas.kt) — only the
+            // password is sensitive. Must match the value used by the
+            // express-api provisioner (PERSONAS_PASSWORD env var) that
+            // created the personas' Firebase Auth accounts.
+            buildConfigField(
+                "String",
+                "DEV_QA_PERSONAS_PASSWORD",
+                "\"${(project.findProperty("DEV_QA_PERSONAS_PASSWORD") as? String) ?: System.getenv("DEV_QA_PERSONAS_PASSWORD") ?: ""}\"",
+            )
         }
         create("prod") {
             dimension = "env"
@@ -105,6 +123,9 @@ android {
             buildConfigField("String", "LOCAL_HOST", "\"\"")
             buildConfigField("String", "LOCAL_DEV_EMAIL", "\"\"")
             buildConfigField("String", "LOCAL_DEV_PASSWORD", "\"\"")
+            // Prod never bakes the persona-picker password — production
+            // builds must not expose any test-account shortcut.
+            buildConfigField("String", "DEV_QA_PERSONAS_PASSWORD", "\"\"")
         }
         create("local") {
             dimension = "env"
@@ -141,6 +162,12 @@ android {
             // (the source of truth for the credential).
             buildConfigField("String", "LOCAL_DEV_EMAIL", "\"claude-test@shytalk.dev\"")
             buildConfigField("String", "LOCAL_DEV_PASSWORD", "\"localdev123\"")
+            // Local flavor talks to Firebase emulators which seed the 17
+            // test personas via local/seed.js with a fixed dev password.
+            // Hardcoded here so the persona picker works out-of-the-box
+            // when an operator runs `./gradlew installLocalDebug` against
+            // a freshly started emulator stack — no env var needed.
+            buildConfigField("String", "DEV_QA_PERSONAS_PASSWORD", "\"localdev123\"")
         }
     }
 

@@ -18,6 +18,7 @@ data class BuildVariantConfig(
     val isLocalEmulator: Boolean = false,
     val localDevPassword: String? = null,
     val localDevEmail: String? = null,
+    val localDevPersonasPassword: String? = null,
     val googleWebClientId: String? = null,
     val iosDeviceId: String? = null,
     val environment: String = "prod",
@@ -73,6 +74,7 @@ object BuildVariant {
     val isLocalEmulator: Boolean get() = holder.isLocalEmulator
     val localDevPassword: String? get() = holder.localDevPassword
     val localDevEmail: String? get() = holder.localDevEmail
+    val localDevPersonasPassword: String? get() = holder.localDevPersonasPassword
     val googleWebClientId: String? get() = holder.googleWebClientId
 
     /**
@@ -100,6 +102,33 @@ object BuildVariant {
         get() =
             !holder.localDevEmail.isNullOrEmpty() &&
                 !holder.localDevPassword.isNullOrEmpty()
+
+    /**
+     * Whether the "Sign in as test persona" picker on SignInScreen
+     * should be available on this build. Derives from `localDevPersonasPassword`
+     * presence — same fail-closed rule as [isDevSignInAvailable]: no
+     * baked credential → no UI affordance → the picker can't drive a
+     * sign-in even if surfaced.
+     *
+     * Matrix:
+     *   - local flavor: hardcoded → true (same `localdev123` works for all
+     *     emulator-seeded personas since the emulator's Auth user-creation
+     *     script reuses the same password).
+     *   - dev flavor: read from `DEV_QA_PERSONAS_PASSWORD` env var at
+     *     build time. Default empty → false. Operator opts in by passing
+     *     it to `gradlew assembleDevDebug` to enable journey-based
+     *     manual-qa cycles against dev Firebase.
+     *   - prod flavor: always empty → always false (prod APK never bakes
+     *     a shared test password).
+     *
+     * Distinct from [isDevSignInAvailable] (single-account shortcut)
+     * because the picker uses email-per-persona + shared-password,
+     * whereas the shortcut uses a single hardcoded account. Both can
+     * be enabled on the same build; SignInScreen renders one button
+     * for each available path.
+     */
+    val isPersonaPickerAvailable: Boolean
+        get() = !holder.localDevPersonasPassword.isNullOrEmpty()
 
     /**
      * iOS-only stable per-device identifier, eagerly computed in
@@ -220,6 +249,7 @@ object BuildVariant {
         value: Boolean,
         devPassword: String? = null,
         devEmail: String? = null,
+        devPersonasPassword: String? = null,
         googleWebClientId: String? = null,
     ) {
         holder =
@@ -227,6 +257,7 @@ object BuildVariant {
                 isLocalEmulator = value,
                 localDevPassword = devPassword?.takeIf { it.isNotEmpty() },
                 localDevEmail = devEmail?.takeIf { it.isNotEmpty() },
+                localDevPersonasPassword = devPersonasPassword?.takeIf { it.isNotEmpty() },
                 googleWebClientId = googleWebClientId?.takeIf { it.isNotEmpty() },
             )
     }

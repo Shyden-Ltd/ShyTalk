@@ -1,14 +1,20 @@
 package com.shyden.shytalk.feature.auth
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material3.AlertDialog
@@ -34,6 +40,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shyden.shytalk.core.BuildVariant
+import com.shyden.shytalk.core.DevPersona
+import com.shyden.shytalk.core.devPersonas
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.SecureStorage
 import com.shyden.shytalk.core.util.logW
@@ -295,6 +303,7 @@ fun SignInScreen(
 
             // Track which provider is actively signing in (null = none)
             var signingInProvider by remember { mutableStateOf<String?>(null) }
+            var showPersonaPicker by remember { mutableStateOf(false) }
 
             LaunchedEffect(uiState.isLoading, uiState.error) {
                 if (!uiState.isLoading && signingInProvider != null) {
@@ -463,6 +472,163 @@ fun SignInScreen(
                     Text("Dev Sign-In", color = MaterialTheme.colorScheme.tertiary)
                 }
             }
+
+            // Persona-picker sign-in. Distinct from the single-account Dev
+            // Sign-In above: the picker lets QA operators pick from the 17
+            // test personas (P-02..P-19) so journey scenarios that target
+            // a specific persona (e.g. j04 Hayato DOB-flip, j08 Vexa cross-
+            // cohort prober) can run against the right Firebase identity
+            // without a rebuild between personas. Same fail-closed gate as
+            // isDevSignInAvailable — empty baked password → button hidden.
+            //
+            // Available on:
+            //   - local flavor (hardcoded "localdev123"; matches local/seed.js
+            //     which seeds the 17 personas into the Firebase Auth emulator
+            //     with that password)
+            //   - dev flavor when built with `-PDEV_QA_PERSONAS_PASSWORD=…`
+            //     or `DEV_QA_PERSONAS_PASSWORD=…` env var. The value must
+            //     match the `PERSONAS_PASSWORD` env var the express-api
+            //     provisioner used to create the persona accounts on dev
+            //     Firebase Auth.
+            if (BuildVariant.isPersonaPickerAvailable) {
+                Spacer(modifier = Modifier.height(12.dp))
+                TextButton(
+                    onClick = { showPersonaPicker = true },
+                    enabled = !isBusy,
+                    modifier = Modifier.testTag("persona_picker_open"),
+                ) {
+                    Text(
+                        "Sign in as test persona",
+                        color = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
+            }
+
+            // Persona picker dialog. Shown only when explicitly opened by
+            // the button above. Defence-in-depth re-check of
+            // isPersonaPickerAvailable inside the click handler — same
+            // Frida-mitigation pattern as the single-account Dev Sign-In.
+            if (showPersonaPicker && BuildVariant.isPersonaPickerAvailable) {
+                AlertDialog(
+                    onDismissRequest = { if (!isBusy) showPersonaPicker = false },
+                    confirmButton = {},
+                    dismissButton = {
+                        TextButton(
+                            onClick = { showPersonaPicker = false },
+                            enabled = !isBusy,
+                        ) { Text("Cancel") }
+                    },
+                    title = { Text("Sign in as test persona") },
+                    text = {
+                        // Bounded height so the dialog scrolls rather than
+                        // pushing the buttons off-screen on a short device.
+                        LazyColumn(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 400.dp),
+                        ) {
+                            items(devPersonas, key = { it.id }) { persona ->
+                                PersonaPickerRow(
+                                    persona = persona,
+                                    enabled = !isBusy,
+                                    onClick = {
+                                        if (isBusy) return@PersonaPickerRow
+                                        val sharedPw = BuildVariant.localDevPersonasPassword
+                                        if (sharedPw.isNullOrEmpty()) {
+                                            logW(
+                                                "SignInScreen",
+                                                "Persona picker invoked but localDevPersonasPassword is empty",
+                                            )
+                                            return@PersonaPickerRow
+                                        }
+                                        showPersonaPicker = false
+                                        signingInProvider = "dev"
+                                        scope.launch {
+                                            try {
+                                                performDevSignIn(
+                                                    email = persona.email,
+                                                    password = sharedPw,
+                                                )
+                                                viewModel.resolveAfterExternalSignIn(
+                                                    "email",
+                                                    persona.email,
+                                                )
+                                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                                throw e
+                                            } catch (e: Exception) {
+                                                logW(
+                                                    "SignInScreen",
+                                                    "Persona sign-in failed for ${persona.id}",
+                                                    e,
+                                                )
+                                                snackbarHostState.showSnackbar(
+                                                    "Persona sign-in failed",
+                                                )
+                                            } finally {
+                                                signingInProvider = null
+                                            }
+                                        }
+                                    },
+                                )
+                            }
+                        }
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PersonaPickerRow(
+    persona: DevPersona,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(vertical = 12.dp, horizontal = 8.dp)
+                .testTag("persona_row_${persona.id}"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                persona.displayName,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                persona.email,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Surface(
+            color =
+                when (persona.cohort) {
+                    DevPersona.Cohort.ADULT -> MaterialTheme.colorScheme.primaryContainer
+                    DevPersona.Cohort.MINOR -> MaterialTheme.colorScheme.secondaryContainer
+                },
+            shape = RoundedCornerShape(8.dp),
+        ) {
+            Text(
+                text =
+                    when (persona.cohort) {
+                        DevPersona.Cohort.ADULT -> "adult"
+                        DevPersona.Cohort.MINOR -> "minor"
+                    },
+                color =
+                    when (persona.cohort) {
+                        DevPersona.Cohort.ADULT -> MaterialTheme.colorScheme.onPrimaryContainer
+                        DevPersona.Cohort.MINOR -> MaterialTheme.colorScheme.onSecondaryContainer
+                    },
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+            )
         }
     }
 }
