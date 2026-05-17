@@ -336,6 +336,9 @@ const matchers = [
       const sess = ctx.sessions.get(name);
       if (!sess)
         return { ok: false, error: `no signed-in session for "${name}" — Given step missing?` };
+      if (!sess.idToken) {
+        return { ok: false, error: `session for "${name}" has no idToken — sign-in malformed?` };
+      }
       const headers = { Authorization: `Bearer ${sess.idToken}` };
       if (bodyText) headers['Content-Type'] = 'application/json';
       const r = await ctx.fetch(ctx.apiBase + apiPath, {
@@ -350,7 +353,220 @@ const matchers = [
       } catch {
         // body wasn't JSON — keep as null, handlers using "body has field" will fail loudly
       }
-      ctx.lastResponse = { status: r.status, body: parsedBody, persona: name };
+      ctx.lastResponse = { status: r.status, body: parsedBody, persona: name, path: apiPath };
+      return { ok: true };
+    },
+  },
+
+  // ── API request — j08/j02/j04 phrasings (v3) ──
+  //
+  // The original `<Persona> sends GET/POST <path>` verb landed in v1.
+  // The OSA journey files (j08 in particular) use three additional
+  // phrasings that v3 makes runnable:
+  //
+  //   1. `<Persona> on <Platform> POSTs <path> with <kv-list>`
+  //      Example: `Vexa on Web POSTs /api/users/follow with targetUniqueId=60000010`
+  //      The kv-list is a chain like `recipient=60000010 and giftId="rose"`.
+  //      Numeric, boolean, null, and quoted-string values are coerced via
+  //      `parseKvPairs` → `parseLiteral`. Unquoted bare words become strings.
+  //
+  //   2. `POST <path> with (<kv-list>|any payload|body <json>) as <Persona>`
+  //      Example: `POST /api/users/follow with targetUniqueId=50000010 as Mia`
+  //      Alt word order, common in scenarios where the persona is the
+  //      grammatical subject of the *next* sentence. `any payload` sends `{}`
+  //      and is used by submit-with-any-body negative-path scenarios.
+  //
+  //   3. `<Persona> on <Platform> attempts POST <path> with body <json>`
+  //      Example: `Vexa on Web attempts POST /api/conversations/c1/messages with body {"text": "hello"}`
+  //      Used when the test author wants to spell out an explicit JSON body
+  //      that doesn't fit the kv-pair shape (nested objects, etc.).
+  //
+  //   4. `<Persona> on <Platform> (opens|navigates to) "<path>"`
+  //      Example: `Vexa on Web opens "/discovery"`
+  //      If `<path>` starts with `/api/`, fires a GET and stores
+  //      `lastResponse` like a normal request. Otherwise records
+  //      `ctx.lastVisit` so chained UI-only assertions can introspect
+  //      where the persona "is" without the runner pretending to render
+  //      DOM. The runner's honesty contract: don't claim to verify a
+  //      thing it can't see.
+  //
+  // All four matchers populate `ctx.lastResponse.path` so the new
+  // path-tagged response assertions (below) can verify the chain.
+  {
+    pattern:
+      // eslint-disable-next-line sonarjs/slow-regex
+      /^([A-Z][a-z]+)(?:\s+on\s+\w[\w ]{0,20})?\s+POSTs\s+(\S+)\s+with\s+(.+?)\.?$/,
+    async handler(m, ctx) {
+      const name = m[1];
+      const apiPath = m[2];
+      const kvText = m[3];
+      const sess = ctx.sessions.get(name);
+      if (!sess)
+        return { ok: false, error: `no signed-in session for "${name}" — Given step missing?` };
+      if (!sess.idToken) {
+        return { ok: false, error: `session for "${name}" has no idToken — sign-in malformed?` };
+      }
+      let body;
+      try {
+        body = parseKvPairs(kvText);
+      } catch (e) {
+        return { ok: false, error: `could not parse kv-pairs "${kvText}": ${e.message}` };
+      }
+      const r = await ctx.fetch(ctx.apiBase + apiPath, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${sess.idToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+      let parsedBody = null;
+      try {
+        const text = await r.text();
+        parsedBody = text ? JSON.parse(text) : null;
+      } catch {
+        // body wasn't JSON — keep null
+      }
+      ctx.lastResponse = { status: r.status, body: parsedBody, persona: name, path: apiPath };
+      return { ok: true };
+    },
+  },
+  {
+    pattern:
+      // Alt word order: `POST <path> with <kv-list-or-any-payload-or-body> as <Persona>(?: on <Platform>)?`
+      // eslint-disable-next-line sonarjs/slow-regex
+      /^POST\s+(\S+)\s+with\s+(any payload|body\s+(\{[^}]*\}|\[[^\]]*\])|.+?)\s+as\s+([A-Z][a-z]+)(?:\s+on\s+\w[\w ]{0,20})?\.?$/,
+    async handler(m, ctx) {
+      const apiPath = m[1];
+      const payloadSpec = m[2];
+      const explicitJsonBody = m[3]; // defined only when the `body {...}` alternative matched
+      const name = m[4];
+      const sess = ctx.sessions.get(name);
+      if (!sess)
+        return { ok: false, error: `no signed-in session for "${name}" — Given step missing?` };
+      if (!sess.idToken) {
+        return { ok: false, error: `session for "${name}" has no idToken — sign-in malformed?` };
+      }
+      let body;
+      if (payloadSpec === 'any payload') {
+        body = {};
+      } else if (explicitJsonBody !== undefined) {
+        // Drive the "body {json}" branch off the regex capture, not a
+        // string prefix on payloadSpec — a kv-text fragment that
+        // happens to start with "body " would otherwise mis-dispatch.
+        try {
+          body = JSON.parse(explicitJsonBody);
+        } catch (e) {
+          return { ok: false, error: `malformed JSON body "${explicitJsonBody}": ${e.message}` };
+        }
+      } else {
+        try {
+          body = parseKvPairs(payloadSpec);
+        } catch (e) {
+          return { ok: false, error: `could not parse kv-pairs "${payloadSpec}": ${e.message}` };
+        }
+      }
+      const r = await ctx.fetch(ctx.apiBase + apiPath, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${sess.idToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+      let parsedBody = null;
+      try {
+        const text = await r.text();
+        parsedBody = text ? JSON.parse(text) : null;
+      } catch {
+        // not JSON
+      }
+      ctx.lastResponse = { status: r.status, body: parsedBody, persona: name, path: apiPath };
+      return { ok: true };
+    },
+  },
+  {
+    pattern:
+      // `<Persona>(?: on <Platform>)? attempts POST <path> with body <json>`
+      /^([A-Z][a-z]+)(?:\s+on\s+\w[\w ]{0,20})?\s+attempts\s+POST\s+(\S+)\s+with\s+body\s+(\{[^}]*\}|\[[^\]]*\])\.?$/,
+    async handler(m, ctx) {
+      const name = m[1];
+      const apiPath = m[2];
+      const bodyText = m[3];
+      const sess = ctx.sessions.get(name);
+      if (!sess)
+        return { ok: false, error: `no signed-in session for "${name}" — Given step missing?` };
+      if (!sess.idToken) {
+        return { ok: false, error: `session for "${name}" has no idToken — sign-in malformed?` };
+      }
+      let body;
+      try {
+        body = JSON.parse(bodyText);
+      } catch (e) {
+        return { ok: false, error: `malformed JSON body "${bodyText}": ${e.message}` };
+      }
+      const r = await ctx.fetch(ctx.apiBase + apiPath, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${sess.idToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+      let parsedBody = null;
+      try {
+        const text = await r.text();
+        parsedBody = text ? JSON.parse(text) : null;
+      } catch {
+        // not JSON
+      }
+      ctx.lastResponse = { status: r.status, body: parsedBody, persona: name, path: apiPath };
+      return { ok: true };
+    },
+  },
+  {
+    pattern:
+      // `<Persona>(?: on <Platform>)? (opens|navigates to) "<path>"`
+      // API path → GET; non-API path → record visit (no HTTP call).
+      /^([A-Z][a-z]+)(?:\s+on\s+\w[\w ]{0,20})?\s+(?:opens|navigates to)\s+"([^"]+)"\.?$/,
+    async handler(m, ctx) {
+      const name = m[1];
+      const target = m[2];
+      const sess = ctx.sessions.get(name);
+      if (!sess)
+        return { ok: false, error: `no signed-in session for "${name}" — Given step missing?` };
+      // Reset lastResponse on every visit. Without this, a non-API "opens"
+      // would leave stale lastResponse from a prior step — subsequent
+      // assertions like "the response status is 200" would silently pass
+      // against the wrong response. Honest-failure contract: a visit step
+      // either replaces lastResponse with a fresh response (API path) or
+      // clears it (web nav).
+      ctx.lastResponse = null;
+      if (target.startsWith('/api/')) {
+        // The idToken guard only applies when a network call would actually
+        // fire — a non-API visit ("/discovery") is a no-op from the runner's
+        // perspective and a malformed session is irrelevant to it.
+        if (!sess.idToken) {
+          return { ok: false, error: `session for "${name}" has no idToken — sign-in malformed?` };
+        }
+        const r = await ctx.fetch(ctx.apiBase + target, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${sess.idToken}` },
+        });
+        let parsedBody = null;
+        try {
+          const text = await r.text();
+          parsedBody = text ? JSON.parse(text) : null;
+        } catch {
+          // not JSON
+        }
+        ctx.lastResponse = { status: r.status, body: parsedBody, persona: name, path: target };
+        return { ok: true };
+      }
+      // Web-app or admin path — runner can't render DOM, but record the
+      // visit so chained assertions know who is where. Subsequent UI-only
+      // assertions still STEP_NOT_IMPLEMENTED, which is honest.
+      ctx.lastVisit = { persona: name, path: target };
       return { ok: true };
     },
   },
@@ -393,6 +609,67 @@ const matchers = [
       const haystack = JSON.stringify(ctx.lastResponse.body);
       if (!haystack.includes(needle)) {
         return { ok: false, error: `response body did not contain "${needle}"` };
+      }
+      return { ok: true };
+    },
+  },
+  {
+    // `the response from <path> has <N> results`
+    //
+    // Tightly bound to the prior request's path so a misplaced When step
+    // doesn't accidentally let a stale `lastResponse` satisfy a later
+    // assertion. The error message names the expected and actual paths
+    // so the operator can find the chain break quickly.
+    //
+    // Recognised body shapes (in order):
+    //   - { results: [...] } — standard list endpoint
+    //   - { data: [...] }    — alt list endpoint
+    //   - [...]              — bare array body
+    //   - { users: [...] }, { items: [...] } — common ad-hoc shapes
+    // First matching shape wins. If none match, the matcher errors with
+    // an explicit list of inspected keys so test authors know which
+    // shape the endpoint returned.
+    pattern: /^the response from (\S+) has (\d+) results?$/,
+    async handler(m, ctx) {
+      const expectedPath = m[1];
+      const expectedCount = parseInt(m[2], 10);
+      if (!ctx.lastResponse)
+        return { ok: false, error: `no prior response — expected a request to ${expectedPath}` };
+      if (ctx.lastResponse.path !== expectedPath) {
+        return {
+          ok: false,
+          error: `last response was from "${ctx.lastResponse.path}", expected "${expectedPath}"`,
+        };
+      }
+      const body = ctx.lastResponse.body;
+      if (body === null || body === undefined) {
+        return {
+          ok: false,
+          error: `response body was not JSON (status=${ctx.lastResponse.status}) — cannot count results`,
+        };
+      }
+      let rows = null;
+      if (Array.isArray(body)) rows = body;
+      else if (typeof body === 'object') {
+        for (const key of ['results', 'data', 'users', 'items', 'rows']) {
+          if (Array.isArray(body[key])) {
+            rows = body[key];
+            break;
+          }
+        }
+      }
+      if (rows === null) {
+        const keys = typeof body === 'object' ? Object.keys(body).join(',') : typeof body;
+        return {
+          ok: false,
+          error: `response body has no recognised list field (keys: ${keys})`,
+        };
+      }
+      if (rows.length !== expectedCount) {
+        return {
+          ok: false,
+          error: `response from "${expectedPath}" had ${rows.length} results, expected ${expectedCount}`,
+        };
       }
       return { ok: true };
     },
@@ -588,7 +865,20 @@ const matchers = [
 async function executeStep(step, ctx) {
   for (const { pattern, handler } of matchers) {
     const m = pattern.exec(step.text);
-    if (m) return await handler(m, ctx);
+    if (m) {
+      // Wrap handler invocation so a thrown exception (fetch network error,
+      // Firestore RPC failure, JSON.parse on a binary body, etc.) becomes a
+      // structured finding instead of an unhandled rejection that crashes the
+      // runner. Without this guard, a transient network blip during cycle N
+      // would abort the whole cycle rather than emit one Blocker finding for
+      // the affected scenario — silently masking dozens of other findings.
+      try {
+        return await handler(m, ctx);
+      } catch (e) {
+        const msg = e?.message || String(e);
+        return { ok: false, error: `handler threw: ${msg}` };
+      }
+    }
   }
   return {
     ok: false,
@@ -601,6 +891,7 @@ async function runScenario(scenario, parsed, ctx) {
   // Reset per-scenario state
   ctx.sessions = new Map();
   ctx.lastResponse = null;
+  ctx.lastVisit = null;
   ctx.locale = 'en';
 
   const allSteps = [...(parsed.background?.steps || []), ...scenario.steps];
@@ -767,6 +1058,82 @@ function parseLiteral(raw) {
   if (/^-?\d+\.\d+$/.test(raw)) return parseFloat(raw);
   if (raw.startsWith('"') && raw.endsWith('"')) return raw.slice(1, -1);
   return raw;
+}
+
+/**
+ * Parse an inline kv-list of the shape `key=value and key=value and ...`
+ * used in v3 HTTP-call matchers (`POSTs <path> with k=v and k=v`).
+ *
+ * Quoted strings preserve embedded ` and ` exactly because tokenisation
+ * walks the string respecting quote state — `body="hi and bye"` parses
+ * to {body: "hi and bye"}, not two malformed fragments.
+ *
+ * Value coercion mirrors parseLiteral:
+ *   - `key=42`     → number 42
+ *   - `key="rose"` → string "rose"
+ *   - `key=true`   → boolean true
+ *   - `key=null`   → null
+ *   - `key=word`   → unquoted bare string "word"
+ *
+ * Throws on:
+ *  - empty input (caller passed nothing meaningful)
+ *  - pairs missing `=`
+ *  - keys that aren't identifier-shaped
+ */
+function parseKvPairs(text) {
+  if (typeof text !== 'string') {
+    throw new Error(`kv-pair text must be a string, got ${typeof text}`);
+  }
+  if (text.trim() === '') {
+    throw new Error('empty kv-pair text');
+  }
+  // Split on ` and ` while respecting double-quoted strings. Quoted values
+  // may contain backslash-escaped quotes (`"say \"hi\""`) — the tokeniser
+  // unescapes `\"` to `"` so callers get the intended value, not the raw
+  // backslash sequence. Non-quote backslashes pass through unchanged.
+  const pairs = [];
+  let buf = '';
+  let inString = false;
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === '\\' && i + 1 < text.length && text[i + 1] === '"') {
+      // Escaped quote inside a string literal — preserve quote, drop the
+      // backslash. Outside a string literal this is unusual but we still
+      // strip the backslash to keep the inverse-parse round-trip clean.
+      buf += '"';
+      i += 2;
+      continue;
+    }
+    if (c === '"') {
+      inString = !inString;
+      buf += c;
+      i++;
+      continue;
+    }
+    if (!inString && text.slice(i, i + 5) === ' and ') {
+      pairs.push(buf.trim());
+      buf = '';
+      i += 5;
+      continue;
+    }
+    buf += c;
+    i++;
+  }
+  if (buf.trim()) pairs.push(buf.trim());
+
+  const out = {};
+  for (const raw of pairs) {
+    const eq = raw.indexOf('=');
+    if (eq < 0) throw new Error(`kv-pair missing "=": "${raw}"`);
+    const key = raw.slice(0, eq).trim();
+    const val = raw.slice(eq + 1).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
+      throw new Error(`kv-pair key not identifier-shaped: "${key}"`);
+    }
+    out[key] = parseLiteral(val);
+  }
+  return out;
 }
 
 /**
@@ -964,6 +1331,7 @@ module.exports = {
   decodeJwtPayload,
   pickField,
   parseLiteral,
+  parseKvPairs,
   parseJsonishPredicate,
   probeOsaInvariants,
   formatReport,

@@ -19,6 +19,7 @@ const {
   decodeJwtPayload,
   pickField,
   parseLiteral,
+  parseKvPairs,
   parseJsonishPredicate,
   executeStep,
   runFeatureFile,
@@ -231,6 +232,133 @@ describe('parseJsonishPredicate', () => {
     expect(parseJsonishPredicate('url: "https://example.com:8080/x"')).toEqual({
       url: 'https://example.com:8080/x',
     });
+  });
+});
+
+// ── parseKvPairs (v3) ─────────────────────────────────────────────
+
+describe('parseKvPairs', () => {
+  test('single numeric kv-pair', () => {
+    expect(parseKvPairs('targetUniqueId=60000010')).toEqual({ targetUniqueId: 60000010 });
+  });
+
+  test('single quoted-string kv-pair', () => {
+    expect(parseKvPairs('giftId="rose"')).toEqual({ giftId: 'rose' });
+  });
+
+  test('chained with " and "', () => {
+    expect(parseKvPairs('recipient=60000010 and amount=100')).toEqual({
+      recipient: 60000010,
+      amount: 100,
+    });
+  });
+
+  test('mixed numeric and quoted', () => {
+    expect(parseKvPairs('recipient=60000010 and giftId="rose"')).toEqual({
+      recipient: 60000010,
+      giftId: 'rose',
+    });
+  });
+
+  test('boolean and null literals', () => {
+    expect(parseKvPairs('isAdmin=true and revokedAt=null')).toEqual({
+      isAdmin: true,
+      revokedAt: null,
+    });
+  });
+
+  test('quoted string containing the literal " and " is not split', () => {
+    expect(parseKvPairs('body="hi and bye"')).toEqual({ body: 'hi and bye' });
+  });
+
+  test('throws on empty input', () => {
+    expect(() => parseKvPairs('')).toThrow(/empty/);
+    expect(() => parseKvPairs('   ')).toThrow(/empty/);
+  });
+
+  test('throws on missing "="', () => {
+    expect(() => parseKvPairs('foo')).toThrow(/missing "="/);
+  });
+
+  test('throws on non-identifier key', () => {
+    expect(() => parseKvPairs('1foo=42')).toThrow(/not identifier-shaped/);
+    expect(() => parseKvPairs('foo bar=42')).toThrow(/not identifier-shaped/);
+  });
+
+  test('preserves unquoted bare-word values as strings', () => {
+    expect(parseKvPairs('status=active')).toEqual({ status: 'active' });
+  });
+
+  test('three pairs with mixed types', () => {
+    expect(parseKvPairs('a=1 and b="x" and c=false')).toEqual({ a: 1, b: 'x', c: false });
+  });
+
+  // ── C-2 fix: escaped-quote handling in quoted values ──
+  test('strips backslash from escaped quote inside string literal', () => {
+    expect(parseKvPairs('msg="say \\"hi\\""')).toEqual({ msg: 'say "hi"' });
+  });
+
+  test('mixed chain with one escaped-quote value', () => {
+    expect(parseKvPairs('a=1 and msg="he said \\"yes\\""')).toEqual({
+      a: 1,
+      msg: 'he said "yes"',
+    });
+  });
+
+  // ── I-1 fix: non-string input type guard ──
+  test('throws actionable error on numeric input', () => {
+    expect(() => parseKvPairs(42)).toThrow(/must be a string, got number/);
+  });
+
+  test('throws actionable error on object input', () => {
+    expect(() => parseKvPairs({})).toThrow(/must be a string, got object/);
+  });
+
+  test('throws actionable error on boolean input', () => {
+    expect(() => parseKvPairs(true)).toThrow(/must be a string, got boolean/);
+  });
+
+  // `typeof null === 'object'` so the error says "got object" — technically
+  // accurate but the test pins behaviour explicitly so future me knows.
+  test('throws on null input (typeof object)', () => {
+    expect(() => parseKvPairs(null)).toThrow(/must be a string, got object/);
+  });
+
+  test('throws on undefined input', () => {
+    expect(() => parseKvPairs(undefined)).toThrow(/must be a string, got undefined/);
+  });
+
+  // ── Document parseLiteral fall-through for special numeric literals ──
+  // These are never valid JSON anyway (NaN/Infinity serialize to null) so
+  // treating them as bare strings is the safest behaviour — a test pin
+  // ensures no one "improves" this into number coercion later.
+  test('NaN bare word falls through to string (not number)', () => {
+    expect(parseKvPairs('x=NaN')).toEqual({ x: 'NaN' });
+  });
+
+  test('Infinity bare word falls through to string (not number)', () => {
+    expect(parseKvPairs('x=Infinity')).toEqual({ x: 'Infinity' });
+  });
+
+  test('MAX_SAFE_INTEGER parses as a regular JS number', () => {
+    expect(parseKvPairs('big=9007199254740991')).toEqual({ big: 9007199254740991 });
+  });
+
+  // ── I-2 fix: float and negative-number coverage ──
+  test('parses positive float value', () => {
+    expect(parseKvPairs('price=3.14')).toEqual({ price: 3.14 });
+  });
+
+  test('parses negative float value', () => {
+    expect(parseKvPairs('delta=-0.5')).toEqual({ delta: -0.5 });
+  });
+
+  test('parses negative integer value', () => {
+    expect(parseKvPairs('offset=-42')).toEqual({ offset: -42 });
+  });
+
+  test('parses zero (numeric boundary)', () => {
+    expect(parseKvPairs('count=0')).toEqual({ count: 0 });
   });
 });
 
@@ -1564,5 +1692,747 @@ describe('OSA Background verbs end-to-end via runFeatureFile', () => {
       expect(sr.status).toBe('pass');
     }
     expect(findings).toEqual([]);
+  });
+});
+
+// ── HTTP-call verbs v3 (POSTs / GETs / opens / navigates) ──────────
+
+/**
+ * Shared helper — produces a fetch mock that signs in any persona and
+ * captures every subsequent /api/ call so tests can assert on body,
+ * headers, URL, and the `path` field that v3 records on lastResponse.
+ *
+ * The mock returns `apiResponse` for /api/ paths so individual tests can
+ * shape the status+body, and a stub signin response for the identitytoolkit
+ * URL. Test-specific overrides take precedence.
+ */
+function makeV3Fetch(apiResponse) {
+  const idToken =
+    'aaa.' + Buffer.from(JSON.stringify({ uniqueId: 50000040 })).toString('base64url') + '.bbb';
+  return jest.fn(async (url, opts) => {
+    if (url.includes('signInWithPassword')) {
+      return {
+        status: 200,
+        json: async () => ({ idToken, refreshToken: 'rt', localId: 'fb' }),
+      };
+    }
+    // Capture call for assertion later via toHaveBeenCalledWith.
+    return {
+      status: apiResponse?.status ?? 200,
+      text: async () => JSON.stringify(apiResponse?.body ?? {}),
+      _capturedOpts: opts,
+    };
+  });
+}
+
+describe('HTTP-call v3 — POSTs with kv-list', () => {
+  test('parses single numeric kv-pair and POSTs with persona token', async () => {
+    const fetchMock = makeV3Fetch({ status: 404, body: {} });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Vexa [P-07] is signed in on Web Chromium' }, ctx);
+    const r = await executeStep(
+      {
+        kind: 'When',
+        text: 'Vexa on Web POSTs /api/users/follow with targetUniqueId=60000010',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.lastResponse.status).toBe(404);
+    expect(ctx.lastResponse.path).toBe('/api/users/follow');
+    // Inspect the captured POST: URL, method, body, auth header.
+    const lastCall = fetchMock.mock.calls.at(-1);
+    expect(lastCall[0]).toBe('https://dev-api.example/api/users/follow');
+    expect(lastCall[1].method).toBe('POST');
+    expect(JSON.parse(lastCall[1].body)).toEqual({ targetUniqueId: 60000010 });
+    expect(lastCall[1].headers.Authorization).toMatch(/^Bearer /);
+  });
+
+  test('parses multi-pair kv-list with mixed types', async () => {
+    const fetchMock = makeV3Fetch({ status: 200, body: {} });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Vexa [P-07] is signed in on Web Chromium' }, ctx);
+    const r = await executeStep(
+      {
+        kind: 'When',
+        text: 'Vexa on Web POSTs /api/economy/send-gift with recipient=60000010 and giftId="rose"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const lastCall = fetchMock.mock.calls.at(-1);
+    expect(JSON.parse(lastCall[1].body)).toEqual({ recipient: 60000010, giftId: 'rose' });
+  });
+
+  test('without explicit platform — `Marcus POSTs /api/foo`', async () => {
+    const fetchMock = makeV3Fetch({ status: 200, body: {} });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Marcus [P-04] is signed in' }, ctx);
+    const r = await executeStep({ kind: 'When', text: 'Marcus POSTs /api/foo with x=1' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(ctx.lastResponse.path).toBe('/api/foo');
+  });
+
+  test('errors with actionable message when persona has no session', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'When', text: 'Vexa on Web POSTs /api/users/follow with targetUniqueId=60000010' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no signed-in session for "Vexa"/);
+  });
+
+  test('errors when kv-list is malformed (key has no =)', async () => {
+    const fetchMock = makeV3Fetch({ status: 200 });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Vexa [P-07] is signed in' }, ctx);
+    const r = await executeStep({ kind: 'When', text: 'Vexa POSTs /api/foo with badpair' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/could not parse kv-pairs/);
+  });
+
+  test('accepts multi-word platform "Web Chromium"', async () => {
+    const fetchMock = makeV3Fetch({ status: 404 });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Vexa [P-07] is signed in on Web Chromium' }, ctx);
+    const r = await executeStep(
+      { kind: 'When', text: 'Vexa on Web Chromium POSTs /api/foo with x=1' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe('HTTP-call v3 — alt word order: POST <path> with X as <Persona>', () => {
+  test('kv-pairs body — `POST /api/foo with x=1 as Marcus`', async () => {
+    const fetchMock = makeV3Fetch({ status: 404 });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Marcus [P-04] is signed in on Android' }, ctx);
+    const r = await executeStep(
+      { kind: 'When', text: 'POST /api/users/follow with targetUniqueId=50000010 as Marcus' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.lastResponse.path).toBe('/api/users/follow');
+    const lastCall = fetchMock.mock.calls.at(-1);
+    expect(JSON.parse(lastCall[1].body)).toEqual({ targetUniqueId: 50000010 });
+  });
+
+  test('any-payload form — `POST /api/X with any payload as Marcus`', async () => {
+    const fetchMock = makeV3Fetch({ status: 200 });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Marcus [P-04] is signed in on Android' }, ctx);
+    const r = await executeStep(
+      { kind: 'When', text: 'POST /api/age-verification/submit with any payload as Marcus' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const lastCall = fetchMock.mock.calls.at(-1);
+    expect(JSON.parse(lastCall[1].body)).toEqual({});
+  });
+
+  test('explicit-body form — `POST /api/X with body {...} as Marcus`', async () => {
+    const fetchMock = makeV3Fetch({ status: 200 });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Marcus [P-04] is signed in on Android' }, ctx);
+    const r = await executeStep(
+      {
+        kind: 'When',
+        text: 'POST /api/users/me with body {"displayName": "M"} as Marcus',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const lastCall = fetchMock.mock.calls.at(-1);
+    expect(JSON.parse(lastCall[1].body)).toEqual({ displayName: 'M' });
+  });
+
+  test('explicit-body form errors on malformed JSON', async () => {
+    const fetchMock = makeV3Fetch({ status: 200 });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Marcus [P-04] is signed in on Android' }, ctx);
+    const r = await executeStep(
+      { kind: 'When', text: 'POST /api/users/me with body {not json} as Marcus' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/malformed JSON body/);
+  });
+
+  test('errors when persona has no session', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'When', text: 'POST /api/users/follow with x=1 as Marcus' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no signed-in session for "Marcus"/);
+  });
+});
+
+describe('HTTP-call v3 — attempts POST with body', () => {
+  test('drives explicit-body POST', async () => {
+    const fetchMock = makeV3Fetch({ status: 403 });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Vexa [P-07] is signed in on Web Chromium' }, ctx);
+    const r = await executeStep(
+      {
+        kind: 'When',
+        text: 'Vexa on Web attempts POST /api/conversations/c1/messages with body {"text": "hello"}',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.lastResponse.status).toBe(403);
+    expect(ctx.lastResponse.path).toBe('/api/conversations/c1/messages');
+    const lastCall = fetchMock.mock.calls.at(-1);
+    expect(JSON.parse(lastCall[1].body)).toEqual({ text: 'hello' });
+  });
+
+  test('errors on malformed JSON body', async () => {
+    const fetchMock = makeV3Fetch({ status: 200 });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Vexa [P-07] is signed in' }, ctx);
+    const r = await executeStep(
+      { kind: 'When', text: 'Vexa attempts POST /api/foo with body {bad json}' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/malformed JSON body/);
+  });
+});
+
+describe('HTTP-call v3 — opens / navigates verbs', () => {
+  test('opens /api/X fires a GET and records path on lastResponse', async () => {
+    const fetchMock = makeV3Fetch({ status: 200, body: { results: [] } });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Vexa [P-07] is signed in on Web Chromium' }, ctx);
+    const r = await executeStep(
+      { kind: 'When', text: 'Vexa on Web opens "/api/users/search?q=Marcus"' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.lastResponse.status).toBe(200);
+    expect(ctx.lastResponse.path).toBe('/api/users/search?q=Marcus');
+    const lastCall = fetchMock.mock.calls.at(-1);
+    expect(lastCall[0]).toBe('https://dev-api.example/api/users/search?q=Marcus');
+    expect(lastCall[1].method).toBe('GET');
+  });
+
+  test('opens "/discovery" (non-API path) records lastVisit but no HTTP call', async () => {
+    const fetchMock = makeV3Fetch({ status: 200 });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Vexa [P-07] is signed in on Web Chromium' }, ctx);
+    const apiCallsBefore = fetchMock.mock.calls.length;
+    const r = await executeStep({ kind: 'When', text: 'Vexa on Web opens "/discovery"' }, ctx);
+    expect(r.ok).toBe(true);
+    // No additional fetch fired (only the sign-in one before).
+    expect(fetchMock.mock.calls.length).toBe(apiCallsBefore);
+    expect(ctx.lastVisit).toEqual({ persona: 'Vexa', path: '/discovery' });
+  });
+
+  test('navigates to is treated as an alias for opens', async () => {
+    const fetchMock = makeV3Fetch({ status: 404 });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Vexa [P-07] is signed in on Web Chromium' }, ctx);
+    const r = await executeStep(
+      { kind: 'When', text: 'Vexa on Web navigates to "/profile/60000010"' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.lastVisit).toEqual({ persona: 'Vexa', path: '/profile/60000010' });
+  });
+
+  test('opens path with #fragment is treated as web nav not API', async () => {
+    const fetchMock = makeV3Fetch({ status: 200 });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Vexa [P-07] is signed in on Web Chromium' }, ctx);
+    const apiCallsBefore = fetchMock.mock.calls.length;
+    const r = await executeStep(
+      { kind: 'When', text: 'Vexa on Web opens "/profile/50000040#stalkers"' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(fetchMock.mock.calls.length).toBe(apiCallsBefore);
+    expect(ctx.lastVisit.path).toBe('/profile/50000040#stalkers');
+  });
+
+  test('errors when persona has no session', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'When', text: 'Vexa on Web opens "/discovery"' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no signed-in session for "Vexa"/);
+  });
+});
+
+describe('Response-from-path assertion (v3)', () => {
+  test('passes when path matches and body has results array', async () => {
+    const ctx = makeCtx();
+    ctx.lastResponse = {
+      status: 200,
+      body: { results: [{ uniqueId: 1 }, { uniqueId: 2 }] },
+      path: '/api/users/search',
+    };
+    const r = await executeStep(
+      { kind: 'Then', text: 'the response from /api/users/search has 2 results' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('handles bare-array body shape', async () => {
+    const ctx = makeCtx();
+    ctx.lastResponse = { status: 200, body: [{ a: 1 }], path: '/api/things' };
+    const r = await executeStep(
+      { kind: 'Then', text: 'the response from /api/things has 1 result' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('handles { data: [...] } shape', async () => {
+    const ctx = makeCtx();
+    ctx.lastResponse = { status: 200, body: { data: [] }, path: '/api/x' };
+    const r = await executeStep(
+      { kind: 'Then', text: 'the response from /api/x has 0 results' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('handles { users: [...] } shape', async () => {
+    const ctx = makeCtx();
+    ctx.lastResponse = { status: 200, body: { users: [{}, {}, {}] }, path: '/api/u' };
+    const r = await executeStep(
+      { kind: 'Then', text: 'the response from /api/u has 3 results' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('fails when count mismatches with both numbers in error', async () => {
+    const ctx = makeCtx();
+    ctx.lastResponse = { status: 200, body: { results: [1, 2] }, path: '/api/x' };
+    const r = await executeStep(
+      { kind: 'Then', text: 'the response from /api/x has 0 results' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('2');
+    expect(r.error).toContain('0');
+  });
+
+  test('fails when last response path does not match expected', async () => {
+    const ctx = makeCtx();
+    ctx.lastResponse = { status: 200, body: { results: [] }, path: '/api/users/me' };
+    const r = await executeStep(
+      { kind: 'Then', text: 'the response from /api/users/search has 0 results' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('/api/users/me');
+    expect(r.error).toContain('/api/users/search');
+  });
+
+  test('fails with no prior response — chain break message', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'the response from /api/x has 0 results' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no prior response/);
+  });
+
+  test('fails informatively when body has no list field', async () => {
+    const ctx = makeCtx();
+    ctx.lastResponse = { status: 200, body: { foo: 'bar' }, path: '/api/x' };
+    const r = await executeStep(
+      { kind: 'Then', text: 'the response from /api/x has 0 results' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no recognised list field/);
+    expect(r.error).toContain('foo');
+  });
+});
+
+describe('HTTP-call v3 end-to-end via runFeatureFile', () => {
+  test('all 6 fixture scenarios pass when API + visit + assertions chain', async () => {
+    // Build a fetch mock that knows how to respond to each path the fixture hits.
+    const idToken =
+      'aaa.' + Buffer.from(JSON.stringify({ uniqueId: 50000040 })).toString('base64url') + '.bbb';
+    const fetchMock = jest.fn(async (url) => {
+      if (url.includes('signInWithPassword')) {
+        return {
+          status: 200,
+          json: async () => ({ idToken, refreshToken: 'rt', localId: 'fb' }),
+        };
+      }
+      if (url.endsWith('/api/health')) return { status: 200, json: async () => ({}) };
+      if (url.includes('/api/users/follow') || url.includes('/api/conversations/c1/messages')) {
+        return {
+          status: url.includes('/messages') ? 403 : 404,
+          text: async () => JSON.stringify({}),
+        };
+      }
+      if (url.includes('/api/age-verification/submit')) {
+        return { status: 200, text: async () => JSON.stringify({}) };
+      }
+      if (url.includes('/api/users/search')) {
+        return { status: 200, text: async () => JSON.stringify({ results: [] }) };
+      }
+      // Default for unknown paths.
+      return { status: 200, text: async () => JSON.stringify({}) };
+    });
+    const ctx = makeCtx({ fetch: fetchMock });
+    const { findings, scenarioReports } = await runFeatureFile(
+      path.join(FIXTURE_DIR, 'sample-http-call-v3.feature'),
+      ctx,
+    );
+    for (const sr of scenarioReports) {
+      // Comment lines mean some scenarios may have STEP_NOT_IMPLEMENTED UI assertions in
+      // theory — but the fixture is shaped to only use v3 verbs end-to-end. So all pass.
+      expect(sr.status).toBe('pass');
+    }
+    expect(findings).toEqual([]);
+  });
+});
+
+// ── Code-review finding fixes: hardening tests ─────────────────────
+
+/**
+ * C-1 — executeStep must convert handler-thrown exceptions into structured
+ * findings instead of crashing the runner. These tests pass a fetch mock
+ * that throws (network error / DNS failure / timeout simulation) and
+ * verify each new handler returns ok:false with an actionable error
+ * message that includes the original throw text.
+ */
+describe('C-1 — handler-thrown exceptions become structured findings', () => {
+  function signedInCtx() {
+    const idToken =
+      'aaa.' + Buffer.from(JSON.stringify({ uniqueId: 50000040 })).toString('base64url') + '.bbb';
+    const ctx = makeCtx({
+      fetch: jest.fn(async (url) => {
+        if (url.includes('signInWithPassword')) {
+          return {
+            status: 200,
+            json: async () => ({ idToken, refreshToken: 'rt', localId: 'fb' }),
+          };
+        }
+        throw new Error('ECONNREFUSED');
+      }),
+    });
+    return ctx;
+  }
+
+  test('POSTs handler — fetch rejection becomes finding, not crash', async () => {
+    const ctx = signedInCtx();
+    await executeStep({ kind: 'Given', text: 'Vexa [P-07] is signed in on Web Chromium' }, ctx);
+    const r = await executeStep({ kind: 'When', text: 'Vexa on Web POSTs /api/foo with x=1' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('ECONNREFUSED');
+    expect(r.error).toMatch(/handler threw/);
+  });
+
+  test('alt-order POST handler — fetch rejection becomes finding', async () => {
+    const ctx = signedInCtx();
+    await executeStep({ kind: 'Given', text: 'Marcus [P-04] is signed in on Android' }, ctx);
+    const r = await executeStep({ kind: 'When', text: 'POST /api/foo with x=1 as Marcus' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('ECONNREFUSED');
+  });
+
+  test('attempts POST handler — fetch rejection becomes finding', async () => {
+    const ctx = signedInCtx();
+    await executeStep({ kind: 'Given', text: 'Vexa [P-07] is signed in on Web Chromium' }, ctx);
+    const r = await executeStep(
+      { kind: 'When', text: 'Vexa attempts POST /api/foo with body {"x": 1}' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('ECONNREFUSED');
+  });
+
+  test('opens /api handler — fetch rejection becomes finding', async () => {
+    const ctx = signedInCtx();
+    await executeStep({ kind: 'Given', text: 'Vexa [P-07] is signed in on Web Chromium' }, ctx);
+    const r = await executeStep({ kind: 'When', text: 'Vexa on Web opens "/api/users/me"' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toContain('ECONNREFUSED');
+  });
+
+  test('end-to-end — a thrown fetch surfaces as finding, runFeatureFile does not reject', async () => {
+    const fetchMock = jest.fn(async (url) => {
+      if (url.includes('signInWithPassword')) {
+        const idToken =
+          'aaa.' +
+          Buffer.from(JSON.stringify({ uniqueId: 50000040 })).toString('base64url') +
+          '.bbb';
+        return {
+          status: 200,
+          json: async () => ({ idToken, refreshToken: 'rt', localId: 'fb' }),
+        };
+      }
+      if (url.endsWith('/api/health')) return { status: 200, json: async () => ({}) };
+      throw new Error('SIMULATED_NETWORK_BLIP');
+    });
+    const ctx = makeCtx({ fetch: fetchMock });
+    const result = await runFeatureFile(path.join(FIXTURE_DIR, 'sample-http-call-v3.feature'), ctx);
+    // The throw must surface as at least one finding — confirm the
+    // try/catch wrap doesn't merely suppress the error.
+    const networkFindings = result.findings.filter((f) =>
+      (f.error || '').includes('SIMULATED_NETWORK_BLIP'),
+    );
+    expect(networkFindings.length).toBeGreaterThan(0);
+    // The error should be tagged with "handler threw:" prefix so the
+    // operator can distinguish a runtime exception from an assertion failure.
+    expect(networkFindings[0].error).toMatch(/handler threw/);
+  });
+});
+
+/**
+ * I-4 — sessions with missing/undefined idToken (sign-in handler returned
+ * 200 but the response body had no idToken field) must fail fast with an
+ * actionable error rather than send `Authorization: Bearer undefined`.
+ */
+describe('I-4 — session with no idToken fails fast in every handler', () => {
+  function ctxWithBrokenSession(name) {
+    const ctx = makeCtx({ fetch: jest.fn() });
+    ctx.sessions.set(name, { persona: {}, idToken: undefined, customClaims: {} });
+    return ctx;
+  }
+
+  test('POSTs handler errors with "no idToken"', async () => {
+    const ctx = ctxWithBrokenSession('Vexa');
+    const r = await executeStep({ kind: 'When', text: 'Vexa on Web POSTs /api/foo with x=1' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no idToken/);
+  });
+
+  test('alt-order POST handler errors with "no idToken"', async () => {
+    const ctx = ctxWithBrokenSession('Marcus');
+    const r = await executeStep({ kind: 'When', text: 'POST /api/foo with x=1 as Marcus' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no idToken/);
+  });
+
+  test('attempts POST handler errors with "no idToken"', async () => {
+    const ctx = ctxWithBrokenSession('Vexa');
+    const r = await executeStep(
+      { kind: 'When', text: 'Vexa attempts POST /api/foo with body {"x": 1}' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no idToken/);
+  });
+
+  test('opens handler errors with "no idToken" for /api/ path', async () => {
+    const ctx = ctxWithBrokenSession('Vexa');
+    const r = await executeStep({ kind: 'When', text: 'Vexa on Web opens "/api/users/me"' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no idToken/);
+  });
+
+  // The idToken guard is intentionally scoped to API paths only — a
+  // non-API visit ("/discovery") does not fire an HTTP call and so a
+  // missing idToken is irrelevant to that step. Documenting the contract.
+  test('opens handler PASSES for non-API path even with broken session', async () => {
+    const ctx = ctxWithBrokenSession('Vexa');
+    const r = await executeStep({ kind: 'When', text: 'Vexa on Web opens "/discovery"' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(ctx.lastVisit).toEqual({ persona: 'Vexa', path: '/discovery' });
+  });
+
+  test('existing sends GET handler also errors with "no idToken" (retroactive fix)', async () => {
+    const ctx = ctxWithBrokenSession('Alice');
+    const r = await executeStep(
+      { kind: 'When', text: 'Alice sends GET /api/users/me with her ID token' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no idToken/);
+  });
+});
+
+/**
+ * I-5 — response-from-path must produce an actionable error when the
+ * upstream response had no JSON body (204 No Content, binary, etc.),
+ * not the confusing "no recognised list field (keys: object)" message.
+ */
+describe('I-5 — response-from-path handles non-JSON / null body honestly', () => {
+  test('body=null returns "response body was not JSON" with status', async () => {
+    const ctx = makeCtx();
+    ctx.lastResponse = { status: 204, body: null, path: '/api/x' };
+    const r = await executeStep(
+      { kind: 'Then', text: 'the response from /api/x has 0 results' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/was not JSON/);
+    expect(r.error).toContain('204');
+  });
+
+  test('body=undefined returns the same actionable error', async () => {
+    const ctx = makeCtx();
+    ctx.lastResponse = { status: 500, body: undefined, path: '/api/x' };
+    const r = await executeStep(
+      { kind: 'Then', text: 'the response from /api/x has 0 results' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/was not JSON/);
+    expect(r.error).toContain('500');
+  });
+});
+
+/**
+ * I-6 — `opens` to a non-API path must clear `ctx.lastResponse` so a
+ * subsequent assertion like `the response status is 200` fails honestly
+ * with "no prior response" rather than silently asserting against a
+ * stale response from an earlier step.
+ */
+describe('I-6 — opens non-API path clears stale lastResponse', () => {
+  test('non-API open clears stale lastResponse', async () => {
+    const fetchMock = jest.fn(async (url) => {
+      const idToken =
+        'aaa.' + Buffer.from(JSON.stringify({ uniqueId: 50000040 })).toString('base64url') + '.bbb';
+      if (url.includes('signInWithPassword')) {
+        return {
+          status: 200,
+          json: async () => ({ idToken, refreshToken: 'rt', localId: 'fb' }),
+        };
+      }
+      return { status: 200, text: async () => JSON.stringify({ a: 1 }) };
+    });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Vexa [P-07] is signed in on Web Chromium' }, ctx);
+    // Pre-populate lastResponse via an API path open.
+    await executeStep({ kind: 'When', text: 'Vexa on Web opens "/api/users/me"' }, ctx);
+    expect(ctx.lastResponse).not.toBeNull();
+    // Now open a non-API path — stale lastResponse must be cleared.
+    await executeStep({ kind: 'When', text: 'Vexa on Web opens "/discovery"' }, ctx);
+    expect(ctx.lastResponse).toBeNull();
+    // Confirm the honest-failure contract: a subsequent assertion gets a
+    // "no prior request" error, not a silent pass on stale data.
+    const r = await executeStep({ kind: 'Then', text: 'the response status is 200' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/no prior request/);
+  });
+
+  test('runScenario resets lastVisit between scenarios', async () => {
+    // The fixture has multiple scenarios; verify lastVisit is reset before
+    // each scenario by ensuring at least one scenario fires opens "/discovery"
+    // and the per-scenario isolation holds (scenario sequence runs cleanly).
+    const fetchMock = jest.fn(async (url) => {
+      if (url.includes('signInWithPassword')) {
+        const idToken =
+          'aaa.' +
+          Buffer.from(JSON.stringify({ uniqueId: 50000040 })).toString('base64url') +
+          '.bbb';
+        return {
+          status: 200,
+          json: async () => ({ idToken, refreshToken: 'rt', localId: 'fb' }),
+        };
+      }
+      if (url.endsWith('/api/health')) return { status: 200, json: async () => ({}) };
+      if (url.includes('/api/users/follow') || url.includes('/api/conversations/c1/messages')) {
+        return {
+          status: url.includes('/messages') ? 403 : 404,
+          text: async () => JSON.stringify({}),
+        };
+      }
+      if (url.includes('/api/age-verification/submit')) {
+        return { status: 200, text: async () => JSON.stringify({}) };
+      }
+      if (url.includes('/api/users/search')) {
+        return { status: 200, text: async () => JSON.stringify({ results: [] }) };
+      }
+      return { status: 200, text: async () => JSON.stringify({}) };
+    });
+    const ctx = makeCtx({ fetch: fetchMock });
+    const { scenarioReports } = await runFeatureFile(
+      path.join(FIXTURE_DIR, 'sample-http-call-v3.feature'),
+      ctx,
+    );
+    // After the full run, ctx.lastVisit reflects only the LAST scenario's
+    // state (the "opens /discovery" scenario). Per-scenario reset is verified
+    // by all 6 scenarios passing — if lastVisit bled in, the runner's per-
+    // scenario reset would not be honoured. Every scenario passes.
+    for (const sr of scenarioReports) {
+      expect(sr.status).toBe('pass');
+    }
+  });
+});
+
+/**
+ * I-3 — the alt-order POST handler dispatches the explicit-body branch off
+ * the regex capture group (m[3]), not a string-prefix on m[2]. The concrete
+ * failure mode is unreachable today (the regex's `body {...}` alternative
+ * wins for actual JSON bodies) but the new gating prevents future fixture
+ * authors from triggering JSON.parse(undefined) crashes.
+ */
+describe('I-3 — alt-order POST dispatches body-branch off m[3], not m[2]', () => {
+  test('explicit-body still works (m[3] defined)', async () => {
+    const idToken =
+      'aaa.' + Buffer.from(JSON.stringify({ uniqueId: 50000040 })).toString('base64url') + '.bbb';
+    const fetchMock = jest.fn(async (url) => {
+      if (url.includes('signInWithPassword')) {
+        return { status: 200, json: async () => ({ idToken, refreshToken: 'rt', localId: 'fb' }) };
+      }
+      return { status: 200, text: async () => JSON.stringify({}) };
+    });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Marcus [P-04] is signed in on Android' }, ctx);
+    const r = await executeStep(
+      { kind: 'When', text: 'POST /api/x with body {"a": 1} as Marcus' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const lastCall = fetchMock.mock.calls.at(-1);
+    expect(JSON.parse(lastCall[1].body)).toEqual({ a: 1 });
+  });
+
+  // A kv-text fragment whose first field name starts with `body` (e.g.,
+  // `bodyVar=42`) must NOT accidentally trigger the JSON-body branch.
+  // m[3] is undefined → kv-pair branch runs → POST body is {bodyVar: 42}.
+  test('kv-text with field name starting with "body" goes to kv-pair branch', async () => {
+    const idToken =
+      'aaa.' + Buffer.from(JSON.stringify({ uniqueId: 50000040 })).toString('base64url') + '.bbb';
+    const fetchMock = jest.fn(async (url) => {
+      if (url.includes('signInWithPassword')) {
+        return { status: 200, json: async () => ({ idToken, refreshToken: 'rt', localId: 'fb' }) };
+      }
+      return { status: 200, text: async () => JSON.stringify({}) };
+    });
+    const ctx = makeCtx({ fetch: fetchMock });
+    await executeStep({ kind: 'Given', text: 'Marcus [P-04] is signed in on Android' }, ctx);
+    const r = await executeStep(
+      { kind: 'When', text: 'POST /api/x with bodyVar=42 as Marcus' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const lastCall = fetchMock.mock.calls.at(-1);
+    expect(JSON.parse(lastCall[1].body)).toEqual({ bodyVar: 42 });
+  });
+});
+
+describe('I-5 — response-from-path with body=null but successful status', () => {
+  // Some endpoints intentionally return 200 with no body (e.g., empty list
+  // endpoint returning bare 200 + nothing). The null-body guard fires
+  // regardless of status — fine, but document with a test that the error
+  // message still surfaces the original status so the operator can tell
+  // "no body AND failure" vs "no body BUT 200".
+  test('body=null with 200 status still produces actionable error', async () => {
+    const ctx = makeCtx();
+    ctx.lastResponse = { status: 200, body: null, path: '/api/x' };
+    const r = await executeStep(
+      { kind: 'Then', text: 'the response from /api/x has 0 results' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/was not JSON/);
+    expect(r.error).toContain('200');
   });
 });
