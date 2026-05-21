@@ -148,6 +148,23 @@ jobs:
           DEV_QA_PERSONAS_PASSWORD: ${{ secrets.DEV_QA_PERSONAS_PASSWORD }}
         run: ./gradlew testDevDebugUnitTest :shared:jvmTest detekt assembleDevRelease jacocoDevDebugUnitTestReport --parallel
 
+      # Also build the local-flavor APK so AFK operators / automation can
+      # install it on test devices without needing the local emulator
+      # stack running. The KMP shared framework is already compiled by
+      # the assembleDevRelease step above, so this only adds the Android
+      # local-flavor link + APK package step (~30-60s).
+      - name: Build localDebug APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'android' }}
+          LIVEKIT_URL: ${{ secrets.LIVEKIT_URL || 'wss://placeholder.livekit.cloud' }}
+        run: ./gradlew assembleLocalDebug
+
+      - name: Upload localDebug APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: local-debug-apk
+          path: app/build/outputs/apk/local/debug/*.apk
+
       - name: Publish unit test report
         uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # v2
         if: always()
