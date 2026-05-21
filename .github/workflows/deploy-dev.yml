@@ -463,6 +463,28 @@ jobs:
           restore-keys: |
             konan-${{ runner.os }}-
 
+      # Wider cache for K/N intermediate state — without these dirs on
+      # disk, gradle's UP-TO-DATE check on K/N compile tasks fails even
+      # when the final framework IS cached (the narrow step below), and
+      # forces a fresh K/N compile. Source hashes drive invalidation;
+      # restore-keys give partial-match warmth so a touched-source PR
+      # gets incremental rather than from-scratch compile.
+      #
+      # Pinned by tests/scripts/deploy-dev-kmp-cache.test.js to prevent
+      # silent shrinkage of the cache surface back to framework-only.
+      - name: Cache KMP intermediate build state
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: |
+            shared/build/classes
+            shared/build/kotlin
+            shared/build/intermediates
+            shared/build/kotlinTransformedMetadataLibraries
+            shared/build/generated
+          key: kmp-intermediates-${{ runner.os }}-${{ hashFiles('shared/src/**', 'shared/build.gradle.kts', 'gradle/libs.versions.toml') }}
+          restore-keys: |
+            kmp-intermediates-${{ runner.os }}-
+
       - name: Cache KMP shared framework
         id: kmp-cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
