@@ -407,7 +407,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "cd \"$SRCROOT/..\"\n./gradlew :shared:embedAndSignAppleFrameworkForXcode --max-workers=1\n";
+			shellScript = "cd \"$SRCROOT/..\"\n./gradlew :shared:embedAndSignAppleFrameworkForXcode --max-workers=2\n";
 		};
 		11FD2A8F46925E7FD8E8CD14 /* [CP] Copy Pods Resources */ = {
 			isa = PBXShellScriptBuildPhase;

@@ -474,21 +474,28 @@ jobs:
         if: steps.kmp-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          # --max-workers=1: K/N link tasks can deadlock when run in
-          # parallel (xcodebuild's nested gradle call hung 39+ min before
-          # this flag was added). Serializing all gradle tasks is the
-          # safe baseline; on a 14GB macos-latest runner with multiple
-          # parallel K/N processes potentially needing ~3-5GB each plus
-          # competing for the konan compiler cache, parallelism is a
-          # net-negative anyway.
-          ./gradlew :shared:linkReleaseFrameworkIosArm64 :shared:linkDebugFrameworkIosArm64 --max-workers=1
+          # Only Release here — Debug is built by xcodebuild's nested
+          # gradle call in the Compile Kotlin Framework build phase,
+          # protected by --max-workers in pbxproj. Pre-building Debug
+          # in warm-up only shifts ~25 min between steps without saving
+          # total time, and the historical fast warm-up (pre-2026-04-28)
+          # only ever did Release.
+          ./gradlew :shared:linkReleaseFrameworkIosArm64
 
       - name: Cache Xcode derived data
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/Library/Developer/Xcode/DerivedData
-          key: xcode-derived-${{ hashFiles('iosApp/**', 'shared/build/bin/iosArm64/releaseFramework/**') }}
-          restore-keys: xcode-derived-
+          # Key anchored on Swift sources + the workspace/project files only.
+          # Previous key hashed `iosApp/**` (transitively includes the .bak
+          # files the diagnostic step left behind + Pods/) and the live
+          # framework build output, both of which churn enough to make the
+          # cache miss on most runs. New key is stable across runs that
+          # only change KMP sources or workflows.
+          key: xcode-derived-${{ runner.os }}-${{ hashFiles('iosApp/iosApp.xcodeproj/project.pbxproj', 'iosApp/iosApp.xcworkspace/contents.xcworkspacedata', 'iosApp/Podfile.lock', 'iosApp/iosApp/**/*.swift', 'iosApp/iosApp/ExportOptions.plist') }}
+          restore-keys: |
+            xcode-derived-${{ runner.os }}-
+            xcode-derived-
 
       - name: Install CocoaPods
         run: |

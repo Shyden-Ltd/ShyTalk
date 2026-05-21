@@ -119,10 +119,12 @@ jobs:
 
       - name: Build shared KMP framework for iOS Simulator
         if: steps.check-tests.outputs.has_tests == 'true'
-        # --max-workers=1 — see deploy-dev.yml's matching step. The KMP
-        # plugin can deadlock on parallel K/N link tasks under macOS
-        # runner memory pressure; serializing is safer than fast.
-        run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 --max-workers=1
+        # Single task → --max-workers is a no-op here (gradle has nothing
+        # to parallelise within one task). The deadlock protection lives
+        # in iosApp.xcodeproj/project.pbxproj's Compile Kotlin Framework
+        # build phase script where xcodebuild's nested gradle call
+        # naturally tries to do multiple K/N variants in parallel.
+        run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64
 
       - name: Install CocoaPods
         if: steps.check-tests.outputs.has_tests == 'true'
