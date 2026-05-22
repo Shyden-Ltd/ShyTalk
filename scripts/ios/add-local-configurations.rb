@@ -120,34 +120,50 @@ NEW_CONFIG_NAMES.each do |name|
   puts "Added project-level XCBuildConfiguration: #{name}"
 end
 
-# ── 3. Add Debug-Local + Release-Local to iosApp target list ──────
-# Target-level configs have NO base reference at 3.2 — CocoaPods
-# integration in Phase 3.4 will inject Pods-iosApp.debug-local
-# .xcconfig as the base. Until then, target configs inherit
-# baseline settings (SWIFT_VERSION, codesign, etc.) from their
-# Debug/Release sibling via the cloned build_settings.
-iosapp_target = project.targets.find { |t| t.name == TARGET_NAME } ||
-                raise("Could not find iosApp target in project.")
+# ── Helper: add Debug-Local + Release-Local to a TARGET's list ────
+# Target-level configs have NO base reference — CocoaPods integration
+# in Phase 3.4 will inject Pods-<target>.debug-local.xcconfig as the
+# base. Until then, target configs inherit baseline settings
+# (SWIFT_VERSION, codesign, IPHONEOS_DEPLOYMENT_TARGET, BUNDLE_LOADER
+# for test targets, etc.) from their Debug/Release sibling via the
+# cloned build_settings.
+def add_local_configs_to_target(project, target_name, label)
+  target = project.targets.find { |t| t.name == target_name } ||
+           raise("Could not find target #{target_name} in project.")
 
-NEW_CONFIG_NAMES.each do |name|
-  existing = iosapp_target.build_configuration_list.build_configurations.find { |c| c.name == name }
-  if existing
-    # Same self-heal migration as the project-level loop above.
-    if existing.build_settings.empty?
-      existing.build_settings = clone_settings_from_sibling(iosapp_target.build_configuration_list, name)
-      puts "Updated iosApp-target XCBuildConfiguration: #{name} (back-filled empty build_settings)"
-    else
-      puts "iosApp-target XCBuildConfiguration already present: #{name} (no-op)"
+  NEW_CONFIG_NAMES.each do |name|
+    existing = target.build_configuration_list.build_configurations.find { |c| c.name == name }
+    if existing
+      # Self-heal migration (see project-level loop above).
+      if existing.build_settings.empty?
+        existing.build_settings = clone_settings_from_sibling(target.build_configuration_list, name)
+        puts "Updated #{label} XCBuildConfiguration: #{name} (back-filled empty build_settings)"
+      else
+        puts "#{label} XCBuildConfiguration already present: #{name} (no-op)"
+      end
+      next
     end
-    next
-  end
 
-  config = project.new(Xcodeproj::Project::Object::XCBuildConfiguration)
-  config.name = name
-  config.build_settings = clone_settings_from_sibling(iosapp_target.build_configuration_list, name)
-  iosapp_target.build_configuration_list.build_configurations << config
-  puts "Added iosApp-target XCBuildConfiguration: #{name}"
+    config = project.new(Xcodeproj::Project::Object::XCBuildConfiguration)
+    config.name = name
+    config.build_settings = clone_settings_from_sibling(target.build_configuration_list, name)
+    target.build_configuration_list.build_configurations << config
+    puts "Added #{label} XCBuildConfiguration: #{name}"
+  end
 end
+
+# ── 3. iosApp target (Phase 3.2) ──────────────────────────────────
+add_local_configs_to_target(project, 'iosApp', 'iosApp-target')
+
+# ── 4. iosAppTests + iosAppUITests targets (Phase 3.3) ────────────
+# When iosApp is built with Debug-Local, `xcodebuild test` against
+# that scheme picks the matching test-target configuration. Without
+# Local configs on the test targets, Xcode falls back to
+# defaultConfigurationName (Release) which has different SWIFT_VERSION
+# / entitlements than the app build — `pod install` would also barf
+# on the inconsistency.
+add_local_configs_to_target(project, 'iosAppTests', 'iosAppTests-target')
+add_local_configs_to_target(project, 'iosAppUITests', 'iosAppUITests-target')
 
 project.save
 puts "\nSaved iosApp.xcodeproj."

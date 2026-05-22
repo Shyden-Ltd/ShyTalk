@@ -173,14 +173,16 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
     // Two per configuration name: one at project-level (058558B0
     // list) and one at iosApp-target-level (058558B1 list). Test
     // targets are Phase 3.3 — explicitly NOT counted here.
-    test('Debug-Local appears as an XCBuildConfiguration name exactly twice (project + iosApp target)', () => {
+    test('Debug-Local appears as an XCBuildConfiguration name exactly four times (project + 3 targets)', () => {
+      // Phase 3.2 added project + iosApp target. Phase 3.3 (PR after
+      // this one) added iosAppTests + iosAppUITests targets. Total: 4.
       const count = countMatches(pbxproj, /\n\t{3}name = "Debug-Local";/g);
-      expect(count).toBe(2);
+      expect(count).toBe(4);
     });
 
-    test('Release-Local appears as an XCBuildConfiguration name exactly twice (project + iosApp target)', () => {
+    test('Release-Local appears as an XCBuildConfiguration name exactly four times (project + 3 targets)', () => {
       const count = countMatches(pbxproj, /\n\t{3}name = "Release-Local";/g);
-      expect(count).toBe(2);
+      expect(count).toBe(4);
     });
 
     test('Local.xcconfig appears as a baseConfigurationReference comment exactly twice (project-level Debug-Local + Release-Local)', () => {
@@ -209,16 +211,12 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
       expect(block).toMatch(/\* Release-Local \*\/,/);
     });
 
-    test('test targets are NOT modified in Phase 3.2 (deferred to 3.3)', () => {
-      // iosAppTests list — must NOT yet contain Local configs.
-      const testsBlock = extractConfigurationList(pbxproj, 'A10008002600000000000001');
-      expect(testsBlock).not.toMatch(/Debug-Local/);
-      expect(testsBlock).not.toMatch(/Release-Local/);
-      // iosAppUITests list — same.
-      const uitestsBlock = extractConfigurationList(pbxproj, '08EFC4EBCF29E72CA6FC9F2A');
-      expect(uitestsBlock).not.toMatch(/Debug-Local/);
-      expect(uitestsBlock).not.toMatch(/Release-Local/);
-    });
+    // Removed 'test targets are NOT modified in Phase 3.2 (deferred
+    // to 3.3)' — that assertion was correct when Phase 3.2 was the
+    // tip, but Phase 3.3 (PR after this one) intentionally crosses
+    // that boundary. The positive-state assertions for test-target
+    // Local configs are in
+    // tests/scripts/ios-local-3-3-test-target-configs.test.js.
 
     test('project-level defaultConfigurationName remains Release (not changed by Local addition)', () => {
       const block = extractConfigurationList(pbxproj, '058558B0273AAA2400C9D062');
@@ -244,18 +242,32 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
     // config wholesale) would break the planned 3.4 integration
     // silently.
     test('iosApp-target Debug-Local has NO baseConfigurationReference (Phase 3.4 scope)', () => {
+      // After Phase 3.3, 4 Debug-Local matches exist: project +
+      // iosApp + iosAppTests + iosAppUITests. Identify the iosApp
+      // one specifically — it has neither BUNDLE_LOADER (iosAppTests
+      // marker) nor TEST_TARGET_NAME (iosAppUITests marker) nor
+      // a baseConfigurationReference (project-level marker).
       const matches = findBuildConfigurationsByName(pbxproj, 'Debug-Local');
-      // Two matches: one project-level (has base ref), one iosApp-target (no base ref).
-      expect(matches).toHaveLength(2);
-      const targetLevel = matches.find((m) => !m.block.includes('baseConfigurationReference'));
-      expect(targetLevel).toBeDefined();
+      expect(matches).toHaveLength(4);
+      const iosAppTarget = matches.find(
+        (m) =>
+          !m.block.includes('baseConfigurationReference') &&
+          !m.block.includes('BUNDLE_LOADER') &&
+          !m.block.includes('TEST_TARGET_NAME'),
+      );
+      expect(iosAppTarget).toBeDefined();
     });
 
     test('iosApp-target Release-Local has NO baseConfigurationReference (Phase 3.4 scope)', () => {
       const matches = findBuildConfigurationsByName(pbxproj, 'Release-Local');
-      expect(matches).toHaveLength(2);
-      const targetLevel = matches.find((m) => !m.block.includes('baseConfigurationReference'));
-      expect(targetLevel).toBeDefined();
+      expect(matches).toHaveLength(4);
+      const iosAppTarget = matches.find(
+        (m) =>
+          !m.block.includes('baseConfigurationReference') &&
+          !m.block.includes('BUNDLE_LOADER') &&
+          !m.block.includes('TEST_TARGET_NAME'),
+      );
+      expect(iosAppTarget).toBeDefined();
     });
 
     // Round 1 Gap 3 — UUID fidelity. The original test asserted
@@ -324,16 +336,28 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
     // like IPHONEOS_DEPLOYMENT_TARGET).
     test('iosApp-target Debug-Local inherits SWIFT_VERSION = "5.0" from Debug', () => {
       const matches = findBuildConfigurationsByName(pbxproj, 'Debug-Local');
-      const targetLevel = matches.find((m) => !m.block.includes('baseConfigurationReference'));
-      expect(targetLevel).toBeDefined();
-      expect(targetLevel.block).toContain('SWIFT_VERSION = 5.0;');
+      // After Phase 3.3 the iosApp-target Debug-Local is identified
+      // by absence of base ref + absence of test-target markers.
+      const iosAppTarget = matches.find(
+        (m) =>
+          !m.block.includes('baseConfigurationReference') &&
+          !m.block.includes('BUNDLE_LOADER') &&
+          !m.block.includes('TEST_TARGET_NAME'),
+      );
+      expect(iosAppTarget).toBeDefined();
+      expect(iosAppTarget.block).toContain('SWIFT_VERSION = 5.0;');
     });
 
     test('iosApp-target Release-Local inherits SWIFT_VERSION = "5.0" from Release', () => {
       const matches = findBuildConfigurationsByName(pbxproj, 'Release-Local');
-      const targetLevel = matches.find((m) => !m.block.includes('baseConfigurationReference'));
-      expect(targetLevel).toBeDefined();
-      expect(targetLevel.block).toContain('SWIFT_VERSION = 5.0;');
+      const iosAppTarget = matches.find(
+        (m) =>
+          !m.block.includes('baseConfigurationReference') &&
+          !m.block.includes('BUNDLE_LOADER') &&
+          !m.block.includes('TEST_TARGET_NAME'),
+      );
+      expect(iosAppTarget).toBeDefined();
+      expect(iosAppTarget.block).toContain('SWIFT_VERSION = 5.0;');
     });
 
     // PBXFileReference for Local.xcconfig must declare the xcconfig
