@@ -1775,3 +1775,261 @@ describe('android-adb-driver — androidContinuesNormallyInRoom', () => {
     expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsMicIconAs', () => {
+  // Wake 103 matcher — `<Name>'s Android UI shows mic icon as "<X>"`
+  // (j09 host mic on/off, j10 warning auto-mutes, j15 MC unmutes
+  // between sets). Inspects the `room_micToggleButton` IconButton's
+  // contentDescription, which Compose (ChatPanel.kt:325-332) sets
+  // from one of three string resources:
+  //   - Res.string.mute              = "Mute"              ← mic OPEN
+  //   - Res.string.unmute            = "Unmute"            ← mic MUTED
+  //   - Res.string.voice_unavailable = "Voice unavailable" ← mic CLOSED
+  // The button TEXT reflects the action a user would take on tap;
+  // the STATE is therefore the inverse — "Mute" label means the
+  // mic is currently open (clicking would mute it).
+  //
+  // Foundation policy: English (en-US) `local` flavor only. Locale
+  // expansion is a future layer — the matcher's `state` arg is a
+  // Gherkin literal, not a localised string, so the en→i18n map
+  // belongs in the driver, not the runner.
+  //
+  // Attribute-order tolerance: uiautomator dump attribute ordering is
+  // not contractually fixed. The impl uses a TWO-STEP extraction
+  // (find the full <node ...> tag containing the testTag, then look
+  // up content-desc within that captured tag string), so the test
+  // pins both attribute orders.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('"open" state with Mute contentDescription → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Mute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(true);
+  });
+
+  test('"muted" state with Unmute contentDescription → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Unmute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'muted')).toBe(true);
+  });
+
+  test('"closed" state with Voice unavailable contentDescription → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Voice unavailable" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'closed')).toBe(true);
+  });
+
+  test('state/contentDescription mismatch — open expected but Unmute present → false', async () => {
+    // Pins that asking for "open" when the mic is actually muted is
+    // correctly rejected (the journey scenario is failing — assertion
+    // should NOT silently pass).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Unmute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(false);
+  });
+
+  test('state/contentDescription mismatch — muted expected but Mute present → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Mute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'muted')).toBe(false);
+  });
+
+  test('state/contentDescription mismatch — closed expected but Mute present → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Mute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'closed')).toBe(false);
+  });
+
+  test('attribute-order tolerance — content-desc before resource-id → true', async () => {
+    // uiautomator dump's attribute order is not contractually fixed.
+    // Verifying with `node -e` against the live regex before adding
+    // this test confirmed the two-step extraction tolerates both
+    // orderings. Pin both directions.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node content-desc="Mute" resource-id="com.shyden.shytalk.local:id/room_micToggleButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(true);
+  });
+
+  test('mic toggle node missing entirely → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_chatInput" content-desc="Mute" />',
+    });
+    const driver = await createAndroidDriver();
+    // The "Mute" contentDescription is on a non-mic node — must not
+    // false-positive from a stray attribute elsewhere in the dump.
+    expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(false);
+  });
+
+  test('mic toggle present but no content-desc attribute → false', async () => {
+    // Defensive: if a future Compose refactor removes the
+    // contentDescription, the driver should return false (the
+    // contract is "we can detect the state", and without
+    // content-desc we cannot).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(false);
+  });
+
+  test('empty state arg → false', async () => {
+    // Defensive: even though the runner regex requires a non-empty
+    // state (`"([^"]+)"`), pin that an empty arg returns false
+    // rather than throwing or matching arbitrarily.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Mute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', '')).toBe(false);
+  });
+
+  test('unknown state ("speaking") → false', async () => {
+    // Pins that arbitrary states outside the {open, muted, closed}
+    // alphabet return false rather than throwing or short-circuiting
+    // any inner predicate. Critical because the Gherkin author could
+    // typo "open" → "openn" — the assertion must fail loudly.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Mute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'speaking')).toBe(false);
+  });
+
+  test('state arg is case-insensitive — "OPEN" maps to open', async () => {
+    // Defensive against authoring style — the corpus uses lowercase
+    // per the matcher comment, but a Gherkin author writing "OPEN"
+    // or "Open" shouldn't silently fail. Documented behaviour:
+    // lowercase the state before map lookup.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Mute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'OPEN')).toBe(true);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="room_micToggleButton" content-desc="Mute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(true);
+  });
+
+  test('left-boundary false-positive guarded — pre_room_micToggleButton_x does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="pre_room_micToggleButton_x" content-desc="Mute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(false);
+  });
+
+  test('right-boundary false-positive guarded — room_micToggleButton_extra does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton_extra" content-desc="Mute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false (not undefined)', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(false);
+  });
+
+  test('persona name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Mute" />',
+    });
+    const driver = await createAndroidDriver();
+    const okTheo = await driver.androidShowsMicIconAs('Theo', 'open');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Mute" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okAlice = await driver2.androidShowsMicIconAs('Alice', 'open');
+
+    expect(okTheo).toBe(true);
+    expect(okAlice).toBe(true);
+  });
+
+  test('content-desc contains hint as substring (e.g., "Mute mic") → true', async () => {
+    // Pins substring-match semantics: contentDescription doesn't have
+    // to equal the hint exactly. Some accessibility libraries pad
+    // descriptions ("Mute mic", "Currently: Mute"). Substring match
+    // tolerates this without false-failing.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Mute mic" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(true);
+  });
+});

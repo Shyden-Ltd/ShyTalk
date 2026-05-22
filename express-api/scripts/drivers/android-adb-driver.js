@@ -467,6 +467,47 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return isInRoomScreen(dump);
   };
 
+  // Wake 103 — `<Name>'s Android UI shows mic icon as "<X>"` (j09
+  // host mic on/off, j10 warning auto-mutes, j15 MC unmutes between
+  // sets). Inspects the `room_micToggleButton` IconButton's
+  // contentDescription (ChatPanel.kt:325-332) to determine state.
+  //
+  // The Compose contentDescription is the action a user would take
+  // on tap, so the displayed STATE is the inverse:
+  //   - contentDescription "Mute"              → mic is currently OPEN
+  //   - contentDescription "Unmute"            → mic is currently MUTED
+  //   - contentDescription "Voice unavailable" → mic is CLOSED
+  //
+  // Foundation policy: English (en-US) `local` flavor only.
+  // Locale-aware expansion belongs in this map (driver-side), not
+  // the runner — the Gherkin `state` arg is a stable literal.
+  //
+  // Attribute-order tolerance: uiautomator dump's attribute ordering
+  // is not contractually fixed. The impl uses a TWO-STEP extraction:
+  // first capture the full <node ...> tag containing the testTag,
+  // then look for content-desc within that captured tag string.
+  // This is order-independent and survives uiautomator version drift.
+  const MIC_STATE_HINTS = {
+    open: ['Mute'],
+    muted: ['Unmute'],
+    closed: ['Voice unavailable'],
+  };
+  driver.androidShowsMicIconAs = async (_name, state) => {
+    if (!state) return false;
+    const hints = MIC_STATE_HINTS[state.toLowerCase()];
+    if (!hints) return false;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?room_micToggleButton"[^>]*\/?>/;
+    const tagMatch = dump.match(tagRx);
+    if (!tagMatch) return false;
+    const descMatch = tagMatch[0].match(/content-desc="([^"]*)"/);
+    if (!descMatch) return false;
+    const contentDesc = descMatch[1];
+    return hints.some((h) => contentDesc.includes(h));
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
