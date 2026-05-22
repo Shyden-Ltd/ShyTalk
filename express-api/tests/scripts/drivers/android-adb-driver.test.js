@@ -3197,6 +3197,15 @@ describe('android-adb-driver — androidDisablesInput', () => {
     // explicitly — production handles it via the optional `/` in the
     // tail, but the test makes the contract self-evident and would
     // catch a future regex simplification (e.g. `\/>` only).
+    //
+    // Round 2 I-2 clarification: tagRx uses `[^>]*` which stops at
+    // the first `>`. This is safe because uiautomator XML never
+    // emits a literal `>` inside an attribute value (the spec
+    // escapes them as `&gt;`). So `[^>]*` reliably bounds at the
+    // outer node's opening-tag terminator, and `tagMatch[0]`
+    // captures only that opening tag. Child nodes after the `>`
+    // are excluded — which is intentional (see PR #736 R1 I-1
+    // discussion of child-carried values).
     mockExec({
       "'uiautomator' 'dump'": '',
       "'cat' '/sdcard/dump.xml'":
@@ -3240,5 +3249,36 @@ describe('android-adb-driver — androidDisablesInput', () => {
     });
     const driver = await createAndroidDriver();
     expect(await driver.androidDisablesInput('Theo', 'chat')).toBe(false);
+  });
+
+  test('null inputName arg → false', async () => {
+    // Round 2 I-1: the guard `if (!inputName || !inputName.trim())`
+    // correctly short-circuits on null and undefined. Pin both
+    // explicitly so a future refactor changing the guard to
+    // `inputName.length === 0` (which would crash on null) is
+    // caught immediately. Empty-string and whitespace-only pins
+    // are already in place above; this completes the null-safety
+    // matrix that prior PRs established (#728 banner, #730
+    // reason).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_chatInput" enabled="false" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidDisablesInput('Theo', null)).toBe(false);
+  });
+
+  test('undefined inputName arg → false', async () => {
+    // Round 2 I-1 (companion to the null pin above). Pins that
+    // omitting the arg (which would pass `undefined` positionally)
+    // does not crash the driver.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_chatInput" enabled="false" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidDisablesInput('Theo', undefined)).toBe(false);
   });
 });
