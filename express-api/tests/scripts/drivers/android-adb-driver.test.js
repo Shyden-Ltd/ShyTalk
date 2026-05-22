@@ -1734,4 +1734,44 @@ describe('android-adb-driver — androidContinuesNormallyInRoom', () => {
     const driver = await createAndroidDriver();
     expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(true);
   });
+
+  test('warning_acknowledgeButton alone (no room) → false', async () => {
+    // Round 2 M-1: completes the standalone × WARNING_MARKERS matrix
+    // for this describe block. `warning_title` and
+    // `warning_communityStandardsLink` are pinned standalone above
+    // (lines 1573, 1666), but `warning_acknowledgeButton` only
+    // appears in the overlap branch — never isolated. This pin
+    // isolates the "warning marker alone forces false" path for
+    // the third marker. A future refactor that removed
+    // warning_acknowledgeButton from WARNING_MARKERS would break
+    // the overlap precedence pin but no standalone test would
+    // catch that the acknowledgement-button marker was the sole
+    // cause of the negative result.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/warning_acknowledgeButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(false);
+  });
+
+  test('warning-side right-boundary under composition — warning_title_extra near room_seatGrid → true', async () => {
+    // Round 2 M-2: the room-side right-boundary (`room_seatGrid_extra`)
+    // is pinned. This pins the analogous warning-side right-boundary
+    // under composition — a padded warning ID (`warning_title_extra`)
+    // must NOT be detected by isOnWarningScreen, leaving the room
+    // assertion to carry the result to true. The closing `"` is a
+    // hard structural anchor in dumpHasAnyMarker's regex, but the
+    // pin defends against future regex changes that might remove or
+    // weaken that anchor on the warning marker set.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/warning_title_extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(true);
+  });
 });
