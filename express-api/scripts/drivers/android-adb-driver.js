@@ -445,6 +445,28 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return isInRoomScreen(dump);
   };
 
+  // Wake 105 — "<Name>'s Android UI continues normally in the room"
+  // (j10). Semantic: actor is unaffected by a mid-room moderation
+  // event — still IN the room AND not on a warning screen. Composes
+  // two existing predicates without introducing new markers.
+  //
+  // Precedence: warning beats room. If both ROOM_MARKERS and
+  // WARNING_MARKERS appear in the same dump (rare — warning sheet
+  // drawn over the still-mounted room), the user is NOT continuing
+  // normally because the warning blocks interaction.
+  //
+  // FUTURE axis: "input disabled / frozen overlay while still in
+  // room" has no Compose testTag yet — only `privateChat_frozenBanner`
+  // exists, and that's the messaging surface, not the voice room.
+  // Layer this third axis once the testTag lands (likely surfaced
+  // during Phase 10 real journey-testing).
+  driver.androidContinuesNormallyInRoom = async (_name) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    if (isOnWarningScreen(dump)) return false;
+    return isInRoomScreen(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

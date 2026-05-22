@@ -1502,3 +1502,180 @@ describe('android-adb-driver — androidNavigatesToRoomScreen', () => {
     );
   });
 });
+
+describe('android-adb-driver — androidContinuesNormallyInRoom', () => {
+  // Wake 105 matcher — `<Name>'s Android UI continues normally in the
+  // room` (j10). Semantically: actor is unaffected by a mid-room
+  // moderation event — still in the room AND not pulled into a warning
+  // screen. Composes two existing predicates from prior PRs:
+  //   - isInRoomScreen  (ROOM_MARKERS present)
+  //   - isOnWarningScreen (WARNING_MARKERS present)  → must be FALSE
+  //
+  // The third logical axis ("input disabled / frozen overlay while in
+  // room") has no Compose testTag yet — verified via grep over
+  // shared/src and app/src. Only `privateChat_frozenBanner` exists,
+  // and that's the messaging surface, not the voice room. Foundation
+  // policy: assert in-room AND not-on-warning only; layer the
+  // frozen/disabled axis once a testTag for it lands.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('room_seatGrid present, no warning markers → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(true);
+  });
+
+  test('room_roomName present, no warning markers → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_roomName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(true);
+  });
+
+  test('room_backButton present, no warning markers → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_backButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(true);
+  });
+
+  test('not in room screen (only main_roomsTab visible) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(false);
+  });
+
+  test('on warning screen instead of room → false', async () => {
+    // Post-eject typical state: user is no longer in the room because
+    // the warning screen replaced the back-stack entry. ROOM_MARKERS
+    // are absent, WARNING_MARKERS are present. Both predicates push
+    // toward false.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/warning_title" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(false);
+  });
+
+  test('room markers present AND warning markers present → false (warning wins)', async () => {
+    // Rare but possible: a warning sheet drawn OVER the still-mounted
+    // room. The user is NOT continuing normally — the warning blocks
+    // interaction. Pin the precedence: warning beats room.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/warning_acknowledgeButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="room_seatGrid" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(true);
+  });
+
+  test('left-boundary false-positive guarded — pre_room_seatGrid_x does NOT count as in-room', async () => {
+    // Same anti-substring discipline as the room-screen PRs. Confirms
+    // the room-side of the composed predicate doesn't false-positive
+    // on padded resource-ids.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_room_seatGrid_x" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(false);
+  });
+
+  test('right-boundary false-positive guarded — room_seatGrid_extra does NOT count as in-room', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid_extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(false);
+  });
+
+  test('persona name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />',
+    });
+    const driver = await createAndroidDriver();
+    const okTheo = await driver.androidContinuesNormallyInRoom('Theo');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okAlice = await driver2.androidContinuesNormallyInRoom('Alice');
+
+    expect(okTheo).toBe(true);
+    expect(okAlice).toBe(true);
+  });
+
+  test('uiautomator dump throws → false (not undefined)', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(false);
+  });
+
+  test('warning_communityStandardsLink alone (no room) → false', async () => {
+    // The 3 WARNING_MARKERS are exercised individually elsewhere
+    // (NavigatesToWarningScreen suite) but pinning a non-title
+    // warning marker here too defends against future refactors that
+    // might tighten the warning predicate to require warning_title
+    // specifically. The "any of the warning markers" contract must
+    // hold for the composed predicate.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/warning_communityStandardsLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(false);
+  });
+});
