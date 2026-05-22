@@ -2208,12 +2208,85 @@ describe('android-adb-driver — androidShowsBalanceViaListener', () => {
 
   test('balance with currency prefix — "$5,000" → true', async () => {
     // The `$` is not a word char, so the left lookbehind passes.
-    // Pins that future locale changes adding `$`, `€`, `£`, or `¥`
-    // prefix don't break the assertion.
+    // Round 1 I-3: `€`, `£`, `¥` prefix variants are pinned in
+    // separate tests below (the comment previously claimed coverage
+    // here that was actually absent).
     mockExec({
       "'uiautomator' 'dump'": '',
       "'cat' '/sdcard/dump.xml'":
         '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="$5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(true);
+  });
+
+  test('balance with euro prefix — "€5,000" → true', async () => {
+    // Round 1 I-3: `€` (U+20AC) is non-ASCII, non-word. Under
+    // JavaScript regex semantics without the `u` flag, `\w` matches
+    // only `[A-Za-z0-9_]` — so `€` is NOT a word char and the left
+    // lookbehind `(?<![\w-])` passes. Pin the contract.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="€5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(true);
+  });
+
+  test('balance with pound prefix — "£5,000" → true', async () => {
+    // Round 1 I-3: same as euro pin but for `£` (U+00A3).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="£5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(true);
+  });
+
+  test('balance with yen prefix — "¥5,000" → true', async () => {
+    // Round 1 I-3: same as euro pin but for `¥` (U+00A5).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="¥5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(true);
+  });
+
+  test('hyphen-prefix balance — "-5,000" does NOT match "5,000" (negative is a distinct value)', async () => {
+    // Round 1 I-1: a Compose locale that formats negative balances
+    // as "-5,000" would mean the user's balance is NOT 5,000 (it's
+    // negative 5,000). Asserting "5,000" against a "-5,000" display
+    // must return false. The lookbehind class `[\w-]` blocks the
+    // hyphen specifically (it's the same class used in
+    // androidShowsBanner's text= attribute guard). Pin the
+    // contract so a future relaxation of the class doesn't silently
+    // accept negative balances as matches for positive assertions.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="-5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(false);
+  });
+
+  test('node with &gt;-escaped angle bracket before resource-id → tag still located', async () => {
+    // Round 1 I-2: uiautomator XML-encodes `>` as `&gt;` in
+    // attribute values, so `[^>]*` in the tag regex doesn't truncate
+    // (none of `&`, `g`, `t`, `;` is a literal `>`). Pin that the
+    // tag-capture step works when another attribute value contains
+    // an HTML-escaped angle bracket positioned before resource-id.
+    // Low probability in practice (uiautomator always escapes), but
+    // explicit defends against future regex changes that might use
+    // `[^>]+?` non-greedy or otherwise alter the boundary.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node text="5,000 &gt; 0" resource-id="com.shyden.shytalk.local:id/wallet_balance" content-desc="5,000" />',
     });
     const driver = await createAndroidDriver();
     expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(true);
