@@ -567,6 +567,43 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return valueRx.test(tagMatch[0]);
   };
 
+  // Wake 102 — `<Name>'s Android UI replaces follow button with
+  // "<X>"` (j07 — UI element swap after follow action completes).
+  // Inspects the `profile_followButton` testTag node's text= AND
+  // content-desc= attributes for the buttonId string.
+  //
+  // The buttonId is one of the four follow-state Compose strings
+  // (ProfileScreen.kt:1183, 1192): "Follow", "Unfollow", "Following",
+  // "Follow back". These have OVERLAPPING PREFIXES — "Follow" is a
+  // prefix of "Follow back" and "Following". Substring or word-
+  // boundary substring matching would false-positive across them
+  // (asserting "Follow" against a "Follow back" button would pass
+  // under word-boundary substring tolerance because of the space
+  // delimiter).
+  //
+  // Foundation design: EXACT (case-insensitive) match across either
+  // text= or content-desc= within the captured tag. The mic-icon's
+  // substring tolerance (PR #734) was for hypothetical accessibility
+  // padding; here the four states are mutually-exclusive labels and
+  // exact match is the safer foundation. If a future surface
+  // legitimately pads ("Follow • Alice"), this method's contract
+  // needs an explicit revision, not silent drift.
+  driver.androidReplacesFollowButton = async (_name, buttonId) => {
+    if (!buttonId || !buttonId.trim()) return false;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?profile_followButton"[^>]*\/?>/;
+    const tagMatch = dump.match(tagRx);
+    if (!tagMatch) return false;
+    const target = buttonId.toLowerCase();
+    const attrRx = /(?:text|content-desc)="([^"]*)"/g;
+    for (const m of tagMatch[0].matchAll(attrRx)) {
+      if (m[1].toLowerCase() === target) return true;
+    }
+    return false;
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

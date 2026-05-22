@@ -2520,3 +2520,306 @@ describe('android-adb-driver — androidShowsBalanceViaListener', () => {
     expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(false);
   });
 });
+
+describe('android-adb-driver — androidReplacesFollowButton', () => {
+  // Wake 102 matcher — `<Name>'s Android UI replaces follow button
+  // with "<X>"` (j07 — UI element swap after follow action completes).
+  // Inspects the `profile_followButton` testTag node's text= AND
+  // content-desc= attributes for the buttonId string.
+  //
+  // The buttonId is one of the four follow-state Compose strings
+  // (ProfileScreen.kt:1183, 1192): "Follow", "Unfollow", "Following",
+  // "Follow back". These have OVERLAPPING PREFIXES — "Follow" is a
+  // prefix of "Follow back" and "Following". Substring or word-
+  // boundary substring matching would false-positive across them
+  // (asserting "Follow" against a "Follow back" button would pass
+  // under word-boundary substring tolerance because of the space
+  // delimiter).
+  //
+  // Foundation design: EXACT (case-insensitive) match across either
+  // text= or content-desc= within the captured tag. The mic-icon's
+  // substring tolerance (PR #734) was for hypothetical accessibility
+  // padding; here the four states are mutually-exclusive labels
+  // and exact match is the safer foundation.
+  //
+  // Two-step extraction (PR #734 pattern): capture the
+  // profile_followButton node tag first, then scan its attributes.
+  // Attribute-order independent.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('buttonId "Follow" matches contentDescription "Follow" → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Follow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(true);
+  });
+
+  test('buttonId "Unfollow" matches text="Unfollow" → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" text="Unfollow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Unfollow')).toBe(true);
+  });
+
+  test('buttonId "Following" matches contentDescription "Following" → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Following" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Following')).toBe(true);
+  });
+
+  test('buttonId "Follow back" matches contentDescription "Follow back" → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Follow back" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow back')).toBe(true);
+  });
+
+  test('overlap rejection — buttonId "Follow" does NOT match "Follow back"', async () => {
+    // Critical overlap pin: the corpus has 4 follow states with
+    // overlapping prefixes. Word-boundary substring match would
+    // false-positive here (space delimiter between "Follow" and
+    // "back"). Exact match correctly rejects.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Follow back" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(false);
+  });
+
+  test('overlap rejection — buttonId "Follow" does NOT match "Following"', async () => {
+    // Word-boundary substring match would correctly reject this
+    // (word-char suffix), but the test pins it explicitly for the
+    // exact-match contract too.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Following" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(false);
+  });
+
+  test('overlap rejection — buttonId "Follow back" does NOT match "Follow" (shorter hint, longer button label is the inverse)', async () => {
+    // Inverse direction: button shows shorter "Follow", assertion
+    // asks for longer "Follow back". Exact match rejects (longer
+    // hint cannot equal shorter label).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Follow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow back')).toBe(false);
+  });
+
+  test('case-insensitive match — "follow" matches "Follow"', async () => {
+    // Defensive against authoring style — the corpus uses
+    // canonical-case strings ("Follow"), but a Gherkin author
+    // writing "follow" (lowercase) shouldn't silently fail.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Follow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'follow')).toBe(true);
+  });
+
+  test('case-insensitive multi-word — "follow back" matches "Follow back"', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Follow back" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'follow back')).toBe(true);
+  });
+
+  test('profile_followButton node missing → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_messageButton" content-desc="Follow" />',
+    });
+    const driver = await createAndroidDriver();
+    // The "Follow" contentDescription is on a non-follow node —
+    // must not false-positive from a stray attribute elsewhere.
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(false);
+  });
+
+  test('profile_followButton present but no text or content-desc → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(false);
+  });
+
+  test('empty buttonId arg → false', async () => {
+    // Defensive: the runner regex requires `([^"]+)` so an empty
+    // string is not reachable from valid Gherkin, but pin that the
+    // driver rejects whitespace-only input rather than silently
+    // matching any node with an empty attribute.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Follow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', '')).toBe(false);
+  });
+
+  test('whitespace-only buttonId arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Follow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', '   ')).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="profile_followButton" content-desc="Follow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(true);
+  });
+
+  test('left-boundary false-positive guarded — pre_profile_followButton_x does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="pre_profile_followButton_x" content-desc="Follow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(false);
+  });
+
+  test('right-boundary false-positive guarded — profile_followButton_extra does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton_extra" content-desc="Follow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(false);
+  });
+
+  test('package-qualified left-boundary guarded — :id/pre_profile_followButton does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_profile_followButton" content-desc="Follow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(false);
+  });
+
+  test('attribute-order tolerance — content-desc before resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node content-desc="Follow" resource-id="com.shyden.shytalk.local:id/profile_followButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(true);
+  });
+
+  test('uiautomator dump throws → false (not undefined)', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(false);
+  });
+
+  test('persona name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Follow" />',
+    });
+    const driver = await createAndroidDriver();
+    const okTheo = await driver.androidReplacesFollowButton('Theo', 'Follow');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Follow" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okAlice = await driver2.androidReplacesFollowButton('Alice', 'Follow');
+
+    expect(okTheo).toBe(true);
+    expect(okAlice).toBe(true);
+  });
+
+  test('first-match contract pinned — two profile_followButton nodes, first wins', async () => {
+    // Same contract as androidShowsBalanceViaListener (PR #735 R2).
+    // First node has "Follow", second has "Unfollow". Assertion for
+    // "Unfollow" must return false because the first (winning)
+    // match doesn't carry that value. A future swap to
+    // `matchAll`/multi-node scanning would silently change
+    // behaviour without this pin.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Follow" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Unfollow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Unfollow')).toBe(false);
+  });
+
+  test('partial match within a longer attribute value rejected — "Unfollow Alice" does NOT match "Unfollow"', async () => {
+    // Exact-match (not substring) — pin that even where the
+    // buttonId IS a prefix of a longer attribute value, the
+    // assertion fails. Defends against future drift toward
+    // substring tolerance that would re-introduce the overlap
+    // false-positives.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Unfollow Alice" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Unfollow')).toBe(false);
+  });
+});
