@@ -1,5 +1,20 @@
 platform :ios, '16.0'
 
+# Local-flavour configuration mapping (added 2026-05-22, Phase 3.4 of
+# the iOS-local build-out). Without this, CocoaPods sees Debug-Local
+# and Release-Local in iosApp.xcodeproj (added by Phase 3.2 via
+# scripts/ios/add-local-configurations.rb) but doesn't know whether
+# they're debug-style or release-style configs — it then refuses to
+# generate Pods-iosApp.debug-local.xcconfig / .release-local.xcconfig,
+# and the Local configs have no baseConfigurationReference pointing
+# at any Pods xcconfig, so they can't resolve module dependencies
+# (FirebaseCore, GoogleSignIn, LiveKitClient, etc.). Phase 3.3 added
+# the same configs to test targets — those inherit search paths via
+# TEST_HOST/BUNDLE_LOADER from iosApp's Local configs.
+project 'iosApp.xcodeproj',
+  'Debug-Local' => :debug,
+  'Release-Local' => :release
+
 target 'iosApp' do
   use_frameworks! :linkage => :static
 

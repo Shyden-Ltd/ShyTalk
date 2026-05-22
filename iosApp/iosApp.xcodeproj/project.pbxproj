@@ -91,12 +91,14 @@
 		A10001002600000000000023 /* StartingScreenCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartingScreenCoordinatorTests.swift; sourceTree = "<group>"; };
 		A10001002600000000000024 /* GoogleSignInHelperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleSignInHelperTests.swift; sourceTree = "<group>"; };
 		A10003002600000000000001 /* iosAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = iosAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1545238E4CCEC23A10384F3 /* Pods-iosApp.debug-local.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.debug-local.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.debug-local.xcconfig"; sourceTree = "<group>"; };
 		A4194D2DAF7801EEB19415A3 /* StartingScreenCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StartingScreenCache.swift; path = iosApp/feature/starting/StartingScreenCache.swift; sourceTree = SOURCE_ROOT; };
 		BE254B9C06195293860934D8 /* iosApp.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = iosApp.entitlements; path = iosApp/iosApp.entitlements; sourceTree = SOURCE_ROOT; };
 		D0A4F7B83C8E1F2D5B6A9C01 /* StoreKitBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StoreKitBridge.swift; path = iosApp/StoreKitBridge.swift; sourceTree = SOURCE_ROOT; };
 		D7BC7D9DF72B6567762ADC66 /* ManualQARemoteControl.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ManualQARemoteControl.swift; path = iosAppUITests/ManualQARemoteControl.swift; sourceTree = "<group>"; };
 		DCA2BF0B8EEF6C0696E649B2 /* Local.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = Local.xcconfig; sourceTree = "<group>"; };
 		E28E4DFD9DDDDA95668E5893 /* LiveKitBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = LiveKitBridge.swift; path = iosApp/LiveKitBridge.swift; sourceTree = SOURCE_ROOT; };
+		EB03B228469A1B1BF924C31D /* Pods-iosApp.release-local.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-iosApp.release-local.xcconfig"; path = "Target Support Files/Pods-iosApp/Pods-iosApp.release-local.xcconfig"; sourceTree = "<group>"; };
 		F6914C8FB414C2D00F27D96C /* StartingScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = StartingScreen.swift; path = iosApp/feature/starting/StartingScreen.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -242,6 +244,8 @@
 			children = (
 				68FB5FAA0E85EFC24643CA4B /* Pods-iosApp.debug.xcconfig */,
 				59DE73CD449B7006816DC1E8 /* Pods-iosApp.release.xcconfig */,
+				A1545238E4CCEC23A10384F3 /* Pods-iosApp.debug-local.xcconfig */,
+				EB03B228469A1B1BF924C31D /* Pods-iosApp.release-local.xcconfig */,
 			);
 			name = Pods;
 			path = Pods;
@@ -741,6 +745,7 @@
 		};
 		385479B1B10E5455F17F2ACB /* Debug-Local */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A1545238E4CCEC23A10384F3 /* Pods-iosApp.debug-local.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -767,8 +772,29 @@
 			};
 			name = "Debug-Local";
 		};
+		4933807A95758EB97862A631 /* Release-Local */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = F3XX4PM3MF;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPrincipalClass = "";
+				INFOPLIST_KEY_UIRequiredDeviceCapabilities = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shyden.shytalk.uitests;
+				PRODUCT_NAME = iosAppUITests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = iosApp;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = "Release-Local";
+		};
 		9C42CB3D0291CB25483D5375 /* Release-Local */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = EB03B228469A1B1BF924C31D /* Pods-iosApp.release-local.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -916,6 +942,25 @@
 			};
 			name = "Debug-Local";
 		};
+		B3A0AD056C15A51C3454A91F /* Release-Local */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = F3XX4PM3MF;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shyden.shytalk.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iosApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/iosApp";
+			};
+			name = "Release-Local";
+		};
 		EC30098239A66F4B6AB2CC80 /* Release-Local */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReference = DCA2BF0B8EEF6C0696E649B2 /* Local.xcconfig */;
@@ -973,6 +1018,44 @@
 			};
 			name = "Release-Local";
 		};
+		FAB42417B12DB6DF3477883A /* Debug-Local */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = F3XX4PM3MF;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shyden.shytalk.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iosApp.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/iosApp";
+			};
+			name = "Debug-Local";
+		};
+		FB4D2915B20BE1997F93F1DD /* Debug-Local */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = F3XX4PM3MF;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPrincipalClass = "";
+				INFOPLIST_KEY_UIRequiredDeviceCapabilities = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shyden.shytalk.uitests;
+				PRODUCT_NAME = iosAppUITests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = iosApp;
+			};
+			name = "Debug-Local";
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -1003,6 +1086,8 @@
 			buildConfigurations = (
 				30A29A68A2F6F23AE86D0CC5 /* Release */,
 				A8CC4EE65441124E76D797CD /* Debug */,
+				FB4D2915B20BE1997F93F1DD /* Debug-Local */,
+				4933807A95758EB97862A631 /* Release-Local */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -1012,6 +1097,8 @@
 			buildConfigurations = (
 				A10009002600000000000001 /* Debug */,
 				A10009002600000000000002 /* Release */,
+				FAB42417B12DB6DF3477883A /* Debug-Local */,
+				B3A0AD056C15A51C3454A91F /* Release-Local */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
