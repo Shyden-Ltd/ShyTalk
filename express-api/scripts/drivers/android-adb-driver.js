@@ -629,7 +629,15 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${tag}"[^>]*\\/?>`);
     const tagMatch = dump.match(tagRx);
     if (!tagMatch) return false;
-    return /enabled="false"/.test(tagMatch[0]);
+    // Round 1 I-2: `(?<![\w-])` negative lookbehind blocks compound
+    // attribute names ending in `enabled` (e.g. hyphenated forms
+    // like `pre-enabled="false"`). Mirrors the boundary shape used
+    // in androidShowsBanner's `text=` attribute guard. In current
+    // uiautomator vocabulary the standard `enabled` is the only
+    // such attribute, but the anchor defends against future surface
+    // growth without cost.
+    // eslint-disable-next-line sonarjs/slow-regex
+    return /(?<![\w-])enabled="false"/.test(tagMatch[0]);
   };
 
   // Open named screen — launches the local-build app via MainActivity.

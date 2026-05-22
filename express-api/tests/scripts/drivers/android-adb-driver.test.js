@@ -3189,4 +3189,56 @@ describe('android-adb-driver — androidDisablesInput', () => {
     const driver = await createAndroidDriver();
     expect(await driver.androidDisablesInput('Theo', 'chat')).toBe(false);
   });
+
+  test('non-self-closing tag form — open-tag <node ...>...</node> still detected', async () => {
+    // Round 1 I-1: real uiautomator XML emits both self-closing
+    // (`<node ... />`) and non-self-closing (`<node ...>...</node>`)
+    // forms. The tagRx's `\/?>` handles both. Pin the open-tag form
+    // explicitly — production handles it via the optional `/` in the
+    // tail, but the test makes the contract self-evident and would
+    // catch a future regex simplification (e.g. `\/>` only).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_chatInput" enabled="false"><node text="ignored-child" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidDisablesInput('Theo', 'chat')).toBe(true);
+  });
+
+  test('compound-attribute left-boundary guard — pre-enabled="false" does NOT match', async () => {
+    // Round 1 I-2: bare `/enabled="false"/` substring scan would
+    // false-positive against any compound attribute ending in
+    // `enabled` — e.g. a hypothetical hyphenated form like
+    // `pre-enabled="false"`. The lookbehind `(?<![\w-])` blocks the
+    // hyphen and word-char prefixes, mirroring androidShowsBanner's
+    // text= attribute guard.
+    //
+    // In current uiautomator vocabulary the standard `enabled` is
+    // the only `enabled`-ending attribute, but this pin defends
+    // against future surface growth.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_chatInput" pre-enabled="false" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidDisablesInput('Theo', 'chat')).toBe(false);
+  });
+
+  test('compound-attribute left-boundary guard — chatEnabled="false" does NOT match', async () => {
+    // Symmetric to the hyphen pin: word-char prefix is also blocked
+    // by the `(?<![\w-])` lookbehind. The `t` before `Enabled` would
+    // pass an exact-case regex (since the test searches lowercase
+    // `enabled`), so the actual collision risk is on camelCase
+    // attributes with a trailing lowercase form. Pinned for
+    // completeness — pin `chatenabled` (lowercase prefix).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_chatInput" chatenabled="false" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidDisablesInput('Theo', 'chat')).toBe(false);
+  });
 });
