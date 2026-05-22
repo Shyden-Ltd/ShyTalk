@@ -1678,4 +1678,60 @@ describe('android-adb-driver — androidContinuesNormallyInRoom', () => {
     const driver = await createAndroidDriver();
     expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(false);
   });
+
+  test('warning_title + room_seatGrid overlap → false (precedence pin for warning_title)', async () => {
+    // Round 1 I-2 fix: the original "both present" overlap test pinned
+    // the warning-beats-room precedence using warning_acknowledgeButton.
+    // This pins the same precedence for warning_title — proving the
+    // "any of the warning markers wins" contract on the OVERLAP branch
+    // (not just the no-room branch the warning_title-alone test
+    // exercises). Without this, a future refactor that special-cases
+    // warning_title detection could silently break precedence for it
+    // alone, and the existing tests would still pass.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/warning_title" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(false);
+  });
+
+  test('warning_communityStandardsLink + room_seatGrid overlap → false (precedence pin)', async () => {
+    // Round 1 I-2 fix: completes the WARNING_MARKERS × overlap-branch
+    // coverage matrix. With this and the warning_title+room and
+    // warning_acknowledgeButton+room cases, all 3 warning markers are
+    // pinned in the overlap branch. No warning marker should ever lose
+    // precedence to the room markers.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/warning_communityStandardsLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(false);
+  });
+
+  test('warning-side left-boundary under composition — pre_warning_title_x near room_seatGrid → true', async () => {
+    // Round 1 I-1 fix: the room-side left boundary
+    // (`pre_room_seatGrid_x`) was already pinned. This pins the
+    // analogous warning-side boundary IN THE COMPOSED CONTEXT —
+    // a padded warning ID (`pre_warning_title_x`) must NOT be
+    // detected by isOnWarningScreen, leaving the room assertion
+    // free to carry the result to true. Confirms the
+    // dumpHasAnyMarker boundary rule holds for the WARNING marker
+    // set under composition. A future refactor that splits
+    // isOnWarningScreen into a helper with a different regex would
+    // break this case silently without this pin.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node resource-id="pre_warning_title_x" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidContinuesNormallyInRoom('Theo')).toBe(true);
+  });
 });
