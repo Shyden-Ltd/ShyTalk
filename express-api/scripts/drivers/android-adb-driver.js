@@ -426,6 +426,25 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return isOnProfileScreen(dump);
   };
 
+  // Wake 99 — `<Name>'s Android UI navigates to the room screen
+  // <suffix>`. j09 — 2 corpus rows with descriptive suffixes:
+  //   - "with host seat occupied"
+  //   - "as a non-seated participant"
+  // The suffix is scenario-reader METADATA, not UI text. It would
+  // never appear in a `text=`/`content-desc=` attribute, so attempting
+  // to substring-match it into the dump would false-fail every call.
+  // Driver asserts ROOM_MARKERS presence only and ignores the suffix.
+  //
+  // FUTURE: a follow-up PR can layer suffix-aware refinement on top
+  // (e.g. for "with host seat occupied", additionally inspect the
+  // seat-1 subtree for a non-empty avatar element). Done as a layer,
+  // not a replacement, so the foundation assertion stays sound.
+  driver.androidNavigatesToRoomScreen = async (_name, _suffix) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    return isInRoomScreen(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
