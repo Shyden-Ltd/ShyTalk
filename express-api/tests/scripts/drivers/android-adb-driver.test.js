@@ -2020,10 +2020,11 @@ describe('android-adb-driver — androidShowsMicIconAs', () => {
   });
 
   test('content-desc contains hint as substring (e.g., "Mute mic") → true', async () => {
-    // Pins substring-match semantics: contentDescription doesn't have
+    // Pins suffix-padded match semantics: contentDescription doesn't have
     // to equal the hint exactly. Some accessibility libraries pad
-    // descriptions ("Mute mic", "Currently: Mute"). Substring match
-    // tolerates this without false-failing.
+    // descriptions ("Mute mic", "Currently: Mute"). The word-boundary
+    // match (Round 1 I-1 fix) tolerates this without false-failing —
+    // "Mute" is preceded by start-of-string and followed by a space.
     mockExec({
       "'uiautomator' 'dump'": '',
       "'cat' '/sdcard/dump.xml'":
@@ -2031,5 +2032,64 @@ describe('android-adb-driver — androidShowsMicIconAs', () => {
     });
     const driver = await createAndroidDriver();
     expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(true);
+  });
+
+  test('prefix collision guard — "Auto-Unmute" does NOT match state "muted"', async () => {
+    // Round 1 I-1 fix: bare `.includes("Unmute")` would have returned
+    // true for `"Auto-Unmute"` (substring true). The word-boundary
+    // match blocks this — the `-` before "Unmute" is matched by the
+    // negative lookbehind `(?<![\w-])`. Pins the boundary rule so a
+    // future Compose feature adding a label like "Auto-Unmute" or
+    // "Smart-Unmute" doesn't silently false-positive the assertion.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Auto-Unmute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'muted')).toBe(false);
+  });
+
+  test('prefix collision guard — "Pre-Mute" does NOT match state "open"', async () => {
+    // Round 1 I-1: same boundary rule applied to the "open" hint.
+    // Symmetric coverage with the "Auto-Unmute" pin above.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Pre-Mute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(false);
+  });
+
+  test('suffix collision guard — "MuteAll" does NOT match state "open"', async () => {
+    // Round 1 I-1: the right-side word-boundary `(?!\w)` blocks the
+    // hint from being a prefix of a longer word. "MuteAll" contains
+    // "Mute" but the following `A` is a word char — match blocked.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="MuteAll" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(false);
+  });
+
+  test('package-qualified left-boundary false-positive guarded — :id/pre_room_micToggleButton does NOT match', async () => {
+    // Round 1 I-2: the bare-form left-boundary case is already pinned
+    // (`pre_room_micToggleButton_x`). This pins the analogous
+    // package-qualified form. The optional `(?:[^"]*:id/)?` group
+    // would consume `com.shyden.shytalk.local:id/`, leaving
+    // `pre_room_micToggleButton` to match against the literal
+    // `room_micToggleButton` — that fails because `pre_` precedes
+    // `room_`. The pin makes the regex contract explicit for this
+    // method's distinct (non-dumpHasAnyMarker) regex shape.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_room_micToggleButton" content-desc="Mute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(false);
   });
 });

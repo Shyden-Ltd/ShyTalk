@@ -505,7 +505,22 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const descMatch = tagMatch[0].match(/content-desc="([^"]*)"/);
     if (!descMatch) return false;
     const contentDesc = descMatch[1];
-    return hints.some((h) => contentDesc.includes(h));
+    // Round 1 I-1 fix: word-boundary match instead of bare
+    // `.includes()`. Plain substring match was vulnerable to prefix
+    // collisions — e.g. `"Auto-Unmute".includes("Unmute")` is true.
+    // Negative lookbehind `(?<![\w-])` blocks preceding word chars
+    // and hyphens (matches the boundary shape used in
+    // androidShowsBanner). Negative lookahead `(?!\w)` blocks
+    // suffix word chars (so `"MuteAll"` doesn't match `"Mute"`).
+    // Spaces and punctuation around the hint remain valid —
+    // padded forms like "Mute mic" and "Currently: Mute" still
+    // match. Hints are escaped for regex safety in case future
+    // localisations contain dot/paren/etc.
+    return hints.some((h) => {
+      const escH = h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // eslint-disable-next-line sonarjs/slow-regex
+      return new RegExp(`(?<![\\w-])${escH}(?!\\w)`).test(contentDesc);
+    });
   };
 
   // Open named screen — launches the local-build app via MainActivity.
