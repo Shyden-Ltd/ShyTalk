@@ -157,11 +157,99 @@ describe('iosApp.xcodeproj — Phase 3.3 test-target Local configurations', () =
     test('iosAppUITests Debug-Local inherits SWIFT_VERSION from iosAppUITests Debug', () => {
       const debugLocals = findBuildConfigurationsByName(pbxproj, 'Debug-Local');
       // iosAppUITests configs have `TEST_TARGET_NAME` set.
-      const iosAppUITestsConfig = debugLocals.find((m) =>
-        m.block.includes('TEST_TARGET_NAME'),
-      );
+      const iosAppUITestsConfig = debugLocals.find((m) => m.block.includes('TEST_TARGET_NAME'));
       expect(iosAppUITestsConfig).toBeDefined();
       expect(iosAppUITestsConfig.block).toContain('SWIFT_VERSION = 5.0;');
+    });
+
+    // Round 1 I-3: Release-Local SWIFT_VERSION on both test targets.
+    // The CocoaPods consistency failure that motivated 3.2 round 4
+    // applies equally to Release builds — if pod install is ever
+    // run against the Release-Local scheme, an empty SWIFT_VERSION
+    // would fail the same way. Pinning both Debug and Release.
+    test('iosAppTests Release-Local inherits SWIFT_VERSION from iosAppTests Release', () => {
+      const releaseLocals = findBuildConfigurationsByName(pbxproj, 'Release-Local');
+      const iosAppTestsConfig = releaseLocals.find(
+        (m) => m.block.includes('BUNDLE_LOADER') || m.block.includes('TEST_HOST'),
+      );
+      expect(iosAppTestsConfig).toBeDefined();
+      expect(iosAppTestsConfig.block).toContain('SWIFT_VERSION = 5.0;');
+    });
+
+    test('iosAppUITests Release-Local inherits SWIFT_VERSION from iosAppUITests Release', () => {
+      const releaseLocals = findBuildConfigurationsByName(pbxproj, 'Release-Local');
+      const iosAppUITestsConfig = releaseLocals.find((m) => m.block.includes('TEST_TARGET_NAME'));
+      expect(iosAppUITestsConfig).toBeDefined();
+      expect(iosAppUITestsConfig.block).toContain('SWIFT_VERSION = 5.0;');
+    });
+
+    // Round 1 I-2: VALIDATE_PRODUCT asymmetry.
+    // The existing iosAppUITests Release config carries
+    // `VALIDATE_PRODUCT = YES` (a Release-only setting that catches
+    // provisioning issues on archive). Debug-Local should NOT inherit
+    // it (clone is from Debug, not Release). Release-Local SHOULD
+    // inherit it (clone is from Release). The asymmetry is a real
+    // contract: VALIDATE_PRODUCT on a simulator Debug build creates
+    // false-positive provisioning errors.
+    test('iosAppUITests Debug-Local does NOT carry VALIDATE_PRODUCT', () => {
+      const debugLocals = findBuildConfigurationsByName(pbxproj, 'Debug-Local');
+      const uiTestsDebugLocal = debugLocals.find((m) => m.block.includes('TEST_TARGET_NAME'));
+      expect(uiTestsDebugLocal).toBeDefined();
+      expect(uiTestsDebugLocal.block).not.toContain('VALIDATE_PRODUCT');
+    });
+
+    test('iosAppUITests Release-Local carries VALIDATE_PRODUCT = YES (inherited from Release)', () => {
+      const releaseLocals = findBuildConfigurationsByName(pbxproj, 'Release-Local');
+      const uiTestsReleaseLocal = releaseLocals.find((m) => m.block.includes('TEST_TARGET_NAME'));
+      expect(uiTestsReleaseLocal).toBeDefined();
+      expect(uiTestsReleaseLocal.block).toContain('VALIDATE_PRODUCT = YES');
+    });
+  });
+
+  // Round 1 I-4: NO baseConfigurationReference on any of the 4 new
+  // test-target Local configs. Phase 3.4 (CocoaPods integration) is
+  // the only thing allowed to add base refs to target-level configs,
+  // and only after the explicit pod-install step. A copy-paste of
+  // the project-level config creation block that accidentally adds
+  // `base_configuration_reference = xcconfig_ref` to the test target
+  // creation would be caught by these tests.
+  describe('Phase 3.3 NO baseConfigurationReference (Phase 3.4 scope)', () => {
+    test('iosAppTests Debug-Local has NO baseConfigurationReference', () => {
+      const matches = findBuildConfigurationsByName(pbxproj, 'Debug-Local');
+      const iosAppTestsConfig = matches.find(
+        (m) =>
+          (m.block.includes('BUNDLE_LOADER') || m.block.includes('TEST_HOST')) &&
+          !m.block.includes('baseConfigurationReference'),
+      );
+      expect(iosAppTestsConfig).toBeDefined();
+    });
+
+    test('iosAppTests Release-Local has NO baseConfigurationReference', () => {
+      const matches = findBuildConfigurationsByName(pbxproj, 'Release-Local');
+      const iosAppTestsConfig = matches.find(
+        (m) =>
+          (m.block.includes('BUNDLE_LOADER') || m.block.includes('TEST_HOST')) &&
+          !m.block.includes('baseConfigurationReference'),
+      );
+      expect(iosAppTestsConfig).toBeDefined();
+    });
+
+    test('iosAppUITests Debug-Local has NO baseConfigurationReference', () => {
+      const matches = findBuildConfigurationsByName(pbxproj, 'Debug-Local');
+      const uiTestsConfig = matches.find(
+        (m) =>
+          m.block.includes('TEST_TARGET_NAME') && !m.block.includes('baseConfigurationReference'),
+      );
+      expect(uiTestsConfig).toBeDefined();
+    });
+
+    test('iosAppUITests Release-Local has NO baseConfigurationReference', () => {
+      const matches = findBuildConfigurationsByName(pbxproj, 'Release-Local');
+      const uiTestsConfig = matches.find(
+        (m) =>
+          m.block.includes('TEST_TARGET_NAME') && !m.block.includes('baseConfigurationReference'),
+      );
+      expect(uiTestsConfig).toBeDefined();
     });
   });
 
