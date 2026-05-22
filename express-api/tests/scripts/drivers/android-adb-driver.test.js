@@ -2494,4 +2494,29 @@ describe('android-adb-driver — androidShowsBalanceViaListener', () => {
     const driver = await createAndroidDriver();
     expect(await driver.androidShowsBalanceViaListener('Theo', '1,234.56')).toBe(false);
   });
+
+  test('first-match contract pinned — two wallet_balance nodes, first wins', async () => {
+    // Round 2 Minor: `dump.match(tagRx)` returns the first match
+    // only. If uiautomator emits two `wallet_balance` nodes (rare
+    // in Compose — one wallet UI on screen at a time — but
+    // theoretically possible with modal stacks or recycled views),
+    // the driver inspects whichever node appears first in the dump.
+    //
+    // Pin this as the deliberate contract. A future swap to
+    // `matchAll`/multi-node scanning would change behaviour
+    // silently without this pin — the breakage of this test would
+    // force an explicit decision.
+    //
+    // Setup: first node has "1,234", second has "5,000". Assertion
+    // for "5,000" must return false because the first (winning)
+    // match doesn't carry that value.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="1,234" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(false);
+  });
 });
