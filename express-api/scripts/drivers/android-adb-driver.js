@@ -604,6 +604,34 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return false;
   };
 
+  // Wake 89 — `<Name>'s Android UI disables the <X> input` (j11:50).
+  // Parameterised input-control state assertion. The inputName arg
+  // is the bare control name ("chat", "comment", "gift", etc.),
+  // mapped to a Compose testTag via INPUT_TAGS.
+  //
+  // Currently only "chat" → "room_chatInput" is grounded
+  // (ChatPanel.kt:273). Unmapped names return false until a future
+  // Compose change lands the missing testTag — better to FAIL the
+  // assertion than silently match an unrelated node.
+  //
+  // Two-step extraction (PR #734 pattern): capture the input's node
+  // tag first, then scan for `enabled="false"` within it. The
+  // closing `"` anchors the right boundary so `enabled="falsey"` or
+  // similar values don't false-match.
+  const INPUT_TAGS = { chat: 'room_chatInput' };
+  driver.androidDisablesInput = async (_name, inputName) => {
+    if (!inputName || !inputName.trim()) return false;
+    const tag = INPUT_TAGS[inputName.toLowerCase()];
+    if (!tag) return false;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${tag}"[^>]*\\/?>`);
+    const tagMatch = dump.match(tagRx);
+    if (!tagMatch) return false;
+    return /enabled="false"/.test(tagMatch[0]);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
