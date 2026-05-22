@@ -2822,4 +2822,78 @@ describe('android-adb-driver — androidReplacesFollowButton', () => {
     const driver = await createAndroidDriver();
     expect(await driver.androidReplacesFollowButton('Theo', 'Unfollow')).toBe(false);
   });
+
+  test('non-self-closing open-tag form with value on outer node → true', async () => {
+    // Round 1 I-1: real uiautomator XML for Compose Button often uses
+    // the open-tag form `<node ...>...</node>` rather than self-closing
+    // `<node ... />`. The `\/?>` part of tagRx correctly matches both
+    // forms. With Compose's `Modifier.semantics(mergeDescendants = true)`
+    // (the default for Button), the merged contentDescription lands on
+    // the OUTER node. tagRx captures just the opening tag (no children),
+    // and the matchAll scan finds the value there.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" content-desc="Follow"><node text="ignored-child-text" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(true);
+  });
+
+  test('non-self-closing form with value ONLY on a child node → false (contract limitation)', async () => {
+    // Round 1 I-1: pin the deliberate contract limitation — values
+    // that appear ONLY on a child node are NOT detected. tagRx
+    // captures just the opening tag, so matchAll scans only the
+    // outer node's attributes. This is the correct foundation
+    // because Compose's Button merges descendants into the outer
+    // node by default. Scanning children would risk cross-button
+    // false-positives (a different Compose surface might nest
+    // arbitrary text inside the button container).
+    //
+    // If a future Compose change ever leaves the value only on a
+    // child, this test breaks loudly and the contract is revisited
+    // intentionally rather than silently expanded.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" class="Button"><node text="Follow" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(false);
+  });
+
+  test('matchAll iterates BOTH text and content-desc — divergent values both findable', async () => {
+    // Round 1 I-2: pin that `matchAll` actually iterates rather than
+    // stopping at the first attribute. With `text="Follow"` AND
+    // `content-desc="Unfollow"` on the same node, both buttonIds
+    // should independently match. Defends against a future refactor
+    // that swaps matchAll for `.match()` (first-only) without
+    // updating tests.
+    //
+    // Realistic? Compose's accessibility merge usually keeps text and
+    // contentDescription aligned, but uiautomator can surface
+    // divergent values when text is the rendered label and
+    // content-desc is the role hint. The pin doesn't assume
+    // divergence is common — just that the iteration semantics
+    // hold when it occurs.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" text="Follow" content-desc="Unfollow" />',
+    });
+    const driver = await createAndroidDriver();
+    // First attribute (text="Follow")
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(true);
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_followButton" text="Follow" content-desc="Unfollow" />',
+    });
+    const driver2 = await createAndroidDriver();
+    // Second attribute (content-desc="Unfollow") — only reachable if
+    // matchAll iterates past the first hit when it doesn't match.
+    expect(await driver2.androidReplacesFollowButton('Theo', 'Unfollow')).toBe(true);
+  });
 });
