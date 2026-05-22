@@ -409,14 +409,19 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
     // The test:
     //   (1) invokes the script via execFileSync
     //   (2) asserts exit 0
-    //   (3) asserts stdout contains the 5 "(no-op)" lines
+    //   (3) asserts stdout contains all 9 "(no-op)" lines (one per
+    //       script step that has an idempotency check: 1 file-ref +
+    //       2 project-level + 2 iosApp-target + 2 iosAppTests-target
+    //       + 2 iosAppUITests-target) — Phase 3.3 expanded from 5 to 9
     //   (4) re-reads pbxproj and asserts structural invariants
     //       are unchanged from before (Debug-Local count, Release-
     //       Local count, Local.xcconfig file-ref UUID stable)
     //
     // Skips gracefully if ruby+xcodeproj-gem unavailable (Linux CI).
     // On macOS CI this runs and exercises the script's no-op paths
-    // (script lines 67-71, 79-82, 101-105) end-to-end.
+    // (the empty-settings self-heal branch in the new
+    // add_local_configs_to_target helper) end-to-end across all
+    // three targets.
     test('script is structurally idempotent — re-run preserves all configurations and file refs', () => {
       try {
         // eslint-disable-next-line sonarjs/no-os-command-from-path
@@ -451,6 +456,23 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
       );
       expect(stdout).toContain(
         'iosApp-target XCBuildConfiguration already present: Release-Local (no-op)',
+      );
+      // Phase 3.3 additions — review round 1 I-1 fix. The script
+      // emits a no-op for each of the 4 new test-target Local
+      // configs on re-run. Without these assertions, a regression
+      // that silently skips one of the 3.3 target loops would pass
+      // the existing 5 assertions.
+      expect(stdout).toContain(
+        'iosAppTests-target XCBuildConfiguration already present: Debug-Local (no-op)',
+      );
+      expect(stdout).toContain(
+        'iosAppTests-target XCBuildConfiguration already present: Release-Local (no-op)',
+      );
+      expect(stdout).toContain(
+        'iosAppUITests-target XCBuildConfiguration already present: Debug-Local (no-op)',
+      );
+      expect(stdout).toContain(
+        'iosAppUITests-target XCBuildConfiguration already present: Release-Local (no-op)',
       );
 
       // (4) structural invariants unchanged

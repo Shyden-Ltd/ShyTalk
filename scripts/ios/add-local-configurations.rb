@@ -3,7 +3,7 @@
 
 # scripts/ios/add-local-configurations.rb
 #
-# Phase 3.2 of the iOS-local build-out: adds Debug-Local and
+# Phase 3.2-3.3 of the iOS-local build-out: adds Debug-Local and
 # Release-Local XCBuildConfigurations to iosApp.xcodeproj.
 #
 # Scope:
@@ -12,11 +12,15 @@
 #     baseConfigurationReference (the file added by PR #714).
 #   - iosApp TARGET-level configuration list — both configs added,
 #     no base reference (CocoaPods integration is Phase 3.4).
+#   - iosAppTests + iosAppUITests TARGET-level configuration lists
+#     (Phase 3.3, PR #719) — both configs added, no base reference,
+#     build_settings cloned from each target's Debug/Release sibling
+#     so SWIFT_VERSION + BUNDLE_LOADER + TEST_TARGET_NAME inherit
+#     correctly.
 #   - The Local.xcconfig file itself is added as a PBXFileReference
 #     under iosApp/Configurations/ if not already present.
 #
 # Out of scope (deferred to later sub-PRs):
-#   - 3.3 — iosAppTests + iosAppUITests target configurations
 #   - 3.4 — Pods-iosApp.{debug,release}-local.xcconfig generation
 #   - 3.5 — Local scheme + LiveKitBridge.isAllowedURL extension
 #
@@ -30,7 +34,9 @@
 # Usage:
 #   ruby scripts/ios/add-local-configurations.rb
 #
-# Verified by: express-api/tests/scripts/ios-local-configurations.test.js
+# Verified by:
+#   - express-api/tests/scripts/ios-local-configurations.test.js (3.2)
+#   - express-api/tests/scripts/ios-local-3-3-test-target-configs.test.js (3.3)
 
 require 'xcodeproj'
 
