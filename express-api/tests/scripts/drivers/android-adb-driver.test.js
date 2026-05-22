@@ -1458,4 +1458,47 @@ describe('android-adb-driver — androidNavigatesToRoomScreen', () => {
     const driver = await createAndroidDriver();
     expect(await driver.androidNavigatesToRoomScreen('Theo', '')).toBe(true);
   });
+
+  test('package-qualified left-boundary guarded — :id/pre_room_seatGrid does NOT match', async () => {
+    // Round 1 I-2: the bare-form left-boundary case is pinned above
+    // (`pre_room_seatGrid_x`). This pins the package-qualified
+    // analogue — `com.shyden.shytalk.local:id/pre_room_seatGrid` —
+    // which exercises a different code path through the regex: the
+    // optional `(?:[^"]*:id/)?` group consumes the package prefix
+    // up through `:id/`, leaving `pre_room_seatGrid` to be matched
+    // against the marker literal `room_seatGrid`. That match must
+    // fail (it does — the marker is not a prefix-substring match;
+    // it must be the FIRST chars after `:id/`).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_room_seatGrid" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToRoomScreen('Theo', 'with host seat occupied')).toBe(
+      false,
+    );
+  });
+
+  test('uiautomator dump throws → false (not undefined)', async () => {
+    // Round 1 I-1: `androidUiDump` wraps the `uiautomator dump` and
+    // `cat /sdcard/dump.xml` adb shell calls in a try/catch that
+    // returns `''` on rejection. The driver method's `if (!dump)
+    // return false` guard then fires. Without this test, if the
+    // catch is ever refactored to re-throw or to return null, the
+    // method silently returns `undefined` — and `executeStep` would
+    // treat that as falsy-truthy ambiguously. Pin the contract:
+    // a thrown adb call still yields a clean `false`.
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToRoomScreen('Theo', 'with host seat occupied')).toBe(
+      false,
+    );
+  });
 });
