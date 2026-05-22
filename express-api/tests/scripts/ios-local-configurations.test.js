@@ -259,9 +259,7 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
       expect(xcconfigUuid).toMatch(/^[0-9A-F]{24}$/);
 
       const debugMatches = findBuildConfigurationsByName(pbxproj, 'Debug-Local');
-      const projectLevelDebug = debugMatches.find((m) =>
-        m.block.includes('/* Local.xcconfig */'),
-      );
+      const projectLevelDebug = debugMatches.find((m) => m.block.includes('/* Local.xcconfig */'));
       expect(projectLevelDebug).toBeDefined();
       expect(projectLevelDebug.block).toContain(
         `baseConfigurationReference = ${xcconfigUuid} /* Local.xcconfig */;`,
@@ -413,7 +411,11 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
         encoding: 'utf8',
       });
 
-      // (3) the 5 no-op stdout messages
+      // (3) the 9 no-op stdout messages (5 from Phase 3.2 + 4 from
+      // Phase 3.3, which added iosAppTests + iosAppUITests target
+      // loops in PR #722). Without the 4 added assertions, a future
+      // regression that silently skips one of the 3.3 target loops
+      // would pass the existing 5 assertions.
       expect(stdout).toContain('PBXFileReference already present: Local.xcconfig (no-op)');
       expect(stdout).toContain(
         'Project-level XCBuildConfiguration already present: Debug-Local (no-op)',
@@ -426,6 +428,18 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
       );
       expect(stdout).toContain(
         'iosApp-target XCBuildConfiguration already present: Release-Local (no-op)',
+      );
+      expect(stdout).toContain(
+        'iosAppTests-target XCBuildConfiguration already present: Debug-Local (no-op)',
+      );
+      expect(stdout).toContain(
+        'iosAppTests-target XCBuildConfiguration already present: Release-Local (no-op)',
+      );
+      expect(stdout).toContain(
+        'iosAppUITests-target XCBuildConfiguration already present: Debug-Local (no-op)',
+      );
+      expect(stdout).toContain(
+        'iosAppUITests-target XCBuildConfiguration already present: Release-Local (no-op)',
       );
 
       // (4) structural invariants unchanged
@@ -456,11 +470,30 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
       expect(yamlText).toContain('      - name: Verify pbxproj-mutation script idempotency');
     });
 
-    test('idempotency step runs the specific Jest file', () => {
-      // The step must invoke jest scoped to this test file (not the
-      // full suite), so build-ios doesn't pay the cost of every
-      // unrelated express-api test on every PR.
-      expect(yamlText).toMatch(/npx jest tests\/scripts\/ios-local-configurations\.test\.js/);
+    test('idempotency step runs BOTH ios-local Jest files (scoped, not full suite)', () => {
+      // The step must invoke jest scoped to BOTH ios-local test
+      // files so the combined Phase 3.3+3.4 contract is also
+      // exercised on the macOS runner after pod install — not
+      // just the Phase 3.2 file. Without the second file, the
+      // post-pod-install pbxproj state (Pods xcconfig base refs)
+      // isn't re-verified on macOS CI.
+      expect(yamlText).toContain('tests/scripts/ios-local-configurations.test.js');
+      expect(yamlText).toContain('tests/scripts/ios-local-3-3-3-4-combined.test.js');
+    });
+
+    test('idempotency step BEFORE-pod-install assertion test (Phase 3.2) is also scoped to it', () => {
+      // The before-pod-install ordering test (`runs BEFORE Install
+      // CocoaPods`) still applies — the scoped jest invocation
+      // happens before pod install regardless of how many files it
+      // passes. This is here as a sanity nudge: if anyone reorders
+      // pod install + idempotency step relative to each other, BOTH
+      // jest files must be on the same side.
+      const stepHeader = '      - name: Verify pbxproj-mutation script idempotency';
+      const cocoapodsHeader = '      - name: Install CocoaPods';
+      const stepIdx = yamlText.indexOf(stepHeader);
+      const cocoapodsIdx = yamlText.indexOf(cocoapodsHeader);
+      expect(stepIdx).toBeGreaterThanOrEqual(0);
+      expect(cocoapodsIdx).toBeGreaterThan(stepIdx);
     });
 
     test('idempotency step runs BEFORE Install CocoaPods (pod install mutates pbxproj)', () => {

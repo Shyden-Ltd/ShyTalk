@@ -183,7 +183,9 @@ jobs:
         run: |
           gem install --user-install xcodeproj
           cd express-api && \
-          npx jest tests/scripts/ios-local-configurations.test.js
+          npx jest \
+            tests/scripts/ios-local-configurations.test.js \
+            tests/scripts/ios-local-3-3-3-4-combined.test.js
 
       - name: Install CocoaPods
         if: steps.check-tests.outputs.has_tests == 'true'

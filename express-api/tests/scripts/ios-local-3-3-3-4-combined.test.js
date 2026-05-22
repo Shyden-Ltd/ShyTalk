@@ -50,6 +50,14 @@ function extractConfigurationList(pbxproj, uuid) {
   const marker = `\n\t\t${uuid} `;
   const markerIdx = section.indexOf(marker);
   if (markerIdx < 0) throw new Error(`XCConfigurationList ${uuid} not found.`);
+  // Round 1 m-1: duplicate-UUID guard. Symmetric with the canonical
+  // helper in ios-local-configurations.test.js. Throws if the same
+  // UUID is declared more than once — silent first-match would be
+  // a latent footgun on a future corrupted pbxproj.
+  const secondIdx = section.indexOf(marker, markerIdx + 1);
+  if (secondIdx >= 0) {
+    throw new Error(`XCConfigurationList ${uuid} appears more than once.`);
+  }
   const blockStart = markerIdx + 1;
   const blockEnd = section.indexOf('\n\t\t};', blockStart);
   return section.slice(blockStart, blockEnd + '\n\t\t};'.length);
@@ -58,6 +66,13 @@ function extractConfigurationList(pbxproj, uuid) {
 function findBuildConfigurationsByName(pbxproj, name) {
   const sectionStart = pbxproj.indexOf('/* Begin XCBuildConfiguration section */');
   const sectionEnd = pbxproj.indexOf('/* End XCBuildConfiguration section */');
+  // Round 1 I-3: section-marker guard. Without this, a corrupted
+  // pbxproj that lacks the markers silently returns an empty array
+  // — every dependent test then fails with `expect(config).toBeDefined()`
+  // instead of the clearer "markers not found" diagnostic.
+  if (sectionStart < 0 || sectionEnd < 0) {
+    throw new Error('XCBuildConfiguration section markers not found.');
+  }
   const section = pbxproj.slice(sectionStart, sectionEnd);
   const results = [];
   const blockRegex = /\t\t([0-9A-F]{24}) \/\* ([^*]+?) \*\/ = \{([\s\S]+?)\n\t\t\};/g;
