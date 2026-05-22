@@ -508,15 +508,23 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // Round 1 I-1 fix: word-boundary match instead of bare
     // `.includes()`. Plain substring match was vulnerable to prefix
     // collisions — e.g. `"Auto-Unmute".includes("Unmute")` is true.
-    // Negative lookbehind `(?<![\w-])` blocks preceding word chars
-    // and hyphens (matches the boundary shape used in
-    // androidShowsBanner). Negative lookahead `(?!\w)` blocks
-    // suffix word chars (so `"MuteAll"` doesn't match `"Mute"`).
-    // Spaces and punctuation around the hint remain valid —
-    // padded forms like "Mute mic" and "Currently: Mute" still
-    // match. Hints are escaped for regex safety in case future
-    // localisations contain dot/paren/etc.
+    //
+    // Round 2 I-1 fix: conditional rule for multi-word hints. The
+    // word-boundary regex `(?<![\w-])${h}(?!\w)` only anchors at
+    // the OUTER edges of the hint string — so for a multi-word hint
+    // like "Voice unavailable", a content-desc value of
+    // "Enable Voice unavailable mode" matches (leading space passes
+    // the left lookbehind, trailing space passes the right lookahead).
+    // For multi-word hints, switch to exact (case-insensitive)
+    // match: Compose emits stable literal strings, and any padded
+    // form would be a regression in Compose, not an accessibility
+    // tool's padding. Single-word hints retain the word-boundary
+    // substring tolerance so accessibility-padded forms like
+    // "Mute mic" / "Currently: Mute" still match.
     return hints.some((h) => {
+      if (h.includes(' ')) {
+        return contentDesc.toLowerCase() === h.toLowerCase();
+      }
       const escH = h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       // eslint-disable-next-line sonarjs/slow-regex
       return new RegExp(`(?<![\\w-])${escH}(?!\\w)`).test(contentDesc);

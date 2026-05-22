@@ -2092,4 +2092,54 @@ describe('android-adb-driver — androidShowsMicIconAs', () => {
     const driver = await createAndroidDriver();
     expect(await driver.androidShowsMicIconAs('Theo', 'open')).toBe(false);
   });
+
+  test('multi-word hint embedded in sentence — "Enable Voice unavailable mode" does NOT match', async () => {
+    // Round 2 I-1: the word-boundary regex `(?<![\w-])${h}(?!\w)`
+    // only anchors at the OUTER edges of the hint. For multi-word
+    // hints like "Voice unavailable", `"Enable Voice unavailable mode"`
+    // satisfies both anchors (leading space passes `(?<![\w-])`,
+    // trailing space passes `(?!\w)`). Fixed by switching multi-word
+    // hints to exact (case-insensitive) match — Compose emits
+    // verbatim string-resource values, so embedded forms would be
+    // a Compose regression, not legitimate UI state.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Enable Voice unavailable mode" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'closed')).toBe(false);
+  });
+
+  test('multi-word hint exact (case-insensitive) match — "voice unavailable" → true', async () => {
+    // Round 2 I-1 corollary: multi-word path uses case-insensitive
+    // exact match. Pin that case variation is still tolerated for
+    // multi-word hints (the prior single-word case-insensitivity
+    // test at "OPEN" exercises the state arg, this exercises the
+    // contentDesc value being case-insensitively equal).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="voice unavailable" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'closed')).toBe(true);
+  });
+
+  test('suffix-padded muted hint — "Unmute mic" → true (symmetric with "Mute mic")', async () => {
+    // Round 2 Minor: symmetric coverage with the suffix-padded
+    // "Mute mic" test for the "open" state. The single-word path
+    // (used for "Unmute") preserves the word-boundary substring
+    // tolerance — "Unmute" is preceded by start-of-string and
+    // followed by a space, so both anchors pass. Important to pin
+    // both single-word hints exercise the same accessibility
+    // padding contract.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_micToggleButton" content-desc="Unmute mic" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMicIconAs('Theo', 'muted')).toBe(true);
+  });
 });
