@@ -443,7 +443,8 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
         encoding: 'utf8',
       });
 
-      // (3) the 5 no-op stdout messages
+      // (3) the 9 no-op stdout messages (5 from Phase 3.2 + 4 from
+      // Phase 3.3 — iosAppTests + iosAppUITests target loops).
       expect(stdout).toContain('PBXFileReference already present: Local.xcconfig (no-op)');
       expect(stdout).toContain(
         'Project-level XCBuildConfiguration already present: Debug-Local (no-op)',
