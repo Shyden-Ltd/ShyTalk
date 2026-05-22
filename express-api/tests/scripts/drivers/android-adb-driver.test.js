@@ -2143,3 +2143,282 @@ describe('android-adb-driver — androidShowsMicIconAs', () => {
     expect(await driver.androidShowsMicIconAs('Theo', 'muted')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsBalanceViaListener', () => {
+  // Wake 100 matcher — `<Name>'s Android UI shows the new "<X>"
+  // balance via Firestore listener` (j06 wallet refresh via real-time
+  // listener). Inspects the `wallet_balance` node's `text=` and
+  // `content-desc=` attributes for the balance string.
+  //
+  // Balance shape is user-facing — can include digit separators
+  // ("5,000"), currency prefix ("$5,000"), and padded labels
+  // ("Balance: 5,000 coins"). Substring match with digit-boundary
+  // protection — same word-boundary pattern as the mic-icon impl
+  // (PR #734).
+  //
+  // The matcher's pattern accepts `"([^"]+)"` so the balance string
+  // is regex-escaped before insertion into the boundary regex.
+  // Compose's text= and content-desc= can appear in either order;
+  // the two-step extraction handles attribute-order tolerance.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('balance in text attribute → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(true);
+  });
+
+  test('balance in content-desc attribute → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" content-desc="5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(true);
+  });
+
+  test('balance with padded label prefix — "Balance: 5,000" → true', async () => {
+    // Accessibility labels often pad the value with a descriptive
+    // prefix. The word-boundary match accepts the surrounding space.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="Balance: 5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(true);
+  });
+
+  test('balance with trailing unit — "5,000 coins" → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="5,000 coins" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(true);
+  });
+
+  test('balance with currency prefix — "$5,000" → true', async () => {
+    // The `$` is not a word char, so the left lookbehind passes.
+    // Pins that future locale changes adding `$`, `€`, `£`, or `¥`
+    // prefix don't break the assertion.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="$5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(true);
+  });
+
+  test('numeric-prefix collision guarded — "45,000" does NOT match "5,000"', async () => {
+    // Pins the digit-boundary protection on the LEFT side. Without
+    // word-boundary, "45,000" would match the hint "5,000" via
+    // naive substring scan, silently confirming an INCORRECT
+    // balance assertion.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="45,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(false);
+  });
+
+  test('numeric-suffix collision guarded — "5,0000" does NOT match "5,000"', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="5,0000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(false);
+  });
+
+  test('different balance present → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="1,234" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(false);
+  });
+
+  test('wallet_balance node missing → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" text="5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    // The "5,000" text is on a non-wallet node — must not false-positive
+    // from a stray attribute elsewhere in the dump.
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(false);
+  });
+
+  test('wallet_balance present but neither text nor content-desc has balance → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(false);
+  });
+
+  test('empty balance arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '')).toBe(false);
+  });
+
+  test('whitespace-only balance arg → false', async () => {
+    // Defensive against accidentally-blank Gherkin: even though the
+    // runner regex requires `([^"]+)` (one or more non-quote chars),
+    // an author could write `" "` and it would slip through. Pin
+    // that the driver rejects whitespace-only input.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '   ')).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="wallet_balance" text="5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(true);
+  });
+
+  test('left-boundary false-positive guarded — pre_wallet_balance_x does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_wallet_balance_x" text="5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(false);
+  });
+
+  test('right-boundary false-positive guarded — wallet_balance_extra does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance_extra" text="5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(false);
+  });
+
+  test('package-qualified left-boundary guarded — :id/pre_wallet_balance does NOT match', async () => {
+    // Same pattern as PR #734's I-2 fix. The optional `(?:[^"]*:id/)?`
+    // group consumes the package prefix, leaving `pre_wallet_balance`
+    // to match against `wallet_balance` literal — that fails because
+    // `pre_` precedes `wallet_`. Pin the contract explicit.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_wallet_balance" text="5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(false);
+  });
+
+  test('attribute-order tolerance — content-desc before resource-id → true', async () => {
+    // uiautomator dump attribute ordering is not contractually fixed
+    // (see PR #734 mic-icon impl). The two-step extraction must
+    // tolerate both orderings.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node content-desc="5,000" resource-id="com.shyden.shytalk.local:id/wallet_balance" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(true);
+  });
+
+  test('uiautomator dump throws → false (not undefined)', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '5,000')).toBe(false);
+  });
+
+  test('persona name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    const okTheo = await driver.androidShowsBalanceViaListener('Theo', '5,000');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="5,000" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okAlice = await driver2.androidShowsBalanceViaListener('Alice', '5,000');
+
+    expect(okTheo).toBe(true);
+    expect(okAlice).toBe(true);
+  });
+
+  test('balance with regex-significant chars — "1,234.56" matches literally', async () => {
+    // The balance arg is regex-escaped before insertion into the
+    // boundary regex. Pins that `.` in "1,234.56" matches a LITERAL
+    // dot, not "any char" — `1,2345/6` would otherwise false-match
+    // (decimal-point variant of the prefix-collision concern).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="1,234.56" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '1,234.56')).toBe(true);
+  });
+
+  test('balance with regex-significant chars — "1,234.56" does NOT match "1,234/56"', async () => {
+    // Verifies the literal-dot escape via the negative case.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="1,234/56" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBalanceViaListener('Theo', '1,234.56')).toBe(false);
+  });
+});

@@ -531,6 +531,42 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     });
   };
 
+  // Wake 100 — `<Name>'s Android UI shows the new "<X>" balance via
+  // Firestore listener` (j06 — wallet refresh via real-time listener).
+  // Inspects the `wallet_balance` node's `text=` and `content-desc=`
+  // attributes for the balance string.
+  //
+  // Balance shape: user-facing decimal with optional digit separators
+  // ("5,000"), currency prefix ("$5,000"), and label padding
+  // ("Balance: 5,000 coins"). Word-boundary regex prevents numeric-
+  // prefix collisions ("45,000" must NOT match "5,000") and numeric-
+  // suffix collisions ("5,0000" must NOT match "5,000"). Same boundary
+  // shape as androidShowsMicIconAs (PR #734) but applied across
+  // text= AND content-desc= since either can carry the value.
+  //
+  // Balance arg is regex-escaped — a "." in "1,234.56" matches a
+  // literal dot, not "any char" (decimal-point variant of the
+  // numeric-collision concern).
+  //
+  // Two-step extraction (PR #734 pattern): capture the wallet_balance
+  // node tag first, then scan its attributes. Attribute-order
+  // independent.
+  driver.androidShowsBalanceViaListener = async (_name, balance) => {
+    if (!balance || !balance.trim()) return false;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?wallet_balance"[^>]*\/?>/;
+    const tagMatch = dump.match(tagRx);
+    if (!tagMatch) return false;
+    const escBalance = balance.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Scan within the captured tag for either text= or content-desc=
+    // carrying the balance value with digit-boundary protection.
+    // eslint-disable-next-line sonarjs/slow-regex
+    const valueRx = new RegExp(`(?:text|content-desc)="[^"]*(?<![\\w-])${escBalance}(?!\\w)[^"]*"`);
+    return valueRx.test(tagMatch[0]);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
