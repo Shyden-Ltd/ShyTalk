@@ -2896,4 +2896,28 @@ describe('android-adb-driver — androidReplacesFollowButton', () => {
     // matchAll iterates past the first hit when it doesn't match.
     expect(await driver2.androidReplacesFollowButton('Theo', 'Unfollow')).toBe(true);
   });
+
+  test('bare left-boundary without suffix — pre_profile_followButton does NOT match', async () => {
+    // Round 2 I-1: explicit pin that a bare resource-id of
+    // `pre_profile_followButton` (no `_x` suffix, no package prefix)
+    // is correctly rejected. The reviewer's regex-trace reasoning
+    // initially suggested this could be a left-boundary bug because
+    // `profile_followButton"` is a suffix of `pre_profile_followButton"`.
+    //
+    // Verified false alarm — the production regex anchors
+    // `profile_followButton"` to the position IMMEDIATELY after
+    // `resource-id="` (modulo the optional `(?:[^"]*:id/)?` prefix
+    // group). The literal cannot "slide" within the attribute value
+    // because `resource-id="` is a fixed anchor.
+    //
+    // Pin here so future reviewers don't need to mentally simulate
+    // the regex anchoring — the test makes the contract self-evident.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="pre_profile_followButton" content-desc="Follow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidReplacesFollowButton('Theo', 'Follow')).toBe(false);
+  });
 });
