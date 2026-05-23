@@ -252,7 +252,12 @@ describe('ios-devicectl-driver — iosAdminShowsAppealText', () => {
     expect(await driver.iosAdminShowsAppealText('Mod', 'Selma')).toBe(false);
   });
 
-  test('iosUiDump throws → false', async () => {
+  test('iosUiDump throws → rejects (propagates; no try/catch in foundation)', async () => {
+    // iOS foundation methods do NOT swallow iosUiDump errors — propagation
+    // is the chosen contract. This differs from the Android sibling which
+    // wraps androidUiDump in try/catch and returns false. Documented as a
+    // driver-level decision: WDA / XCTest errors should surface to the
+    // runner so journey authors can see real connectivity failures.
     const driver = await createIosDriver({ udid: 'X' });
     driver.iosUiDump = async () => {
       throw new Error('WDA: connection lost');
