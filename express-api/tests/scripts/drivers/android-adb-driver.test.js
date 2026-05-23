@@ -11152,3 +11152,202 @@ describe('android-adb-driver — androidOpenProfileFrom', () => {
     expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', 'room')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidRefreshLanguageRail', () => {
+  // Wake 87 — `<Name> on <Plat> refreshes the language rail` (j17:78).
+  // Pull-to-refresh / refresh-button on the language-filter rail.
+  // Driver receives `(name)`.
+  //
+  // Foundation strategy: presence-check on the `languageRail_*` testTag
+  // PREFIX. No `languageRail_*` testTag exists in
+  // shared/src/commonMain yet — the language-filter rail UI is unbuilt.
+  // Returns false in real journeys today; lands true when the rail
+  // ships with `languageRail_*` testTags (e.g. languageRail_container,
+  // languageRail_refreshButton).
+  //
+  // Action body (perform the pull-to-refresh gesture or tap the refresh
+  // button) is deferred until per-element testTags exist. The `_name`
+  // arg is accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('languageRail_container present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/languageRail_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('Yuki')).toBe(true);
+  });
+
+  test('languageRail_refreshButton present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/languageRail_refreshButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('Yuki')).toBe(true);
+  });
+
+  test('absent (no language rail) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('Yuki')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('Yuki')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="languageRail_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('Yuki')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/languageRail_container"><node text="EN" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('Yuki')).toBe(true);
+  });
+
+  test('left-boundary — pre_languageRail_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_languageRail_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('Yuki')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_languageRail_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_languageRail_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('Yuki')).toBe(false);
+  });
+
+  test('right-boundary — languageRail_containerExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/languageRail_containerExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('Yuki')).toBe(true);
+  });
+
+  test('confusable prefix — language_railOption does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/language_railOption" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('Yuki')).toBe(false);
+  });
+
+  test('bare confusable prefix — language_railOption does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="language_railOption" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('Yuki')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('Yuki')).toBe(false);
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/languageRail_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('Bao')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/languageRail_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail(null)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/languageRail_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail(undefined)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/languageRail_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/languageRail_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('   ')).toBe(true);
+  });
+
+  test('first-match contract — two languageRail_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/languageRail_container" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/languageRail_refreshButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidRefreshLanguageRail('Yuki')).toBe(true);
+  });
+});

@@ -1615,6 +1615,28 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 87 — `<Name> on <Plat> refreshes the language rail` (j17:78).
+  // Pull-to-refresh / refresh-button on the language-filter rail.
+  // Driver receives `(name)`.
+  //
+  // Foundation strategy: presence-check on the `languageRail_*` testTag
+  // PREFIX. No `languageRail_*` testTag exists in
+  // shared/src/commonMain yet — the language-filter rail UI is unbuilt.
+  // Returns false in real journeys today; lands true when the rail
+  // ships with `languageRail_*` testTags (e.g. languageRail_container,
+  // languageRail_refreshButton).
+  //
+  // Action body (perform the pull-to-refresh gesture or tap the
+  // refresh button) is deferred until per-element testTags exist.
+  // The `_name` arg is accepted-and-ignored.
+  driver.androidRefreshLanguageRail = async (_name) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?languageRail_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

@@ -16998,7 +16998,94 @@ describe('Wake 87 — "<Name> on <Plat> refreshes the language rail"', () => {
       ctx,
     );
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/androidRefreshLanguageRail/);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidRefreshLanguageRail/);
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidRefreshLanguageRail: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Marcus on Android refreshes the language rail' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Marcus|language rail/);
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosRefreshLanguageRail: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Yuki on iOS Sim refreshes the language rail' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Yuki|language rail/);
+  });
+
+  test('iOS Sim no driver → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'When', text: 'Yuki on iOS Sim refreshes the language rail' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosRefreshLanguageRail/);
+  });
+
+  // Web branch — routes to ctx.webDriver.webRefreshLanguageRail
+  test('Web matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webRefreshLanguageRail: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Alice on Web refreshes the language rail' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice');
+  });
+
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webRefreshLanguageRail: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Alice on Web Chromium refreshes the language rail' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice');
+  });
+
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webRefreshLanguageRail: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Alice on Web Safari refreshes the language rail' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice');
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webRefreshLanguageRail: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Alice on Web refreshes the language rail' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|language rail/);
+  });
+
+  test('Web driver missing → fail (driver-object name correctly identifies webDriver)', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'When', text: 'Alice on Web refreshes the language rail' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webRefreshLanguageRail/);
   });
 });
 
