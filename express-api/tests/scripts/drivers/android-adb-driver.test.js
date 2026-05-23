@@ -3470,4 +3470,28 @@ describe('android-adb-driver — androidShowsFrozenBanner', () => {
     const driver = await createAndroidDriver();
     expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(true);
   });
+
+  test('foundation-layer contract pinned — child text content is IGNORED (not consulted)', async () => {
+    // Round 1 I-1: this method's foundation is a pure presence-check
+    // — the banner's INNER text (a child node) is deliberately not
+    // consulted. Pin the contract by showing that a dump whose child
+    // text differs from any plausible expected value STILL returns
+    // true.
+    //
+    // Future layering: a suffix-aware refinement PR will extract the
+    // child node's text= attribute and verify it against either a
+    // string-resource key ("with text-from-key X") or a literal
+    // locale value ("with locale string Y"). When that PR lands, it
+    // must UPDATE this test to reflect the new (stricter) contract.
+    // Without this pin, the layering author might mistakenly assume
+    // the foundation already validated inner text and skip adding
+    // the new assertion.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_frozenBanner"><node text="Something else entirely" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(true);
+  });
 });
