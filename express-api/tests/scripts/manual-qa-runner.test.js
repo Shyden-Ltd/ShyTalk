@@ -20140,6 +20140,137 @@ describe('Wake 98 — `<Name>\'s <Plat> UI shows a +N in the "<X>" count`', () =
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/Alice|Likes/);
   });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web UI shows a +1 in the "Followers" count' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsCountBadge/);
+  });
+
+  // Web Chromium variant — full 3-test set
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsCountBadge: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web Chromium UI shows a +1 in the "Followers" count' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 1, 'Followers');
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsCountBadge: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web Chromium UI shows a +1 in the "Followers" count' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|Followers/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web Chromium UI shows a +1 in the "Followers" count' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsCountBadge/);
+  });
+
+  // Web Safari variant — full 3-test set
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsCountBadge: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web Safari UI shows a +1 in the "Followers" count' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 1, 'Followers');
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsCountBadge: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web Safari UI shows a +1 in the "Followers" count' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|Followers/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web Safari UI shows a +1 in the "Followers" count' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsCountBadge/);
+  });
+
+  // Android branch — completing 3-test set
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsCountBadge: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Marcus\'s Android UI shows a +1 in the "Followers" count' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Marcus|Followers/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Marcus\'s Android UI shows a +1 in the "Followers" count' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsCountBadge/);
+  });
+
+  // iOS Sim branch — full 3-test set
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsCountBadge: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Marcus\'s iOS Sim UI shows a +1 in the "Followers" count' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Marcus', 1, 'Followers');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsCountBadge: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Marcus\'s iOS Sim UI shows a +1 in the "Followers" count' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Marcus|Followers/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Marcus\'s iOS Sim UI shows a +1 in the "Followers" count' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsCountBadge/);
+  });
 });
 
 describe('Wake 98 — `<Name>\'s <Plat> Admin UI shows N row for "<X>" with status "<Y>"`', () => {

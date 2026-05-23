@@ -1658,6 +1658,28 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 98 — `<Name>'s <Plat> UI shows a +N in the "<X>" count`
+  // (j01/j02/j07). Generic delta-badge assertion. Driver receives
+  // `(name, delta, label)`.
+  //
+  // Foundation strategy: presence-check on the `countBadge_*` testTag
+  // PREFIX. No `countBadge_*` testTag exists in shared/src/commonMain
+  // yet — delta-badge UI is unbuilt. Returns false in real journeys
+  // today; lands true when ships with countBadge_followersDelta /
+  // countBadge_likesDelta testTags.
+  //
+  // Per-label verification (Followers vs Likes) needs a label →
+  // testTag map. Per-delta verification (matching the actual displayed
+  // +N) needs text-extraction. Both deferred. All 3 args
+  // (_name, _delta, _label) accepted-and-ignored.
+  driver.androidShowsCountBadge = async (_name, _delta, _label) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?countBadge_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

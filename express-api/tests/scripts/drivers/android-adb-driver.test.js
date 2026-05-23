@@ -11549,3 +11549,284 @@ describe('android-adb-driver — androidShowsBeansPerWeekChart', () => {
     expect(await driver.androidShowsBeansPerWeekChart('Yuki')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsCountBadge', () => {
+  // Wake 98 — `<Name>'s <Plat> UI shows a +N in the "<X>" count`
+  // (j01/j02/j07). Generic delta-badge assertion: a numeric counter
+  // (Followers, Likes, etc.) shows a +N increment. Driver receives
+  // `(name, delta, label)`.
+  //
+  // Foundation strategy: presence-check on the `countBadge_*` testTag
+  // PREFIX. No `countBadge_*` testTag exists in shared/src/commonMain
+  // yet — delta-badge UI is unbuilt. Returns false in real journeys
+  // today; lands true when ships with countBadge_followersDelta,
+  // countBadge_likesDelta, etc.
+  //
+  // Per-label verification (`Followers` vs `Likes`) needs a label →
+  // testTag map. Per-delta verification (matching the actual displayed
+  // +N) needs text-extraction. Both deferred. All 3 args
+  // (_name, _delta, _label) accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('countBadge_followersDelta present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, 'Followers')).toBe(true);
+  });
+
+  test('countBadge_likesDelta present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_likesDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 5, 'Likes')).toBe(true);
+  });
+
+  test('absent (no badge) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, 'Followers')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, 'Followers')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, 'Followers')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta"><node text="+1" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, 'Followers')).toBe(true);
+  });
+
+  test('left-boundary — pre_countBadge_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, 'Followers')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_countBadge_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, 'Followers')).toBe(false);
+  });
+
+  test('right-boundary — countBadge_followersDeltaExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDeltaExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, 'Followers')).toBe(true);
+  });
+
+  test('confusable prefix — count_badgeSummary does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/count_badgeSummary" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, 'Followers')).toBe(false);
+  });
+
+  test('bare confusable prefix — count_badgeSummary does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="count_badgeSummary" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, 'Followers')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, 'Followers')).toBe(false);
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Bao', 1, 'Followers')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge(null, 1, 'Followers')).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge(undefined, 1, 'Followers')).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('', 1, 'Followers')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('   ', 1, 'Followers')).toBe(true);
+  });
+
+  test('null delta → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', null, 'Followers')).toBe(true);
+  });
+
+  test('undefined delta → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', undefined, 'Followers')).toBe(true);
+  });
+
+  test('0 delta → true (delta accepted-and-ignored regardless of value)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 0, 'Followers')).toBe(true);
+  });
+
+  test('null label → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, null)).toBe(true);
+  });
+
+  test('undefined label → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, undefined)).toBe(true);
+  });
+
+  test('empty label → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, '')).toBe(true);
+  });
+
+  test('whitespace label → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, '   ')).toBe(true);
+  });
+
+  test('different label still passes (foundation does not match specific label)', async () => {
+    // Per-label verification needs a label → testTag map.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, 'Likes')).toBe(true);
+  });
+
+  test('first-match contract — two countBadge_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_followersDelta" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/countBadge_likesDelta" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsCountBadge('Selma', 1, 'Followers')).toBe(true);
+  });
+});
