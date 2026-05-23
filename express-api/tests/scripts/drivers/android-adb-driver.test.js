@@ -10678,6 +10678,19 @@ describe('android-adb-driver — androidOpenProfileAndTap', () => {
     expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'Block')).toBe(false);
   });
 
+  test('bare confusable prefix — profileSettings_X does NOT match (no package)', async () => {
+    // Bare-form companion to the package-qualified confusable test above.
+    // Cluster convention (PR #767 R0): both forms pinned to prove the
+    // `(?:[^"]*:id\/)?` optional prefix doesn't change the left-anchor
+    // discipline.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="profileSettings_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'Block')).toBe(false);
+  });
+
   test('uiautomator dump throws → false', async () => {
     execSync.mockImplementation((cmd) => {
       if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
