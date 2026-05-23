@@ -4315,3 +4315,222 @@ describe('android-adb-driver — androidSearchIn', () => {
     expect(inputCall[0]).toContain(String.raw`'a'\''b'\''c'`);
   });
 });
+
+describe('android-adb-driver — androidScanAllRenderedStrings', () => {
+  // Wake 76 matcher — `the test runner scans all rendered strings on
+  // <Name>'s Android UI across N screens` (j13:60). Meta state-seed
+  // method that collects every `text=` and `content-desc=` value
+  // from the current uiautomator dump into an array, stored on
+  // `ctx.scannedStrings` for follow-up assertion steps (e.g. "no
+  // string has the en/strings.xml fallback when the locale is X").
+  //
+  // Foundation policy: only scans the CURRENT screen. The `screens`
+  // count argument is accepted-and-ignored at this layer — a future
+  // PR can add multi-screen navigation (tap each main tab, dump,
+  // collect, repeat). Even single-screen collection is useful for
+  // follow-up locale-fallback assertions against the visible UI.
+  //
+  // Returns an array of unique non-empty string values (deduplicated
+  // via Set, whitespace-trimmed, empties filtered out). Returns
+  // empty array on dump failure rather than null/undefined — the
+  // runner stores the result on ctx and downstream steps iterate it.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('collects text and content-desc values from current dump', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node text="hello" content-desc="world" /><node text="bye" />',
+    });
+    const driver = await createAndroidDriver();
+    const result = await driver.androidScanAllRenderedStrings('Theo', 1);
+    expect(result).toEqual(expect.arrayContaining(['hello', 'world', 'bye']));
+    expect(result).toHaveLength(3);
+  });
+
+  test('deduplicates repeated values', async () => {
+    // A button might render its label as both `text=` and
+    // `content-desc=`; the same text could appear on multiple nodes.
+    // Pin that duplicates are collapsed via the Set semantics.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node text="Follow" content-desc="Follow" /><node text="Follow" />',
+    });
+    const driver = await createAndroidDriver();
+    const result = await driver.androidScanAllRenderedStrings('Theo', 1);
+    expect(result).toEqual(['Follow']);
+  });
+
+  test('filters out empty string values', async () => {
+    // Nodes without rendered text often have `text=""` placeholders.
+    // Those shouldn't pollute the scanned-strings array.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node text="" content-desc="" /><node text="real-content" />',
+    });
+    const driver = await createAndroidDriver();
+    const result = await driver.androidScanAllRenderedStrings('Theo', 1);
+    expect(result).toEqual(['real-content']);
+  });
+
+  test('filters out whitespace-only values', async () => {
+    // Some Compose surfaces use whitespace strings as visual spacers.
+    // After trim, those become empty and should be filtered.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node text="   " content-desc="\t\n" /><node text="real" />',
+    });
+    const driver = await createAndroidDriver();
+    const result = await driver.androidScanAllRenderedStrings('Theo', 1);
+    expect(result).toEqual(['real']);
+  });
+
+  test('returns empty array on empty dump', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    const result = await driver.androidScanAllRenderedStrings('Theo', 1);
+    expect(result).toEqual([]);
+  });
+
+  test('returns empty array when uiautomator dump throws', async () => {
+    // Defensive: dump-fail returns [] rather than null/undefined so
+    // downstream steps iterating ctx.scannedStrings don't crash.
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    const result = await driver.androidScanAllRenderedStrings('Theo', 1);
+    expect(result).toEqual([]);
+  });
+
+  test('mixes text and content-desc collection — both attribute types harvested', async () => {
+    // Pin that BOTH attribute types contribute. Some nodes carry
+    // text only, others content-desc only, others both. The Set
+    // dedupes overlap.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node text="only-text" />' +
+        '<node content-desc="only-desc" />' +
+        '<node text="both" content-desc="other" />',
+    });
+    const driver = await createAndroidDriver();
+    const result = await driver.androidScanAllRenderedStrings('Theo', 1);
+    expect(result).toEqual(expect.arrayContaining(['only-text', 'only-desc', 'both', 'other']));
+    expect(result).toHaveLength(4);
+  });
+
+  test('handles unicode and locale-specific text', async () => {
+    // Pin that non-ASCII strings (e.g. translations) are collected
+    // verbatim — important since the matcher's downstream
+    // locale-fallback assertion relies on character-exact equality.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node text="привет" /><node content-desc="こんにちは" /><node text="مرحبا" />',
+    });
+    const driver = await createAndroidDriver();
+    const result = await driver.androidScanAllRenderedStrings('Theo', 1);
+    expect(result).toEqual(expect.arrayContaining(['привет', 'こんにちは', 'مرحبا']));
+    expect(result).toHaveLength(3);
+  });
+
+  test('persona name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node text="ok" />',
+    });
+    const driver = await createAndroidDriver();
+    const okTheo = await driver.androidScanAllRenderedStrings('Theo', 1);
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node text="ok" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okAlice = await driver2.androidScanAllRenderedStrings('Alice', 1);
+
+    expect(okTheo).toEqual(['ok']);
+    expect(okAlice).toEqual(['ok']);
+  });
+
+  test('screens count ignored at foundation layer — result identical regardless of N', async () => {
+    // Pin the foundation contract: `screens` is accepted but
+    // ignored. A future PR can add multi-screen navigation, but
+    // until then a request for N=5 returns the same single-screen
+    // result as N=1.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node text="single-screen" />',
+    });
+    const driver = await createAndroidDriver();
+    const result1 = await driver.androidScanAllRenderedStrings('Theo', 1);
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node text="single-screen" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const result5 = await driver2.androidScanAllRenderedStrings('Theo', 5);
+
+    expect(result1).toEqual(['single-screen']);
+    expect(result5).toEqual(['single-screen']);
+  });
+
+  test('preserves order of first-occurrence (Set iteration order)', async () => {
+    // JS Set iteration order is insertion order. The first
+    // occurrence of each string is what determines the position.
+    // Pin this for deterministic downstream assertions.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node text="first" /><node text="second" /><node text="first" /><node text="third" />',
+    });
+    const driver = await createAndroidDriver();
+    const result = await driver.androidScanAllRenderedStrings('Theo', 1);
+    expect(result).toEqual(['first', 'second', 'third']);
+  });
+
+  test('attributes other than text/content-desc are NOT collected', async () => {
+    // Pin that `resource-id`, `class`, `package`, etc. are NOT
+    // captured. Only `text=` and `content-desc=` carry rendered
+    // user-facing strings.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/foo" class="android.view.View" package="com.shyden.shytalk.local" text="visible" />',
+    });
+    const driver = await createAndroidDriver();
+    const result = await driver.androidScanAllRenderedStrings('Theo', 1);
+    expect(result).toEqual(['visible']);
+    expect(result).not.toContain('com.shyden.shytalk.local:id/foo');
+    expect(result).not.toContain('android.view.View');
+  });
+
+  test('text containing embedded quotes is captured up to next non-escaped quote', async () => {
+    // uiautomator XML escapes literal `"` in attribute values as
+    // `&quot;`. Pin the foundation behaviour: `[^"]*` in the regex
+    // stops at the next literal `"`. A future enhancement could
+    // decode `&quot;` back to `"`, but for now we pin the verbatim
+    // captured form.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node text="he said &quot;hi&quot; today" />',
+    });
+    const driver = await createAndroidDriver();
+    const result = await driver.androidScanAllRenderedStrings('Theo', 1);
+    // The literal stored value is `he said &quot;hi&quot; today`
+    expect(result).toEqual(['he said &quot;hi&quot; today']);
+  });
+});

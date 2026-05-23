@@ -796,6 +796,38 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     }
   };
 
+  // Wake 76 — `the test runner scans all rendered strings on
+  // <Name>'s Android UI across N screens` (j13:60). Meta state-seed
+  // method: collects every `text=` and `content-desc=` value from
+  // the current uiautomator dump into an array, stored by the
+  // runner on `ctx.scannedStrings` for follow-up assertion steps
+  // (e.g. "no string has the en/strings.xml fallback when the
+  // locale is X").
+  //
+  // Foundation policy: only scans the CURRENT screen. The `screens`
+  // count is accepted-and-ignored — a future PR can add multi-
+  // screen navigation (tap each main tab, dump, collect, repeat).
+  // Even single-screen collection is useful for follow-up locale-
+  // fallback assertions against the visible UI.
+  //
+  // Returns an array of unique non-empty trimmed string values.
+  // Returns empty array on dump failure rather than null/undefined
+  // — the runner stores the result on ctx and downstream steps
+  // iterate it. A null/undefined return would force defensive
+  // checks at every callsite.
+  driver.androidScanAllRenderedStrings = async (_name, _screens) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return [];
+    const collected = new Set();
+    // eslint-disable-next-line sonarjs/slow-regex
+    const attrRx = /(?:text|content-desc)="([^"]*)"/g;
+    for (const m of dump.matchAll(attrRx)) {
+      const value = m[1].trim();
+      if (value) collected.add(value);
+    }
+    return [...collected];
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
