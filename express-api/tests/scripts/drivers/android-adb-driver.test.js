@@ -4754,4 +4754,47 @@ describe('android-adb-driver — androidJoinEventRoom', () => {
     const driver = await createAndroidDriver();
     expect(await driver.androidJoinEventRoom('Alice')).toBe(true);
   });
+
+  test('parent roomCard without bounds, child has bounds → false (child-span correctly rejected)', async () => {
+    // Round 1 C-1 verification: the two-step extraction pattern
+    // structurally CANNOT match a child node's bounds when the
+    // parent (the roomCard) lacks them. tagRx uses `[^>]*` which
+    // stays within the parent's opening tag; bounds is then
+    // scanned from the captured opening-tag string only.
+    //
+    // Reviewer claimed at 97% confidence that the old `[^<]*?`
+    // pattern would span past `>` into the child — verified WRONG
+    // with `node -e` (the `[^<]` exclusion stops at the child's
+    // `<` boundary). But the two-step refactor in production
+    // makes the safety structural rather than incidental.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomList_roomCard_abc" clickable="true"><node bounds="[10,500][200,600]" text="Title" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidJoinEventRoom('Alice')).toBe(false);
+  });
+
+  test('attribute-order tolerance — bounds BEFORE resource-id in same tag → match', async () => {
+    // Round 1 I-1: the two-step extraction is order-independent
+    // within the captured opening tag. uiautomator's standard
+    // attribute order is `resource-id ... bounds`, but if a future
+    // API level (or a different uiautomator implementation)
+    // emits bounds first, the two-step pattern still works because
+    // `tagMatch[0]` captures the FULL opening tag and the bounds
+    // scan operates on that captured string without ordering
+    // assumptions.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node bounds="[0,200][1000,400]" resource-id="com.shyden.shytalk.local:id/roomList_roomCard_abc" />',
+    });
+    const driver = await createAndroidDriver();
+    const ok = await driver.androidJoinEventRoom('Alice');
+    expect(ok).toBe(true);
+    const tapCall = execSync.mock.calls.find((c) => c[0].includes("'input' 'tap'"));
+    expect(tapCall[0]).toContain("'500'");
+    expect(tapCall[0]).toContain("'300'");
+  });
 });

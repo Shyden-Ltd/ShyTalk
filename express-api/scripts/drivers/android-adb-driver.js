@@ -853,13 +853,30 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidJoinEventRoom = async (_name) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
+    // Round 1 I-1 refactor: use the TWO-STEP extraction pattern
+    // established by androidShowsMicIconAs (line 502),
+    // androidShowsBalanceViaListener (line 559), and
+    // androidReplacesFollowButton (line 596). This is
+    // ORDER-INDEPENDENT (handles bounds before or after resource-id
+    // in the same tag) and structurally cannot match a child
+    // node's bounds when the parent lacks them — `[^>]*` stays
+    // within the opening tag, then bounds is scanned from the
+    // captured tag string only. Sets the reference template for
+    // subsequent parameterised-testTag methods in this cluster.
+    //
+    // Diverges from androidTapByTag (line 218) which still uses
+    // the older `[^<]*?` pattern. That method works correctly
+    // because uiautomator emits bounds AFTER resource-id (verified
+    // standard order), but the two-step is the stricter
+    // foundation for the rest of the cluster.
     // eslint-disable-next-line sonarjs/slow-regex
-    const rx =
-      /<node[^>]*resource-id="(?:[^"]*:id\/)?roomList_roomCard_[^"]*"[^<]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/;
-    const m = dump.match(rx);
-    if (!m) return false;
-    const cx = Math.round((Number(m[1]) + Number(m[3])) / 2);
-    const cy = Math.round((Number(m[2]) + Number(m[4])) / 2);
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?roomList_roomCard_[^"]*"[^>]*\/?>/;
+    const tagMatch = dump.match(tagRx);
+    if (!tagMatch) return false;
+    const boundsMatch = tagMatch[0].match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
+    if (!boundsMatch) return false;
+    const cx = Math.round((Number(boundsMatch[1]) + Number(boundsMatch[3])) / 2);
+    const cy = Math.round((Number(boundsMatch[2]) + Number(boundsMatch[4])) / 2);
     return await driver.androidTap(cx, cy);
   };
 
