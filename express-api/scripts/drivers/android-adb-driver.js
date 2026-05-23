@@ -1207,6 +1207,51 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 101 — `<Name>'s Android UI shows <Other>'s seat with <X>
+  // indicator` (j09 mic-on / j10 mic-off). Generic per-seat
+  // indicator assertion. Driver receives `(viewer, target,
+  // indicator)`.
+  //
+  // Foundation strategy: TRIPLE composition (mirrors PR #747's
+  // androidShowsGiftFromSender):
+  //   1. room_seatGrid testTag PRESENT (viewer on room screen)
+  //   2. target's name appears with symmetric word-boundary
+  //   3. indicator text appears with symmetric word-boundary
+  //
+  // Per-seat indicator scoping is journey-orchestrated — no per-
+  // seat testTag exists yet. The journey ensures only the
+  // relevant seat is in view at assertion time. A future PR could
+  // layer per-seat per-indicator testTags (e.g.
+  // `room_seat_${n}_micOn`).
+  //
+  // Cross-seat pass-through (same as PR #747's cross-entry): two
+  // independent scans over the whole dump. Journey orchestrator's
+  // responsibility to ensure single-seat context.
+  driver.androidShowsSeatWithIndicator = async (_viewer, target, indicator) => {
+    if (typeof target !== 'string' || !target.trim()) return false;
+    if (typeof indicator !== 'string' || !indicator.trim()) return false;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // Step 1: seat grid visible
+    // eslint-disable-next-line sonarjs/slow-regex
+    const gridRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?room_seatGrid"[^>]*\/?>/;
+    if (!gridRx.test(dump)) return false;
+    // Step 2: target appears with symmetric word-boundary
+    const escTarget = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const targetRx = new RegExp(
+      `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escTarget}(?![\\w-])[^"]*"`,
+    );
+    if (!targetRx.test(dump)) return false;
+    // Step 3: indicator appears with symmetric word-boundary
+    const escIndicator = indicator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const indicatorRx = new RegExp(
+      `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escIndicator}(?![\\w-])[^"]*"`,
+    );
+    return indicatorRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

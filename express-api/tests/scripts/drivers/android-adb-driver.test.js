@@ -7401,3 +7401,323 @@ describe('android-adb-driver — androidShowsInThread', () => {
     expect(await driver.androidShowsInThread('Selma', 'message', undefined)).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsSeatWithIndicator', () => {
+  // Wake 101 matcher — `<Name>'s Android UI shows <Other>'s seat
+  // with <X> indicator` (j09 mic-on / j10 mic-off). Generic
+  // per-seat indicator assertion. Driver receives `(viewer, target,
+  // indicator)`.
+  //
+  // Foundation strategy: TRIPLE composition (mirrors PR #747's
+  // androidShowsGiftFromSender):
+  //   1. room_seatGrid testTag PRESENT (viewer is on room screen)
+  //   2. target's name appears with symmetric word-boundary
+  //   3. indicator text appears with symmetric word-boundary
+  //
+  // Per-seat indicator scoping is journey-orchestrated — no per-
+  // seat testTag exists yet. The journey ensures only the
+  // relevant seat is in view at assertion time. A future PR could
+  // layer per-seat per-indicator testTags (e.g. `room_seat_${n}_micOn`).
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('room_seatGrid + target + indicator all present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam" /><node content-desc="mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on')).toBe(true);
+  });
+
+  test('target + indicator on same node → true', async () => {
+    // Realistic seat overlay: "Adam mic-on" or similar.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on')).toBe(true);
+  });
+
+  test('room_seatGrid absent (wrong screen) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />' +
+        '<node text="Adam mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on')).toBe(false);
+  });
+
+  test('target present + indicator absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' + '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on')).toBe(false);
+  });
+
+  test('indicator present + target absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="someone-else mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on')).toBe(false);
+  });
+
+  test('multiple indicators — "mic-off" requested, "mic-on" in dump → false', async () => {
+    // Pin that indicator distinction matters: asking for mic-off
+    // shouldn't false-positive against mic-on.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam" /><node content-desc="mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-off')).toBe(false);
+  });
+
+  test('prefix-collision blocked on target — "Adam" ≠ "AdamSmith"', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="AdamSmith mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on')).toBe(false);
+  });
+
+  test('hyphen-suffix blocked on target — "Adam" ≠ "Adam-jr"', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam-jr mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on')).toBe(false);
+  });
+
+  test('hyphen-suffix blocked on indicator — "mic-on" ≠ "mic-on-pulse"', async () => {
+    // The indicator itself contains a hyphen ("mic-on"). The
+    // symmetric word-boundary `(?![\w-])` blocks a trailing hyphen
+    // even when the literal contains internal hyphens.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam mic-on-pulse" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on')).toBe(false);
+  });
+
+  test('empty target → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', '', 'mic-on')).toBe(false);
+  });
+
+  test('empty indicator → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', '')).toBe(false);
+  });
+
+  test('null target → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', null, 'mic-on')).toBe(false);
+  });
+
+  test('null indicator → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', null)).toBe(false);
+  });
+
+  test('undefined target → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', undefined, 'mic-on')).toBe(false);
+  });
+
+  test('undefined indicator → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', undefined)).toBe(false);
+  });
+
+  test('whitespace-only target → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', '   ', 'mic-on')).toBe(false);
+  });
+
+  test('whitespace-only indicator → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', '   ')).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="room_seatGrid" /><node text="Adam mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on')).toBe(true);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on')).toBe(false);
+  });
+
+  test('viewer name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    const okSelma = await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam mic-on" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okBea = await driver2.androidShowsSeatWithIndicator('Bea', 'Adam', 'mic-on');
+
+    expect(okSelma).toBe(true);
+    expect(okBea).toBe(true);
+  });
+
+  test('regex-significant chars on both args — escaped properly', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="User.42 status.online" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'User.42', 'status.online')).toBe(
+      true,
+    );
+  });
+
+  test('regex-escape negative — literal dot escaped', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="UserX42 statusXonline" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'User.42', 'status.online')).toBe(
+      false,
+    );
+  });
+
+  test('compound attribute names (hint-text=) NOT consulted', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node hint-text="Adam mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on')).toBe(false);
+  });
+
+  test('cross-seat pass-through documented — target in seat-A, indicator in seat-B → true (orchestrator invariant)', async () => {
+    // Same contract as PR #747's cross-entry pin and PR #750's
+    // cross-row pin. Two independent scans over the whole dump.
+    // Documented limitation: per-seat scoping requires per-seat
+    // testTags (don't exist yet).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam mic-off" />' +
+        '<node text="someone-else mic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on')).toBe(true);
+  });
+});
