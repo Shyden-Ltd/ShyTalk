@@ -1533,6 +1533,33 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 86 — `<Name> on <Plat> approves <Other>'s seat request` (j17:51).
+  // Voice-room host action — host approves a pending seat request from
+  // <Other>. Driver receives `(host, requester)`.
+  //
+  // Foundation strategy: presence-check on the `seatRequest_*` testTag
+  // PREFIX. No `seatRequest_*` testTag exists in shared/src/commonMain
+  // yet — seat-request backend exists (SeatRequestRepository in
+  // core/room), but no UI testTag exposes the pending-requests panel
+  // or per-request Approve button. SeatItem.kt exposes only
+  // room_requestSeatButton (requester-side) and room_seatGrid (host
+  // view).
+  //
+  // Returns false in real journeys today; lands true when seatRequest_*
+  // testTags ship (e.g. seatRequest_pendingPanel /
+  // seatRequest_approveButton_<requesterId>).
+  //
+  // Both args (_host, _requester) accepted-and-ignored. Per-requester
+  // approval (tapping THIS specific approve button) needs a
+  // requester-id → testTag map.
+  driver.androidApproveSeatRequest = async (_host, _requester) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?seatRequest_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

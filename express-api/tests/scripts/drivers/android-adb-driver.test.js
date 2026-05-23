@@ -10291,3 +10291,264 @@ describe('android-adb-driver — androidAlsoShowsInParticipantsList', () => {
     expect(await driver.androidAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidApproveSeatRequest', () => {
+  // Wake 86 — `<Name> on <Plat> approves <Other>'s seat request` (j17:51).
+  // Voice-room host action — host approves a pending seat request from
+  // <Other>. Driver receives `(host, requester)`.
+  //
+  // Foundation strategy: presence-check on the `seatRequest_*` testTag
+  // PREFIX. No `seatRequest_*` testTag exists in shared/src/commonMain
+  // yet — seat-request backend exists (SeatRequestRepository in core/room),
+  // but no UI testTag exposes the pending-requests panel or per-request
+  // Approve button to uiautomator. SeatItem.kt exposes only
+  // room_requestSeatButton (requester-side) and room_seatGrid (host view).
+  //
+  // Returns false in real journeys today; lands true when seatRequest_*
+  // testTags ship (e.g. seatRequest_pendingPanel /
+  // seatRequest_approveButton_<requesterId>).
+  //
+  // Both args (_host, _requester) accepted-and-ignored. Per-requester
+  // approval (tapping THIS specific approve button) needs a requester-id
+  // → testTag map.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('seatRequest_approveButton present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', 'Bao')).toBe(true);
+  });
+
+  test('seatRequest_pendingPanel present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_pendingPanel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', 'Bao')).toBe(true);
+  });
+
+  test('absent (no seat-request surface) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', 'Bao')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', 'Bao')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="seatRequest_approveButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', 'Bao')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButton"><node text="Approve" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', 'Bao')).toBe(true);
+  });
+
+  test('left-boundary — pre_seatRequest_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_seatRequest_approveButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', 'Bao')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_seatRequest_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_seatRequest_approveButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', 'Bao')).toBe(false);
+  });
+
+  test('right-boundary — seatRequest_approveButtonExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButtonExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', 'Bao')).toBe(true);
+  });
+
+  test('confusable prefix — seat_requestApprove does NOT match', async () => {
+    // Pin: left anchor is `seatRequest_` literally. A hypothetical
+    // `seat_*` family must not false-match.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seat_requestApprove" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', 'Bao')).toBe(false);
+  });
+
+  test('similar-but-distinct — room_requestSeatButton does NOT match', async () => {
+    // The requester-side button (SeatItem.kt:142) must not satisfy a
+    // HOST approval matcher. They serve different roles in the j17
+    // sequence.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_requestSeatButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', 'Bao')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', 'Bao')).toBe(false);
+  });
+
+  test('host name accepted-and-ignored — Ines passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Ines', 'Bao')).toBe(true);
+  });
+
+  test('null host → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest(null, 'Bao')).toBe(true);
+  });
+
+  test('undefined host → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest(undefined, 'Bao')).toBe(true);
+  });
+
+  test('empty host → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('', 'Bao')).toBe(true);
+  });
+
+  test('whitespace host → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('   ', 'Bao')).toBe(true);
+  });
+
+  test('null requester → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', null)).toBe(true);
+  });
+
+  test('undefined requester → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', undefined)).toBe(true);
+  });
+
+  test('empty requester → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', '')).toBe(true);
+  });
+
+  test('whitespace requester → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', '   ')).toBe(true);
+  });
+
+  test('different requester still passes (foundation does not match specific request)', async () => {
+    // Per-requester approval needs a requester-id → testTag map.
+    // Today the foundation matches ANY seatRequest_* element.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', 'NotInRequest')).toBe(true);
+  });
+
+  test('first-match contract — two seatRequest_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButton" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_pendingPanel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidApproveSeatRequest('Alice', 'Bao')).toBe(true);
+  });
+});
