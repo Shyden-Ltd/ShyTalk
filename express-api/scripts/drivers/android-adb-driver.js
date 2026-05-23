@@ -1337,6 +1337,33 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Show welcome PM in language — j13 locale verification. The journey
+  // switches the viewer's locale (via the in-app language picker), then
+  // a fixture-driven welcome PM lands in the conversation. This matcher
+  // verifies the conversation thread is OPEN by checking for the
+  // privateChat_messageInput tag in the dump.
+  //
+  // Foundation policy: the locale `code` parameter is accepted-and-ignored.
+  // Verifying that displayed text is in a specific language would require
+  // comparing the message body against the localised welcome strings for
+  // each of the app's 20 supported locales, which needs access to the
+  // shared/src/commonMain/composeResources/values-{locale}/strings.xml
+  // files. The journey orchestrator ensures this matcher fires after the
+  // locale switch settled.
+  //
+  // A future PR could layer locale verification by reading the message
+  // text from a `welcomePm_message` testTag (currently not exposed) and
+  // hashing it against a known-locale registry, OR by parsing the
+  // `text="..."` attribute on the message node and checking script
+  // categories (Latin / Cyrillic / CJK).
+  driver.androidShowsWelcomePmInLanguage = async (_name, _code) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

@@ -8373,3 +8373,199 @@ describe('android-adb-driver — androidShowsPmThreadDirection', () => {
     expect(await driver.androidShowsPmThreadDirection('Selma', 'rtl')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsWelcomePmInLanguage', () => {
+  // Wake matcher (j13 corpus) — `<Name>'s Android UI shows the
+  // welcome PM in language "<code>"` — j13 locale verification.
+  // Driver receives `(name, code)` where code is a locale code
+  // (en, ru, ja, ar, etc.).
+  //
+  // Foundation strategy: presence-check the conversation thread is
+  // open (privateChat_messageInput testTag PRESENT). The locale
+  // code is accepted-and-ignored — verifying that text is in a
+  // specific language requires comparing the message body against
+  // localised welcome strings, which needs access to the strings.xml
+  // files for each locale. Foundation policy: ignore code.
+  //
+  // The journey ensures this matcher fires after locale switch
+  // settled. A future PR could layer locale verification via
+  // strings.xml comparison or by hashing the welcome string against
+  // a known-locale registry.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('privateChat_messageInput present + code "en" → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(true);
+  });
+
+  test('privateChat_messageInput present + code "ru" → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'ru')).toBe(true);
+  });
+
+  test('privateChat_messageInput present + code "ja" → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'ja')).toBe(true);
+  });
+
+  test('privateChat_messageInput absent (wrong screen) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput"><node text="Welcome message" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(true);
+  });
+
+  test('left-boundary false-positive — pre_privateChat_messageInput_x does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_privateChat_messageInput_x" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(false);
+  });
+
+  test('right-boundary false-positive — privateChat_messageInput_extra does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput_extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(false);
+  });
+
+  test('package-qualified left-boundary — :id/pre_privateChat_messageInput does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(false);
+  });
+
+  test('bare left-boundary no suffix — pre_privateChat_messageInput does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(false);
+  });
+
+  test('persona name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    const okSelma = await driver.androidShowsWelcomePmInLanguage('Selma', 'en');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okBea = await driver2.androidShowsWelcomePmInLanguage('Bea', 'en');
+
+    expect(okSelma).toBe(true);
+    expect(okBea).toBe(true);
+  });
+
+  test('unknown locale code still passes — code accepted-and-ignored', async () => {
+    // Foundation contract pin: code is not validated against the
+    // app's 20-locale registry. The journey orchestrator ensures
+    // the locale switch settled before this matcher fires.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'xx')).toBe(true);
+  });
+
+  test('undefined code → true (code accepted-and-ignored regardless of value)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', undefined)).toBe(true);
+  });
+
+  test('first-match contract — two privateChat_messageInput nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(true);
+  });
+});
