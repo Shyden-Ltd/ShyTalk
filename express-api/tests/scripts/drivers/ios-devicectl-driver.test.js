@@ -174,6 +174,171 @@ describe('ios-devicectl-driver — every IOS_METHOD_NAMES entry resolves to a fu
   });
 });
 
+describe('ios-devicectl-driver — iosAdminShowsAppealText', () => {
+  // Wake 89 — `<Name>'s <Plat> Admin UI shows <Other>'s appeal with
+  // the text` (j11:73). Same matcher as Android PR #762; iOS variant.
+  //
+  // Foundation strategy: presence-check on `adminAppeal_*` XCUITest
+  // identifier PREFIX. No iOS admin surface exists today; returns
+  // false in real journeys. Tests use injected mock iosUiDump.
+  //
+  // XCUITest dump format (when WDA lands):
+  //   <XCUIElementTypeOther identifier="adminAppeal_appealText" name="..." />
+  // The regex matches any XCUIElementType\w+ with identifier prefix.
+  //
+  // Both args (_viewer, _target) accepted-and-ignored.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('adminAppeal_appealText present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminAppeal_appealText" />',
+    );
+    expect(await driver.iosAdminShowsAppealText('Mod', 'Selma')).toBe(true);
+  });
+
+  test('adminAppeal_panel present → true (any suffix matches prefix)', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeButton identifier="adminAppeal_panel" />');
+    expect(await driver.iosAdminShowsAppealText('Mod', 'Selma')).toBe(true);
+  });
+
+  test('absent (no admin surface) → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosAdminShowsAppealText('Mod', 'Selma')).toBe(false);
+  });
+
+  test('empty dump → false (default scaffold state)', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    // Default iosUiDump returns '' — every presence-check returns false.
+    expect(await driver.iosAdminShowsAppealText('Mod', 'Selma')).toBe(false);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminAppeal_appealText"><XCUIElementTypeStaticText name="Text" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosAdminShowsAppealText('Mod', 'Selma')).toBe(true);
+  });
+
+  test('left-boundary — pre_adminAppeal_X does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="pre_adminAppeal_appealText" />',
+    );
+    expect(await driver.iosAdminShowsAppealText('Mod', 'Selma')).toBe(false);
+  });
+
+  test('right-boundary — adminAppeal_appealTextExtra still matches (prefix contract)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminAppeal_appealTextExtra" />',
+    );
+    expect(await driver.iosAdminShowsAppealText('Mod', 'Selma')).toBe(true);
+  });
+
+  test('confusable prefix — admin_appeal does NOT match (no underscore-after-prefix)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="admin_appealSummary" />',
+    );
+    expect(await driver.iosAdminShowsAppealText('Mod', 'Selma')).toBe(false);
+  });
+
+  test('different-attribute (name= instead of identifier=) does NOT match', async () => {
+    // Pin: the regex requires `identifier=`, not `name=`. Android's
+    // resource-id sibling has a similar attribute-specificity guard.
+    const driver = await driverWithDump('<XCUIElementTypeOther name="adminAppeal_appealText" />');
+    expect(await driver.iosAdminShowsAppealText('Mod', 'Selma')).toBe(false);
+  });
+
+  test('iosUiDump throws → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA: connection lost');
+    };
+    await expect(driver.iosAdminShowsAppealText('Mod', 'Selma')).rejects.toThrow();
+  });
+
+  test('viewer accepted-and-ignored — Bea passes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminAppeal_appealText" />',
+    );
+    expect(await driver.iosAdminShowsAppealText('Bea', 'Selma')).toBe(true);
+  });
+
+  test('null viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminAppeal_appealText" />',
+    );
+    expect(await driver.iosAdminShowsAppealText(null, 'Selma')).toBe(true);
+  });
+
+  test('undefined viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminAppeal_appealText" />',
+    );
+    expect(await driver.iosAdminShowsAppealText(undefined, 'Selma')).toBe(true);
+  });
+
+  test('empty viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminAppeal_appealText" />',
+    );
+    expect(await driver.iosAdminShowsAppealText('', 'Selma')).toBe(true);
+  });
+
+  test('whitespace viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminAppeal_appealText" />',
+    );
+    expect(await driver.iosAdminShowsAppealText('   ', 'Selma')).toBe(true);
+  });
+
+  test('null target → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminAppeal_appealText" />',
+    );
+    expect(await driver.iosAdminShowsAppealText('Mod', null)).toBe(true);
+  });
+
+  test('undefined target → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminAppeal_appealText" />',
+    );
+    expect(await driver.iosAdminShowsAppealText('Mod', undefined)).toBe(true);
+  });
+
+  test('empty target → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminAppeal_appealText" />',
+    );
+    expect(await driver.iosAdminShowsAppealText('Mod', '')).toBe(true);
+  });
+
+  test('whitespace target → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminAppeal_appealText" />',
+    );
+    expect(await driver.iosAdminShowsAppealText('Mod', '   ')).toBe(true);
+  });
+
+  test('different target still passes (foundation does not match specific user)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminAppeal_appealText" />',
+    );
+    expect(await driver.iosAdminShowsAppealText('Mod', 'Theo')).toBe(true);
+  });
+
+  test('first-match contract — two adminAppeal_* nodes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminAppeal_appealText" />' +
+        '<XCUIElementTypeOther identifier="adminAppeal_panel" />',
+    );
+    expect(await driver.iosAdminShowsAppealText('Mod', 'Selma')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't

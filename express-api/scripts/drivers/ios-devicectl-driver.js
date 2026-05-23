@@ -165,17 +165,40 @@ async function createIosDriver({ udid: preferred } = {}) {
   };
 
   // Stub registration loop. Each subsequent PR overrides one name
-  // with a foundation presence-check (e.g.
-  //   driver.iosShowsUserCard = async (_viewer, _target) => {
-  //     const dump = await driver.iosUiDump();
-  //     if (!dump) return false;
-  //     const tagRx = /<XCUIElementTypeAny[^>]*identifier="(?:[^"]*:id\/)?userCard_[^"]*"[^>]*\/?>/;
-  //     return tagRx.test(dump);
-  //   };
-  // until all names have foundation implementations.
+  // with a foundation presence-check (XCUITest dump format) that
+  // mirrors the Android cluster's pattern but adapted to iOS's
+  // identifier attribute. Until all names have foundation
+  // implementations, every unimplemented stub returns false.
   for (const methodName of listMethods()) {
     driver[methodName] = async (..._args) => false;
   }
+
+  // ── Foundation presence-check methods ─────────────────────────────
+  //
+  // Each iOS foundation method follows the Android cluster's pattern:
+  // presence-check against `iosUiDump()` for a `<feature>_*` testTag
+  // PREFIX. iOS-specific differences from Android:
+  //   - XCUITest emits `<XCUIElementType... identifier="X" />` (no
+  //     `resource-id` attribute, no `:id/` package qualifier).
+  //   - The XML element tag varies (XCUIElementTypeButton,
+  //     XCUIElementTypeOther, etc.) so the regex matches any
+  //     `XCUIElementType\w+`.
+  //
+  // While `iosUiDump()` returns '' in the scaffold state, every
+  // presence-check returns false in real journeys. When WDA / XCTest
+  // integration lands, both `iosUiDump()` and these regexes start
+  // doing real work.
+  //
+  // Wake 89 — `<Name>'s <Plat> Admin UI shows <Other>'s appeal with
+  // the text` (j11:73). Same matcher as Android #762; iOS variant.
+  // Returns false today (no admin UI on iOS, same as Android).
+  driver.iosAdminShowsAppealText = async (_viewer, _target) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="adminAppeal_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
 
   driver.close = async () => {
     /* devicectl is stateless; nothing to release */
