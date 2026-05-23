@@ -765,7 +765,28 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const tapped = await driver.androidTapByTag(tag);
     if (!tapped) return false;
     try {
-      adb(['shell', 'input', 'text', text.replace(/ /g, '%s')]);
+      // Round 1 C-1: text is the first USER-CONTROLLED free-form
+      // string reaching adb() in the cluster. Prior methods passed
+      // only known-safe values (numeric coords, alphanumeric tags).
+      // adb() wraps each arg in single quotes; a single quote in
+      // `text` (e.g. "O'Brien", "can't") would produce unbalanced
+      // quotes and shell misparse.
+      //
+      // POSIX escape: replace ' with '\'' (close quote + escaped
+      // literal quote + reopen quote). Inside the surrounding
+      // single quotes that adb() adds, this round-trips correctly —
+      // the device receives the literal text.
+      //
+      // KNOWN LIMITATION (Round 1 I-1): the literal sequence `%s` in
+      // `text` is indistinguishable from an encoded space on the
+      // device side — adb's `input text` decodes `%s` as a literal
+      // space and has no `%%`-style escape. Searching for a string
+      // containing `%s` will yield spaces at those positions. Not
+      // fixable without a different keyboard-driver primitive
+      // (e.g. uiautomator setText via UI Automator API) — separate PR.
+      const quoteEscaped = text.replace(/'/g, "'\\''");
+      const spaceEncoded = quoteEscaped.replace(/ /g, '%s');
+      adb(['shell', 'input', 'text', spaceEncoded]);
       return true;
     } catch (e) {
       console.error(
