@@ -344,6 +344,179 @@ describe('ios-devicectl-driver — iosAdminShowsAppealText', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosAdminShowsDashboardCounters', () => {
+  // Wake 105 — `<Name>'s <Plat> Admin UI shows the dashboard with
+  // counters: N reports, N verifications, N appeals` (j12). Mirrors
+  // Android sibling #763's pattern.
+  //
+  // Foundation: presence-check on `adminDashboard_*` XCUITest
+  // identifier PREFIX. Both args (_viewer, _counters) accepted-and-
+  // ignored. The _counters object structure (reports/verifications/
+  // appeals) is NOT validated — that needs per-counter testTags +
+  // text-extraction.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  const sampleCounters = { reports: 5, verifications: 2, appeals: 1 };
+
+  test('adminDashboard_reportsCounter present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminDashboard_reportsCounter" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters('Mod', sampleCounters)).toBe(true);
+  });
+
+  test('adminDashboard_verificationsCounter present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminDashboard_verificationsCounter" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters('Mod', sampleCounters)).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosAdminShowsDashboardCounters('Mod', sampleCounters)).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosAdminShowsDashboardCounters('Mod', sampleCounters)).toBe(false);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminDashboard_reportsCounter"><XCUIElementTypeStaticText name="5" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters('Mod', sampleCounters)).toBe(true);
+  });
+
+  test('left-boundary — pre_adminDashboard_X does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="pre_adminDashboard_reportsCounter" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters('Mod', sampleCounters)).toBe(false);
+  });
+
+  test('right-boundary — adminDashboard_reportsCounterExtra still matches', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminDashboard_reportsCounterExtra" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters('Mod', sampleCounters)).toBe(true);
+  });
+
+  test('confusable prefix — admin_dashboardSummary does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="admin_dashboardSummary" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters('Mod', sampleCounters)).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther name="adminDashboard_reportsCounter" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters('Mod', sampleCounters)).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosAdminShowsDashboardCounters('Mod', sampleCounters)).rejects.toThrow();
+  });
+
+  test('viewer accepted-and-ignored — Bea passes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminDashboard_reportsCounter" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters('Bea', sampleCounters)).toBe(true);
+  });
+
+  test('null viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminDashboard_reportsCounter" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters(null, sampleCounters)).toBe(true);
+  });
+
+  test('undefined viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminDashboard_reportsCounter" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters(undefined, sampleCounters)).toBe(true);
+  });
+
+  test('empty viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminDashboard_reportsCounter" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters('', sampleCounters)).toBe(true);
+  });
+
+  test('whitespace viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminDashboard_reportsCounter" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters('   ', sampleCounters)).toBe(true);
+  });
+
+  test('null counters → true (accepted-and-ignored)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminDashboard_reportsCounter" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters('Mod', null)).toBe(true);
+  });
+
+  test('undefined counters → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminDashboard_reportsCounter" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters('Mod', undefined)).toBe(true);
+  });
+
+  test('empty object counters → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminDashboard_reportsCounter" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters('Mod', {})).toBe(true);
+  });
+
+  test('partial counters → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminDashboard_reportsCounter" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters('Mod', { reports: 5, appeals: 1 })).toBe(
+      true,
+    );
+  });
+
+  test('large counters → true (foundation does not validate values)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminDashboard_reportsCounter" />',
+    );
+    expect(
+      await driver.iosAdminShowsDashboardCounters('Mod', {
+        reports: 9999999,
+        verifications: 0,
+        appeals: -1,
+      }),
+    ).toBe(true);
+  });
+
+  test('first-match contract — two adminDashboard_* nodes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminDashboard_reportsCounter" />' +
+        '<XCUIElementTypeOther identifier="adminDashboard_appealsCounter" />',
+    );
+    expect(await driver.iosAdminShowsDashboardCounters('Mod', sampleCounters)).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't

@@ -200,6 +200,19 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 105 — `<Name>'s <Plat> Admin UI shows the dashboard with
+  // counters: N reports, N verifications, N appeals` (j12). Mirrors
+  // Android sibling #763. Foundation: presence-check on
+  // `adminDashboard_*` XCUITest identifier PREFIX. Both args
+  // (_viewer, _counters) accepted-and-ignored.
+  driver.iosAdminShowsDashboardCounters = async (_viewer, _counters) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="adminDashboard_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   driver.close = async () => {
     /* devicectl is stateless; nothing to release */
   };
