@@ -5494,6 +5494,21 @@ describe('android-adb-driver — androidShowsInSeatGrid', () => {
     expect(ok5).toBe(true);
   });
 
+  test('seatNum=0 (off-by-one sentinel) also accept-and-ignored', async () => {
+    // Round 1 I-1 pin: while real seat positions start at 1, an
+    // off-by-one journey authoring error could pass 0. The
+    // foundation accept-and-ignore contract extends across the full
+    // integer domain — `_seatNum` is never read, so 0 yields the
+    // same result as 1/5/etc. when target is visible.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' + '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', 'Adam', 0)).toBe(true);
+  });
+
   test('padded target name — "speaker: Adam" still matches Adam', async () => {
     // Realistic seat-grid labels often pad with role prefix
     // ("speaker: Adam", "host • Adam"). Substring match with
