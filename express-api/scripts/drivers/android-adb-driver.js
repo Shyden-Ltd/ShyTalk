@@ -707,6 +707,13 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // entries for richer assertion chains, but the foundation just
   // asserts visibility — a future PR can extract entries when
   // needed (e.g. for "each entry shows <fields>" follow-up steps).
+  // TABLE_TAGS values are expected to be alphanumeric + underscore
+  // only (Compose testTag convention). The defensive escape on `tag`
+  // before regex interpolation defends against future entries that
+  // might contain regex metacharacters (e.g. a hypothetical
+  // "user-reports" with a hyphen, or worse, "report_list+" with a
+  // `+`). Without the escape, the next entry could be a latent
+  // regex-injection point.
   const TABLE_TAGS = { reports: 'reportReview_list' };
   driver.androidAdminShowsTableOf = async (_viewer, noun) => {
     if (!noun || !noun.trim()) return false;
@@ -714,8 +721,9 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     if (!tag) return false;
     const dump = await driver.androidUiDump();
     if (!dump) return false;
+    const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // eslint-disable-next-line sonarjs/slow-regex
-    const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${tag}"[^>]*\\/?>`);
+    const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${escTag}"[^>]*\\/?>`);
     return tagRx.test(dump);
   };
 
