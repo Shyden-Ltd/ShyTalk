@@ -13516,3 +13516,201 @@ describe('android-adb-driver — androidShowsOfficialBadge', () => {
     expect(await driver.androidShowsOfficialBadge('Officia', '')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsOnlyMinorCohortInRankings', () => {
+  // Wake 99 — `<Name>'s <Plat> UI shows only minor-cohort users in the
+  // rankings` (j02). Cohort-filtered rankings list. Driver receives
+  // `(name)`.
+  //
+  // Foundation strategy: presence-check on the `rankings_*` testTag
+  // PREFIX. No `rankings_*` testTag exists in shared/src/commonMain
+  // yet — rankings UI is unbuilt. Returns false in real journeys today;
+  // lands true when ships with rankings_minorCohortList /
+  // rankings_userRow etc.
+  //
+  // Per-cohort verification (asserting ONLY minor-cohort users, not
+  // any users) needs row-level cohort attribute parsing. Deferred.
+  // The `_name` arg is accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('rankings_minorCohortList present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/rankings_minorCohortList" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('Mia')).toBe(true);
+  });
+
+  test('rankings_userRow present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/rankings_userRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('Mia')).toBe(true);
+  });
+
+  test('absent (no rankings) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('Mia')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('Mia')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="rankings_minorCohortList" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('Mia')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/rankings_minorCohortList"><node text="Top 10" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('Mia')).toBe(true);
+  });
+
+  test('left-boundary — pre_rankings_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_rankings_minorCohortList" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('Mia')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_rankings_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_rankings_minorCohortList" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('Mia')).toBe(false);
+  });
+
+  test('right-boundary — rankings_minorCohortListExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/rankings_minorCohortListExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('Mia')).toBe(true);
+  });
+
+  test('confusable prefix — ranking_panel does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/ranking_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('Mia')).toBe(false);
+  });
+
+  test('bare confusable prefix — ranking_panel does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="ranking_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('Mia')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('Mia')).toBe(false);
+  });
+
+  test('name accepted-and-ignored — Selma passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/rankings_minorCohortList" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('Selma')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/rankings_minorCohortList" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings(null)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/rankings_minorCohortList" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings(undefined)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/rankings_minorCohortList" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/rankings_minorCohortList" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('   ')).toBe(true);
+  });
+
+  test('first-match contract — two rankings_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/rankings_minorCohortList" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/rankings_userRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOnlyMinorCohortInRankings('Mia')).toBe(true);
+  });
+});

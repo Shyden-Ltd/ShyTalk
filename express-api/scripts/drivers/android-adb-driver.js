@@ -1811,6 +1811,27 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 99 — `<Name>'s <Plat> UI shows only minor-cohort users in the
+  // rankings` (j02). Cohort-filtered rankings list. Driver receives
+  // `(name)`.
+  //
+  // Foundation strategy: presence-check on the `rankings_*` testTag
+  // PREFIX. No `rankings_*` testTag exists in shared/src/commonMain
+  // yet — rankings UI is unbuilt. Returns false in real journeys today;
+  // lands true when ships with rankings_minorCohortList /
+  // rankings_userRow etc.
+  //
+  // Per-cohort verification (asserting ONLY minor-cohort users, not
+  // any users) needs row-level cohort attribute parsing. Deferred.
+  // The `_name` arg is accepted-and-ignored.
+  driver.androidShowsOnlyMinorCohortInRankings = async (_name) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?rankings_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const NOUN_KIND_TAGS = {
     'appeal::button': 'suspension_submitAppealButton',
   };

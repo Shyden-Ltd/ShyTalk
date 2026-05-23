@@ -21283,7 +21283,159 @@ describe('Wake 99 — "<Name>\'s <Plat> UI shows only minor-cohort users in the 
       ctx,
     );
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/iosShowsOnlyMinorCohortInRankings/);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsOnlyMinorCohortInRankings/);
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsOnlyMinorCohortInRankings: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Mia's iOS Sim UI shows only minor-cohort users in the rankings" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Mia|rankings/);
+  });
+
+  // Android — full 3-test set
+  test('Android matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { androidShowsOnlyMinorCohortInRankings: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Mia's Android UI shows only minor-cohort users in the rankings" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Mia');
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsOnlyMinorCohortInRankings: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Mia's Android UI shows only minor-cohort users in the rankings" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Mia|rankings/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Mia's Android UI shows only minor-cohort users in the rankings" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsOnlyMinorCohortInRankings/);
+  });
+
+  // Web — full 3-test set
+  test('Web matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsOnlyMinorCohortInRankings: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Mia's Web UI shows only minor-cohort users in the rankings" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Mia');
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsOnlyMinorCohortInRankings: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Mia's Web UI shows only minor-cohort users in the rankings" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Mia|rankings/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Mia's Web UI shows only minor-cohort users in the rankings" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsOnlyMinorCohortInRankings/);
+  });
+
+  // Web Chromium variant
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsOnlyMinorCohortInRankings: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Mia's Web Chromium UI shows only minor-cohort users in the rankings",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Mia');
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsOnlyMinorCohortInRankings: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Mia's Web Chromium UI shows only minor-cohort users in the rankings",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Mia|rankings/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Mia's Web Chromium UI shows only minor-cohort users in the rankings",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsOnlyMinorCohortInRankings/);
+  });
+
+  // Web Safari variant
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsOnlyMinorCohortInRankings: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Mia's Web Safari UI shows only minor-cohort users in the rankings" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Mia');
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsOnlyMinorCohortInRankings: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Mia's Web Safari UI shows only minor-cohort users in the rankings" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Mia|rankings/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Mia's Web Safari UI shows only minor-cohort users in the rankings" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsOnlyMinorCohortInRankings/);
   });
 });
 
