@@ -4798,3 +4798,260 @@ describe('android-adb-driver — androidJoinEventRoom', () => {
     expect(tapCall[0]).toContain("'300'");
   });
 });
+
+describe('android-adb-driver — androidNavigatesToPath', () => {
+  // Wake 99 matcher — `<Name>'s Android UI navigates to "<Path>"`
+  // (j03+). Generic path-based navigation assertion. Driver receives
+  // `(name, path)` where path is a web-style URL: `/`, `/profile/42`,
+  // `/messages/abc`, etc.
+  //
+  // Foundation strategy: a PATH_TAGS map from path prefix to
+  // distinctive Compose testTag. Path resolution:
+  //   1. Exact match (handles `/` specifically)
+  //   2. Prefix match: `/profile/42` → uses `/profile` mapping
+  //
+  // Currently 5 mappings:
+  //   - "/"         → main_roomsTab            (root → rooms landing)
+  //   - "/profile"  → profile_displayName       (any profile screen)
+  //   - "/messages" → main_messagesTab          (messages tab)
+  //   - "/wallet"   → wallet_balance            (wallet screen)
+  //   - "/settings" → securitySettingsScreen    (settings landing)
+  //
+  // Unmapped paths return false (FAIL-loud contract — journey
+  // author gets a clear FAIL until the path mapping lands).
+  //
+  // Foundation contract: PRESENCE check only. Tab paths like "/" and
+  // "/messages" assert the tab bar is visible, which is true on every
+  // main screen (slightly looser than "user is on THIS tab"). A
+  // future PR can tighten with `selected="true"` for tab paths.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('root "/" → main_roomsTab present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Lena', '/')).toBe(true);
+  });
+
+  test('exact "/profile" → profile_displayName present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/profile')).toBe(true);
+  });
+
+  test('prefix-match "/profile/42" → resolves to /profile mapping', async () => {
+    // Pin the prefix-resolver. A profile URL with a user ID still
+    // routes to the profile screen check.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/profile/42')).toBe(true);
+  });
+
+  test('prefix-match "/messages/abc123" → resolves to /messages mapping', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/messages/abc123')).toBe(true);
+  });
+
+  test('"/wallet" → wallet_balance present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/wallet_balance" text="5,000" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/wallet')).toBe(true);
+  });
+
+  test('"/settings" → securitySettingsScreen present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/securitySettingsScreen" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/settings')).toBe(true);
+  });
+
+  test('expected screen testTag absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    // Asserting profile but on rooms tab → must fail.
+    expect(await driver.androidNavigatesToPath('Adam', '/profile/42')).toBe(false);
+  });
+
+  test('unmapped path "/login.html" → false (FAIL-loud)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/login.html')).toBe(false);
+  });
+
+  test('unmapped path "/unknown" → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/unknown')).toBe(false);
+  });
+
+  test('empty path arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '')).toBe(false);
+  });
+
+  test('whitespace-only path arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '   ')).toBe(false);
+  });
+
+  test('null path arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', null)).toBe(false);
+  });
+
+  test('undefined path arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', undefined)).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/profile')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/profile')).toBe(false);
+  });
+
+  test('persona name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    const okAdam = await driver.androidNavigatesToPath('Adam', '/');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okLena = await driver2.androidNavigatesToPath('Lena', '/');
+
+    expect(okAdam).toBe(true);
+    expect(okLena).toBe(true);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/profile')).toBe(true);
+  });
+
+  test('"/profile" exact-match is distinct from "/profile-extras" non-prefix', async () => {
+    // Defensive: the prefix-resolver requires either exact match
+    // OR the prefix followed by `/`. A path like "/profile-extras"
+    // is NOT a prefix of "/profile" — must return null (FAIL-loud).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/profile-extras')).toBe(false);
+  });
+
+  test('longest-prefix wins: a path matching multiple prefixes resolves to the most specific', async () => {
+    // Currently no path overlaps exist (all prefixes are disjoint),
+    // but pin the contract via the resolver behaviour. If future
+    // mappings add e.g. "/profile/edit", the resolver should
+    // prefer "/profile/edit" over "/profile" for "/profile/edit/photo".
+    //
+    // Today's pin: "/profile/42" resolves to "/profile" (the only
+    // matching prefix), not to "/" (which is exact-only).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/profile/42')).toBe(true);
+    // Sanity: "/" does NOT prefix-match "/profile/42" because the
+    // "/" → main_roomsTab mapping is exact-only.
+  });
+
+  test('path with extra trailing segments — "/profile/42/edit" still resolves to /profile', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/profile/42/edit')).toBe(true);
+  });
+});

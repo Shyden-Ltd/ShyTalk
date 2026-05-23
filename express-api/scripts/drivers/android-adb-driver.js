@@ -880,6 +880,61 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return await driver.androidTap(cx, cy);
   };
 
+  // Wake 99 — `<Name>'s Android UI navigates to "<Path>"` (j03+).
+  // Generic path-based navigation assertion. Path is a web-style
+  // URL like `/`, `/profile/42`, `/messages/abc`.
+  //
+  // Foundation strategy: PATH_TAGS map with prefix-resolver
+  //   1. Exact match (handles `/` — must not greedy-match other paths)
+  //   2. Prefix match: `/profile/42` → `/profile` mapping
+  //
+  // Currently 5 mappings, all grounded in existing Compose testTags:
+  //   - "/"         → main_roomsTab            (root → rooms landing)
+  //   - "/profile"  → profile_displayName       (any profile screen)
+  //   - "/messages" → main_messagesTab          (messages tab)
+  //   - "/wallet"   → wallet_balance            (wallet screen)
+  //   - "/settings" → securitySettingsScreen    (settings landing)
+  //
+  // Unmapped paths return false — FAIL-loud contract (same as
+  // INPUT_TAGS / TABLE_TAGS scaffolds).
+  //
+  // Foundation contract: PRESENCE check only. Tab paths assert the
+  // tab BAR is visible (true on every main screen), so they're
+  // looser than "user is on THIS tab specifically". A future PR
+  // can tighten with `selected="true"` for tab paths.
+  const PATH_TAGS = {
+    '/': 'main_roomsTab',
+    '/profile': 'profile_displayName',
+    '/messages': 'main_messagesTab',
+    '/wallet': 'wallet_balance',
+    '/settings': 'securitySettingsScreen',
+  };
+  function resolvePathTag(path) {
+    if (PATH_TAGS[path]) return PATH_TAGS[path];
+    // Prefix match: longest-matching prefix wins. Exclude '/' from
+    // prefix iteration (it's exact-only — otherwise every path
+    // would prefix-match it).
+    let best = null;
+    for (const prefix of Object.keys(PATH_TAGS)) {
+      if (prefix === '/') continue;
+      if (path === prefix || path.startsWith(prefix + '/')) {
+        if (!best || prefix.length > best.length) best = prefix;
+      }
+    }
+    return best ? PATH_TAGS[best] : null;
+  }
+  driver.androidNavigatesToPath = async (_name, path) => {
+    if (typeof path !== 'string' || !path.trim()) return false;
+    const tag = resolvePathTag(path.trim());
+    if (!tag) return false;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${escTag}"[^>]*\\/?>`);
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
