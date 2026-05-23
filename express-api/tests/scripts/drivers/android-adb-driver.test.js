@@ -12137,3 +12137,294 @@ describe('android-adb-driver — androidShowsEditedBodyWithTag', () => {
     expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', 'edited')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsInAppGiftNotification', () => {
+  // Wake 100 — `<Name>'s <Plat> UI shows the in-app gift notification
+  // with sender "<X>" and gift "<Y>"` (j05). Toast/banner when a gift
+  // is received in real time. Driver receives
+  // `(recipient, sender, giftId)`.
+  //
+  // Foundation strategy: presence-check on the `giftNotification_*`
+  // testTag PREFIX. No `giftNotification_*` testTag exists in
+  // shared/src/commonMain yet — the real-time gift notification toast
+  // is unbuilt. Returns false in real journeys today; lands true when
+  // ships with giftNotification_toast / giftNotification_giftIcon.
+  //
+  // Per-sender and per-gift verification need text/image extraction.
+  // Deferred. All 3 args (_recipient, _sender, _giftId) accepted-and-
+  // ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('giftNotification_toast present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', 'rose')).toBe(true);
+  });
+
+  test('giftNotification_giftIcon present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_giftIcon" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', 'rose')).toBe(true);
+  });
+
+  test('absent (no notification) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', 'rose')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', 'rose')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', 'rose')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast"><node text="Alice sent you a rose" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', 'rose')).toBe(true);
+  });
+
+  test('left-boundary — pre_giftNotification_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', 'rose')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_giftNotification_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', 'rose')).toBe(false);
+  });
+
+  test('right-boundary — giftNotification_toastExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toastExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', 'rose')).toBe(true);
+  });
+
+  test('confusable prefix — gift_notificationPanel does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/gift_notificationPanel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', 'rose')).toBe(false);
+  });
+
+  test('bare confusable prefix — gift_notificationPanel does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="gift_notificationPanel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', 'rose')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', 'rose')).toBe(false);
+  });
+
+  test('recipient accepted-and-ignored — Bao passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Bao', 'Alice', 'rose')).toBe(true);
+  });
+
+  test('null recipient → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification(null, 'Alice', 'rose')).toBe(true);
+  });
+
+  test('undefined recipient → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification(undefined, 'Alice', 'rose')).toBe(true);
+  });
+
+  test('empty recipient → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('', 'Alice', 'rose')).toBe(true);
+  });
+
+  test('whitespace recipient → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('   ', 'Alice', 'rose')).toBe(true);
+  });
+
+  test('null sender → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', null, 'rose')).toBe(true);
+  });
+
+  test('undefined sender → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', undefined, 'rose')).toBe(true);
+  });
+
+  test('empty sender → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', '', 'rose')).toBe(true);
+  });
+
+  test('whitespace sender → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', '   ', 'rose')).toBe(true);
+  });
+
+  test('null giftId → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', null)).toBe(true);
+  });
+
+  test('undefined giftId → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', undefined)).toBe(true);
+  });
+
+  test('empty giftId → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', '')).toBe(true);
+  });
+
+  test('whitespace giftId → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', '   ')).toBe(true);
+  });
+
+  test('different sender/giftId still passes (foundation does not match specifics)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Different', 'AnyGift')).toBe(
+      true,
+    );
+  });
+
+  test('first-match contract — two giftNotification_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_toast" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/giftNotification_giftIcon" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInAppGiftNotification('Selma', 'Alice', 'rose')).toBe(true);
+  });
+});

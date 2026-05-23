@@ -20782,18 +20782,127 @@ describe('Wake 100 — `<Name>\'s <Plat> UI shows the new "<X>" gift entry`', ()
 });
 
 describe('Wake 100 — `<Name>\'s <Plat> UI shows the in-app gift notification with sender "<X>" and gift "<Y>"`', () => {
+  // Helper for terser tests in this block
+  const giftText = (platform) =>
+    `Selma's ${platform} UI shows the in-app gift notification with sender "Alice" and gift "crown"`;
+
   test('matching → ok', async () => {
     const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidShowsInAppGiftNotification: spy } });
-    const r = await executeStep(
-      {
-        kind: 'Then',
-        text: 'Selma\'s Android UI shows the in-app gift notification with sender "Alice" and gift "crown"',
-      },
-      ctx,
-    );
+    const r = await executeStep({ kind: 'Then', text: giftText('Android') }, ctx);
     expect(r.ok).toBe(true);
     expect(spy).toHaveBeenCalledWith('Selma', 'Alice', 'crown');
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsInAppGiftNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: giftText('Android') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Selma|gift notification/i);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: giftText('Android') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsInAppGiftNotification/);
+  });
+
+  // iOS Sim — full 3-test set
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsInAppGiftNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: giftText('iOS Sim') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Selma', 'Alice', 'crown');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsInAppGiftNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: giftText('iOS Sim') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Selma|gift notification/i);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: giftText('iOS Sim') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsInAppGiftNotification/);
+  });
+
+  // Web — full 3-test set
+  test('Web matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsInAppGiftNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: giftText('Web') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Selma', 'Alice', 'crown');
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsInAppGiftNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: giftText('Web') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Selma|gift notification/i);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: giftText('Web') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsInAppGiftNotification/);
+  });
+
+  // Web Chromium — full 3-test set
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsInAppGiftNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: giftText('Web Chromium') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Selma', 'Alice', 'crown');
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsInAppGiftNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: giftText('Web Chromium') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Selma|gift notification/i);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: giftText('Web Chromium') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsInAppGiftNotification/);
+  });
+
+  // Web Safari — full 3-test set
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsInAppGiftNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: giftText('Web Safari') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Selma', 'Alice', 'crown');
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsInAppGiftNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: giftText('Web Safari') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Selma|gift notification/i);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: giftText('Web Safari') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsInAppGiftNotification/);
   });
 });
 

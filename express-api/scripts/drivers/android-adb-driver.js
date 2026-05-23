@@ -1704,6 +1704,28 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 100 — `<Name>'s <Plat> UI shows the in-app gift notification
+  // with sender "<X>" and gift "<Y>"` (j05). Toast/banner when a gift
+  // is received in real time. Driver receives
+  // `(recipient, sender, giftId)`.
+  //
+  // Foundation strategy: presence-check on the `giftNotification_*`
+  // testTag PREFIX. No `giftNotification_*` testTag exists in
+  // shared/src/commonMain yet — the real-time gift notification toast
+  // is unbuilt. Returns false in real journeys today; lands true when
+  // ships with giftNotification_toast / giftNotification_giftIcon.
+  //
+  // Per-sender and per-gift verification need text/image extraction.
+  // Deferred. All 3 args (_recipient, _sender, _giftId) accepted-and-
+  // ignored.
+  driver.androidShowsInAppGiftNotification = async (_recipient, _sender, _giftId) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?giftNotification_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
