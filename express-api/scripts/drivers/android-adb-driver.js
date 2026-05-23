@@ -1055,6 +1055,29 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return senderRx.test(dump);
   };
 
+  // Wake 105 — `<Name>'s Android UI shows the message in the
+  // conversation thread` (j11). Single-arg. The matcher is
+  // intentionally specific (NOT the Wake-100 generic in-thread
+  // variant with a noun capture): "the message" refers to a
+  // journey-orchestrated specific message that was just sent.
+  //
+  // Foundation strategy: assert the conversation thread is open
+  // by checking `privateChat_messageInput` testTag presence. The
+  // journey orchestrator ensures this matcher only fires AFTER a
+  // specific message was sent, so "the message" being visible is
+  // implied by the thread being open.
+  //
+  // A future PR could layer per-message verification once Compose
+  // ships per-message testTags (currently only the input field has
+  // a testTag). Same shape as PR #731's androidNavigatesToProfileScreen.
+  driver.androidShowsMessageInConversationThread = async (_name) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

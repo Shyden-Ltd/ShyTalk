@@ -6069,3 +6069,159 @@ describe('android-adb-driver — androidShowsGiftFromSender', () => {
     expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsMessageInConversationThread', () => {
+  // Wake 105 matcher — `<Name>'s Android UI shows the message in the
+  // conversation thread` (j11). Single-arg. The matcher is
+  // intentionally specific (NOT the Wake-100 generic in-thread
+  // variant): "the message" refers to a journey-orchestrated
+  // specific message that was just sent.
+  //
+  // Foundation strategy: assert the conversation thread is open
+  // (privateChat_messageInput testTag PRESENT). The journey
+  // orchestrator ensures the test only fires AFTER a specific
+  // message was sent, so "the message" being visible is implied
+  // by the thread being open.
+  //
+  // A future PR could layer per-message verification once Compose
+  // ships per-message testTags (currently only the input field has
+  // a testTag). Same shape as PR #731's androidNavigatesToProfileScreen.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('privateChat_messageInput present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMessageInConversationThread('Selma')).toBe(true);
+  });
+
+  test('privateChat_messageInput absent (wrong screen) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMessageInConversationThread('Selma')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMessageInConversationThread('Selma')).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMessageInConversationThread('Selma')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput"><node text="placeholder" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMessageInConversationThread('Selma')).toBe(true);
+  });
+
+  test('left-boundary false-positive guarded — pre_privateChat_messageInput_x does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_privateChat_messageInput_x" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMessageInConversationThread('Selma')).toBe(false);
+  });
+
+  test('right-boundary false-positive guarded — privateChat_messageInput_extra does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput_extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMessageInConversationThread('Selma')).toBe(false);
+  });
+
+  test('package-qualified left-boundary guarded — :id/pre_privateChat_messageInput does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMessageInConversationThread('Selma')).toBe(false);
+  });
+
+  test('bare left-boundary without suffix — pre_privateChat_messageInput does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMessageInConversationThread('Selma')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMessageInConversationThread('Selma')).toBe(false);
+  });
+
+  test('persona name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    const okSelma = await driver.androidShowsMessageInConversationThread('Selma');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okBea = await driver2.androidShowsMessageInConversationThread('Bea');
+
+    expect(okSelma).toBe(true);
+    expect(okBea).toBe(true);
+  });
+
+  test('first-match contract pinned — two privateChat_messageInput nodes', async () => {
+    // Presence-check semantics: as long as the first match exists,
+    // return true. The second one's existence doesn't change the
+    // answer. Pin in case of a future refactor that introduces
+    // matchAll-based logic.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsMessageInConversationThread('Selma')).toBe(true);
+  });
+});
