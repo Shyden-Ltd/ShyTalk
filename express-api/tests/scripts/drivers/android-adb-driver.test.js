@@ -6471,4 +6471,42 @@ describe('android-adb-driver — androidShowsNewUnreadConversation', () => {
     const driver = await createAndroidDriver();
     expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(false);
   });
+
+  test('first-guard right-boundary — main_messagesTabExtra does NOT count', async () => {
+    // Round 1 I-2: symmetric with the left-boundary pin above.
+    // The closing `"` in the regex is a hard right anchor, but the
+    // pin documents the contract.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTabExtra" />' +
+        '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(false);
+  });
+
+  test('chat-thread-screen disambiguation — privateChat_messageInput alone (no messages tab) → false', async () => {
+    // Round 1 I-1: PrivateChatScreen replaces MainScreen entirely
+    // in the nav graph (NavGraph.kt:496-497) — its Scaffold has no
+    // NavigationBar. So `main_messagesTab` is ABSENT when inside a
+    // chat thread. This pin documents the screen distinction
+    // explicitly: even when the chat input is visible (which would
+    // be reachable from a sibling test like
+    // `androidShowsMessageInConversationThread`), the conversation
+    // LIST is NOT in the dump → must return false.
+    //
+    // Regression-proof against a future navigation refactor that
+    // embeds the chat screen inside MainScreen (which would
+    // suddenly make main_messagesTab present + privateChat_messageInput
+    // present simultaneously; the assertion would falsely pass).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />' +
+        '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(false);
+  });
 });
