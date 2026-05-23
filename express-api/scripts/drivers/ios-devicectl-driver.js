@@ -213,6 +213,18 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 106 — `<Name>'s <Plat> Admin UI shows the "<X>" stat` (j12).
+  // Mirrors Android sibling #764. Foundation: presence-check on
+  // `adminStat_*` XCUITest identifier PREFIX. Both args (_viewer,
+  // _statName) accepted-and-ignored.
+  driver.iosAdminShowsStat = async (_viewer, _statName) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="adminStat_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   driver.close = async () => {
     /* devicectl is stateless; nothing to release */
   };

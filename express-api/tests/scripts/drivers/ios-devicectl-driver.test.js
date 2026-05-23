@@ -517,6 +517,161 @@ describe('ios-devicectl-driver — iosAdminShowsDashboardCounters', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosAdminShowsStat', () => {
+  // Wake 106 — `<Name>'s <Plat> Admin UI shows the "<X>" stat` (j12).
+  // Mirrors Android PR #764. Foundation: presence-check on
+  // `adminStat_*` XCUITest identifier PREFIX.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('adminStat_dailyActiveUsers present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminStat_dailyActiveUsers" />',
+    );
+    expect(await driver.iosAdminShowsStat('Mod', 'Daily Active Users')).toBe(true);
+  });
+
+  test('adminStat_reportsResolved present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminStat_reportsResolved" />',
+    );
+    expect(await driver.iosAdminShowsStat('Mod', 'Reports Resolved Today')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosAdminShowsStat('Mod', 'X')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosAdminShowsStat('Mod', 'X')).toBe(false);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminStat_dailyActiveUsers"><XCUIElementTypeStaticText name="1234" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosAdminShowsStat('Mod', 'X')).toBe(true);
+  });
+
+  test('left-boundary — pre_adminStat_X does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="pre_adminStat_dailyActiveUsers" />',
+    );
+    expect(await driver.iosAdminShowsStat('Mod', 'X')).toBe(false);
+  });
+
+  test('right-boundary — adminStat_dailyActiveUsersExtra still matches', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminStat_dailyActiveUsersExtra" />',
+    );
+    expect(await driver.iosAdminShowsStat('Mod', 'X')).toBe(true);
+  });
+
+  test('confusable prefix — admin_statSummary does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="admin_statSummary" />');
+    expect(await driver.iosAdminShowsStat('Mod', 'X')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther name="adminStat_dailyActiveUsers" />',
+    );
+    expect(await driver.iosAdminShowsStat('Mod', 'X')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosAdminShowsStat('Mod', 'X')).rejects.toThrow();
+  });
+
+  test('viewer accepted-and-ignored — Bea passes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminStat_dailyActiveUsers" />',
+    );
+    expect(await driver.iosAdminShowsStat('Bea', 'X')).toBe(true);
+  });
+
+  test('null viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminStat_dailyActiveUsers" />',
+    );
+    expect(await driver.iosAdminShowsStat(null, 'X')).toBe(true);
+  });
+
+  test('undefined viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminStat_dailyActiveUsers" />',
+    );
+    expect(await driver.iosAdminShowsStat(undefined, 'X')).toBe(true);
+  });
+
+  test('empty viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminStat_dailyActiveUsers" />',
+    );
+    expect(await driver.iosAdminShowsStat('', 'X')).toBe(true);
+  });
+
+  test('whitespace viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminStat_dailyActiveUsers" />',
+    );
+    expect(await driver.iosAdminShowsStat('   ', 'X')).toBe(true);
+  });
+
+  test('null statName → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminStat_dailyActiveUsers" />',
+    );
+    expect(await driver.iosAdminShowsStat('Mod', null)).toBe(true);
+  });
+
+  test('undefined statName → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminStat_dailyActiveUsers" />',
+    );
+    expect(await driver.iosAdminShowsStat('Mod', undefined)).toBe(true);
+  });
+
+  test('empty statName → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminStat_dailyActiveUsers" />',
+    );
+    expect(await driver.iosAdminShowsStat('Mod', '')).toBe(true);
+  });
+
+  test('whitespace statName → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminStat_dailyActiveUsers" />',
+    );
+    expect(await driver.iosAdminShowsStat('Mod', '   ')).toBe(true);
+  });
+
+  test('different statName still passes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminStat_dailyActiveUsers" />',
+    );
+    expect(await driver.iosAdminShowsStat('Mod', 'Some Other Stat')).toBe(true);
+  });
+
+  test('first-match contract — two adminStat_* nodes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="adminStat_dailyActiveUsers" />' +
+        '<XCUIElementTypeOther identifier="adminStat_reportsResolved" />',
+    );
+    expect(await driver.iosAdminShowsStat('Mod', 'X')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't
