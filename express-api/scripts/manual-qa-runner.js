@@ -6097,13 +6097,17 @@ const matchers = [
   {
     // Approve seat request composite (j09 host). Driver locates the
     // seat-request notification for the named user and taps approve.
+    // Driver contract is `(host, requester)` — matches Wake 86's
+    // canonical "approves" phrasing at line 9753 to keep both step
+    // forms consistent under the same driver method.
     pattern: /^([A-Z][a-z]+)\s+on Android\s+taps approve on ([A-Z][a-z]+)'s seat request$/,
     async handler(m, ctx) {
+      const host = m[1];
       const requester = m[2];
       if (!ctx.uiDriver?.androidApproveSeatRequest) {
         return { ok: false, error: 'ctx.uiDriver.androidApproveSeatRequest not configured' };
       }
-      await ctx.uiDriver.androidApproveSeatRequest(requester);
+      await ctx.uiDriver.androidApproveSeatRequest(host, requester);
       return { ok: true };
     },
   },

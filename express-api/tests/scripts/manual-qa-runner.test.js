@@ -9871,7 +9871,12 @@ describe('Approve seat request composite', () => {
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(spy).toHaveBeenCalledWith('Ines');
+    // Updated PR #766: driver contract is now `(host, requester)` to
+    // match Wake 86's canonical "approves" phrasing. Previously
+    // asserted the requester only — the host was dropped on the
+    // floor, which would mask a regression when per-requester
+    // approval lands.
+    expect(spy).toHaveBeenCalledWith('Theo', 'Ines');
   });
 });
 
