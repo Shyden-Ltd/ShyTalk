@@ -19652,6 +19652,187 @@ describe('Wake 93 — `OR within Nms <Name>\'s <Plat> UI shows a "<X>" toast and
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/toast|nav/);
   });
+
+  test('iOS Sim no driver → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'OR within 3000ms Bao\'s iOS Sim UI shows a "X" toast and navigates back to "/y"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsToastAndNavigates/);
+  });
+
+  // Android — full 3-test set
+  test('Android matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { androidShowsToastAndNavigates: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'OR within 3000ms Theo\'s Android UI shows a "Closed" toast and navigates back to "/rooms"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Theo', 'Closed', '/rooms', 3000);
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsToastAndNavigates: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'OR within 3000ms Theo\'s Android UI shows a "Closed" toast and navigates back to "/rooms"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/toast|nav/);
+  });
+
+  test('Android no driver → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'OR within 3000ms Theo\'s Android UI shows a "Closed" toast and navigates back to "/rooms"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsToastAndNavigates/);
+  });
+
+  // Web — full 3-test set
+  test('Web matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsToastAndNavigates: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'OR within 3000ms Alice\'s Web UI shows a "Closed" toast and navigates back to "/rooms"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'Closed', '/rooms', 3000);
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsToastAndNavigates: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'OR within 3000ms Alice\'s Web UI shows a "Closed" toast and navigates back to "/rooms"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/toast|nav/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'OR within 3000ms Alice\'s Web UI shows a "Closed" toast and navigates back to "/rooms"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsToastAndNavigates/);
+  });
+
+  // Web Chromium variant
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsToastAndNavigates: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'OR within 3000ms Alice\'s Web Chromium UI shows a "Closed" toast and navigates back to "/rooms"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'Closed', '/rooms', 3000);
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsToastAndNavigates: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'OR within 3000ms Alice\'s Web Chromium UI shows a "Closed" toast and navigates back to "/rooms"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/toast|nav/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'OR within 3000ms Alice\'s Web Chromium UI shows a "Closed" toast and navigates back to "/rooms"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsToastAndNavigates/);
+  });
+
+  // Web Safari variant
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsToastAndNavigates: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'OR within 3000ms Alice\'s Web Safari UI shows a "Closed" toast and navigates back to "/rooms"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'Closed', '/rooms', 3000);
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsToastAndNavigates: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'OR within 3000ms Alice\'s Web Safari UI shows a "Closed" toast and navigates back to "/rooms"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/toast|nav/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'OR within 3000ms Alice\'s Web Safari UI shows a "Closed" toast and navigates back to "/rooms"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsToastAndNavigates/);
+  });
 });
 
 describe('Wake 93 — "the PM does NOT render in English even if <Sender>\'s locale is en"', () => {

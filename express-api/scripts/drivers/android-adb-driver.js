@@ -1935,6 +1935,26 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 93 — `OR within Nms <Name>'s <Plat> UI shows a "<X>" toast
+  // and navigates back to "<Y>"` (j10:36). Alternate-outcome step.
+  // Driver receives `(name, toast, route, timeout)`.
+  //
+  // Foundation strategy: presence-check on the `toastWithRoute_*`
+  // testTag PREFIX. No `toastWithRoute_*` testTag exists in
+  // shared/src/commonMain yet — toast-with-navigation combination is
+  // unbuilt. Returns false in real journeys today; lands true when
+  // ships with toastWithRoute_text / toastWithRoute_destination etc.
+  //
+  // Per-toast / per-route / timeout verification deferred. All 4 args
+  // (_name, _toast, _route, _timeout) accepted-and-ignored.
+  driver.androidShowsToastAndNavigates = async (_name, _toast, _route, _timeout) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?toastWithRoute_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const NOUN_KIND_TAGS = {
     'appeal::button': 'suspension_submitAppealButton',
   };
