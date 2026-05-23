@@ -8591,3 +8591,258 @@ describe('android-adb-driver — androidShowsWelcomePmInLanguage', () => {
     expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidSubmitStarFeedback', () => {
+  // Wake 87 — `<Name> on <Plat> selects N stars and submits feedback "<X>"`
+  // (j17:60). Composite rating-action: pick N stars + type feedback + submit.
+  // Driver receives `(name, stars, feedback)`.
+  //
+  // Foundation strategy: presence-check on the `feedbackScreen_*` testTag
+  // PREFIX. The current app has no rating/feedback screen in
+  // shared/src/commonMain (no RatingScreen.kt / FeedbackScreen.kt files),
+  // so this method returns false in real journeys today. When the screen
+  // ships with `feedbackScreen_starRow` / `feedbackScreen_inputText` /
+  // `feedbackScreen_submitButton` testTags, this stays sound — the
+  // wildcard prefix match will land.
+  //
+  // Per-element action body (tap N-th star + type feedback + tap submit)
+  // is deferred until per-element testTags exist. The (name, stars,
+  // feedback) args are accepted-and-ignored.
+  //
+  // Shell-escape note (feedback-adb-shell-escape-pattern.md): when the
+  // real action ships, the `feedback` text MUST POSIX-escape `'` before
+  // any adb-shell interpolation. The foundation does not call adb with
+  // free-form text, so the vulnerability surface is currently empty.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('feedbackScreen_starRow present + stars=5 + feedback → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 5, 'Bao explained tones clearly')).toBe(
+      true,
+    );
+  });
+
+  test('feedbackScreen_inputText present + stars=4 → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_inputText" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 4, 'good')).toBe(true);
+  });
+
+  test('feedbackScreen_submitButton present + stars=1 → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_submitButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 1, 'meh')).toBe(true);
+  });
+
+  test('no feedbackScreen_* tag (wrong screen) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 5, 'good')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 5, 'good')).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 5, 'good')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_starRow"><node text="★" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 5, 'good')).toBe(true);
+  });
+
+  test('left-boundary false-positive — pre_feedbackScreen_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 5, 'good')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_feedbackScreen_starRow does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 5, 'good')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 5, 'good')).toBe(false);
+  });
+
+  test('persona name ignored — Bea also passes when screen present', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Bea', 5, 'good')).toBe(true);
+  });
+
+  test('null name → true (name accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback(null, 5, 'good')).toBe(true);
+  });
+
+  test('undefined name → true (name accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback(undefined, 5, 'good')).toBe(true);
+  });
+
+  test('null stars → true (stars accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', null, 'good')).toBe(true);
+  });
+
+  test('undefined stars → true (stars accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', undefined, 'good')).toBe(true);
+  });
+
+  test('0 stars → true (stars accepted-and-ignored regardless of value)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 0, 'good')).toBe(true);
+  });
+
+  test('null feedback → true (feedback accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 5, null)).toBe(true);
+  });
+
+  test('undefined feedback → true (feedback accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 5, undefined)).toBe(true);
+  });
+
+  test('empty feedback → true (feedback accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 5, '')).toBe(true);
+  });
+
+  test("feedback with apostrophe — doesn't corrupt the call (foundation does not interpolate)", async () => {
+    // Foundation contract pin: when the real action ships (tap + type +
+    // submit), the feedback text MUST POSIX-escape `'` before any
+    // adb-shell interpolation (feedback-adb-shell-escape-pattern.md).
+    // Today the foundation never passes feedback to adb, so the surface
+    // is empty — but this pin guards against a future refactor adding
+    // unescaped interpolation that would break for apostrophe-laden
+    // input ("Bao's tones were great").
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 5, "Bao's tones were great")).toBe(true);
+  });
+
+  test('any feedbackScreen_* suffix matches — prefix contract', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_unknownSuffix_xyz" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 5, 'good')).toBe(true);
+  });
+
+  test('first-match contract — two feedbackScreen_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_starRow" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_submitButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('Yuki', 5, 'good')).toBe(true);
+  });
+});

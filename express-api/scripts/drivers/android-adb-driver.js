@@ -1364,6 +1364,34 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 87 — `<Name> on <Plat> selects N stars and submits feedback "<X>"`
+  // (j17:60). Composite rating-action: pick N stars + type feedback + submit.
+  //
+  // Foundation strategy: presence-check on the `feedbackScreen_*` testTag
+  // PREFIX. The current app has NO rating/feedback screen in
+  // shared/src/commonMain (no RatingScreen.kt / FeedbackScreen.kt files),
+  // so this method returns false in real journeys today. When the screen
+  // ships with `feedbackScreen_starRow` / `feedbackScreen_inputText` /
+  // `feedbackScreen_submitButton` testTags, this stays sound — the
+  // wildcard prefix match (`feedbackScreen_[^"]*`) will land.
+  //
+  // Per-element action body (tap N-th star + type feedback into input +
+  // tap submit) is deferred until per-element testTags exist. The (name,
+  // stars, feedback) args are accepted-and-ignored.
+  //
+  // Shell-escape note: when the real action ships, the `feedback` text
+  // MUST POSIX-escape `'` before any adb-shell interpolation (per the
+  // pattern fixed in PR #741 for free-form-text driver methods). The
+  // foundation does not call adb with free-form text, so the
+  // shell-injection surface is currently empty.
+  driver.androidSubmitStarFeedback = async (_name, _stars, _feedback) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?feedbackScreen_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
