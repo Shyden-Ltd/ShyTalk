@@ -1392,6 +1392,47 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 89 — `<Name> on <Plat> taps the <X> from the <Y>` (j16:24).
+  // Composite tap-from-surface action. Driver receives `(name, target,
+  // source)` — locate surface Y, scope to target X within it.
+  //
+  // Foundation strategy: SURFACE_TARGET_TAGS scaffold keyed by lowercase
+  // `${source}::${target}` → Compose testTag. ONE mapping is grounded
+  // in the journey corpus (j16:48):
+  //
+  //   'invite banner::event-room link' → 'inviteBanner_eventRoomLink'
+  //
+  // The `inviteBanner_*` testTag does NOT yet exist in
+  // shared/src/commonMain (no banner with this testTag in any current
+  // composable). So this method returns false in real journeys today.
+  // When the surface ships with that testTag, this stays sound — the
+  // exact-match lookup will land.
+  //
+  // FAIL-loud contract: unmapped source OR target returns false
+  // (consistent with INPUT_TAGS / TABLE_TAGS / SEARCH_FIELD_TAGS /
+  // PATH_TAGS / ROW_COUNT_TABLE_TAGS scaffolds). A journey author
+  // writing an unmapped surface gets a clear FAIL instead of a silent
+  // pass against an unrelated node.
+  //
+  // Per-element action body (tap the resolved testTag's bounds) is
+  // deferred until the testTag exists in the dump. The `_name` arg
+  // is accepted-and-ignored.
+  const SURFACE_TARGET_TAGS = {
+    'invite banner::event-room link': 'inviteBanner_eventRoomLink',
+  };
+  driver.androidTapFromSurface = async (_name, target, source) => {
+    if (!target || !target.trim()) return false;
+    if (!source || !source.trim()) return false;
+    const key = `${source.toLowerCase()}::${target.toLowerCase()}`;
+    const tag = SURFACE_TARGET_TAGS[key];
+    if (!tag) return false;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${tag}"[^>]*\\/?>`);
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

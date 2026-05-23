@@ -8870,3 +8870,310 @@ describe('android-adb-driver — androidSubmitStarFeedback', () => {
     expect(await driver.androidSubmitStarFeedback('Yuki', 5, 'good')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidTapFromSurface', () => {
+  // Wake 89 — `<Name> on <Plat> taps the <X> from the <Y>` (j16:24).
+  // Composite tap-from-surface action. Driver receives
+  // `(name, target, source)` — locate surface Y, scope to target X
+  // within it.
+  //
+  // Foundation strategy: SURFACE_TARGET_TAGS scaffold keyed by
+  // lowercase `${source}::${target}` → Compose testTag. Currently
+  // ONE mapping is grounded in the journey corpus (j16:48):
+  //
+  //   'invite banner::event-room link' → 'inviteBanner_eventRoomLink'
+  //
+  // The `inviteBanner_*` testTag does NOT yet exist in
+  // shared/src/commonMain — the invite-banner surface is unbuilt.
+  // So this method returns false in real journeys today. When the
+  // surface ships, this stays sound — the testTag will land.
+  //
+  // FAIL-loud contract: unmapped source OR target returns false
+  // (consistent with INPUT_TAGS / TABLE_TAGS / SEARCH_FIELD_TAGS /
+  // PATH_TAGS scaffolds). A journey author writing an unmapped
+  // surface gets a clear FAIL.
+  //
+  // Per-element action body (tap the resolved testTag's bounds) is
+  // deferred until the testTag exists in the dump. The `_name` arg
+  // is accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('mapped surface+target tag present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/inviteBanner_eventRoomLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'event-room link', 'invite banner')).toBe(
+      true,
+    );
+  });
+
+  test('mapped surface+target tag ABSENT (surface not visible) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'event-room link', 'invite banner')).toBe(
+      false,
+    );
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'event-room link', 'invite banner')).toBe(
+      false,
+    );
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'event-room link', 'invite banner')).toBe(
+      false,
+    );
+  });
+
+  test('unmapped source "footer" → false (FAIL-loud)', async () => {
+    // FAIL-loud: a journey author writing "taps the X from the footer"
+    // gets a clear FAIL when no footer surface is mapped.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/inviteBanner_eventRoomLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'event-room link', 'footer')).toBe(false);
+  });
+
+  test('unmapped target "skip link" → false (FAIL-loud)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/inviteBanner_eventRoomLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'skip link', 'invite banner')).toBe(false);
+  });
+
+  test('mapped source + unmapped target → false (composite key miss)', async () => {
+    // Pin: even though "invite banner" alone is mapped, a target
+    // OTHER than "event-room link" in that surface returns false
+    // because the composite key doesn't exist.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/inviteBanner_eventRoomLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'dismiss button', 'invite banner')).toBe(
+      false,
+    );
+  });
+
+  test('empty target → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', '', 'invite banner')).toBe(false);
+  });
+
+  test('whitespace-only target → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', '   ', 'invite banner')).toBe(false);
+  });
+
+  test('null target → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', null, 'invite banner')).toBe(false);
+  });
+
+  test('undefined target → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', undefined, 'invite banner')).toBe(false);
+  });
+
+  test('empty source → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'event-room link', '')).toBe(false);
+  });
+
+  test('whitespace-only source → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'event-room link', '   ')).toBe(false);
+  });
+
+  test('null source → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'event-room link', null)).toBe(false);
+  });
+
+  test('undefined source → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'event-room link', undefined)).toBe(false);
+  });
+
+  test('case-insensitive lookup — UPPERCASE source/target still resolves', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/inviteBanner_eventRoomLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'EVENT-ROOM LINK', 'INVITE BANNER')).toBe(
+      true,
+    );
+  });
+
+  test('mixed-case lookup — Invite Banner + Event-Room Link still resolves', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/inviteBanner_eventRoomLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'Event-Room Link', 'Invite Banner')).toBe(
+      true,
+    );
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="inviteBanner_eventRoomLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'event-room link', 'invite banner')).toBe(
+      true,
+    );
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/inviteBanner_eventRoomLink"><node text="Join now" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'event-room link', 'invite banner')).toBe(
+      true,
+    );
+  });
+
+  test('left-boundary false-positive — pre_inviteBanner_eventRoomLink_x does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_inviteBanner_eventRoomLink_x" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'event-room link', 'invite banner')).toBe(
+      false,
+    );
+  });
+
+  test('right-boundary false-positive — inviteBanner_eventRoomLink_extra does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/inviteBanner_eventRoomLink_extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'event-room link', 'invite banner')).toBe(
+      false,
+    );
+  });
+
+  test('bare left-boundary no suffix — pre_inviteBanner_eventRoomLink does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_inviteBanner_eventRoomLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'event-room link', 'invite banner')).toBe(
+      false,
+    );
+  });
+
+  test('persona name ignored — Bea also passes when surface+target visible', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/inviteBanner_eventRoomLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Bea', 'event-room link', 'invite banner')).toBe(
+      true,
+    );
+  });
+
+  test('null name → true (name accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/inviteBanner_eventRoomLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface(null, 'event-room link', 'invite banner')).toBe(true);
+  });
+
+  test('undefined name → true (name accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/inviteBanner_eventRoomLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface(undefined, 'event-room link', 'invite banner')).toBe(
+      true,
+    );
+  });
+
+  test('empty name → true (name accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/inviteBanner_eventRoomLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('', 'event-room link', 'invite banner')).toBe(true);
+  });
+
+  test('whitespace-only name → true (name accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/inviteBanner_eventRoomLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('   ', 'event-room link', 'invite banner')).toBe(
+      true,
+    );
+  });
+
+  test('first-match contract — two inviteBanner_eventRoomLink nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/inviteBanner_eventRoomLink" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/inviteBanner_eventRoomLink" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidTapFromSurface('Selma', 'event-room link', 'invite banner')).toBe(
+      true,
+    );
+  });
+});
