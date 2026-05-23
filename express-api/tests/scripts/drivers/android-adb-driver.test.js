@@ -4556,3 +4556,202 @@ describe('android-adb-driver — androidScanAllRenderedStrings', () => {
     expect(result).toEqual(['he said &quot;hi&quot; today']);
   });
 });
+
+describe('android-adb-driver — androidJoinEventRoom', () => {
+  // Composite matcher Wake 86-ish — two personas "both join the
+  // event room" via Promise.all. Each platform's driver receives
+  // just the persona name and is responsible for joining whatever
+  // room is currently visible (the journey orchestrator ensures
+  // only the event room is in the list at this point).
+  //
+  // Foundation strategy: tap the FIRST `roomList_roomCard_*` node
+  // found in the current uiautomator dump. This is the cluster's
+  // first method that uses a PARAMETERISED testTag prefix-match
+  // (vs. exact-match for INPUT_TAGS / TABLE_TAGS lookups).
+  //
+  // Compose source: HomeScreen.kt:155 attaches
+  // `roomList_roomCard_${room.roomId}` to each visible room card.
+  // The wildcard suffix is matched via `[^"]*` in the regex.
+  //
+  // If no room card is visible (empty rooms tab, or admin on a
+  // different tab), returns false — the journey author gets a
+  // clear FAIL.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('package-qualified roomCard present → tap centre + return true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('roomList_roomCard_abc123', '[0,200][1000,400]'),
+    });
+    const driver = await createAndroidDriver();
+    const ok = await driver.androidJoinEventRoom('Alice');
+    expect(ok).toBe(true);
+    // bounds [0,200][1000,400] → centre (500, 300)
+    const tapCall = execSync.mock.calls.find((c) => c[0].includes("'input' 'tap'"));
+    expect(tapCall).toBeDefined();
+    expect(tapCall[0]).toContain("'500'");
+    expect(tapCall[0]).toContain("'300'");
+  });
+
+  test('bare roomCard (no package prefix) → tap + return true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="roomList_roomCard_xyz" bounds="[10,20][30,40]" />',
+    });
+    const driver = await createAndroidDriver();
+    const ok = await driver.androidJoinEventRoom('Alice');
+    expect(ok).toBe(true);
+  });
+
+  test('multiple roomCards present → first wins', async () => {
+    // Pin the first-match contract: with two roomCards visible,
+    // the driver taps the first one in document order. The
+    // journey orchestrator is responsible for ensuring only the
+    // intended room is visible, but pin the contract anyway.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomList_roomCard_first" bounds="[0,200][1000,400]" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/roomList_roomCard_second" bounds="[0,500][1000,700]" />',
+    });
+    const driver = await createAndroidDriver();
+    const ok = await driver.androidJoinEventRoom('Alice');
+    expect(ok).toBe(true);
+    const tapCall = execSync.mock.calls.find((c) => c[0].includes("'input' 'tap'"));
+    // First roomCard centre: (500, 300)
+    expect(tapCall[0]).toContain("'500'");
+    expect(tapCall[0]).toContain("'300'");
+    // Second roomCard centre would be (500, 600) — must NOT be the tap target
+    expect(tapCall[0]).not.toContain("'600'");
+  });
+
+  test('no roomCard in dump (empty rooms list) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomList_emptyState" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidJoinEventRoom('Alice')).toBe(false);
+  });
+
+  test('roomCard present but no bounds attribute → false', async () => {
+    // Defensive — if uiautomator emits a roomCard without bounds
+    // (theoretically impossible per its schema but pinnable), the
+    // regex bounds-capture fails to match.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomList_roomCard_abc" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidJoinEventRoom('Alice')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidJoinEventRoom('Alice')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidJoinEventRoom('Alice')).toBe(false);
+  });
+
+  test('tap fails (input tap throws) → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) return '';
+      if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
+        return '<node resource-id="com.shyden.shytalk.local:id/roomList_roomCard_abc" bounds="[0,200][1000,400]" />';
+      }
+      if (cmd.includes("'input' 'tap'")) throw new Error('adb: device unauthorised');
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidJoinEventRoom('Alice')).toBe(false);
+  });
+
+  test('left-boundary false-positive guarded — pre_roomList_roomCard_x does NOT match', async () => {
+    // Same boundary-anchor discipline as the assertion methods.
+    // The regex requires `roomList_roomCard_` to be at the start
+    // of the attribute value (modulo the optional package prefix).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="pre_roomList_roomCard_x" bounds="[0,200][1000,400]" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidJoinEventRoom('Alice')).toBe(false);
+  });
+
+  test('package-qualified left-boundary guarded — :id/pre_roomList_roomCard_x does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_roomList_roomCard_x" bounds="[0,200][1000,400]" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidJoinEventRoom('Alice')).toBe(false);
+  });
+
+  test('persona name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('roomList_roomCard_abc', '[0,200][1000,400]'),
+    });
+    const driver = await createAndroidDriver();
+    const okAlice = await driver.androidJoinEventRoom('Alice');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('roomList_roomCard_abc', '[0,200][1000,400]'),
+    });
+    const driver2 = await createAndroidDriver();
+    const okBob = await driver2.androidJoinEventRoom('Bob');
+
+    expect(okAlice).toBe(true);
+    expect(okBob).toBe(true);
+  });
+
+  test('non-self-closing roomCard tag form → tap + return true', async () => {
+    // uiautomator can emit roomCards as non-self-closing nodes
+    // with children. The regex `[^>]*` correctly bounds within
+    // the outer node's opening tag.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomList_roomCard_abc" bounds="[0,200][1000,400]"><node text="Room title" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    const ok = await driver.androidJoinEventRoom('Alice');
+    expect(ok).toBe(true);
+  });
+
+  test('roomCard with parameterised ID containing digits and dashes → match', async () => {
+    // Realistic Firestore-style room ID: 20-char alphanumeric with
+    // hyphens. The `[^"]*` wildcard suffix matches any such ID.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomList_roomCard_abc123-XYZ_456" bounds="[0,200][1000,400]" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidJoinEventRoom('Alice')).toBe(true);
+  });
+});

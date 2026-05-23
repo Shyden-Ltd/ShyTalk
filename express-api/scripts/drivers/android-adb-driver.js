@@ -834,6 +834,35 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return [...collected];
   };
 
+  // Composite matcher Wake 86-ish — "<P1> on <plat1> and <P2> on
+  // <plat2> both join the event room". Each platform's driver
+  // receives just the persona name and joins whatever room is
+  // currently visible (the journey orchestrator ensures only the
+  // event room is in the list at this point).
+  //
+  // Foundation strategy: tap the FIRST `roomList_roomCard_*` node
+  // found in the current uiautomator dump. This is the cluster's
+  // first method using a PARAMETERISED testTag prefix-match
+  // (vs. exact-match for INPUT_TAGS / TABLE_TAGS lookups). The
+  // `[^"]*` wildcard suffix matches any room-id (Firestore-style
+  // alphanumeric+hyphens) attached by HomeScreen.kt:155.
+  //
+  // If no room card is visible (empty rooms tab, or actor on a
+  // different tab), returns false — the journey author gets a
+  // clear FAIL.
+  driver.androidJoinEventRoom = async (_name) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const rx =
+      /<node[^>]*resource-id="(?:[^"]*:id\/)?roomList_roomCard_[^"]*"[^<]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/;
+    const m = dump.match(rx);
+    if (!m) return false;
+    const cx = Math.round((Number(m[1]) + Number(m[3])) / 2);
+    const cy = Math.round((Number(m[2]) + Number(m[4])) / 2);
+    return await driver.androidTap(cx, cy);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
