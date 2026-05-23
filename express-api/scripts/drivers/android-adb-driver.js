@@ -1293,6 +1293,28 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 105 — `<Name>'s Android UI shows the system PM from
+  // Officia` (j11 — system-message visibility from the "Officia"
+  // official sender). Single-arg.
+  //
+  // Foundation strategy: presence-check the conversation thread is
+  // open (privateChat_messageInput testTag PRESENT). Same shape as
+  // PRs #748, #752, #754.
+  //
+  // The "system PM from Officia" semantic is journey-orchestrated
+  // — no per-sender testTag or official-badge classifier exists in
+  // uiautomator dumps today. The journey ensures the test only
+  // fires after the system PM is in the active thread. A future
+  // PR could layer per-message verification once Compose ships
+  // sender-tagged messages.
+  driver.androidShowsSystemPmFromOfficia = async (_name) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

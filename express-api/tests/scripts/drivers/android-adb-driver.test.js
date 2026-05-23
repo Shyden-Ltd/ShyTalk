@@ -8036,3 +8036,154 @@ describe('android-adb-driver — androidShowsContributorsList', () => {
     expect(await driver.androidShowsContributorsList('Selma')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsSystemPmFromOfficia', () => {
+  // Wake 105 matcher — `<Name>'s Android UI shows the system PM
+  // from Officia` (j11 — system-message visibility from the
+  // "Officia" official sender). Single-arg.
+  //
+  // Foundation strategy: presence-check the conversation thread
+  // is open (privateChat_messageInput testTag PRESENT). Same shape
+  // as PRs #748, #752, #754.
+  //
+  // The "system PM from Officia" semantic is journey-orchestrated
+  // — no per-sender testTag or official-badge classifier exists in
+  // uiautomator dumps today. The journey ensures the test only
+  // fires after the system PM is in the active thread. A future
+  // PR could layer per-message verification once Compose ships
+  // sender-tagged messages.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('privateChat_messageInput present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSystemPmFromOfficia('Selma')).toBe(true);
+  });
+
+  test('privateChat_messageInput absent (wrong screen) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSystemPmFromOfficia('Selma')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSystemPmFromOfficia('Selma')).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSystemPmFromOfficia('Selma')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput"><node text="Welcome from Officia" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSystemPmFromOfficia('Selma')).toBe(true);
+  });
+
+  test('left-boundary false-positive — pre_privateChat_messageInput_x does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_privateChat_messageInput_x" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSystemPmFromOfficia('Selma')).toBe(false);
+  });
+
+  test('right-boundary false-positive — privateChat_messageInput_extra does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput_extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSystemPmFromOfficia('Selma')).toBe(false);
+  });
+
+  test('package-qualified left-boundary — :id/pre_privateChat_messageInput does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSystemPmFromOfficia('Selma')).toBe(false);
+  });
+
+  test('bare left-boundary no suffix — pre_privateChat_messageInput does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSystemPmFromOfficia('Selma')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSystemPmFromOfficia('Selma')).toBe(false);
+  });
+
+  test('persona name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    const okSelma = await driver.androidShowsSystemPmFromOfficia('Selma');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okBea = await driver2.androidShowsSystemPmFromOfficia('Bea');
+
+    expect(okSelma).toBe(true);
+    expect(okBea).toBe(true);
+  });
+
+  test('first-match contract — two privateChat_messageInput nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSystemPmFromOfficia('Selma')).toBe(true);
+  });
+});
