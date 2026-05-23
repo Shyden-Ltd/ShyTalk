@@ -7384,4 +7384,20 @@ describe('android-adb-driver — androidShowsInThread', () => {
     const driver = await createAndroidDriver();
     expect(await driver.androidShowsInThread('Selma', 'edit', '')).toBe(true);
   });
+
+  test('undefined suffix → true (suffix accepted-and-ignored regardless of value)', async () => {
+    // Round 1 pin: the runner at manual-qa-runner.js:12069 normalises
+    // `suffix = m[4] || ''` so undefined never reaches the driver
+    // from valid Gherkin. But the foundation contract is "suffix is
+    // ignored regardless of value" — pin that explicitly. Consistent
+    // with the seatNum=0 pin in PR #746 (extends accept-and-ignore
+    // across the full value domain for ignored args).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInThread('Selma', 'message', undefined)).toBe(true);
+  });
 });
