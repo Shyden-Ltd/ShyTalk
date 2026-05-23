@@ -1510,6 +1510,29 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 103 — `<Name>'s <Plat> UI also shows <Other> in the participants
+  // list` (j09). Voice-room session — confirms <Other> is visible in
+  // <Name>'s participants list (multi-actor session sanity).
+  //
+  // Foundation strategy: presence-check on the `participantsList_*`
+  // testTag PREFIX. No `participantsList_*` testTag exists in
+  // shared/src/commonMain — voice-room participant rendering uses
+  // SeatItem.kt's `room_requestSeatButton` / `room_seatGrid` (without a
+  // participants-list testTag family). Returns false in real journeys
+  // today; lands true when participantsList_* testTags ship.
+  //
+  // Both args (_viewer, _other) accepted-and-ignored. Per-participant
+  // verification (asserting THIS specific user is in the list, not just
+  // "any participant tile is visible") needs a participant-id → testTag
+  // map (similar to the SURFACE_TARGET_TAGS scaffold in #760).
+  driver.androidAlsoShowsInParticipantsList = async (_viewer, _other) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?participantsList_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

@@ -10045,3 +10045,249 @@ describe('android-adb-driver — androidAdminShowsStat', () => {
     expect(await driver.androidAdminShowsStat('Mod', 'Daily Active Users')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidAlsoShowsInParticipantsList', () => {
+  // Wake 103 — `<Name>'s <Plat> UI also shows <Other> in the participants
+  // list` (j09). Voice-room session — confirms <Other> is visible in the
+  // viewer's participants list (multi-actor session sanity).
+  //
+  // Foundation strategy: presence-check on the `participantsList_*`
+  // testTag PREFIX. The current app has NO `participantsList_*` testTag
+  // in shared/src/commonMain — voice-room participant rendering uses
+  // SeatItem.kt's `room_requestSeatButton` and `room_seatGrid` (without
+  // a participants-list testTag family). Returns false in real journeys
+  // today; lands true when participantsList_* testTags ship.
+  //
+  // Both args (_viewer, _other) accepted-and-ignored. Per-participant
+  // verification (asserting THIS specific user is in the list, not just
+  // "any participant tile is visible") needs a participant-id → testTag
+  // map (similar to SURFACE_TARGET_TAGS in #760).
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('participantsList_userTile present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_userTile" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(true);
+  });
+
+  test('participantsList_container present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(true);
+  });
+
+  test('absent (no participants surface) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="participantsList_userTile" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_userTile"><node text="Bao" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(true);
+  });
+
+  test('left-boundary — pre_participantsList_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_participantsList_userTile" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_participantsList_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_participantsList_userTile" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(false);
+  });
+
+  test('right-boundary — participantsList_userTileExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_userTileExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(true);
+  });
+
+  test('confusable prefix — participants_listItem does NOT match', async () => {
+    // Pin: left anchor is `participantsList_` literally, not the looser
+    // `participants_`. A hypothetical `participants_*` family must not
+    // false-match.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participants_listItem" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(false);
+  });
+
+  test('viewer name accepted-and-ignored — Ines passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_userTile" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Ines', 'Bao')).toBe(true);
+  });
+
+  test('null viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_userTile" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList(null, 'Bao')).toBe(true);
+  });
+
+  test('undefined viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_userTile" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList(undefined, 'Bao')).toBe(true);
+  });
+
+  test('empty viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_userTile" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('', 'Bao')).toBe(true);
+  });
+
+  test('whitespace viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_userTile" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('   ', 'Bao')).toBe(true);
+  });
+
+  test('null other → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_userTile" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', null)).toBe(true);
+  });
+
+  test('undefined other → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_userTile" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', undefined)).toBe(true);
+  });
+
+  test('empty other → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_userTile" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', '')).toBe(true);
+  });
+
+  test('whitespace other → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_userTile" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', '   ')).toBe(true);
+  });
+
+  test('different other still passes (foundation does not match specific user)', async () => {
+    // Per-user verification needs a participant-id → testTag map.
+    // Today the foundation matches ANY participantsList_* tag.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_userTile" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', 'NotInList')).toBe(true);
+  });
+
+  test('first-match contract — two participantsList_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_userTile" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/participantsList_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(true);
+  });
+});

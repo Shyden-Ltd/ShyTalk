@@ -20560,6 +20560,93 @@ describe('Wake 103 — "<Name>\'s <Plat> UI also shows <Other> in the participan
     expect(r.ok).toBe(true);
     expect(spy).toHaveBeenCalledWith('Alice', 'Ines');
   });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webAlsoShowsInParticipantsList: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web UI also shows Ines in the participants list" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Ines|participants list/i);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web UI also shows Ines in the participants list" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/webAlsoShowsInParticipantsList/);
+  });
+
+  // Android branch — routes to ctx.uiDriver.androidAlsoShowsInParticipantsList
+  test('Android matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { androidAlsoShowsInParticipantsList: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Android UI also shows Ines in the participants list" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'Ines');
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidAlsoShowsInParticipantsList: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Android UI also shows Ines in the participants list" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Ines|participants list/i);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Android UI also shows Ines in the participants list" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/androidAlsoShowsInParticipantsList/);
+  });
+
+  // iOS Sim branch — routes to ctx.uiDriver.iosAlsoShowsInParticipantsList
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosAlsoShowsInParticipantsList: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's iOS Sim UI also shows Ines in the participants list" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'Ines');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosAlsoShowsInParticipantsList: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's iOS Sim UI also shows Ines in the participants list" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Ines|participants list/i);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's iOS Sim UI also shows Ines in the participants list" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/iosAlsoShowsInParticipantsList/);
+  });
 });
 
 describe('Wake 103 — `<Name>\'s <Plat> UI shows mic icon as "<X>"`', () => {
