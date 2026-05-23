@@ -15474,3 +15474,251 @@ describe('android-adb-driver — androidShowsToastAndNavigatesBack', () => {
     expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', '/y')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsUserCard', () => {
+  // Wake 97 — `<Name>'s <Plat> UI shows <Other>'s user card` (j07).
+  // Inner step under `within Nms`. Bare user-card-visibility check.
+  // Driver receives `(viewer, target)`.
+  //
+  // Foundation strategy: presence-check on the `userCard_*` testTag
+  // PREFIX. No `userCard_*` testTag exists in shared/src/commonMain
+  // yet — user-card overlay is unbuilt. Returns false in real journeys
+  // today; lands true when ships with userCard_root / userCard_avatar
+  // etc.
+  //
+  // Per-user verification (asserting THIS specific user's card, not
+  // any card) needs user-id → testTag map. Deferred. Both args
+  // (_viewer, _target) accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('userCard_root present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_root" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', 'Bob')).toBe(true);
+  });
+
+  test('userCard_avatar present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_avatar" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', 'Bob')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', 'Bob')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', 'Bob')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="userCard_root" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', 'Bob')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_root"><node text="Bob" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', 'Bob')).toBe(true);
+  });
+
+  test('left-boundary — pre_userCard_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_userCard_root" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', 'Bob')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_userCard_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_userCard_root" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', 'Bob')).toBe(false);
+  });
+
+  test('right-boundary — userCard_rootExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_rootExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', 'Bob')).toBe(true);
+  });
+
+  test('confusable prefix — user_cardOther does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/user_cardOther" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', 'Bob')).toBe(false);
+  });
+
+  test('bare confusable prefix — user_cardOther does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="user_cardOther" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', 'Bob')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', 'Bob')).toBe(false);
+  });
+
+  test('viewer accepted-and-ignored — Bao passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_root" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Bao', 'Bob')).toBe(true);
+  });
+
+  test('null viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_root" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard(null, 'Bob')).toBe(true);
+  });
+
+  test('undefined viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_root" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard(undefined, 'Bob')).toBe(true);
+  });
+
+  test('empty viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_root" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('', 'Bob')).toBe(true);
+  });
+
+  test('whitespace viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_root" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('   ', 'Bob')).toBe(true);
+  });
+
+  test('null target → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_root" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', null)).toBe(true);
+  });
+
+  test('undefined target → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_root" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', undefined)).toBe(true);
+  });
+
+  test('empty target → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_root" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', '')).toBe(true);
+  });
+
+  test('whitespace target → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_root" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', '   ')).toBe(true);
+  });
+
+  test('different target still passes (foundation does not match specific user)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_root" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', 'NotInCard')).toBe(true);
+  });
+
+  test('first-match contract — two userCard_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_root" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_avatar" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCard('Alice', 'Bob')).toBe(true);
+  });
+});

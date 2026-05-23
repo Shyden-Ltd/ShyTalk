@@ -1975,6 +1975,26 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 97 — `<Name>'s <Plat> UI shows <Other>'s user card` (j07).
+  // Inner step under `within Nms`. Bare user-card-visibility check.
+  // Driver receives `(viewer, target)`.
+  //
+  // Foundation strategy: presence-check on the `userCard_*` testTag
+  // PREFIX. No `userCard_*` testTag exists in shared/src/commonMain
+  // yet — user-card overlay is unbuilt. Returns false in real journeys
+  // today; lands true when ships with userCard_root / userCard_avatar
+  // etc.
+  //
+  // Per-user verification needs user-id → testTag map. Deferred. Both
+  // args (_viewer, _target) accepted-and-ignored.
+  driver.androidShowsUserCard = async (_viewer, _target) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?userCard_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const NOUN_KIND_TAGS = {
     'appeal::button': 'suspension_submitAppealButton',
   };

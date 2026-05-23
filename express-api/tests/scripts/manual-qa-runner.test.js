@@ -20666,6 +20666,148 @@ describe('Wake 97 — "<Name>\'s <Plat> UI shows <Other>\'s user card"', () => {
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/Alice|card/);
   });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's Android UI shows Alice's user card" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsUserCard/);
+  });
+
+  // iOS Sim
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsUserCard: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's iOS Sim UI shows Alice's user card" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Adam', 'Alice');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsUserCard: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's iOS Sim UI shows Alice's user card" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|card/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's iOS Sim UI shows Alice's user card" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsUserCard/);
+  });
+
+  // Web
+  test('Web matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsUserCard: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's Web UI shows Alice's user card" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Adam', 'Alice');
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsUserCard: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's Web UI shows Alice's user card" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|card/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's Web UI shows Alice's user card" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsUserCard/);
+  });
+
+  // Web Chromium
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsUserCard: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's Web Chromium UI shows Alice's user card" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Adam', 'Alice');
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsUserCard: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's Web Chromium UI shows Alice's user card" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|card/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's Web Chromium UI shows Alice's user card" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsUserCard/);
+  });
+
+  // Web Safari
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsUserCard: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's Web Safari UI shows Alice's user card" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Adam', 'Alice');
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsUserCard: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's Web Safari UI shows Alice's user card" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|card/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's Web Safari UI shows Alice's user card" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsUserCard/);
+  });
 });
 
 describe('Wake 97 — "<Name>\'s <Plat> UI shows the warning banner overlay on top of the room"', () => {
