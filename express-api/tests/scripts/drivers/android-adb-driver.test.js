@@ -3665,6 +3665,52 @@ describe('android-adb-driver — androidAdminShowsNewReportInQueue', () => {
     expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(true);
   });
 
+  test('empty-state right-boundary — reportReview_emptyState_extra (bare) does NOT block', async () => {
+    // Round 1 I-1: extends the empty-state boundary matrix to match
+    // the list-tag coverage. A bare suffix-padded tag like
+    // `reportReview_emptyState_extra` shouldn't block the assertion
+    // when a real list is present.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node resource-id="reportReview_emptyState_extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(true);
+  });
+
+  test('empty-state right-boundary — :id/reportReview_emptyState_extra (package-qualified) does NOT block', async () => {
+    // Round 1 I-1: package-qualified right-boundary analog. The
+    // optional `(?:[^"]*:id/)?` group consumes the prefix, leaving
+    // `reportReview_emptyState_extra"` to be matched against the
+    // literal `reportReview_emptyState"` — the closing `"` anchor
+    // rejects the `_extra` suffix.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_emptyState_extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(true);
+  });
+
+  test('empty-state package-qualified left-boundary — :id/pre_reportReview_emptyState does NOT block', async () => {
+    // Round 1 I-1: package-qualified analog of the existing
+    // bare-form pre_* pin. The optional group consumes the package
+    // prefix; the literal `reportReview_emptyState"` then fails
+    // against `pre_reportReview_emptyState"`.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/pre_reportReview_emptyState" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(true);
+  });
+
   test('uiautomator dump throws → false (not undefined)', async () => {
     execSync.mockImplementation((cmd) => {
       if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
