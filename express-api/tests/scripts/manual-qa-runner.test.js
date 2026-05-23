@@ -21176,6 +21176,201 @@ describe('Wake 103 — `<Name>\'s <Plat> UI shows the edited body "<X>" with an 
     expect(r.ok).toBe(true);
     expect(spy).toHaveBeenCalledWith('Alice', 'typo here', 'edited');
   });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsEditedBodyWithTag: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s Web UI shows the edited body "typo here" with an "edited" tag',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|edited|tag/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s Web UI shows the edited body "typo here" with an "edited" tag',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsEditedBodyWithTag/);
+  });
+
+  // Web Chromium variant — full 3-test set
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsEditedBodyWithTag: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s Web Chromium UI shows the edited body "typo here" with an "edited" tag',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'typo here', 'edited');
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsEditedBodyWithTag: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s Web Chromium UI shows the edited body "typo here" with an "edited" tag',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|edited|tag/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s Web Chromium UI shows the edited body "typo here" with an "edited" tag',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsEditedBodyWithTag/);
+  });
+
+  // Web Safari variant — full 3-test set
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsEditedBodyWithTag: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s Web Safari UI shows the edited body "typo here" with an "edited" tag',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'typo here', 'edited');
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsEditedBodyWithTag: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s Web Safari UI shows the edited body "typo here" with an "edited" tag',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|edited|tag/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s Web Safari UI shows the edited body "typo here" with an "edited" tag',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsEditedBodyWithTag/);
+  });
+
+  // Android branch — full 3-test set
+  test('Android matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { androidShowsEditedBodyWithTag: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s Android UI shows the edited body "typo here" with an "edited" tag',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'typo here', 'edited');
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsEditedBodyWithTag: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s Android UI shows the edited body "typo here" with an "edited" tag',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|edited|tag/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s Android UI shows the edited body "typo here" with an "edited" tag',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsEditedBodyWithTag/);
+  });
+
+  // iOS Sim branch — full 3-test set
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsEditedBodyWithTag: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s iOS Sim UI shows the edited body "typo here" with an "edited" tag',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'typo here', 'edited');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsEditedBodyWithTag: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s iOS Sim UI shows the edited body "typo here" with an "edited" tag',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|edited|tag/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s iOS Sim UI shows the edited body "typo here" with an "edited" tag',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsEditedBodyWithTag/);
+  });
 });
 
 describe('Wake 103 — "<Name>\'s <Plat> UI also shows <Other> in the participants list"', () => {

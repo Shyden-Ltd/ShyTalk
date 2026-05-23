@@ -1680,6 +1680,30 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 103 — `<Name>'s <Plat> UI shows the edited body "<X>" with an
+  // "<Y>" tag` (j07). Message-edit indicator on the recipient view.
+  // Driver receives `(name, body, tag)`.
+  //
+  // Foundation strategy: presence-check on the `editedBody_*` testTag
+  // PREFIX. No `editedBody_*` testTag exists in shared/src/commonMain
+  // yet — only the source-side `room_msg_editTarget_<id>` testTag
+  // exists (MessageBubble.kt:241), which marks the message being
+  // edited (NOT the post-edit "(edited)" badge on the recipient view
+  // — distinct concerns).
+  //
+  // Returns false in real journeys today; lands true when ships with
+  // editedBody_<msgId> / editedBody_badge testTags.
+  //
+  // Per-body and per-tag verification need text-extraction. Deferred.
+  // All 3 args (_name, _body, _tag) accepted-and-ignored.
+  driver.androidShowsEditedBodyWithTag = async (_name, _body, _tag) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?editedBody_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

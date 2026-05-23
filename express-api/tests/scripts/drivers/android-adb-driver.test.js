@@ -11830,3 +11830,310 @@ describe('android-adb-driver — androidShowsCountBadge', () => {
     expect(await driver.androidShowsCountBadge('Selma', 1, 'Followers')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsEditedBodyWithTag', () => {
+  // Wake 103 — `<Name>'s <Plat> UI shows the edited body "<X>" with an
+  // "<Y>" tag` (j07). Message-edit indicator on the recipient view.
+  // Driver receives `(name, body, tag)`.
+  //
+  // Foundation strategy: presence-check on the `editedBody_*` testTag
+  // PREFIX. No `editedBody_*` testTag exists in shared/src/commonMain
+  // yet — only the source-side `room_msg_editTarget_<id>` testTag
+  // exists (MessageBubble.kt:241), which marks the message being
+  // edited, not the post-edit "(edited)" badge on the recipient view.
+  //
+  // Returns false in real journeys today; lands true when ships with
+  // editedBody_<msgId> / editedBody_badge / etc.
+  //
+  // Per-body text verification (matching the displayed string) and
+  // per-tag verification (matching the "(edited)" label exactly) are
+  // deferred — both need text-extraction. All 3 args (_name, _body,
+  // _tag) accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('editedBody_badge present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated body', 'edited')).toBe(
+      true,
+    );
+  });
+
+  test('editedBody_msg42 present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_msg42" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', 'edited')).toBe(true);
+  });
+
+  test('absent (no edited badge) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', 'edited')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', 'edited')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', 'edited')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge"><node text="(edited)" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', 'edited')).toBe(true);
+  });
+
+  test('left-boundary — pre_editedBody_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', 'edited')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_editedBody_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', 'edited')).toBe(false);
+  });
+
+  test('right-boundary — editedBody_badgeExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badgeExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', 'edited')).toBe(true);
+  });
+
+  test('confusable prefix — edited_bodyOther does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/edited_bodyOther" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', 'edited')).toBe(false);
+  });
+
+  test('bare confusable prefix — edited_bodyOther does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="edited_bodyOther" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', 'edited')).toBe(false);
+  });
+
+  test('similar-but-distinct — room_msg_editTarget_42 does NOT match', async () => {
+    // The source-side edit-target testTag (MessageBubble.kt:241) marks
+    // the message being edited, NOT the post-edit indicator. Pin that
+    // these don't conflate.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_msg_editTarget_42" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', 'edited')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', 'edited')).toBe(false);
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Bao', 'Updated', 'edited')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag(null, 'Updated', 'edited')).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag(undefined, 'Updated', 'edited')).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('', 'Updated', 'edited')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('   ', 'Updated', 'edited')).toBe(true);
+  });
+
+  test('null body → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', null, 'edited')).toBe(true);
+  });
+
+  test('undefined body → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', undefined, 'edited')).toBe(true);
+  });
+
+  test('empty body → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', '', 'edited')).toBe(true);
+  });
+
+  test('whitespace body → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', '   ', 'edited')).toBe(true);
+  });
+
+  test('null tag → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', null)).toBe(true);
+  });
+
+  test('undefined tag → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', undefined)).toBe(true);
+  });
+
+  test('empty tag → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', '')).toBe(true);
+  });
+
+  test('whitespace tag → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', '   ')).toBe(true);
+  });
+
+  test('different body/tag still passes (foundation does not match specifics)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'AnyBody', 'AnyTag')).toBe(true);
+  });
+
+  test('first-match contract — two editedBody_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_badge" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/editedBody_msg42" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsEditedBodyWithTag('Alice', 'Updated', 'edited')).toBe(true);
+  });
+});
