@@ -17471,7 +17471,38 @@ describe('Wake 88 — "<Name> on <Plat> opens <Other>\'s profile from the <X>"',
       ctx,
     );
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/webOpenProfileFrom/);
+    // Tightened (PR #768 R1): assert the error names the CORRECT
+    // driver object (`ctx.webDriver`, NOT `ctx.uiDriver`) — the
+    // matcher dispatches on `platform.startsWith('Web')` and the
+    // error message must reflect the actual driver path the
+    // developer should provide.
+    expect(r.error).toMatch(/ctx\.webDriver\.webOpenProfileFrom/);
+  });
+
+  // Web Chromium + Web Safari platform tokens (PR #768 R1) — the
+  // matcher pattern at scripts/manual-qa-runner.js:10106 explicitly
+  // lists "Web Chromium" and "Web Safari" as platform alternatives.
+  // Pin that both tokens route to webOpenProfileFrom via webDriver.
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webOpenProfileFrom: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: "Alice on Web Chromium opens Bob's profile from the inbox" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'Bob', 'inbox');
+  });
+
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webOpenProfileFrom: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: "Alice on Web Safari opens Bob's profile from the inbox" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'Bob', 'inbox');
   });
 });
 
