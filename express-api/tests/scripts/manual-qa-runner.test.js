@@ -17529,6 +17529,72 @@ describe('Wake 89 — "<Name>\'s <Plat> Admin UI shows <Other>\'s appeal with th
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/webAdminShowsAppealText/);
   });
+
+  // Android branch — routes to ctx.uiDriver.androidAdminShowsAppealText
+  test('Android matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { androidAdminShowsAppealText: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Greta's Android Admin UI shows Raul's appeal with the text" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Greta', 'Raul');
+  });
+
+  test('Android no appeal → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidAdminShowsAppealText: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Greta's Android Admin UI shows Raul's appeal with the text" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Raul|appeal/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Greta's Android Admin UI shows Raul's appeal with the text" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/androidAdminShowsAppealText/);
+  });
+
+  // iOS Sim branch — routes to ctx.uiDriver.iosAdminShowsAppealText
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosAdminShowsAppealText: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Greta's iOS Sim Admin UI shows Raul's appeal with the text" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Greta', 'Raul');
+  });
+
+  test('iOS Sim no appeal → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosAdminShowsAppealText: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Greta's iOS Sim Admin UI shows Raul's appeal with the text" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Raul|appeal/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Greta's iOS Sim Admin UI shows Raul's appeal with the text" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/iosAdminShowsAppealText/);
+  });
 });
 
 describe('Wake 89 — "a conversation "<X>" exists ... created before the OSA migration" (state-seed)', () => {
