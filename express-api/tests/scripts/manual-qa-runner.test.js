@@ -17067,6 +17067,53 @@ describe('Wake 87 — "<Name> on <Plat> refreshes the language rail"', () => {
     expect(spy).toHaveBeenCalledWith('Alice');
   });
 
+  // Each Web variant gets its own 3-test set per cluster checklist:
+  // matching/returns-false/driver-missing. The Web/Web Chromium/Web Safari
+  // tokens share the same `startsWith('Web')` dispatch branch, but pinning
+  // each variant individually catches a future regression that special-
+  // cases one token (e.g. browser-specific routing override).
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webRefreshLanguageRail: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Alice on Web Chromium refreshes the language rail' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|language rail/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'When', text: 'Alice on Web Chromium refreshes the language rail' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webRefreshLanguageRail/);
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webRefreshLanguageRail: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Alice on Web Safari refreshes the language rail' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|language rail/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'When', text: 'Alice on Web Safari refreshes the language rail' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webRefreshLanguageRail/);
+  });
+
   test('Web driver returns false → fail', async () => {
     const spy = jest.fn(async () => false);
     const ctx = makeCtx({ webDriver: { webRefreshLanguageRail: spy } });
