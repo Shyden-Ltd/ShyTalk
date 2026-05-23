@@ -5054,4 +5054,52 @@ describe('android-adb-driver — androidNavigatesToPath', () => {
     const driver = await createAndroidDriver();
     expect(await driver.androidNavigatesToPath('Adam', '/profile/42/edit')).toBe(true);
   });
+
+  test('path with query string "/profile?userId=42" → false (no query-string routing)', async () => {
+    // Round 1 I-1: the path-resolver does NOT strip query strings.
+    // `/profile?userId=42` is neither an exact match nor a prefix
+    // match (the literal string starts with `/profile?`, not
+    // `/profile/`). FAIL-loud contract: Gherkin steps must supply
+    // clean path segments without query strings.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/profile?userId=42')).toBe(false);
+  });
+
+  test('path with fragment "/profile#bio" → false (no fragment routing)', async () => {
+    // Round 1 I-2: same contract as query strings — fragments are
+    // not stripped by the path-resolver. `/profile#bio` is neither
+    // exact nor prefix match. FAIL-loud.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/profile#bio')).toBe(false);
+  });
+
+  test('"/" exclusion from prefix-iteration is directly pinned — /profile/42 does NOT resolve via /', async () => {
+    // Round 1 M-1: the previous longest-prefix test implies `/` is
+    // exact-only via the dump-content selection, but doesn't pin
+    // it directly. This test makes the exclusion unambiguous:
+    // the dump contains ONLY main_roomsTab (the `/` mapping
+    // target). If `/` were treated as a prefix, `/profile/42`
+    // would route to main_roomsTab and the dump-presence check
+    // would PASS — which would be wrong (the user is asserting
+    // they're on /profile/42, not at /). The correct behaviour:
+    // `/profile/42` routes to profile_displayName, which is ABSENT
+    // here → result must be false.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidNavigatesToPath('Adam', '/profile/42')).toBe(false);
+  });
 });
