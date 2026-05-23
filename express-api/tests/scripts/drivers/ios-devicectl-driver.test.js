@@ -1359,6 +1359,99 @@ describe('ios-devicectl-driver — iosIsNoLongerInVoiceRoom', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosIsStillInRoom', () => {
+  // Wake 84 — `<Name>'s <Plat> UI is still in the room`.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('room marker present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosIsStillInRoom('Alice')).toBe(true);
+  });
+
+  test('no room marker → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosIsStillInRoom('Alice')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosIsStillInRoom('Alice')).toBe(false);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid"><XCUIElementTypeStaticText name="Bao" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosIsStillInRoom('Alice')).toBe(true);
+  });
+
+  test('left-boundary — pre_room_X does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="pre_room_seatGrid" />');
+    expect(await driver.iosIsStillInRoom('Alice')).toBe(false);
+  });
+
+  test('right-boundary — room_seatGridExtra still matches', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGridExtra" />');
+    expect(await driver.iosIsStillInRoom('Alice')).toBe(true);
+  });
+
+  test('confusable prefix — rooms_listItem does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="rooms_listItem" />');
+    expect(await driver.iosIsStillInRoom('Alice')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther name="room_seatGrid" />');
+    expect(await driver.iosIsStillInRoom('Alice')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosIsStillInRoom('Alice')).rejects.toThrow();
+  });
+
+  test('name accepted-and-ignored — Ines passes', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosIsStillInRoom('Ines')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosIsStillInRoom(null)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosIsStillInRoom(undefined)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosIsStillInRoom('')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosIsStillInRoom('   ')).toBe(true);
+  });
+
+  test('first-match contract — two room_* markers', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid" />' +
+        '<XCUIElementTypeOther identifier="room_chatInput" />',
+    );
+    expect(await driver.iosIsStillInRoom('Alice')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't

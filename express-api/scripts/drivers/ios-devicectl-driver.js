@@ -290,6 +290,16 @@ async function createIosDriver({ udid: preferred } = {}) {
     return !roomRx.test(dump);
   };
 
+  // Wake 84 — `<Name>'s <Plat> UI is still in the room`. Mirrors
+  // Android sibling. Presence-check on `room_*` testTag PREFIX.
+  driver.iosIsStillInRoom = async (_name) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const roomRx = /<XCUIElementType\w+[^>]*\bidentifier="room_[^"]*"[^>]*\/?>/;
+    return roomRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;
