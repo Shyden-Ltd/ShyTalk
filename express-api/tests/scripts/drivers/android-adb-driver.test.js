@@ -5400,3 +5400,290 @@ describe('android-adb-driver — androidShowsNewGiftEntry', () => {
     expect(await driver.androidShowsNewGiftEntry('Selma', 'rose')).toBe(false);
   });
 });
+
+describe('android-adb-driver — androidShowsInSeatGrid', () => {
+  // Wake 102 matcher — `<Name>'s Android UI shows <Other> in seat N
+  // of the seat grid` (j09). Driver receives `(viewer, target,
+  // seatNum)`. The seat-position aspect requires per-seat testTags
+  // which don't exist yet (Compose attaches `room_seatGrid` to the
+  // container only). Foundation policy: ignore seatNum, assert
+  // target's name is visible somewhere in the seat-grid surface.
+  //
+  // Two-step composition (same pattern as PR #745
+  // androidShowsNewGiftEntry):
+  //   1. room_seatGrid testTag must be PRESENT (user is on the
+  //      room screen).
+  //   2. target's name appears in any text=/content-desc= with
+  //      SYMMETRIC word-boundary protection (`(?<![\w-])` +
+  //      `(?![\w-])` — same boundary fix as PR #745 R1).
+  //
+  // The seat-position semantic is journey-orchestrated until per-
+  // seat testTags exist. A future PR could layer this with e.g.
+  // `room_seat_${seatNum}_displayName` for stricter verification.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('room_seatGrid + target name in text → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' + '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', 'Adam', 1)).toBe(true);
+  });
+
+  test('room_seatGrid + target name in content-desc → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node content-desc="Bea" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', 'Bea', 2)).toBe(true);
+  });
+
+  test('room_seatGrid absent (user not in room) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />' + '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    // "Adam" text exists but on a non-seat-grid screen → must NOT
+    // false-positive. Pin the FIRST guard.
+    expect(await driver.androidShowsInSeatGrid('Selma', 'Adam', 1)).toBe(false);
+  });
+
+  test('room_seatGrid present + target not in any text → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Different" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', 'Adam', 1)).toBe(false);
+  });
+
+  test('seatNum is ignored at foundation layer — N=1 and N=5 both pass when target visible', async () => {
+    // Foundation contract pin: the seat-number arg is accepted but
+    // ignored. Both N=1 and N=5 return the same result given the
+    // same dump. A future PR layering per-seat verification will
+    // need to update this pin.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' + '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    const ok1 = await driver.androidShowsInSeatGrid('Selma', 'Adam', 1);
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' + '<node text="Adam" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const ok5 = await driver2.androidShowsInSeatGrid('Selma', 'Adam', 5);
+
+    expect(ok1).toBe(true);
+    expect(ok5).toBe(true);
+  });
+
+  test('padded target name — "speaker: Adam" still matches Adam', async () => {
+    // Realistic seat-grid labels often pad with role prefix
+    // ("speaker: Adam", "host • Adam"). Substring match with
+    // word-boundary protection accepts.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="speaker: Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', 'Adam', 1)).toBe(true);
+  });
+
+  test('prefix-collision blocked — "Adam" hint does NOT match "AdamSmith"', async () => {
+    // Word-boundary protection (same as PR #745 fix). "AdamSmith"
+    // — the `S` after `Adam` is a word char → blocked.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="AdamSmith" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', 'Adam', 1)).toBe(false);
+  });
+
+  test('suffix-collision blocked — "Bea" hint does NOT match "Beatrix"', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Beatrix the great" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', 'Bea', 1)).toBe(false);
+  });
+
+  test('hyphen-suffix blocked — "Adam" hint does NOT match "Adam-jr"', async () => {
+    // Round 1 boundary inherited from PR #745 — symmetric
+    // `(?<![\w-])...(?![\w-])` blocks hyphen-suffix compounds.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam-jr" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', 'Adam', 1)).toBe(false);
+  });
+
+  test('hyphen-prefix blocked — "Adam" hint does NOT match "pre-Adam"', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="pre-Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', 'Adam', 1)).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', 'Adam', 1)).toBe(false);
+  });
+
+  test('empty target arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' + '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', '', 1)).toBe(false);
+  });
+
+  test('whitespace-only target → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' + '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', '   ', 1)).toBe(false);
+  });
+
+  test('null target → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' + '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', null, 1)).toBe(false);
+  });
+
+  test('undefined target → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' + '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', undefined, 1)).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="room_seatGrid" /><node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', 'Adam', 1)).toBe(true);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', 'Adam', 1)).toBe(false);
+  });
+
+  test('viewer name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' + '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    const okSelma = await driver.androidShowsInSeatGrid('Selma', 'Adam', 1);
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' + '<node text="Adam" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okBea = await driver2.androidShowsInSeatGrid('Bea', 'Adam', 1);
+
+    expect(okSelma).toBe(true);
+    expect(okBea).toBe(true);
+  });
+
+  test('target with regex-significant chars — escaped before insertion', async () => {
+    // Defensive — persona names are simple, but a future scenario
+    // could use a target like "User.42" or "Bob+1". Regex-escape
+    // ensures literal matching.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="User.42" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', 'User.42', 1)).toBe(true);
+  });
+
+  test('target with regex-significant chars — negative pins literal-dot escape', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="UserX42" />',
+    });
+    const driver = await createAndroidDriver();
+    // Without escape, "User.42" would match "UserX42" (. = any char).
+    // With escape, "User.42" requires literal dot → no match.
+    expect(await driver.androidShowsInSeatGrid('Selma', 'User.42', 1)).toBe(false);
+  });
+
+  test('compound attribute names (hint-text=) NOT consulted', async () => {
+    // Same outer-attribute-name guard as PRs #742 and #745.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node hint-text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsInSeatGrid('Selma', 'Adam', 1)).toBe(false);
+  });
+});

@@ -983,6 +983,38 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return giftRx.test(dump);
   };
 
+  // Wake 102 — `<Name>'s Android UI shows <Other> in seat N of the
+  // seat grid` (j09). Driver receives `(viewer, target, seatNum)`.
+  //
+  // Foundation strategy: two-step composition (mirrors PR #745's
+  // androidShowsNewGiftEntry):
+  //   1. room_seatGrid testTag PRESENT (user is on the room screen).
+  //   2. target's name appears in any text= or content-desc= with
+  //      SYMMETRIC word-boundary protection (`(?<![\w-])` +
+  //      `(?![\w-])` — same shape as PR #745 R1 fix).
+  //
+  // The seat-position semantic is journey-orchestrated until per-
+  // seat testTags exist (Compose currently only tags the container
+  // `room_seatGrid`, not individual seats). A future PR could
+  // layer this with e.g. `room_seat_${seatNum}_displayName` for
+  // stricter per-position verification.
+  driver.androidShowsInSeatGrid = async (_viewer, target, _seatNum) => {
+    if (typeof target !== 'string' || !target.trim()) return false;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // Step 1: seat-grid must be visible
+    // eslint-disable-next-line sonarjs/slow-regex
+    const gridRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?room_seatGrid"[^>]*\/?>/;
+    if (!gridRx.test(dump)) return false;
+    // Step 2: target name appears with symmetric word-boundary
+    const escTarget = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const targetRx = new RegExp(
+      `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escTarget}(?![\\w-])[^"]*"`,
+    );
+    return targetRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
