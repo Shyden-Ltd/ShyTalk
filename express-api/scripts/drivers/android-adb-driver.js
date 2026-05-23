@@ -1252,6 +1252,27 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return indicatorRx.test(dump);
   };
 
+  // Wake 105 — `<Name>'s Android UI shows the second offensive
+  // message` (j11 — sequential corpus-specific assertion, journey-
+  // orchestrated after a first offensive message). Single-arg.
+  //
+  // Foundation strategy: presence-check the conversation thread is
+  // open (privateChat_messageInput testTag PRESENT). Same shape as
+  // PR #748's androidShowsMessageInConversationThread.
+  //
+  // The "second offensive message" semantic is journey-orchestrated
+  // — there's no per-message testTag and no "offensive" classifier
+  // visible in uiautomator dumps. The journey ensures the test only
+  // fires after the second offensive message lands. A future PR
+  // could layer per-message verification once messages have testTags.
+  driver.androidShowsSecondOffensiveMessage = async (_name) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
