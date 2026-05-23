@@ -966,9 +966,19 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // "rose"). Hint is regex-escaped for future gift IDs that
     // might contain dots, plus signs, etc.
     const escGift = giftId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Round 1 I-1 fix: SYMMETRIC inner boundaries. Original was
+    // `(?<![\w-])...(?!\w)` — left blocks word + hyphen, right only
+    // blocks word. Asymmetric: `text="crown-shaped"` false-matches
+    // `crown` because hyphen passes the right lookahead.
+    //
+    // Fixed to `(?![\w-])` on the right — symmetric with the left
+    // lookbehind. Now `crown-shaped` correctly does NOT match
+    // `crown`, while `Adam sent crown today` (space-padded) still
+    // does. Defends against compound gift labels like "rose-gold
+    // pendant" false-matching the "rose" hint.
     // eslint-disable-next-line sonarjs/slow-regex
     const giftRx = new RegExp(
-      `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escGift}(?!\\w)[^"]*"`,
+      `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escGift}(?![\\w-])[^"]*"`,
     );
     return giftRx.test(dump);
   };

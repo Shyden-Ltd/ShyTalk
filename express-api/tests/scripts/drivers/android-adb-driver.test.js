@@ -5187,11 +5187,16 @@ describe('android-adb-driver — androidShowsNewGiftEntry', () => {
   });
 
   test('prefix-collision blocked — "crown" hint does NOT match "Crowning Achievement"', async () => {
-    // Word-boundary protection. "Crowning" starts with "Crown" but
-    // the `(?!\w)` lookahead blocks suffix word chars. Also blocks
-    // the case-sensitive concern (English: "crown" lowercase vs
-    // "Crowning" capital C — the regex is case-sensitive so this
-    // wouldn't match anyway, but pin both forms).
+    // Word-boundary protection: the inner right lookahead
+    // `(?![\w-])` blocks suffix word chars. "Crowning" — the `i`
+    // after `Crown` is a word char → blocked.
+    //
+    // Round 1 I-2 fix: comment corrected. The case-sensitivity is
+    // a side effect (the regex is case-sensitive so `crown` ≠
+    // `Crown`), but the ACTUAL blocking mechanism here is the
+    // right-side word-boundary, not case rules. A future-reader
+    // asking "what if giftId were `Crown` (capital C)?" needs to
+    // know it's the word-boundary doing the work.
     mockExec({
       "'uiautomator' 'dump'": '',
       "'cat' '/sdcard/dump.xml'":
@@ -5362,5 +5367,36 @@ describe('android-adb-driver — androidShowsNewGiftEntry', () => {
     });
     const driver = await createAndroidDriver();
     expect(await driver.androidShowsNewGiftEntry('Selma', 'crown')).toBe(false);
+  });
+
+  test('suffix-hyphen blocked — "crown" hint does NOT match "crown-shaped"', async () => {
+    // Round 1 I-1 fix: the original inner right lookahead was
+    // `(?!\w)` (blocks word chars only). A hyphen is not `\w`, so
+    // `text="crown-shaped"` false-matched `crown`. Fixed to
+    // `(?![\w-])` — symmetric with the inner left lookbehind
+    // `(?<![\w-])`. Defends against compound gift labels.
+    //
+    // Verified with `node -e` against the new regex.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="crown-shaped" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'crown')).toBe(false);
+  });
+
+  test('suffix-hyphen symmetric — "rose" hint does NOT match "rose-gold pendant"', async () => {
+    // Round 1 I-1 fix: same boundary applied to "rose". Compound
+    // labels with hyphen-prefixed suffixes are blocked.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="rose-gold pendant" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'rose')).toBe(false);
   });
 });
