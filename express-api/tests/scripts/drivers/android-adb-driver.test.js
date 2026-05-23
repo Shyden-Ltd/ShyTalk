@@ -5103,3 +5103,264 @@ describe('android-adb-driver — androidNavigatesToPath', () => {
     expect(await driver.androidNavigatesToPath('Adam', '/profile/42')).toBe(false);
   });
 });
+
+describe('android-adb-driver — androidShowsNewGiftEntry', () => {
+  // Wake 100 matcher — `<Name>'s Android UI shows the new "<X>"
+  // gift entry` (j05 — gift-log entry on recipient view). Driver
+  // receives `(name, giftId)` where giftId is the friendly name
+  // ("crown", "rose", etc.) per the j05 corpus.
+  //
+  // Foundation strategy: two-step composition (mirrors PR #739's
+  // androidAdminShowsNewReportInQueue pattern):
+  //   1. giftWall_grid testTag must be PRESENT (user is on the
+  //      gift-wall surface — profile screen typically).
+  //   2. giftId text appears anywhere in the dump with word-boundary
+  //      protection (prevents prefix-collision: "crown" hint must
+  //      not match "Crowning Achievement").
+  //
+  // The "new" semantic is journey-orchestrated — the test runs
+  // RIGHT AFTER a gift is sent, so the latest entry IS the new one.
+  // A future PR could layer per-row inspection (e.g.
+  // giftWall_entry_${giftId}) to verify the specific entry rather
+  // than any text occurrence.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('giftWall_grid present + giftId in text → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'crown')).toBe(true);
+  });
+
+  test('giftWall_grid present + giftId in content-desc → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node content-desc="rose" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'rose')).toBe(true);
+  });
+
+  test('giftWall_grid absent (user on wrong screen) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />' +
+        '<node text="crown" />',
+    });
+    const driver = await createAndroidDriver();
+    // The "crown" text exists but on a non-gift-wall screen → must
+    // not false-positive. Pin the FIRST guard (giftWall_grid required).
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'crown')).toBe(false);
+  });
+
+  test('giftWall_grid present but giftId not in any text → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="other-gift" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'crown')).toBe(false);
+  });
+
+  test('giftWall_grid present + giftId padded in surrounding text → true', async () => {
+    // Real gift-log entries often have padded labels like
+    // "Adam sent crown ×5" — substring match should accept.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam sent crown today" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'crown')).toBe(true);
+  });
+
+  test('prefix-collision blocked — "crown" hint does NOT match "Crowning Achievement"', async () => {
+    // Word-boundary protection. "Crowning" starts with "Crown" but
+    // the `(?!\w)` lookahead blocks suffix word chars. Also blocks
+    // the case-sensitive concern (English: "crown" lowercase vs
+    // "Crowning" capital C — the regex is case-sensitive so this
+    // wouldn't match anyway, but pin both forms).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Crowning Achievement Unlocked" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'crown')).toBe(false);
+  });
+
+  test('suffix-collision blocked — "rose" hint does NOT match "roseate"', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="roseate hue" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'rose')).toBe(false);
+  });
+
+  test('prefix-collision blocked — "rose" hint does NOT match "primrose"', async () => {
+    // Word-prefix collision the OTHER direction.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="primrose path" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'rose')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'crown')).toBe(false);
+  });
+
+  test('empty giftId arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', '')).toBe(false);
+  });
+
+  test('whitespace-only giftId arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', '   ')).toBe(false);
+  });
+
+  test('null giftId arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', null)).toBe(false);
+  });
+
+  test('undefined giftId arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', undefined)).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="giftWall_grid" /><node text="crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'crown')).toBe(true);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'crown')).toBe(false);
+  });
+
+  test('persona name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="crown" />',
+    });
+    const driver = await createAndroidDriver();
+    const okSelma = await driver.androidShowsNewGiftEntry('Selma', 'crown');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="crown" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okAlice = await driver2.androidShowsNewGiftEntry('Alice', 'crown');
+
+    expect(okSelma).toBe(true);
+    expect(okAlice).toBe(true);
+  });
+
+  test('giftId with regex-significant chars — escaped before insertion', async () => {
+    // Defensive: gift IDs in the j05 corpus are plain words, but
+    // a future "gift_2.0" or "rose+1" would have regex metacharacters.
+    // The escape ensures literal matching.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="gift_2.0" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'gift_2.0')).toBe(true);
+  });
+
+  test('giftId with regex-significant chars — negative case proves literal-dot escape', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="gift_2X0" />',
+    });
+    const driver = await createAndroidDriver();
+    // Without the literal-dot escape, "2.0" would match "2X0" (. = any char).
+    // With escape, "2.0" requires a literal dot → no match.
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'gift_2.0')).toBe(false);
+  });
+
+  test('compound attribute names (hint-text=) NOT consulted for giftId match', async () => {
+    // Same lookbehind concern as PR #742 (scan-all-strings). The
+    // outer attribute-name guard `(?<![\w-])(?:text|content-desc)=`
+    // prevents `hint-text="crown"` from triggering a false match.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node hint-text="crown" sub-text="more text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewGiftEntry('Selma', 'crown')).toBe(false);
+  });
+});

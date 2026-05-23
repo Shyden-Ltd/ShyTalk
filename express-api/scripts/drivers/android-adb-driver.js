@@ -935,6 +935,44 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 100 — `<Name>'s Android UI shows the new "<X>" gift entry`
+  // (j05 — gift-log entry on recipient view). Driver receives
+  // `(name, giftId)` where giftId is the friendly name ("crown",
+  // "rose", etc.) per the j05 corpus.
+  //
+  // Foundation strategy: two-step COMPOSITION (mirrors
+  // androidAdminShowsNewReportInQueue from PR #739):
+  //   1. giftWall_grid testTag must be PRESENT (user is on the
+  //      gift-wall surface).
+  //   2. giftId text appears anywhere in the dump with word-boundary
+  //      protection — same regex shape as androidShowsBanner.
+  //
+  // The "new" semantic is journey-orchestrated — the test runs
+  // RIGHT AFTER a gift is sent, so the latest entry IS the new one.
+  // A future PR could layer per-row inspection (e.g.
+  // `giftWall_entry_${giftId}` parameterised testTag) to verify
+  // the specific entry rather than any text occurrence.
+  driver.androidShowsNewGiftEntry = async (_name, giftId) => {
+    if (typeof giftId !== 'string' || !giftId.trim()) return false;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // Step 1: gift wall must be visible
+    // eslint-disable-next-line sonarjs/slow-regex
+    const wallRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?giftWall_grid"[^>]*\/?>/;
+    if (!wallRx.test(dump)) return false;
+    // Step 2: giftId text appears with word-boundary protection
+    // (same boundary shape as androidShowsBanner — blocks prefix
+    // collisions like "Crowning" / "primrose" matching "crown" /
+    // "rose"). Hint is regex-escaped for future gift IDs that
+    // might contain dots, plus signs, etc.
+    const escGift = giftId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const giftRx = new RegExp(
+      `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escGift}(?!\\w)[^"]*"`,
+    );
+    return giftRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
