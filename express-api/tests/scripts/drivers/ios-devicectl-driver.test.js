@@ -672,6 +672,162 @@ describe('ios-devicectl-driver — iosAdminShowsStat', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosAlsoShowsInParticipantsList', () => {
+  // Wake 103 — `<Name>'s <Plat> UI also shows <Other> in the
+  // participants list` (j09). Mirrors Android PR #765.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('participantsList_userTile present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participantsList_userTile" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(true);
+  });
+
+  test('participantsList_container present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participantsList_container" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(false);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participantsList_userTile"><XCUIElementTypeStaticText name="Bao" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(true);
+  });
+
+  test('left-boundary — pre_participantsList_X does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="pre_participantsList_userTile" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(false);
+  });
+
+  test('right-boundary — participantsList_userTileExtra still matches', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participantsList_userTileExtra" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(true);
+  });
+
+  test('confusable prefix — participants_listItem does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participants_listItem" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther name="participantsList_userTile" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosAlsoShowsInParticipantsList('Alice', 'Bao')).rejects.toThrow();
+  });
+
+  test('viewer accepted-and-ignored — Ines passes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participantsList_userTile" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('Ines', 'Bao')).toBe(true);
+  });
+
+  test('null viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participantsList_userTile" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList(null, 'Bao')).toBe(true);
+  });
+
+  test('undefined viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participantsList_userTile" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList(undefined, 'Bao')).toBe(true);
+  });
+
+  test('empty viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participantsList_userTile" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('', 'Bao')).toBe(true);
+  });
+
+  test('whitespace viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participantsList_userTile" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('   ', 'Bao')).toBe(true);
+  });
+
+  test('null other → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participantsList_userTile" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('Alice', null)).toBe(true);
+  });
+
+  test('undefined other → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participantsList_userTile" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('Alice', undefined)).toBe(true);
+  });
+
+  test('empty other → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participantsList_userTile" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('Alice', '')).toBe(true);
+  });
+
+  test('whitespace other → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participantsList_userTile" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('Alice', '   ')).toBe(true);
+  });
+
+  test('different other still passes (foundation does not match specific user)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participantsList_userTile" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('Alice', 'NotInList')).toBe(true);
+  });
+
+  test('first-match contract — two participantsList_* nodes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="participantsList_userTile" />' +
+        '<XCUIElementTypeOther identifier="participantsList_container" />',
+    );
+    expect(await driver.iosAlsoShowsInParticipantsList('Alice', 'Bao')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't

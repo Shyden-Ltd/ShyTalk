@@ -225,6 +225,18 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 103 — `<Name>'s <Plat> UI also shows <Other> in the
+  // participants list` (j09). Mirrors Android sibling #765. Foundation:
+  // presence-check on `participantsList_*` XCUITest identifier PREFIX.
+  // Both args (_viewer, _other) accepted-and-ignored.
+  driver.iosAlsoShowsInParticipantsList = async (_viewer, _other) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="participantsList_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   driver.close = async () => {
     /* devicectl is stateless; nothing to release */
   };
