@@ -640,6 +640,28 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return /(?<![\w-])enabled="false"/.test(tagMatch[0]);
   };
 
+  // Wake 99 — `<Name>'s Android UI[ opens conversation "<X>"] shows
+  // the frozen-banner element <suffix>` (j08, 4 corpus rows). Driver
+  // receives `(viewer, convId, suffix)` where convId is optional
+  // (null when no "opens conversation X" prefix in the Gherkin) and
+  // suffix is descriptive ("with text-from-key X" or "with locale
+  // string Y").
+  //
+  // Foundation policy: presence-check `privateChat_frozenBanner`
+  // testTag (PrivateChatScreen.kt:440) only. All three args are
+  // accepted-and-ignored at this layer — the assertion is "the
+  // frozen banner is currently visible". A future PR can layer
+  // text-from-key / locale-string verification once those contracts
+  // are clearer. Same shape as androidNavigatesToRoomScreen's
+  // suffix-ignore foundation (PR #732).
+  driver.androidShowsFrozenBanner = async (_viewer, _convId, _suffix) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_frozenBanner"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

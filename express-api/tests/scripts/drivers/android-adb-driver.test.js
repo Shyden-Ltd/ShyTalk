@@ -3282,3 +3282,192 @@ describe('android-adb-driver — androidDisablesInput', () => {
     expect(await driver.androidDisablesInput('Theo', undefined)).toBe(false);
   });
 });
+
+describe('android-adb-driver — androidShowsFrozenBanner', () => {
+  // Wake 99 matcher — `<Name>'s <Plat> UI[ opens conversation "<X>"]
+  // shows the frozen-banner element <suffix>` (j08, 4 corpus rows).
+  // Driver receives `(viewer, convId, suffix)`. `convId` is optional
+  // (null when no "opens conversation X" prefix in Gherkin). `suffix`
+  // is descriptive — could be "with text-from-key X" or "with locale
+  // string Y".
+  //
+  // Foundation policy: presence-check `privateChat_frozenBanner`
+  // testTag (PrivateChatScreen.kt:440) only. All three args are
+  // accepted-and-ignored at this layer — the assertion is "the
+  // frozen banner is currently visible". A future PR can layer
+  // text-from-key / locale-string verification on top once those
+  // contracts are clearer.
+  //
+  // Same shape as androidNavigatesToRoomScreen's suffix-ignore
+  // foundation (PR #732).
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('privateChat_frozenBanner present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_frozenBanner" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(true);
+  });
+
+  test('privateChat_frozenBanner absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="privateChat_frozenBanner" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    // PR #736+ established that uiautomator can emit both
+    // self-closing and open-tag forms. The tagRx's `\/?>` handles
+    // both — pin the open-tag form.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_frozenBanner"><node text="Conversation frozen" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(true);
+  });
+
+  test('convId-specified call (non-null) — also passes', async () => {
+    // Pins that the optional convId arg is correctly accepted-and-
+    // ignored when it carries a real value (the "opens conversation
+    // X" Gherkin variant).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_frozenBanner" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidShowsFrozenBanner('Theo', 'conv_abc123', 'with text-from-key X'),
+    ).toBe(true);
+  });
+
+  test('different suffix variant — "with locale string Y" also passes', async () => {
+    // Pins that the suffix is ignored at the foundation layer — all
+    // 4 j08 corpus rows return identical results given the same
+    // dump. A future PR layering suffix-aware refinement (e.g.
+    // text-from-key inspection of the banner's inner text node)
+    // would update this test.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_frozenBanner" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsFrozenBanner('Theo', null, 'with locale string Y')).toBe(true);
+  });
+
+  test('left-boundary false-positive guarded — pre_privateChat_frozenBanner_x does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_privateChat_frozenBanner_x" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(false);
+  });
+
+  test('right-boundary false-positive guarded — privateChat_frozenBanner_extra does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_frozenBanner_extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(false);
+  });
+
+  test('package-qualified left-boundary guarded — :id/pre_privateChat_frozenBanner does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_privateChat_frozenBanner" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(false);
+  });
+
+  test('bare left-boundary without suffix — pre_privateChat_frozenBanner does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_privateChat_frozenBanner" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false (not undefined)', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(false);
+  });
+
+  test('viewer name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_frozenBanner" />',
+    });
+    const driver = await createAndroidDriver();
+    const okTheo = await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_frozenBanner" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okAlice = await driver2.androidShowsFrozenBanner('Alice', null, 'with text-from-key X');
+
+    expect(okTheo).toBe(true);
+    expect(okAlice).toBe(true);
+  });
+
+  test('first-match contract pinned — two privateChat_frozenBanner nodes, first wins', async () => {
+    // Same first-match contract as prior method PRs. Presence-check
+    // semantics: as long as the first match exists, return true.
+    // The second one's existence doesn't change the answer.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_frozenBanner" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_frozenBanner" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(true);
+  });
+});
