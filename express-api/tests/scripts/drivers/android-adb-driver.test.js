@@ -9578,6 +9578,46 @@ describe('android-adb-driver — androidAdminShowsDashboardCounters', () => {
     ).toBe(false);
   });
 
+  test('right-boundary — adminDashboard_reportsCounterExtra still matches (prefix contract)', async () => {
+    // Pin: the prefix-wildcard form `adminDashboard_[^"]*` accepts ANY
+    // suffix up to the closing quote. `_reportsCounterExtra` is therefore
+    // a valid match — the foundation matches any `adminDashboard_*` tag.
+    // If a future change tightened the suffix (e.g. required word-boundary
+    // or an enumerated suffix list), this test would catch the change.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_reportsCounterExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('Mod', {
+        reports: 0,
+        verifications: 0,
+        appeals: 0,
+      }),
+    ).toBe(true);
+  });
+
+  test('confusable non-dashboard prefix — admin_dashboardSummary does NOT match', async () => {
+    // Pin: the left anchor is `adminDashboard_` literally, NOT `admin_`.
+    // A hypothetical `admin_*` family of testTags must not false-match an
+    // adminDashboard_* assertion. Documents the prefix specificity.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/admin_dashboardSummary" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('Mod', {
+        reports: 0,
+        verifications: 0,
+        appeals: 0,
+      }),
+    ).toBe(false);
+  });
+
   test('uiautomator dump throws → false', async () => {
     execSync.mockImplementation((cmd) => {
       if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';

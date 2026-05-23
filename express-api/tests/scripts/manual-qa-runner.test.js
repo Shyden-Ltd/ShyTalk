@@ -20845,7 +20845,11 @@ describe('Wake 105 — "<Name>\'s <Plat> Admin UI shows the dashboard with count
       ctx,
     );
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/Greta|dashboard|counters/);
+    // Tighter than the Web sibling's loose `/Greta|dashboard|counters/` —
+    // pin that the error message includes the structural "dashboard ...
+    // counters" phrasing so a future refactor cannot drop both terms
+    // without breaking this test.
+    expect(r.error).toMatch(/dashboard.*counters/i);
   });
 
   test('Android driver missing → fail', async () => {
@@ -20887,7 +20891,7 @@ describe('Wake 105 — "<Name>\'s <Plat> Admin UI shows the dashboard with count
       ctx,
     );
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/Greta|dashboard|counters/);
+    expect(r.error).toMatch(/dashboard.*counters/i);
   });
 
   test('iOS Sim driver missing → fail', async () => {
