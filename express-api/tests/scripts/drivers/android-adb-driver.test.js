@@ -15183,3 +15183,294 @@ describe('android-adb-driver — androidShowsToastAndNavigates', () => {
     expect(await driver.androidShowsToastAndNavigates('Theo', 'X', '/y', 1000)).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsToastAndNavigatesBack', () => {
+  // Wake 104 — `<Name>'s <Plat> UI shows a "<X>" toast and navigates
+  // back to "<Y>"` (j10). Toast + nav (no timeout prefix; distinct
+  // from Wake 93's `OR within Nms` variant — both share the same
+  // toast+route surface). Driver receives `(name, toast, route)`.
+  //
+  // Foundation strategy: presence-check on the `toastWithRoute_*`
+  // testTag PREFIX — same family as #784's `androidShowsToastAndNavigates`
+  // (j10 toast+nav surface is shared between the OR-variant and the
+  // direct variant). Returns false in real journeys today; lands true
+  // when ships with toastWithRoute_text / toastWithRoute_destination
+  // etc.
+  //
+  // Per-toast / per-route verification deferred. All 3 args (_name,
+  // _toast, _route) accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('toastWithRoute_text present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'Room closed', '/rooms')).toBe(
+      true,
+    );
+  });
+
+  test('toastWithRoute_destination present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_destination" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', '/y')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', '/y')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', '/y')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', '/y')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text"><node text="Room closed" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', '/y')).toBe(true);
+  });
+
+  test('left-boundary — pre_toastWithRoute_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', '/y')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_toastWithRoute_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', '/y')).toBe(false);
+  });
+
+  test('right-boundary — toastWithRoute_textExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_textExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', '/y')).toBe(true);
+  });
+
+  test('confusable prefix — toast_withRoute does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toast_withRoute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', '/y')).toBe(false);
+  });
+
+  test('bare confusable prefix — toast_withRoute does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="toast_withRoute" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', '/y')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', '/y')).toBe(false);
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Bao', 'X', '/y')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack(null, 'X', '/y')).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack(undefined, 'X', '/y')).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('', 'X', '/y')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('   ', 'X', '/y')).toBe(true);
+  });
+
+  test('null toast → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', null, '/y')).toBe(true);
+  });
+
+  test('undefined toast → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', undefined, '/y')).toBe(true);
+  });
+
+  test('empty toast → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', '', '/y')).toBe(true);
+  });
+
+  test('whitespace toast → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', '   ', '/y')).toBe(true);
+  });
+
+  test('null route → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', null)).toBe(true);
+  });
+
+  test('undefined route → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', undefined)).toBe(true);
+  });
+
+  test('empty route → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', '')).toBe(true);
+  });
+
+  test('whitespace route → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', '   ')).toBe(true);
+  });
+
+  test('different toast/route still passes (foundation does not match specifics)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'AnyToast', '/any')).toBe(true);
+  });
+
+  test('first-match contract — two toastWithRoute_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_text" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/toastWithRoute_destination" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsToastAndNavigatesBack('Theo', 'X', '/y')).toBe(true);
+  });
+});

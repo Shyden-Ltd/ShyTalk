@@ -23291,18 +23291,122 @@ describe('Wake 103 — "<Name>\'s <Plat> UI shows the room-closed summary panel"
 // ── Wake 104 — j10/j11/j12 narrows ──────────────────────────────────
 
 describe('Wake 104 — `<Name>\'s <Plat> UI shows a "<X>" toast and navigates back to "<Y>"`', () => {
+  const tnbText = (platform) =>
+    `Ines's ${platform} UI shows a "Room closed by host warning" toast and navigates back to "/rooms"`;
+
   test('matching → ok', async () => {
     const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { iosShowsToastAndNavigatesBack: spy } });
-    const r = await executeStep(
-      {
-        kind: 'Then',
-        text: 'Ines\'s iOS Sim UI shows a "Room closed by host warning" toast and navigates back to "/rooms"',
-      },
-      ctx,
-    );
+    const r = await executeStep({ kind: 'Then', text: tnbText('iOS Sim') }, ctx);
     expect(r.ok).toBe(true);
     expect(spy).toHaveBeenCalledWith('Ines', 'Room closed by host warning', '/rooms');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsToastAndNavigatesBack: spy } });
+    const r = await executeStep({ kind: 'Then', text: tnbText('iOS Sim') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Ines|toast|nav/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: tnbText('iOS Sim') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsToastAndNavigatesBack/);
+  });
+
+  test('Android matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { androidShowsToastAndNavigatesBack: spy } });
+    const r = await executeStep({ kind: 'Then', text: tnbText('Android') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Ines', 'Room closed by host warning', '/rooms');
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsToastAndNavigatesBack: spy } });
+    const r = await executeStep({ kind: 'Then', text: tnbText('Android') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Ines|toast|nav/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: tnbText('Android') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsToastAndNavigatesBack/);
+  });
+
+  test('Web matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsToastAndNavigatesBack: spy } });
+    const r = await executeStep({ kind: 'Then', text: tnbText('Web') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Ines', 'Room closed by host warning', '/rooms');
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsToastAndNavigatesBack: spy } });
+    const r = await executeStep({ kind: 'Then', text: tnbText('Web') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Ines|toast|nav/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: tnbText('Web') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsToastAndNavigatesBack/);
+  });
+
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsToastAndNavigatesBack: spy } });
+    const r = await executeStep({ kind: 'Then', text: tnbText('Web Chromium') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Ines', 'Room closed by host warning', '/rooms');
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsToastAndNavigatesBack: spy } });
+    const r = await executeStep({ kind: 'Then', text: tnbText('Web Chromium') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Ines|toast|nav/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: tnbText('Web Chromium') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsToastAndNavigatesBack/);
+  });
+
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsToastAndNavigatesBack: spy } });
+    const r = await executeStep({ kind: 'Then', text: tnbText('Web Safari') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Ines', 'Room closed by host warning', '/rooms');
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsToastAndNavigatesBack: spy } });
+    const r = await executeStep({ kind: 'Then', text: tnbText('Web Safari') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Ines|toast|nav/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: tnbText('Web Safari') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsToastAndNavigatesBack/);
   });
 });
 
