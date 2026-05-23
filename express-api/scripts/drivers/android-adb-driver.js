@@ -1751,6 +1751,44 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 69/71 — `<Name>'s <Plat> UI shows the <noun> <kind>` (positive)
+  // and `... no longer shows ...` (negative; runner inverts assertion).
+  // Generic noun+kind matcher. Driver receives `(name, noun, kind)`.
+  // kind ∈ {button|screen|banner|dialog|panel|tab}.
+  //
+  // Foundation strategy: 7th *_TAGS scaffold (NOUN_KIND_TAGS) keyed by
+  // lowercase `${noun}::${kind}` composite → Compose testTag (exact
+  // match, NOT prefix). ONE mapping currently grounded (j11:86):
+  //
+  //   'appeal::button' → 'suspension_submitAppealButton'
+  //     (SuspensionScreen.kt:251 — user-side appeal flow)
+  //
+  // Unmapped composites return false — FAIL-loud (consistent with
+  // SURFACE_TARGET_TAGS / INPUT_TAGS scaffolds).
+  //
+  // The `_name` arg is accepted-and-ignored; `noun` and `kind` are
+  // REQUIRED (input rejection on empty/whitespace/null/undefined).
+  const NOUN_KIND_TAGS = {
+    'appeal::button': 'suspension_submitAppealButton',
+  };
+  driver.androidShowsNamedKind = async (_name, noun, kind) => {
+    if (!noun || !noun.trim()) return false;
+    if (!kind || !kind.trim()) return false;
+    const key = `${noun.toLowerCase()}::${kind.toLowerCase()}`;
+    const tag = NOUN_KIND_TAGS[key];
+    if (!tag) return false;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // Defense-in-depth: regex-escape the tag value before interpolation,
+    // consistent with TABLE_TAGS / PATH_TAGS / ROW_COUNT_TABLE_TAGS /
+    // SURFACE_TARGET_TAGS. The single mapped entry is `[A-Za-z_]`-only
+    // today, but future map values could contain regex metacharacters.
+    const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${escTag}"[^>]*\\/?>`);
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

@@ -12721,3 +12721,277 @@ describe('android-adb-driver — androidShowsInResults', () => {
     expect(await driver.androidShowsInResults('Alice', 'Bob', null)).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsNamedKind', () => {
+  // Wake 69/71 — `<Name>'s <Plat> UI shows the <noun> <kind>` (positive)
+  // and `<Name>'s <Plat> UI no longer shows the <noun> <kind>` (negative
+  // — runner inverts assertion). Generic noun+kind matcher. Driver
+  // receives `(name, noun, kind)`. kind ∈ {button|screen|banner|dialog|
+  // panel|tab}.
+  //
+  // Foundation strategy: NOUN_KIND_TAGS scaffold (7th *_TAGS scaffold)
+  // keyed by lowercase `${noun}::${kind}` composite → Compose testTag.
+  // ONE mapping currently grounded (j11:86):
+  //
+  //   'appeal::button' → 'suspension_submitAppealButton'
+  //     (SuspensionScreen.kt:251 — user-side appeal flow)
+  //
+  // Unmapped composites return false — FAIL-loud contract (consistent
+  // with SURFACE_TARGET_TAGS / INPUT_TAGS / etc.).
+  //
+  // The `_name` arg is accepted-and-ignored; `noun` and `kind` are
+  // REQUIRED (used in the scaffold lookup).
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('appeal button mapped + testTag present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_submitAppealButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'appeal', 'button')).toBe(true);
+  });
+
+  test('appeal button mapped + testTag ABSENT → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'appeal', 'button')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'appeal', 'button')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'appeal', 'button')).toBe(false);
+  });
+
+  test('unmapped composite "suspension::screen" → false (FAIL-loud)', async () => {
+    // Even though the suspension flow exists in SuspensionScreen.kt,
+    // there's no SCREEN-level testTag mapped yet — FAIL-loud rather
+    // than silently presence-checking against any suspension_* tag.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_appealField" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'suspension', 'screen')).toBe(false);
+  });
+
+  test('unmapped composite "warning::banner" → false (FAIL-loud)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_submitAppealButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Hayato', 'warning', 'banner')).toBe(false);
+  });
+
+  test('mapped noun + WRONG kind ("appeal::screen") → false', async () => {
+    // "appeal" alone is mapped only under kind "button". A request for
+    // kind "screen" must return false even though the testTag is
+    // visible in the dump.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_submitAppealButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'appeal', 'screen')).toBe(false);
+  });
+
+  test('case-insensitive lookup — UPPERCASE noun + kind still resolves', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_submitAppealButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'APPEAL', 'BUTTON')).toBe(true);
+  });
+
+  test('mixed-case lookup — Appeal + Button still resolves', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_submitAppealButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'Appeal', 'Button')).toBe(true);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="suspension_submitAppealButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'appeal', 'button')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_submitAppealButton"><node text="Submit" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'appeal', 'button')).toBe(true);
+  });
+
+  test('left-boundary — pre_suspension_submitAppealButton does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_suspension_submitAppealButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'appeal', 'button')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_suspension_submitAppealButton does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_suspension_submitAppealButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'appeal', 'button')).toBe(false);
+  });
+
+  test('right-boundary — suspension_submitAppealButton_extra does NOT match (exact tag)', async () => {
+    // NOUN_KIND_TAGS uses EXACT-match lookup (not prefix), so suffix
+    // additions to the tag value would not satisfy the lookup. Pin this
+    // contract — the tag must match the mapped value exactly up to the
+    // closing `"`.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_submitAppealButton_extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'appeal', 'button')).toBe(false);
+  });
+
+  test('empty noun → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', '', 'button')).toBe(false);
+  });
+
+  test('whitespace noun → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', '   ', 'button')).toBe(false);
+  });
+
+  test('null noun → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', null, 'button')).toBe(false);
+  });
+
+  test('undefined noun → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', undefined, 'button')).toBe(false);
+  });
+
+  test('empty kind → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'appeal', '')).toBe(false);
+  });
+
+  test('whitespace kind → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'appeal', '   ')).toBe(false);
+  });
+
+  test('null kind → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'appeal', null)).toBe(false);
+  });
+
+  test('undefined kind → false', async () => {
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'appeal', undefined)).toBe(false);
+  });
+
+  test('name accepted-and-ignored — Hayato passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_submitAppealButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Hayato', 'appeal', 'button')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_submitAppealButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind(null, 'appeal', 'button')).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_submitAppealButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind(undefined, 'appeal', 'button')).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_submitAppealButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('', 'appeal', 'button')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_submitAppealButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('   ', 'appeal', 'button')).toBe(true);
+  });
+
+  test('first-match contract — two suspension_submitAppealButton nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_submitAppealButton" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_submitAppealButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNamedKind('Raul', 'appeal', 'button')).toBe(true);
+  });
+});
