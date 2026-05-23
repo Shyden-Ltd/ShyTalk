@@ -8558,6 +8558,28 @@ describe('android-adb-driver — androidShowsWelcomePmInLanguage', () => {
     expect(await driver.androidShowsWelcomePmInLanguage('Selma', undefined)).toBe(true);
   });
 
+  test('null name → true (name accepted-and-ignored regardless of value)', async () => {
+    // Regression guard: pins the accepted-and-ignored contract for `_name`
+    // so a future input-guard refactor cannot silently change behavior.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage(null, 'en')).toBe(true);
+  });
+
+  test('undefined name → true (name accepted-and-ignored regardless of value)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage(undefined, 'en')).toBe(true);
+  });
+
   test('first-match contract — two privateChat_messageInput nodes', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
