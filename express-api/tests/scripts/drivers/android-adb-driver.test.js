@@ -4518,6 +4518,28 @@ describe('android-adb-driver — androidScanAllRenderedStrings', () => {
     expect(result).not.toContain('android.view.View');
   });
 
+  test('compound attribute names (hint-text=, error-text=, sub-text=) are NOT collected', async () => {
+    // Round 1 I-1: the `(?<![\w-])` lookbehind blocks compound
+    // attribute names ending in `text`. Without the guard,
+    // framework-internal placeholder/error labels would pollute
+    // the scanned-strings array and break downstream locale-
+    // fallback assertions. Mirrors the boundary used in
+    // androidShowsBanner.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node hint-text="Enter search" error-text="Required" sub-text="Hint" text="Hello" content-desc="World" />',
+    });
+    const driver = await createAndroidDriver();
+    const result = await driver.androidScanAllRenderedStrings('Theo', 1);
+    expect(result).toEqual(expect.arrayContaining(['Hello', 'World']));
+    expect(result).toHaveLength(2);
+    // The compound-attr values must NOT pollute the scanned-strings
+    expect(result).not.toContain('Enter search');
+    expect(result).not.toContain('Required');
+    expect(result).not.toContain('Hint');
+  });
+
   test('text containing embedded quotes is captured up to next non-escaped quote', async () => {
     // uiautomator XML escapes literal `"` in attribute values as
     // `&quot;`. Pin the foundation behaviour: `[^"]*` in the regex

@@ -819,8 +819,14 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const dump = await driver.androidUiDump();
     if (!dump) return [];
     const collected = new Set();
+    // Round 1 I-1 fix: the `(?<![\w-])` negative lookbehind blocks
+    // compound attribute names ending in `text` (e.g. `hint-text=`,
+    // `error-text=`, `sub-text=`). Without the guard, framework-
+    // internal placeholder/error labels would pollute the scanned-
+    // strings array and break downstream locale-fallback assertions.
+    // Mirrors the boundary used in androidShowsBanner (line 308).
     // eslint-disable-next-line sonarjs/slow-regex
-    const attrRx = /(?:text|content-desc)="([^"]*)"/g;
+    const attrRx = /(?<![\w-])(?:text|content-desc)="([^"]*)"/g;
     for (const m of dump.matchAll(attrRx)) {
       const value = m[1].trim();
       if (value) collected.add(value);
