@@ -6009,4 +6009,63 @@ describe('android-adb-driver — androidShowsGiftFromSender', () => {
     const driver = await createAndroidDriver();
     expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(false);
   });
+
+  test('hyphen-suffix blocked on sender — "Adam" hint ≠ "Adam-Lee"', async () => {
+    // Round 1 I-1: symmetric coverage with the giftId hyphen-suffix
+    // pin above. The symmetric `(?<![\w-])...(?![\w-])` boundary
+    // blocks compound name suffixes for the sender arg too.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam-Lee sent crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(false);
+  });
+
+  test('hyphen-prefix blocked on sender — "Adam" hint ≠ "pre-Adam"', async () => {
+    // Round 1 I-1: symmetric prefix variant for sender. The
+    // boundary lookbehind blocks hyphen-prefixed forms equally.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="crown from pre-Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(false);
+  });
+
+  test('cross-entry: giftId and sender from different entries both appear → true (known; orchestrator enforces single-entry invariant)', async () => {
+    // Round 1 I-2: documents the foundation contract gap. The two
+    // substring scans run independently over the WHOLE dump — if
+    // multiple gift entries are visible, the assertion can pass
+    // even when no single entry matches both giftId AND sender
+    // (cross-entry false positive).
+    //
+    // This is a KNOWN limitation. The production comment at the
+    // driver method documents that "the journey orchestrator
+    // ensures only one gift entry is shown at the time of the
+    // assertion, so cross-entry false positives aren't reachable."
+    // This test pins that behaviour explicitly — without it, the
+    // contract gap was undocumented in the test record.
+    //
+    // Setup: entry-1 has "crown from Alice", entry-2 has "rose
+    // from Adam". Assertion "crown from Adam" passes because crown
+    // matches entry-1 AND Adam matches entry-2.
+    //
+    // A future PR layering per-entry verification (via per-entry
+    // testTags) would tighten this — this pin would then be
+    // updated to `expect(...).toBe(false)`.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="crown from Alice" />' +
+        '<node text="rose from Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(true);
+  });
 });
