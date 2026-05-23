@@ -1315,6 +1315,28 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 92 — `<Name>'s Android UI shows the PM thread with
+  // document direction "<X>"` (j18:33). Driver receives
+  // `(name, direction)` where direction is "rtl" or "ltr".
+  //
+  // Foundation strategy: presence-check the conversation thread is
+  // open (privateChat_messageInput testTag PRESENT). The direction
+  // arg is accepted-and-ignored — RTL layout direction isn't
+  // surfaced via uiautomator's resource-id attributes on Compose;
+  // it's controlled by `Configuration.getLayoutDirection()` which
+  // requires a different inspection mechanism.
+  //
+  // A future PR could layer direction verification via `adb shell
+  // getprop persist.sys.locale` or parsing uiautomator's `class`
+  // attribute for layout-direction hints.
+  driver.androidShowsPmThreadDirection = async (_name, _direction) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

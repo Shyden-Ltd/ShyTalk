@@ -8187,3 +8187,189 @@ describe('android-adb-driver — androidShowsSystemPmFromOfficia', () => {
     expect(await driver.androidShowsSystemPmFromOfficia('Selma')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsPmThreadDirection', () => {
+  // Wake 92 matcher — `<Name>'s Android UI shows the PM thread with
+  // document direction "<X>"` (j18:33). Driver receives
+  // `(name, direction)` where direction is "rtl" or "ltr".
+  //
+  // Foundation strategy: presence-check the conversation thread is
+  // open (privateChat_messageInput testTag PRESENT). The direction
+  // arg is accepted-and-ignored — RTL layout direction isn't
+  // surfaced via uiautomator's resource-id attributes on Compose;
+  // it's controlled by `Configuration.getLayoutDirection()` which
+  // requires a different inspection mechanism.
+  //
+  // The journey ensures this matcher only fires after locale
+  // switching has settled the layout direction. A future PR could
+  // layer direction verification via `adb shell getprop persist.sys.locale`
+  // or parsing uiautomator's `class` attribute for layout-direction
+  // hints.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('privateChat_messageInput present + direction "rtl" → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsPmThreadDirection('Selma', 'rtl')).toBe(true);
+  });
+
+  test('privateChat_messageInput present + direction "ltr" → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsPmThreadDirection('Selma', 'ltr')).toBe(true);
+  });
+
+  test('privateChat_messageInput absent (wrong screen) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsPmThreadDirection('Selma', 'rtl')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsPmThreadDirection('Selma', 'rtl')).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsPmThreadDirection('Selma', 'rtl')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput"><node text="placeholder" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsPmThreadDirection('Selma', 'rtl')).toBe(true);
+  });
+
+  test('left-boundary false-positive — pre_privateChat_messageInput_x does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_privateChat_messageInput_x" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsPmThreadDirection('Selma', 'rtl')).toBe(false);
+  });
+
+  test('right-boundary false-positive — privateChat_messageInput_extra does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput_extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsPmThreadDirection('Selma', 'rtl')).toBe(false);
+  });
+
+  test('package-qualified left-boundary — :id/pre_privateChat_messageInput does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsPmThreadDirection('Selma', 'rtl')).toBe(false);
+  });
+
+  test('bare left-boundary no suffix — pre_privateChat_messageInput does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsPmThreadDirection('Selma', 'rtl')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsPmThreadDirection('Selma', 'rtl')).toBe(false);
+  });
+
+  test('persona name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    const okSelma = await driver.androidShowsPmThreadDirection('Selma', 'rtl');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okBea = await driver2.androidShowsPmThreadDirection('Bea', 'rtl');
+
+    expect(okSelma).toBe(true);
+    expect(okBea).toBe(true);
+  });
+
+  test('arbitrary direction value ignored — "foobar" still passes', async () => {
+    // Foundation contract pin: direction is accepted-and-ignored
+    // regardless of value. Pins that the foundation doesn't
+    // validate the direction string against a known list.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsPmThreadDirection('Selma', 'foobar')).toBe(true);
+  });
+
+  test('undefined direction → true (suffix accepted-and-ignored regardless)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsPmThreadDirection('Selma', undefined)).toBe(true);
+  });
+
+  test('first-match contract — two privateChat_messageInput nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsPmThreadDirection('Selma', 'rtl')).toBe(true);
+  });
+});
