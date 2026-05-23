@@ -20457,7 +20457,141 @@ describe('Wake 98 — `<Name>\'s <Plat> UI shows <Other> in the results[ with di
       ctx,
     );
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/iosShowsInResults/);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsInResults/);
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsInResults: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Mia's iOS Sim UI shows Marcus in the results" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Marcus|results/i);
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsInResults: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Adam\'s Android UI shows Alice in the results with displayName "Alice"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|results/i);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's Android UI shows Alice in the results" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsInResults/);
+  });
+
+  // Web — full 3-test set
+  test('Web matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsInResults: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web UI shows Bob in the results" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'Bob', null);
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsInResults: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web UI shows Bob in the results" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Bob|results/i);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web UI shows Bob in the results" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsInResults/);
+  });
+
+  // Web Chromium variant
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsInResults: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Chromium UI shows Bob in the results" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'Bob', null);
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsInResults: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Chromium UI shows Bob in the results" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Bob|results/i);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Chromium UI shows Bob in the results" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsInResults/);
+  });
+
+  // Web Safari variant
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsInResults: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Safari UI shows Bob in the results" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'Bob', null);
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsInResults: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Safari UI shows Bob in the results" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Bob|results/i);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Safari UI shows Bob in the results" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsInResults/);
   });
 });
 

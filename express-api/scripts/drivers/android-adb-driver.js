@@ -1726,6 +1726,31 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 98 — `<Name>'s <Plat> UI shows <Other> in the results[ with
+  // displayName "<X>"]` (j01/j02). Discovery list result visibility.
+  // Optional displayName suffix. Driver receives
+  // `(viewer, target, displayName)` — displayName may be `null` (no
+  // `with displayName` suffix in step).
+  //
+  // Foundation strategy: presence-check on the `searchResults_*`
+  // testTag PREFIX. No `searchResults_*` testTag exists in
+  // shared/src/commonMain yet — NewMessageScreen.kt exposes only
+  // `newMessage_searchField` for the input box, not per-result tiles.
+  //
+  // Returns false in real journeys today; lands true when ships with
+  // searchResults_userTile / searchResults_container.
+  //
+  // Per-user verification needs user-id → testTag map. Per-displayName
+  // verification needs text-extraction. Both deferred. All 3 args
+  // (_viewer, _target, _displayName) accepted-and-ignored.
+  driver.androidShowsInResults = async (_viewer, _target, _displayName) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?searchResults_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
