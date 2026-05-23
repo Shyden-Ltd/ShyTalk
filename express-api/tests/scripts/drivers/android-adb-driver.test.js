@@ -9177,3 +9177,236 @@ describe('android-adb-driver — androidTapFromSurface', () => {
     );
   });
 });
+
+describe('android-adb-driver — androidAdminShowsAppealText', () => {
+  // Wake 89 — `<Name>'s <Plat> Admin UI shows <Other>'s appeal with the
+  // text` (j11:73). Admin moderation UI assertion. Driver verifies an
+  // appeal section is visible for <Other> with non-empty body text.
+  //
+  // Foundation strategy: presence-check on `adminAppeal_appealText`
+  // testTag. The current app has NO admin moderation surface in
+  // shared/src/commonMain — only the USER-side suspension/appeal flow
+  // exists (suspension_appealField / suspension_submitAppealButton in
+  // SuspensionScreen.kt). The admin reviewer side is web-only today.
+  //
+  // So this method returns false in real journeys today. When/if an
+  // Android admin app ships with `adminAppeal_*` testTags, this stays
+  // sound — the wildcard prefix match will land.
+  //
+  // Both args (`_viewer`, `_target`) are accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('adminAppeal_appealText present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminAppeal_appealText" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', 'Selma')).toBe(true);
+  });
+
+  test('adminAppeal_panel present → true (any adminAppeal_* matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminAppeal_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', 'Selma')).toBe(true);
+  });
+
+  test('absent (no admin surface visible) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', 'Selma')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', 'Selma')).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="adminAppeal_appealText" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', 'Selma')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminAppeal_appealText"><node text="I would like to appeal" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', 'Selma')).toBe(true);
+  });
+
+  test('left-boundary false-positive — pre_adminAppeal_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_adminAppeal_appealText" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', 'Selma')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_adminAppeal_appealText does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_adminAppeal_appealText" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', 'Selma')).toBe(false);
+  });
+
+  test('similar but distinct prefix — suspension_appealField does NOT match', async () => {
+    // The user-side suspension appeal field is distinct from the
+    // admin-side review panel. Pin that they don't conflate.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/suspension_appealField" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', 'Selma')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', 'Selma')).toBe(false);
+  });
+
+  test('viewer name accepted-and-ignored — Bea also passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminAppeal_appealText" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Bea', 'Selma')).toBe(true);
+  });
+
+  test('target name accepted-and-ignored — different target passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminAppeal_appealText" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', 'Theo')).toBe(true);
+  });
+
+  test('null viewer → true (viewer accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminAppeal_appealText" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText(null, 'Selma')).toBe(true);
+  });
+
+  test('undefined viewer → true (viewer accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminAppeal_appealText" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText(undefined, 'Selma')).toBe(true);
+  });
+
+  test('empty viewer → true (viewer accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminAppeal_appealText" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('', 'Selma')).toBe(true);
+  });
+
+  test('whitespace viewer → true (viewer accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminAppeal_appealText" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('   ', 'Selma')).toBe(true);
+  });
+
+  test('null target → true (target accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminAppeal_appealText" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', null)).toBe(true);
+  });
+
+  test('undefined target → true (target accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminAppeal_appealText" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', undefined)).toBe(true);
+  });
+
+  test('empty target → true (target accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminAppeal_appealText" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', '')).toBe(true);
+  });
+
+  test('whitespace target → true (target accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminAppeal_appealText" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', '   ')).toBe(true);
+  });
+
+  test('first-match contract — two adminAppeal_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminAppeal_appealText" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/adminAppeal_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsAppealText('Mod', 'Selma')).toBe(true);
+  });
+});

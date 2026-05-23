@@ -1439,6 +1439,29 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 89 — `<Name>'s <Plat> Admin UI shows <Other>'s appeal with the
+  // text` (j11:73). Admin moderation UI assertion. Driver verifies an
+  // appeal section is visible for <Other> with non-empty body text.
+  //
+  // Foundation strategy: presence-check on the `adminAppeal_*` testTag
+  // PREFIX. The current app has NO admin moderation surface in
+  // shared/src/commonMain — only the USER-side flow exists
+  // (`suspension_appealField` / `suspension_submitAppealButton` in
+  // SuspensionScreen.kt). The admin reviewer side is web-only today.
+  //
+  // Returns false in real journeys today. When/if an Android admin app
+  // ships with `adminAppeal_*` testTags, this stays sound — the wildcard
+  // prefix match will land.
+  //
+  // Both args (`_viewer`, `_target`) are accepted-and-ignored.
+  driver.androidAdminShowsAppealText = async (_viewer, _target) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?adminAppeal_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
