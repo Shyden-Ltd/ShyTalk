@@ -16923,7 +16923,139 @@ describe('Wake 87 — "<Name>\'s <Plat> UI shows a chart of beans earned per wee
       ctx,
     );
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/webShowsBeansPerWeekChart/);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsBeansPerWeekChart/);
+  });
+
+  // Web Chromium variant — full 3-test set per cluster checklist
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsBeansPerWeekChart: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Bao's Web Chromium UI shows a chart of beans earned per week" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Bao');
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsBeansPerWeekChart: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Bao's Web Chromium UI shows a chart of beans earned per week" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/chart|beans/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Bao's Web Chromium UI shows a chart of beans earned per week" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsBeansPerWeekChart/);
+  });
+
+  // Web Safari variant — full 3-test set
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsBeansPerWeekChart: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Bao's Web Safari UI shows a chart of beans earned per week" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Bao');
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsBeansPerWeekChart: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Bao's Web Safari UI shows a chart of beans earned per week" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/chart|beans/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Bao's Web Safari UI shows a chart of beans earned per week" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsBeansPerWeekChart/);
+  });
+
+  // Android branch — routes to ctx.uiDriver.androidShowsBeansPerWeekChart
+  test('Android matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { androidShowsBeansPerWeekChart: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Bao's Android UI shows a chart of beans earned per week" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Bao');
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsBeansPerWeekChart: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Bao's Android UI shows a chart of beans earned per week" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/chart|beans/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Bao's Android UI shows a chart of beans earned per week" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsBeansPerWeekChart/);
+  });
+
+  // iOS Sim branch — routes to ctx.uiDriver.iosShowsBeansPerWeekChart
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsBeansPerWeekChart: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Bao's iOS Sim UI shows a chart of beans earned per week" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Bao');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsBeansPerWeekChart: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Bao's iOS Sim UI shows a chart of beans earned per week" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/chart|beans/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Bao's iOS Sim UI shows a chart of beans earned per week" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsBeansPerWeekChart/);
   });
 });
 

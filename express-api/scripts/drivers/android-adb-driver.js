@@ -1637,6 +1637,27 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 87 — `<Name>'s <Plat> UI shows a chart of beans earned per
+  // week` (j17:74). Bare chart-presence assertion. Driver receives
+  // `(name)`.
+  //
+  // Foundation strategy: presence-check on the `beansChart_*` testTag
+  // PREFIX. No `beansChart_*` testTag exists in shared/src/commonMain
+  // yet — the beans-earnings chart UI is unbuilt. Returns false in
+  // real journeys today; lands true when the chart ships with
+  // `beansChart_*` testTags (e.g. beansChart_container,
+  // beansChart_weekBar).
+  //
+  // Bin-level value verification is out of scope (matcher contract is
+  // "bare chart-presence assertion"). `_name` accepted-and-ignored.
+  driver.androidShowsBeansPerWeekChart = async (_name) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?beansChart_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

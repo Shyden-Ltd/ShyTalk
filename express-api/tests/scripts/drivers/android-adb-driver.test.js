@@ -11351,3 +11351,201 @@ describe('android-adb-driver — androidRefreshLanguageRail', () => {
     expect(await driver.androidRefreshLanguageRail('Yuki')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsBeansPerWeekChart', () => {
+  // Wake 87 — `<Name>'s <Plat> UI shows a chart of beans earned per
+  // week` (j17:74). Bare chart-presence assertion. Driver receives
+  // `(name)`.
+  //
+  // Foundation strategy: presence-check on the `beansChart_*` testTag
+  // PREFIX. No `beansChart_*` testTag exists in shared/src/commonMain
+  // yet — the beans-earnings chart UI is unbuilt. Returns false in
+  // real journeys today; lands true when the chart ships with
+  // `beansChart_*` testTags (e.g. beansChart_container,
+  // beansChart_weekBar).
+  //
+  // Bin-level value verification is out of scope (matcher contract:
+  // "bare chart-presence assertion"). `_name` accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('beansChart_container present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/beansChart_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('Yuki')).toBe(true);
+  });
+
+  test('beansChart_weekBar present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/beansChart_weekBar" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('Yuki')).toBe(true);
+  });
+
+  test('absent (no chart) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('Yuki')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('Yuki')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="beansChart_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('Yuki')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/beansChart_container"><node text="W1" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('Yuki')).toBe(true);
+  });
+
+  test('left-boundary — pre_beansChart_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_beansChart_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('Yuki')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_beansChart_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_beansChart_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('Yuki')).toBe(false);
+  });
+
+  test('right-boundary — beansChart_containerExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/beansChart_containerExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('Yuki')).toBe(true);
+  });
+
+  test('confusable prefix — beans_chartPanel does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/beans_chartPanel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('Yuki')).toBe(false);
+  });
+
+  test('bare confusable prefix — beans_chartPanel does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="beans_chartPanel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('Yuki')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('Yuki')).toBe(false);
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/beansChart_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('Bao')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/beansChart_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart(null)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/beansChart_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart(undefined)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/beansChart_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/beansChart_container" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('   ')).toBe(true);
+  });
+
+  test('first-match contract — two beansChart_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/beansChart_container" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/beansChart_weekBar" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsBeansPerWeekChart('Yuki')).toBe(true);
+  });
+});
