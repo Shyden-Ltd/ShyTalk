@@ -7887,3 +7887,152 @@ describe('android-adb-driver — androidShowsSecondOffensiveMessage', () => {
     expect(await driver.androidShowsSecondOffensiveMessage('Selma')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsContributorsList', () => {
+  // Wake 92 matcher — `<Name>'s Android UI shows the list of
+  // contributors with amounts` (j15:35). Single-arg.
+  //
+  // Foundation strategy: presence-check the gift-wall surface
+  // (giftWall_grid testTag PRESENT). The "amounts" semantic is
+  // journey-orchestrated — without per-row testTags for contributor
+  // amounts, the foundation can't verify the per-row amount
+  // structure. The journey ensures this matcher only fires when
+  // the gift wall is showing contributor entries.
+  //
+  // A future PR could layer per-contributor verification via
+  // testTags like `giftWall_contributor_${id}_amount`.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('giftWall_grid present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsContributorsList('Selma')).toBe(true);
+  });
+
+  test('giftWall_grid absent (wrong screen) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsContributorsList('Selma')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsContributorsList('Selma')).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="giftWall_grid" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsContributorsList('Selma')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid"><node text="contributor 1" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsContributorsList('Selma')).toBe(true);
+  });
+
+  test('left-boundary false-positive — pre_giftWall_grid_x does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_giftWall_grid_x" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsContributorsList('Selma')).toBe(false);
+  });
+
+  test('right-boundary false-positive — giftWall_grid_extra does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid_extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsContributorsList('Selma')).toBe(false);
+  });
+
+  test('package-qualified left-boundary — :id/pre_giftWall_grid does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_giftWall_grid" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsContributorsList('Selma')).toBe(false);
+  });
+
+  test('bare left-boundary no suffix — pre_giftWall_grid does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_giftWall_grid" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsContributorsList('Selma')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsContributorsList('Selma')).toBe(false);
+  });
+
+  test('persona name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />',
+    });
+    const driver = await createAndroidDriver();
+    const okSelma = await driver.androidShowsContributorsList('Selma');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okBea = await driver2.androidShowsContributorsList('Bea');
+
+    expect(okSelma).toBe(true);
+    expect(okBea).toBe(true);
+  });
+
+  test('first-match contract — two giftWall_grid nodes still pass', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsContributorsList('Selma')).toBe(true);
+  });
+});

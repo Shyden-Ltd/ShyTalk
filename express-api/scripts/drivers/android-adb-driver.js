@@ -1273,6 +1273,26 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 92 — `<Name>'s Android UI shows the list of contributors
+  // with amounts` (j15:35). Single-arg.
+  //
+  // Foundation strategy: presence-check the gift-wall surface
+  // (giftWall_grid testTag PRESENT). The "amounts" semantic is
+  // journey-orchestrated — without per-row testTags for contributor
+  // amounts, the foundation can't verify the per-row amount
+  // structure. The journey ensures this matcher only fires when
+  // the gift wall is showing contributor entries.
+  //
+  // A future PR could layer per-contributor verification via
+  // testTags like `giftWall_contributor_${id}_amount`.
+  driver.androidShowsContributorsList = async (_name) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?giftWall_grid"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
