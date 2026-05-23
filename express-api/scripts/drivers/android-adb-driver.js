@@ -1153,6 +1153,37 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return statusRx.test(dump);
   };
 
+  // Wake 104 — `<Name>'s Android Admin UI shows N rows in the <X>
+  // table` (j12 — generic admin table row-count assertion). Driver
+  // receives `(viewer, count, tableName)`.
+  //
+  // Foundation strategy: same TABLE_TAGS lookup as PR #740's
+  // androidAdminShowsTableOf. Same TABLE_TAGS constant is
+  // intentionally redeclared in this closure for symmetry and
+  // future independent evolution. Currently one entry:
+  //   - "reports" → reportReview_list
+  //
+  // The COUNT is journey-orchestrated and ignored at foundation —
+  // no per-row testTag exists for counting matching rows. A future
+  // PR could layer this with `reportReview_row_${id}` parameterised
+  // testTags + a counter scan.
+  //
+  // Unmapped tableNames return false (FAIL-loud) — same scaffold-
+  // then-expand discipline as INPUT_TAGS (PR #737), TABLE_TAGS
+  // (PR #740), SEARCH_FIELD_TAGS (PR #741), PATH_TAGS (PR #744).
+  const ROW_COUNT_TABLE_TAGS = { reports: 'reportReview_list' };
+  driver.androidAdminShowsRowCountInTable = async (_viewer, _count, tableName) => {
+    if (typeof tableName !== 'string' || !tableName.trim()) return false;
+    const tag = ROW_COUNT_TABLE_TAGS[tableName.trim().toLowerCase()];
+    if (!tag) return false;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${escTag}"[^>]*\\/?>`);
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

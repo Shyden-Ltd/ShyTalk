@@ -6940,3 +6940,243 @@ describe('android-adb-driver — androidAdminShowsRowForWithStatus', () => {
     ).toBe(false);
   });
 });
+
+describe('android-adb-driver — androidAdminShowsRowCountInTable', () => {
+  // Wake 104 matcher — `<Name>'s Android Admin UI shows N rows in
+  // the <X> table` (j12 — generic admin table row-count assertion).
+  // Driver receives `(viewer, count, tableName)`.
+  //
+  // Foundation strategy: same TABLE_TAGS lookup as PR #740's
+  // androidAdminShowsTableOf. Currently one entry:
+  //   - "reports" → reportReview_list
+  //
+  // The COUNT is journey-orchestrated and ignored at foundation —
+  // no per-row testTag exists for counting matching rows. A future
+  // PR could layer this with `reportReview_row_${id}` parameterised
+  // testTags + a counter scan.
+  //
+  // Unmapped tableNames return false (FAIL-loud) — same contract
+  // as PR #740.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('"reports" table + tag present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, 'reports')).toBe(true);
+  });
+
+  test('"reports" table absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, 'reports')).toBe(false);
+  });
+
+  test('unmapped tableName "transactions" → false (FAIL-loud)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, 'transactions')).toBe(false);
+  });
+
+  test('count is ignored — N=1 and N=42 both pass when table visible', async () => {
+    // Foundation contract pin: count is accepted but not verified.
+    // Without per-row testTags, counting matching rows isn't
+    // possible. The journey orchestrator is responsible for
+    // verifying actual row count.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    const ok1 = await driver.androidAdminShowsRowCountInTable('Greta', 1, 'reports');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const ok42 = await driver2.androidAdminShowsRowCountInTable('Greta', 42, 'reports');
+
+    expect(ok1).toBe(true);
+    expect(ok42).toBe(true);
+  });
+
+  test('count=0 (empty assertion) — still returns true if table visible (foundation contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 0, 'reports')).toBe(true);
+  });
+
+  test('case-insensitive tableName — "REPORTS" resolves', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, 'REPORTS')).toBe(true);
+  });
+
+  test('whitespace-padded tableName resolves after trim', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, '  reports  ')).toBe(true);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, 'reports')).toBe(false);
+  });
+
+  test('empty tableName → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, '')).toBe(false);
+  });
+
+  test('whitespace-only tableName → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, '   ')).toBe(false);
+  });
+
+  test('null tableName → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, null)).toBe(false);
+  });
+
+  test('undefined tableName → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, undefined)).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, 'reports')).toBe(true);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, 'reports')).toBe(false);
+  });
+
+  test('viewer name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    const okGreta = await driver.androidAdminShowsRowCountInTable('Greta', 1, 'reports');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okAlice = await driver2.androidAdminShowsRowCountInTable('Alice', 1, 'reports');
+
+    expect(okGreta).toBe(true);
+    expect(okAlice).toBe(true);
+  });
+
+  test('left-boundary inherited from regex — pre_reportReview_list_x does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_reportReview_list_x" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, 'reports')).toBe(false);
+  });
+
+  test('right-boundary — reportReview_list_extra does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list_extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, 'reports')).toBe(false);
+  });
+
+  test('multi-word tableName "user reports" → false (not in TABLE_TAGS)', async () => {
+    // Matcher regex allows `\w+(?:[ -]\w+)?` — both "user reports"
+    // and "user-reports" are reachable. Both unmapped → false.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, 'user reports')).toBe(false);
+  });
+
+  test('hyphenated tableName "user-reports" → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, 'user-reports')).toBe(false);
+  });
+});
