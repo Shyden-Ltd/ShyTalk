@@ -21059,4 +21059,91 @@ describe('Wake 106 — `<Name>\'s <Plat> Admin UI shows the "<X>" stat`', () => 
     expect(r.ok).toBe(true);
     expect(spy).toHaveBeenCalledWith('Greta', 'Blocked cross-cohort attempts (24h)');
   });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webAdminShowsStat: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Greta\'s Web Admin UI shows the "Daily Active Users" stat' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Daily Active Users|stat/i);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Greta\'s Web Admin UI shows the "Daily Active Users" stat' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/webAdminShowsStat/);
+  });
+
+  // Android branch — routes to ctx.uiDriver.androidAdminShowsStat
+  test('Android matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { androidAdminShowsStat: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Greta\'s Android Admin UI shows the "Daily Active Users" stat' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Greta', 'Daily Active Users');
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidAdminShowsStat: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Greta\'s Android Admin UI shows the "Daily Active Users" stat' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Daily Active Users|stat/i);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Greta\'s Android Admin UI shows the "Daily Active Users" stat' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/androidAdminShowsStat/);
+  });
+
+  // iOS Sim branch — routes to ctx.uiDriver.iosAdminShowsStat
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosAdminShowsStat: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Greta\'s iOS Sim Admin UI shows the "Daily Active Users" stat' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Greta', 'Daily Active Users');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosAdminShowsStat: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Greta\'s iOS Sim Admin UI shows the "Daily Active Users" stat' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Daily Active Users|stat/i);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Greta\'s iOS Sim Admin UI shows the "Daily Active Users" stat' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/iosAdminShowsStat/);
+  });
 });

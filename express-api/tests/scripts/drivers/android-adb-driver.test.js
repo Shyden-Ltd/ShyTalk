@@ -9796,3 +9796,252 @@ describe('android-adb-driver — androidAdminShowsDashboardCounters', () => {
     ).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidAdminShowsStat', () => {
+  // Wake 106 — `<Name>'s <Plat> Admin UI shows the "<X>" stat` (j12).
+  // Named-stat visibility on the admin dashboard. Driver receives
+  // `(viewer, statName)` where statName is a free-form display label
+  // ("Daily Active Users", "Reports Resolved Today", etc.).
+  //
+  // Foundation strategy: presence-check on the `adminStat_*` testTag
+  // PREFIX. No admin moderation surface in shared/src/commonMain yet
+  // (web-only admin) — see siblings androidAdminShowsAppealText (#762)
+  // and androidAdminShowsDashboardCounters (#763). Returns false in
+  // real journeys today; lands true when `adminStat_*` testTags ship.
+  //
+  // Both args (`_viewer`, `_statName`) are accepted-and-ignored. The
+  // foundation does NOT verify that the specific named stat is
+  // displayed — it only verifies that ANY adminStat_* element is
+  // visible. Per-stat verification would need a stat-name → testTag
+  // map (similar to the SURFACE_TARGET_TAGS scaffold).
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('adminStat_dailyActiveUsers present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_dailyActiveUsers" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', 'Daily Active Users')).toBe(true);
+  });
+
+  test('adminStat_reportsResolved present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_reportsResolved" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', 'Reports Resolved Today')).toBe(true);
+  });
+
+  test('absent (no admin surface) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', 'Daily Active Users')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', 'Daily Active Users')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="adminStat_dailyActiveUsers" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', 'Daily Active Users')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_dailyActiveUsers"><node text="1,234" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', 'Daily Active Users')).toBe(true);
+  });
+
+  test('left-boundary — pre_adminStat_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_adminStat_dailyActiveUsers" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', 'Daily Active Users')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_adminStat_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_adminStat_dailyActiveUsers" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', 'Daily Active Users')).toBe(false);
+  });
+
+  test('right-boundary — adminStat_dailyActiveUsersExtra still matches (prefix contract)', async () => {
+    // Pin: the wildcard suffix `[^"]*` accepts ANY chars up to the
+    // closing quote, so a longer suffix is acceptable. If a future
+    // tightening required word-boundary, this test would catch it.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_dailyActiveUsersExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', 'Daily Active Users')).toBe(true);
+  });
+
+  test('confusable prefix — admin_statSummary does NOT match', async () => {
+    // Pin: the left anchor is `adminStat_` literally. A hypothetical
+    // `admin_*` family must not false-match.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/admin_statSummary" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', 'Daily Active Users')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', 'Daily Active Users')).toBe(false);
+  });
+
+  test('viewer name accepted-and-ignored — Bea passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_dailyActiveUsers" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Bea', 'Daily Active Users')).toBe(true);
+  });
+
+  test('null viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_dailyActiveUsers" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat(null, 'Daily Active Users')).toBe(true);
+  });
+
+  test('undefined viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_dailyActiveUsers" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat(undefined, 'Daily Active Users')).toBe(true);
+  });
+
+  test('empty viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_dailyActiveUsers" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('', 'Daily Active Users')).toBe(true);
+  });
+
+  test('whitespace viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_dailyActiveUsers" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('   ', 'Daily Active Users')).toBe(true);
+  });
+
+  test('null statName → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_dailyActiveUsers" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', null)).toBe(true);
+  });
+
+  test('undefined statName → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_dailyActiveUsers" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', undefined)).toBe(true);
+  });
+
+  test('empty statName → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_dailyActiveUsers" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', '')).toBe(true);
+  });
+
+  test('whitespace statName → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_dailyActiveUsers" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', '   ')).toBe(true);
+  });
+
+  test('different statName still passes (foundation does not match specific stat)', async () => {
+    // The foundation contract: ANY adminStat_* tag satisfies ANY stat
+    // name query. Per-stat verification needs a stat-name → testTag map.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_dailyActiveUsers" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', 'Reports Resolved Today')).toBe(true);
+  });
+
+  test('first-match contract — two adminStat_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_dailyActiveUsers" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/adminStat_reportsResolved" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsStat('Mod', 'Daily Active Users')).toBe(true);
+  });
+});

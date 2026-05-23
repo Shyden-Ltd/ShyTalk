@@ -1487,6 +1487,29 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 106 — `<Name>'s <Plat> Admin UI shows the "<X>" stat` (j12).
+  // Named-stat visibility on the admin dashboard. Driver receives
+  // `(viewer, statName)` where statName is a free-form display label.
+  //
+  // Foundation strategy: presence-check on the `adminStat_*` testTag
+  // PREFIX. No admin moderation surface in shared/src/commonMain yet
+  // (web-only admin) — see siblings androidAdminShowsAppealText (#762)
+  // and androidAdminShowsDashboardCounters (#763). Returns false in
+  // real journeys today; lands true when `adminStat_*` testTags ship.
+  //
+  // Both args (_viewer, _statName) accepted-and-ignored. The foundation
+  // does NOT verify that the specific named stat is displayed — it
+  // only verifies that ANY adminStat_* element is visible. Per-stat
+  // verification would need a stat-name → testTag map (similar to the
+  // SURFACE_TARGET_TAGS scaffold in #760).
+  driver.androidAdminShowsStat = async (_viewer, _statName) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?adminStat_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
