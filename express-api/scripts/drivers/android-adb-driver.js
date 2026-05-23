@@ -690,6 +690,35 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return !emptyRx.test(dump);
   };
 
+  // Wake 92 — `<Name>'s Android Admin UI shows a table of recent
+  // <X>` (j12:24). Generic admin-table presence assertion. The noun
+  // arg can be 1-3 words per the matcher's `(\w+(?:\s+\w+){0,2})`
+  // capture (e.g. "reports", "user reports", "active user reports").
+  //
+  // Foundation strategy: a TABLE_TAGS map from canonical noun to
+  // Compose testTag. Currently only one entry exists:
+  //   - "reports" → reportReview_list (the admin queue list)
+  //
+  // Unmapped nouns return false — same FAIL-loud contract as
+  // INPUT_TAGS in androidDisablesInput (PR #737). Future Compose
+  // work would add testTags for transactions/audits/users/etc.
+  //
+  // Returns boolean. The runner contract also accepts an array of
+  // entries for richer assertion chains, but the foundation just
+  // asserts visibility — a future PR can extract entries when
+  // needed (e.g. for "each entry shows <fields>" follow-up steps).
+  const TABLE_TAGS = { reports: 'reportReview_list' };
+  driver.androidAdminShowsTableOf = async (_viewer, noun) => {
+    if (!noun || !noun.trim()) return false;
+    const tag = TABLE_TAGS[noun.trim().toLowerCase()];
+    if (!tag) return false;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${tag}"[^>]*\\/?>`);
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

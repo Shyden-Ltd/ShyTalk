@@ -3759,3 +3759,249 @@ describe('android-adb-driver — androidAdminShowsNewReportInQueue', () => {
     expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidAdminShowsTableOf', () => {
+  // Wake 92 matcher — `<Name>'s Android Admin UI shows a table of
+  // recent <X>` (j12:24). Generic admin-table presence assertion.
+  // Driver receives `(viewer, noun)` where noun is 1-3 words
+  // (e.g. "reports", "user reports", "active user reports").
+  //
+  // Foundation strategy: a TABLE_TAGS map from canonical noun to
+  // Compose testTag. Currently only one entry exists:
+  //   - "reports" → reportReview_list (verified in PR #739)
+  //
+  // Unmapped nouns return false until the corresponding Compose
+  // testTag is added — same FAIL-loud contract as INPUT_TAGS in
+  // PR #737. Returns boolean (truthy = visible). The matcher
+  // protocol also supports returning an array of entries for richer
+  // assertion chains, but the foundation just asserts visibility —
+  // a future PR can extract entries when needed.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('"reports" noun with reportReview_list present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', 'reports')).toBe(true);
+  });
+
+  test('"reports" noun with table tag absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', 'reports')).toBe(false);
+  });
+
+  test('unmapped noun "transactions" → false (FAIL-loud contract)', async () => {
+    // Only "reports" is mapped today. An unmapped noun returns false
+    // even if the dump contains a similar-looking table. Protects
+    // journey-test authors from silently asserting against an
+    // unrelated node — they get a clear FAIL until the testTag
+    // mapping lands.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', 'transactions')).toBe(false);
+  });
+
+  test('case-insensitive noun — "REPORTS" maps to reports', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', 'REPORTS')).toBe(true);
+  });
+
+  test('noun with surrounding whitespace — "  reports  " maps to reports', async () => {
+    // Defensive against Gherkin authoring artifacts. The matcher
+    // regex `(\w+(?:\s+\w+){0,2})` shouldn't introduce leading/
+    // trailing whitespace, but the .trim() in the lookup defends
+    // against future regex tweaks.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', '  reports  ')).toBe(true);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', 'reports')).toBe(false);
+  });
+
+  test('empty noun arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', '')).toBe(false);
+  });
+
+  test('whitespace-only noun arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', '   ')).toBe(false);
+  });
+
+  test('null noun arg → false', async () => {
+    // Memory rule: pin null/undefined alongside empty + whitespace
+    // (see PR #737 R2 and the null-undefined-pins memory).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', null)).toBe(false);
+  });
+
+  test('undefined noun arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', undefined)).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', 'reports')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list"><node text="row 1" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', 'reports')).toBe(true);
+  });
+
+  test('left-boundary false-positive — pre_reportReview_list_x does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_reportReview_list_x" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', 'reports')).toBe(false);
+  });
+
+  test('right-boundary false-positive — reportReview_list_extra does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list_extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', 'reports')).toBe(false);
+  });
+
+  test('package-qualified left-boundary — :id/pre_reportReview_list does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', 'reports')).toBe(false);
+  });
+
+  test('bare left-boundary without suffix — pre_reportReview_list does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', 'reports')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false (not undefined)', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', 'reports')).toBe(false);
+  });
+
+  test('viewer name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    const okGary = await driver.androidAdminShowsTableOf('Gary', 'reports');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okAlice = await driver2.androidAdminShowsTableOf('Alice', 'reports');
+
+    expect(okGary).toBe(true);
+    expect(okAlice).toBe(true);
+  });
+
+  test('first-match contract pinned — two reportReview_list nodes, presence holds', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', 'reports')).toBe(true);
+  });
+
+  test('multi-word noun "user reports" → false (no testTag mapping)', async () => {
+    // Pins that compound nouns from the matcher's `(\w+(?:\s+\w+){0,2})`
+    // pattern are accepted by the matcher but return false from the
+    // driver until a TABLE_TAGS entry is added.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsTableOf('Gary', 'user reports')).toBe(false);
+  });
+});
