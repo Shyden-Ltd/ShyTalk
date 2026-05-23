@@ -13023,7 +13023,139 @@ describe('Wake 71 — UI no longer shows the <name> <kind>', () => {
       ctx,
     );
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/androidShowsNamedKind/);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsNamedKind/);
+  });
+
+  // iOS Sim — driver returns false → ok / returns true → fail / missing → fail
+  test('iOS Sim driver returns false (no longer shown) → ok', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsNamedKind: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Mia's iOS Sim UI no longer shows the wallet screen" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Mia', 'wallet', 'screen');
+  });
+
+  test('iOS Sim driver returns true (still shown) → fail', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsNamedKind: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Mia's iOS Sim UI no longer shows the wallet screen" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/wallet/);
+  });
+
+  test('iOS Sim no driver → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Mia's iOS Sim UI no longer shows the wallet screen" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsNamedKind/);
+  });
+
+  // Web — full 3-test set
+  test('Web driver returns false → ok', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsNamedKind: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web UI no longer shows the wallet screen" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'wallet', 'screen');
+  });
+
+  test('Web driver returns true → fail', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsNamedKind: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web UI no longer shows the wallet screen" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/wallet/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web UI no longer shows the wallet screen" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsNamedKind/);
+  });
+
+  // Web Chromium — full 3-test set
+  test('Web Chromium driver returns false → ok', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsNamedKind: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Chromium UI no longer shows the wallet screen" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'wallet', 'screen');
+  });
+
+  test('Web Chromium driver returns true → fail', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsNamedKind: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Chromium UI no longer shows the wallet screen" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/wallet/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Chromium UI no longer shows the wallet screen" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsNamedKind/);
+  });
+
+  // Web Safari — full 3-test set
+  test('Web Safari driver returns false → ok', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsNamedKind: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Safari UI no longer shows the wallet screen" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'wallet', 'screen');
+  });
+
+  test('Web Safari driver returns true → fail', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsNamedKind: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Safari UI no longer shows the wallet screen" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/wallet/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Safari UI no longer shows the wallet screen" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsNamedKind/);
   });
 });
 
