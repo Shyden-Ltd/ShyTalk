@@ -1428,8 +1428,14 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     if (!tag) return false;
     const dump = await driver.androidUiDump();
     if (!dump) return false;
+    // Defense-in-depth: regex-escape the tag value before interpolation,
+    // consistent with TABLE_TAGS (line 724), PATH_TAGS (line 932), and
+    // ROW_COUNT_TABLE_TAGS (line 1181). Current sole entry contains only
+    // `[A-Za-z_]`, but a future map value containing a regex metacharacter
+    // (e.g. `.` or `+`) would silently broaden the match without this guard.
+    const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // eslint-disable-next-line sonarjs/slow-regex
-    const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${tag}"[^>]*\\/?>`);
+    const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${escTag}"[^>]*\\/?>`);
     return tagRx.test(dump);
   };
 
