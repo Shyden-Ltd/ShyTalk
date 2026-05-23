@@ -21763,6 +21763,138 @@ describe('Wake 100 — "<Name>\'s <Plat> UI shows (her|his|their) own rank in th
     expect(r.ok).toBe(true);
     expect(spy).toHaveBeenCalledWith('Yuki', 10);
   });
+
+  // Android — driver returns false + missing
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsOwnRankInTop: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's Android UI shows his own rank in the top 50" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Adam|rank/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Adam's Android UI shows his own rank in the top 50" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsOwnRankInTop/);
+  });
+
+  // iOS Sim — driver returns false + missing
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsOwnRankInTop: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Yuki's iOS Sim UI shows their own rank in the top 10" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Yuki|rank/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Yuki's iOS Sim UI shows their own rank in the top 10" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsOwnRankInTop/);
+  });
+
+  // Web — driver returns false + missing
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsOwnRankInTop: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web UI shows her own rank in the top 100" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|rank/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web UI shows her own rank in the top 100" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsOwnRankInTop/);
+  });
+
+  // Web Chromium variant
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsOwnRankInTop: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Chromium UI shows her own rank in the top 100" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 100);
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsOwnRankInTop: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Chromium UI shows her own rank in the top 100" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|rank/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Chromium UI shows her own rank in the top 100" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsOwnRankInTop/);
+  });
+
+  // Web Safari variant
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsOwnRankInTop: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Safari UI shows her own rank in the top 100" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 100);
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsOwnRankInTop: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Safari UI shows her own rank in the top 100" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|rank/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web Safari UI shows her own rank in the top 100" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsOwnRankInTop/);
+  });
 });
 
 describe('Wake 100 — `<Name>\'s <Plat> UI shows the new "<X>" balance via Firestore listener`', () => {

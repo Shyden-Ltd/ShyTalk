@@ -13714,3 +13714,242 @@ describe('android-adb-driver — androidShowsOnlyMinorCohortInRankings', () => {
     expect(await driver.androidShowsOnlyMinorCohortInRankings('Mia')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsOwnRankInTop', () => {
+  // Wake 100 — `<Name>'s <Plat> UI shows (her|his|their) own rank in
+  // the top N` (j05). Leaderboard own-rank visibility. Pronoun is
+  // grammatical (not captured). Driver receives `(name, topN)` —
+  // topN is the integer cutoff (e.g. 10, 50, 100).
+  //
+  // Foundation strategy: presence-check on the `ownRank_*` testTag
+  // PREFIX. No `ownRank_*` testTag exists in shared/src/commonMain
+  // yet — leaderboard own-rank highlight is unbuilt. Returns false
+  // in real journeys today; lands true when ships with
+  // ownRank_indicator / ownRank_userRow etc.
+  //
+  // Per-topN verification (asserting the rank is within top N) needs
+  // text-extraction of the rank number. Deferred. Both args
+  // (_name, _topN) accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('ownRank_indicator present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(true);
+  });
+
+  test('ownRank_userRow present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/ownRank_userRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', 50)).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="ownRank_indicator" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator"><node text="#7" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(true);
+  });
+
+  test('left-boundary — pre_ownRank_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_ownRank_indicator" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(false);
+  });
+
+  test('bare left-boundary — pre_ownRank_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_ownRank_indicator" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(false);
+  });
+
+  test('right-boundary — ownRank_indicatorExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicatorExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(true);
+  });
+
+  test('confusable prefix — own_rankPanel does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/own_rankPanel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(false);
+  });
+
+  test('bare confusable prefix — own_rankPanel does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="own_rankPanel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(false);
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Bao', 10)).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop(null, 10)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop(undefined, 10)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('', 10)).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('   ', 10)).toBe(true);
+  });
+
+  test('null topN → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', null)).toBe(true);
+  });
+
+  test('undefined topN → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', undefined)).toBe(true);
+  });
+
+  test('0 topN → true (topN accepted-and-ignored regardless of value)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', 0)).toBe(true);
+  });
+
+  test('different topN still passes (foundation does not match specific cutoff)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', 9999)).toBe(true);
+  });
+
+  test('first-match contract — two ownRank_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/ownRank_userRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(true);
+  });
+});

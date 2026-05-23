@@ -12175,8 +12175,9 @@ const matchers = [
           ? 'androidShowsOwnRankInTop'
           : 'iosShowsOwnRankInTop';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, topN);
       if (!ok) {

@@ -1832,6 +1832,27 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 100 — `<Name>'s <Plat> UI shows (her|his|their) own rank in
+  // the top N` (j05). Leaderboard own-rank visibility. Driver receives
+  // `(name, topN)`.
+  //
+  // Foundation strategy: presence-check on the `ownRank_*` testTag
+  // PREFIX. No `ownRank_*` testTag exists in shared/src/commonMain
+  // yet — leaderboard own-rank highlight is unbuilt. Returns false in
+  // real journeys today; lands true when ships with
+  // ownRank_indicator / ownRank_userRow etc.
+  //
+  // Per-topN verification (asserting rank is within top N) needs
+  // text-extraction. Deferred. Both args (_name, _topN) accepted-
+  // and-ignored.
+  driver.androidShowsOwnRankInTop = async (_name, _topN) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?ownRank_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const NOUN_KIND_TAGS = {
     'appeal::button': 'suspension_submitAppealButton',
   };
