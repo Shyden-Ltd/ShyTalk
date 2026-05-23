@@ -1109,6 +1109,50 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return otherRx.test(dump);
   };
 
+  // Wake 98 — `<Name>'s Android Admin UI shows N row for "<X>" with
+  // status "<Y>"` (j01/j04 admin-queue row presence). Driver
+  // receives `(viewer, count, targetId, status)`.
+  //
+  // Foundation strategy: TRIPLE composition (mirrors PR #747's
+  // androidShowsGiftFromSender):
+  //   1. reportReview_list testTag PRESENT (admin queue visible)
+  //   2. targetId text appears with symmetric word-boundary
+  //   3. status text appears with symmetric word-boundary
+  //
+  // The COUNT (typically 1) is journey-orchestrated and ignored
+  // at foundation — no per-row testTag exists for counting matching
+  // rows. A future PR could layer this with `reportReview_row_${id}`
+  // parameterised testTags.
+  //
+  // Cross-row pass-through (same as PR #747): if multiple rows
+  // are visible with targetId in row-A and status in row-B, the
+  // assertion passes. Journey orchestrator's responsibility to
+  // ensure single-row context.
+  driver.androidAdminShowsRowForWithStatus = async (_viewer, _count, targetId, status) => {
+    if (typeof targetId !== 'string' || !targetId.trim()) return false;
+    if (typeof status !== 'string' || !status.trim()) return false;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // Step 1: admin queue visible
+    // eslint-disable-next-line sonarjs/slow-regex
+    const listRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?reportReview_list"[^>]*\/?>/;
+    if (!listRx.test(dump)) return false;
+    // Step 2: targetId appears with symmetric word-boundary
+    const escTarget = targetId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const targetRx = new RegExp(
+      `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escTarget}(?![\\w-])[^"]*"`,
+    );
+    if (!targetRx.test(dump)) return false;
+    // Step 3: status appears with symmetric word-boundary
+    const escStatus = status.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const statusRx = new RegExp(
+      `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escStatus}(?![\\w-])[^"]*"`,
+    );
+    return statusRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

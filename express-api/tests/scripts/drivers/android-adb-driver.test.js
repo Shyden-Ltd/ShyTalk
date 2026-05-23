@@ -6510,3 +6510,383 @@ describe('android-adb-driver — androidShowsNewUnreadConversation', () => {
     expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(false);
   });
 });
+
+describe('android-adb-driver — androidAdminShowsRowForWithStatus', () => {
+  // Wake 98 matcher — `<Name>'s Android Admin UI shows N row for
+  // "<X>" with status "<Y>"` (j01/j04 admin-queue row presence).
+  // Driver receives `(viewer, count, targetId, status)`.
+  //
+  // Foundation strategy: TRIPLE composition (mirrors PR #747's
+  // androidShowsGiftFromSender):
+  //   1. reportReview_list testTag PRESENT (admin queue visible)
+  //   2. targetId text appears with symmetric word-boundary
+  //   3. status text appears with symmetric word-boundary
+  //
+  // The COUNT (typically 1) is journey-orchestrated and ignored
+  // at foundation — no per-row testTag exists for counting matching
+  // rows. A future PR could layer per-row inspection once
+  // `reportReview_row_${id}` parameterised testTags ship.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('reportReview_list + targetId + status all present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 [pending review]" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', 'pending'),
+    ).toBe(true);
+  });
+
+  test('targetId in text, status in content-desc → true', async () => {
+    // Realistic admin rows split target + status across attrs.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123" /><node content-desc="status: pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', 'pending'),
+    ).toBe(true);
+  });
+
+  test('reportReview_list absent (wrong screen) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />' +
+        '<node text="riley-abc123 pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', 'pending'),
+    ).toBe(false);
+  });
+
+  test('targetId present + status absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 resolved" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', 'pending'),
+    ).toBe(false);
+  });
+
+  test('status present + targetId absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="someone-else pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', 'pending'),
+    ).toBe(false);
+  });
+
+  test('count is ignored — N=1 and N=3 both return same result', async () => {
+    // Foundation contract pin: count is accepted but ignored. The
+    // journey orchestrator is responsible for verifying the number
+    // of matching rows — a future PR could layer this.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 pending" />',
+    });
+    const driver = await createAndroidDriver();
+    const ok1 = await driver.androidAdminShowsRowForWithStatus(
+      'Greta',
+      1,
+      'riley-abc123',
+      'pending',
+    );
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 pending" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const ok3 = await driver2.androidAdminShowsRowForWithStatus(
+      'Greta',
+      3,
+      'riley-abc123',
+      'pending',
+    );
+
+    expect(ok1).toBe(true);
+    expect(ok3).toBe(true);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', 'pending'),
+    ).toBe(false);
+  });
+
+  test('empty targetId → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowForWithStatus('Greta', 1, '', 'pending')).toBe(false);
+  });
+
+  test('empty status → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', '')).toBe(
+      false,
+    );
+  });
+
+  test('null targetId → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowForWithStatus('Greta', 1, null, 'pending')).toBe(false);
+  });
+
+  test('null status → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', null)).toBe(
+      false,
+    );
+  });
+
+  test('undefined targetId → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowForWithStatus('Greta', 1, undefined, 'pending')).toBe(
+      false,
+    );
+  });
+
+  test('undefined status → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', undefined),
+    ).toBe(false);
+  });
+
+  test('whitespace-only targetId → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowForWithStatus('Greta', 1, '   ', 'pending')).toBe(
+      false,
+    );
+  });
+
+  test('whitespace-only status → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', '   ')).toBe(
+      false,
+    );
+  });
+
+  test('prefix-collision blocked on targetId — "riley" hint ≠ "rileyford"', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="rileyford pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley', 'pending')).toBe(
+      false,
+    );
+  });
+
+  test('hyphen-suffix blocked on status — "pending" hint ≠ "pending-review"', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 pending-review" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', 'pending'),
+    ).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="reportReview_list" /><node text="riley-abc123 pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', 'pending'),
+    ).toBe(true);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', 'pending'),
+    ).toBe(false);
+  });
+
+  test('viewer name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 pending" />',
+    });
+    const driver = await createAndroidDriver();
+    const okGreta = await driver.androidAdminShowsRowForWithStatus(
+      'Greta',
+      1,
+      'riley-abc123',
+      'pending',
+    );
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 pending" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okAlice = await driver2.androidAdminShowsRowForWithStatus(
+      'Alice',
+      1,
+      'riley-abc123',
+      'pending',
+    );
+
+    expect(okGreta).toBe(true);
+    expect(okAlice).toBe(true);
+  });
+
+  test('regex-significant chars on both args — escaped properly', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="user.42 status:in.review" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'user.42', 'in.review')).toBe(
+      true,
+    );
+  });
+
+  test('regex-significant chars — negative pins literal-dot escape', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="userX42 statusXin/review" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'user.42', 'in.review')).toBe(
+      false,
+    );
+  });
+
+  test('compound attribute names (hint-text=) NOT consulted for either arg', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node hint-text="riley-abc123 pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', 'pending'),
+    ).toBe(false);
+  });
+
+  test('cross-row pass-through documented — targetId in row-1, status in row-2 → true (orchestrator invariant)', async () => {
+    // Round 1 contract pin (mirrors PR #747's cross-entry pin):
+    // the two substring scans run INDEPENDENTLY over the whole
+    // dump. If multiple rows are visible with target and status
+    // split across them, the assertion can pass even though no
+    // single row matches both. This is a KNOWN limitation —
+    // documented in production. A future per-row testTag layer
+    // would tighten this.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 resolved" />' +
+        '<node text="other-user pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', 'pending'),
+    ).toBe(true);
+  });
+});
