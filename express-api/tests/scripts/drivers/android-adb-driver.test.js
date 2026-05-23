@@ -7526,6 +7526,21 @@ describe('android-adb-driver — androidShowsSeatWithIndicator', () => {
     expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on')).toBe(false);
   });
 
+  test('prefix-collision blocked on indicator — "mic-on" ≠ "notmic-on"', async () => {
+    // Round 1 pin: symmetric LEFT-boundary guard for indicator
+    // (matching the existing right-boundary pin above). The inner
+    // `(?<![\w-])` blocks word-char and hyphen prefixes equally for
+    // both target AND indicator args.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/room_seatGrid" />' +
+        '<node text="Adam notmic-on" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatWithIndicator('Selma', 'Adam', 'mic-on')).toBe(false);
+  });
+
   test('empty dump → false', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
