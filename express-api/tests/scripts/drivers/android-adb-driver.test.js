@@ -13276,3 +13276,243 @@ describe('android-adb-driver — androidShowsNonEmptyLocaleText', () => {
     expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsOfficialBadge', () => {
+  // Wake 88 — `<Name>'s <Plat> UI shows the official badge[ <suffix>]`
+  // (j13/j18). Bare and suffixed forms; the optional trailing fragment
+  // is passed to the driver verbatim so it can dispatch to the right
+  // slot ("on the sender avatar", "with Arabic label", etc.).
+  //
+  // Foundation strategy: presence-check on the `officialBadge_*`
+  // testTag PREFIX. No `officialBadge_*` testTag exists in
+  // shared/src/commonMain yet — Official-user badge UI is unbuilt.
+  // Returns false in real journeys today; lands true when ships with
+  // officialBadge_icon / officialBadge_label.
+  //
+  // Per-suffix dispatch (avatar vs label, language variant) deferred.
+  // All 2 args (_name, _suffix) accepted-and-ignored. Note: runner
+  // coerces a missing suffix to `''`, never null/undefined — pin both
+  // forms defensively anyway.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('officialBadge_icon present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/officialBadge_icon" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', '')).toBe(true);
+  });
+
+  test('officialBadge_label present + suffix passed → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/officialBadge_label" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', 'on the sender avatar')).toBe(true);
+  });
+
+  test('absent (no badge) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', '')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', '')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="officialBadge_icon" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', '')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/officialBadge_icon"><node text="Official" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', '')).toBe(true);
+  });
+
+  test('left-boundary — pre_officialBadge_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_officialBadge_icon" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', '')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_officialBadge_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_officialBadge_icon" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', '')).toBe(false);
+  });
+
+  test('right-boundary — officialBadge_iconExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/officialBadge_iconExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', '')).toBe(true);
+  });
+
+  test('confusable prefix — official_badgeRoot does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/official_badgeRoot" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', '')).toBe(false);
+  });
+
+  test('bare confusable prefix — official_badgeRoot does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="official_badgeRoot" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', '')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', '')).toBe(false);
+  });
+
+  test('name accepted-and-ignored — Layla passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/officialBadge_icon" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Layla', '')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/officialBadge_icon" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge(null, '')).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/officialBadge_icon" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge(undefined, '')).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/officialBadge_icon" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('', '')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/officialBadge_icon" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('   ', '')).toBe(true);
+  });
+
+  test('null suffix → true (defensive — runner passes empty string)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/officialBadge_icon" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', null)).toBe(true);
+  });
+
+  test('undefined suffix → true (defensive — runner passes empty string)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/officialBadge_icon" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', undefined)).toBe(true);
+  });
+
+  test('whitespace suffix → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/officialBadge_icon" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', '   ')).toBe(true);
+  });
+
+  test('different suffix still passes (foundation does not dispatch on suffix)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/officialBadge_icon" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', 'with Arabic label')).toBe(true);
+  });
+
+  test('first-match contract — two officialBadge_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/officialBadge_icon" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/officialBadge_label" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsOfficialBadge('Officia', '')).toBe(true);
+  });
+});

@@ -1790,6 +1790,27 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 88 — `<Name>'s <Plat> UI shows the official badge[ <suffix>]`
+  // (j13/j18). Bare and suffixed forms; the optional trailing fragment
+  // is passed verbatim so the driver can dispatch to the right slot
+  // ("on the sender avatar", "with Arabic label", etc.).
+  //
+  // Foundation strategy: presence-check on the `officialBadge_*`
+  // testTag PREFIX. No `officialBadge_*` testTag exists in
+  // shared/src/commonMain yet — Official-user badge UI is unbuilt.
+  // Returns false in real journeys today; lands true when ships with
+  // officialBadge_icon / officialBadge_label.
+  //
+  // Per-suffix dispatch (avatar vs label, language variant) deferred.
+  // Both args (_name, _suffix) accepted-and-ignored.
+  driver.androidShowsOfficialBadge = async (_name, _suffix) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?officialBadge_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const NOUN_KIND_TAGS = {
     'appeal::button': 'suspension_submitAppealButton',
   };

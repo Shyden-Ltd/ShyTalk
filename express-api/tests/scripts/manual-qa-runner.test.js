@@ -17784,6 +17784,137 @@ describe('Wake 88 — "<Name>\'s <Plat> UI shows the official badge[ <suffix>]"'
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/Hayato|badge/);
   });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Hayato's Android UI shows the official badge" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsOfficialBadge/);
+  });
+
+  // iOS Sim — full 3-test set
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsOfficialBadge: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Yuki's iOS Sim UI shows the official badge" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Yuki', '');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsOfficialBadge: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Yuki's iOS Sim UI shows the official badge" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Yuki|badge/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Yuki's iOS Sim UI shows the official badge" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsOfficialBadge/);
+  });
+
+  // Web — full 3-test set (Web ok already covered above by arabic-label test)
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsOfficialBadge: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web UI shows the official badge" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Layla|badge/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web UI shows the official badge" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsOfficialBadge/);
+  });
+
+  // Web Chromium variant
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsOfficialBadge: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web Chromium UI shows the official badge" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Layla', '');
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsOfficialBadge: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web Chromium UI shows the official badge" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Layla|badge/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web Chromium UI shows the official badge" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsOfficialBadge/);
+  });
+
+  // Web Safari variant
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsOfficialBadge: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web Safari UI shows the official badge" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Layla', '');
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsOfficialBadge: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web Safari UI shows the official badge" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Layla|badge/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web Safari UI shows the official badge" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsOfficialBadge/);
+  });
 });
 
 describe('Wake 88 — "<Name> on <Plat> opens <Other>\'s profile and taps "<X>""', () => {
