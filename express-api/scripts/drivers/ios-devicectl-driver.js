@@ -249,6 +249,27 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 90 — `<Name>'s <Plat> UI continues normally in the room`
+  // (j10). Mirrors Android sibling. Composite predicate: still IN
+  // the room AND NOT on a warning screen. Both axes are foundation
+  // presence-checks on testTag prefixes.
+  //
+  // Precedence: warning beats room. If both ROOM_MARKERS and
+  // WARNING_MARKERS appear, the user is NOT continuing normally
+  // (warning blocks interaction).
+  //
+  // The `_name` arg is accepted-and-ignored.
+  driver.iosContinuesNormallyInRoom = async (_name) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const warningRx = /<XCUIElementType\w+[^>]*\bidentifier="warning_[^"]*"[^>]*\/?>/;
+    if (warningRx.test(dump)) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const roomRx = /<XCUIElementType\w+[^>]*\bidentifier="room_[^"]*"[^>]*\/?>/;
+    return roomRx.test(dump);
+  };
+
   driver.close = async () => {
     /* devicectl is stateless; nothing to release */
   };

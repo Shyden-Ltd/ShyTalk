@@ -984,6 +984,126 @@ describe('ios-devicectl-driver — iosApproveSeatRequest', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosContinuesNormallyInRoom', () => {
+  // Wake 90 — `<Name>'s <Plat> UI continues normally in the room`
+  // (j10). Composite predicate: IN room AND NOT on warning screen.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('room marker present + no warning → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosContinuesNormallyInRoom('Alice')).toBe(true);
+  });
+
+  test('warning marker present (even with room) → false (warning beats room)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid" />' +
+        '<XCUIElementTypeOther identifier="warning_title" />',
+    );
+    expect(await driver.iosContinuesNormallyInRoom('Alice')).toBe(false);
+  });
+
+  test('warning marker only → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="warning_title" />');
+    expect(await driver.iosContinuesNormallyInRoom('Alice')).toBe(false);
+  });
+
+  test('absent (no room, no warning) → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosContinuesNormallyInRoom('Alice')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosContinuesNormallyInRoom('Alice')).toBe(false);
+  });
+
+  test('bare room marker (no package qualifier) → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_chatInput" />');
+    expect(await driver.iosContinuesNormallyInRoom('Alice')).toBe(true);
+  });
+
+  test('non-self-closing tag form room marker → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid"><XCUIElementTypeStaticText name="Bao" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosContinuesNormallyInRoom('Alice')).toBe(true);
+  });
+
+  test('left-boundary — pre_room_X does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="pre_room_seatGrid" />');
+    expect(await driver.iosContinuesNormallyInRoom('Alice')).toBe(false);
+  });
+
+  test('left-boundary — pre_warning_X does NOT count as warning', async () => {
+    // A confusable warning prefix should NOT block, then the room
+    // check decides. Here neither room nor warning present (only
+    // `pre_warning_X`) → false on room axis.
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="pre_warning_title" />');
+    expect(await driver.iosContinuesNormallyInRoom('Alice')).toBe(false);
+  });
+
+  test('right-boundary — room_seatGridExtra still matches (prefix contract)', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGridExtra" />');
+    expect(await driver.iosContinuesNormallyInRoom('Alice')).toBe(true);
+  });
+
+  test('confusable room prefix — rooms_listItem does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="rooms_listItem" />');
+    expect(await driver.iosContinuesNormallyInRoom('Alice')).toBe(false);
+  });
+
+  test('attribute-specificity — name= for room does NOT trigger', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther name="room_seatGrid" />');
+    expect(await driver.iosContinuesNormallyInRoom('Alice')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosContinuesNormallyInRoom('Alice')).rejects.toThrow();
+  });
+
+  test('name accepted-and-ignored — Ines passes', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosContinuesNormallyInRoom('Ines')).toBe(true);
+  });
+
+  test('null name → true (with room marker)', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosContinuesNormallyInRoom(null)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosContinuesNormallyInRoom(undefined)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosContinuesNormallyInRoom('')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosContinuesNormallyInRoom('   ')).toBe(true);
+  });
+
+  test('first-match contract — two room_* markers', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid" />' +
+        '<XCUIElementTypeOther identifier="room_chatInput" />',
+    );
+    expect(await driver.iosContinuesNormallyInRoom('Alice')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't
