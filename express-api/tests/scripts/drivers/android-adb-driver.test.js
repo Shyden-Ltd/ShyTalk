@@ -6225,3 +6225,250 @@ describe('android-adb-driver — androidShowsMessageInConversationThread', () =>
     expect(await driver.androidShowsMessageInConversationThread('Selma')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsNewUnreadConversation', () => {
+  // Wake 102 matcher — `<Name>'s Android UI shows a new conversation
+  // with <Other> highlighted as unread` (j07 — recipient's inbox
+  // shows new unread conversation from sender). Driver receives
+  // `(viewer, other)`.
+  //
+  // Foundation strategy: two-step composition (mirrors PR #745):
+  //   1. main_messagesTab testTag PRESENT (viewer is in messages
+  //      area).
+  //   2. other's name appears in text/content-desc with symmetric
+  //      word-boundary protection.
+  //
+  // The "highlighted as unread" semantic is journey-orchestrated.
+  // No per-row testTag exists for unread state today; a future PR
+  // could layer this with e.g. `conversation_row_${id}_unread`.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('main_messagesTab + other in text → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(true);
+  });
+
+  test('main_messagesTab + other in content-desc → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node content-desc="Bea" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'Bea')).toBe(true);
+  });
+
+  test('main_messagesTab absent (wrong screen) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />' + '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(false);
+  });
+
+  test('main_messagesTab present but other absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node text="Different" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(false);
+  });
+
+  test('prefix-collision blocked — "Adam" hint ≠ "AdamSmith"', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node text="AdamSmith" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(false);
+  });
+
+  test('hyphen-suffix blocked — "Adam" hint ≠ "Adam-Lee"', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node text="Adam-Lee" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(false);
+  });
+
+  test('hyphen-prefix blocked — "Adam" hint ≠ "pre-Adam"', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node text="pre-Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(false);
+  });
+
+  test('padded other name — "Adam · just now" still matches', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node text="Adam · just now" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(true);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(false);
+  });
+
+  test('empty other arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', '')).toBe(false);
+  });
+
+  test('whitespace-only other → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', '   ')).toBe(false);
+  });
+
+  test('null other → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', null)).toBe(false);
+  });
+
+  test('undefined other → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', undefined)).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="main_messagesTab" /><node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(true);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(false);
+  });
+
+  test('viewer name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    const okSelma = await driver.androidShowsNewUnreadConversation('Selma', 'Adam');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node text="Adam" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okBea = await driver2.androidShowsNewUnreadConversation('Bea', 'Adam');
+
+    expect(okSelma).toBe(true);
+    expect(okBea).toBe(true);
+  });
+
+  test('other with regex-significant chars — positive case (literal dot)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node text="User.42" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'User.42')).toBe(true);
+  });
+
+  test('other with regex-significant chars — negative pins literal-dot escape', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node text="UserX42" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'User.42')).toBe(false);
+  });
+
+  test('compound attribute names (hint-text=) NOT consulted', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_messagesTab" />' +
+        '<node hint-text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(false);
+  });
+
+  test('first-guard left-boundary — pre_main_messagesTab does NOT count', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_main_messagesTab" /><node text="Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNewUnreadConversation('Selma', 'Adam')).toBe(false);
+  });
+});

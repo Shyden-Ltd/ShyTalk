@@ -1078,6 +1078,37 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 102 — `<Name>'s Android UI shows a new conversation with
+  // <Other> highlighted as unread` (j07 — recipient's inbox shows
+  // new unread conversation from sender). Driver receives
+  // `(viewer, other)`.
+  //
+  // Foundation strategy: two-step composition (mirrors PR #745):
+  //   1. main_messagesTab testTag PRESENT (viewer is in messages
+  //      area — this assertion can't be made from anywhere else).
+  //   2. other's name appears in text/content-desc with symmetric
+  //      word-boundary protection.
+  //
+  // The "highlighted as unread" semantic is journey-orchestrated.
+  // No per-row testTag exists for unread state today; a future PR
+  // could layer this with e.g. `conversation_row_${id}_unread`.
+  driver.androidShowsNewUnreadConversation = async (_viewer, other) => {
+    if (typeof other !== 'string' || !other.trim()) return false;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // Step 1: messages tab visible
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tabRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?main_messagesTab"[^>]*\/?>/;
+    if (!tabRx.test(dump)) return false;
+    // Step 2: other name appears with symmetric word-boundary
+    const escOther = other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const otherRx = new RegExp(
+      `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escOther}(?![\\w-])[^"]*"`,
+    );
+    return otherRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
