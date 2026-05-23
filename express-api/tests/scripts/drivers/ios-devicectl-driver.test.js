@@ -1263,6 +1263,102 @@ describe('ios-devicectl-driver — iosDisablesInput', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosIsNoLongerInVoiceRoom', () => {
+  // Wake 105 — `<Name>'s <Plat> UI is no longer in the voice room`.
+  // Inverse of iosIsStillInRoom. CRITICAL defensive: empty dump
+  // returns false (can't confirm gone).
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('no room marker → true (user is gone)', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosIsNoLongerInVoiceRoom('Alice')).toBe(true);
+  });
+
+  test('room marker present → false (still in room)', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosIsNoLongerInVoiceRoom('Alice')).toBe(false);
+  });
+
+  test("empty dump → false (CRITICAL: can't confirm gone)", async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    // Empty dump must NOT incorrectly report user-has-left. Pin the
+    // defensive behaviour explicitly.
+    expect(await driver.iosIsNoLongerInVoiceRoom('Alice')).toBe(false);
+  });
+
+  test('different screen → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosIsNoLongerInVoiceRoom('Alice')).toBe(true);
+  });
+
+  test('non-self-closing room tag still detected → false', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid"><XCUIElementTypeStaticText name="Bao" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosIsNoLongerInVoiceRoom('Alice')).toBe(false);
+  });
+
+  test('left-boundary — pre_room_X does NOT count as in-room', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="pre_room_seatGrid" />');
+    expect(await driver.iosIsNoLongerInVoiceRoom('Alice')).toBe(true);
+  });
+
+  test('right-boundary — room_seatGridExtra still counts as in-room', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGridExtra" />');
+    expect(await driver.iosIsNoLongerInVoiceRoom('Alice')).toBe(false);
+  });
+
+  test('confusable prefix — rooms_listItem does NOT count as in-room', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="rooms_listItem" />');
+    expect(await driver.iosIsNoLongerInVoiceRoom('Alice')).toBe(true);
+  });
+
+  test('attribute-specificity — name="room_X" does NOT count', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther name="room_seatGrid" />');
+    expect(await driver.iosIsNoLongerInVoiceRoom('Alice')).toBe(true);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosIsNoLongerInVoiceRoom('Alice')).rejects.toThrow();
+  });
+
+  test('name accepted-and-ignored — Ines passes', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosIsNoLongerInVoiceRoom('Ines')).toBe(true);
+  });
+
+  test('null name → true (with non-room dump)', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosIsNoLongerInVoiceRoom(null)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosIsNoLongerInVoiceRoom(undefined)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosIsNoLongerInVoiceRoom('')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosIsNoLongerInVoiceRoom('   ')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't

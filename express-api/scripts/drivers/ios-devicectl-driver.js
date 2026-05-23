@@ -278,6 +278,18 @@ async function createIosDriver({ udid: preferred } = {}) {
   // The XCUITest attribute `enabled="false"` is the iOS equivalent
   // of uiautomator's same attribute (both expose a boolean enabled
   // state).
+  // Wake 105 — `<Name>'s <Plat> UI is no longer in the voice room`.
+  // Inverse of (future) iosIsStillInRoom. CRITICAL: returns false (not
+  // true) when the dump is empty — empty dump means "can't confirm",
+  // not "confirmed gone". This defensive matches the Android sibling.
+  driver.iosIsNoLongerInVoiceRoom = async (_name) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const roomRx = /<XCUIElementType\w+[^>]*\bidentifier="room_[^"]*"[^>]*\/?>/;
+    return !roomRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;
