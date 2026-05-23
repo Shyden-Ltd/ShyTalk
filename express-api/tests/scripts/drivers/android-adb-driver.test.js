@@ -7096,6 +7096,23 @@ describe('android-adb-driver — androidAdminShowsRowCountInTable', () => {
     expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, undefined)).toBe(false);
   });
 
+  test('numeric tableName (e.g., 42) → false (typeof guard pinned)', async () => {
+    // Round 1 I-1: extends the null/undefined null-safety matrix
+    // to numeric types. The `typeof tableName !== 'string'` guard
+    // rejects ANY non-string (number, boolean, object) — pin the
+    // numeric case explicitly so a future refactor changing the
+    // guard to `!tableName` (which would still reject 0 but accept
+    // non-zero numbers as truthy and crash on `.trim()`) is
+    // caught immediately.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsRowCountInTable('Greta', 1, 42)).toBe(false);
+  });
+
   test('bare resource-id (no package prefix) → true', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
