@@ -18202,6 +18202,160 @@ describe('Wake 89 — "<Name>\'s <Plat> UI shows non-empty <Language> text for s
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/Klingonese|language/);
   });
+
+  // Web driver returns false → fail / driver missing → fail
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsNonEmptyLocaleText: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web UI shows non-empty Arabic text for section 11" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/section|Arabic/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web UI shows non-empty Arabic text for section 11" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsNonEmptyLocaleText/);
+  });
+
+  // Web Chromium variant
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsNonEmptyLocaleText: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web Chromium UI shows non-empty Arabic text for section 11" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Layla', 'ar', 11);
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsNonEmptyLocaleText: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web Chromium UI shows non-empty Arabic text for section 11" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/section|Arabic/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web Chromium UI shows non-empty Arabic text for section 11" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsNonEmptyLocaleText/);
+  });
+
+  // Web Safari variant
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsNonEmptyLocaleText: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web Safari UI shows non-empty Arabic text for section 11" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Layla', 'ar', 11);
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsNonEmptyLocaleText: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web Safari UI shows non-empty Arabic text for section 11" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/section|Arabic/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Layla's Web Safari UI shows non-empty Arabic text for section 11" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsNonEmptyLocaleText/);
+  });
+
+  // Android — full 3-test set
+  test('Android matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { androidShowsNonEmptyLocaleText: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Hayato's Android UI shows non-empty Japanese text for section 3" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Hayato', 'ja', 3);
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsNonEmptyLocaleText: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Hayato's Android UI shows non-empty Japanese text for section 3" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/section|Japanese/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Hayato's Android UI shows non-empty Japanese text for section 3" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsNonEmptyLocaleText/);
+  });
+
+  // iOS Sim — full 3-test set
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsNonEmptyLocaleText: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Yuki's iOS Sim UI shows non-empty Japanese text for section 3" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Yuki', 'ja', 3);
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsNonEmptyLocaleText: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Yuki's iOS Sim UI shows non-empty Japanese text for section 3" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/section|Japanese/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Yuki's iOS Sim UI shows non-empty Japanese text for section 3" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsNonEmptyLocaleText/);
+  });
 });
 
 describe('Wake 89 — "<Name>\'s <Plat> UI disables the <X> input"', () => {

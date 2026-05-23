@@ -1768,6 +1768,28 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   //
   // The `_name` arg is accepted-and-ignored; `noun` and `kind` are
   // REQUIRED (input rejection on empty/whitespace/null/undefined).
+  // Wake 89 — `<Name>'s <Plat> UI shows non-empty <Language> text for
+  // section N` (j13:36). Locale section assertion. Driver receives
+  // `(name, code, section)`.
+  //
+  // Foundation strategy: presence-check on the `localeText_*` testTag
+  // PREFIX. No `localeText_*` testTag exists in shared/src/commonMain
+  // yet — per-section locale-text testTags are unbuilt. Returns false
+  // in real journeys today; lands true when ships with
+  // localeText_section1 / localeText_section2 etc.
+  //
+  // Per-section verification needs a section-number → testTag map.
+  // Per-language verification needs text-extraction + script-category
+  // detection. Both deferred. All 3 args (_name, _code, _section)
+  // accepted-and-ignored.
+  driver.androidShowsNonEmptyLocaleText = async (_name, _code, _section) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?localeText_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const NOUN_KIND_TAGS = {
     'appeal::button': 'suspension_submitAppealButton',
   };

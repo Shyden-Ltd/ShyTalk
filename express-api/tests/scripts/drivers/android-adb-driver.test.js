@@ -12995,3 +12995,284 @@ describe('android-adb-driver — androidShowsNamedKind', () => {
     expect(await driver.androidShowsNamedKind('Raul', 'appeal', 'button')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsNonEmptyLocaleText', () => {
+  // Wake 89 — `<Name>'s <Plat> UI shows non-empty <Language> text for
+  // section N` (j13:36). Locale section assertion. Driver checks that
+  // section N of the current screen contains non-empty text in the
+  // named language. Driver receives `(name, code, section)` — code is
+  // a BCP-47 locale code (en, ja, ar, etc.), section is a number.
+  //
+  // Foundation strategy: presence-check on the `localeText_*` testTag
+  // PREFIX. No `localeText_*` testTag exists in shared/src/commonMain
+  // yet — per-section locale-text testTags are unbuilt. Returns false
+  // in real journeys today; lands true when ships with
+  // localeText_section1 / localeText_section2 etc.
+  //
+  // Per-section verification needs a section-number → testTag map.
+  // Per-language verification needs text-extraction + script-category
+  // detection. Both deferred. All 3 args (_name, _code, _section)
+  // accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('localeText_section1 present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(true);
+  });
+
+  test('localeText_section2 present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section2" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ar', 2)).toBe(true);
+  });
+
+  test('absent (no locale-text element) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1"><node text="こんにちは" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(true);
+  });
+
+  test('left-boundary — pre_localeText_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(false);
+  });
+
+  test('bare left-boundary — pre_localeText_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(false);
+  });
+
+  test('right-boundary — localeText_section1Extra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1Extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(true);
+  });
+
+  test('confusable prefix — locale_textSection1 does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/locale_textSection1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(false);
+  });
+
+  test('bare confusable prefix — locale_textSection1 does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="locale_textSection1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(false);
+  });
+
+  test('name accepted-and-ignored — Selma passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Selma', 'ja', 1)).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText(null, 'ja', 1)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText(undefined, 'ja', 1)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('', 'ja', 1)).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('   ', 'ja', 1)).toBe(true);
+  });
+
+  test('null code → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', null, 1)).toBe(true);
+  });
+
+  test('undefined code → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', undefined, 1)).toBe(true);
+  });
+
+  test('empty code → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', '', 1)).toBe(true);
+  });
+
+  test('whitespace code → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', '   ', 1)).toBe(true);
+  });
+
+  test('null section → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', null)).toBe(true);
+  });
+
+  test('undefined section → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', undefined)).toBe(true);
+  });
+
+  test('0 section → true (section accepted-and-ignored regardless of value)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 0)).toBe(true);
+  });
+
+  test('different code/section still passes (foundation does not match specifics)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ar', 99)).toBe(true);
+  });
+
+  test('first-match contract — two localeText_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/localeText_section2" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(true);
+  });
+});
