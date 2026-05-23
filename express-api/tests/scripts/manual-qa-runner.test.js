@@ -20512,7 +20512,189 @@ describe('Wake 97 — "<Name>\'s <Plat> UI shows the warning banner overlay on t
       ctx,
     );
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/androidShowsRoomWarningBanner/);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsRoomWarningBanner/);
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsRoomWarningBanner: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Theo's Android UI shows the warning banner overlay on top of the room",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Theo|warning|banner/);
+  });
+
+  // iOS Sim
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsRoomWarningBanner: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Theo's iOS Sim UI shows the warning banner overlay on top of the room",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Theo');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsRoomWarningBanner: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Theo's iOS Sim UI shows the warning banner overlay on top of the room",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Theo|warning|banner/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Theo's iOS Sim UI shows the warning banner overlay on top of the room",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsRoomWarningBanner/);
+  });
+
+  // Web
+  test('Web matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsRoomWarningBanner: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Theo's Web UI shows the warning banner overlay on top of the room",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Theo');
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsRoomWarningBanner: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Theo's Web UI shows the warning banner overlay on top of the room",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Theo|warning|banner/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Theo's Web UI shows the warning banner overlay on top of the room",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsRoomWarningBanner/);
+  });
+
+  // Web Chromium
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsRoomWarningBanner: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Theo's Web Chromium UI shows the warning banner overlay on top of the room",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Theo');
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsRoomWarningBanner: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Theo's Web Chromium UI shows the warning banner overlay on top of the room",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Theo|warning|banner/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Theo's Web Chromium UI shows the warning banner overlay on top of the room",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsRoomWarningBanner/);
+  });
+
+  // Web Safari
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsRoomWarningBanner: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Theo's Web Safari UI shows the warning banner overlay on top of the room",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Theo');
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsRoomWarningBanner: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Theo's Web Safari UI shows the warning banner overlay on top of the room",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Theo|warning|banner/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Theo's Web Safari UI shows the warning banner overlay on top of the room",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsRoomWarningBanner/);
   });
 });
 

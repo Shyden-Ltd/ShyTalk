@@ -14150,3 +14150,214 @@ describe('android-adb-driver — androidShowsRoomClosedSummary', () => {
     expect(await driver.androidShowsRoomClosedSummary('Selma')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsRoomWarningBanner', () => {
+  // Wake 97 — `<Name>'s <Plat> UI shows the warning banner overlay on
+  // top of the room` (j10). Cohort-warning overlay assertion. Driver
+  // receives `(name)`.
+  //
+  // Foundation strategy: presence-check on the `roomWarningBanner_*`
+  // testTag PREFIX. No `roomWarningBanner_*` testTag exists in
+  // shared/src/commonMain yet — the in-room warning overlay is unbuilt
+  // (the full-screen WarningScreen.kt is distinct; the overlay variant
+  // is the j10 concern). Returns false in real journeys today; lands
+  // true when ships with roomWarningBanner_overlay / _title etc.
+  //
+  // Distinct-from `warning_*` (WarningScreen.kt's full-screen tags):
+  // similar-but-distinct guard pinned. `_name` accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('roomWarningBanner_overlay present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomWarningBanner_overlay" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('Theo')).toBe(true);
+  });
+
+  test('roomWarningBanner_title present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomWarningBanner_title" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('Theo')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('Theo')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('Theo')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="roomWarningBanner_overlay" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('Theo')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomWarningBanner_overlay"><node text="Warning" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('Theo')).toBe(true);
+  });
+
+  test('left-boundary — pre_roomWarningBanner_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_roomWarningBanner_overlay" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('Theo')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_roomWarningBanner_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_roomWarningBanner_overlay" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('Theo')).toBe(false);
+  });
+
+  test('right-boundary — roomWarningBanner_overlayExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomWarningBanner_overlayExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('Theo')).toBe(true);
+  });
+
+  test('confusable prefix — roomWarning_bannerOther does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomWarning_bannerOther" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('Theo')).toBe(false);
+  });
+
+  test('bare confusable prefix — roomWarning_bannerOther does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="roomWarning_bannerOther" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('Theo')).toBe(false);
+  });
+
+  test('similar-but-distinct — warning_title (WarningScreen full-screen tag) does NOT match', async () => {
+    // WarningScreen.kt:82 exposes warning_title for the FULL-SCREEN
+    // warning, distinct from the j10 in-room overlay. Pin that they
+    // don't conflate — different journey concerns.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/warning_title" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('Theo')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('Theo')).toBe(false);
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomWarningBanner_overlay" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('Bao')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomWarningBanner_overlay" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner(null)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomWarningBanner_overlay" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner(undefined)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomWarningBanner_overlay" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomWarningBanner_overlay" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('   ')).toBe(true);
+  });
+
+  test('first-match contract — two roomWarningBanner_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomWarningBanner_overlay" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/roomWarningBanner_title" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomWarningBanner('Theo')).toBe(true);
+  });
+});

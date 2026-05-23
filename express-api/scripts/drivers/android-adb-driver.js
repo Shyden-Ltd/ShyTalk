@@ -1872,6 +1872,27 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 97 — `<Name>'s <Plat> UI shows the warning banner overlay on
+  // top of the room` (j10). Cohort-warning overlay assertion. Driver
+  // receives `(name)`.
+  //
+  // Foundation strategy: presence-check on the `roomWarningBanner_*`
+  // testTag PREFIX. No `roomWarningBanner_*` testTag exists in
+  // shared/src/commonMain yet — the in-room overlay variant is unbuilt
+  // (the full-screen `warning_*` family in WarningScreen.kt:82+ is a
+  // distinct concern — different journey trigger). Returns false in
+  // real journeys today; lands true when ships with
+  // roomWarningBanner_overlay / _title etc.
+  //
+  // The `_name` arg is accepted-and-ignored.
+  driver.androidShowsRoomWarningBanner = async (_name) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?roomWarningBanner_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const NOUN_KIND_TAGS = {
     'appeal::button': 'suspension_submitAppealButton',
   };
