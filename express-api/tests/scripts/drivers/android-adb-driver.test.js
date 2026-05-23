@@ -4289,4 +4289,29 @@ describe('android-adb-driver — androidSearchIn', () => {
     // adb on the device side — known limitation).
     expect(inputCall[0]).toContain('find%s%s%splaceholder');
   });
+
+  test("recursive-escape case — text containing POSIX escape literal `\\'` is handled", async () => {
+    // Round 2 Minor: the POSIX escape replacement
+    // `text.replace(/'/g, "'\\''")` fires on every `'` in the input
+    // independently. A pathological text like "a'b'c" produces a
+    // string where each ' is independently escaped — verified with
+    // `node -e` to produce structurally valid POSIX-quoted output.
+    //
+    // Unreachable from valid Gherkin (no user searches for POSIX
+    // escape syntax), but pinning the recursive case defends
+    // against a future refactor that might use a non-global replace.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('newMessage_searchField', '[10,100][1000,200]'),
+    });
+    const driver = await createAndroidDriver();
+    const ok = await driver.androidSearchIn('messages', "a'b'c");
+    expect(ok).toBe(true);
+    const inputCall = execSync.mock.calls.find((c) => c[0].includes("'input' 'text'"));
+    expect(inputCall).toBeDefined();
+    // After POSIX escape: each ' becomes '\\''. After adb()'s outer
+    // wrap, we should see 'a'\''b'\''c' — every embedded ' properly
+    // closed and reopened.
+    expect(inputCall[0]).toContain(String.raw`'a'\''b'\''c'`);
+  });
 });
