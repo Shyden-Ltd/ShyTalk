@@ -1589,6 +1589,32 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 88 — `<Name> on <Plat> opens <Other>'s profile from the <X>`
+  // (j17:71, j18:49). Composite navigation: from source surface (room,
+  // PM, inbox, ...) → <Other>'s profile. Driver receives
+  // `(actor, target, source)`.
+  //
+  // Foundation strategy: presence-check on the `profile_*` testTag
+  // PREFIX. Same target screen as androidOpenProfileAndTap (#767) —
+  // ProfileScreen.kt exposes `profile_displayName` (lines 507, 992).
+  // Returns true in real journeys whenever the profile screen is open.
+  //
+  // What's foundation about it: the source-surface navigation (room →
+  // tap-user-avatar / PM → tap-header-avatar / inbox → tap-row) is
+  // NOT yet driven by this method. The foundation only confirms the
+  // destination is the profile screen. A future PR with a
+  // source → entry-point-gesture map would enable proper driving of
+  // the navigation.
+  //
+  // All 3 args (_actor, _target, _source) accepted-and-ignored.
+  driver.androidOpenProfileFrom = async (_actor, _target, _source) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?profile_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

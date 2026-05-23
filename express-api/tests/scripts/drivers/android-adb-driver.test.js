@@ -10856,3 +10856,299 @@ describe('android-adb-driver — androidOpenProfileAndTap', () => {
     expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'Block')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidOpenProfileFrom', () => {
+  // Wake 88 — `<Name> on <Plat> opens <Other>'s profile from the <X>`
+  // (j17:71, j18:49). Composite navigation: from source surface (room,
+  // PM, inbox, ...) → <Other>'s profile. Driver receives
+  // `(actor, target, source)`.
+  //
+  // Foundation strategy: presence-check on the `profile_*` testTag
+  // PREFIX. Same target screen as androidOpenProfileAndTap (#767) —
+  // ProfileScreen.kt exposes `profile_displayName` (lines 507, 992).
+  // Returns true in real journeys whenever the profile screen is open.
+  //
+  // What's foundation about it: the source-surface navigation (room →
+  // tap-user-avatar / PM → tap-header-avatar / inbox → tap-row) is
+  // NOT yet driven by this method. The foundation only confirms the
+  // destination is the profile screen. A future PR with a
+  // source → entry-point-gesture map would enable proper driving of
+  // the navigation.
+  //
+  // All 3 args (_actor, _target, _source) accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('profile_displayName present + source "room" → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', 'room')).toBe(true);
+  });
+
+  test('profile_avatar present + source "PM" → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_avatar" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Adam', 'Officia', 'PM')).toBe(true);
+  });
+
+  test('absent (no profile surface) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', 'room')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', 'room')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', 'room')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName"><node text="Bao" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', 'room')).toBe(true);
+  });
+
+  test('left-boundary — pre_profile_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', 'room')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_profile_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', 'room')).toBe(false);
+  });
+
+  test('right-boundary — profile_displayNameExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayNameExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', 'room')).toBe(true);
+  });
+
+  test('confusable prefix — profileSettings_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profileSettings_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', 'room')).toBe(false);
+  });
+
+  test('bare confusable prefix — profileSettings_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="profileSettings_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', 'room')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', 'room')).toBe(false);
+  });
+
+  test('actor accepted-and-ignored — Adam passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Adam', 'Bao', 'room')).toBe(true);
+  });
+
+  test('null actor → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom(null, 'Bao', 'room')).toBe(true);
+  });
+
+  test('undefined actor → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom(undefined, 'Bao', 'room')).toBe(true);
+  });
+
+  test('empty actor → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('', 'Bao', 'room')).toBe(true);
+  });
+
+  test('whitespace actor → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('   ', 'Bao', 'room')).toBe(true);
+  });
+
+  test('null target → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', null, 'room')).toBe(true);
+  });
+
+  test('undefined target → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', undefined, 'room')).toBe(true);
+  });
+
+  test('empty target → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', '', 'room')).toBe(true);
+  });
+
+  test('whitespace target → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', '   ', 'room')).toBe(true);
+  });
+
+  test('null source → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', null)).toBe(true);
+  });
+
+  test('undefined source → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', undefined)).toBe(true);
+  });
+
+  test('empty source → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', '')).toBe(true);
+  });
+
+  test('whitespace source → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', '   ')).toBe(true);
+  });
+
+  test('different source still passes (foundation does not match specific entry)', async () => {
+    // Per-source entry-gesture needs a source → entry-point-gesture map.
+    // Today the foundation matches ANY profile_* element (the destination
+    // is reached). Test sources: room, PM, inbox, search.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', 'inbox')).toBe(true);
+  });
+
+  test('first-match contract — two profile_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/profile_avatar" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileFrom('Yuki', 'Bao', 'room')).toBe(true);
+  });
+});
