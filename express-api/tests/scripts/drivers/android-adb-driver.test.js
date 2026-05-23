@@ -15722,3 +15722,213 @@ describe('android-adb-driver — androidShowsUserCard', () => {
     expect(await driver.androidShowsUserCard('Alice', 'Bob')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsUserCardSkeletons', () => {
+  // Wake 97 — `<Name>'s <Plat> UI shows skeleton placeholders for user
+  // cards` (j14). Low-bandwidth loading-state assertion. Driver
+  // receives `(name)`.
+  //
+  // Foundation strategy: presence-check on the `userCardSkeleton_*`
+  // testTag PREFIX. No `userCardSkeleton_*` testTag exists in
+  // shared/src/commonMain yet — skeleton placeholder UI is unbuilt.
+  // Returns false in real journeys today; lands true when ships with
+  // userCardSkeleton_row / userCardSkeleton_shimmer etc.
+  //
+  // Distinct from sibling `userCard_*` (PR #786) — skeletons are the
+  // loading state BEFORE the user-card overlay renders.
+  // `_name` accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('userCardSkeleton_row present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCardSkeleton_row" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('Bao')).toBe(true);
+  });
+
+  test('userCardSkeleton_shimmer present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCardSkeleton_shimmer" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('Bao')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('Bao')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('Bao')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="userCardSkeleton_row" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('Bao')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCardSkeleton_row"><node text="..." /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('Bao')).toBe(true);
+  });
+
+  test('left-boundary — pre_userCardSkeleton_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_userCardSkeleton_row" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('Bao')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_userCardSkeleton_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_userCardSkeleton_row" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('Bao')).toBe(false);
+  });
+
+  test('right-boundary — userCardSkeleton_rowExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCardSkeleton_rowExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('Bao')).toBe(true);
+  });
+
+  test('confusable prefix — userCard_skeleton does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_skeleton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('Bao')).toBe(false);
+  });
+
+  test('bare confusable prefix — userCard_skeleton does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="userCard_skeleton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('Bao')).toBe(false);
+  });
+
+  test('similar-but-distinct — userCard_root (rendered card) does NOT match', async () => {
+    // PR #786's userCard_* family is the rendered card; this matcher
+    // is the LOADING state. Pin that they don't conflate.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCard_root" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('Bao')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('Bao')).toBe(false);
+  });
+
+  test('name accepted-and-ignored — Alice passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCardSkeleton_row" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('Alice')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCardSkeleton_row" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons(null)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCardSkeleton_row" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons(undefined)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCardSkeleton_row" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCardSkeleton_row" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('   ')).toBe(true);
+  });
+
+  test('first-match contract — two userCardSkeleton_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/userCardSkeleton_row" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/userCardSkeleton_shimmer" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsUserCardSkeletons('Bao')).toBe(true);
+  });
+});

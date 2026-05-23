@@ -1995,6 +1995,27 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 97 — `<Name>'s <Plat> UI shows skeleton placeholders for user
+  // cards` (j14). Low-bandwidth loading-state assertion. Driver
+  // receives `(name)`.
+  //
+  // Foundation strategy: presence-check on the `userCardSkeleton_*`
+  // testTag PREFIX. No `userCardSkeleton_*` testTag exists in
+  // shared/src/commonMain yet — skeleton placeholder UI is unbuilt.
+  // Returns false in real journeys today; lands true when ships with
+  // userCardSkeleton_row / userCardSkeleton_shimmer etc.
+  //
+  // Distinct from sibling `userCard_*` — skeletons are the loading
+  // state BEFORE the user-card overlay renders. The `_name` arg is
+  // accepted-and-ignored.
+  driver.androidShowsUserCardSkeletons = async (_name) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?userCardSkeleton_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const NOUN_KIND_TAGS = {
     'appeal::button': 'suspension_submitAppealButton',
   };

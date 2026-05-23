@@ -21097,6 +21097,148 @@ describe('Wake 97 — "<Name>\'s <Plat> UI shows skeleton placeholders for user 
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/Ines|skeleton/);
   });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Ines's Web UI shows skeleton placeholders for user cards" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsUserCardSkeletons/);
+  });
+
+  // Android — full 3-test set
+  test('Android matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { androidShowsUserCardSkeletons: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Ines's Android UI shows skeleton placeholders for user cards" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Ines');
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsUserCardSkeletons: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Ines's Android UI shows skeleton placeholders for user cards" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Ines|skeleton/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Ines's Android UI shows skeleton placeholders for user cards" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsUserCardSkeletons/);
+  });
+
+  // iOS Sim — full 3-test set
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsUserCardSkeletons: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Ines's iOS Sim UI shows skeleton placeholders for user cards" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Ines');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsUserCardSkeletons: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Ines's iOS Sim UI shows skeleton placeholders for user cards" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Ines|skeleton/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Ines's iOS Sim UI shows skeleton placeholders for user cards" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsUserCardSkeletons/);
+  });
+
+  // Web Chromium variant
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsUserCardSkeletons: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Ines's Web Chromium UI shows skeleton placeholders for user cards" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Ines');
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsUserCardSkeletons: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Ines's Web Chromium UI shows skeleton placeholders for user cards" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Ines|skeleton/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Ines's Web Chromium UI shows skeleton placeholders for user cards" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsUserCardSkeletons/);
+  });
+
+  // Web Safari variant
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsUserCardSkeletons: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Ines's Web Safari UI shows skeleton placeholders for user cards" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Ines');
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsUserCardSkeletons: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Ines's Web Safari UI shows skeleton placeholders for user cards" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Ines|skeleton/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Ines's Web Safari UI shows skeleton placeholders for user cards" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsUserCardSkeletons/);
+  });
 });
 
 describe('Wake 97 — `<Name>\'s <Plat> UI shows a "<X>" banner`', () => {
