@@ -22184,18 +22184,122 @@ describe('Wake 101 — "(either )?<Name>\'s <Plat> UI is still in the room <suff
 });
 
 describe('Wake 101 — `<Name>\'s <Plat> UI shows a seat-request notification with "<X>" + approve/deny`', () => {
+  const seatReqText = (platform) =>
+    `Theo's ${platform} UI shows a seat-request notification with "Ines" + approve/deny`;
+
   test('matching → ok', async () => {
     const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidShowsSeatRequestNotification: spy } });
-    const r = await executeStep(
-      {
-        kind: 'Then',
-        text: 'Theo\'s Android UI shows a seat-request notification with "Ines" + approve/deny',
-      },
-      ctx,
-    );
+    const r = await executeStep({ kind: 'Then', text: seatReqText('Android') }, ctx);
     expect(r.ok).toBe(true);
     expect(spy).toHaveBeenCalledWith('Theo', 'Ines');
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsSeatRequestNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: seatReqText('Android') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Theo|seat-request/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: seatReqText('Android') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsSeatRequestNotification/);
+  });
+
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsSeatRequestNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: seatReqText('iOS Sim') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Theo', 'Ines');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsSeatRequestNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: seatReqText('iOS Sim') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Theo|seat-request/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: seatReqText('iOS Sim') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsSeatRequestNotification/);
+  });
+
+  test('Web matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsSeatRequestNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: seatReqText('Web') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Theo', 'Ines');
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsSeatRequestNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: seatReqText('Web') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Theo|seat-request/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: seatReqText('Web') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsSeatRequestNotification/);
+  });
+
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsSeatRequestNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: seatReqText('Web Chromium') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Theo', 'Ines');
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsSeatRequestNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: seatReqText('Web Chromium') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Theo|seat-request/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: seatReqText('Web Chromium') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsSeatRequestNotification/);
+  });
+
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsSeatRequestNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: seatReqText('Web Safari') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Theo', 'Ines');
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsSeatRequestNotification: spy } });
+    const r = await executeStep({ kind: 'Then', text: seatReqText('Web Safari') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Theo|seat-request/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: seatReqText('Web Safari') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsSeatRequestNotification/);
   });
 });
 

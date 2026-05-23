@@ -1893,6 +1893,27 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 101 — `<Name>'s <Plat> UI shows a seat-request notification
+  // with "<X>" + approve/deny` (j09). Host receives notification when
+  // a participant requests a seat. Driver receives `(host, requester)`.
+  //
+  // Foundation strategy: presence-check on the
+  // `seatRequestNotification_*` testTag PREFIX. No
+  // `seatRequestNotification_*` testTag exists in shared/src/commonMain
+  // yet — host-side notification UI is unbuilt. Returns false in real
+  // journeys today; lands true when ships with
+  // seatRequestNotification_toast / _actionRow etc.
+  //
+  // Distinct-from `seatRequest_*` (#766 — the host approval button
+  // family). Both args (_host, _requester) accepted-and-ignored.
+  driver.androidShowsSeatRequestNotification = async (_host, _requester) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?seatRequestNotification_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const NOUN_KIND_TAGS = {
     'appeal::button': 'suspension_submitAppealButton',
   };

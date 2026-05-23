@@ -14361,3 +14361,266 @@ describe('android-adb-driver — androidShowsRoomWarningBanner', () => {
     expect(await driver.androidShowsRoomWarningBanner('Theo')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsSeatRequestNotification', () => {
+  // Wake 101 — `<Name>'s <Plat> UI shows a seat-request notification
+  // with "<X>" + approve/deny` (j09). Host receives notification when
+  // a participant requests a seat. Driver receives `(host, requester)`.
+  //
+  // Foundation strategy: presence-check on the
+  // `seatRequestNotification_*` testTag PREFIX. No
+  // `seatRequestNotification_*` testTag exists in
+  // shared/src/commonMain yet — host-side notification UI is unbuilt.
+  // Returns false in real journeys today; lands true when ships with
+  // seatRequestNotification_toast / seatRequestNotification_actionRow
+  // etc.
+  //
+  // Distinct-from `seatRequest_*` (#766 — the host approval button
+  // family); similar-but-distinct guard pinned. Both args (_host,
+  // _requester) accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('seatRequestNotification_toast present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(true);
+  });
+
+  test('seatRequestNotification_actionRow present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_actionRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="seatRequestNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast"><node text="Bao requests" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(true);
+  });
+
+  test('left-boundary — pre_seatRequestNotification_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_seatRequestNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_seatRequestNotification_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_seatRequestNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
+  });
+
+  test('right-boundary — seatRequestNotification_toastExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toastExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(true);
+  });
+
+  test('confusable prefix — seatRequest_Notification does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_Notification" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
+  });
+
+  test('bare confusable prefix — seatRequest_Notification does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="seatRequest_Notification" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
+  });
+
+  test('similar-but-distinct — seatRequest_approveButton (host action) does NOT match', async () => {
+    // PR #766 shipped seatRequest_* for the host APPROVAL button.
+    // Distinct from the host-side seatRequestNotification_* for the
+    // incoming-request toast. Pin that they don't conflate.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButton" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
+  });
+
+  test('host accepted-and-ignored — Ines passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Ines', 'Bao')).toBe(true);
+  });
+
+  test('null host → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification(null, 'Bao')).toBe(true);
+  });
+
+  test('undefined host → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification(undefined, 'Bao')).toBe(true);
+  });
+
+  test('empty host → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('', 'Bao')).toBe(true);
+  });
+
+  test('whitespace host → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('   ', 'Bao')).toBe(true);
+  });
+
+  test('null requester → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', null)).toBe(true);
+  });
+
+  test('undefined requester → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', undefined)).toBe(true);
+  });
+
+  test('empty requester → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', '')).toBe(true);
+  });
+
+  test('whitespace requester → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', '   ')).toBe(true);
+  });
+
+  test('different requester still passes (foundation does not match specific user)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', 'NotInRequest')).toBe(true);
+  });
+
+  test('first-match contract — two seatRequestNotification_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_actionRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(true);
+  });
+});
