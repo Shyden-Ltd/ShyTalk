@@ -9410,3 +9410,349 @@ describe('android-adb-driver — androidAdminShowsAppealText', () => {
     expect(await driver.androidAdminShowsAppealText('Mod', 'Selma')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidAdminShowsDashboardCounters', () => {
+  // Wake 105 — `<Name>'s <Plat> Admin UI shows the dashboard with
+  // counters: N reports, N verifications, N appeals` (j12). Admin
+  // landing page counters. Driver receives
+  // `(viewer, { reports, verifications, appeals })`.
+  //
+  // Foundation strategy: presence-check on the `adminDashboard_*`
+  // testTag PREFIX. The current app has NO admin moderation surface
+  // in shared/src/commonMain — see the sibling matcher
+  // androidAdminShowsAppealText for context. The admin reviewer side
+  // is web-only today.
+  //
+  // Returns false in real journeys today. When/if an Android admin
+  // app ships with `adminDashboard_*` testTags (e.g.
+  // adminDashboard_reportsCounter, adminDashboard_verificationsCounter,
+  // adminDashboard_appealsCounter), this stays sound — the wildcard
+  // prefix match will land.
+  //
+  // Both args (`_viewer`, `_counters`) accepted-and-ignored. The
+  // foundation does not validate that the displayed counter values
+  // match the expected object — that needs per-counter testTags + a
+  // text-extraction inspection mechanism.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('adminDashboard_reportsCounter present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_reportsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('Mod', {
+        reports: 5,
+        verifications: 2,
+        appeals: 1,
+      }),
+    ).toBe(true);
+  });
+
+  test('adminDashboard_verificationsCounter present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_verificationsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('Mod', {
+        reports: 0,
+        verifications: 0,
+        appeals: 0,
+      }),
+    ).toBe(true);
+  });
+
+  test('adminDashboard_appealsCounter present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_appealsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('Mod', {
+        reports: 100,
+        verifications: 50,
+        appeals: 10,
+      }),
+    ).toBe(true);
+  });
+
+  test('absent (no admin surface) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('Mod', {
+        reports: 0,
+        verifications: 0,
+        appeals: 0,
+      }),
+    ).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('Mod', {
+        reports: 0,
+        verifications: 0,
+        appeals: 0,
+      }),
+    ).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="adminDashboard_reportsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('Mod', {
+        reports: 1,
+        verifications: 1,
+        appeals: 1,
+      }),
+    ).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_reportsCounter"><node text="5" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('Mod', {
+        reports: 5,
+        verifications: 0,
+        appeals: 0,
+      }),
+    ).toBe(true);
+  });
+
+  test('left-boundary — pre_adminDashboard_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_adminDashboard_reportsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('Mod', {
+        reports: 0,
+        verifications: 0,
+        appeals: 0,
+      }),
+    ).toBe(false);
+  });
+
+  test('bare left-boundary — pre_adminDashboard_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_adminDashboard_reportsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('Mod', {
+        reports: 0,
+        verifications: 0,
+        appeals: 0,
+      }),
+    ).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('Mod', {
+        reports: 0,
+        verifications: 0,
+        appeals: 0,
+      }),
+    ).toBe(false);
+  });
+
+  test('viewer name accepted-and-ignored — Bea passes too', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_reportsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('Bea', {
+        reports: 1,
+        verifications: 1,
+        appeals: 1,
+      }),
+    ).toBe(true);
+  });
+
+  test('null viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_reportsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters(null, {
+        reports: 0,
+        verifications: 0,
+        appeals: 0,
+      }),
+    ).toBe(true);
+  });
+
+  test('undefined viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_reportsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters(undefined, {
+        reports: 0,
+        verifications: 0,
+        appeals: 0,
+      }),
+    ).toBe(true);
+  });
+
+  test('empty viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_reportsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('', {
+        reports: 0,
+        verifications: 0,
+        appeals: 0,
+      }),
+    ).toBe(true);
+  });
+
+  test('whitespace viewer → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_reportsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('   ', {
+        reports: 0,
+        verifications: 0,
+        appeals: 0,
+      }),
+    ).toBe(true);
+  });
+
+  test('null counters → true (counters accepted-and-ignored)', async () => {
+    // The foundation does not destructure or validate counters — pin that
+    // a null object doesn't crash the method and still returns based on
+    // the testTag presence-check.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_reportsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsDashboardCounters('Mod', null)).toBe(true);
+  });
+
+  test('undefined counters → true (counters accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_reportsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsDashboardCounters('Mod', undefined)).toBe(true);
+  });
+
+  test('empty object counters → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_reportsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsDashboardCounters('Mod', {})).toBe(true);
+  });
+
+  test('partial counters (missing verifications) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_reportsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsDashboardCounters('Mod', { reports: 5, appeals: 1 })).toBe(
+      true,
+    );
+  });
+
+  test('high-value counters (large numbers) → true', async () => {
+    // Pin that NaN/Infinity/very-large numbers don't crash. Counters are
+    // accepted-and-ignored, so the value shouldn't matter at all.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_reportsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('Mod', {
+        reports: 9999999,
+        verifications: 0,
+        appeals: -1,
+      }),
+    ).toBe(true);
+  });
+
+  test('first-match contract — two adminDashboard_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_reportsCounter" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/adminDashboard_appealsCounter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsDashboardCounters('Mod', {
+        reports: 1,
+        verifications: 1,
+        appeals: 1,
+      }),
+    ).toBe(true);
+  });
+});

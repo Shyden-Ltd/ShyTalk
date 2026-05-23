@@ -1462,6 +1462,31 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 105 — `<Name>'s <Plat> Admin UI shows the dashboard with
+  // counters: N reports, N verifications, N appeals` (j12). Admin
+  // landing page counters. Driver receives
+  // `(viewer, { reports, verifications, appeals })`.
+  //
+  // Foundation strategy: presence-check on `adminDashboard_*` testTag
+  // PREFIX. No admin moderation surface in shared/src/commonMain yet
+  // (web-only admin reviewer side) — see sibling matcher
+  // androidAdminShowsAppealText for context. Returns false in real
+  // journeys today; when adminDashboard_* testTags ship (e.g.
+  // adminDashboard_reportsCounter / verificationsCounter / appealsCounter),
+  // the wildcard prefix match will land.
+  //
+  // Both args (_viewer, _counters) accepted-and-ignored. The
+  // foundation does not validate that the displayed counter values
+  // match the expected object — that needs per-counter testTags + a
+  // text-extraction inspection mechanism.
+  driver.androidAdminShowsDashboardCounters = async (_viewer, _counters) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?adminDashboard_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

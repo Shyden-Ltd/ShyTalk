@@ -20818,6 +20818,90 @@ describe('Wake 105 — "<Name>\'s <Plat> Admin UI shows the dashboard with count
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/Greta|dashboard|counters/);
   });
+
+  // Android branch — routes to ctx.uiDriver.androidAdminShowsDashboardCounters
+  test('Android matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { androidAdminShowsDashboardCounters: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Greta's Android Admin UI shows the dashboard with counters: 3 reports, 5 verifications, 2 appeals",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Greta', { reports: 3, verifications: 5, appeals: 2 });
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidAdminShowsDashboardCounters: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Greta's Android Admin UI shows the dashboard with counters: 1 reports, 2 verifications, 3 appeals",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Greta|dashboard|counters/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Greta's Android Admin UI shows the dashboard with counters: 0 reports, 0 verifications, 0 appeals",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/androidAdminShowsDashboardCounters/);
+  });
+
+  // iOS Sim branch — routes to ctx.uiDriver.iosAdminShowsDashboardCounters
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosAdminShowsDashboardCounters: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Greta's iOS Sim Admin UI shows the dashboard with counters: 4 reports, 1 verifications, 7 appeals",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Greta', { reports: 4, verifications: 1, appeals: 7 });
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosAdminShowsDashboardCounters: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Greta's iOS Sim Admin UI shows the dashboard with counters: 1 reports, 0 verifications, 0 appeals",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Greta|dashboard|counters/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: "Greta's iOS Sim Admin UI shows the dashboard with counters: 0 reports, 0 verifications, 0 appeals",
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/iosAdminShowsDashboardCounters/);
+  });
 });
 
 // ── Wake 106 — j12 admin daily routine ─────────────────────────────
