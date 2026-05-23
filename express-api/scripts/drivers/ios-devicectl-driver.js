@@ -237,6 +237,18 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 86 — `<Name> on <Plat> approves <Other>'s seat request`
+  // (j17:51). Mirrors Android sibling #766. Foundation:
+  // presence-check on `seatRequest_*` XCUITest identifier PREFIX.
+  // Both args (_host, _requester) accepted-and-ignored.
+  driver.iosApproveSeatRequest = async (_host, _requester) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="seatRequest_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   driver.close = async () => {
     /* devicectl is stateless; nothing to release */
   };

@@ -828,6 +828,162 @@ describe('ios-devicectl-driver — iosAlsoShowsInParticipantsList', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosApproveSeatRequest', () => {
+  // Wake 86 — `<Name> on <Plat> approves <Other>'s seat request`
+  // (j17:51). Mirrors Android PR #766.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('seatRequest_approveButton present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="seatRequest_approveButton" />',
+    );
+    expect(await driver.iosApproveSeatRequest('Alice', 'Bao')).toBe(true);
+  });
+
+  test('seatRequest_pendingPanel present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="seatRequest_pendingPanel" />',
+    );
+    expect(await driver.iosApproveSeatRequest('Alice', 'Bao')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosApproveSeatRequest('Alice', 'Bao')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosApproveSeatRequest('Alice', 'Bao')).toBe(false);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="seatRequest_approveButton"><XCUIElementTypeStaticText name="Approve" /></XCUIElementTypeButton>',
+    );
+    expect(await driver.iosApproveSeatRequest('Alice', 'Bao')).toBe(true);
+  });
+
+  test('left-boundary — pre_seatRequest_X does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="pre_seatRequest_approveButton" />',
+    );
+    expect(await driver.iosApproveSeatRequest('Alice', 'Bao')).toBe(false);
+  });
+
+  test('right-boundary — seatRequest_approveButtonExtra still matches', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="seatRequest_approveButtonExtra" />',
+    );
+    expect(await driver.iosApproveSeatRequest('Alice', 'Bao')).toBe(true);
+  });
+
+  test('confusable prefix — seat_requestApprove does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="seat_requestApprove" />',
+    );
+    expect(await driver.iosApproveSeatRequest('Alice', 'Bao')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther name="seatRequest_approveButton" />',
+    );
+    expect(await driver.iosApproveSeatRequest('Alice', 'Bao')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosApproveSeatRequest('Alice', 'Bao')).rejects.toThrow();
+  });
+
+  test('host accepted-and-ignored — Ines passes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="seatRequest_approveButton" />',
+    );
+    expect(await driver.iosApproveSeatRequest('Ines', 'Bao')).toBe(true);
+  });
+
+  test('null host → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="seatRequest_approveButton" />',
+    );
+    expect(await driver.iosApproveSeatRequest(null, 'Bao')).toBe(true);
+  });
+
+  test('undefined host → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="seatRequest_approveButton" />',
+    );
+    expect(await driver.iosApproveSeatRequest(undefined, 'Bao')).toBe(true);
+  });
+
+  test('empty host → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="seatRequest_approveButton" />',
+    );
+    expect(await driver.iosApproveSeatRequest('', 'Bao')).toBe(true);
+  });
+
+  test('whitespace host → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="seatRequest_approveButton" />',
+    );
+    expect(await driver.iosApproveSeatRequest('   ', 'Bao')).toBe(true);
+  });
+
+  test('null requester → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="seatRequest_approveButton" />',
+    );
+    expect(await driver.iosApproveSeatRequest('Alice', null)).toBe(true);
+  });
+
+  test('undefined requester → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="seatRequest_approveButton" />',
+    );
+    expect(await driver.iosApproveSeatRequest('Alice', undefined)).toBe(true);
+  });
+
+  test('empty requester → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="seatRequest_approveButton" />',
+    );
+    expect(await driver.iosApproveSeatRequest('Alice', '')).toBe(true);
+  });
+
+  test('whitespace requester → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="seatRequest_approveButton" />',
+    );
+    expect(await driver.iosApproveSeatRequest('Alice', '   ')).toBe(true);
+  });
+
+  test('different requester still passes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="seatRequest_approveButton" />',
+    );
+    expect(await driver.iosApproveSeatRequest('Alice', 'NotInRequest')).toBe(true);
+  });
+
+  test('first-match contract — two seatRequest_* nodes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="seatRequest_approveButton" />' +
+        '<XCUIElementTypeOther identifier="seatRequest_pendingPanel" />',
+    );
+    expect(await driver.iosApproveSeatRequest('Alice', 'Bao')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't
