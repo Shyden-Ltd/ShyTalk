@@ -1853,6 +1853,25 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 103 — `<Name>'s <Plat> UI shows the room-closed summary
+  // panel` (j09). Post-room-close summary view. Driver receives
+  // `(name)`.
+  //
+  // Foundation strategy: presence-check on the `roomClosedSummary_*`
+  // testTag PREFIX. No `roomClosedSummary_*` testTag exists in
+  // shared/src/commonMain yet — post-close summary UI is unbuilt.
+  // Returns false in real journeys today; lands true when ships with
+  // roomClosedSummary_panel / roomClosedSummary_stats etc.
+  //
+  // The `_name` arg is accepted-and-ignored.
+  driver.androidShowsRoomClosedSummary = async (_name) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?roomClosedSummary_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const NOUN_KIND_TAGS = {
     'appeal::button': 'suspension_submitAppealButton',
   };

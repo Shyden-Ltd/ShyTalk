@@ -13953,3 +13953,200 @@ describe('android-adb-driver — androidShowsOwnRankInTop', () => {
     expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsRoomClosedSummary', () => {
+  // Wake 103 — `<Name>'s <Plat> UI shows the room-closed summary
+  // panel` (j09). Post-room-close summary view. Driver receives
+  // `(name)`.
+  //
+  // Foundation strategy: presence-check on the
+  // `roomClosedSummary_*` testTag PREFIX. No `roomClosedSummary_*`
+  // testTag exists in shared/src/commonMain yet — post-close summary
+  // UI is unbuilt. Returns false in real journeys today; lands true
+  // when ships with roomClosedSummary_panel / roomClosedSummary_stats
+  // etc.
+  //
+  // The `_name` arg is accepted-and-ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('roomClosedSummary_panel present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomClosedSummary_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('Selma')).toBe(true);
+  });
+
+  test('roomClosedSummary_stats present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomClosedSummary_stats" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('Selma')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('Selma')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('Selma')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="roomClosedSummary_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('Selma')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomClosedSummary_panel"><node text="Room closed" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('Selma')).toBe(true);
+  });
+
+  test('left-boundary — pre_roomClosedSummary_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_roomClosedSummary_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('Selma')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_roomClosedSummary_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_roomClosedSummary_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('Selma')).toBe(false);
+  });
+
+  test('right-boundary — roomClosedSummary_panelExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomClosedSummary_panelExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('Selma')).toBe(true);
+  });
+
+  test('confusable prefix — roomClosed_summary does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomClosed_summary" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('Selma')).toBe(false);
+  });
+
+  test('bare confusable prefix — roomClosed_summary does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="roomClosed_summary" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('Selma')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('Selma')).toBe(false);
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomClosedSummary_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('Bao')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomClosedSummary_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary(null)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomClosedSummary_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary(undefined)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomClosedSummary_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomClosedSummary_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('   ')).toBe(true);
+  });
+
+  test('first-match contract — two roomClosedSummary_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomClosedSummary_panel" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/roomClosedSummary_stats" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsRoomClosedSummary('Selma')).toBe(true);
+  });
+});
