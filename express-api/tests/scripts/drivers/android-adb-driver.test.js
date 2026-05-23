@@ -8748,6 +8748,30 @@ describe('android-adb-driver — androidSubmitStarFeedback', () => {
     expect(await driver.androidSubmitStarFeedback(undefined, 5, 'good')).toBe(true);
   });
 
+  test('empty name → true (name accepted-and-ignored)', async () => {
+    // Per feedback-null-undefined-pins-default.md: pin all 4 input-rejection
+    // cases (`''` / `'   '` / `null` / `undefined`) for accepted-and-ignored
+    // string args so a future input-guard refactor cannot silently change
+    // behavior for empty/whitespace inputs.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('', 5, 'good')).toBe(true);
+  });
+
+  test('whitespace-only name → true (name accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/feedbackScreen_starRow" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSubmitStarFeedback('   ', 5, 'good')).toBe(true);
+  });
+
   test('null stars → true (stars accepted-and-ignored)', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
