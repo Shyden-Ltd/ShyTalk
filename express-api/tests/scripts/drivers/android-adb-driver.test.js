@@ -5702,3 +5702,311 @@ describe('android-adb-driver — androidShowsInSeatGrid', () => {
     expect(await driver.androidShowsInSeatGrid('Selma', 'Adam', 1)).toBe(false);
   });
 });
+
+describe('android-adb-driver — androidShowsGiftFromSender', () => {
+  // Wake 99 matcher — `<Name>'s Android UI shows a "<X>" gift from
+  // <Other>` (j01 — gift-receipt notification on recipient view).
+  // Driver receives `(recipient, giftId, sender)`.
+  //
+  // Foundation strategy: TRIPLE composition (extends PR #745's
+  // double composition):
+  //   1. giftWall_grid testTag PRESENT (recipient is on gift-wall
+  //      surface).
+  //   2. giftId text appears with symmetric word-boundary.
+  //   3. sender text appears with symmetric word-boundary.
+  //
+  // Both substring scans run over the whole dump independently —
+  // the journey orchestrator ensures only one gift entry is shown
+  // at the time of the assertion, so cross-entry "match in
+  // different entries" false positives aren't reachable. A future
+  // PR could layer per-entry verification once Compose ships per-
+  // entry testTags.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('giftWall_grid + giftId + sender all present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam sent crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(true);
+  });
+
+  test('giftId in text, sender in content-desc → true', async () => {
+    // Realistic uiautomator output often splits role across nodes.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="crown" /><node content-desc="from Adam" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(true);
+  });
+
+  test('giftWall_grid absent (wrong screen) → false', async () => {
+    // First guard pins: even when both giftId and sender are in
+    // the dump, the assertion fails if the gift-wall surface
+    // isn't visible.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />' +
+        '<node text="Adam sent crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(false);
+  });
+
+  test('giftId present but sender absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(false);
+  });
+
+  test('sender present but giftId absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam sent something" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(false);
+  });
+
+  test('both giftId and sender in same node text → true', async () => {
+    // Pin the same-node case explicitly (the realistic gift-log
+    // entry shape: "Adam sent crown ×5"). Both regexes find their
+    // hit in the same text= attribute.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam sent crown today" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(true);
+  });
+
+  test('prefix collision blocked on giftId — "crown" hint ≠ "Crowning"', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam earned Crowning Achievement" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(false);
+  });
+
+  test('prefix collision blocked on sender — "Adam" hint ≠ "AdamSmith"', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="AdamSmith sent crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(false);
+  });
+
+  test('hyphen-suffix blocked on giftId — "crown" hint ≠ "crown-shaped"', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam sent crown-shaped trophy" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(false);
+  });
+
+  test('empty giftId → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam sent crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', '', 'Adam')).toBe(false);
+  });
+
+  test('empty sender → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam sent crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', '')).toBe(false);
+  });
+
+  test('null giftId → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam sent crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', null, 'Adam')).toBe(false);
+  });
+
+  test('null sender → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam sent crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', null)).toBe(false);
+  });
+
+  test('undefined giftId → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam sent crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', undefined, 'Adam')).toBe(false);
+  });
+
+  test('undefined sender → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam sent crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', undefined)).toBe(false);
+  });
+
+  test('whitespace-only giftId → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam sent crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', '   ', 'Adam')).toBe(false);
+  });
+
+  test('whitespace-only sender → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam sent crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', '   ')).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="giftWall_grid" /><node text="Adam sent crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(true);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(false);
+  });
+
+  test('recipient name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam sent crown" />',
+    });
+    const driver = await createAndroidDriver();
+    const okSelma = await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="Adam sent crown" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okBea = await driver2.androidShowsGiftFromSender('Bea', 'crown', 'Adam');
+
+    expect(okSelma).toBe(true);
+    expect(okBea).toBe(true);
+  });
+
+  test('giftId AND sender with regex-significant chars — both escaped', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="User.42 sent gift_2.0" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'gift_2.0', 'User.42')).toBe(true);
+  });
+
+  test('regex-escape — literal dot does not match arbitrary char', async () => {
+    // Without escape, "gift_2.0" would match "gift_2X0". With
+    // escape, it requires a literal dot.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node text="UserX42 sent gift_2X0" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'gift_2.0', 'User.42')).toBe(false);
+  });
+
+  test('compound attribute names (hint-text=) NOT consulted', async () => {
+    // Outer attribute-name guard from PR #742 + #745.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/giftWall_grid" />' +
+        '<node hint-text="Adam sent crown" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsGiftFromSender('Selma', 'crown', 'Adam')).toBe(false);
+  });
+});

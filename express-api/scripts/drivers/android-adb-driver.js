@@ -1015,6 +1015,46 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return targetRx.test(dump);
   };
 
+  // Wake 99 — `<Name>'s Android UI shows a "<X>" gift from <Other>`
+  // (j01). Driver receives `(recipient, giftId, sender)`.
+  //
+  // Foundation strategy: TRIPLE composition (extends the double
+  // composition from PR #745):
+  //   1. giftWall_grid testTag PRESENT (recipient is on gift-wall).
+  //   2. giftId text appears with symmetric word-boundary.
+  //   3. sender text appears with symmetric word-boundary.
+  //
+  // Both substring scans run over the whole dump independently.
+  // The journey orchestrator ensures only one gift entry is shown
+  // at the time of the assertion, so cross-entry "match in
+  // different entries" false positives aren't reachable. A future
+  // PR could layer per-entry verification once Compose ships per-
+  // entry testTags.
+  driver.androidShowsGiftFromSender = async (_recipient, giftId, sender) => {
+    if (typeof giftId !== 'string' || !giftId.trim()) return false;
+    if (typeof sender !== 'string' || !sender.trim()) return false;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // Step 1: gift wall must be visible
+    // eslint-disable-next-line sonarjs/slow-regex
+    const wallRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?giftWall_grid"[^>]*\/?>/;
+    if (!wallRx.test(dump)) return false;
+    // Step 2: giftId appears with symmetric word-boundary
+    const escGift = giftId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const giftRx = new RegExp(
+      `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escGift}(?![\\w-])[^"]*"`,
+    );
+    if (!giftRx.test(dump)) return false;
+    // Step 3: sender appears with symmetric word-boundary
+    const escSender = sender.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const senderRx = new RegExp(
+      `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escSender}(?![\\w-])[^"]*"`,
+    );
+    return senderRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
