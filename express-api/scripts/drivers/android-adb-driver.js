@@ -727,6 +727,54 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Two matchers (Wake 32-ish) delegate to this method:
+  //   `<P> on Android searches "<X>" in <screen>` → screen-scoped
+  //   `<P> on Android types "<X>" into the search field` → active-screen (null)
+  //
+  // First action method in the cluster — instead of asserting state,
+  // it performs a TAP + INPUT TEXT sequence. The runner doesn't
+  // inspect the return value (always wraps in ok: true), but the
+  // driver returns boolean for direct testability and for future
+  // runner refactors that might surface failures.
+  //
+  // Foundation strategy: SEARCH_FIELD_TAGS map from canonical screen
+  // name to Compose testTag. Currently one entry. Null screen falls
+  // back to the same tag (active-screen typically means "the
+  // currently visible search surface", which today is the new-
+  // message composer).
+  //
+  // Text encoding: adb's `shell input text` splits on spaces by
+  // default (each arg becomes a separate command). The standard
+  // workaround is to encode spaces as `%s`. Non-space chars pass
+  // through literally — no shell interpretation because adb()
+  // single-quotes every arg.
+  const SEARCH_FIELD_TAGS = { messages: 'newMessage_searchField' };
+  const DEFAULT_SEARCH_FIELD_TAG = 'newMessage_searchField';
+  driver.androidSearchIn = async (screen, text) => {
+    // `typeof text !== 'string'` rejects null and undefined too
+    // (typeof null === 'object'; typeof undefined === 'undefined').
+    if (typeof text !== 'string' || !text.trim()) return false;
+    // `!screen` matches null, undefined, and the empty string — all
+    // route to the default field. Empty-string screen is unreachable
+    // from valid Gherkin (matcher requires `\w+`), but the broad
+    // check is defensive.
+    const tag = !screen
+      ? DEFAULT_SEARCH_FIELD_TAG
+      : SEARCH_FIELD_TAGS[String(screen).trim().toLowerCase()];
+    if (!tag) return false;
+    const tapped = await driver.androidTapByTag(tag);
+    if (!tapped) return false;
+    try {
+      adb(['shell', 'input', 'text', text.replace(/ /g, '%s')]);
+      return true;
+    } catch (e) {
+      console.error(
+        `[android-driver] androidSearchIn(${screen}, ${text}) input failed: ${e.message}`,
+      );
+      return false;
+    }
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

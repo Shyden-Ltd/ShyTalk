@@ -4005,3 +4005,207 @@ describe('android-adb-driver — androidAdminShowsTableOf', () => {
     expect(await driver.androidAdminShowsTableOf('Gary', 'user reports')).toBe(false);
   });
 });
+
+describe('android-adb-driver — androidSearchIn', () => {
+  // Two matchers delegate to this method:
+  //   `<P> on Android searches "<X>" in <screen>` → screen-scoped
+  //   `<P> on Android types "<X>" into the search field` → active-screen (null)
+  //
+  // Driver signature: `androidSearchIn(screen, text)` — `screen` may
+  // be null (= active-screen / default field).
+  //
+  // Foundation strategy: a SEARCH_FIELD_TAGS map from canonical screen
+  // name to Compose testTag. Currently one entry:
+  //   - "messages" → newMessage_searchField
+  // And the active-screen (null) default routes to the same tag.
+  //
+  // Sequence: tap the search field → type the text (`adb shell input
+  // text`, with spaces encoded as `%s` per Android's standard
+  // convention). No explicit submit — most Compose search fields
+  // auto-search as you type.
+  //
+  // The runner never inspects the return value (always wraps in
+  // `ok: true`), but the driver still returns boolean for direct
+  // testability and for future runner refactors that might want to
+  // surface failures.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('screen "messages" + text "hello" → tap + input text', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('newMessage_searchField', '[10,100][1000,200]'),
+    });
+    const driver = await createAndroidDriver();
+    const ok = await driver.androidSearchIn('messages', 'hello');
+    expect(ok).toBe(true);
+    // Verify the tap was at the centre of the bounds
+    const tapCall = execSync.mock.calls.find((c) => c[0].includes("'input' 'tap'"));
+    expect(tapCall).toBeDefined();
+    // Verify input text was called with the literal text
+    const inputCall = execSync.mock.calls.find(
+      (c) => c[0].includes("'input' 'text'") && c[0].includes('hello'),
+    );
+    expect(inputCall).toBeDefined();
+  });
+
+  test('null screen → defaults to newMessage_searchField', async () => {
+    // The "types into the search field" matcher passes null.
+    // Driver falls back to the default search field tag.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('newMessage_searchField', '[10,100][1000,200]'),
+    });
+    const driver = await createAndroidDriver();
+    const ok = await driver.androidSearchIn(null, 'world');
+    expect(ok).toBe(true);
+  });
+
+  test('text with spaces — "hello world" encoded as "hello%sworld"', async () => {
+    // adb shell input text uses %s to represent a space (anything
+    // else would be split by the shell). Pin the encoding.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('newMessage_searchField', '[10,100][1000,200]'),
+    });
+    const driver = await createAndroidDriver();
+    const ok = await driver.androidSearchIn('messages', 'hello world');
+    expect(ok).toBe(true);
+    const inputCall = execSync.mock.calls.find((c) => c[0].includes("'input' 'text'"));
+    expect(inputCall).toBeDefined();
+    expect(inputCall[0]).toContain('hello%sworld');
+    expect(inputCall[0]).not.toContain("'hello' 'world'");
+  });
+
+  test('unmapped screen "foobar" → false (FAIL-loud contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('newMessage_searchField', '[10,100][1000,200]'),
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSearchIn('foobar', 'hello')).toBe(false);
+  });
+
+  test('search field testTag absent in dump → false', async () => {
+    // Map resolved to a tag, but uiautomator dump doesn't show it
+    // (admin on wrong screen). Tap fails → method returns false.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('main_roomsTab', '[0,1900][270,2100]'),
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSearchIn('messages', 'hello')).toBe(false);
+  });
+
+  test('empty text arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('newMessage_searchField', '[10,100][1000,200]'),
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSearchIn('messages', '')).toBe(false);
+  });
+
+  test('null text arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('newMessage_searchField', '[10,100][1000,200]'),
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSearchIn('messages', null)).toBe(false);
+  });
+
+  test('undefined text arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('newMessage_searchField', '[10,100][1000,200]'),
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSearchIn('messages', undefined)).toBe(false);
+  });
+
+  test('whitespace-only text arg → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('newMessage_searchField', '[10,100][1000,200]'),
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSearchIn('messages', '   ')).toBe(false);
+  });
+
+  test('case-insensitive screen name — "MESSAGES" resolves', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('newMessage_searchField', '[10,100][1000,200]'),
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSearchIn('MESSAGES', 'hello')).toBe(true);
+  });
+
+  test('whitespace-padded screen name — "  messages  " resolves after trim', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('newMessage_searchField', '[10,100][1000,200]'),
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSearchIn('  messages  ', 'hello')).toBe(true);
+  });
+
+  test('input text throws → false (defensive)', async () => {
+    // Tap succeeds but the subsequent `input text` call rejects.
+    // The driver catches and returns false rather than propagating.
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) return '';
+      if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
+        return '<node resource-id="com.shyden.shytalk.local:id/newMessage_searchField" bounds="[10,100][1000,200]" />';
+      }
+      if (cmd.includes("'input' 'tap'")) return '';
+      if (cmd.includes("'input' 'text'")) throw new Error('adb: device unauthorised');
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSearchIn('messages', 'hello')).toBe(false);
+  });
+
+  test('uiautomator dump fails → false (tap fails first)', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) throw new Error('adb: device offline');
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidSearchIn('messages', 'hello')).toBe(false);
+  });
+
+  test('tap and input commands issued in correct order', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('newMessage_searchField', '[10,100][1000,200]'),
+    });
+    const driver = await createAndroidDriver();
+    await driver.androidSearchIn('messages', 'query');
+    // Find the indices of tap and input text in the call sequence
+    const tapIdx = execSync.mock.calls.findIndex((c) => c[0].includes("'input' 'tap'"));
+    const inputIdx = execSync.mock.calls.findIndex((c) => c[0].includes("'input' 'text'"));
+    expect(tapIdx).toBeGreaterThanOrEqual(0);
+    expect(inputIdx).toBeGreaterThanOrEqual(0);
+    expect(tapIdx).toBeLessThan(inputIdx);
+  });
+
+  test('text with regex-significant chars — no shell interpretation', async () => {
+    // Pin that the text is passed to `input text` literally — no
+    // shell glob expansion, no regex escape needed. The shell-
+    // quoting of adb() args isolates the value.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('newMessage_searchField', '[10,100][1000,200]'),
+    });
+    const driver = await createAndroidDriver();
+    const ok = await driver.androidSearchIn('messages', 'a.b*c');
+    expect(ok).toBe(true);
+    const inputCall = execSync.mock.calls.find((c) => c[0].includes("'input' 'text'"));
+    expect(inputCall[0]).toContain('a.b*c');
+  });
+});
