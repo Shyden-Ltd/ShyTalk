@@ -14078,7 +14078,7 @@ async function main() {
   }
   if (opts.driver === 'simctl' || opts.driver === 'all') {
     try {
-      const { createIosDriver } = require('./drivers/ios-simctl-driver');
+      const { createIosDriver } = require('./drivers/ios-devicectl-driver');
       const iosDriver = await createIosDriver({});
       if (!uiDriver) {
         uiDriver = iosDriver;
