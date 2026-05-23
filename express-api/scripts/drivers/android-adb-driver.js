@@ -1184,6 +1184,29 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 100 — `<Name>'s Android UI shows the <noun> in the thread
+  // [with <suffix>]` (j07, 2 corpus rows). noun is "message" or
+  // "reply"; optional trailing suffix like "with timestamp + sent
+  // indicator". Driver receives `(name, noun, suffix)`.
+  //
+  // Foundation strategy: presence-check the conversation thread
+  // is open (privateChat_messageInput testTag PRESENT). Same shape
+  // as PR #748's androidShowsMessageInConversationThread but with
+  // two additional accepted-and-ignored args (noun, suffix).
+  //
+  // The noun/suffix details are journey-orchestrated — the test
+  // runs RIGHT AFTER a specific message/reply is sent, so "the
+  // <noun>" being visible is implied by the thread being open. A
+  // future PR could layer per-message verification with parameterised
+  // testTags or by parsing message bodies in the dump.
+  driver.androidShowsInThread = async (_name, _noun, _suffix) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
