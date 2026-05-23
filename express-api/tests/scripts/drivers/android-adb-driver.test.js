@@ -6889,4 +6889,54 @@ describe('android-adb-driver — androidAdminShowsRowForWithStatus', () => {
       await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', 'pending'),
     ).toBe(true);
   });
+
+  test('hyphen-suffix blocked on targetId — "riley-abc123" hint ≠ "riley-abc123-extra"', async () => {
+    // Round 1 I-1: symmetric coverage with the status hyphen-suffix
+    // pin. The `(?![\w-])` right boundary blocks trailing hyphens
+    // for the targetId arg too.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123-extra pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', 'pending'),
+    ).toBe(false);
+  });
+
+  test('compound-attribute guard isolated per arg — targetId in hint-text= (only) → false', async () => {
+    // Round 1 I-2: isolate Step 2's compound-attribute guard.
+    // status appears in legitimate text=, but targetId is only in
+    // hint-text=. Should return false (Step 2 fails because
+    // targetId is not in a real text/content-desc attribute).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node hint-text="riley-abc123" /><node text="pending review" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', 'pending'),
+    ).toBe(false);
+  });
+
+  test('compound-attribute guard isolated per arg — status in hint-text= (only) → false', async () => {
+    // Round 1 I-2: isolate Step 3's compound-attribute guard.
+    // targetId appears in legitimate text=, but status is only in
+    // hint-text=. Should return false (Step 3 fails because status
+    // is not in a real text/content-desc attribute).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node text="riley-abc123 row" /><node hint-text="pending" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidAdminShowsRowForWithStatus('Greta', 1, 'riley-abc123', 'pending'),
+    ).toBe(false);
+  });
 });
