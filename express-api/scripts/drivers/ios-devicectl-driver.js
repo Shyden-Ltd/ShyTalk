@@ -270,6 +270,30 @@ async function createIosDriver({ udid: preferred } = {}) {
     return roomRx.test(dump);
   };
 
+  // Wake 89 — `<Name>'s <Plat> UI disables the <X> input` (j11:50).
+  // Mirrors Android sibling. Two-step extraction: lookup the input's
+  // XCUITest identifier via INPUT_TAGS map, then scan for
+  // `enabled="false"` within the captured element tag.
+  //
+  // The XCUITest attribute `enabled="false"` is the iOS equivalent
+  // of uiautomator's same attribute (both expose a boolean enabled
+  // state).
+  const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
+  driver.iosDisablesInput = async (_name, inputName) => {
+    if (!inputName || !inputName.trim()) return false;
+    const tag = IOS_INPUT_TAGS[inputName.toLowerCase()];
+    if (!tag) return false;
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = new RegExp(`<XCUIElementType\\w+[^>]*\\bidentifier="${escTag}"[^>]*\\/?>`);
+    const tagMatch = dump.match(tagRx);
+    if (!tagMatch) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    return /(?<![\w-])enabled="false"/.test(tagMatch[0]);
+  };
+
   driver.close = async () => {
     /* devicectl is stateless; nothing to release */
   };

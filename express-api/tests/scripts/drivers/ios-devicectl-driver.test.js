@@ -1104,6 +1104,165 @@ describe('ios-devicectl-driver — iosContinuesNormallyInRoom', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosDisablesInput', () => {
+  // Wake 89 — `<Name>'s <Plat> UI disables the <X> input` (j11:50).
+  // Two-step: INPUT_TAGS lookup → tag presence → enabled="false" scan.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('chat input with enabled="false" → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="room_chatInput" enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput('Theo', 'chat')).toBe(true);
+  });
+
+  test('chat input with enabled="true" → false', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="room_chatInput" enabled="true" />',
+    );
+    expect(await driver.iosDisablesInput('Theo', 'chat')).toBe(false);
+  });
+
+  test('chat input without enabled attribute → false (defensive)', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeTextField identifier="room_chatInput" />');
+    expect(await driver.iosDisablesInput('Theo', 'chat')).toBe(false);
+  });
+
+  test('unmapped input name "comment" → false (FAIL-loud)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="room_chatInput" enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput('Theo', 'comment')).toBe(false);
+  });
+
+  test('input testTag absent → false', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="main_roomsTab" enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput('Theo', 'chat')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosDisablesInput('Theo', 'chat')).toBe(false);
+  });
+
+  test('empty inputName → false', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="room_chatInput" enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput('Theo', '')).toBe(false);
+  });
+
+  test('whitespace inputName → false', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="room_chatInput" enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput('Theo', '   ')).toBe(false);
+  });
+
+  test('null inputName → false', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="room_chatInput" enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput('Theo', null)).toBe(false);
+  });
+
+  test('undefined inputName → false', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="room_chatInput" enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput('Theo', undefined)).toBe(false);
+  });
+
+  test('case-insensitive inputName — "CHAT" maps to chat', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="room_chatInput" enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput('Theo', 'CHAT')).toBe(true);
+  });
+
+  test('left-boundary — pre_room_chatInput does NOT match (package-qualified absent on iOS)', async () => {
+    // iOS XCUITest has no package qualifier, but the regex still
+    // anchors at `identifier="`. Pin that pre_X doesn't match.
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="pre_room_chatInput" enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput('Theo', 'chat')).toBe(false);
+  });
+
+  test('right-boundary — room_chatInput_extra does NOT match (exact tag)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="room_chatInput_extra" enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput('Theo', 'chat')).toBe(false);
+  });
+
+  test('attribute-order tolerance — enabled before identifier still works', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField enabled="false" identifier="room_chatInput" />',
+    );
+    expect(await driver.iosDisablesInput('Theo', 'chat')).toBe(true);
+  });
+
+  test('compound enabled attribute — pre-enabled="false" does NOT trigger', async () => {
+    // Boundary guard: `(?<![\w-])enabled="false"` blocks compound
+    // attribute names like `pre-enabled`. Pin to match Android sibling.
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="room_chatInput" pre-enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput('Theo', 'chat')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosDisablesInput('Theo', 'chat')).rejects.toThrow();
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="room_chatInput" enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput('Bao', 'chat')).toBe(true);
+  });
+
+  test('null name → true (name accepted-and-ignored)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="room_chatInput" enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput(null, 'chat')).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="room_chatInput" enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput(undefined, 'chat')).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="room_chatInput" enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput('', 'chat')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeTextField identifier="room_chatInput" enabled="false" />',
+    );
+    expect(await driver.iosDisablesInput('   ', 'chat')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't
