@@ -14076,7 +14076,13 @@ async function main() {
       console.error(`[runner] Android driver init failed: ${e.message}`);
     }
   }
-  if (opts.driver === 'simctl' || opts.driver === 'all') {
+  if (opts.driver === 'devicectl' || opts.driver === 'simctl' || opts.driver === 'all') {
+    // Accept both 'devicectl' (canonical, physical-device target) and
+    // 'simctl' (legacy alias from the simulator era). Both route to
+    // ios-devicectl-driver per the Phase 5 migration; 'simctl' is kept
+    // as a transitional alias so existing tooling/scripts that pass
+    // --driver simctl continue to work. A future PR can remove the
+    // alias once all journey runners are migrated.
     try {
       const { createIosDriver } = require('./drivers/ios-devicectl-driver');
       const iosDriver = await createIosDriver({});

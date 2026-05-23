@@ -19,12 +19,42 @@ describe('ios-devicectl-driver — selectUdid', () => {
     expect(execSync).not.toHaveBeenCalled();
   });
 
-  test('extracts UDID from devicectl output when no preferred', () => {
+  test('extracts UDID — legacy 8-16 format with "connected" state', () => {
     execSync.mockReturnValueOnce(
       'Name           Hostname     Identifier                          State      Model\n' +
         'iPhone (Yuki)  iPhone.local 00008110-001A2B3C4D5E6F70           connected  iPhone16,2\n',
     );
     expect(selectUdid()).toBe('00008110-001A2B3C4D5E6F70');
+  });
+
+  test('extracts UDID — RFC-4122 8-4-4-4-12 UUID with "available (paired)" state (Xcode 15+)', () => {
+    // This is the REAL devicectl output on macOS 14 / Xcode 15+ —
+    // verified empirically against `xcrun devicectl list devices`
+    // on a paired iPhone. PR #787 R0 reviewer flagged this format
+    // gap; this test pins the production case.
+    execSync.mockReturnValueOnce(
+      'Name            Hostname                        Identifier                             State                Model\n' +
+        '-------------   -----------------------------   ------------------------------------   ------------------   ----\n' +
+        "Sean's iPhone   Seans-iPhone.coredevice.local   74563FF8-D1FC-567D-A6C1-7C8C3CEFE0C6   available (paired)   iPhone Air (iPhone18,4)\n",
+    );
+    expect(selectUdid()).toBe('74563FF8-D1FC-567D-A6C1-7C8C3CEFE0C6');
+  });
+
+  test('extracts UDID — RFC-4122 with "available (connected)" parenthetical', () => {
+    execSync.mockReturnValueOnce(
+      'Name   Hostname   Identifier                             State                  Model\n' +
+        'Phone  Phone.local 11111111-2222-3333-4444-555555555555  available (connected)  iPhone16,1\n',
+    );
+    expect(selectUdid()).toBe('11111111-2222-3333-4444-555555555555');
+  });
+
+  test('extracts UDID — picks FIRST device when multiple are listed', () => {
+    execSync.mockReturnValueOnce(
+      'Name    Hostname     Identifier                             State                Model\n' +
+        'iPhoneA host1.local 11111111-1111-1111-1111-111111111111  available (paired)   iPhone16,1\n' +
+        'iPhoneB host2.local 22222222-2222-2222-2222-222222222222  available (paired)   iPhone16,2\n',
+    );
+    expect(selectUdid()).toBe('11111111-1111-1111-1111-111111111111');
   });
 
   test('returns null when devicectl shows no connected device', () => {
@@ -36,6 +66,14 @@ describe('ios-devicectl-driver — selectUdid', () => {
     execSync.mockImplementationOnce(() => {
       throw new Error('xcrun: command not found');
     });
+    expect(selectUdid()).toBe(null);
+  });
+
+  test('returns null when devicectl emits headers only (empty device list)', () => {
+    execSync.mockReturnValueOnce(
+      'Name   Hostname   Identifier   State   Model\n' +
+        '----   --------   ----------   -----   -----\n',
+    );
     expect(selectUdid()).toBe(null);
   });
 });
@@ -86,6 +124,30 @@ describe('ios-devicectl-driver — createIosDriver factory', () => {
   test('exposes a close() that resolves cleanly', async () => {
     const driver = await createIosDriver({ udid: 'X' });
     await expect(driver.close()).resolves.toBeUndefined();
+  });
+
+  test('no-arg invocation works (factory default `{}`)', async () => {
+    // The factory's `{ udid: preferred } = {}` default must accept
+    // bare `createIosDriver()`. The runner calls `createIosDriver({})`
+    // but the public API surface also supports no-arg.
+    execSync.mockImplementationOnce(() => {
+      throw new Error('xcrun: command not found');
+    });
+    const driver = await createIosDriver();
+    expect(driver).toBeDefined();
+    expect(driver._udid).toBe(null);
+  });
+
+  test('factory: devicectl succeeds but returns no devices → _udid = null', async () => {
+    // The "no device matched" path through createIosDriver — distinct
+    // from the throw path. Pin that the factory tolerates a clean
+    // empty-device-list response.
+    execSync.mockReturnValueOnce(
+      'Name   Hostname   Identifier   State   Model\n' +
+        '----   --------   ----------   -----   -----\n',
+    );
+    const driver = await createIosDriver({});
+    expect(driver._udid).toBe(null);
   });
 });
 

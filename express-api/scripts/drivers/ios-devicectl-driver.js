@@ -48,12 +48,26 @@ function selectUdid(preferredUdid) {
     const raw = execSync('xcrun devicectl list devices 2>/dev/null', {
       encoding: 'utf8',
     });
-    // devicectl output format (varies by version):
-    //   Name           Hostname    Identifier  State    Model
-    //   iPhone (Yuki)  iPhone.local 00008110-... connected iPhone16,2
-    // Extract the first connected device's UDID (40-char hex with dashes).
-    const m = raw.match(/([0-9A-F]{8}-[0-9A-F]{16})\s+connected/i);
-    return m ? m[1] : null;
+    // devicectl output (Xcode 15+ / macOS 14+) emits the device list as
+    // a fixed-width table:
+    //   Name            Hostname                        Identifier                             State                Model
+    //   -------------   -----------------------------   ------------------------------------   ------------------   ----
+    //   Sean's iPhone   Seans-iPhone.coredevice.local   74563FF8-D1FC-567D-A6C1-7C8C3CEFE0C6   available (paired)   iPhone Air (iPhone18,4)
+    //
+    // The Identifier is an RFC-4122 UUID (8-4-4-4-12 hex with dashes,
+    // total 36 chars). The State literal is `available` (with optional
+    // `(paired)` / `(connected)` parenthetical) — NOT just `connected`
+    // as earlier devicectl versions used. Accept both forms.
+    //
+    // We also tolerate the older 8-16 single-dash UDID format (e.g.
+    // `00008110-001A2B3C4D5E6F70`) that some older devices still emit.
+    const uuidRx =
+      /([0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12})\s+(?:available|connected)/i;
+    const legacyRx = /([0-9A-F]{8}-[0-9A-F]{16})\s+(?:available|connected)/i;
+    const uuidMatch = raw.match(uuidRx);
+    if (uuidMatch) return uuidMatch[1];
+    const legacyMatch = raw.match(legacyRx);
+    return legacyMatch ? legacyMatch[1] : null;
   } catch (_e) {
     return null;
   }
