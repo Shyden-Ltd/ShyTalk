@@ -3495,3 +3495,221 @@ describe('android-adb-driver — androidShowsFrozenBanner', () => {
     expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidAdminShowsNewReportInQueue', () => {
+  // Wake 105 matcher — `<Name>'s Android Admin UI shows the new
+  // report in the queue` (j11 — admin sees a freshly-filed report).
+  // Single-arg driver method receiving the reviewer's persona name.
+  //
+  // Foundation strategy: combine TWO testTags that already exist in
+  // Compose (ReportReviewScreen.kt territory):
+  //   - reportReview_list       — admin queue container (must be present)
+  //   - reportReview_emptyState — empty-list placeholder (must be ABSENT)
+  //
+  // Together these assert "the queue contains at least one report",
+  // which is the closest foundation-layer interpretation of "shows
+  // the new report" without a `status="new"` testTag distinguishing
+  // freshly-filed from older reports. A future layer can add per-
+  // row inspection (e.g. via a `reportReview_row_${id}` parameterised
+  // testTag) to verify the SPECIFIC new report. Foundation answer:
+  // "the queue is non-empty".
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('list present, empty-state absent → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(true);
+  });
+
+  test('list present, empty-state ALSO present → false (queue is empty)', async () => {
+    // The two-testTag composition: even though the list container is
+    // there, if the empty-state child is rendered, the queue has
+    // zero reports → foundation answers false. Pin the precedence:
+    // empty-state always wins.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_emptyState" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(false);
+  });
+
+  test('list absent (admin on wrong screen) → false', async () => {
+    // If the admin is on the home tab or any non-queue screen, the
+    // list testTag isn't in the dump. Distinct from "queue is
+    // empty" — the assertion can't be evaluated. Foundation answer:
+    // false (cannot confirm a new report).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(false);
+  });
+
+  test('empty-state alone (no list) → false', async () => {
+    // Defensive edge: if uiautomator emits the empty-state node
+    // without the list container (theoretically impossible but
+    // pinnable), the list-required guard fires first and returns
+    // false. Documents that list-present is the necessary precondition.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_emptyState" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(false);
+  });
+
+  test('bare resource-id (no package prefix) → true when list present without empty', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(true);
+  });
+
+  test('non-self-closing list tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list"><node text="report row" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(true);
+  });
+
+  test('non-self-closing empty-state form — still blocks even if open-tag', async () => {
+    // Symmetric to the non-self-closing list pin: the empty-state
+    // detection must also work for the open-tag form.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_emptyState"><node text="No reports yet" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(false);
+  });
+
+  test('left-boundary false-positive on list — pre_reportReview_list_x does NOT count', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_reportReview_list_x" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(false);
+  });
+
+  test('right-boundary false-positive on list — reportReview_list_extra does NOT count', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list_extra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(false);
+  });
+
+  test('package-qualified left-boundary on list — :id/pre_reportReview_list does NOT count', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(false);
+  });
+
+  test('bare left-boundary without suffix — pre_reportReview_list does NOT count', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(false);
+  });
+
+  test('empty-state false-positive — pre_reportReview_emptyState does NOT block', async () => {
+    // Pins that the empty-state guard ALSO has boundary protection.
+    // If a real `reportReview_list` is present AND a `pre_reportReview_emptyState`
+    // (a different testTag) is also there, the assertion should
+    // still return true because the empty-state guard correctly
+    // rejects the padded variant.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node resource-id="pre_reportReview_emptyState" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(true);
+  });
+
+  test('uiautomator dump throws → false (not undefined)', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(false);
+  });
+
+  test('reviewer name ignored', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    const okGary = await driver.androidAdminShowsNewReportInQueue('Gary');
+
+    jest.clearAllMocks();
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver2 = await createAndroidDriver();
+    const okAlice = await driver2.androidAdminShowsNewReportInQueue('Alice');
+
+    expect(okGary).toBe(true);
+    expect(okAlice).toBe(true);
+  });
+
+  test('first-match contract pinned — two reportReview_list nodes, list-present condition holds', async () => {
+    // Presence-check semantics: as long as the list is present
+    // somewhere and empty-state is absent, the assertion holds.
+    // Two list nodes don't change the answer.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/reportReview_list" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidAdminShowsNewReportInQueue('Gary')).toBe(true);
+  });
+});

@@ -662,6 +662,34 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 105 — `<Name>'s Android Admin UI shows the new report in
+  // the queue` (j11). Single-arg assertion that the admin queue
+  // contains at least one report. Foundation strategy combines two
+  // Compose testTags from the ReportReview screen:
+  //   - reportReview_list       — admin queue container (must be PRESENT)
+  //   - reportReview_emptyState — empty-list placeholder (must be ABSENT)
+  //
+  // Together these answer "the queue is non-empty", which is the
+  // closest foundation-layer interpretation of "shows the new
+  // report" without a `status="new"` testTag distinguishing
+  // freshly-filed from older reports. A future layer can add per-
+  // row inspection (e.g. via a `reportReview_row_${id}` parameterised
+  // testTag) to verify the SPECIFIC new report.
+  //
+  // Precedence: empty-state ALWAYS beats list-present. If both are
+  // in the dump (theoretically impossible per Compose but pinnable),
+  // the queue is considered empty and the assertion returns false.
+  driver.androidAdminShowsNewReportInQueue = async (_reviewer) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const listRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?reportReview_list"[^>]*\/?>/;
+    if (!listRx.test(dump)) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const emptyRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?reportReview_emptyState"[^>]*\/?>/;
+    return !emptyRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).
