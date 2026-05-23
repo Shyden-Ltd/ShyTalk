@@ -14624,3 +14624,241 @@ describe('android-adb-driver — androidShowsSeatRequestNotification', () => {
     expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidShowsStalkersDelta', () => {
+  // Wake 103 — `<Name>'s <Plat> UI shows a +N in the stalkers/profile-
+  // visits counter` (j07). Profile-visit count increment. Driver
+  // receives `(name, delta)`.
+  //
+  // Foundation strategy: presence-check on the `stalkersDelta_*`
+  // testTag PREFIX. No `stalkersDelta_*` testTag exists in
+  // shared/src/commonMain yet — profile-visits delta badge is unbuilt.
+  // Returns false in real journeys today; lands true when ships with
+  // stalkersDelta_badge / stalkersDelta_counter etc.
+  //
+  // Per-delta verification (matching the actual +N) needs text-
+  // extraction. Deferred. Both args (_name, _delta) accepted-and-
+  // ignored.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('stalkersDelta_badge present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/stalkersDelta_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', 1)).toBe(true);
+  });
+
+  test('stalkersDelta_counter present → true (any suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/stalkersDelta_counter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', 3)).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', 1)).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', 1)).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="stalkersDelta_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', 1)).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/stalkersDelta_badge"><node text="+1" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', 1)).toBe(true);
+  });
+
+  test('left-boundary — pre_stalkersDelta_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_stalkersDelta_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', 1)).toBe(false);
+  });
+
+  test('bare left-boundary — pre_stalkersDelta_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_stalkersDelta_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', 1)).toBe(false);
+  });
+
+  test('right-boundary — stalkersDelta_badgeExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/stalkersDelta_badgeExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', 1)).toBe(true);
+  });
+
+  test('confusable prefix — stalkers_deltaOther does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/stalkers_deltaOther" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', 1)).toBe(false);
+  });
+
+  test('bare confusable prefix — stalkers_deltaOther does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="stalkers_deltaOther" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', 1)).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', 1)).toBe(false);
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/stalkersDelta_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Bao', 1)).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/stalkersDelta_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta(null, 1)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/stalkersDelta_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta(undefined, 1)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/stalkersDelta_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('', 1)).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/stalkersDelta_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('   ', 1)).toBe(true);
+  });
+
+  test('null delta → true (accepted-and-ignored)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/stalkersDelta_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', null)).toBe(true);
+  });
+
+  test('undefined delta → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/stalkersDelta_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', undefined)).toBe(true);
+  });
+
+  test('0 delta → true (accepted-and-ignored regardless of value)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/stalkersDelta_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', 0)).toBe(true);
+  });
+
+  test('large delta → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/stalkersDelta_badge" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', 9999)).toBe(true);
+  });
+
+  test('first-match contract — two stalkersDelta_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/stalkersDelta_badge" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/stalkersDelta_counter" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsStalkersDelta('Alice', 1)).toBe(true);
+  });
+});

@@ -22498,18 +22498,122 @@ describe('Wake 103 — "<Name>\'s <Plat> UI navigates to <Other>\'s profile scre
 });
 
 describe("Wake 103 — `<Name>'s <Plat> UI shows a +N in the stalkers/profile-visits counter`", () => {
+  const stalkersText = (platform) =>
+    `Alice's ${platform} UI shows a +1 in the stalkers/profile-visits counter`;
+
   test('matching → ok', async () => {
     const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webShowsStalkersDelta: spy } });
-    const r = await executeStep(
-      {
-        kind: 'Then',
-        text: "Alice's Web UI shows a +1 in the stalkers/profile-visits counter",
-      },
-      ctx,
-    );
+    const r = await executeStep({ kind: 'Then', text: stalkersText('Web') }, ctx);
     expect(r.ok).toBe(true);
     expect(spy).toHaveBeenCalledWith('Alice', 1);
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsStalkersDelta: spy } });
+    const r = await executeStep({ kind: 'Then', text: stalkersText('Web') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|stalkers|profile-visits/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: stalkersText('Web') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsStalkersDelta/);
+  });
+
+  test('Web Chromium matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsStalkersDelta: spy } });
+    const r = await executeStep({ kind: 'Then', text: stalkersText('Web Chromium') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 1);
+  });
+
+  test('Web Chromium driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsStalkersDelta: spy } });
+    const r = await executeStep({ kind: 'Then', text: stalkersText('Web Chromium') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|stalkers|profile-visits/);
+  });
+
+  test('Web Chromium driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: stalkersText('Web Chromium') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsStalkersDelta/);
+  });
+
+  test('Web Safari matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsStalkersDelta: spy } });
+    const r = await executeStep({ kind: 'Then', text: stalkersText('Web Safari') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 1);
+  });
+
+  test('Web Safari driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsStalkersDelta: spy } });
+    const r = await executeStep({ kind: 'Then', text: stalkersText('Web Safari') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|stalkers|profile-visits/);
+  });
+
+  test('Web Safari driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: stalkersText('Web Safari') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.webDriver\.webShowsStalkersDelta/);
+  });
+
+  test('Android matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { androidShowsStalkersDelta: spy } });
+    const r = await executeStep({ kind: 'Then', text: stalkersText('Android') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 1);
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsStalkersDelta: spy } });
+    const r = await executeStep({ kind: 'Then', text: stalkersText('Android') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|stalkers|profile-visits/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: stalkersText('Android') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.androidShowsStalkersDelta/);
+  });
+
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsStalkersDelta: spy } });
+    const r = await executeStep({ kind: 'Then', text: stalkersText('iOS Sim') }, ctx);
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 1);
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsStalkersDelta: spy } });
+    const r = await executeStep({ kind: 'Then', text: stalkersText('iOS Sim') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|stalkers|profile-visits/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Then', text: stalkersText('iOS Sim') }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.uiDriver\.iosShowsStalkersDelta/);
   });
 });
 

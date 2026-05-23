@@ -1914,6 +1914,27 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 103 — `<Name>'s <Plat> UI shows a +N in the stalkers/profile-
+  // visits counter` (j07). Profile-visit count increment. Driver
+  // receives `(name, delta)`.
+  //
+  // Foundation strategy: presence-check on the `stalkersDelta_*`
+  // testTag PREFIX. No `stalkersDelta_*` testTag exists in
+  // shared/src/commonMain yet — profile-visits delta badge is unbuilt.
+  // Returns false in real journeys today; lands true when ships with
+  // stalkersDelta_badge / _counter etc.
+  //
+  // Per-delta verification (matching the actual +N) needs text-
+  // extraction. Deferred. Both args (_name, _delta) accepted-and-
+  // ignored.
+  driver.androidShowsStalkersDelta = async (_name, _delta) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?stalkersDelta_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const NOUN_KIND_TAGS = {
     'appeal::button': 'suspension_submitAppealButton',
   };
