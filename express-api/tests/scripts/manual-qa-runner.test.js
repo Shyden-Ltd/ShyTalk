@@ -17303,6 +17303,71 @@ describe('Wake 88 — "<Name> on <Plat> opens <Other>\'s profile and taps "<X>""
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/iosOpenProfileAndTap/);
   });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosOpenProfileAndTap: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Nora on iOS Sim opens Raul\'s profile and taps "Block"' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Raul|profile.*Block/i);
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidOpenProfileAndTap: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Alice on Android opens Bob\'s profile and taps "Report"' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Bob|profile.*Report/i);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'When', text: 'Alice on Android opens Bob\'s profile and taps "Report"' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/androidOpenProfileAndTap/);
+  });
+
+  // Web branch — routes to ctx.webDriver.webOpenProfileAndTap
+  test('Web matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webOpenProfileAndTap: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Alice on Web opens Bob\'s profile and taps "Report"' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'Bob', 'Report');
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webOpenProfileAndTap: spy } });
+    const r = await executeStep(
+      { kind: 'When', text: 'Alice on Web opens Bob\'s profile and taps "Report"' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Bob|profile.*Report/i);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'When', text: 'Alice on Web opens Bob\'s profile and taps "Report"' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/webOpenProfileAndTap/);
+  });
 });
 
 describe('Wake 88 — "<Name> on <Plat> opens <Other>\'s profile from the <X>"', () => {

@@ -1560,6 +1560,35 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 88 — `<Name> on <Plat> opens <Other>'s profile and taps "<X>"`
+  // (j11:33). Composite open-profile + tap-action. Driver receives
+  // `(actor, target, button)`.
+  //
+  // Foundation strategy: presence-check on the `profile_*` testTag
+  // PREFIX. UNLIKE the admin/dashboard/seatRequest siblings, the
+  // `profile_*` testTag family DOES exist today —
+  // shared/src/commonMain/.../profile/ProfileScreen.kt exposes
+  // `profile_displayName` (lines 507 and 992). So this method WILL
+  // return true in real journeys whenever the profile screen is open.
+  //
+  // What's foundation about it: the per-button tap action (e.g. tap
+  // "Block" / "Report" / "Follow") is NOT yet implemented — buttons
+  // need their own per-action testTags (`profile_blockButton`,
+  // `profile_reportButton`, etc.). The foundation verifies the
+  // profile is OPEN; per-button targeting is deferred.
+  //
+  // All 3 args (_actor, _target, _button) accepted-and-ignored.
+  // Per-target verification (asserting <Other>'s profile specifically,
+  // not any profile) needs profile_displayName text-extraction.
+  // Per-button targeting needs a button-name → testTag map.
+  driver.androidOpenProfileAndTap = async (_actor, _target, _button) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?profile_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   // Open named screen — launches the local-build app via MainActivity.
   // The app's AndroidManifest does NOT declare a `shytalk://` scheme
   // (only HTTPS auth deep-links per app/src/main/AndroidManifest.xml).

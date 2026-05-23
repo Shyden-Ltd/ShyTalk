@@ -10552,3 +10552,294 @@ describe('android-adb-driver — androidApproveSeatRequest', () => {
     expect(await driver.androidApproveSeatRequest('Alice', 'Bao')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidOpenProfileAndTap', () => {
+  // Wake 88 — `<Name> on <Plat> opens <Other>'s profile and taps "<X>"`
+  // (j11:33). Composite open-profile + tap-action. Driver receives
+  // `(actor, target, button)`.
+  //
+  // Foundation strategy: presence-check on the `profile_*` testTag
+  // PREFIX. UNLIKE the admin/dashboard/seatRequest siblings, the
+  // `profile_*` testTag family DOES exist today —
+  // shared/src/commonMain/.../profile/ProfileScreen.kt exposes
+  // `profile_displayName` (lines 507 and 992). So this method WILL
+  // return true in real journeys whenever the profile screen is open.
+  //
+  // What's foundation about it: the per-button tap action (e.g. tap
+  // "Block" / "Report" / "Follow") is NOT yet implemented. Buttons
+  // need their own per-action testTags (`profile_blockButton`,
+  // `profile_reportButton`, etc.). The foundation verifies the
+  // profile is OPEN; per-button targeting is deferred.
+  //
+  // All 3 args (_actor, _target, _button) accepted-and-ignored. Per-
+  // target verification (asserting <Other>'s profile specifically, not
+  // any profile) needs profile_displayName text-extraction. Per-button
+  // targeting needs a button-name → testTag map.
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('profile_displayName present → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'Block')).toBe(true);
+  });
+
+  test('profile_avatar present → true (any profile_* suffix matches)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_avatar" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'Report')).toBe(true);
+  });
+
+  test('absent (no profile surface) → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'Block')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'Block')).toBe(false);
+  });
+
+  test('bare resource-id → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'Block')).toBe(true);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName"><node text="Raul" /></node>',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'Block')).toBe(true);
+  });
+
+  test('left-boundary — pre_profile_X does NOT match (package-qualified)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/pre_profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'Block')).toBe(false);
+  });
+
+  test('bare left-boundary — pre_profile_X does NOT match', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'Block')).toBe(false);
+  });
+
+  test('right-boundary — profile_displayNameExtra still matches (prefix contract)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayNameExtra" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'Block')).toBe(true);
+  });
+
+  test('confusable prefix — profileSettings_X does NOT match', async () => {
+    // Pin: left anchor is `profile_` literally. A hypothetical
+    // `profileSettings_*` family must NOT false-match `profile_*`.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profileSettings_panel" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'Block')).toBe(false);
+  });
+
+  test('uiautomator dump throws → false', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'uiautomator' 'dump'")) {
+        throw new Error('adb: device offline');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'Block')).toBe(false);
+  });
+
+  test('actor accepted-and-ignored — Bea passes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Bea', 'Raul', 'Block')).toBe(true);
+  });
+
+  test('null actor → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap(null, 'Raul', 'Block')).toBe(true);
+  });
+
+  test('undefined actor → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap(undefined, 'Raul', 'Block')).toBe(true);
+  });
+
+  test('empty actor → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('', 'Raul', 'Block')).toBe(true);
+  });
+
+  test('whitespace actor → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('   ', 'Raul', 'Block')).toBe(true);
+  });
+
+  test('null target → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', null, 'Block')).toBe(true);
+  });
+
+  test('undefined target → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', undefined, 'Block')).toBe(true);
+  });
+
+  test('empty target → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', '', 'Block')).toBe(true);
+  });
+
+  test('whitespace target → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', '   ', 'Block')).toBe(true);
+  });
+
+  test('null button → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', null)).toBe(true);
+  });
+
+  test('undefined button → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', undefined)).toBe(true);
+  });
+
+  test('empty button → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', '')).toBe(true);
+  });
+
+  test('whitespace button → true', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', '   ')).toBe(true);
+  });
+
+  test('different button still passes (foundation does not match specific button)', async () => {
+    // Per-button targeting needs button-name → testTag map. Today the
+    // foundation matches ANY profile_* element (the profile is open).
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'AnyButtonName')).toBe(true);
+  });
+
+  test('first-match contract — two profile_* nodes', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/profile_displayName" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/profile_avatar" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidOpenProfileAndTap('Greta', 'Raul', 'Block')).toBe(true);
+  });
+});
