@@ -91,3 +91,6 @@ jobs:
 
       - name: HTML data-i18n keys all have JS translation definitions
         run: bash scripts/check-orphan-i18n-keys.sh
+
+      - name: Release workflow contract (PR-flow + signed commits)
+        run: bash scripts/check-release-trigger.sh

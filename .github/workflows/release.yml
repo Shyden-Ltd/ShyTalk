@@ -102,9 +102,10 @@ jobs:
           # has no open PR, attempt API deletion. If deletion succeeds
           # (e.g. App on ruleset bypass list), the branch is gone. If
           # it fails (ruleset blocks deletion), WARN and proceed —
-          # the per-run unique branch name below (line ~346, includes
-          # github.run_id) guarantees this run will not collide with
-          # the orphan, so the inability to delete is non-fatal.
+          # the per-run-id branch suffix in the `create_commit` step
+          # below (BRANCH includes ${{ github.run_id }}) guarantees
+          # this run will not collide with the orphan, so the
+          # inability to delete is non-fatal.
           #
           # If an open PR DOES reference the orphan branch, the prior
           # run got far enough to open the PR but it hasn't merged.
@@ -375,14 +376,30 @@ jobs:
           # Step 1: Create the release branch (empty, points at main's
           # current HEAD). createCommitOnBranch requires the branch to
           # exist before adding commits to it.
-          if ! gh api -X POST "repos/${{ github.repository }}/git/refs" \
-                -f "ref=refs/heads/${BRANCH}" \
-                -f "sha=${PARENT_SHA}" > /tmp/refs-response.json 2>&1; then
-            echo "::error::Failed to create branch ${BRANCH} via REST API."
-            cat /tmp/refs-response.json
-            exit 1
+          #
+          # Idempotency: if the branch already exists at PARENT_SHA
+          # (e.g. operator clicked "Re-run jobs" after a prior attempt
+          # of this same run created the branch), accept it and move
+          # on. If it exists at a DIFFERENT sha, error out — that's
+          # unexpected state that the operator should investigate.
+          EXISTING_SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/${BRANCH}" --jq '.object.sha' 2>/dev/null || true)
+          if [ -n "${EXISTING_SHA:-}" ]; then
+            if [ "${EXISTING_SHA}" = "${PARENT_SHA}" ]; then
+              echo "Branch ${BRANCH} already exists at ${PARENT_SHA} (idempotent re-run); skipping creation."
+            else
+              echo "::error::Branch ${BRANCH} already exists but points at ${EXISTING_SHA} (expected ${PARENT_SHA}). This usually means a prior attempt of this run advanced the branch before failing. Delete the branch via GitHub UI (Settings > Branches > ${BRANCH} > Delete) and re-trigger."
+              exit 1
+            fi
+          else
+            if ! gh api -X POST "repos/${{ github.repository }}/git/refs" \
+                  -f "ref=refs/heads/${BRANCH}" \
+                  -f "sha=${PARENT_SHA}" > /tmp/refs-response.json 2>&1; then
+              echo "::error::Failed to create branch ${BRANCH} via REST API."
+              cat /tmp/refs-response.json
+              exit 1
+            fi
+            echo "Created branch ${BRANCH} at ${PARENT_SHA}"
           fi
-          echo "Created branch ${BRANCH} at ${PARENT_SHA}"
 
           # Step 2: Build the GraphQL mutation payload. Use jq to
           # safely encode file contents (base64) and construct the
@@ -479,7 +496,14 @@ jobs:
             echo "----- gh pr create output -----"
             echo "$PR_URL"
             echo "-------------------------------"
-            echo "Manual recovery: gh pr create --base main --head ${BRANCH} --title 'chore: release v${VERSION}' --body-file <notes>"
+            # Dump the body inline so the operator can copy-paste — the
+            # temp file ($PR_BODY_FILE) is destroyed when the runner
+            # terminates, so a path reference would be useless.
+            echo "Manual recovery: re-run with the body below."
+            echo "----- PR body (from $PR_BODY_FILE) -----"
+            cat "$PR_BODY_FILE"
+            echo "----------------------------------------"
+            echo "Recovery command: gh pr create --base main --head ${BRANCH} --title 'chore: release v${VERSION}' --body \"<paste body above>\""
             exit 1
           fi
           PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
