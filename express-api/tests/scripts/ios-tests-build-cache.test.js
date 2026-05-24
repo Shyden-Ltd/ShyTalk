@@ -881,4 +881,21 @@ describe('ios-tests.yml — Verify pbxproj-mutation script idempotency step', ()
     // accidentally drop the jest call.
     expect(idempotencyStep).toContain('npx jest tests/scripts/ios-local-configurations.test.js');
   });
+
+  test('step installs xcodeproj gem BEFORE invoking jest (R4 I-3)', () => {
+    // R4 review I-3: the Ruby script `add-local-configurations.rb`
+    // does `require 'xcodeproj'`. Without `gem install xcodeproj`
+    // first, the require fails on a cold macOS runner (the gem is
+    // not pre-installed). The previous tests assert `npx jest` is
+    // present but a future refactor that drops the `gem install`
+    // line would still pass them. Pin the presence + ordering so
+    // the load-bearing prerequisite can't silently disappear.
+    const gemIdx = idempotencyStep.indexOf('gem install');
+    const jestIdx = idempotencyStep.indexOf('npx jest');
+    expect(idempotencyStep).toContain('gem install');
+    expect(idempotencyStep).toContain('xcodeproj');
+    expect(gemIdx).toBeGreaterThanOrEqual(0);
+    expect(jestIdx).toBeGreaterThanOrEqual(0);
+    expect(gemIdx).toBeLessThan(jestIdx);
+  });
 });

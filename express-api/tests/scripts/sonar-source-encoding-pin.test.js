@@ -18,7 +18,7 @@
  * codepoint in a NEW source file by pasting the literal character
  * into a comment or string would re-introduce the same Sonar
  * warning. Sonar warnings are HARD failures per the operator's
- * global rule (2026-05-23).
+ * global rule (2026-05-24).
  *
  * Coverage:
  *   - Every .js / .mjs / .cjs / .ts / .tsx file under
@@ -65,10 +65,17 @@ describe('Sonar source-encoding contract — no literal U+FFFD in source', () =>
     offenders = [];
     for (const file of files) {
       const src = fs.readFileSync(file, 'utf8');
-      if (src.includes(REPLACEMENT_CHAR)) {
-        const lineNo = src.slice(0, src.indexOf(REPLACEMENT_CHAR)).split('\n').length;
-        offenders.push(`${path.relative(EXPRESS_API_ROOT, file)}:${lineNo}`);
-      }
+      if (!src.includes(REPLACEMENT_CHAR)) continue;
+      // R4 review I-1: a file may contain the codepoint on multiple
+      // lines. The earlier `indexOf` form only reported the first
+      // line, forcing the developer to iterate fix → re-run → fix
+      // again. Collect EVERY occurrence so a single failure message
+      // is actionable end-to-end.
+      const hitLines = src
+        .split('\n')
+        .map((l, i) => (l.includes(REPLACEMENT_CHAR) ? i + 1 : null))
+        .filter((n) => n !== null);
+      offenders.push(`${path.relative(EXPRESS_API_ROOT, file)}:${hitLines.join(',')}`);
     }
   });
 

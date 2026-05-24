@@ -58,9 +58,13 @@ describe('iOS Pods integration — Podfile contract', () => {
     // R3 review M-3: CocoaPods Ruby DSL requires `project` at the
     // top level BEFORE any `target` block opens — once the target
     // DSL is active, a `project` call inside it would be misparsed.
-    // The Podfile is currently correct (project at line ~12, first
-    // target at line ~16), but a future PR reordering the file
-    // could break Ruby parsing at pod install time. Pin the ordering.
+    // The Podfile is currently correct (the `project` directive
+    // appears above the first `target` block); pin the ordering so
+    // a future PR reordering the file can't silently break Ruby
+    // parsing at pod install time.
+    // R4 M-1: explicit line numbers removed — they drift the moment
+    // any header comment changes, and "currently correct" + the
+    // assertion below is sufficient documentation.
     const projectIdx = PODFILE_SRC.indexOf("project 'iosApp.xcodeproj'");
     const targetIdx = PODFILE_SRC.indexOf("target 'iosApp' do");
     expect(projectIdx).toBeGreaterThanOrEqual(0);

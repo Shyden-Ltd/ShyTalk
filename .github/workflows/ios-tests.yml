@@ -250,12 +250,16 @@ jobs:
       # (Round 3 I-1 review fix).
       - name: Verify pbxproj-mutation script idempotency
         working-directory: express-api
-        # `gem install` must run BEFORE the cwd matters — it installs
-        # to ~/.gem (user-install), not the cwd — so the chained form
-        # is functionally equivalent to running it before the cd. The
-        # working-directory only affects the jest invocation.
+        # R4 review I-2: `gem install xcodeproj` (no --user-install)
+        # is the standard form on macOS GitHub runners. The runner
+        # user has write access to the system Ruby gem directory and
+        # the gem becomes available via the standard $LOAD_PATH on
+        # the next Ruby invocation. `--user-install` would place the
+        # gem in `~/.gem/...` which (while still on Ruby's GEM_PATH)
+        # adds a subtle correctness-vs-PATH mismatch if a later step
+        # invokes a different Ruby.
         run: |
-          gem install --user-install xcodeproj
+          gem install xcodeproj
           npx jest tests/scripts/ios-local-configurations.test.js
 
       - name: Install CocoaPods
