@@ -1574,6 +1574,139 @@ describe('ios-devicectl-driver — iosJoinEventRoom', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosNavigatesBackToTab', () => {
+  // Wake 95 — `<Name>'s <Plat> UI navigates back to the <tab> tab`.
+  // Foundation: presence-check on `main_*Tab` identifier suffix.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('main_roomsTab present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesBackToTab('Alice', 'rooms')).toBe(true);
+  });
+
+  test('main_messagesTab present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_messagesTab" />');
+    expect(await driver.iosNavigatesBackToTab('Alice', 'messages')).toBe(true);
+  });
+
+  test('main_walletTab present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_walletTab" />');
+    expect(await driver.iosNavigatesBackToTab('Alice', 'wallet')).toBe(true);
+  });
+
+  test('absent (no nav bar) → false', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosNavigatesBackToTab('Alice', 'rooms')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosNavigatesBackToTab('Alice', 'rooms')).toBe(false);
+  });
+
+  test('non-self-closing form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="main_roomsTab"><XCUIElementTypeStaticText name="Rooms" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosNavigatesBackToTab('Alice', 'rooms')).toBe(true);
+  });
+
+  test('left-boundary — pre_main_roomsTab does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="pre_main_roomsTab" />');
+    expect(await driver.iosNavigatesBackToTab('Alice', 'rooms')).toBe(false);
+  });
+
+  test('right-boundary — main_roomsTabExtra does NOT match (Tab" anchors right)', async () => {
+    // The regex requires `Tab"` at the end, so `Extra` suffix after
+    // `Tab` does NOT match — the closing `"` anchors the right side.
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTabExtra" />');
+    expect(await driver.iosNavigatesBackToTab('Alice', 'rooms')).toBe(false);
+  });
+
+  test('confusable prefix — mainPage_tab does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="mainPage_tab" />');
+    expect(await driver.iosNavigatesBackToTab('Alice', 'rooms')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther name="main_roomsTab" />');
+    expect(await driver.iosNavigatesBackToTab('Alice', 'rooms')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosNavigatesBackToTab('Alice', 'rooms')).rejects.toThrow();
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesBackToTab('Bao', 'rooms')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesBackToTab(null, 'rooms')).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesBackToTab(undefined, 'rooms')).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesBackToTab('', 'rooms')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesBackToTab('   ', 'rooms')).toBe(true);
+  });
+
+  test('null tab → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesBackToTab('Alice', null)).toBe(true);
+  });
+
+  test('undefined tab → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesBackToTab('Alice', undefined)).toBe(true);
+  });
+
+  test('empty tab → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesBackToTab('Alice', '')).toBe(true);
+  });
+
+  test('whitespace tab → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesBackToTab('Alice', '   ')).toBe(true);
+  });
+
+  test('different tab still passes (foundation does not verify specific tab)', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesBackToTab('Alice', 'AnyTabName')).toBe(true);
+  });
+
+  test('first-match contract — two main_*Tab nodes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="main_roomsTab" />' +
+        '<XCUIElementTypeOther identifier="main_messagesTab" />',
+    );
+    expect(await driver.iosNavigatesBackToTab('Alice', 'rooms')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't

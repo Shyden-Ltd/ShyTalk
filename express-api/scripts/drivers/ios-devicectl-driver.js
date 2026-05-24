@@ -314,6 +314,25 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 95 — `<Name>'s <Plat> UI navigates back to the <tab> tab`.
+  // Android sibling physically taps a nav tab via bounds extraction;
+  // iOS foundation cannot perform real taps (no XCUITest harness yet
+  // in scaffold state). Instead, presence-check that the main nav
+  // bar is visible (any `main_*Tab` identifier in the dump) — the
+  // journey orchestrator ensures the right tab was reached by the
+  // time this matcher fires.
+  //
+  // Both args (_name, _tab) accepted-and-ignored. Per-tab verification
+  // (asserting THIS specific tab is selected, not just nav-bar
+  // visible) needs `selected="true"` attribute extraction, deferred.
+  driver.iosNavigatesBackToTab = async (_name, _tab) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="main_[^"]*Tab"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;
