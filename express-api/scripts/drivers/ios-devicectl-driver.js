@@ -300,6 +300,20 @@ async function createIosDriver({ udid: preferred } = {}) {
     return roomRx.test(dump);
   };
 
+  // Wake 86 — `<P1> on <plat1> and <P2> on <plat2> both join the
+  // event room` (j16). iOS variant mirroring Android sibling.
+  // Foundation: presence-check on `roomList_roomCard_*` PREFIX (any
+  // room card in current dump — the journey orchestrator ensures
+  // only the event room is in the list at this point). The `_name`
+  // arg is accepted-and-ignored.
+  driver.iosJoinEventRoom = async (_name) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="roomList_roomCard_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;

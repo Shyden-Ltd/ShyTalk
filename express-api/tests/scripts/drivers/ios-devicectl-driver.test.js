@@ -1452,6 +1452,128 @@ describe('ios-devicectl-driver — iosIsStillInRoom', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosJoinEventRoom', () => {
+  // Wake 86 — `<P1> on <plat1> and <P2> on <plat2> both join the
+  // event room` (j16). Presence-check on `roomList_roomCard_*` PREFIX.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('roomList_roomCard_eventRoom123 present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="roomList_roomCard_eventRoom123" />',
+    );
+    expect(await driver.iosJoinEventRoom('Selma')).toBe(true);
+  });
+
+  test('roomList_roomCard_abc-def present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="roomList_roomCard_abc-def" />',
+    );
+    expect(await driver.iosJoinEventRoom('Selma')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosJoinEventRoom('Selma')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosJoinEventRoom('Selma')).toBe(false);
+  });
+
+  test('non-self-closing tag form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="roomList_roomCard_x"><XCUIElementTypeStaticText name="Event Room" /></XCUIElementTypeButton>',
+    );
+    expect(await driver.iosJoinEventRoom('Selma')).toBe(true);
+  });
+
+  test('left-boundary — pre_roomList_roomCard_X does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="pre_roomList_roomCard_x" />',
+    );
+    expect(await driver.iosJoinEventRoom('Selma')).toBe(false);
+  });
+
+  test('right-boundary — roomList_roomCard_xExtra still matches (prefix contract)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="roomList_roomCard_xExtra" />',
+    );
+    expect(await driver.iosJoinEventRoom('Selma')).toBe(true);
+  });
+
+  test('confusable prefix — roomList_room_card does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="roomList_room_card" />');
+    expect(await driver.iosJoinEventRoom('Selma')).toBe(false);
+  });
+
+  test('similar-but-distinct — roomList_header does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="roomList_header" />');
+    expect(await driver.iosJoinEventRoom('Selma')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeButton name="roomList_roomCard_x" />');
+    expect(await driver.iosJoinEventRoom('Selma')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosJoinEventRoom('Selma')).rejects.toThrow();
+  });
+
+  test('name accepted-and-ignored — Tariq passes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="roomList_roomCard_x" />',
+    );
+    expect(await driver.iosJoinEventRoom('Tariq')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="roomList_roomCard_x" />',
+    );
+    expect(await driver.iosJoinEventRoom(null)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="roomList_roomCard_x" />',
+    );
+    expect(await driver.iosJoinEventRoom(undefined)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="roomList_roomCard_x" />',
+    );
+    expect(await driver.iosJoinEventRoom('')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="roomList_roomCard_x" />',
+    );
+    expect(await driver.iosJoinEventRoom('   ')).toBe(true);
+  });
+
+  test('first-match contract — two roomList_roomCard_* nodes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="roomList_roomCard_a" />' +
+        '<XCUIElementTypeButton identifier="roomList_roomCard_b" />',
+    );
+    expect(await driver.iosJoinEventRoom('Selma')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't
