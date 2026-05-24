@@ -96,22 +96,26 @@ jobs:
           # Handle orphan release branches left by a failed previous
           # run. The "no-force-push-anywhere" ruleset blocks branch
           # deletion for most actors, so an aborted run leaves
-          # release/vX.Y.Z behind — and the next dispatch would hit
-          # branch-already-exists when it tried to create the branch.
+          # release/vX.Y.Z behind.
           #
-          # Strategy: if no open PR is using the orphan branch as its
-          # head, the orphan is genuinely stale (no operator state to
-          # preserve). Attempt API deletion. The deletion only succeeds
-          # if the workflow's GitHub App is on the ruleset's bypass
-          # list — if it isn't, fall back to the old behavior (error
-          # out with manual recovery instructions).
+          # Strategy: opportunistic best-effort cleanup. If the orphan
+          # has no open PR, attempt API deletion. If deletion succeeds
+          # (e.g. App on ruleset bypass list), the branch is gone. If
+          # it fails (ruleset blocks deletion), WARN and proceed —
+          # the per-run unique branch name below (line ~346, includes
+          # github.run_id) guarantees this run will not collide with
+          # the orphan, so the inability to delete is non-fatal.
           #
           # If an open PR DOES reference the orphan branch, the prior
           # run got far enough to open the PR but it hasn't merged.
-          # Refuse to delete — that's operator state.
+          # Refuse to delete — that's operator state — and bail with
+          # a clear instruction. (The earlier `OPEN_RELEASE_PRS`
+          # guard already covers PRs with `chore: release v` titles,
+          # but a residual orphan with a closed-and-not-deleted PR
+          # could still trip us here.)
           ORPHAN_RELEASE_BRANCHES=$(gh api repos/${{ github.repository }}/branches --paginate --jq '.[].name | select(startswith("release/v"))')
           if [ -n "$ORPHAN_RELEASE_BRANCHES" ]; then
-            echo "Orphan release branch(es) detected — attempting auto-cleanup."
+            echo "Orphan release branch(es) detected — attempting opportunistic cleanup."
             # `for x in $var` does NOT create a subshell, so `exit 1`
             # inside the loop actually aborts the outer script. We
             # deliberately avoid `... | while read` here for that
@@ -125,11 +129,9 @@ jobs:
               if gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$branch" 2>/tmp/delete-err; then
                 echo "Auto-deleted orphan release branch: $branch"
               else
-                echo "::error::Failed to auto-delete orphan branch '$branch' via API. The workflow's GitHub App likely isn't in the no-force-push-anywhere ruleset's bypass list."
-                echo "Fix forward: add the Release app to the ruleset's bypass list (Settings > Rulesets > no-force-push-anywhere > Bypass list), OR delete the orphan branch manually via the GitHub UI (Settings > Branches > $branch > Delete) and re-trigger."
-                echo "API error output:"
+                echo "::warning::Could not auto-delete orphan branch '$branch' (likely ruleset-blocked). Proceeding — this run uses a unique per-run-id branch name and won't collide. To clean up the orphan later, delete via GitHub UI (Settings > Branches > $branch > Delete) or add the Release app to the no-force-push-anywhere ruleset's bypass list."
+                echo "API error output (informational):"
                 cat /tmp/delete-err
-                exit 1
               fi
             done
           fi
@@ -343,7 +345,13 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
-          BRANCH="release/v${VERSION}"
+          # Branch name includes the workflow run-id so each run gets a
+          # uniquely-named branch. This prevents collision with any
+          # orphan release/vX.Y.Z branch left by a prior failed run that
+          # the ruleset wouldn't let us delete. Squash-merge into main
+          # discards the branch name entirely, so the per-run suffix
+          # never appears in main's history — only in the transient PR.
+          BRANCH="release/v${VERSION}-r${{ github.run_id }}"
           PARENT_SHA=$(git rev-parse HEAD)
 
           # We deliberately do NOT use `git commit` + `git push` here.
@@ -421,7 +429,8 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
-          BRANCH="release/v${VERSION}"
+          # Same per-run branch name as create_commit step above.
+          BRANCH="release/v${VERSION}-r${{ github.run_id }}"
           NOTES_FILE="${{ steps.notes.outputs.notes_file }}"
 
           # PR body uses the same release notes that will eventually go
