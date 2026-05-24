@@ -348,13 +348,16 @@ describe('ios-tests.yml — build-ios job cold-cache survival', () => {
       );
     });
 
-    // Round 5 I-1: the prior fixture placed the blank line BETWEEN
-    // siblings, where premature termination at `\r` happened to land
-    // exactly on the boundary — all assertions passed even without
-    // trimEnd, so the test couldn't detect a regression. The fix is
-    // to place the blank line INSIDE the First step's body. Without
-    // trimEnd, the column-0 guard fires on the `\r` blank line and
-    // the loop breaks BEFORE capturing `if: always()` — the
+    // CRLF-safety fixture hardening (carried over from the canonical
+    // extractStep helper's review history in afk-install-artifacts.test.js
+    // round 5 finding I-1, NOT PR #827's R5):
+    // the prior fixture placed the blank line BETWEEN siblings,
+    // where premature termination at `\r` happened to land exactly
+    // on the boundary — all assertions passed even without trimEnd,
+    // so the test couldn't detect a regression. The fix is to place
+    // the blank line INSIDE the First step's body. Without trimEnd,
+    // the column-0 guard fires on the `\r` blank line and the loop
+    // breaks BEFORE capturing `if: always()` — the
     // `toContain('if: always()')` assertion then fails. With trimEnd,
     // the blank line trims to '' (length 0, falsy column-0 guard),
     // the loop continues, and the full step body is captured.
@@ -868,10 +871,11 @@ describe('ios-tests.yml — Verify pbxproj-mutation script idempotency step', ()
     // verification steps must use the idiomatic GitHub Actions form
     // for the working directory.
     expect(idempotencyStep).toContain('working-directory: express-api');
-    // `gem install` happens before the jest invocation but it
-    // user-installs to ~/.gem so working-directory doesn't affect
-    // it; the step is still correct. What MUST be absent is the
-    // inline `cd express-api` form.
+    // R4 I-2 + R5 I-1: `gem install xcodeproj` (no --user-install)
+    // installs to the system Ruby gem directory, which is on
+    // $LOAD_PATH for the runner user. working-directory doesn't
+    // affect gem installation; the step is still correct. What
+    // MUST be absent is the inline `cd express-api` form.
     expect(idempotencyStep).not.toContain('cd express-api');
   });
 
@@ -886,16 +890,24 @@ describe('ios-tests.yml — Verify pbxproj-mutation script idempotency step', ()
     // R4 review I-3: the Ruby script `add-local-configurations.rb`
     // does `require 'xcodeproj'`. Without `gem install xcodeproj`
     // first, the require fails on a cold macOS runner (the gem is
-    // not pre-installed). The previous tests assert `npx jest` is
-    // present but a future refactor that drops the `gem install`
-    // line would still pass them. Pin the presence + ordering so
-    // the load-bearing prerequisite can't silently disappear.
-    const gemIdx = idempotencyStep.indexOf('gem install');
-    const jestIdx = idempotencyStep.indexOf('npx jest');
-    expect(idempotencyStep).toContain('gem install');
-    expect(idempotencyStep).toContain('xcodeproj');
-    expect(gemIdx).toBeGreaterThanOrEqual(0);
-    expect(jestIdx).toBeGreaterThanOrEqual(0);
-    expect(gemIdx).toBeLessThan(jestIdx);
+    // not pre-installed). A future refactor that drops the gem
+    // install line — or splits it to a different preceding step
+    // (making it absent from THIS step block) — must fail this test.
+    //
+    // R5 T-1: assert the exact token `gem install xcodeproj` (not
+    // separate `gem install` and `xcodeproj` substrings), so a
+    // change to `gem install bundler` plus an unrelated `xcodeproj`
+    // reference can't accidentally pass.
+    // R5 I-2: the ordering check `gemIdx < jestIdx` does NOT prove
+    // presence — if gemIdx is -1 (absent) and jestIdx is positive,
+    // `-1 < positive` is TRUE and the test silently passes the
+    // absent-gem-install case. The `toContain` calls below are the
+    // load-bearing presence checks; the indexOf comparison adds
+    // ordering on top.
+    expect(idempotencyStep).toContain('gem install xcodeproj');
+    expect(idempotencyStep).toContain('npx jest');
+    expect(idempotencyStep.indexOf('gem install xcodeproj')).toBeLessThan(
+      idempotencyStep.indexOf('npx jest'),
+    );
   });
 });
