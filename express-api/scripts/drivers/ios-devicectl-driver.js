@@ -548,6 +548,29 @@ async function createIosDriver({ udid: preferred } = {}) {
     return valueRx.test(tagMatch[0]);
   };
 
+  // Wake 97 — `<Name>'s <Plat> UI shows a "<X>" banner`. Mirrors Android
+  // sibling. Banners persist on-screen until dismissed (unlike toasts),
+  // so a single dump scan is sufficient.
+  //
+  // Implementation: dump the UI tree, look for the banner text as any
+  // of label=, name=, or value= XCUITest attribute values across ANY
+  // node (no tag anchoring). Substring match — banners frequently
+  // contain dynamic suffixes ("...in 5 minutes", "(retry)"), so an
+  // exact-match would be too strict. Banner is regex-escaped.
+  //
+  // The \b before (?:label|name|value)= prevents compound attribute
+  // names like accessibilityLabel= from false-matching. Whitespace-only
+  // banner returns false defensively (runner Gherkin requires [^"]+
+  // so unreachable in practice).
+  driver.iosShowsBanner = async (_name, banner) => {
+    if (!banner || !banner.trim()) return false;
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    const escBanner = banner.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    return new RegExp(`\\b(?:label|name|value)="[^"]*${escBanner}[^"]*"`).test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;

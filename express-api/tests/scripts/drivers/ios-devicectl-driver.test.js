@@ -3299,6 +3299,177 @@ describe('ios-devicectl-driver — iosShowsBalanceViaListener', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosShowsBanner', () => {
+  // Wake 97 — `<Name>'s <Plat> UI shows a "<X>" banner`. Foundation:
+  // substring scan across any node's label/name/value attr.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  // Happy paths — each label-bearing attribute.
+  test('label= carries banner → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText label="Connection lost — retrying" />',
+    );
+    expect(await driver.iosShowsBanner('Adam', 'Connection lost')).toBe(true);
+  });
+
+  test('name= carries banner → true (icon-only banner)', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther name="You are offline" />');
+    expect(await driver.iosShowsBanner('Adam', 'You are offline')).toBe(true);
+  });
+
+  test('value= carries banner → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther value="Reconnecting in 5 seconds" />',
+    );
+    expect(await driver.iosShowsBanner('Adam', 'Reconnecting')).toBe(true);
+  });
+
+  // Substring tolerance — banner with dynamic suffix.
+  test('substring match — banner with dynamic suffix → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText label="Connection lost — retrying in 5 minutes" />',
+    );
+    expect(await driver.iosShowsBanner('Adam', 'Connection lost')).toBe(true);
+  });
+
+  // Regex-meta chars in banner must be treated literally.
+  test('banner with parens "(retry)" matches literally', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeStaticText label="Failed (retry)" />');
+    expect(await driver.iosShowsBanner('Adam', '(retry)')).toBe(true);
+  });
+
+  test('banner with dot "v1.2" matches literal dot (not any-char)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText label="Update to v1.2 available" />',
+    );
+    expect(await driver.iosShowsBanner('Adam', 'v1.2')).toBe(true);
+  });
+
+  test('banner "v1.2" does NOT match label "v1X2" (regex-escape protects dot)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText label="Update to v1X2 available" />',
+    );
+    expect(await driver.iosShowsBanner('Adam', 'v1.2')).toBe(false);
+  });
+
+  // Compound-attribute name protection (the \b guard).
+  test('accessibilityLabel= does NOT trigger (\\b guards compound attr names)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText accessibilityLabel="Connection lost" />',
+    );
+    expect(await driver.iosShowsBanner('Adam', 'Connection lost')).toBe(false);
+  });
+
+  test('hint= does NOT trigger (only label/name/value scanned)', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeStaticText hint="Connection lost" />');
+    expect(await driver.iosShowsBanner('Adam', 'Connection lost')).toBe(false);
+  });
+
+  // identifier= specifically must not be scanned (different attribute).
+  test('identifier="Connection lost" does NOT match (not in attr alternation)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="Connection lost" />',
+    );
+    expect(await driver.iosShowsBanner('Adam', 'Connection lost')).toBe(false);
+  });
+
+  // Cross-tag scan — banner can be on any element type.
+  test('banner on XCUIElementTypeButton element → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeButton label="Update available" />');
+    expect(await driver.iosShowsBanner('Adam', 'Update available')).toBe(true);
+  });
+
+  test('banner on XCUIElementTypeImage element with name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeImage name="Connection lost" />');
+    expect(await driver.iosShowsBanner('Adam', 'Connection lost')).toBe(true);
+  });
+
+  // Tag absence / empty dump.
+  test('banner not present → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther label="Something else" />');
+    expect(await driver.iosShowsBanner('Adam', 'Connection lost')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosShowsBanner('Adam', 'Connection lost')).toBe(false);
+  });
+
+  // Case sensitivity — banner is a substring match, not case-insensitive.
+  test('case mismatch — "connection lost" lowercase does NOT match "Connection lost"', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeStaticText label="Connection lost" />');
+    expect(await driver.iosShowsBanner('Adam', 'connection lost')).toBe(false);
+  });
+
+  // Input-rejection isolation: throwing iosUiDump proves guard short-
+  // circuits before any dump fetch.
+  test('null banner → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
+    expect(await driver.iosShowsBanner('Adam', null)).toBe(false);
+  });
+
+  test('undefined banner → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
+    expect(await driver.iosShowsBanner('Adam', undefined)).toBe(false);
+  });
+
+  test('empty banner → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
+    expect(await driver.iosShowsBanner('Adam', '')).toBe(false);
+  });
+
+  test('whitespace banner → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
+    expect(await driver.iosShowsBanner('Adam', '   ')).toBe(false);
+  });
+
+  // name (first arg) accepted-and-ignored.
+  test('null name → still evaluates banner', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeStaticText label="Connection lost" />');
+    expect(await driver.iosShowsBanner(null, 'Connection lost')).toBe(true);
+  });
+
+  test('undefined name → still evaluates banner', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeStaticText label="Connection lost" />');
+    expect(await driver.iosShowsBanner(undefined, 'Connection lost')).toBe(true);
+  });
+
+  test('empty name → still evaluates banner', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeStaticText label="Connection lost" />');
+    expect(await driver.iosShowsBanner('', 'Connection lost')).toBe(true);
+  });
+
+  test('whitespace name → still evaluates banner', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeStaticText label="Connection lost" />');
+    expect(await driver.iosShowsBanner('   ', 'Connection lost')).toBe(true);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosShowsBanner('Adam', 'Connection lost')).rejects.toThrow();
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't

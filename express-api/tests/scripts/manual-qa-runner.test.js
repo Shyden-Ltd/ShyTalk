@@ -21263,6 +21263,80 @@ describe('Wake 97 — `<Name>\'s <Plat> UI shows a "<X>" banner`', () => {
     expect(r.ok).toBe(true);
     expect(spy).toHaveBeenCalledWith('Theo', 'Hold on');
   });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsBanner: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Ines\'s iOS Sim UI shows a "Reconnecting" banner' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Ines.*iOS Sim.*Reconnecting/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Ines\'s iOS Sim UI shows a "Reconnecting" banner' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/iosShowsBanner/);
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsBanner: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Theo\'s Android UI shows a "Hold on" banner' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Theo.*Android.*Hold on/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Theo\'s Android UI shows a "Hold on" banner' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/androidShowsBanner/);
+  });
+
+  test('Web matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsBanner: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web UI shows a "Update available" banner' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'Update available');
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsBanner: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web UI shows a "Update available" banner' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice.*Web.*Update available/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web UI shows a "Update available" banner' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/webShowsBanner/);
+  });
 });
 
 describe('Wake 97 — "<Name>\'s LiveKit track is not disconnected"', () => {
