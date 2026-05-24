@@ -4782,6 +4782,156 @@ describe('ios-devicectl-driver — iosShowsInResults', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosShowsInSeatGrid', () => {
+  // Wake 102 — `<Name>'s <Plat> UI shows <Other> in seat N of the seat
+  // grid`. Two-step composition: room_seatGrid identifier presence +
+  // target name with symmetric word-boundary across label/name/value.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  const FULL_DUMP =
+    '<XCUIElementTypeOther identifier="room_seatGrid">' +
+    '<XCUIElementTypeStaticText label="Ines" />' +
+    '</XCUIElementTypeOther>';
+
+  test('grid + target → true', async () => {
+    const driver = await driverWithDump(FULL_DUMP);
+    expect(await driver.iosShowsInSeatGrid('Theo', 'Ines', 3)).toBe(true);
+  });
+
+  test('grid absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeStaticText label="Ines" />');
+    expect(await driver.iosShowsInSeatGrid('Theo', 'Ines', 3)).toBe(false);
+  });
+
+  test('target absent → false', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid"><XCUIElementTypeStaticText label="Other" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsInSeatGrid('Theo', 'Ines', 3)).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosShowsInSeatGrid('Theo', 'Ines', 3)).toBe(false);
+  });
+
+  test('target "Ines" does NOT match "Inesia" (suffix collision)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid"><XCUIElementTypeStaticText label="Inesia" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsInSeatGrid('Theo', 'Ines', 3)).toBe(false);
+  });
+
+  test('target "Ines" does NOT match "PreInes" (prefix collision)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid"><XCUIElementTypeStaticText label="PreInes" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsInSeatGrid('Theo', 'Ines', 3)).toBe(false);
+  });
+
+  test('target "Ines" does NOT match "Ines-Berg" (hyphen suffix)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid"><XCUIElementTypeStaticText label="Ines-Berg" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsInSeatGrid('Theo', 'Ines', 3)).toBe(false);
+  });
+
+  test('target on value= → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid"><XCUIElementTypeStaticText value="Ines" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsInSeatGrid('Theo', 'Ines', 3)).toBe(true);
+  });
+
+  test('target on name= → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid"><XCUIElementTypeStaticText name="Ines" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsInSeatGrid('Theo', 'Ines', 3)).toBe(true);
+  });
+
+  test('target "User.42" matches literal dot', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid"><XCUIElementTypeStaticText label="User.42" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsInSeatGrid('Theo', 'User.42', 3)).toBe(true);
+  });
+
+  test('target "User.42" does NOT match "UserX42" (escape protects dot)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid"><XCUIElementTypeStaticText label="UserX42" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsInSeatGrid('Theo', 'User.42', 3)).toBe(false);
+  });
+
+  test('accessibilityLabel="Ines" does NOT contribute', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid"><XCUIElementTypeStaticText accessibilityLabel="Ines" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsInSeatGrid('Theo', 'Ines', 3)).toBe(false);
+  });
+
+  test('null target → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
+    expect(await driver.iosShowsInSeatGrid('Theo', null, 3)).toBe(false);
+  });
+
+  test('undefined target → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
+    expect(await driver.iosShowsInSeatGrid('Theo', undefined, 3)).toBe(false);
+  });
+
+  test('empty target → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
+    expect(await driver.iosShowsInSeatGrid('Theo', '', 3)).toBe(false);
+  });
+
+  test('whitespace target → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
+    expect(await driver.iosShowsInSeatGrid('Theo', '   ', 3)).toBe(false);
+  });
+
+  test('null viewer → still evaluates', async () => {
+    const driver = await driverWithDump(FULL_DUMP);
+    expect(await driver.iosShowsInSeatGrid(null, 'Ines', 3)).toBe(true);
+  });
+
+  test('null seatNum → still evaluates', async () => {
+    const driver = await driverWithDump(FULL_DUMP);
+    expect(await driver.iosShowsInSeatGrid('Theo', 'Ines', null)).toBe(true);
+  });
+
+  test('different seatNum still passes (no per-seat verification)', async () => {
+    const driver = await driverWithDump(FULL_DUMP);
+    expect(await driver.iosShowsInSeatGrid('Theo', 'Ines', 99)).toBe(true);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosShowsInSeatGrid('Theo', 'Ines', 3)).rejects.toThrow();
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't
