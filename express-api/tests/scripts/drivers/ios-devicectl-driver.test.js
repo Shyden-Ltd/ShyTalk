@@ -162,13 +162,16 @@ describe('ios-devicectl-driver — iosUiDump', () => {
 describe('ios-devicectl-driver — every IOS_METHOD_NAMES entry resolves to a function', () => {
   // This contract test guards against typos in the method-name array
   // (e.g. a name in IOS_METHOD_NAMES that doesn't get registered on
-  // the driver instance) and pins that every stub returns false in
-  // the scaffold state.
+  // the driver instance) and pins that every method returns false in
+  // the scaffold state — whether it's still a stub or a foundation
+  // implementation. Foundation methods pass via the same exit: the
+  // default `iosUiDump()` returns '' (empty string), which is falsy,
+  // and every foundation method's early-return is `if (!dump) return
+  // false`. So both stubs and foundations satisfy this contract
+  // until WDA / XCTest integration ships a real `iosUiDump()`.
   test.each(listMethods())('driver.%s is a function returning false', async (methodName) => {
     const driver = await createIosDriver({ udid: 'X' });
     expect(typeof driver[methodName]).toBe('function');
-    // All stubs return false until subsequent PRs replace them with
-    // foundation presence-check implementations.
     const result = await driver[methodName]('arg1', 'arg2', 'arg3');
     expect(result).toBe(false);
   });
