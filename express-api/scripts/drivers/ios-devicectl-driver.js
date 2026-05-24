@@ -577,6 +577,26 @@ async function createIosDriver({ udid: preferred } = {}) {
     return new RegExp(`\\b(?:label|name|value)="[^"]*${escBanner}[^"]*"`).test(dump);
   };
 
+  // Wake 87 — `<Name>'s <Plat> UI shows a chart of beans earned per
+  // week` (j17:74). Mirrors Android sibling. Bare chart-presence
+  // assertion. Driver receives `(name)`.
+  //
+  // Foundation strategy: presence-check on `beansChart_*` identifier
+  // PREFIX. No such identifier exists in commonMain yet — chart UI is
+  // unbuilt. Returns false in real journeys today; lands true when
+  // the chart ships with `beansChart_*` identifiers (e.g.
+  // beansChart_container, beansChart_weekBar).
+  //
+  // Bin-level value verification is out of scope. `_name` accepted-
+  // and-ignored.
+  driver.iosShowsBeansPerWeekChart = async (_name) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="beansChart_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;

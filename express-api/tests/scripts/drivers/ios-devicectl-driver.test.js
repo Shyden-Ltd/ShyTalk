@@ -3483,6 +3483,123 @@ describe('ios-devicectl-driver — iosShowsBanner', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosShowsBeansPerWeekChart', () => {
+  // Wake 87 — `<Name>'s <Plat> UI shows a chart of beans earned per
+  // week`. Foundation: presence-check on `beansChart_*` identifier.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('beansChart_container present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="beansChart_container" />',
+    );
+    expect(await driver.iosShowsBeansPerWeekChart('Marcus')).toBe(true);
+  });
+
+  test('beansChart_weekBar present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="beansChart_weekBar" />');
+    expect(await driver.iosShowsBeansPerWeekChart('Marcus')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosShowsBeansPerWeekChart('Marcus')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosShowsBeansPerWeekChart('Marcus')).toBe(false);
+  });
+
+  test('non-self-closing form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="beansChart_container"><XCUIElementTypeStaticText name="Mon: 12" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsBeansPerWeekChart('Marcus')).toBe(true);
+  });
+
+  test('left-boundary — pre_beansChart_X does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="pre_beansChart_container" />',
+    );
+    expect(await driver.iosShowsBeansPerWeekChart('Marcus')).toBe(false);
+  });
+
+  test('right-boundary — beansChart_containerExtra still matches', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="beansChart_containerExtra" />',
+    );
+    expect(await driver.iosShowsBeansPerWeekChart('Marcus')).toBe(true);
+  });
+
+  test('confusable prefix — beansChartExtras_panel does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="beansChartExtras_panel" />',
+    );
+    expect(await driver.iosShowsBeansPerWeekChart('Marcus')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther name="beansChart_container" />');
+    expect(await driver.iosShowsBeansPerWeekChart('Marcus')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosShowsBeansPerWeekChart('Marcus')).rejects.toThrow();
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="beansChart_container" />',
+    );
+    expect(await driver.iosShowsBeansPerWeekChart('Bao')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="beansChart_container" />',
+    );
+    expect(await driver.iosShowsBeansPerWeekChart(null)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="beansChart_container" />',
+    );
+    expect(await driver.iosShowsBeansPerWeekChart(undefined)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="beansChart_container" />',
+    );
+    expect(await driver.iosShowsBeansPerWeekChart('')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="beansChart_container" />',
+    );
+    expect(await driver.iosShowsBeansPerWeekChart('   ')).toBe(true);
+  });
+
+  test('first-match contract — two beansChart_* nodes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="beansChart_container" />' +
+        '<XCUIElementTypeOther identifier="beansChart_weekBar" />',
+    );
+    expect(await driver.iosShowsBeansPerWeekChart('Marcus')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't
