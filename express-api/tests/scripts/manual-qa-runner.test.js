@@ -23329,7 +23329,7 @@ describe('Wake 102 — "<Name>\'s <Plat> UI shows a new conversation with <Other
 });
 
 describe('Wake 102 — "<Name>\'s <Plat> UI shows <Other> in seat N of the seat grid"', () => {
-  test('matching → ok', async () => {
+  test('Web matching → ok', async () => {
     const spy = jest.fn(async () => true);
     const ctx = makeCtx({ webDriver: { webShowsInSeatGrid: spy } });
     const r = await executeStep(
@@ -23338,6 +23338,98 @@ describe('Wake 102 — "<Name>\'s <Plat> UI shows <Other> in seat N of the seat 
     );
     expect(r.ok).toBe(true);
     expect(spy).toHaveBeenCalledWith('Alice', 'Ines', 2);
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsInSeatGrid: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web UI shows Ines in seat 2 of the seat grid" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Ines/);
+    expect(r.error).toMatch(/seat 2/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web UI shows Ines in seat 2 of the seat grid" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/webShowsInSeatGrid/);
+  });
+
+  test('Android matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { androidShowsInSeatGrid: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Theo's Android UI shows Ines in seat 3 of the seat grid" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Theo', 'Ines', 3);
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsInSeatGrid: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Theo's Android UI shows Ines in seat 3 of the seat grid" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    // Tightened (R1): assert both the target name AND the seat number
+    // are present — runner produces `${viewer}'s ${platform} UI does
+    // not show ${target} in seat ${seatNum}`; a regression that drops
+    // the seat number would otherwise pass.
+    expect(r.error).toMatch(/Ines/);
+    expect(r.error).toMatch(/seat 3/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Theo's Android UI shows Ines in seat 3 of the seat grid" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/androidShowsInSeatGrid/);
+  });
+
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsInSeatGrid: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Nora's iOS Sim UI shows Ines in seat 4 of the seat grid" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Nora', 'Ines', 4);
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsInSeatGrid: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Nora's iOS Sim UI shows Ines in seat 4 of the seat grid" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Ines/);
+    expect(r.error).toMatch(/seat 4/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Nora's iOS Sim UI shows Ines in seat 4 of the seat grid" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/iosShowsInSeatGrid/);
   });
 });
 

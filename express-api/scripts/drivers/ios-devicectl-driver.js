@@ -742,6 +742,56 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 101 — `<Name>'s <Plat> UI shows <Other> in results[ with
+  // displayName "<X>"]` (j01/j02). iOS mirror of Android sibling.
+  // Discovery list result visibility with optional displayName
+  // suffix. Driver receives (viewer, target, displayName) — displayName
+  // may be `null` (no "with displayName" suffix in step).
+  //
+  // Foundation strategy: presence-check `searchResults_*` identifier
+  // PREFIX. No such identifier exists in commonMain yet —
+  // NewMessageScreen exposes only `newMessage_searchField` for the
+  // input box, not per-result tiles. Returns false in real journeys
+  // today; lands true when commonMain ships searchResults_userTile
+  // / searchResults_container. Per-user and per-displayName checks
+  // need attribute extraction; deferred. All 3 args accepted-and-
+  // ignored.
+  driver.iosShowsInResults = async (_viewer, _target, _displayName) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="searchResults_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
+  // Wake 102 — `<Name>'s <Plat> UI shows <Other> in seat N of the seat
+  // grid` (j09). iOS mirror of Android sibling. Driver receives
+  // (viewer, target, seatNum).
+  //
+  // Foundation strategy: two-step composition:
+  //   1. room_seatGrid identifier PRESENT (user is on the room screen).
+  //   2. target name appears in any label/name/value attr with
+  //      SYMMETRIC word-boundary protection across [\w-].
+  //
+  // Per-seat verification is journey-orchestrated until per-seat
+  // identifiers exist. _viewer + _seatNum accepted-and-ignored.
+  driver.iosShowsInSeatGrid = async (_viewer, target, _seatNum) => {
+    if (typeof target !== 'string' || !target.trim()) return false;
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // Step 1: seat-grid must be visible.
+    // eslint-disable-next-line sonarjs/slow-regex
+    const gridRx = /<XCUIElementType\w+[^>]*\bidentifier="room_seatGrid"[^>]*\/?>/;
+    if (!gridRx.test(dump)) return false;
+    // Step 2: target name appears with symmetric word-boundary.
+    const escTarget = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const targetRx = new RegExp(
+      `\\b(?:label|name|value)="[^"]*(?<![\\w-])${escTarget}(?![\\w-])[^"]*"`,
+    );
+    return targetRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;
