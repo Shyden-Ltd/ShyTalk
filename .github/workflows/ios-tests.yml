@@ -174,15 +174,27 @@ jobs:
       # ~/Library/Developer/Xcode/DerivedData) per the xcodebuild
       # `-derivedDataPath build/ios-derived-data` flag below. Without
       # this, xcodebuild re-compiles every Pods + KMP framework object
-      # from scratch (~15-20 min cold). Keyed on iosApp source + Pods
-      # lock hash + KMP framework hash so any change correctly
-      # invalidates; restore-keys allow incremental compile via
-      # Xcode's own per-file timestamp checks.
+      # from scratch (~15-20 min cold).
+      #
+      # Key components — DO NOT use `iosApp/**` glob: the iosApp/Pods
+      # cache step (above) restores Pods files into iosApp/Pods/ BEFORE
+      # this hashFiles runs, and Pods generated files would then poison
+      # the key on every warm-Pods run (guaranteed DerivedData miss).
+      # Instead, list the specific committed dirs/files under iosApp/
+      # that legitimately invalidate DerivedData when changed:
+      #   - iosApp/iosApp/**             — Swift sources of the app target
+      #   - iosApp/iosAppTests/**        — Swift sources of the tests target
+      #   - iosApp/iosAppUITests/**      — Swift sources of the UI tests target
+      #   - iosApp/iosApp.xcodeproj/**   — project file changes
+      #   - iosApp/Podfile.lock          — pod version pin
+      #   - iosApp/Configurations/**     — xcconfigs
+      # Then the KMP simulator framework hash so KMP-source changes
+      # invalidate too.
       - name: Cache Xcode DerivedData (build/ios-derived-data)
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: build/ios-derived-data
-          key: ios-derived-${{ runner.os }}-${{ hashFiles('iosApp/**', 'iosApp/Podfile.lock', 'shared/build/bin/iosSimulatorArm64/**') }}
+          key: ios-derived-${{ runner.os }}-${{ hashFiles('iosApp/iosApp/**', 'iosApp/iosAppTests/**', 'iosApp/iosAppUITests/**', 'iosApp/iosApp.xcodeproj/**', 'iosApp/Podfile.lock', 'iosApp/Configurations/**', 'shared/build/bin/iosSimulatorArm64/**') }}
           restore-keys: |
             ios-derived-${{ runner.os }}-
 
@@ -246,8 +258,22 @@ jobs:
         # Skip when iosApp/Pods/ cache hit AND Podfile.lock unchanged —
         # pods are already installed and the pbxproj already wired.
         # On miss (or new Podfile.lock), runs fresh `pod install`.
+        #
+        # --deployment enforces that the committed Podfile.lock is the
+        # source of truth: pod install fails loudly on lock mismatch
+        # instead of silently regenerating. Catches stale-lock bugs
+        # before they corrupt the Pods cache.
         if: steps.check-tests.outputs.has_tests == 'true' && steps.pods-cache.outputs.cache-hit != 'true'
-        run: cd iosApp && pod install
+        run: cd iosApp && pod install --deployment
+
+      # Pin contract for the iosAppTests CocoaPods integration. Runs
+      # AFTER `pod install` so it reads the post-install pbxproj
+      # state for baseConfigurationReference assertions. Must run
+      # unconditionally on every iOS PR (no `has_tests` guard) — the
+      # contract being pinned is `iosAppTests target's xcconfigs are
+      # wired`, which is independent of whether tests exist for it.
+      - name: Verify iosAppTests Pods integration (pin contract)
+        run: cd express-api && npx jest tests/scripts/ios-pods-integration-pin.test.js
 
       - name: Build iOS app for testing
         if: steps.check-tests.outputs.has_tests == 'true'

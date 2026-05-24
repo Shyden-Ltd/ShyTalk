@@ -406,3 +406,224 @@ describe('ios-tests.yml — build-ios job cold-cache survival', () => {
     });
   });
 });
+
+// ── PR #827 cache + xcodebuild flag pins ─────────────────────────────
+//
+// Added by PR #827 after operator flagged Build iOS step taking ~35min.
+// 4 new cache steps + 4 xcodebuild flags estimated ~20min warm-cache
+// savings. Each pinned here so a future "cleanup" PR can't silently
+// regress to the slow path. Same coverage shape as the konan cache
+// pins above (SHA, path, key, restore-key OS-scope) plus per-flag
+// presence pins for xcodebuild.
+describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', () => {
+  let yamlText;
+  let cocoaPodsRepoCacheStep;
+  let podsCacheStep;
+  let derivedDataCacheStep;
+  let swiftPmCacheStep;
+  let installPodsStep;
+  let buildIosStep;
+
+  beforeAll(() => {
+    yamlText = fs.readFileSync(IOS_TESTS_PATH, 'utf8');
+    cocoaPodsRepoCacheStep = extractStep(
+      yamlText,
+      'Cache CocoaPods spec repos (~/.cocoapods/repos)',
+    );
+    podsCacheStep = extractStep(yamlText, 'Cache iosApp/Pods');
+    derivedDataCacheStep = extractStep(
+      yamlText,
+      'Cache Xcode DerivedData (build/ios-derived-data)',
+    );
+    swiftPmCacheStep = extractStep(yamlText, 'Cache SwiftPM packages (build/ios-spm-packages)');
+    installPodsStep = extractStep(yamlText, 'Install CocoaPods');
+    buildIosStep = extractStep(yamlText, 'Build iOS app for testing');
+  });
+
+  describe('CocoaPods spec-repos cache', () => {
+    test('pins actions/cache@v5.0.5 SHA', () => {
+      expect(cocoaPodsRepoCacheStep).toContain(
+        'actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae',
+      );
+    });
+    test('targets ~/.cocoapods/repos', () => {
+      expect(cocoaPodsRepoCacheStep).toContain('~/.cocoapods/repos');
+    });
+    test('key keyed on Podfile.lock', () => {
+      expect(cocoaPodsRepoCacheStep).toContain("hashFiles('iosApp/Podfile.lock')");
+    });
+    test('restore-keys is OS-scoped (cocoapods-repos-${{ runner.os }}-)', () => {
+      const lines = cocoaPodsRepoCacheStep.split('\n');
+      const idx = lines.findIndex((l) => l.includes('restore-keys:'));
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(lines[idx + 1]).toContain('cocoapods-repos-${{ runner.os }}-');
+    });
+  });
+
+  describe('iosApp/Pods cache (load-bearing — gates Install CocoaPods skip)', () => {
+    test('pins actions/cache@v5.0.5 SHA', () => {
+      expect(podsCacheStep).toContain('actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae');
+    });
+    test('targets iosApp/Pods', () => {
+      expect(podsCacheStep).toContain('path: iosApp/Pods');
+    });
+    test('has id: pods-cache (required for Install CocoaPods step cache-hit ref)', () => {
+      // Without `id: pods-cache`, the `steps.pods-cache.outputs.cache-hit`
+      // reference in the Install CocoaPods step's `if:` evaluates to
+      // empty string, and `pod install` would run on every push even
+      // on warm cache — defeating the whole optimisation.
+      expect(podsCacheStep).toContain('id: pods-cache');
+    });
+    test('key keyed on Podfile.lock', () => {
+      expect(podsCacheStep).toContain("hashFiles('iosApp/Podfile.lock')");
+    });
+    test('restore-keys is OS-scoped (pods-${{ runner.os }}-)', () => {
+      const lines = podsCacheStep.split('\n');
+      const idx = lines.findIndex((l) => l.includes('restore-keys:'));
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(lines[idx + 1]).toContain('pods-${{ runner.os }}-');
+    });
+  });
+
+  describe('Xcode DerivedData cache', () => {
+    test('pins actions/cache@v5.0.5 SHA', () => {
+      expect(derivedDataCacheStep).toContain(
+        'actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae',
+      );
+    });
+    test('targets build/ios-derived-data (matches xcodebuild -derivedDataPath)', () => {
+      expect(derivedDataCacheStep).toContain('path: build/ios-derived-data');
+    });
+    test('key does NOT use bare iosApp/** glob (C-1 fix: would include iosApp/Pods/**)', () => {
+      // The Pods cache restores iosApp/Pods/ BEFORE this hashFiles
+      // runs. A bare `iosApp/**` glob would include those Pods files
+      // and produce a warm-Pods-induced cache key, guaranteeing a
+      // DerivedData miss on every warm-Pods run. Must list specific
+      // committed dirs/files instead.
+      expect(derivedDataCacheStep).not.toContain("hashFiles('iosApp/**'");
+    });
+    test('key hashes app/test/UI-test sources + project + Podfile.lock + Configurations', () => {
+      expect(derivedDataCacheStep).toContain("'iosApp/iosApp/**'");
+      expect(derivedDataCacheStep).toContain("'iosApp/iosAppTests/**'");
+      expect(derivedDataCacheStep).toContain("'iosApp/iosAppUITests/**'");
+      expect(derivedDataCacheStep).toContain("'iosApp/iosApp.xcodeproj/**'");
+      expect(derivedDataCacheStep).toContain("'iosApp/Podfile.lock'");
+      expect(derivedDataCacheStep).toContain("'iosApp/Configurations/**'");
+    });
+    test('key hashes KMP simulator framework so KMP-source changes invalidate', () => {
+      expect(derivedDataCacheStep).toContain("'shared/build/bin/iosSimulatorArm64/**'");
+    });
+    test('restore-keys is OS-scoped', () => {
+      const lines = derivedDataCacheStep.split('\n');
+      const idx = lines.findIndex((l) => l.includes('restore-keys:'));
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(lines[idx + 1]).toContain('ios-derived-${{ runner.os }}-');
+    });
+  });
+
+  describe('SwiftPM packages cache', () => {
+    test('pins actions/cache@v5.0.5 SHA', () => {
+      expect(swiftPmCacheStep).toContain('actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae');
+    });
+    test('targets build/ios-spm-packages (matches xcodebuild -clonedSourcePackagesDirPath)', () => {
+      expect(swiftPmCacheStep).toContain('path: build/ios-spm-packages');
+    });
+    test('key keyed on Package.resolved + Package.swift', () => {
+      expect(swiftPmCacheStep).toContain("hashFiles('iosApp/**/Package.resolved'");
+      expect(swiftPmCacheStep).toContain("'iosApp/**/Package.swift'");
+    });
+    test('restore-keys is OS-scoped (ios-spm-${{ runner.os }}-)', () => {
+      const lines = swiftPmCacheStep.split('\n');
+      const idx = lines.findIndex((l) => l.includes('restore-keys:'));
+      expect(idx).toBeGreaterThanOrEqual(0);
+      expect(lines[idx + 1]).toContain('ios-spm-${{ runner.os }}-');
+    });
+  });
+
+  describe('Install CocoaPods step', () => {
+    test('uses --deployment (I-5: lock divergence fails loudly)', () => {
+      expect(installPodsStep).toContain('pod install --deployment');
+    });
+    test('skip-on-cache-hit gate references steps.pods-cache.outputs.cache-hit', () => {
+      // Without this gate, pod install runs on every push even with
+      // warm Pods cache, defeating the cache. The gate is load-bearing.
+      expect(installPodsStep).toContain("steps.pods-cache.outputs.cache-hit != 'true'");
+    });
+  });
+
+  describe('Build iOS app for testing — xcodebuild perf flags', () => {
+    test('uses -quiet (drops per-file CpHeader/CompileC chatter, stays under 48k log line ceiling)', () => {
+      expect(buildIosStep).toContain('-quiet');
+    });
+    test('uses -clonedSourcePackagesDirPath build/ios-spm-packages (cacheable SPM dir)', () => {
+      expect(buildIosStep).toContain('-clonedSourcePackagesDirPath build/ios-spm-packages');
+    });
+    test('uses -skipPackagePluginValidation (no interactive trust prompts in CI)', () => {
+      expect(buildIosStep).toContain('-skipPackagePluginValidation');
+    });
+    test('uses -skipMacroValidation (no interactive Swift-macro trust prompts in CI)', () => {
+      expect(buildIosStep).toContain('-skipMacroValidation');
+    });
+    test('still uses -derivedDataPath build/ios-derived-data (matches DerivedData cache path)', () => {
+      expect(buildIosStep).toContain('-derivedDataPath build/ios-derived-data');
+    });
+  });
+
+  describe('Ordering — caches restore BEFORE Install CocoaPods + Build iOS app', () => {
+    test('Cache iosApp/Pods step appears before Install CocoaPods', () => {
+      const cacheIdx = yamlText.indexOf('      - name: Cache iosApp/Pods');
+      const installIdx = yamlText.indexOf('      - name: Install CocoaPods');
+      expect(cacheIdx).toBeGreaterThanOrEqual(0);
+      expect(installIdx).toBeGreaterThanOrEqual(0);
+      expect(cacheIdx).toBeLessThan(installIdx);
+    });
+    test('Cache DerivedData + SwiftPM steps appear before Build iOS app for testing', () => {
+      const derivedIdx = yamlText.indexOf(
+        '      - name: Cache Xcode DerivedData (build/ios-derived-data)',
+      );
+      const spmIdx = yamlText.indexOf(
+        '      - name: Cache SwiftPM packages (build/ios-spm-packages)',
+      );
+      const buildIdx = yamlText.indexOf('      - name: Build iOS app for testing');
+      expect(derivedIdx).toBeGreaterThanOrEqual(0);
+      expect(spmIdx).toBeGreaterThanOrEqual(0);
+      expect(buildIdx).toBeGreaterThanOrEqual(0);
+      expect(derivedIdx).toBeLessThan(buildIdx);
+      expect(spmIdx).toBeLessThan(buildIdx);
+    });
+  });
+});
+
+// ── ios-pods-integration-pin.test.js CI wiring (C-3 fix) ─────────────
+describe('ios-tests.yml — Verify iosAppTests Pods integration CI step', () => {
+  let yamlText;
+  let pinStep;
+
+  beforeAll(() => {
+    yamlText = fs.readFileSync(IOS_TESTS_PATH, 'utf8');
+    pinStep = extractStep(yamlText, 'Verify iosAppTests Pods integration (pin contract)');
+  });
+
+  test('Verify iosAppTests Pods integration step exists', () => {
+    expect(pinStep).toContain('npx jest tests/scripts/ios-pods-integration-pin.test.js');
+  });
+
+  test('Verify iosAppTests step appears AFTER Install CocoaPods (reads post-install pbxproj)', () => {
+    const installIdx = yamlText.indexOf('      - name: Install CocoaPods');
+    const pinIdx = yamlText.indexOf(
+      '      - name: Verify iosAppTests Pods integration (pin contract)',
+    );
+    expect(installIdx).toBeGreaterThanOrEqual(0);
+    expect(pinIdx).toBeGreaterThanOrEqual(0);
+    expect(pinIdx).toBeGreaterThan(installIdx);
+  });
+
+  test('Verify iosAppTests step has NO `if:` guard on has_tests (contract is always-on)', () => {
+    // The Pods integration contract for iosAppTests must hold even
+    // when XCTest targets are temporarily empty — the wiring itself
+    // is what's pinned.
+    const lines = pinStep.split('\n');
+    const ifLines = lines.filter((l) => /^\s+if:/.test(l));
+    expect(ifLines).toEqual([]);
+  });
+});

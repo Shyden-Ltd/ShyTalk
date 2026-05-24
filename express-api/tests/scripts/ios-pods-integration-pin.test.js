@@ -72,16 +72,41 @@ describe('iOS Pods integration — Podfile contract', () => {
     // The nested form ensures iosAppTests shares the parent's Pods
     // workspace integration. A standalone top-level `target
     // 'iosAppTests'` would not get the inheritance.
-    const iosAppOpen = PODFILE_SRC.indexOf("target 'iosApp' do");
-    const iosAppTests = PODFILE_SRC.indexOf("target 'iosAppTests' do");
-    expect(iosAppOpen).toBeGreaterThan(-1);
-    expect(iosAppTests).toBeGreaterThan(iosAppOpen);
-    // The `end` that closes iosApp must come AFTER iosAppTests block.
-    // Trace by finding the last `end` in the file — that's iosApp's
-    // closing `end`.
-    const ends = [...PODFILE_SRC.matchAll(/^end$/gm)].map((m) => m.index);
-    const lastEnd = ends[ends.length - 1];
-    expect(lastEnd).toBeGreaterThan(iosAppTests);
+    //
+    // I-1 fix (PR #827 review R1): the previous "last end" heuristic
+    // was brittle — a future Podfile addition (second target, plugin,
+    // abstract_target) that opens a new `do`/`end` after the iosApp
+    // block would silently break the test. Instead, scan line-by-line
+    // tracking `do`/`end` depth to find the EXACT `end` that closes
+    // the iosApp block, then assert iosAppTests is fully inside it.
+    const lines = PODFILE_SRC.split('\n');
+    const iosAppOpenLine = lines.findIndex((l) => /^target\s+['"]iosApp['"]\s+do\b/.test(l));
+    expect(iosAppOpenLine).toBeGreaterThanOrEqual(0);
+    // Walk forward, tracking depth. Each line that opens a block
+    // (target X do, post_install do |x|, etc.) increments depth;
+    // each lone `end` decrements. The first depth-0 line after the
+    // iosApp open is iosApp's closing `end`.
+    let depth = 1;
+    let iosAppCloseLine = -1;
+    for (let i = iosAppOpenLine + 1; i < lines.length; i++) {
+      const l = lines[i].trim();
+      // Open: `... do` or `... do |...|` at end of line (excluding `end`).
+      if (/\bdo\b(\s*\|[^|]*\|)?\s*$/.test(l) && !/^end\b/.test(l)) depth++;
+      else if (l === 'end') {
+        depth--;
+        if (depth === 0) {
+          iosAppCloseLine = i;
+          break;
+        }
+      }
+    }
+    expect(iosAppCloseLine).toBeGreaterThan(iosAppOpenLine);
+
+    const iosAppTestsLine = lines.findIndex((l) =>
+      /^\s+target\s+['"]iosAppTests['"]\s+do\b/.test(l),
+    );
+    expect(iosAppTestsLine).toBeGreaterThan(iosAppOpenLine);
+    expect(iosAppTestsLine).toBeLessThan(iosAppCloseLine);
   });
 });
 
@@ -130,9 +155,13 @@ describe('iOS Pods integration — pbxproj contract', () => {
         'g',
       );
       const blocks = [...PBXPROJ_SRC.matchAll(blockRx)].map((m) => m[0]);
-      // There are TWO Debug-Local blocks (project-level + iosApp target);
-      // ALL must have SWIFT_VERSION = 5.0.
-      expect(blocks.length).toBeGreaterThan(0);
+      // There are EXACTLY TWO Debug-Local blocks (project-level +
+      // iosApp target). The count is pinned exactly — Phase 3.3 (if
+      // it lands separately) would add Local configs to iosAppTests
+      // + iosAppUITests, bumping to 4. When that happens, update
+      // this count alongside (forcing the dev to think about whether
+      // those new configs also need SWIFT_VERSION = 5.0).
+      expect(blocks.length).toBe(2);
       for (const block of blocks) {
         expect(block).toMatch(/SWIFT_VERSION = 5\.0;/);
       }

@@ -170,10 +170,17 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
   });
 
   describe('XCBuildConfiguration entries', () => {
-    // After Phase 3.4 (PR #722, combined 3.3+3.4): 4 entries per
-    // name — project + iosApp target + iosAppTests target +
-    // iosAppUITests target. Test target entries added by 3.3, Pods
-    // xcconfig base refs on iosApp added by 3.4 (`pod install`).
+    // After PR #827 (Phase 3.4 only — iosAppTests Pods integration):
+    // 2 entries per name. Project-level + iosApp target. Test targets
+    // (iosAppTests + iosAppUITests) do NOT have Local configs yet —
+    // Phase 3.3 (adding those via scripts/ios/add-local-configurations.rb)
+    // is a separate future PR. When Phase 3.3 lands, this becomes 4.
+    //
+    // Historical note: the combined Phase 3.3+3.4 fix on branch
+    // ios-local/3-3-3-4-combined (commit c2101fc3216) was authored
+    // but never merged, leaving the iOS-local build-out incomplete.
+    // PR #827 split off the Pods integration (3.4) because that was
+    // the release blocker (iosAppTests couldn't resolve Firebase).
     test('Debug-Local appears as an XCBuildConfiguration name exactly twice (project + iosApp target)', () => {
       // Phase 3.2 + 3.4 reality: project-level + iosApp-target. Test
       // targets (iosAppTests + iosAppUITests) do NOT yet have Local
@@ -216,7 +223,7 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
     });
 
     // Removed 'test targets are NOT modified in Phase 3.2 (deferred
-    // to 3.3)' — Phase 3.4 (PR #722, combined 3.3+3.4) intentionally
+    // to 3.3)' — Phase 3.4 (PR #827, iosAppTests Pods integration only; the original PR #722 combined 3.3+3.4 never merged) intentionally
     // crosses that boundary. The positive-state assertions for test-
     // target Local configs are in ios-local-3-3-3-4-combined.test.js.
 
@@ -236,7 +243,7 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
   });
 
   describe('Phase 3.2 structural invariants (Round 1 review gaps)', () => {
-    // Phase 3.4 (PR #722, combined 3.3+3.4) intentionally adds
+    // Phase 3.4 (PR #827, iosAppTests Pods integration only; the original PR #722 combined 3.3+3.4 never merged) intentionally adds
     // baseConfigurationReference to iosApp-target Local configs
     // pointing at Pods-iosApp.{debug,release}-local.xcconfig. Without
     // those refs, the iosApp main target can't resolve Firebase /
@@ -253,7 +260,7 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
     // of the Local.xcconfig PBXFileReference and asserts BOTH
     // project-level Local configs point at it specifically.
     test('project-level Local configs baseConfigurationReference targets the Local.xcconfig file ref UUID', () => {
-      // After Phase 3.4 (PR #722), iosApp-target Local configs ALSO
+      // After Phase 3.4 (PR #827), iosApp-target Local configs ALSO
       // have a baseConfigurationReference (pointing at Pods-iosApp
       // .<config>.xcconfig), so `.find(includes('baseConfigurationReference'))`
       // no longer uniquely identifies the project-level block.
@@ -315,7 +322,7 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
     // buildSettings when creating Debug-Local/Release-Local so they
     // share the same SWIFT_VERSION (and other target-level baselines
     // like IPHONEOS_DEPLOYMENT_TARGET).
-    // After Phase 3.4 (PR #722), iosApp-target Local configs have
+    // After Phase 3.4 (PR #827), iosApp-target Local configs have
     // baseConfigurationReference pointing at Pods-iosApp.<config>.xcconfig.
     // Identify them by that Pods xcconfig comment (only iosApp has the
     // Pods xcconfig as base ref — project-level uses Local.xcconfig,
