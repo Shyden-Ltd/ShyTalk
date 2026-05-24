@@ -22121,7 +22121,11 @@ describe('Wake 99 — `<Name>\'s <Plat> UI shows a "<X>" gift from <Other>`', ()
       ctx,
     );
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/Alice|crown|Bob/);
+    // Tightened (PR #823 R1): require both gift + sender names in
+    // the error so a degraded message that mentions only one would
+    // fail the test.
+    expect(r.error).toMatch(/crown/);
+    expect(r.error).toMatch(/Bob/);
   });
 
   test('Web driver missing → fail', async () => {
@@ -22153,7 +22157,8 @@ describe('Wake 99 — `<Name>\'s <Plat> UI shows a "<X>" gift from <Other>`', ()
       ctx,
     );
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/Alice|crown|Bob/);
+    expect(r.error).toMatch(/crown/);
+    expect(r.error).toMatch(/Bob/);
   });
 
   test('Android driver missing → fail', async () => {
@@ -22185,7 +22190,8 @@ describe('Wake 99 — `<Name>\'s <Plat> UI shows a "<X>" gift from <Other>`', ()
       ctx,
     );
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/Nora|crown|Bob/);
+    expect(r.error).toMatch(/crown/);
+    expect(r.error).toMatch(/Bob/);
   });
 
   test('iOS Sim driver missing → fail', async () => {

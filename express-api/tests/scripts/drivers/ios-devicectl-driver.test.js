@@ -4216,6 +4216,37 @@ describe('ios-devicectl-driver — iosShowsGiftFromSender', () => {
     expect(await driver.iosShowsGiftFromSender('Alice', 'rose', 'Adam')).toBe(false);
   });
 
+  test('sender "Adam" does NOT match "AdamSmith" (prefix collision)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftWall_grid">' +
+        '<XCUIElementTypeStaticText label="rose" />' +
+        '<XCUIElementTypeStaticText label="AdamSmith" />' +
+        '</XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsGiftFromSender('Alice', 'rose', 'Adam')).toBe(false);
+  });
+
+  // Hyphen-boundary discipline (the `-` in `[\w-]` lookaround).
+  test('giftId "rose" does NOT match "rose-gold" (hyphen suffix collision)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftWall_grid">' +
+        '<XCUIElementTypeStaticText label="rose-gold" />' +
+        '<XCUIElementTypeStaticText label="Adam" />' +
+        '</XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsGiftFromSender('Alice', 'rose', 'Adam')).toBe(false);
+  });
+
+  test('sender "Adam" does NOT match "Adam-Berg" (hyphen suffix collision)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftWall_grid">' +
+        '<XCUIElementTypeStaticText label="rose" />' +
+        '<XCUIElementTypeStaticText label="Adam-Berg" />' +
+        '</XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsGiftFromSender('Alice', 'rose', 'Adam')).toBe(false);
+  });
+
   test('giftId "v1.2" matches literal dot in label', async () => {
     const driver = await driverWithDump(
       '<XCUIElementTypeOther identifier="giftWall_grid">' +
@@ -4253,6 +4284,59 @@ describe('ios-devicectl-driver — iosShowsGiftFromSender', () => {
         '</XCUIElementTypeOther>',
     );
     expect(await driver.iosShowsGiftFromSender('Alice', 'rose', 'Adam')).toBe(true);
+  });
+
+  // value= attribute branch (XCUITest emits value= for controls like
+  // text fields and steppers; the alternation must cover it).
+  test('giftId on value= → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftWall_grid">' +
+        '<XCUIElementTypeStaticText value="rose" />' +
+        '<XCUIElementTypeStaticText label="Adam" />' +
+        '</XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsGiftFromSender('Alice', 'rose', 'Adam')).toBe(true);
+  });
+
+  test('sender on value= → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftWall_grid">' +
+        '<XCUIElementTypeStaticText label="rose" />' +
+        '<XCUIElementTypeStaticText value="Adam" />' +
+        '</XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsGiftFromSender('Alice', 'rose', 'Adam')).toBe(true);
+  });
+
+  // Same-node case: both in one label.
+  test('giftId and sender both in same label → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftWall_grid">' +
+        '<XCUIElementTypeStaticText label="Adam sent rose today" />' +
+        '</XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsGiftFromSender('Alice', 'rose', 'Adam')).toBe(true);
+  });
+
+  // Sender regex-escape (parity with giftId v1.2 coverage).
+  test('sender "User.42" matches literal dot in label', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftWall_grid">' +
+        '<XCUIElementTypeStaticText label="rose" />' +
+        '<XCUIElementTypeStaticText label="User.42" />' +
+        '</XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsGiftFromSender('Alice', 'rose', 'User.42')).toBe(true);
+  });
+
+  test('sender "User.42" does NOT match "UserX42" (escape protects dot)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftWall_grid">' +
+        '<XCUIElementTypeStaticText label="rose" />' +
+        '<XCUIElementTypeStaticText label="UserX42" />' +
+        '</XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsGiftFromSender('Alice', 'rose', 'User.42')).toBe(false);
   });
 
   // Input rejection with isolation.

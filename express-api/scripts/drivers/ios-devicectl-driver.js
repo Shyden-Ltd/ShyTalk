@@ -699,9 +699,14 @@ async function createIosDriver({ udid: preferred } = {}) {
     const wallRx = /<XCUIElementType\w+[^>]*\bidentifier="giftWall_grid"[^>]*\/?>/;
     if (!wallRx.test(dump)) return false;
     // Step 2: giftId appears with symmetric word-boundary across
-    // label/name/value attrs. The \b on the attr-name alternation
-    // guards compound attrs (accessibilityLabel, typename) per the
-    // same pattern as iosShowsBanner.
+    // label/name/value attrs. The \b before (?:label|name|value)=
+    // requires a word boundary IMMEDIATELY BEFORE the attr name —
+    // because \b only fires at \W→\w transitions, compound attrs
+    // like accessibilityLabel= are blocked (the `y` preceding `L`
+    // is a word-char, so no boundary fires there). The symmetric
+    // (?<![\w-]) / (?![\w-]) lookaround around ${escGift} blocks
+    // both word-char AND hyphen on either side, so "roses"/
+    // "wildrose"/"rose-gold" are all rejected for giftId="rose".
     const escGift = giftId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // eslint-disable-next-line sonarjs/slow-regex
     const giftRx = new RegExp(
