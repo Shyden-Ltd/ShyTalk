@@ -1998,6 +1998,105 @@ describe('ios-devicectl-driver — iosNavigatesToProfileScreen', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosNavigatesToRoomScreen', () => {
+  // Wake 101 — `<Name>'s <Plat> UI navigates to the room screen`.
+  // Foundation: presence-check on `room_*` identifier PREFIX.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('room_seatGrid present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosNavigatesToRoomScreen('Alice')).toBe(true);
+  });
+
+  test('room_chatInput present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_chatInput" />');
+    expect(await driver.iosNavigatesToRoomScreen('Alice')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesToRoomScreen('Alice')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosNavigatesToRoomScreen('Alice')).toBe(false);
+  });
+
+  test('non-self-closing form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid"><XCUIElementTypeStaticText name="Seat" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosNavigatesToRoomScreen('Alice')).toBe(true);
+  });
+
+  test('left-boundary — pre_room_X does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="pre_room_seatGrid" />');
+    expect(await driver.iosNavigatesToRoomScreen('Alice')).toBe(false);
+  });
+
+  test('right-boundary — room_seatGridExtra still matches', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGridExtra" />');
+    expect(await driver.iosNavigatesToRoomScreen('Alice')).toBe(true);
+  });
+
+  test('confusable prefix — rooms_listItem does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="rooms_listItem" />');
+    expect(await driver.iosNavigatesToRoomScreen('Alice')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther name="room_seatGrid" />');
+    expect(await driver.iosNavigatesToRoomScreen('Alice')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosNavigatesToRoomScreen('Alice')).rejects.toThrow();
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosNavigatesToRoomScreen('Bao')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosNavigatesToRoomScreen(null)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosNavigatesToRoomScreen(undefined)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosNavigatesToRoomScreen('')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="room_seatGrid" />');
+    expect(await driver.iosNavigatesToRoomScreen('   ')).toBe(true);
+  });
+
+  test('first-match contract — two room_* nodes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid" />' +
+        '<XCUIElementTypeOther identifier="room_chatInput" />',
+    );
+    expect(await driver.iosNavigatesToRoomScreen('Alice')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't
