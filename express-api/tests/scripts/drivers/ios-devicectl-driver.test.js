@@ -3378,6 +3378,19 @@ describe('ios-devicectl-driver — iosShowsBanner', () => {
     expect(await driver.iosShowsBanner('Adam', 'Connection lost')).toBe(false);
   });
 
+  // Direct \b pin for name= against compound attrs (typename=, filename=).
+  test('typename="Connection lost" does NOT match (\\b blocks compound)', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeStaticText typename="Connection lost" />');
+    expect(await driver.iosShowsBanner('Adam', 'Connection lost')).toBe(false);
+  });
+
+  test('somevalue="Connection lost" does NOT match (\\b blocks compound)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText somevalue="Connection lost" />',
+    );
+    expect(await driver.iosShowsBanner('Adam', 'Connection lost')).toBe(false);
+  });
+
   // Cross-tag scan — banner can be on any element type.
   test('banner on XCUIElementTypeButton element → true', async () => {
     const driver = await driverWithDump('<XCUIElementTypeButton label="Update available" />');

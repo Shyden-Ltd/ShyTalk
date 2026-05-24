@@ -558,10 +558,16 @@ async function createIosDriver({ udid: preferred } = {}) {
   // contain dynamic suffixes ("...in 5 minutes", "(retry)"), so an
   // exact-match would be too strict. Banner is regex-escaped.
   //
-  // The \b before (?:label|name|value)= prevents compound attribute
-  // names like accessibilityLabel= from false-matching. Whitespace-only
-  // banner returns false defensively (runner Gherkin requires [^"]+
-  // so unreachable in practice).
+  // The \b before (?:label|name|value)= guards against compound
+  // attribute names. For name= and value= it blocks typename=,
+  // filename=, somevalue= via the word-boundary check. For label=,
+  // accessibilityLabel= is ALSO blocked but by case-sensitivity
+  // (lowercase label vs capital L) — if a future refactor adds the
+  // `i` flag, the \b alone would NOT protect against accessibilityLabel=
+  // (capital L immediately after `y` is a valid word boundary), so the
+  // case-sensitivity decision matters. Whitespace-only banner returns
+  // false defensively (runner Gherkin requires [^"]+ so unreachable
+  // in practice).
   driver.iosShowsBanner = async (_name, banner) => {
     if (!banner || !banner.trim()) return false;
     const dump = await driver.iosUiDump();

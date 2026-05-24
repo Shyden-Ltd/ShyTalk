@@ -21337,6 +21337,28 @@ describe('Wake 97 — `<Name>\'s <Plat> UI shows a "<X>" banner`', () => {
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/webShowsBanner/);
   });
+
+  test('Web Chromium platform token → routes to webShowsBanner', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsBanner: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web Chromium UI shows a "Update available" banner' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'Update available');
+  });
+
+  test('Web Safari platform token → routes to webShowsBanner', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsBanner: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web Safari UI shows a "Update available" banner' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'Update available');
+  });
 });
 
 describe('Wake 97 — "<Name>\'s LiveKit track is not disconnected"', () => {
