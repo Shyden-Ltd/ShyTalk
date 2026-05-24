@@ -9,7 +9,7 @@
   },
   "lint-staged": {
     "express-api/**/*.js": [
-      "npx --prefix express-api eslint",
+      "npx --prefix express-api eslint --max-warnings=0",
       "npx --prefix express-api prettier --check"
     ],
     "*.feature": [
