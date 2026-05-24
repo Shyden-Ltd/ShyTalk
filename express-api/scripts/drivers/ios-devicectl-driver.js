@@ -674,6 +674,49 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 99 — `<Name>'s <Plat> UI shows a "<X>" gift from <Other>`
+  // (j01). iOS mirror of Android sibling. Driver receives
+  // (recipient, giftId, sender).
+  //
+  // Foundation strategy: TRIPLE composition:
+  //   1. giftWall_grid identifier PRESENT (recipient is on gift-wall).
+  //   2. giftId substring appears in any label/name/value with
+  //      symmetric word-boundary protection.
+  //   3. sender substring appears in any label/name/value with
+  //      symmetric word-boundary protection.
+  //
+  // Both substring scans run over the whole dump independently. The
+  // journey orchestrator ensures only one gift entry is shown at the
+  // time of the assertion, so cross-entry false positives aren't
+  // reachable. _recipient is accepted-and-ignored.
+  driver.iosShowsGiftFromSender = async (_recipient, giftId, sender) => {
+    if (typeof giftId !== 'string' || !giftId.trim()) return false;
+    if (typeof sender !== 'string' || !sender.trim()) return false;
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // Step 1: gift wall must be visible.
+    // eslint-disable-next-line sonarjs/slow-regex
+    const wallRx = /<XCUIElementType\w+[^>]*\bidentifier="giftWall_grid"[^>]*\/?>/;
+    if (!wallRx.test(dump)) return false;
+    // Step 2: giftId appears with symmetric word-boundary across
+    // label/name/value attrs. The \b on the attr-name alternation
+    // guards compound attrs (accessibilityLabel, typename) per the
+    // same pattern as iosShowsBanner.
+    const escGift = giftId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const giftRx = new RegExp(
+      `\\b(?:label|name|value)="[^"]*(?<![\\w-])${escGift}(?![\\w-])[^"]*"`,
+    );
+    if (!giftRx.test(dump)) return false;
+    // Step 3: sender appears with symmetric word-boundary.
+    const escSender = sender.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const senderRx = new RegExp(
+      `\\b(?:label|name|value)="[^"]*(?<![\\w-])${escSender}(?![\\w-])[^"]*"`,
+    );
+    return senderRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;

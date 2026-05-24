@@ -22123,6 +22123,80 @@ describe('Wake 99 — `<Name>\'s <Plat> UI shows a "<X>" gift from <Other>`', ()
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/Alice|crown|Bob/);
   });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web UI shows a "rose" gift from Adam' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/webShowsGiftFromSender/);
+  });
+
+  test('Android matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { androidShowsGiftFromSender: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Android UI shows a "rose" gift from Adam' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'rose', 'Adam');
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidShowsGiftFromSender: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Android UI shows a "crown" gift from Bob' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|crown|Bob/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Android UI shows a "rose" gift from Adam' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/androidShowsGiftFromSender/);
+  });
+
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsGiftFromSender: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Nora\'s iOS Sim UI shows a "rose" gift from Adam' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Nora', 'rose', 'Adam');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsGiftFromSender: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Nora\'s iOS Sim UI shows a "crown" gift from Bob' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Nora|crown|Bob/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Nora\'s iOS Sim UI shows a "rose" gift from Adam' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/iosShowsGiftFromSender/);
+  });
 });
 
 describe('Wake 99 — "<Name>\'s <Plat> UI shows only minor-cohort users in the rankings"', () => {
