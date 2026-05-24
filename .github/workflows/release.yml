@@ -53,7 +53,13 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
+          # `client-id` replaces the deprecated `app-id` input in v3.x.
+          # The action aliases both to the same internal `appId` (see
+          # actions/create-github-app-token main.js: `appId: clientId`),
+          # so the existing RELEASE_APP_ID secret value (numeric App ID)
+          # continues to work — GitHub's App-JWT iss claim accepts both
+          # the numeric App ID and the alphanumeric Client ID.
+          client-id: ${{ secrets.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -455,7 +461,18 @@ jobs:
 
       - name: Open release PR
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Use the workflow's built-in GITHUB_TOKEN here rather than the
+          # Release App token. The App's installation does NOT grant
+          # `pull_requests: write`, so `gh pr create` fails with
+          # `GraphQL: Resource not accessible by integration` (observed
+          # in release run 26364598123 on 2026-05-24). The workflow's
+          # `permissions:` block at the top grants `pull-requests: write`
+          # to GITHUB_TOKEN, which is sufficient for both `gh pr create`
+          # and `gh pr merge --auto`. The release commit itself stays
+          # App-signed (created via createCommitOnBranch in the prior
+          # step using the App token); only the PR-open and merge ops
+          # use GITHUB_TOKEN.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
