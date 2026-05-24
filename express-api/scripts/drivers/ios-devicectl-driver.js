@@ -634,6 +634,28 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 103 — `<Name>'s <Plat> UI shows the edited body "<X>" with
+  // an "<Y>" tag` (j07). iOS mirror of Android sibling. Message-edit
+  // indicator on the recipient view. Driver receives (name, body, tag).
+  //
+  // Foundation strategy: presence-check on `editedBody_*` identifier
+  // PREFIX. No such identifier exists in commonMain yet — only the
+  // source-side `room_msg_editTarget_<id>` identifier exists, which
+  // marks the message being edited (NOT the post-edit "(edited)"
+  // badge on the recipient view — distinct concerns).
+  //
+  // Returns false in real journeys today; lands true when commonMain
+  // ships editedBody_<msgId> / editedBody_badge identifiers. Per-body
+  // and per-tag verification need attribute extraction; deferred. All
+  // 3 args accepted-and-ignored.
+  driver.iosShowsEditedBodyWithTag = async (_name, _body, _tag) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="editedBody_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;
