@@ -4433,6 +4433,176 @@ describe('ios-devicectl-driver — iosShowsGiftFromSender', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosShowsInAppGiftNotification', () => {
+  // Wake 100 — `<Name>'s <Plat> UI shows the in-app gift notification
+  // with sender "<X>" and gift "<Y>"`. Foundation: presence-check
+  // giftNotification_* identifier PREFIX.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('giftNotification_toast present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toast" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('Selma', 'Alice', 'crown')).toBe(true);
+  });
+
+  test('giftNotification_giftIcon present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_giftIcon" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('Selma', 'Alice', 'rose')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosShowsInAppGiftNotification('Selma', 'Alice', 'crown')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosShowsInAppGiftNotification('Selma', 'Alice', 'crown')).toBe(false);
+  });
+
+  test('non-self-closing form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toast"><XCUIElementTypeStaticText name="Alice sent crown" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('Selma', 'Alice', 'crown')).toBe(true);
+  });
+
+  test('left-boundary — pre_giftNotification_X does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="pre_giftNotification_toast" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('Selma', 'Alice', 'crown')).toBe(false);
+  });
+
+  test('right-boundary — giftNotification_toastExtra still matches', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toastExtra" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('Selma', 'Alice', 'crown')).toBe(true);
+  });
+
+  test('confusable — giftNotificationExtras_panel does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotificationExtras_panel" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('Selma', 'Alice', 'crown')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther name="giftNotification_toast" />');
+    expect(await driver.iosShowsInAppGiftNotification('Selma', 'Alice', 'crown')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosShowsInAppGiftNotification('Selma', 'Alice', 'crown')).rejects.toThrow();
+  });
+
+  // All 3 args accepted-and-ignored.
+  test('null recipient → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toast" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification(null, 'Alice', 'crown')).toBe(true);
+  });
+
+  test('undefined recipient → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toast" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification(undefined, 'Alice', 'crown')).toBe(true);
+  });
+
+  test('empty recipient → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toast" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('', 'Alice', 'crown')).toBe(true);
+  });
+
+  test('whitespace recipient → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toast" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('   ', 'Alice', 'crown')).toBe(true);
+  });
+
+  test('null sender → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toast" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('Selma', null, 'crown')).toBe(true);
+  });
+
+  test('undefined sender → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toast" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('Selma', undefined, 'crown')).toBe(true);
+  });
+
+  test('empty sender → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toast" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('Selma', '', 'crown')).toBe(true);
+  });
+
+  test('whitespace sender → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toast" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('Selma', '   ', 'crown')).toBe(true);
+  });
+
+  test('null giftId → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toast" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('Selma', 'Alice', null)).toBe(true);
+  });
+
+  test('undefined giftId → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toast" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('Selma', 'Alice', undefined)).toBe(true);
+  });
+
+  test('empty giftId → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toast" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('Selma', 'Alice', '')).toBe(true);
+  });
+
+  test('whitespace giftId → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toast" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('Selma', 'Alice', '   ')).toBe(true);
+  });
+
+  test('first-match contract — two giftNotification_* nodes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftNotification_toast" />' +
+        '<XCUIElementTypeOther identifier="giftNotification_giftIcon" />',
+    );
+    expect(await driver.iosShowsInAppGiftNotification('Selma', 'Alice', 'crown')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't
