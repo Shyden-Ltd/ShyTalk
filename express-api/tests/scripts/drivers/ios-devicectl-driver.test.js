@@ -3688,6 +3688,170 @@ describe('ios-devicectl-driver — iosShowsContributorsList', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosShowsCountBadge', () => {
+  // Wake 98 — `<Name>'s <Plat> UI shows a +N in the "<X>" count`.
+  // Foundation: presence-check countBadge_* identifier PREFIX.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('countBadge_followersDelta present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_followersDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge('Greta', 1, 'Followers')).toBe(true);
+  });
+
+  test('countBadge_likesDelta present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_likesDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge('Greta', 3, 'Likes')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosShowsCountBadge('Greta', 1, 'Followers')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosShowsCountBadge('Greta', 1, 'Followers')).toBe(false);
+  });
+
+  test('non-self-closing form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_followersDelta"><XCUIElementTypeStaticText name="+1" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsCountBadge('Greta', 1, 'Followers')).toBe(true);
+  });
+
+  test('left-boundary — pre_countBadge_X does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="pre_countBadge_followersDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge('Greta', 1, 'Followers')).toBe(false);
+  });
+
+  test('right-boundary — countBadge_followersDeltaExtra still matches', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_followersDeltaExtra" />',
+    );
+    expect(await driver.iosShowsCountBadge('Greta', 1, 'Followers')).toBe(true);
+  });
+
+  test('confusable prefix — countBadgeExtras_panel does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadgeExtras_panel" />',
+    );
+    expect(await driver.iosShowsCountBadge('Greta', 1, 'Followers')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther name="countBadge_followersDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge('Greta', 1, 'Followers')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosShowsCountBadge('Greta', 1, 'Followers')).rejects.toThrow();
+  });
+
+  // All 3 args accepted-and-ignored at foundation tier.
+  test('null name → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_followersDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge(null, 1, 'Followers')).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_followersDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge(undefined, 1, 'Followers')).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_followersDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge('', 1, 'Followers')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_followersDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge('   ', 1, 'Followers')).toBe(true);
+  });
+
+  test('null delta → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_followersDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge('Greta', null, 'Followers')).toBe(true);
+  });
+
+  test('undefined delta → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_followersDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge('Greta', undefined, 'Followers')).toBe(true);
+  });
+
+  test('0 delta → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_followersDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge('Greta', 0, 'Followers')).toBe(true);
+  });
+
+  test('null label → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_followersDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge('Greta', 1, null)).toBe(true);
+  });
+
+  test('undefined label → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_followersDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge('Greta', 1, undefined)).toBe(true);
+  });
+
+  test('empty label → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_followersDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge('Greta', 1, '')).toBe(true);
+  });
+
+  test('whitespace label → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_followersDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge('Greta', 1, '   ')).toBe(true);
+  });
+
+  test('first-match contract — two countBadge_* nodes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="countBadge_followersDelta" />' +
+        '<XCUIElementTypeOther identifier="countBadge_likesDelta" />',
+    );
+    expect(await driver.iosShowsCountBadge('Greta', 1, 'Followers')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't
