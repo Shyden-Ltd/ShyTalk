@@ -2379,9 +2379,9 @@ describe('ios-devicectl-driver — iosOpenProfileAndTap', () => {
 });
 
 describe('ios-devicectl-driver — iosOpenProfileFrom', () => {
-  // Wake 89 — `<Name> on <Plat> opens <Other>'s profile from "<Src>"`
-  // (j10:14). Mirrors Android sibling. `_source` is the surface
-  // (room|chat|search|...); accepted-and-ignored at foundation tier.
+  // Wake 88 — `<Name> on <Plat> opens <Other>'s profile from the <X>`
+  // (j17:71, j18:49). Mirrors Android sibling. `_source` is the surface
+  // (room|PM|inbox|...); accepted-and-ignored at foundation tier.
   function driverWithDump(xml) {
     return createIosDriver({ udid: 'X' }).then((d) => {
       d.iosUiDump = async () => xml;
