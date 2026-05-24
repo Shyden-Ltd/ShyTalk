@@ -142,19 +142,32 @@ describe('iOS Pods integration — pbxproj contract', () => {
     // CocoaPods enumerates ALL project-level configs when validating
     // SWIFT_VERSION uniqueness. An empty Swift on a Local config
     // breaks pod install with the multi-Swift-version error.
-    // We match the buildSettings block (between the config-id comment
-    // and `name = "<config>";`) for the SWIFT_VERSION line.
+    //
+    // R2 review C-1 fix: the prior regex `isa = XCBuildConfiguration;
+    // [\\s\\S]*?name = "<config>";` with the /g flag did NOT isolate
+    // blocks — non-greedy `[\\s\\S]*?` from one `isa =` could span
+    // across multiple unrelated XCBuildConfiguration blocks until it
+    // found a `name = "<config>"`. Now uses a block-scoped parser
+    // that:
+    //   1. Slices the XCBuildConfiguration section by its markers.
+    //   2. Iterates exact `\\t\\t<UUID> /* <name> */ = { ... };` blocks
+    //      using the same regex shape as findBuildConfigurationsByName
+    //      in ios-local-configurations.test.js.
+    //   3. Returns ONLY blocks whose declared name matches.
     function configContainsSwiftVersion(configName) {
-      // Match a block that starts with `name = "<config>";` and walk
-      // backwards to find SWIFT_VERSION = 5.0 within the preceding
-      // buildSettings braces. Simpler: capture the full XCBuildConfiguration
-      // block by matching from `isa = XCBuildConfiguration;` to the
-      // closing `name = "<config>";`.
-      const blockRx = new RegExp(
-        `isa = XCBuildConfiguration;[\\s\\S]*?name = "${configName}";`,
-        'g',
-      );
-      const blocks = [...PBXPROJ_SRC.matchAll(blockRx)].map((m) => m[0]);
+      const sectionStart = PBXPROJ_SRC.indexOf('/* Begin XCBuildConfiguration section */');
+      const sectionEnd = PBXPROJ_SRC.indexOf('/* End XCBuildConfiguration section */');
+      expect(sectionStart).toBeGreaterThanOrEqual(0);
+      expect(sectionEnd).toBeGreaterThan(sectionStart);
+      const section = PBXPROJ_SRC.slice(sectionStart, sectionEnd);
+      // Block header: \t\t<24hex> /* <declaredName> */ = {<body>\n\t\t};
+      const blockRx = /\t\t([0-9A-F]{24}) \/\* ([^*]+?) \*\/ = \{([\s\S]+?)\n\t\t\};/g;
+      const blocks = [];
+      let m;
+      while ((m = blockRx.exec(section)) !== null) {
+        const declaredName = m[2].trim();
+        if (declaredName === configName) blocks.push(m[3]);
+      }
       // There are EXACTLY TWO Debug-Local blocks (project-level +
       // iosApp target). The count is pinned exactly — Phase 3.3 (if
       // it lands separately) would add Local configs to iosAppTests

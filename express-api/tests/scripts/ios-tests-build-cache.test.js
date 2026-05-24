@@ -175,6 +175,44 @@ function extractJob(yamlText, jobName) {
   return lines.slice(startIdx, endIdx).join('\n');
 }
 
+/**
+ * Extract the cache-key value lines from an actions/cache step block —
+ * the `key:` line plus the block-scalar continuation under
+ * `restore-keys: |`. Excludes step metadata (`name:`, `id:`, `path:`,
+ * `uses:`) which can incidentally contain a cache prefix but are not
+ * cache-key values that need runner.os scoping.
+ *
+ * Used by the defence-in-depth "every cache-key line carries
+ * ${{ runner.os }}" checks (R2 review I-3). Positive scoping is more
+ * robust than negative exclusion: when a new metadata field (or YAML
+ * comment) is added to a step, the test only checks the lines that
+ * actually matter, instead of silently catching the new line as a
+ * false positive.
+ *
+ * YAML block-scalar termination: the loop walks forward from the
+ * `restore-keys:` line, collecting every line indented MORE than the
+ * `restore-keys:` line itself. An empty line, or a line at sibling /
+ * parent indent, ends the block.
+ */
+function extractCacheKeyLines(stepText) {
+  const lines = stepText.split('\n');
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (trimmed.startsWith('key:')) {
+      out.push(lines[i]);
+    } else if (trimmed.startsWith('restore-keys:')) {
+      const baseIndent = lines[i].search(/\S/);
+      for (let j = i + 1; j < lines.length; j++) {
+        const indent = lines[j].search(/\S/);
+        if (indent < 0 || indent <= baseIndent) break;
+        out.push(lines[j]);
+      }
+    }
+  }
+  return out;
+}
+
 describe('ios-tests.yml — build-ios job cold-cache survival', () => {
   let yamlText;
   let buildIosJob;
@@ -328,6 +366,97 @@ describe('ios-tests.yml — build-ios job cold-cache survival', () => {
     });
   });
 
+  // R2 review I-3 helper contract: extractCacheKeyLines underpins all
+  // 4 defence-in-depth violation checks. If it silently misses lines,
+  // every consumer test passes vacuously. These direct tests pin the
+  // contract so a future refactor that breaks the block-scalar walker
+  // (or accidentally includes metadata) fails loudly here, not in the
+  // 4 downstream "restore-keys is OS-scoped" tests that would each
+  // produce a less obvious symptom.
+  describe('extractCacheKeyLines helper — contract', () => {
+    test('captures the key: line and excludes name/id/path/uses metadata', () => {
+      const step = [
+        '      - name: Cache iosApp/Pods',
+        '        id: pods-cache',
+        '        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae',
+        '        with:',
+        '          path: iosApp/Pods',
+        "          key: pods-${{ runner.os }}-${{ hashFiles('iosApp/Podfile.lock') }}",
+        '          restore-keys: |',
+        '            pods-${{ runner.os }}-',
+      ].join('\n');
+      const captured = extractCacheKeyLines(step);
+      expect(captured).toHaveLength(2);
+      expect(captured[0]).toContain('key: pods-');
+      expect(captured[1]).toContain('pods-${{ runner.os }}-');
+      // Negative assertions — metadata lines containing the prefix
+      // MUST be excluded.
+      expect(captured.join('\n')).not.toContain('name:');
+      expect(captured.join('\n')).not.toContain('id: pods-cache');
+      expect(captured.join('\n')).not.toContain('path: iosApp/Pods');
+    });
+
+    test('captures multi-entry restore-keys block-scalar contents', () => {
+      const step = [
+        '      - name: Cache Multi',
+        '        with:',
+        '          path: /tmp/multi',
+        "          key: multi-${{ runner.os }}-${{ hashFiles('**') }}",
+        '          restore-keys: |',
+        '            multi-${{ runner.os }}-',
+        '            multi-',
+        '      - name: NextStep',
+      ].join('\n');
+      const captured = extractCacheKeyLines(step);
+      // 1 key line + 2 restore-keys entries.
+      expect(captured).toHaveLength(3);
+      // The bare `multi-` entry would be a defence-in-depth violation;
+      // this test confirms the helper SEES it (a downstream
+      // "no bare prefix" check is the one that would flag it).
+      expect(captured.some((l) => l.trim() === 'multi-')).toBe(true);
+    });
+
+    test('block-scalar walker terminates at sibling/parent indent', () => {
+      const step = [
+        '      - name: Cache',
+        '        with:',
+        '          key: foo-${{ runner.os }}',
+        '          restore-keys: |',
+        '            foo-${{ runner.os }}-',
+        '        env:', // sibling of `with:` — outside the block.
+        '          OTHER: foo-bare',
+      ].join('\n');
+      const captured = extractCacheKeyLines(step);
+      // Must NOT capture the env block — it's at a parent indent
+      // relative to `restore-keys:`.
+      expect(captured.join('\n')).not.toContain('OTHER: foo-bare');
+      expect(captured.join('\n')).not.toContain('env:');
+    });
+
+    test('block-scalar walker terminates on empty line inside block', () => {
+      const step = [
+        '      - name: Cache',
+        '        with:',
+        '          key: foo-${{ runner.os }}',
+        '          restore-keys: |',
+        '            foo-${{ runner.os }}-',
+        '',
+        '      - name: NextStep',
+        '        run: |',
+        '          echo foo-not-cache',
+      ].join('\n');
+      const captured = extractCacheKeyLines(step);
+      // Walker stops at the empty line — `echo foo-not-cache` (which
+      // contains `foo-`) MUST NOT leak in.
+      expect(captured.join('\n')).not.toContain('echo foo-not-cache');
+    });
+
+    test('returns empty array for a step with no cache keys', () => {
+      const step = ['      - name: Run something', '        run: echo hi'].join('\n');
+      expect(extractCacheKeyLines(step)).toEqual([]);
+    });
+  });
+
   // Round 3 I-2 rebuttal: the reviewer claimed extractJob would
   // prematurely terminate at the `outputs:` declaration in the
   // build-ios job. That's incorrect: `outputs:` inside a job body is
@@ -457,6 +586,17 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
       const idx = lines.findIndex((l) => l.includes('restore-keys:'));
       expect(idx).toBeGreaterThanOrEqual(0);
       expect(lines[idx + 1]).toContain('cocoapods-repos-${{ runner.os }}-');
+      // R2 review I-3: defence-in-depth — assert every CACHE-KEY VALUE
+      // line (the `key:` line + the `restore-keys:` block-scalar
+      // contents) carries the runner.os scope. Positively scoped via
+      // extractCacheKeyLines so step metadata (name/id/path/uses) that
+      // incidentally contains the prefix doesn't cause a false positive.
+      // Guards a future PR adding a second restore-key entry with a
+      // bare prefix.
+      const violations = extractCacheKeyLines(cocoaPodsRepoCacheStep).filter(
+        (l) => l.includes('cocoapods-repos-') && !l.includes('${{ runner.os }}'),
+      );
+      expect(violations).toEqual([]);
     });
   });
 
@@ -482,6 +622,13 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
       const idx = lines.findIndex((l) => l.includes('restore-keys:'));
       expect(idx).toBeGreaterThanOrEqual(0);
       expect(lines[idx + 1]).toContain('pods-${{ runner.os }}-');
+      // Defence-in-depth via positively-scoped extractCacheKeyLines.
+      // The step also has `id: pods-cache` which contains `pods-` but
+      // is step metadata, not a cache key value — the helper excludes it.
+      const violations = extractCacheKeyLines(podsCacheStep).filter(
+        (l) => l.includes('pods-') && !l.includes('${{ runner.os }}'),
+      );
+      expect(violations).toEqual([]);
     });
   });
 
@@ -518,6 +665,14 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
       const idx = lines.findIndex((l) => l.includes('restore-keys:'));
       expect(idx).toBeGreaterThanOrEqual(0);
       expect(lines[idx + 1]).toContain('ios-derived-${{ runner.os }}-');
+      // Defence-in-depth via positively-scoped extractCacheKeyLines.
+      // The step's `name:` ("Cache Xcode DerivedData (build/ios-derived-data)")
+      // and `path:` (`build/ios-derived-data`) both contain `ios-derived-`
+      // but are step metadata, not cache key values — the helper excludes them.
+      const violations = extractCacheKeyLines(derivedDataCacheStep).filter(
+        (l) => l.includes('ios-derived-') && !l.includes('${{ runner.os }}'),
+      );
+      expect(violations).toEqual([]);
     });
   });
 
@@ -537,6 +692,13 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
       const idx = lines.findIndex((l) => l.includes('restore-keys:'));
       expect(idx).toBeGreaterThanOrEqual(0);
       expect(lines[idx + 1]).toContain('ios-spm-${{ runner.os }}-');
+      // Defence-in-depth via positively-scoped extractCacheKeyLines.
+      // The step's `name:` and `path:` both contain `ios-spm-` but are
+      // step metadata, not cache key values — the helper excludes them.
+      const violations = extractCacheKeyLines(swiftPmCacheStep).filter(
+        (l) => l.includes('ios-spm-') && !l.includes('${{ runner.os }}'),
+      );
+      expect(violations).toEqual([]);
     });
   });
 
@@ -548,6 +710,12 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
       // Without this gate, pod install runs on every push even with
       // warm Pods cache, defeating the cache. The gate is load-bearing.
       expect(installPodsStep).toContain("steps.pods-cache.outputs.cache-hit != 'true'");
+    });
+    test('also guarded by has_tests == true (no pod install on no-test branches)', () => {
+      // R2 review I-1: a future PR removing `has_tests == 'true'`
+      // from the if would run pod install even on branches with no
+      // iOS test targets, wasting runner minutes. Pin the guard.
+      expect(installPodsStep).toContain("steps.check-tests.outputs.has_tests == 'true'");
     });
   });
 
@@ -572,6 +740,18 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
   describe('Ordering — caches restore BEFORE Install CocoaPods + Build iOS app', () => {
     test('Cache iosApp/Pods step appears before Install CocoaPods', () => {
       const cacheIdx = yamlText.indexOf('      - name: Cache iosApp/Pods');
+      const installIdx = yamlText.indexOf('      - name: Install CocoaPods');
+      expect(cacheIdx).toBeGreaterThanOrEqual(0);
+      expect(installIdx).toBeGreaterThanOrEqual(0);
+      expect(cacheIdx).toBeLessThan(installIdx);
+    });
+    test('Cache CocoaPods spec repos appears before Install CocoaPods', () => {
+      // R2 review I-2: spec-repos cache must be restored before
+      // `pod install` so CocoaPods uses the cached master mirror
+      // instead of re-cloning trunk (~1-3min waste on cold miss).
+      const cacheIdx = yamlText.indexOf(
+        '      - name: Cache CocoaPods spec repos (~/.cocoapods/repos)',
+      );
       const installIdx = yamlText.indexOf('      - name: Install CocoaPods');
       expect(cacheIdx).toBeGreaterThanOrEqual(0);
       expect(installIdx).toBeGreaterThanOrEqual(0);
