@@ -4923,12 +4923,40 @@ describe('ios-devicectl-driver — iosShowsInSeatGrid', () => {
     expect(await driver.iosShowsInSeatGrid('Theo', 'Ines', 99)).toBe(true);
   });
 
-  test('iosUiDump throws → rejects', async () => {
+  // Padded label — XCUITest commonly emits "Host: <name>" or "Seat N:
+  // <name>" labels. Word-boundary regex must still hit the bare name.
+  test('padded label "Host: Ines" still matches target "Ines"', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid"><XCUIElementTypeStaticText label="Host: Ines" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsInSeatGrid('Theo', 'Ines', 3)).toBe(true);
+  });
+
+  // KNOWN LIMITATION pin: the gridRx + targetRx scan the dump
+  // INDEPENDENTLY. If target name appears anywhere in the dump (e.g.
+  // a chat overlay outside the grid subtree) AND room_seatGrid is
+  // present, we still return true. The journey orchestrator ensures
+  // this is only called when the seat grid IS the active screen.
+  // This test pins the current behaviour so a future "fix" (extract
+  // grid subtree, scan only inside) shows up as a contract change.
+  test('target label outside grid (in chat overlay) → true (known limitation; independent scans)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="room_seatGrid">' +
+        '<XCUIElementTypeStaticText label="Other" />' +
+        '</XCUIElementTypeOther>' +
+        '<XCUIElementTypeStaticText label="Ines" />',
+    );
+    expect(await driver.iosShowsInSeatGrid('Theo', 'Ines', 3)).toBe(true);
+  });
+
+  test('iosUiDump throws → rejects with original error', async () => {
     const driver = await createIosDriver({ udid: 'X' });
     driver.iosUiDump = async () => {
       throw new Error('WDA lost');
     };
-    await expect(driver.iosShowsInSeatGrid('Theo', 'Ines', 3)).rejects.toThrow();
+    // Pin the actual error text so an accidental `reject(undefined)` or
+    // unrelated throw doesn't silently satisfy a bare `rejects.toThrow()`.
+    await expect(driver.iosShowsInSeatGrid('Theo', 'Ines', 3)).rejects.toThrow('WDA lost');
   });
 });
 

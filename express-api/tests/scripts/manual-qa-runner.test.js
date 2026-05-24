@@ -23349,6 +23349,7 @@ describe('Wake 102 — "<Name>\'s <Plat> UI shows <Other> in seat N of the seat 
     );
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/Ines/);
+    expect(r.error).toMatch(/seat 2/);
   });
 
   test('Web driver missing → fail', async () => {
@@ -23380,7 +23381,12 @@ describe('Wake 102 — "<Name>\'s <Plat> UI shows <Other> in seat N of the seat 
       ctx,
     );
     expect(r.ok).toBe(false);
+    // Tightened (R1): assert both the target name AND the seat number
+    // are present — runner produces `${viewer}'s ${platform} UI does
+    // not show ${target} in seat ${seatNum}`; a regression that drops
+    // the seat number would otherwise pass.
     expect(r.error).toMatch(/Ines/);
+    expect(r.error).toMatch(/seat 3/);
   });
 
   test('Android driver missing → fail', async () => {
@@ -23413,6 +23419,7 @@ describe('Wake 102 — "<Name>\'s <Plat> UI shows <Other> in seat N of the seat 
     );
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/Ines/);
+    expect(r.error).toMatch(/seat 4/);
   });
 
   test('iOS Sim driver missing → fail', async () => {
