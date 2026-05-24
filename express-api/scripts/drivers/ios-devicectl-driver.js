@@ -483,6 +483,37 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 102 — `<Name>'s <Plat> UI replaces follow button with "<X>"`
+  // (j07 — UI element swap after follow action completes). iOS mirror
+  // of Android sibling. Inspects the `profile_followButton` identifier
+  // node's XCUITest attributes for the buttonId string.
+  //
+  // The buttonId is one of the four follow-state strings: "Follow",
+  // "Unfollow", "Following", "Follow back". These have OVERLAPPING
+  // PREFIXES — "Follow" is a prefix of "Follow back" and "Following".
+  // Substring matching would false-positive across them, so the
+  // foundation uses EXACT (case-insensitive) match per attribute value.
+  //
+  // iOS divergence from Android: XCUITest emits `label=`, `name=`, and
+  // optionally `value=` for button labels (vs Android's `text=` /
+  // `content-desc=`). The identifier itself is captured separately and
+  // is not considered as a label candidate.
+  driver.iosReplacesFollowButton = async (_name, buttonId) => {
+    if (!buttonId || !buttonId.trim()) return false;
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="profile_followButton"[^>]*\/?>/;
+    const tagMatch = dump.match(tagRx);
+    if (!tagMatch) return false;
+    const target = buttonId.toLowerCase();
+    const attrRx = /\b(?:label|name|value)="([^"]*)"/g;
+    for (const m of tagMatch[0].matchAll(attrRx)) {
+      if (m[1].toLowerCase() === target) return true;
+    }
+    return false;
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;
