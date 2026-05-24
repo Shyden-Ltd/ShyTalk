@@ -405,6 +405,18 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 101 — `<Name>'s <Plat> UI navigates to the warning screen`.
+  // Mirrors Android sibling. Foundation: presence-check on `warning_*`
+  // identifier PREFIX (matches WarningScreen.kt's warning_title /
+  // warning_acknowledgeButton testTags). `_name` accepted-and-ignored.
+  driver.iosNavigatesToWarningScreen = async (_name) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="warning_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;

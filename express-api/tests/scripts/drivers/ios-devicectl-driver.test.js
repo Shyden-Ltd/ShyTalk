@@ -2097,6 +2097,107 @@ describe('ios-devicectl-driver — iosNavigatesToRoomScreen', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosNavigatesToWarningScreen', () => {
+  // Wake 101 — `<Name>'s <Plat> UI navigates to the warning screen`.
+  // Foundation: presence-check on `warning_*` identifier PREFIX.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('warning_title present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="warning_title" />');
+    expect(await driver.iosNavigatesToWarningScreen('Alice')).toBe(true);
+  });
+
+  test('warning_acknowledgeButton present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="warning_acknowledgeButton" />',
+    );
+    expect(await driver.iosNavigatesToWarningScreen('Alice')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesToWarningScreen('Alice')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosNavigatesToWarningScreen('Alice')).toBe(false);
+  });
+
+  test('non-self-closing form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="warning_title"><XCUIElementTypeStaticText name="Warning" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosNavigatesToWarningScreen('Alice')).toBe(true);
+  });
+
+  test('left-boundary — pre_warning_X does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="pre_warning_title" />');
+    expect(await driver.iosNavigatesToWarningScreen('Alice')).toBe(false);
+  });
+
+  test('right-boundary — warning_titleExtra still matches', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="warning_titleExtra" />');
+    expect(await driver.iosNavigatesToWarningScreen('Alice')).toBe(true);
+  });
+
+  test('confusable prefix — warnings_listItem does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="warnings_listItem" />');
+    expect(await driver.iosNavigatesToWarningScreen('Alice')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther name="warning_title" />');
+    expect(await driver.iosNavigatesToWarningScreen('Alice')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosNavigatesToWarningScreen('Alice')).rejects.toThrow();
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="warning_title" />');
+    expect(await driver.iosNavigatesToWarningScreen('Bao')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="warning_title" />');
+    expect(await driver.iosNavigatesToWarningScreen(null)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="warning_title" />');
+    expect(await driver.iosNavigatesToWarningScreen(undefined)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="warning_title" />');
+    expect(await driver.iosNavigatesToWarningScreen('')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="warning_title" />');
+    expect(await driver.iosNavigatesToWarningScreen('   ')).toBe(true);
+  });
+
+  test('first-match contract — two warning_* nodes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="warning_title" />' +
+        '<XCUIElementTypeButton identifier="warning_acknowledgeButton" />',
+    );
+    expect(await driver.iosNavigatesToWarningScreen('Alice')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't
