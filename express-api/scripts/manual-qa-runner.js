@@ -6743,8 +6743,9 @@ const matchers = [
             ? 'iosGetWarningReason'
             : 'webGetWarningReason';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const actual = await driver[methodName](name);
       if (actual !== expected) {
@@ -6775,8 +6776,9 @@ const matchers = [
             ? 'iosShowsNamedImage'
             : 'webShowsNamedImage';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const shown = await driver[methodName](name, imageName);
       if (!shown) {
@@ -6804,8 +6806,9 @@ const matchers = [
             ? 'iosShowsNamedUi'
             : 'webShowsNamedUi';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const shown = await driver[methodName](name, nounPhrase);
       if (shown) {
@@ -7030,8 +7033,9 @@ const matchers = [
             ? 'iosGetMicIndicator'
             : 'webGetMicIndicator';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const actual = await driver[methodName](name);
       if (actual !== expected) {
@@ -7096,8 +7100,9 @@ const matchers = [
             ? 'iosLongPressMessageAndTap'
             : 'webLongPressMessageAndTap';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, action);
       if (!ok) {
@@ -7127,8 +7132,9 @@ const matchers = [
             ? 'iosSelectReasonAndConfirm'
             : 'webSelectReasonAndConfirm';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, reason);
       if (!ok) {
@@ -7252,8 +7258,9 @@ const matchers = [
             ? 'iosReportItFor'
             : 'webReportItFor';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, reason);
       if (!ok) {
@@ -7309,8 +7316,9 @@ const matchers = [
             ? 'iosGetDisplayedReason'
             : 'webGetDisplayedReason';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const actual = await driver[methodName](name);
       if (actual !== expected) {
@@ -7341,8 +7349,9 @@ const matchers = [
             ? 'iosGetDisplayedEndDate'
             : 'webGetDisplayedEndDate';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const actualMs = await driver[methodName](name);
       const expectedMs = Date.now() + days * 24 * 60 * 60 * 1000;
@@ -7462,8 +7471,9 @@ const matchers = [
             ? 'iosTypeIntoNamedField'
             : 'webTypeIntoNamedField';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       await driver[methodName](name, fieldName, text);
       return { ok: true };
@@ -7540,8 +7550,9 @@ const matchers = [
             ? 'iosOpenConversationWith'
             : 'webOpenConversationWith';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, otherName);
       if (!ok) {
@@ -7903,8 +7914,9 @@ const matchers = [
             ? 'iosShowsRawI18nKey'
             : 'webShowsRawI18nKey';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const shows = await driver[methodName](name, sampleKey);
       if (shows) {
@@ -7933,8 +7945,9 @@ const matchers = [
           ? 'androidGetFieldAlignment'
           : 'iosGetFieldAlignment';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const actual = await driver[methodName](name, fieldName);
       if (actual !== expected) {
@@ -7964,8 +7977,9 @@ const matchers = [
           ? 'androidShowsLocaleLabels'
           : 'iosShowsLocaleLabels';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, language, labels);
       if (!ok) {
@@ -7992,8 +8006,9 @@ const matchers = [
           ? 'androidBalanceUsesLocaleSeparator'
           : 'iosBalanceUsesLocaleSeparator';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name);
       if (!ok) {
@@ -8063,8 +8078,9 @@ const matchers = [
           ? 'androidSendGiftTo'
           : 'iosSendGiftTo';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, giftName, recipient);
       if (!ok) {
@@ -8120,8 +8136,9 @@ const matchers = [
           ? 'androidShowsLocaleLabels'
           : 'iosShowsLocaleLabels';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, language, []);
       if (!ok) {
@@ -8188,8 +8205,9 @@ const matchers = [
           ? 'androidScanAllRenderedStrings'
           : 'iosScanAllRenderedStrings';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       ctx.scannedStrings = await driver[methodName](name, screens);
       return { ok: true };
@@ -8242,8 +8260,9 @@ const matchers = [
           ? 'androidOpenWithNetwork'
           : 'iosOpenWithNetwork';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, urlPath, profile);
       if (!ok) {
@@ -8317,8 +8336,9 @@ const matchers = [
           ? 'androidTypeAndSend'
           : 'iosTypeAndSend';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, text);
       if (!ok) {
@@ -8465,8 +8485,9 @@ const matchers = [
           ? 'androidShowsLastMessage'
           : 'iosShowsLastMessage';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const shown = await driver[methodName](name);
       if (!shown) {
@@ -8494,8 +8515,9 @@ const matchers = [
           ? 'androidShowsNamedIndicator'
           : 'iosShowsNamedIndicator';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const shown = await driver[methodName](name, indicatorName);
       if (!shown) {
@@ -8523,8 +8545,9 @@ const matchers = [
           ? 'androidPickTemplateAndTitle'
           : 'iosPickTemplateAndTitle';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, template, title);
       if (!ok) {
@@ -8552,8 +8575,9 @@ const matchers = [
           ? 'androidRefreshTab'
           : 'iosRefreshTab';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, tab);
       if (!ok) {
@@ -8579,8 +8603,9 @@ const matchers = [
           ? 'androidSelectGiftAndRecipient'
           : 'iosSelectGiftAndRecipient';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, gift, recipient);
       if (!ok) {
@@ -8607,8 +8632,9 @@ const matchers = [
           ? 'androidShowsTierBadge'
           : 'iosShowsTierBadge';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const shown = await driver[methodName](name, tier);
       if (!shown) {
@@ -8672,8 +8698,9 @@ const matchers = [
           ? 'androidGetSeatState'
           : 'iosGetSeatState';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const actual = await driver[methodName]();
       if (actual !== expected) {
@@ -8741,8 +8768,9 @@ const matchers = [
           ? 'androidTapGiftIconInRoom'
           : 'iosTapGiftIconInRoom';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name);
       if (!ok) {
@@ -8831,8 +8859,9 @@ const matchers = [
           ? 'androidGetTotalBeansThisSession'
           : 'iosGetTotalBeansThisSession';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const actual = await driver[methodName](name);
       if (actual !== claimedTotal) {
@@ -8885,8 +8914,9 @@ const matchers = [
           ? 'androidFillIn'
           : 'iosFillIn';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, fields);
       if (!ok) {
@@ -8912,8 +8942,9 @@ const matchers = [
           ? 'androidTapOnCard'
           : 'iosTapOnCard';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, buttonText, cardType);
       if (!ok) {
@@ -8943,8 +8974,9 @@ const matchers = [
           ? 'androidGiftIconSelectAndRecipient'
           : 'iosGiftIconSelectAndRecipient';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, gift, recipient);
       if (!ok) {
@@ -9128,8 +9160,9 @@ const matchers = [
           ? 'androidShowsNewPmThreadWithSender'
           : 'iosShowsNewPmThreadWithSender';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const shown = await driver[methodName](name, sender);
       if (!shown) {
@@ -9259,8 +9292,9 @@ const matchers = [
           ? 'androidTapOnEventHostHome'
           : 'iosTapOnEventHostHome';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, buttonText);
       if (!ok) {
@@ -9288,8 +9322,9 @@ const matchers = [
           ? 'androidShowsRosterEntry'
           : 'iosShowsRosterEntry';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const shown = await driver[methodName](name, otherName, status);
       if (!shown) {
@@ -9338,8 +9373,9 @@ const matchers = [
           ? 'androidShowsNamedKind'
           : 'iosShowsNamedKind';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const shown = await driver[methodName](name, noun, kind);
       if (!shown) {
@@ -9365,8 +9401,9 @@ const matchers = [
           ? 'androidDidNavigate'
           : 'iosDidNavigate';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const didNavigate = await driver[methodName]();
       if (didNavigate) {
@@ -9390,8 +9427,9 @@ const matchers = [
           ? 'androidDidAutoRejoinRoom'
           : 'iosDidAutoRejoinRoom';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const didRejoin = await driver[methodName](name, roomId);
       if (didRejoin) {
@@ -9419,8 +9457,9 @@ const matchers = [
           ? 'androidShowsRoomScreenWithIndicator'
           : 'iosShowsRoomScreenWithIndicator';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const shown = await driver[methodName](name, indicator);
       if (!shown) {
@@ -9446,8 +9485,9 @@ const matchers = [
           ? 'androidIsStillInRoom'
           : 'iosIsStillInRoom';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const stillIn = await driver[methodName](name);
       if (!stillIn) {
@@ -9470,8 +9510,9 @@ const matchers = [
           ? 'androidNetworkRestores'
           : 'iosNetworkRestores';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name);
       if (!ok) {
@@ -9586,8 +9627,9 @@ const matchers = [
           ? 'androidShowsRoomScreenWithHostBadge'
           : 'iosShowsRoomScreenWithHostBadge';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const shown = await driver[methodName](name, badge);
       if (!shown) {
@@ -9613,8 +9655,9 @@ const matchers = [
       const recipient = m[4];
       const methodName = platform.startsWith('Web') ? 'webSendItemTo' : 'iosSendItemTo';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, item, recipient);
       if (!ok) {
@@ -9685,8 +9728,9 @@ const matchers = [
           ? 'androidTapInRosterPanel'
           : 'iosTapInRosterPanel';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, buttonText);
       if (!ok) {
@@ -9713,8 +9757,9 @@ const matchers = [
           ? 'androidShowsClassroomWithHostBadge'
           : 'iosShowsClassroomWithHostBadge';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const shown = await driver[methodName](name, badge);
       if (!shown) {
@@ -9742,8 +9787,9 @@ const matchers = [
           ? 'androidShowsOthersRoomCard'
           : 'iosShowsOthersRoomCard';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const shown = await driver[methodName](viewer, owner, title);
       if (!shown) {
@@ -9769,8 +9815,9 @@ const matchers = [
           ? 'androidApproveSeatRequest'
           : 'iosApproveSeatRequest';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](host, requester);
       if (!ok) {
@@ -9819,8 +9866,9 @@ const matchers = [
           ? 'androidSubmitStarFeedback'
           : 'iosSubmitStarFeedback';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, stars, feedback);
       if (!ok) {
@@ -10089,8 +10137,9 @@ const matchers = [
           ? 'androidOpenProfileAndTap'
           : 'iosOpenProfileAndTap';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](actor, target, button);
       if (!ok) {
@@ -10287,8 +10336,9 @@ const matchers = [
           ? 'androidDisablesInput'
           : 'iosDisablesInput';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const disabled = await driver[methodName](name, inputName);
       if (!disabled) {
@@ -10318,8 +10368,9 @@ const matchers = [
           ? 'androidAdminShowsAppealText'
           : 'iosAdminShowsAppealText';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const shown = await driver[methodName](viewer, target);
       if (!shown) {
@@ -10381,8 +10432,9 @@ const matchers = [
           ? 'androidTapFromSurface'
           : 'iosTapFromSurface';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, target, source);
       if (!ok) {
@@ -10710,8 +10762,9 @@ const matchers = [
           ? 'androidShowsWelcomePmInLanguage'
           : 'iosShowsWelcomePmInLanguage';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, code);
       if (!ok) {
@@ -10766,8 +10819,9 @@ const matchers = [
           ? 'androidOpensTab'
           : 'iosOpensTab';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, tab);
       if (!ok) {
@@ -10797,8 +10851,9 @@ const matchers = [
           ? 'androidAdminShowsTableOf'
           : 'iosAdminShowsTableOf';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const result = await driver[methodName](viewer, noun);
       if (!result) {
@@ -10856,8 +10911,9 @@ const matchers = [
           ? 'androidShowsContributorsList'
           : 'iosShowsContributorsList';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name);
       if (!ok) {
@@ -10886,8 +10942,9 @@ const matchers = [
           ? 'androidShowsPmThreadDirection'
           : 'iosShowsPmThreadDirection';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, direction);
       if (!ok) {
@@ -11057,8 +11114,9 @@ const matchers = [
           ? 'androidPairedSessionShowsSameTotals'
           : 'iosPairedSessionShowsSameTotals';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, ctx.lastTotals);
       if (!ok) {
@@ -11669,8 +11727,9 @@ const matchers = [
           ? 'androidShowsBanner'
           : 'iosShowsBanner';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, banner);
       if (!ok) {
@@ -11755,8 +11814,9 @@ const matchers = [
           ? 'androidAdminShowsRowForWithStatus'
           : 'iosAdminShowsRowForWithStatus';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](viewer, count, targetId, status);
       if (!ok) {
@@ -11904,8 +11964,9 @@ const matchers = [
           ? 'androidShowsFrozenBanner'
           : 'iosShowsFrozenBanner';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](viewer, convId, suffix);
       if (!ok) {
@@ -11934,8 +11995,9 @@ const matchers = [
           ? 'androidNavigatesToRoomScreen'
           : 'iosNavigatesToRoomScreen';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, suffix);
       if (!ok) {
@@ -11963,8 +12025,9 @@ const matchers = [
           ? 'androidShowsGiftFromSender'
           : 'iosShowsGiftFromSender';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](recipient, giftId, sender);
       if (!ok) {
@@ -12019,8 +12082,9 @@ const matchers = [
           ? 'androidNavigatesToPath'
           : 'iosNavigatesToPath';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, route);
       if (!ok) {
@@ -12061,8 +12125,9 @@ const matchers = [
           ? 'androidNavigatesBackToTab'
           : 'iosNavigatesBackToTab';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, tab);
       if (!ok) {
@@ -12091,8 +12156,9 @@ const matchers = [
           ? 'androidShowsInThread'
           : 'iosShowsInThread';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, noun, suffix);
       if (!ok) {
@@ -12119,8 +12185,9 @@ const matchers = [
           ? 'androidShowsNewGiftEntry'
           : 'iosShowsNewGiftEntry';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, giftId);
       if (!ok) {
@@ -12210,8 +12277,9 @@ const matchers = [
           ? 'androidShowsBalanceViaListener'
           : 'iosShowsBalanceViaListener';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, balance);
       if (!ok) {
@@ -12240,8 +12308,9 @@ const matchers = [
           ? 'androidShowsSeatWithIndicator'
           : 'iosShowsSeatWithIndicator';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](viewer, target, indicator);
       if (!ok) {
@@ -12267,8 +12336,9 @@ const matchers = [
           ? 'androidNavigatesToWarningScreen'
           : 'iosNavigatesToWarningScreen';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, false);
       if (!ok) {
@@ -12295,8 +12365,9 @@ const matchers = [
           ? 'androidShowsWarningScreenOnRelaunch'
           : 'iosShowsWarningScreenOnRelaunch';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name);
       if (!ok) {
@@ -12326,8 +12397,9 @@ const matchers = [
           ? 'androidIsStillInRoom'
           : 'iosIsStillInRoom';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, suffix);
       if (!ok) {
@@ -12385,8 +12457,9 @@ const matchers = [
           ? 'androidSeatIndicatorTransitions'
           : 'iosSeatIndicatorTransitions';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, from, to);
       if (!ok) {
@@ -12434,8 +12507,9 @@ const matchers = [
           ? 'androidReplacesFollowButton'
           : 'iosReplacesFollowButton';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, buttonId);
       if (!ok) {
@@ -12463,8 +12537,9 @@ const matchers = [
           ? 'androidShowsNewUnreadConversation'
           : 'iosShowsNewUnreadConversation';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](viewer, other);
       if (!ok) {
@@ -12493,8 +12568,9 @@ const matchers = [
           ? 'androidShowsInSeatGrid'
           : 'iosShowsInSeatGrid';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](viewer, target, seatNum);
       if (!ok) {
@@ -12543,8 +12619,9 @@ const matchers = [
           ? 'androidShowsSystemPmFromOfficia'
           : 'iosShowsSystemPmFromOfficia';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, subject);
       if (!ok) {
@@ -12571,8 +12648,9 @@ const matchers = [
           ? 'androidShowsWarningScreenWithReason'
           : 'iosShowsWarningScreenWithReason';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, reason);
       if (!ok) {
@@ -12599,8 +12677,9 @@ const matchers = [
           ? 'androidNavigatesToProfileScreen'
           : 'iosNavigatesToProfileScreen';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](actor, target);
       if (!ok) {
@@ -12688,8 +12767,9 @@ const matchers = [
           ? 'androidAlsoShowsInParticipantsList'
           : 'iosAlsoShowsInParticipantsList';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](viewer, other);
       if (!ok) {
@@ -12716,8 +12796,9 @@ const matchers = [
           ? 'androidShowsMicIconAs'
           : 'iosShowsMicIconAs';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name, state);
       if (!ok) {
@@ -12897,8 +12978,9 @@ const matchers = [
           ? 'androidAdminShowsRowCountInTable'
           : 'iosAdminShowsRowCountInTable';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](viewer, count, tableName);
       if (!ok) {
@@ -12925,8 +13007,9 @@ const matchers = [
           ? 'androidIsNoLongerInVoiceRoom'
           : 'iosIsNoLongerInVoiceRoom';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name);
       if (!ok) {
@@ -12953,8 +13036,9 @@ const matchers = [
           ? 'androidContinuesNormallyInRoom'
           : 'iosContinuesNormallyInRoom';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name);
       if (!ok) {
@@ -12982,8 +13066,9 @@ const matchers = [
           ? 'androidShowsMessageInConversationThread'
           : 'iosShowsMessageInConversationThread';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name);
       if (!ok) {
@@ -13009,8 +13094,9 @@ const matchers = [
           ? 'androidAdminShowsNewReportInQueue'
           : 'iosAdminShowsNewReportInQueue';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](viewer);
       if (!ok) {
@@ -13037,8 +13123,9 @@ const matchers = [
           ? 'androidShowsSecondOffensiveMessage'
           : 'iosShowsSecondOffensiveMessage';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](name);
       if (!ok) {
@@ -13068,8 +13155,9 @@ const matchers = [
           ? 'androidAdminShowsDashboardCounters'
           : 'iosAdminShowsDashboardCounters';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](viewer, { reports, verifications, appeals });
       if (!ok) {
@@ -13226,8 +13314,9 @@ const matchers = [
           ? 'androidAdminShowsStat'
           : 'iosAdminShowsStat';
       const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;
+      const driverName = platform.startsWith('Web') ? 'ctx.webDriver' : 'ctx.uiDriver';
       if (!driver?.[methodName]) {
-        return { ok: false, error: `ctx.uiDriver.${methodName} not configured` };
+        return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
       const ok = await driver[methodName](viewer, statName);
       if (!ok) {
