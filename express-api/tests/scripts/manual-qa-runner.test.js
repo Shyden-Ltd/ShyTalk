@@ -22822,7 +22822,7 @@ describe('Wake 101 — "<Name>\'s LiveKit publish for that room is <enabled|disa
 // ── Wake 102 — j07/j09/j11 singletons ────────────────────────────────
 
 describe('Wake 102 — `<Name>\'s <Plat> UI replaces follow button with "<X>"`', () => {
-  test('matching → ok', async () => {
+  test('Android matching → ok', async () => {
     const spy = jest.fn(async () => true);
     const ctx = makeCtx({ uiDriver: { androidReplacesFollowButton: spy } });
     const r = await executeStep(
@@ -22834,6 +22834,91 @@ describe('Wake 102 — `<Name>\'s <Plat> UI replaces follow button with "<X>"`',
     );
     expect(r.ok).toBe(true);
     expect(spy).toHaveBeenCalledWith('Adam', 'profile_unfollowButton');
+  });
+
+  test('Android driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { androidReplacesFollowButton: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Adam\'s Android UI replaces follow button with "Follow"' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Adam.*Android.*Follow/);
+  });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Adam\'s Android UI replaces follow button with "Follow"' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/androidReplacesFollowButton/);
+  });
+
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosReplacesFollowButton: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Nora\'s iOS Sim UI replaces follow button with "Following"' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Nora', 'Following');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosReplacesFollowButton: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Nora\'s iOS Sim UI replaces follow button with "Follow"' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Nora.*iOS Sim.*Follow/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Nora\'s iOS Sim UI replaces follow button with "Follow"' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/iosReplacesFollowButton/);
+  });
+
+  test('Web matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webReplacesFollowButton: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web UI replaces follow button with "Follow back"' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', 'Follow back');
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webReplacesFollowButton: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web UI replaces follow button with "Follow"' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice.*Web.*Follow/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: 'Alice\'s Web UI replaces follow button with "Follow"' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/webReplacesFollowButton/);
   });
 });
 

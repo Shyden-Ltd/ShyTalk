@@ -2885,6 +2885,20 @@ describe('ios-devicectl-driver — iosReplacesFollowButton', () => {
     expect(await driver.iosReplacesFollowButton('Alice', 'Follow back')).toBe(false);
   });
 
+  test('value="Following" does NOT match "Follow" (overlap-prefix via value attr)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="profile_followButton" value="Following" />',
+    );
+    expect(await driver.iosReplacesFollowButton('Alice', 'Follow')).toBe(false);
+  });
+
+  test('attr-scan continues past mismatched name to match value', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeButton identifier="profile_followButton" name="Unrelated" value="Follow" />',
+    );
+    expect(await driver.iosReplacesFollowButton('Alice', 'Follow')).toBe(true);
+  });
+
   test('profile_followButton absent → false', async () => {
     const driver = await driverWithDump(
       '<XCUIElementTypeButton identifier="profile_otherButton" label="Follow" />',
@@ -2925,31 +2939,39 @@ describe('ios-devicectl-driver — iosReplacesFollowButton', () => {
     expect(await driver.iosReplacesFollowButton('Alice', 'Follow')).toBe(true);
   });
 
-  test('null buttonId → false', async () => {
-    const driver = await driverWithDump(
-      '<XCUIElementTypeButton identifier="profile_followButton" label="Follow" />',
-    );
+  // Input-rejection tests use a throwing iosUiDump to PROVE the
+  // buttonId guard early-returns before any dump fetch — a future
+  // reorder that pulls the dump before validating buttonId would
+  // surface the throw and fail these tests.
+  test('null buttonId → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
     expect(await driver.iosReplacesFollowButton('Alice', null)).toBe(false);
   });
 
-  test('undefined buttonId → false', async () => {
-    const driver = await driverWithDump(
-      '<XCUIElementTypeButton identifier="profile_followButton" label="Follow" />',
-    );
+  test('undefined buttonId → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
     expect(await driver.iosReplacesFollowButton('Alice', undefined)).toBe(false);
   });
 
-  test('empty buttonId → false', async () => {
-    const driver = await driverWithDump(
-      '<XCUIElementTypeButton identifier="profile_followButton" label="Follow" />',
-    );
+  test('empty buttonId → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
     expect(await driver.iosReplacesFollowButton('Alice', '')).toBe(false);
   });
 
-  test('whitespace buttonId → false', async () => {
-    const driver = await driverWithDump(
-      '<XCUIElementTypeButton identifier="profile_followButton" label="Follow" />',
-    );
+  test('whitespace buttonId → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
     expect(await driver.iosReplacesFollowButton('Alice', '   ')).toBe(false);
   });
 
