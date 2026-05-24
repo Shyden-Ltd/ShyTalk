@@ -22022,6 +22022,51 @@ describe('Wake 99 — `<Name>\'s <Plat> UI[ opens conversation "<X>"] shows the 
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/Vexa|frozen-banner/);
   });
+
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsFrozenBanner: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Greta\'s iOS Sim UI shows the frozen-banner element with text from key "age_seg_frozen_conversation_banner"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith(
+      'Greta',
+      null,
+      'with text from key "age_seg_frozen_conversation_banner"',
+    );
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsFrozenBanner: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Greta\'s iOS Sim UI shows the frozen-banner element with text from key "X"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Greta|frozen-banner/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Greta\'s iOS Sim UI shows the frozen-banner element with text from key "X"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/iosShowsFrozenBanner/);
+  });
 });
 
 describe("Wake 99 — `<Name>'s <Plat> UI navigates to the room screen <suffix>`", () => {
