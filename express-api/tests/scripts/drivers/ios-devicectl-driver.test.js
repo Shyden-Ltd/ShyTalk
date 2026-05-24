@@ -3992,6 +3992,155 @@ describe('ios-devicectl-driver — iosShowsEditedBodyWithTag', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosShowsFrozenBanner', () => {
+  // Wake 99 — `<Name>'s <Plat> UI[ opens conversation "<X>"] shows the
+  // frozen-banner element <suffix>`. Foundation: presence-check exact
+  // privateChat_frozenBanner identifier.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('privateChat_frozenBanner present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="privateChat_frozenBanner" />',
+    );
+    expect(await driver.iosShowsFrozenBanner('Greta', 'conv1', 'with text "frozen"')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosShowsFrozenBanner('Greta', null, 'with text "frozen"')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosShowsFrozenBanner('Greta', null, 'with text "frozen"')).toBe(false);
+  });
+
+  test('non-self-closing form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="privateChat_frozenBanner"><XCUIElementTypeStaticText name="Conversation frozen" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsFrozenBanner('Greta', null, 'with text "frozen"')).toBe(true);
+  });
+
+  test('left-boundary — pre_privateChat_frozenBanner does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="pre_privateChat_frozenBanner" />',
+    );
+    expect(await driver.iosShowsFrozenBanner('Greta', null, 'X')).toBe(false);
+  });
+
+  test('right-boundary — privateChat_frozenBannerExtra does NOT match (exact-match anchor)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="privateChat_frozenBannerExtra" />',
+    );
+    expect(await driver.iosShowsFrozenBanner('Greta', null, 'X')).toBe(false);
+  });
+
+  test('confusable — privateChatExtras_frozenBanner does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="privateChatExtras_frozenBanner" />',
+    );
+    expect(await driver.iosShowsFrozenBanner('Greta', null, 'X')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther name="privateChat_frozenBanner" />');
+    expect(await driver.iosShowsFrozenBanner('Greta', null, 'X')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(
+      driver.iosShowsFrozenBanner('Greta', null, 'with text "frozen"'),
+    ).rejects.toThrow();
+  });
+
+  test('null viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="privateChat_frozenBanner" />',
+    );
+    expect(await driver.iosShowsFrozenBanner(null, null, 'X')).toBe(true);
+  });
+
+  test('undefined viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="privateChat_frozenBanner" />',
+    );
+    expect(await driver.iosShowsFrozenBanner(undefined, null, 'X')).toBe(true);
+  });
+
+  test('empty viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="privateChat_frozenBanner" />',
+    );
+    expect(await driver.iosShowsFrozenBanner('', null, 'X')).toBe(true);
+  });
+
+  test('whitespace viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="privateChat_frozenBanner" />',
+    );
+    expect(await driver.iosShowsFrozenBanner('   ', null, 'X')).toBe(true);
+  });
+
+  test('null convId → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="privateChat_frozenBanner" />',
+    );
+    expect(await driver.iosShowsFrozenBanner('Greta', null, 'X')).toBe(true);
+  });
+
+  test('undefined convId → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="privateChat_frozenBanner" />',
+    );
+    expect(await driver.iosShowsFrozenBanner('Greta', undefined, 'X')).toBe(true);
+  });
+
+  test('non-empty convId still passes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="privateChat_frozenBanner" />',
+    );
+    expect(await driver.iosShowsFrozenBanner('Greta', 'conv-id-99', 'X')).toBe(true);
+  });
+
+  test('null suffix → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="privateChat_frozenBanner" />',
+    );
+    expect(await driver.iosShowsFrozenBanner('Greta', null, null)).toBe(true);
+  });
+
+  test('undefined suffix → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="privateChat_frozenBanner" />',
+    );
+    expect(await driver.iosShowsFrozenBanner('Greta', null, undefined)).toBe(true);
+  });
+
+  test('empty suffix → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="privateChat_frozenBanner" />',
+    );
+    expect(await driver.iosShowsFrozenBanner('Greta', null, '')).toBe(true);
+  });
+
+  test('whitespace suffix → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="privateChat_frozenBanner" />',
+    );
+    expect(await driver.iosShowsFrozenBanner('Greta', null, '   ')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't

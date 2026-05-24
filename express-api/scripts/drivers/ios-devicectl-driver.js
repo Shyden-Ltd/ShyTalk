@@ -656,6 +656,24 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 99 — `<Name>'s <Plat> UI[ opens conversation "<X>"] shows the
+  // frozen-banner element <suffix>` (j08). iOS mirror of Android sibling.
+  // Driver receives (viewer, convId, suffix) where convId is optional
+  // (null when no "opens conversation X" prefix) and suffix is
+  // descriptive ("with text-from-key X" or "with locale string Y").
+  //
+  // Foundation strategy: presence-check the EXACT `privateChat_frozenBanner`
+  // identifier. All 3 args accepted-and-ignored — the assertion is
+  // "frozen banner currently visible". Per-text and per-locale
+  // verification can layer on later via attribute extraction.
+  driver.iosShowsFrozenBanner = async (_viewer, _convId, _suffix) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="privateChat_frozenBanner"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;
