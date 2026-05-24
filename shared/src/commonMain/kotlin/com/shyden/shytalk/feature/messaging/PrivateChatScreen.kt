@@ -918,7 +918,10 @@ fun PrivateChatScreen(
                                 }
                             },
                             enabled = messageText.isNotBlank(),
-                            modifier = Modifier.testTag("privateChat_sendButton"),
+                            // Tag aligned with manual-qa corpus naming
+                            // (j07:31, j11:24, j13:78). Renamed from
+                            // privateChat_sendButton → conversation_sendButton.
+                            modifier = Modifier.testTag("conversation_sendButton"),
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.Send,

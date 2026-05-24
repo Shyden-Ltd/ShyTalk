@@ -38,6 +38,18 @@ permissions:
   contents: write # needed by playwright-tests.yml allure-report (gh-pages deploy)
   actions: read
 
+# Dev deploys must serialize. Parallel dev deploys can race on the
+# London Express VM (scp tarball + pm2 restart), on Firebase App
+# Distribution upload slots, and on TestFlight build-number
+# assignment. cancel-in-progress: false makes queued deploys wait
+# for the running one to complete rather than preempting it — a
+# partial rollback halfway through a multi-step deploy leaves the
+# env in an undefined state. Mirrors deploy-prod.yml's matching
+# block. Pinned by tests/scripts/deploy-dev-concurrency.test.js.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -310,6 +322,9 @@ jobs:
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           LIVEKIT_URL: ${{ secrets.LIVEKIT_URL }}
+          # See pr-checks.yml's matching env for rationale. The persona
+          # picker on dev variant only appears when this is non-empty.
+          DEV_QA_PERSONAS_PASSWORD: ${{ secrets.DEV_QA_PERSONAS_PASSWORD }}
         run: |
           ./gradlew assembleDevRelease
           mkdir -p dev-release-apk
@@ -365,13 +380,22 @@ jobs:
       always() &&
       inputs.ios-testers &&
       (needs.deploy-backend-dev.result == 'success' || needs.deploy-backend-dev.result == 'skipped')
-    runs-on: [self-hosted, macOS, ARM64, shytalk-mac]
-    # Bumped from 45 -> 90 on 2026-04-28: K/Native linkReleaseFrameworkIosArm64
-    # has been taking 24-29 min on the macos-15 runner pool (was ~10 min in
-    # mid-April). Plus xcodebuild archive ~15-20 min + pod install ~3 min +
-    # TestFlight upload ~2 min = comfortable 50-min worst case. 90 min gives
-    # headroom for runner-pool slowdowns without impacting normal-case time.
-    timeout-minutes: 90
+    # Migrated 2026-05-20 from self-hosted Mac (shytalk-mac) to GitHub-hosted
+    # macos-latest per the no-self-hosted-runners policy. The self-hosted Mac
+    # was crashing under combined xcodebuild + K/Native memory pressure on
+    # an 8GB machine. macos-latest (14GB RAM, 3 cores) absorbs the load
+    # without taking down a developer laptop.
+    runs-on: macos-latest
+    # Tuned 2026-05-21: was 90 (too tight) -> 150 (revealed real hang at
+    # 1h52m of zero log output) -> 100. The earlier "needs more time"
+    # framing was wrong; the actual problem was a gradle daemon collision
+    # inside xcodebuild's `Compile Kotlin Framework` build phase, fixed
+    # by the explicit `gradle --stop` step below. With that fix + a
+    # step-level timeout on the Build/archive step (the only known hang
+    # site), the outer job envelope can stay tight at 100 min. Normal
+    # case is ~60-80 min on cold-cache macos-latest. 100 is the safety
+    # net for anything unexpected before the step timeouts fire.
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -434,6 +458,23 @@ jobs:
         with:
           dev-base64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
 
+      # Cache Kotlin/Native compiler distribution + platform libs (~/.konan).
+      # actions/setup-gradle (used via setup-jdk-gradle composite) caches
+      # ~/.gradle/caches but NOT ~/.konan, so the K/N compiler and its
+      # platform libs (clang, libffi, kotlin-native-prebuilt-*) are
+      # downloaded fresh on every cold runner — ~500MB-1GB of cold-cache
+      # tax per run. Cache-key is anchored on the Kotlin version in
+      # libs.versions.toml so a kotlin-version bump correctly invalidates.
+      # restore-keys allows partial-match restore on minor differences
+      # so we usually get a warm konan even when the exact key misses.
+      - name: Cache Kotlin/Native (~/.konan)
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            konan-${{ runner.os }}-
+
       - name: Cache KMP shared framework
         id: kmp-cache
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
@@ -445,7 +486,14 @@ jobs:
         if: steps.kmp-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          ./gradlew :shared:linkReleaseFrameworkIosArm64
+          # --max-workers=1: K/N link tasks can deadlock when run in
+          # parallel (xcodebuild's nested gradle call hung 39+ min before
+          # this flag was added). Serializing all gradle tasks is the
+          # safe baseline; on a 14GB macos-latest runner with multiple
+          # parallel K/N processes potentially needing ~3-5GB each plus
+          # competing for the konan compiler cache, parallelism is a
+          # net-negative anyway.
+          ./gradlew :shared:linkReleaseFrameworkIosArm64 :shared:linkDebugFrameworkIosArm64 --max-workers=1
 
       - name: Cache Xcode derived data
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
@@ -460,7 +508,29 @@ jobs:
           cd iosApp
           pod install
 
+      # Stop any gradle daemon left running by "Build KMP shared framework for
+      # iOS" before xcodebuild starts. xcodebuild's `Compile Kotlin Framework`
+      # build phase runs `./gradlew :shared:embedAndSignAppleFrameworkForXcode`
+      # from inside a constrained Xcode env (modified TMPDIR, sandboxed PATH);
+      # the new gradle CLI tries to connect to the still-alive daemon from the
+      # earlier explicit gradle step and hangs forever. Forensic evidence
+      # (run 26196249351, job 77076256845): 2 `java` orphan processes at
+      # timeout — the old daemon and the new client both alive after 1h52m
+      # of no log output. Stopping the daemon makes the nested call spawn
+      # fresh and avoid the collision.
+      - name: Stop gradle daemon before xcodebuild
+        run: ./gradlew --stop
+
+      # Step-level hang detector: the xcodebuild archive (which transitively
+      # runs gradle for K/Native compile + framework embed/sign + IPA export
+      # + TestFlight upload) is the only step that's hung on macos-latest so
+      # far. Normal-case duration is ~25-40 min; if it exceeds 50 it's
+      # virtually certainly hung (e.g., daemon collision recurrence, codesign
+      # waiting on keychain, TestFlight upload stuck). Cancelling the step
+      # frees the runner to run cleanup and surfaces a clear "this step
+      # timed out" signal instead of the opaque outer-job timeout.
       - name: Build, archive, and export iOS app
+        timeout-minutes: 50
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
@@ -547,6 +617,25 @@ jobs:
             exit 1
           fi
           echo "Exported IPA: ${ipas[0]} ($(du -h "${ipas[0]}" | cut -f1))"
+
+      # Surface the IPA as a workflow artifact so an AFK operator can
+      # pull it via `gh run download <run-id> -n dev-ios-ipa` and
+      # install on a physical iPhone via
+      # `xcrun devicectl device install app --device <UDID> path/to/*.ipa`
+      # without needing a TestFlight tester invite + waiting for App
+      # Store Connect processing. TestFlight upload still happens in
+      # the next step for the normal tester-distribution flow.
+      - name: Upload IPA as workflow artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: dev-ios-ipa
+          path: ${{ runner.temp }}/export/*.ipa
+          # if-no-files-found: error — the upstream step already
+          # validates IPA count via shell glob + exit 1, so this is
+          # defence-in-depth. Without it, an unexpected file-naming
+          # change could silently upload an empty artifact.
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload to TestFlight
         env:

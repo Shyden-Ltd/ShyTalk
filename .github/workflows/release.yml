@@ -51,9 +51,15 @@ jobs:
     steps:
       - name: Generate app token
         id: app-token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
+          # `client-id` replaces the deprecated `app-id` input in v3.x.
+          # The action aliases both to the same internal `appId` (see
+          # actions/create-github-app-token main.js: `appId: clientId`),
+          # so the existing RELEASE_APP_ID secret value (numeric App ID)
+          # continues to work — GitHub's App-JWT iss claim accepts both
+          # the numeric App ID and the alphanumeric Client ID.
+          client-id: ${{ secrets.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -96,22 +102,27 @@ jobs:
           # Handle orphan release branches left by a failed previous
           # run. The "no-force-push-anywhere" ruleset blocks branch
           # deletion for most actors, so an aborted run leaves
-          # release/vX.Y.Z behind — and the next dispatch would hit
-          # branch-already-exists when it tried to create the branch.
+          # release/vX.Y.Z behind.
           #
-          # Strategy: if no open PR is using the orphan branch as its
-          # head, the orphan is genuinely stale (no operator state to
-          # preserve). Attempt API deletion. The deletion only succeeds
-          # if the workflow's GitHub App is on the ruleset's bypass
-          # list — if it isn't, fall back to the old behavior (error
-          # out with manual recovery instructions).
+          # Strategy: opportunistic best-effort cleanup. If the orphan
+          # has no open PR, attempt API deletion. If deletion succeeds
+          # (e.g. App on ruleset bypass list), the branch is gone. If
+          # it fails (ruleset blocks deletion), WARN and proceed —
+          # the per-run-id branch suffix in the `create_commit` step
+          # below (BRANCH includes ${{ github.run_id }}) guarantees
+          # this run will not collide with the orphan, so the
+          # inability to delete is non-fatal.
           #
           # If an open PR DOES reference the orphan branch, the prior
           # run got far enough to open the PR but it hasn't merged.
-          # Refuse to delete — that's operator state.
+          # Refuse to delete — that's operator state — and bail with
+          # a clear instruction. (The earlier `OPEN_RELEASE_PRS`
+          # guard already covers PRs with `chore: release v` titles,
+          # but a residual orphan with a closed-and-not-deleted PR
+          # could still trip us here.)
           ORPHAN_RELEASE_BRANCHES=$(gh api repos/${{ github.repository }}/branches --paginate --jq '.[].name | select(startswith("release/v"))')
           if [ -n "$ORPHAN_RELEASE_BRANCHES" ]; then
-            echo "Orphan release branch(es) detected — attempting auto-cleanup."
+            echo "Orphan release branch(es) detected — attempting opportunistic cleanup."
             # `for x in $var` does NOT create a subshell, so `exit 1`
             # inside the loop actually aborts the outer script. We
             # deliberately avoid `... | while read` here for that
@@ -125,11 +136,9 @@ jobs:
               if gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$branch" 2>/tmp/delete-err; then
                 echo "Auto-deleted orphan release branch: $branch"
               else
-                echo "::error::Failed to auto-delete orphan branch '$branch' via API. The workflow's GitHub App likely isn't in the no-force-push-anywhere ruleset's bypass list."
-                echo "Fix forward: add the Release app to the ruleset's bypass list (Settings > Rulesets > no-force-push-anywhere > Bypass list), OR delete the orphan branch manually via the GitHub UI (Settings > Branches > $branch > Delete) and re-trigger."
-                echo "API error output:"
+                echo "::warning::Could not auto-delete orphan branch '$branch' (likely ruleset-blocked). Proceeding — this run uses a unique per-run-id branch name and won't collide. To clean up the orphan later, delete via GitHub UI (Branches page (github.com/${{ github.repository }}/branches) > find $branch > trash icon) or add the Release app to the no-force-push-anywhere ruleset's bypass list."
+                echo "API error output (informational):"
                 cat /tmp/delete-err
-                exit 1
               fi
             done
           fi
@@ -343,7 +352,13 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
-          BRANCH="release/v${VERSION}"
+          # Branch name includes the workflow run-id so each run gets a
+          # uniquely-named branch. This prevents collision with any
+          # orphan release/vX.Y.Z branch left by a prior failed run that
+          # the ruleset wouldn't let us delete. Squash-merge into main
+          # discards the branch name entirely, so the per-run suffix
+          # never appears in main's history — only in the transient PR.
+          BRANCH="release/v${VERSION}-r${{ github.run_id }}"
           PARENT_SHA=$(git rev-parse HEAD)
 
           # We deliberately do NOT use `git commit` + `git push` here.
@@ -367,14 +382,43 @@ jobs:
           # Step 1: Create the release branch (empty, points at main's
           # current HEAD). createCommitOnBranch requires the branch to
           # exist before adding commits to it.
-          if ! gh api -X POST "repos/${{ github.repository }}/git/refs" \
-                -f "ref=refs/heads/${BRANCH}" \
-                -f "sha=${PARENT_SHA}" > /tmp/refs-response.json 2>&1; then
-            echo "::error::Failed to create branch ${BRANCH} via REST API."
-            cat /tmp/refs-response.json
-            exit 1
+          #
+          # Idempotency: if the branch already exists at PARENT_SHA
+          # (e.g. operator clicked "Re-run jobs" after a prior attempt
+          # of this same run created the branch), accept it and move
+          # on. If it exists at a DIFFERENT sha, error out — that's
+          # unexpected state that the operator should investigate.
+          #
+          # IMPORTANT: gh api with `--jq` on a 404 response prints the
+          # raw error JSON body to stdout (the --jq filter is bypassed
+          # when gh detects an HTTP error). That's why we split the
+          # exit-code check from the body parse — checking the exit
+          # code via `if gh api ...` is the only reliable way to
+          # distinguish "branch exists (200)" from "branch missing
+          # (404)". Both write to stdout; only the exit code is
+          # diagnostic.
+          if gh api "repos/${{ github.repository }}/git/ref/heads/${BRANCH}" \
+                > /tmp/ref-response.json 2>/dev/null; then
+            # 200 — branch exists. Parse sha from the response body.
+            # `// empty` covers a hypothetical 200-but-missing-key case.
+            EXISTING_SHA=$(jq -r '.object.sha // empty' /tmp/ref-response.json)
+            if [ "${EXISTING_SHA}" = "${PARENT_SHA}" ]; then
+              echo "Branch ${BRANCH} already exists at ${PARENT_SHA} (idempotent re-run); skipping creation."
+            else
+              echo "::error::Branch ${BRANCH} already exists but points at ${EXISTING_SHA} (expected ${PARENT_SHA}). This usually means a prior attempt of this run advanced the branch before failing. Delete the branch via the Branches page (github.com/${{ github.repository }}/branches > find ${BRANCH} > trash icon) and re-trigger."
+              exit 1
+            fi
+          else
+            # 404 — branch doesn't exist. Create it.
+            if ! gh api -X POST "repos/${{ github.repository }}/git/refs" \
+                  -f "ref=refs/heads/${BRANCH}" \
+                  -f "sha=${PARENT_SHA}" > /tmp/refs-response.json 2>&1; then
+              echo "::error::Failed to create branch ${BRANCH} via REST API."
+              cat /tmp/refs-response.json
+              exit 1
+            fi
+            echo "Created branch ${BRANCH} at ${PARENT_SHA}"
           fi
-          echo "Created branch ${BRANCH} at ${PARENT_SHA}"
 
           # Step 2: Build the GraphQL mutation payload. Use jq to
           # safely encode file contents (base64) and construct the
@@ -417,11 +461,23 @@ jobs:
 
       - name: Open release PR
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # Use the workflow's built-in GITHUB_TOKEN here rather than the
+          # Release App token. The App's installation does NOT grant
+          # `pull_requests: write`, so `gh pr create` fails with
+          # `GraphQL: Resource not accessible by integration` (observed
+          # in release run 26364598123 on 2026-05-24). The workflow's
+          # `permissions:` block at the top grants `pull-requests: write`
+          # to GITHUB_TOKEN, which is sufficient for both `gh pr create`
+          # and `gh pr merge --auto`. The release commit itself stays
+          # App-signed (created via createCommitOnBranch in the prior
+          # step using the App token); only the PR-open and merge ops
+          # use GITHUB_TOKEN.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
-          BRANCH="release/v${VERSION}"
+          # Same per-run branch name as create_commit step above.
+          BRANCH="release/v${VERSION}-r${{ github.run_id }}"
           NOTES_FILE="${{ steps.notes.outputs.notes_file }}"
 
           # PR body uses the same release notes that will eventually go
@@ -470,7 +526,18 @@ jobs:
             echo "----- gh pr create output -----"
             echo "$PR_URL"
             echo "-------------------------------"
-            echo "Manual recovery: gh pr create --base main --head ${BRANCH} --title 'chore: release v${VERSION}' --body-file <notes>"
+            # Dump the body inline so the operator can copy-paste — the
+            # temp file ($PR_BODY_FILE) is destroyed when the runner
+            # terminates, so a path reference would be useless.
+            echo "Manual recovery: re-run with the body below."
+            echo "----- PR body (from $PR_BODY_FILE) -----"
+            cat "$PR_BODY_FILE"
+            echo "----------------------------------------"
+            # Recovery via --body-file rather than --body to avoid the
+            # quoting trap (the body contains literal " in markdown
+            # footnotes, which would break a shell --body argument).
+            echo "Recovery: save the body above to /tmp/pr-body.md, then run:"
+            echo "  gh pr create --base main --head ${BRANCH} --title 'chore: release v${VERSION}' --body-file /tmp/pr-body.md"
             exit 1
           fi
           PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')

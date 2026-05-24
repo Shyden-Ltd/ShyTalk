@@ -45,10 +45,12 @@ fun CreateRoomDialog(
             }
         },
         confirmButton = {
+            // Tag aligned with corpus naming (j09:24, j15:25, j16:53).
+            // Renamed from createRoom_createButton → createRoom_confirmButton.
             TextButton(
                 onClick = { onCreate(roomName) },
                 enabled = roomName.isNotBlank(),
-                modifier = Modifier.testTag("createRoom_createButton"),
+                modifier = Modifier.testTag("createRoom_confirmButton"),
             ) {
                 Text(stringResource(Res.string.create))
             }

@@ -27,7 +27,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
@@ -149,409 +152,417 @@ class MainActivity : AppCompatActivity() {
 
         setContent {
             ShyTalkTheme(darkTheme = true) {
-                PreviewWatermark {
-                    // Starting screen states (checked FIRST, before all other checks)
-                    var startingScreenCheckDone by remember { mutableStateOf(false) }
-                    var blockingScreen by remember { mutableStateOf<StartingScreen?>(null) }
-                    var dismissableScreens by remember { mutableStateOf<List<StartingScreen>>(emptyList()) }
-                    var blockingScreenDismissed by remember { mutableStateOf(false) }
-                    var dismissableScreenIndex by remember { mutableStateOf(0) }
+                @OptIn(ExperimentalComposeUiApi::class)
+                androidx.compose.foundation.layout.Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .semantics { testTagsAsResourceId = true },
+                ) {
+                    PreviewWatermark {
+                        // Starting screen states (checked FIRST, before all other checks)
+                        var startingScreenCheckDone by remember { mutableStateOf(false) }
+                        var blockingScreen by remember { mutableStateOf<StartingScreen?>(null) }
+                        var dismissableScreens by remember { mutableStateOf<List<StartingScreen>>(emptyList()) }
+                        var blockingScreenDismissed by remember { mutableStateOf(false) }
+                        var dismissableScreenIndex by remember { mutableStateOf(0) }
 
-                    var updateRequired by remember { mutableStateOf(false) }
-                    var checkComplete by remember { mutableStateOf(false) }
-                    var softUpdateAvailable by remember { mutableStateOf<String?>(null) }
-                    var isUnsafe by remember { mutableStateOf(false) }
-                    var backendDegraded by remember { mutableStateOf(false) }
-                    var degradedAcknowledged by remember { mutableStateOf(false) }
-                    var legalAccepted by remember {
-                        mutableStateOf(LanguagePreference.getAcceptedLegalVersion() >= CURRENT_LEGAL_VERSION)
-                    }
-                    var viewingLegalDoc by remember { mutableStateOf<String?>(null) }
-
-                    val cache = remember { StartingScreenCache(this@MainActivity) }
-
-                    // Starting screens check — runs FIRST before all other checks
-                    LaunchedEffect(Unit) {
-                        // Check cache first for immediate blocking
-                        val cached = cache.getCachedBlocker()
-
-                        when (val result = appConfigService.getStartingScreens()) {
-                            is Resource.Success -> {
-                                val screens = result.data
-                                val enabledScreens = screens.values.filter { it.enabled }
-                                val blocker = enabledScreens.firstOrNull { !it.dismissable }
-                                if (blocker != null) {
-                                    if (cached?.contentHash != blocker.contentHash) {
-                                        cache.cacheBlocker(blocker, null)
-                                    }
-                                    blockingScreen = blocker
-                                } else {
-                                    cache.clearBlocker()
-                                    dismissableScreens =
-                                        enabledScreens
-                                            .filter { it.dismissable }
-                                            .filter { it.frequency != "once" || !cache.isDismissed(it.screenId) }
-                                }
-                            }
-
-                            is Resource.Error -> {
-                                if (cached != null) {
-                                    blockingScreen = cached.toStartingScreen()
-                                }
-                            }
-
-                            is Resource.Loading -> { /* wait */ }
+                        var updateRequired by remember { mutableStateOf(false) }
+                        var checkComplete by remember { mutableStateOf(false) }
+                        var softUpdateAvailable by remember { mutableStateOf<String?>(null) }
+                        var isUnsafe by remember { mutableStateOf(false) }
+                        var backendDegraded by remember { mutableStateOf(false) }
+                        var degradedAcknowledged by remember { mutableStateOf(false) }
+                        var legalAccepted by remember {
+                            mutableStateOf(LanguagePreference.getAcceptedLegalVersion() >= CURRENT_LEGAL_VERSION)
                         }
-                        startingScreenCheckDone = true
-                    }
+                        var viewingLegalDoc by remember { mutableStateOf<String?>(null) }
 
-                    // Existing update/health checks — only runs after starting screen check passes
-                    LaunchedEffect(startingScreenCheckDone) {
-                        if (!startingScreenCheckDone) return@LaunchedEffect
-                        // Don't run further checks if blocked
-                        if (blockingScreen != null) return@LaunchedEffect
+                        val cache = remember { StartingScreenCache(this@MainActivity) }
 
-                        // Anti-emulator / anti-root gate. See UnsafeDeviceGate
-                        // for the bypass logic + flavor-by-flavor matrix.
-                        isUnsafe = UnsafeDeviceGate.isBlocked()
-                        when (val result = appConfigService.getLatestVersionInfo()) {
-                            is Resource.Success -> {
-                                val (minVersionCode, latestVersionCode, latestVersionName) = result.data
-                                updateRequired = appConfigService.currentVersionCode < minVersionCode
-                                if (!updateRequired && appConfigService.currentVersionCode < latestVersionCode) {
-                                    softUpdateAvailable = latestVersionName.ifEmpty { "v$latestVersionCode" }
-                                }
-                            }
+                        // Starting screens check — runs FIRST before all other checks
+                        LaunchedEffect(Unit) {
+                            // Check cache first for immediate blocking
+                            val cached = cache.getCachedBlocker()
 
-                            is Resource.Error -> {
-                                updateRequired = false
-                            }
-
-                            is Resource.Loading -> { /* wait */ }
-                        }
-                        when (val healthResult = appConfigService.checkBackendHealth()) {
-                            is Resource.Success -> {
-                                backendDegraded = healthResult.data.status == "degraded"
-                            }
-
-                            else -> {}
-                        }
-                        checkComplete = true
-                    }
-
-                    // Poll health every 5 minutes while degraded; clear when recovered
-                    LaunchedEffect(backendDegraded) {
-                        if (!backendDegraded) return@LaunchedEffect
-                        while (true) {
-                            delay(300_000L) // 5 minutes
-                            when (val result = appConfigService.checkBackendHealth()) {
+                            when (val result = appConfigService.getStartingScreens()) {
                                 is Resource.Success -> {
-                                    if (result.data.status == "ok") {
-                                        backendDegraded = false
-                                        return@LaunchedEffect
+                                    val screens = result.data
+                                    val enabledScreens = screens.values.filter { it.enabled }
+                                    val blocker = enabledScreens.firstOrNull { !it.dismissable }
+                                    if (blocker != null) {
+                                        if (cached?.contentHash != blocker.contentHash) {
+                                            cache.cacheBlocker(blocker, null)
+                                        }
+                                        blockingScreen = blocker
+                                    } else {
+                                        cache.clearBlocker()
+                                        dismissableScreens =
+                                            enabledScreens
+                                                .filter { it.dismissable }
+                                                .filter { it.frequency != "once" || !cache.isDismissed(it.screenId) }
                                     }
                                 }
 
-                                else -> {} // still degraded
+                                is Resource.Error -> {
+                                    if (cached != null) {
+                                        blockingScreen = cached.toStartingScreen()
+                                    }
+                                }
+
+                                is Resource.Loading -> { /* wait */ }
+                            }
+                            startingScreenCheckDone = true
+                        }
+
+                        // Existing update/health checks — only runs after starting screen check passes
+                        LaunchedEffect(startingScreenCheckDone) {
+                            if (!startingScreenCheckDone) return@LaunchedEffect
+                            // Don't run further checks if blocked
+                            if (blockingScreen != null) return@LaunchedEffect
+
+                            // Anti-emulator / anti-root gate. See UnsafeDeviceGate
+                            // for the bypass logic + flavor-by-flavor matrix.
+                            isUnsafe = UnsafeDeviceGate.isBlocked()
+                            when (val result = appConfigService.getLatestVersionInfo()) {
+                                is Resource.Success -> {
+                                    val (minVersionCode, latestVersionCode, latestVersionName) = result.data
+                                    updateRequired = appConfigService.currentVersionCode < minVersionCode
+                                    if (!updateRequired && appConfigService.currentVersionCode < latestVersionCode) {
+                                        softUpdateAvailable = latestVersionName.ifEmpty { "v$latestVersionCode" }
+                                    }
+                                }
+
+                                is Resource.Error -> {
+                                    updateRequired = false
+                                }
+
+                                is Resource.Loading -> { /* wait */ }
+                            }
+                            when (val healthResult = appConfigService.checkBackendHealth()) {
+                                is Resource.Success -> {
+                                    backendDegraded = healthResult.data.status == "degraded"
+                                }
+
+                                else -> {}
+                            }
+                            checkComplete = true
+                        }
+
+                        // Poll health every 5 minutes while degraded; clear when recovered
+                        LaunchedEffect(backendDegraded) {
+                            if (!backendDegraded) return@LaunchedEffect
+                            while (true) {
+                                delay(300_000L) // 5 minutes
+                                when (val result = appConfigService.checkBackendHealth()) {
+                                    is Resource.Success -> {
+                                        if (result.data.status == "ok") {
+                                            backendDegraded = false
+                                            return@LaunchedEffect
+                                        }
+                                    }
+
+                                    else -> {} // still degraded
+                                }
                             }
                         }
-                    }
 
-                    when {
-                        !startingScreenCheckDone -> {
-                            // Loading spinner while checking starting screens
-                            Surface(
-                                color = MaterialTheme.colorScheme.background,
-                                modifier = Modifier.fillMaxSize(),
-                            ) {
-                                Column(
+                        when {
+                            !startingScreenCheckDone -> {
+                                // Loading spinner while checking starting screens
+                                Surface(
+                                    color = MaterialTheme.colorScheme.background,
                                     modifier = Modifier.fillMaxSize(),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
                                 ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Text(
-                                        text = stringResource(Res.string.starting_screen_loading),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-
-                        blockingScreen != null && !blockingScreenDismissed -> {
-                            // Blocking screen — STOPS all further loading
-                            StartingScreenComposable(
-                                screen = blockingScreen!!,
-                                onDismiss = { blockingScreenDismissed = true },
-                            )
-                        }
-
-                        !checkComplete -> {
-                            Surface(
-                                color = MaterialTheme.colorScheme.background,
-                                modifier = Modifier.fillMaxSize(),
-                            ) {
-                                Column(
-                                    modifier = Modifier.fillMaxSize(),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
-                                    Spacer(modifier = Modifier.height(12.dp))
-                                    Text(
-                                        text = stringResource(Res.string.checking_for_updates),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
-                        }
-
-                        isUnsafe -> {
-                            UnsafeDeviceScreen()
-                        }
-
-                        updateRequired -> {
-                            ForceUpdateScreen()
-                        }
-
-                        backendDegraded && !degradedAcknowledged -> {
-                            DegradedModeScreen(onAcknowledge = { degradedAcknowledged = true })
-                        }
-
-                        !legalAccepted -> {
-                            when (viewingLegalDoc) {
-                                "privacy" ->
-                                    PrivacyPolicyScreen(
-                                        onAccept = {},
-                                        onDecline = {},
-                                        onNavigateBack = { viewingLegalDoc = null },
-                                        showActions = false,
-                                    )
-
-                                "community" ->
-                                    CommunityStandardsScreen(
-                                        onNavigateBack = { viewingLegalDoc = null },
-                                    )
-
-                                "terms" ->
-                                    TermsAndConditionsScreen(
-                                        onNavigateBack = { viewingLegalDoc = null },
-                                    )
-
-                                "cyberbullying" ->
-                                    CyberBullyingPolicyScreen(
-                                        onNavigateBack = { viewingLegalDoc = null },
-                                    )
-
-                                else ->
-                                    LegalAcceptanceScreen(
-                                        onAccept = {
-                                            LanguagePreference.setAcceptedLegalVersion(CURRENT_LEGAL_VERSION)
-                                            legalAccepted = true
-                                        },
-                                        onViewPrivacyPolicy = { viewingLegalDoc = "privacy" },
-                                        onViewCommunityStandards = { viewingLegalDoc = "community" },
-                                        onViewTerms = { viewingLegalDoc = "terms" },
-                                        onViewCyberBullyingPolicy = { viewingLegalDoc = "cyberbullying" },
-                                    )
-                            }
-                        }
-
-                        dismissableScreens.isNotEmpty() && dismissableScreenIndex < dismissableScreens.size -> {
-                            val currentScreen = dismissableScreens[dismissableScreenIndex]
-                            StartingScreenComposable(
-                                screen = currentScreen,
-                                onDismiss = {
-                                    if (currentScreen.frequency == "once") {
-                                        cache.markDismissed(currentScreen.screenId)
-                                    }
-                                    dismissableScreenIndex++
-                                },
-                            )
-                        }
-
-                        else -> {
-                            val navController = rememberNavController()
-                            val navigateToRoomId by navigateToRoomState
-
-                            LaunchedEffect(navigateToRoomId) {
-                                val roomId = navigateToRoomId
-                                if (roomId != null) {
-                                    navController.navigate(Screen.Room.createRoute(roomId)) {
-                                        launchSingleTop = true
-                                    }
-                                    navigateToRoomState.value = null
-                                }
-                            }
-
-                            val navigateToChatInfo by navigateToChatState
-
-                            // Push deep-link authorisation re-check — delegates to
-                            // commonMain `verifyPushNavigation` so iOS and Android
-                            // share the same authz semantics (timeout, identity
-                            // gate, block-list gate, group conversation-membership
-                            // gate; all fail-closed). Use `resolvedUniqueId`
-                            // explicitly to avoid the cold-start race where
-                            // `currentUserId` falls back to the Firebase UID
-                            // before identity resolution completes.
-                            LaunchedEffect(navigateToChatInfo) {
-                                val chatInfo = navigateToChatInfo
-                                if (chatInfo != null) {
-                                    val (id, isGroup) = chatInfo
-                                    val currentUserId = authRepository.resolvedUniqueId
-                                    if (currentUserId.isNullOrEmpty()) {
-                                        Log.w(TAG, "Push deep-link dropped — identity not yet resolved or signed out")
-                                        navigateToChatState.value = null
-                                        return@LaunchedEffect
-                                    }
-                                    val authzOk =
-                                        verifyPushNavigation(
-                                            currentUserId = currentUserId,
-                                            targetId = id,
-                                            isGroup = isGroup,
-                                            fetchBlockedUserIds = { userRepository.getBlockedUserIds(it) },
-                                            fetchConversation = { privateMessageRepository.getConversation(it) },
+                                    Column(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(24.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary,
                                         )
-                                    if (!authzOk) {
-                                        navigateToChatState.value = null
-                                        return@LaunchedEffect
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Text(
+                                            text = stringResource(Res.string.starting_screen_loading),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
                                     }
-                                    val route =
-                                        if (isGroup) {
-                                            Screen.GroupChat.createRoute(id)
-                                        } else {
-                                            Screen.PrivateChat.createRoute(id)
-                                        }
-                                    navController.navigate(route) {
-                                        launchSingleTop = true
-                                    }
-                                    navigateToChatState.value = null
-                                    // Also clear the shared chatDeepLinks bus so a
-                                    // future tri-platform unification through that
-                                    // channel doesn't leave a stale link. Idempotent.
-                                    consumeChatDeepLink()
                                 }
                             }
 
-                            val pendingEmailLink by pendingEmailLinkState
+                            blockingScreen != null && !blockingScreenDismissed -> {
+                                // Blocking screen — STOPS all further loading
+                                StartingScreenComposable(
+                                    screen = blockingScreen!!,
+                                    onDismiss = { blockingScreenDismissed = true },
+                                )
+                            }
 
-                            // Skip sign-in screen if already authenticated (prevents login flash)
-                            val initialRoute =
-                                if (
-                                    authRepository.isAuthenticated &&
-                                    appLockRepository.hasCredential &&
-                                    authRepository.currentUserId != null
+                            !checkComplete -> {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.background,
+                                    modifier = Modifier.fillMaxSize(),
                                 ) {
-                                    Screen.Main.route
-                                } else {
-                                    Screen.SignIn.route
+                                    Column(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center,
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(24.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                        Text(
+                                            text = stringResource(Res.string.checking_for_updates),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+
+                            isUnsafe -> {
+                                UnsafeDeviceScreen()
+                            }
+
+                            updateRequired -> {
+                                ForceUpdateScreen()
+                            }
+
+                            backendDegraded && !degradedAcknowledged -> {
+                                DegradedModeScreen(onAcknowledge = { degradedAcknowledged = true })
+                            }
+
+                            !legalAccepted -> {
+                                when (viewingLegalDoc) {
+                                    "privacy" ->
+                                        PrivacyPolicyScreen(
+                                            onAccept = {},
+                                            onDecline = {},
+                                            onNavigateBack = { viewingLegalDoc = null },
+                                            showActions = false,
+                                        )
+
+                                    "community" ->
+                                        CommunityStandardsScreen(
+                                            onNavigateBack = { viewingLegalDoc = null },
+                                        )
+
+                                    "terms" ->
+                                        TermsAndConditionsScreen(
+                                            onNavigateBack = { viewingLegalDoc = null },
+                                        )
+
+                                    "cyberbullying" ->
+                                        CyberBullyingPolicyScreen(
+                                            onNavigateBack = { viewingLegalDoc = null },
+                                        )
+
+                                    else ->
+                                        LegalAcceptanceScreen(
+                                            onAccept = {
+                                                LanguagePreference.setAcceptedLegalVersion(CURRENT_LEGAL_VERSION)
+                                                legalAccepted = true
+                                            },
+                                            onViewPrivacyPolicy = { viewingLegalDoc = "privacy" },
+                                            onViewCommunityStandards = { viewingLegalDoc = "community" },
+                                            onViewTerms = { viewingLegalDoc = "terms" },
+                                            onViewCyberBullyingPolicy = { viewingLegalDoc = "cyberbullying" },
+                                        )
+                                }
+                            }
+
+                            dismissableScreens.isNotEmpty() && dismissableScreenIndex < dismissableScreens.size -> {
+                                val currentScreen = dismissableScreens[dismissableScreenIndex]
+                                StartingScreenComposable(
+                                    screen = currentScreen,
+                                    onDismiss = {
+                                        if (currentScreen.frequency == "once") {
+                                            cache.markDismissed(currentScreen.screenId)
+                                        }
+                                        dismissableScreenIndex++
+                                    },
+                                )
+                            }
+
+                            else -> {
+                                val navController = rememberNavController()
+                                val navigateToRoomId by navigateToRoomState
+
+                                LaunchedEffect(navigateToRoomId) {
+                                    val roomId = navigateToRoomId
+                                    if (roomId != null) {
+                                        navController.navigate(Screen.Room.createRoute(roomId)) {
+                                            launchSingleTop = true
+                                        }
+                                        navigateToRoomState.value = null
+                                    }
                                 }
 
-                            NavGraph(
-                                navController = navController,
-                                startDestination = initialRoute,
-                                isBackendDegraded = backendDegraded,
-                                pendingEmailLink = pendingEmailLink,
-                                onEmailLinkConsumed = { pendingEmailLinkState.value = null },
-                                onSignOut = {
-                                    workerApiClient.clearTokenCache()
-                                    // Process-scoped: sign-out must finish even if this
-                                    // Activity is destroyed by the navigation it triggers.
-                                    // Rethrow CancellationException to keep structured
-                                    // concurrency intact when the scope is cancelled.
-                                    ProcessLifecycleOwner.get().lifecycleScope.launch {
-                                        try {
-                                            authRepository.signOut()
-                                        } catch (e: CancellationException) {
-                                            throw e
-                                        } catch (e: Exception) {
-                                            Log.e(TAG, "authRepository.signOut() failed: ${e.message}", e)
-                                        }
-                                    }
-                                },
-                            )
+                                val navigateToChatInfo by navigateToChatState
 
-                            softUpdateAvailable?.let { version ->
-                                AlertDialog(
-                                    onDismissRequest = { softUpdateAvailable = null },
-                                    title = { Text(stringResource(Res.string.update_available)) },
-                                    text = { Text(stringResource(Res.string.update_available_soft, version)) },
-                                    confirmButton = {
-                                        TextButton(onClick = {
-                                            softUpdateAvailable = null
-                                            startActivity(
-                                                Intent(
-                                                    Intent.ACTION_VIEW,
-                                                    Uri.parse("https://play.google.com/store/apps/details?id=com.shyden.shytalk"),
-                                                ),
+                                // Push deep-link authorisation re-check — delegates to
+                                // commonMain `verifyPushNavigation` so iOS and Android
+                                // share the same authz semantics (timeout, identity
+                                // gate, block-list gate, group conversation-membership
+                                // gate; all fail-closed). Use `resolvedUniqueId`
+                                // explicitly to avoid the cold-start race where
+                                // `currentUserId` falls back to the Firebase UID
+                                // before identity resolution completes.
+                                LaunchedEffect(navigateToChatInfo) {
+                                    val chatInfo = navigateToChatInfo
+                                    if (chatInfo != null) {
+                                        val (id, isGroup) = chatInfo
+                                        val currentUserId = authRepository.resolvedUniqueId
+                                        if (currentUserId.isNullOrEmpty()) {
+                                            Log.w(TAG, "Push deep-link dropped — identity not yet resolved or signed out")
+                                            navigateToChatState.value = null
+                                            return@LaunchedEffect
+                                        }
+                                        val authzOk =
+                                            verifyPushNavigation(
+                                                currentUserId = currentUserId,
+                                                targetId = id,
+                                                isGroup = isGroup,
+                                                fetchBlockedUserIds = { userRepository.getBlockedUserIds(it) },
+                                                fetchConversation = { privateMessageRepository.getConversation(it) },
                                             )
-                                        }) { Text(stringResource(Res.string.update_now)) }
-                                    },
-                                    dismissButton = {
-                                        TextButton(onClick = { softUpdateAvailable = null }) {
-                                            Text(stringResource(Res.string.later))
+                                        if (!authzOk) {
+                                            navigateToChatState.value = null
+                                            return@LaunchedEffect
+                                        }
+                                        val route =
+                                            if (isGroup) {
+                                                Screen.GroupChat.createRoute(id)
+                                            } else {
+                                                Screen.PrivateChat.createRoute(id)
+                                            }
+                                        navController.navigate(route) {
+                                            launchSingleTop = true
+                                        }
+                                        navigateToChatState.value = null
+                                        // Also clear the shared chatDeepLinks bus so a
+                                        // future tri-platform unification through that
+                                        // channel doesn't leave a stale link. Idempotent.
+                                        consumeChatDeepLink()
+                                    }
+                                }
+
+                                val pendingEmailLink by pendingEmailLinkState
+
+                                // Skip sign-in screen if already authenticated (prevents login flash)
+                                val initialRoute =
+                                    if (
+                                        authRepository.isAuthenticated &&
+                                        appLockRepository.hasCredential &&
+                                        authRepository.currentUserId != null
+                                    ) {
+                                        Screen.Main.route
+                                    } else {
+                                        Screen.SignIn.route
+                                    }
+
+                                NavGraph(
+                                    navController = navController,
+                                    startDestination = initialRoute,
+                                    isBackendDegraded = backendDegraded,
+                                    pendingEmailLink = pendingEmailLink,
+                                    onEmailLinkConsumed = { pendingEmailLinkState.value = null },
+                                    onSignOut = {
+                                        workerApiClient.clearTokenCache()
+                                        // Process-scoped: sign-out must finish even if this
+                                        // Activity is destroyed by the navigation it triggers.
+                                        // Rethrow CancellationException to keep structured
+                                        // concurrency intact when the scope is cancelled.
+                                        ProcessLifecycleOwner.get().lifecycleScope.launch {
+                                            try {
+                                                authRepository.signOut()
+                                            } catch (e: CancellationException) {
+                                                throw e
+                                            } catch (e: Exception) {
+                                                Log.e(TAG, "authRepository.signOut() failed: ${e.message}", e)
+                                            }
                                         }
                                     },
                                 )
+
+                                softUpdateAvailable?.let { version ->
+                                    AlertDialog(
+                                        onDismissRequest = { softUpdateAvailable = null },
+                                        title = { Text(stringResource(Res.string.update_available)) },
+                                        text = { Text(stringResource(Res.string.update_available_soft, version)) },
+                                        confirmButton = {
+                                            TextButton(onClick = {
+                                                softUpdateAvailable = null
+                                                startActivity(
+                                                    Intent(
+                                                        Intent.ACTION_VIEW,
+                                                        Uri.parse("https://play.google.com/store/apps/details?id=com.shyden.shytalk"),
+                                                    ),
+                                                )
+                                            }) { Text(stringResource(Res.string.update_now)) }
+                                        },
+                                        dismissButton = {
+                                            TextButton(onClick = { softUpdateAvailable = null }) {
+                                                Text(stringResource(Res.string.later))
+                                            }
+                                        },
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    // Leave room confirmation dialog (triggered by chathead X tap)
-                    val showLeaveDialog by showLeaveConfirmationState
-                    if (showLeaveDialog) {
-                        val isOwner = activeRoomManager.activeRoom.value?.ownerId == activeRoomManager.currentUserId
-                        AlertDialog(
-                            onDismissRequest = { showLeaveConfirmationState.value = false },
-                            title = {
-                                Text(
-                                    if (isOwner) {
-                                        stringResource(
-                                            Res.string.close_room_question,
-                                        )
-                                    } else {
-                                        stringResource(Res.string.leave_room_question)
-                                    },
-                                )
-                            },
-                            text = {
-                                Text(
-                                    if (isOwner) {
-                                        stringResource(Res.string.close_room_description)
-                                    } else {
-                                        stringResource(Res.string.leave_room_description)
-                                    },
-                                )
-                            },
-                            confirmButton = {
-                                TextButton(onClick = {
-                                    showLeaveConfirmationState.value = false
-                                    val intent =
-                                        Intent(this@MainActivity, RoomService::class.java).apply {
-                                            action = "CONFIRM_DISMISS"
-                                        }
-                                    startService(intent)
-                                }) { Text(stringResource(Res.string.leave)) }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = { showLeaveConfirmationState.value = false }) {
-                                    Text(stringResource(Res.string.cancel))
-                                }
-                            },
-                        )
+                        // Leave room confirmation dialog (triggered by chathead X tap)
+                        val showLeaveDialog by showLeaveConfirmationState
+                        if (showLeaveDialog) {
+                            val isOwner = activeRoomManager.activeRoom.value?.ownerId == activeRoomManager.currentUserId
+                            AlertDialog(
+                                onDismissRequest = { showLeaveConfirmationState.value = false },
+                                title = {
+                                    Text(
+                                        if (isOwner) {
+                                            stringResource(
+                                                Res.string.close_room_question,
+                                            )
+                                        } else {
+                                            stringResource(Res.string.leave_room_question)
+                                        },
+                                    )
+                                },
+                                text = {
+                                    Text(
+                                        if (isOwner) {
+                                            stringResource(Res.string.close_room_description)
+                                        } else {
+                                            stringResource(Res.string.leave_room_description)
+                                        },
+                                    )
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        showLeaveConfirmationState.value = false
+                                        val intent =
+                                            Intent(this@MainActivity, RoomService::class.java).apply {
+                                                action = "CONFIRM_DISMISS"
+                                            }
+                                        startService(intent)
+                                    }) { Text(stringResource(Res.string.leave)) }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showLeaveConfirmationState.value = false }) {
+                                        Text(stringResource(Res.string.cancel))
+                                    }
+                                },
+                            )
+                        }
                     }
-                }
+                } // close Box(testTagsAsResourceId)
             }
         }
 

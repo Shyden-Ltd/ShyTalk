@@ -46,6 +46,54 @@ function evictOldest(cache) {
   }
 }
 
+// ─── Synthetic-token bypass (NODE_ENV=local ONLY) ──────────────────
+//
+// The manual-qa-runner synthesises sessions for personas it can't sign
+// in via the Firebase Auth emulator (ephemeral personas: P-01 Adam,
+// P-03 Mia — and also as a shortcut for provisioned personas to avoid
+// the emulator round-trip on every scenario). The synthetic idToken
+// has shape `synthetic:<name>:<uniqueId>` and is sent as the Bearer
+// token on subsequent API calls.
+//
+// In production this token shape would fail `auth.verifyIdToken` and
+// return 401 — which is the correct behaviour because no real user
+// could forge such a token.
+//
+// In NODE_ENV=local, the entire stack runs against the Firebase
+// emulator (which accepts unsigned tokens anyway) and the only callers
+// are the test harness + developers running the local seed. Accepting
+// synthetic tokens HERE lets the manual-qa-runner exercise cohort-gate
+// and other auth-gated routes end-to-end without requiring every
+// persona to have a real Firebase Auth user record.
+//
+// SECURITY:
+//   - HARD GATE: NODE_ENV must literally equal 'local'. Any other
+//     value (production, staging, undefined, '') refuses synthetic
+//     tokens and falls through to real verification.
+//   - The function returns null whenever the gate fails or the token
+//     can't be parsed, so the caller falls through to the standard
+//     verifyIdToken path.
+//   - No suspension check is bypassed: synthetic tokens skip the
+//     suspension lookup because in local-emulator state the
+//     suspensions collection is the seed, and the test scenarios
+//     either don't seed suspensions or seed them on purpose (in which
+//     case the cohort gate, not auth, is what the scenario asserts).
+function decodeSyntheticToken(idToken) {
+  if (process.env.NODE_ENV !== 'local') return null;
+  if (typeof idToken !== 'string' || !idToken.startsWith('synthetic:')) return null;
+  const parts = idToken.split(':');
+  if (parts.length !== 3) return null;
+  const [, name, uniqueIdStr] = parts;
+  if (!name || !/^\d+$/.test(uniqueIdStr)) return null;
+  const uniqueId = parseInt(uniqueIdStr, 10);
+  if (!Number.isFinite(uniqueId) || uniqueId <= 0) return null;
+  return {
+    uid: `synthetic-${name}-${uniqueId}`,
+    uniqueId,
+    token: { uid: `synthetic-${name}-${uniqueId}`, uniqueId, synthetic: true, name },
+  };
+}
+
 // ─── UniqueId resolution ─────────────────────────────────────────
 
 /**
@@ -130,6 +178,13 @@ async function authMiddleware(req, res, next) {
 
   const idToken = authHeader.slice(7);
 
+  // Synthetic-token bypass (NODE_ENV=local only — see helper for rationale).
+  const synth = decodeSyntheticToken(idToken);
+  if (synth) {
+    req.auth = synth;
+    return next();
+  }
+
   try {
     const decoded = await auth.verifyIdToken(idToken);
     const uid = decoded.uid;
@@ -176,6 +231,17 @@ async function authMiddlewareStrict(req, res, next) {
   }
 
   const idToken = authHeader.slice(7);
+
+  // Synthetic-token bypass (NODE_ENV=local only). The strict variant
+  // normally adds revocation-checking via verifyIdToken(token, true) —
+  // there's nothing to revoke on a synthetic token, so the bypass is
+  // semantically equivalent here. Both middlewares behave identically
+  // for synthetic tokens; only the live-token branches differ.
+  const synth = decodeSyntheticToken(idToken);
+  if (synth) {
+    req.auth = synth;
+    return next();
+  }
 
   try {
     const decoded = await auth.verifyIdToken(idToken, true);

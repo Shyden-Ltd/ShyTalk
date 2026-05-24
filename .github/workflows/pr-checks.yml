@@ -99,7 +99,14 @@ jobs:
 
   lint:
     needs: [detect-changes]
-    if: needs.detect-changes.outputs.workflow_only != 'true'
+    # No workflow_only short-circuit: lint.yml's unconditional steps
+    # (actionlint, check-no-paid-runners, check-workflow-concurrency-
+    # scoping, check-orphan-i18n-keys, check-release-trigger) MUST run
+    # on workflow-only PRs — that's the case where they matter most,
+    # since those PRs are the ones changing workflows. The heavyweight
+    # steps inside lint.yml (ktlint, Express lint, Gherkin lint) are
+    # already gated on app_changed / backend_changed, so the cost on
+    # workflow-only PRs is ~30s of cheap shellcheck/script invocations.
     uses: ./.github/workflows/lint.yml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
@@ -138,7 +145,44 @@ jobs:
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'android' }}
           LIVEKIT_URL: ${{ secrets.LIVEKIT_URL || 'wss://placeholder.livekit.cloud' }}
+          # Bake the persona-picker password into the dev APK so journey-based
+          # manual QA on dev variant can sign in as P-02..P-19 personas
+          # without OAuth. Must match the value the express-api provisioner
+          # used to create the dev Firebase Auth accounts (PERSONAS_PASSWORD).
+          # Falls back to empty → picker UI fails closed (BuildVariant.kt's
+          # isPersonaPickerAvailable returns false). See app/build.gradle.kts
+          # line 105 for the buildConfigField wiring.
+          DEV_QA_PERSONAS_PASSWORD: ${{ secrets.DEV_QA_PERSONAS_PASSWORD }}
         run: ./gradlew testDevDebugUnitTest :shared:jvmTest detekt assembleDevRelease jacocoDevDebugUnitTestReport --parallel
+
+      # Also build the local-flavor APK so AFK operators / automation
+      # can install it on test devices without needing a local Firebase
+      # emulator + Express stack running just to produce the APK. The
+      # KMP shared framework is already compiled by assembleDevRelease
+      # above; this only adds the Android local-flavor link + package
+      # step (~30-60s incremental cost).
+      #
+      # No env vars needed: the `local` flavor hardcodes its LiveKit
+      # URL (`ws://$localHostAlias:7880`) and DEV_QA_PERSONAS_PASSWORD
+      # (`localdev123`) in app/build.gradle.kts, and `assembleLocalDebug`
+      # uses the debug build type which does NOT reference the release
+      # signing config (so KEYSTORE_PASSWORD is dead). Removing them
+      # avoids misleading future maintainers.
+      - name: Build localDebug APK
+        run: ./gradlew assembleLocalDebug
+
+      - name: Upload localDebug APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: local-debug-apk
+          path: app/build/outputs/apk/local/debug/*.apk
+          # if-no-files-found: error — failing-loud when the glob
+          # matches zero files. Default `warn` would produce a
+          # SUCCESSFUL empty-zip upload, breaking AFK install
+          # silently (gh run download would succeed with an empty
+          # directory).
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Publish unit test report
         uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # v2
@@ -180,7 +224,7 @@ jobs:
         # github.head_ref so a merge commit added by a human doesn't
         # bypass the skip (github.actor would resolve to the human).
         if: always() && !startsWith(github.head_ref, 'dependabot/')
-        uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: kotlin-report
@@ -276,7 +320,25 @@ jobs:
       (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped')
     uses: ./.github/workflows/ios-tests.yml
     with:
-      ios: 'none'
+      # Default iOS device for PR runs. Mirror of android-e2e's
+      # `android: '33-phone'` — one device, latest stable iOS, single
+      # form-factor. The job-level `if:` above already gates on
+      # `app_changed` + `skip_ios_e2e`, so this only runs when
+      # iOS-relevant code changes (and not when the PR body has the
+      # `[skip-ios-e2e]` marker).
+      #
+      # Was 'none' until 2026-05-21, which made the matrix expand to
+      # zero devices in ios-tests.yml's resolve-inputs job — the
+      # entire iOS E2E surface was symbolic. Pinned to a specific
+      # device via tests/scripts/pr-checks-ios-gating.test.js to
+      # prevent silent regression back to 'none'.
+      #
+      # Bumped 2026-05-22 from `18.1-iphone` to `26.2-iphone` to
+      # exercise the LATEST iOS runtime the macos-15 runner ships
+      # pre-installed (via Xcode 26.3). Older versions remain
+      # available via workflow_dispatch with `ios: 'all'`. Pinned by
+      # tests/scripts/ios-26-xcode-bump.test.js.
+      ios: '26.2-iphone'
       parallel: true
       ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit

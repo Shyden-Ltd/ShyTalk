@@ -120,9 +120,50 @@ final class StartingScreenServiceTests: XCTestCase {
         XCTAssertTrue(screens.isEmpty)
     }
 
+    // Regression: JSONSerialization.jsonObject(with: Data()) throws
+    // NSCocoaError 3840 — not nil for the as? cast to handle. The
+    // service must early-return [:] BEFORE the JSONSerialization call.
+    // Pinned by PR #716.
     func testFetchStartingScreens_emptyData() async throws {
         let data = Data()
         let session = mockSession(data: data)
+        let service = makeService(session: session)
+
+        let screens = try await service.fetchStartingScreens()
+
+        XCTAssertTrue(screens.isEmpty)
+    }
+
+    // Regression: a whitespace-only body (`"   "`, `" \n "`, etc.) is
+    // semantically equivalent to empty — JSONSerialization throws
+    // NSCocoaError 3840 on it too. The empty-body guard must use
+    // `String(data:).trimmingCharacters(in: .whitespacesAndNewlines)`
+    // so the same fast-path catches both. PR #716 review round 1 I1.
+    func testFetchStartingScreens_whitespaceOnlyBody() async throws {
+        let data = "   \n  \r\n  ".data(using: .utf8)!
+        let session = mockSession(data: data)
+        let service = makeService(session: session)
+
+        let screens = try await service.fetchStartingScreens()
+
+        XCTAssertTrue(screens.isEmpty)
+    }
+
+    func testFetchStartingScreens_newlineOnlyBody() async throws {
+        let data = "\n".data(using: .utf8)!
+        let session = mockSession(data: data)
+        let service = makeService(session: session)
+
+        let screens = try await service.fetchStartingScreens()
+
+        XCTAssertTrue(screens.isEmpty)
+    }
+
+    // HTTP 204 No Content — the API's "no screens active" semantic.
+    // Status passes the 200-299 guard, then the empty-body fast-path
+    // returns [:]. PR #716 review round 1 M2.
+    func testFetchStartingScreens_http204_returnsEmpty() async throws {
+        let session = mockSession(data: Data(), statusCode: 204)
         let service = makeService(session: session)
 
         let screens = try await service.fetchStartingScreens()
@@ -140,8 +181,17 @@ final class StartingScreenServiceTests: XCTestCase {
         do {
             _ = try await service.fetchStartingScreens()
             XCTFail("Expected error for malformed JSON")
-        } catch {
-            // Expected — cannotParseResponse or JSONSerialization error
+        } catch let error as NSError {
+            // NSCocoaError 3840 from JSONSerialization, OR
+            // URLError(.cannotParseResponse) if the parse returns a
+            // value that fails the dict cast — both are acceptable
+            // for malformed input. Reject any other error class.
+            let isCocoaParse = error.domain == NSCocoaErrorDomain && error.code == 3840
+            let isURLParse = (error as? URLError)?.code == .cannotParseResponse
+            XCTAssertTrue(
+                isCocoaParse || isURLParse,
+                "Expected NSCocoaError 3840 or URLError.cannotParseResponse, got \(error)"
+            )
         }
     }
 
@@ -153,8 +203,12 @@ final class StartingScreenServiceTests: XCTestCase {
         do {
             _ = try await service.fetchStartingScreens()
             XCTFail("Expected error for JSON array")
+        } catch let error as URLError {
+            // JSON parses successfully but the as? [String: Any] cast
+            // fails, hitting the explicit throw URLError(.cannotParseResponse).
+            XCTAssertEqual(error.code, .cannotParseResponse)
         } catch {
-            // Expected — response is not a dictionary
+            XCTFail("Expected URLError.cannotParseResponse, got \(error)")
         }
     }
 
@@ -222,8 +276,10 @@ final class StartingScreenServiceTests: XCTestCase {
         do {
             _ = try await service.fetchStartingScreens()
             XCTFail("Expected error for 500 response")
+        } catch let error as URLError {
+            XCTAssertEqual(error.code, .badServerResponse)
         } catch {
-            // Expected
+            XCTFail("Expected URLError.badServerResponse, got \(error)")
         }
     }
 
@@ -235,8 +291,10 @@ final class StartingScreenServiceTests: XCTestCase {
         do {
             _ = try await service.fetchStartingScreens()
             XCTFail("Expected error for 404 response")
+        } catch let error as URLError {
+            XCTAssertEqual(error.code, .badServerResponse)
         } catch {
-            // Expected
+            XCTFail("Expected URLError.badServerResponse, got \(error)")
         }
     }
 

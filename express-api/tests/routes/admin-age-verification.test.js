@@ -65,6 +65,14 @@ jest.mock('../../src/utils/firebase', () => ({
     getUser: (...args) => mockGetUser(...args),
     revokeRefreshTokens: (...args) => mockRevokeRefreshTokens(...args),
   },
+  // FieldValue.arrayRemove is used by the cross-cohort follow-edge
+  // cleanup in /modify-dob (UK OSA #17 PR 6 runtime hook). Tests assert
+  // on the payload shape, so we return a tagged sentinel rather than the
+  // real Firestore Sentinel object.
+  FieldValue: {
+    arrayRemove: (...values) => ({ __op: 'arrayRemove', values }),
+    arrayUnion: (...values) => ({ __op: 'arrayUnion', values }),
+  },
 }));
 
 const mockDeleteObject = jest.fn().mockResolvedValue();
@@ -687,5 +695,175 @@ describe('POST /api/admin/age-verification/:id/modify-dob', () => {
       .expect(200);
 
     expect(mockRevokeRefreshTokens).not.toHaveBeenCalled();
+  });
+
+  // ── UK OSA #17 PR 6 runtime — cross-cohort follow-edge cleanup ──
+  //
+  // When the admin DOB-modify flips a user's cohort, the same
+  // transaction MUST remove follow edges that are now cross-cohort.
+  // The one-shot migration script (migrate-segregation-relationships.js)
+  // handles legacy data; this runtime hook prevents drift during
+  // ongoing admin operations. If this is ever silently disabled, a
+  // downgraded user retains their adult-cohort follows and the j19 OSA
+  // regression probe fails.
+
+  test('cohort flip adult→minor clears cross-cohort follow edges on BOTH sides', async () => {
+    // Setup: target user is currently adult with two adult-cohort
+    // follows. After flipping to minor, those follows are now
+    // cross-cohort and must be removed.
+    mockTxGet.mockImplementation((path) => {
+      if (path === 'ageVerificationSubmissions/sub-1') {
+        return Promise.resolve({ exists: true, data: () => pendingSubmissionDoc() });
+      }
+      if (path === 'users/10000050') {
+        return Promise.resolve({
+          exists: true,
+          data: () => ({
+            dateOfBirth: 946684800000,
+            ageVerified: false,
+            firebaseUid: 'fb-target-uid',
+            cohort: 'adult',
+            uniqueId: 10000050,
+            followingIds: [50000010, 50000060],
+            followerIds: [50000020],
+          }),
+        });
+      }
+      if (path === 'users/50000010') {
+        return Promise.resolve({
+          exists: true,
+          data: () => ({ uniqueId: 50000010, cohort: 'adult' }),
+        });
+      }
+      if (path === 'users/50000060') {
+        return Promise.resolve({
+          exists: true,
+          data: () => ({ uniqueId: 50000060, cohort: 'adult' }),
+        });
+      }
+      if (path === 'users/50000020') {
+        return Promise.resolve({
+          exists: true,
+          data: () => ({ uniqueId: 50000020, cohort: 'adult' }),
+        });
+      }
+      return Promise.resolve({ exists: false });
+    });
+
+    const sixteenYearsAgo = new Date();
+    sixteenYearsAgo.setUTCFullYear(sixteenYearsAgo.getUTCFullYear() - 16);
+    const app = createApp();
+    const response = await request(app)
+      .post('/api/admin/age-verification/sub-1/modify-dob')
+      .send({ newDob: sixteenYearsAgo.getTime(), reason: 'ID showed user is 16' })
+      .expect(200);
+
+    expect(response.body.crossCohortEdgesCleared).toBe(3);
+    // Following edges: target removes 50000010 from followingIds; the
+    // counterparty removes 10000050 from their followerIds.
+    expect(mockTxUpdate).toHaveBeenCalledWith('users/10000050', {
+      followingIds: { __op: 'arrayRemove', values: [50000010] },
+    });
+    expect(mockTxUpdate).toHaveBeenCalledWith('users/50000010', {
+      followerIds: { __op: 'arrayRemove', values: [10000050] },
+    });
+    expect(mockTxUpdate).toHaveBeenCalledWith('users/10000050', {
+      followingIds: { __op: 'arrayRemove', values: [50000060] },
+    });
+    expect(mockTxUpdate).toHaveBeenCalledWith('users/50000060', {
+      followerIds: { __op: 'arrayRemove', values: [10000050] },
+    });
+    // Follower edge: target removes 50000020 from followerIds; the
+    // counterparty removes 10000050 from their followingIds.
+    expect(mockTxUpdate).toHaveBeenCalledWith('users/10000050', {
+      followerIds: { __op: 'arrayRemove', values: [50000020] },
+    });
+    expect(mockTxUpdate).toHaveBeenCalledWith('users/50000020', {
+      followingIds: { __op: 'arrayRemove', values: [10000050] },
+    });
+  });
+
+  test('cohort unchanged: no edge cleanup attempted', async () => {
+    // Target is already 'adult' and the new DOB keeps them adult.
+    // Even though follows exist, no edges should be removed because
+    // there is no cohort flip.
+    mockTxGet.mockImplementation((path) => {
+      if (path === 'ageVerificationSubmissions/sub-1') {
+        return Promise.resolve({ exists: true, data: () => pendingSubmissionDoc() });
+      }
+      if (path === 'users/10000050') {
+        return Promise.resolve({
+          exists: true,
+          data: () => ({
+            dateOfBirth: 946684800000,
+            ageVerified: false,
+            firebaseUid: 'fb-target-uid',
+            cohort: 'adult',
+            uniqueId: 10000050,
+            followingIds: [50000010],
+            followerIds: [],
+          }),
+        });
+      }
+      return Promise.resolve({ exists: false });
+    });
+
+    const dob1990 = new Date('1990-01-01T00:00:00Z').getTime();
+    const app = createApp();
+    const response = await request(app)
+      .post('/api/admin/age-verification/sub-1/modify-dob')
+      .send({ newDob: dob1990, reason: 'ID confirmed adult DOB' })
+      .expect(200);
+
+    expect(response.body.crossCohortEdgesCleared).toBe(0);
+    // No arrayRemove writes should appear in the update calls.
+    const arrayRemoveCalls = mockTxUpdate.mock.calls.filter(
+      ([, payload]) =>
+        payload &&
+        Object.values(payload).some((v) => v && typeof v === 'object' && v.__op === 'arrayRemove'),
+    );
+    expect(arrayRemoveCalls).toHaveLength(0);
+  });
+
+  test('SHYTALK_OFFICIAL counterparties are exempt from cleanup', async () => {
+    // The one-shot migration script preserves Officia's cross-cohort
+    // edges intentionally so system PMs can reach users of any cohort.
+    // The runtime hook applies the same exemption.
+    mockTxGet.mockImplementation((path) => {
+      if (path === 'ageVerificationSubmissions/sub-1') {
+        return Promise.resolve({ exists: true, data: () => pendingSubmissionDoc() });
+      }
+      if (path === 'users/10000050') {
+        return Promise.resolve({
+          exists: true,
+          data: () => ({
+            dateOfBirth: 946684800000,
+            ageVerified: false,
+            firebaseUid: 'fb-target-uid',
+            cohort: 'adult',
+            uniqueId: 10000050,
+            followingIds: [1],
+            followerIds: [],
+          }),
+        });
+      }
+      if (path === 'users/1') {
+        return Promise.resolve({
+          exists: true,
+          data: () => ({ uniqueId: 1, userType: 'SHYTALK_OFFICIAL', isOfficial: true }),
+        });
+      }
+      return Promise.resolve({ exists: false });
+    });
+
+    const sixteenYearsAgo = new Date();
+    sixteenYearsAgo.setUTCFullYear(sixteenYearsAgo.getUTCFullYear() - 16);
+    const app = createApp();
+    const response = await request(app)
+      .post('/api/admin/age-verification/sub-1/modify-dob')
+      .send({ newDob: sixteenYearsAgo.getTime(), reason: 'ID confirms <18' })
+      .expect(200);
+
+    expect(response.body.crossCohortEdgesCleared).toBe(0);
   });
 });

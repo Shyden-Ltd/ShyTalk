@@ -53,7 +53,7 @@ const router = express.Router();
 // a local notification when the app is backgrounded. Best-effort —
 // failures surface via the partial-failure response shape, not a 500.
 
-const { db, auth } = require('../utils/firebase');
+const { db, auth, FieldValue } = require('../utils/firebase');
 const r2 = require('../utils/r2');
 const audit = require('../utils/age-verification-audit');
 const systemPm = require('../utils/age-verification-system-pm');
@@ -350,6 +350,7 @@ router.post('/admin/age-verification/:id/modify-dob', async (req, res) => {
     let targetUserData = null;
     let targetFirebaseUid = null;
     let newCohort = 'minor';
+    let clearedEdgeCount = 0;
     await db.runTransaction(async (tx) => {
       const subRef = db.doc(`ageVerificationSubmissions/${id}`);
       const subSnap = await tx.get(subRef);
@@ -367,6 +368,57 @@ router.post('/admin/age-verification/:id/modify-dob', async (req, res) => {
       oldDob = userData?.dateOfBirth ?? null;
       const verifiedNow = isAtLeast18FromDob(newDob);
       newCohort = verifiedNow ? 'adult' : 'minor';
+
+      // UK OSA #17 PR 6 — runtime equivalent of migrate-segregation-
+      // relationships.js. When a cohort flips (admin DOB modification can
+      // take a user adult→minor or minor→adult), the user's existing
+      // follow edges that are now cross-cohort MUST be cleared in the
+      // same transaction as the cohort write. The one-shot migration
+      // script only handles legacy data; without this runtime hook the
+      // flip leaves cross-cohort edges live, which fails j19's OSA
+      // invariant probe and would violate the same compliance contract
+      // in prod. We batch all counterparty reads BEFORE any writes —
+      // Firestore transactions forbid reads after writes.
+      const oldCohort = userData?.cohort ?? null;
+      const counterpartyEdges = [];
+      if (oldCohort && oldCohort !== newCohort && userData) {
+        const followingIds = Array.isArray(userData.followingIds) ? userData.followingIds : [];
+        const followerIds = Array.isArray(userData.followerIds) ? userData.followerIds : [];
+        const uniqueCounterparties = [...new Set([...followingIds, ...followerIds])];
+        const counterpartySnaps = await Promise.all(
+          uniqueCounterparties.map((id) => tx.get(db.doc(`users/${id}`))),
+        );
+        const cohortByCounterparty = new Map();
+        counterpartySnaps.forEach((snap, idx) => {
+          if (snap.exists) {
+            cohortByCounterparty.set(uniqueCounterparties[idx], snap.data()?.cohort ?? null);
+          }
+        });
+        // Exempt SHYTALK_OFFICIAL accounts: the migration script preserves
+        // Officia's cross-cohort edges intentionally so system PMs can reach
+        // users of any cohort. Apply the same exemption at runtime.
+        const userIsOfficial = userData.userType === 'SHYTALK_OFFICIAL' || userData.isOfficial;
+        for (const targetId of followingIds) {
+          const c = cohortByCounterparty.get(targetId);
+          if (!c || c === newCohort) continue;
+          const targetSnap = counterpartySnaps[uniqueCounterparties.indexOf(targetId)];
+          const targetIsOfficial =
+            targetSnap?.exists &&
+            (targetSnap.data()?.userType === 'SHYTALK_OFFICIAL' || targetSnap.data()?.isOfficial);
+          if (userIsOfficial || targetIsOfficial) continue;
+          counterpartyEdges.push({ direction: 'following', counterpartyId: targetId });
+        }
+        for (const sourceId of followerIds) {
+          const c = cohortByCounterparty.get(sourceId);
+          if (!c || c === newCohort) continue;
+          const sourceSnap = counterpartySnaps[uniqueCounterparties.indexOf(sourceId)];
+          const sourceIsOfficial =
+            sourceSnap?.exists &&
+            (sourceSnap.data()?.userType === 'SHYTALK_OFFICIAL' || sourceSnap.data()?.isOfficial);
+          if (userIsOfficial || sourceIsOfficial) continue;
+          counterpartyEdges.push({ direction: 'follower', counterpartyId: sourceId });
+        }
+      }
 
       tx.update(subRef, {
         status: 'dob_modified',
@@ -391,6 +443,24 @@ router.post('/admin/age-verification/:id/modify-dob', async (req, res) => {
         // Same transaction so cohort + pmLocked can never diverge.
         cohort: newCohort,
       });
+      // Cross-cohort edge cleanup writes — mirror the migration script's
+      // both-sides arrayRemove pattern so neither side retains a dangling
+      // reference (a one-sided clean leaves a phantom follower count on
+      // the surviving side, which a cohort-segregation audit would flag).
+      for (const edge of counterpartyEdges) {
+        if (edge.direction === 'following') {
+          tx.update(userRef, { followingIds: FieldValue.arrayRemove(edge.counterpartyId) });
+          tx.update(db.doc(`users/${edge.counterpartyId}`), {
+            followerIds: FieldValue.arrayRemove(userData.uniqueId),
+          });
+        } else {
+          tx.update(userRef, { followerIds: FieldValue.arrayRemove(edge.counterpartyId) });
+          tx.update(db.doc(`users/${edge.counterpartyId}`), {
+            followingIds: FieldValue.arrayRemove(userData.uniqueId),
+          });
+        }
+      }
+      clearedEdgeCount = counterpartyEdges.length;
       // Capture for the post-commit claim mint. Effective-cohort
       // computation must see the NEW cohort but the EXISTING
       // override (admin cohortOverride survives a DOB change).
@@ -464,6 +534,10 @@ router.post('/admin/age-verification/:id/modify-dob', async (req, res) => {
       userNotified,
       pushNotified,
       claimMinted,
+      // OSA #17 PR 6 runtime cleanup count — surfaced so the admin UI
+      // can show the audit trail (e.g., "downgraded Hayato to minor;
+      // cleared 2 cross-cohort follow edges").
+      crossCohortEdgesCleared: clearedEdgeCount,
     });
   } catch (err) {
     log.error('admin-age-verification', `${errorId} failed`, { id, error: err?.message });

@@ -1,6 +1,17 @@
 services:
   livekit:
     image: livekit/livekit-server:v1.9.1
+    # Resource diet 2026-05-21: cap to 256m. livekit-server is a Go
+    # binary, ~50-100MB steady-state. The cap prevents balloon under
+    # peer-connection spikes during voice-room test scenarios. Pinned
+    # by tests/scripts/local-stack-resource-diet.test.js.
+    #
+    # memswap_limit equals mem_limit so Docker disables swap for this
+    # container. Without this, Docker's default doubles the effective
+    # memory to mem_limit + mem_limit-of-swap, silently degrading host
+    # performance under spike instead of failing loud at the cap.
+    mem_limit: 256m
+    memswap_limit: 256m
     ports:
       - "7880:7880"
       - "7881:7881"
@@ -12,6 +23,10 @@ services:
 
   minio:
     image: minio/minio:RELEASE.2025-03-12T18-04-18Z
+    # MinIO pages recent blocks; 512m is generous for fixture-sized
+    # objects in tests. memswap_limit pinned equal to disable swap.
+    mem_limit: 512m
+    memswap_limit: 512m
     ports:
       - "9002:9000"
       - "9001:9001"
@@ -22,6 +37,10 @@ services:
 
   mailpit:
     image: axllent/mailpit:v1.21
+    # Tiny in-memory SMTP sink. memswap_limit pinned equal to disable
+    # swap (no balloon possible).
+    mem_limit: 128m
+    memswap_limit: 128m
     ports:
       - "1025:1025"
       - "8025:8025"

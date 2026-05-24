@@ -385,11 +385,14 @@ jobs:
       inputs.ios &&
       (needs.deploy-backend-prod.result == 'success' || needs.deploy-backend-prod.result == 'skipped')
     environment: prod-ios
-    runs-on: [self-hosted, macOS, ARM64, shytalk-mac]
-    # Bumped from 45 -> 90 on 2026-04-28: K/Native linkReleaseFrameworkIosArm64
-    # plus xcodebuild archive plus App Store upload total ~50 min worst case
-    # on slow days; 90 gives runner-pool-slowdown headroom.
-    timeout-minutes: 90
+    # Migrated 2026-05-20 from self-hosted Mac (shytalk-mac) to GitHub-hosted
+    # macos-latest per the no-self-hosted-runners policy. See deploy-dev.yml
+    # for full rationale.
+    runs-on: macos-latest
+    # Tuned 2026-05-21 to 100 min. See deploy-dev.yml's distribute-ios
+    # timeout comment for the full reasoning (gradle daemon collision was
+    # the real cause of the apparent slowness, not insufficient minutes).
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -431,10 +434,23 @@ jobs:
           dev-base64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
           prod-base64: ${{ secrets.GOOGLE_SERVICES_PROD_BASE64 }}
 
+      # See deploy-dev.yml's matching step for rationale — ~/.konan is the
+      # only big iOS-relevant cache that setup-gradle doesn't cover.
+      - name: Cache Kotlin/Native (~/.konan)
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            konan-${{ runner.os }}-
+
       - name: Build KMP shared framework for iOS
         run: |
           set -euo pipefail
-          ./gradlew :shared:linkReleaseFrameworkIosArm64
+          # See deploy-dev.yml's matching step — --max-workers=1 avoids the
+          # parallel K/N link deadlock; also pre-build Debug so xcodebuild's
+          # nested gradle call finds it UP-TO-DATE.
+          ./gradlew :shared:linkReleaseFrameworkIosArm64 :shared:linkDebugFrameworkIosArm64 --max-workers=1
 
       - name: Install CocoaPods
         run: |
@@ -442,7 +458,16 @@ jobs:
           cd iosApp
           pod install
 
+      # Mirror of deploy-dev.yml's pre-xcodebuild daemon stop. See that file
+      # for the full forensic explanation (run 26196249351 hang analysis).
+      # Same gradle-daemon collision pattern would hit prod releases too.
+      - name: Stop gradle daemon before xcodebuild
+        run: ./gradlew --stop
+
+      # Step-level hang detector — see deploy-dev.yml's matching step for
+      # the rationale. 50-min cap catches recurrence cheaply.
       - name: Build and archive iOS app
+        timeout-minutes: 50
         run: |
           set -euo pipefail
           # Read the bumped versionCode/versionName from app/build.gradle.kts
@@ -716,7 +741,9 @@ jobs:
     if: |
       always() &&
       needs.deploy-ios-prod.result == 'success'
-    runs-on: [self-hosted, macOS, ARM64, shytalk-mac]
+    # Migrated 2026-05-20 to GitHub-hosted macos-latest per the
+    # no-self-hosted-runners policy. See deploy-dev.yml for rationale.
+    runs-on: macos-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -730,11 +757,33 @@ jobs:
           dev-base64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
           prod-base64: ${{ secrets.GOOGLE_SERVICES_PROD_BASE64 }}
 
+      # Mirror of deploy-ios-prod's konan cache. ~/.konan isn't covered by
+      # setup-gradle. Sharing the same cache key across all iOS jobs lets
+      # them all hit the same warm cache once any of them has populated it.
+      - name: Cache Kotlin/Native (~/.konan)
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            konan-${{ runner.os }}-
+
       - name: Build KMP shared framework for iOS Simulator
-        run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64
+        # --max-workers=1 — see deploy-dev.yml's matching step. Same
+        # parallel-K/N-link deadlock would apply on Sim too.
+        run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 --max-workers=1
 
       - name: Install CocoaPods
         run: cd iosApp && pod install
+
+      # Same gradle-daemon-collision prevention as distribute-ios — the
+      # smoke-test xcodebuild invocation also triggers the
+      # `Compile Kotlin Framework` build phase that calls gradle, so the
+      # daemon from `Build KMP shared framework for iOS Simulator` above
+      # must be stopped first. See deploy-dev.yml's matching step for
+      # full forensics.
+      - name: Stop gradle daemon before xcodebuild
+        run: ./gradlew --stop
 
       - name: Build iOS app for simulator
         run: |

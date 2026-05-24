@@ -46,12 +46,21 @@ class StartingScreenService {
             throw URLError(.badServerResponse)
         }
 
+        // No-content body means "no screens active" — return early.
+        // Covers zero bytes, whitespace-only, and newline-only bodies.
+        // Must precede JSONSerialization.jsonObject(), which THROWS
+        // on any of these (NSCocoaError 3840) rather than returning
+        // nil for the as? cast to handle. Pinned by
+        // testFetchStartingScreens_emptyData,
+        // testFetchStartingScreens_whitespaceOnlyBody, and
+        // testFetchStartingScreens_newlineOnlyBody.
+        if let str = String(data: data, encoding: .utf8),
+           str.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return [:]
+        }
+
         // Parse: { "screenId": { ...fields } }
         guard let raw = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            // If the response is empty or not a dictionary, return empty
-            if data.isEmpty {
-                return [:]
-            }
             throw URLError(.cannotParseResponse)
         }
 

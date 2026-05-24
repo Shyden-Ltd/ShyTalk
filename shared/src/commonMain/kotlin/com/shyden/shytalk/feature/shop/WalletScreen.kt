@@ -176,7 +176,18 @@ private fun CoinsTab(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(stringResource(Res.string.buy_shy_coins), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        // wallet_buyCoinsButton: cohort-gated surface. j01/j02/j04
+        // scenarios assert this is VISIBLE for adults (post-verification)
+        // and HIDDEN for minors / pending verification. The tag goes on
+        // the section header so existence-checks pass when the whole
+        // buy-coins UI is rendered. The per-package buy itself is
+        // tagged separately via CoinPackageCard if needed.
+        Text(
+            stringResource(Res.string.buy_shy_coins),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.testTag("wallet_buyCoinsButton"),
+        )
         Spacer(modifier = Modifier.height(8.dp))
 
         // Grid rendered inline to avoid nested scrollable issues

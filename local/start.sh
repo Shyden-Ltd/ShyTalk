@@ -45,7 +45,16 @@ docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d
 # =============================================================================
 echo "==> Step 2/8: Starting Firebase Emulators..."
 cd "$PROJECT_ROOT"
-npx firebase emulators:start \
+# Resource diet 2026-05-21: cap the Firebase emulator JVM heap at 1g.
+# Default heap on macOS is ~4 GB which is overkill for fixture-sized
+# Firestore + Auth data. `env VAR=val cmd` scopes JAVA_TOOL_OPTIONS to
+# the firebase CLI process ONLY — it must NOT leak into later steps
+# like Step 7's `./gradlew assembleLocalDebug` which needs the full
+# Gradle daemon heap (Kotlin compile peaks at 2-4 GB; capping it to
+# 1g would OOM the build). `$!` after `env … cmd &` still captures
+# the right PID because env exec()s into cmd via execvp.
+# Pinned by tests/scripts/local-stack-resource-diet.test.js.
+env JAVA_TOOL_OPTIONS="-Xmx1g" npx firebase emulators:start \
   --project=demo-shytalk \
   --import=local/firebase-emulator-data \
   --export-on-exit=local/firebase-emulator-data &
@@ -90,7 +99,15 @@ echo "==> Step 4/8: Seeding data..."
 # Step 5: Start Express API (background)
 # =============================================================================
 echo "==> Step 5/8: Starting Express API..."
-cd "$PROJECT_ROOT/express-api" && NODE_ENV=local TEST_API_KEY=local-test-key node src/index.js 2>&1 | sed 's/^/[API] /' &
+# Use process substitution `> >(sed ...)` instead of a pipe so the
+# colour-prefix on stdout doesn't make `$!` capture sed's PID
+# instead of node's. The pre-substitution form (`node ... | sed ... &`)
+# made `API_PID=$!` capture sed; cleanup's `kill "$API_PID"` killed
+# sed but orphaned node, leaving port 3000 held open across runs.
+# With process substitution, node remains the operative backgrounded
+# process and $! captures it. Pinned by
+# tests/scripts/local-stack-resource-diet.test.js (round 3 fix).
+cd "$PROJECT_ROOT/express-api" && NODE_ENV=local TEST_API_KEY=local-test-key node src/index.js > >(sed 's/^/[API] /') 2>&1 &
 API_PID=$!
 cd "$PROJECT_ROOT"
 
@@ -160,7 +177,15 @@ echo "  View Allure:      npx allure serve allure-results"
 echo ""
 echo "Press Ctrl+C to stop..."
 
-# Keep running until Ctrl+C
-wait $FIREBASE_PID
+# Keep running until Ctrl+C. The `|| true` is required: this script
+# runs under `set -e` (line 2), and `wait` returns Firebase's exit
+# code on natural Firebase termination. On a Firebase crash (non-zero
+# exit), the unguarded `wait` would abort the shell via set -e BEFORE
+# reaching the cleanup() call below — leaving Docker containers
+# (LiveKit, MinIO, Mailpit) running indefinitely. The existing INT/TERM
+# trap covers Ctrl+C, not set-e-induced exits. `|| true` makes the
+# wait fall through to the cleanup line regardless of Firebase's
+# exit code. Pinned by tests/scripts/local-stack-resource-diet.test.js.
+wait $FIREBASE_PID || true
 echo "Firebase emulators exited."
 cleanup

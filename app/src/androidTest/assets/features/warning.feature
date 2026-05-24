@@ -11,8 +11,8 @@ Feature: Warning Acknowledgment
 
   Scenario: Accepting the warning navigates to main screen
     Given I am on the "warning" screen
-    When I wait for the element with tag "warning_acceptButton"
-    And I tap the element with tag "warning_acceptButton"
+    When I wait for the element with tag "warning_acknowledgeButton"
+    And I tap the element with tag "warning_acknowledgeButton"
     Then I should see the element with tag "main_roomsTab"
 
   Scenario: Tapping community standards link navigates to community standards

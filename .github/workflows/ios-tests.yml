@@ -66,6 +66,7 @@ jobs:
               { 'ios-version': '17.5', 'form-factor': 'ipad', simulator: 'iPad Air (M2)' },
               { 'ios-version': '18.1', 'form-factor': 'iphone', simulator: 'iPhone 16' },
               { 'ios-version': '18.1', 'form-factor': 'ipad', simulator: 'iPad Air (M3)' },
+              { 'ios-version': '26.2', 'form-factor': 'iphone', simulator: 'iPhone 17' },
             ];
 
             const ios = '${{ inputs.ios }}' || 'all';
@@ -94,11 +95,31 @@ jobs:
     needs: [resolve-inputs]
     if: always() && needs.resolve-inputs.result == 'success' && needs.resolve-inputs.outputs.run_ios == 'true'
     runs-on: macos-15
-    timeout-minutes: 30
+    # Bumped 2026-05-22 from 30 → 60. PR #714 was the first iOS-touching
+    # PR after PR #708 enabled iOS E2E gating; its build-ios run
+    # cancelled at exactly 30:00. Cold K/N compile alone takes 24-29
+    # min on macos-15; with pod install + xcodebuild build-for-testing
+    # on top, 30 is below the floor. 60 gives ~15 min headroom over the
+    # observed worst case. Pinned by
+    # tests/scripts/ios-tests-build-cache.test.js.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ needs.resolve-inputs.outputs.ref }}
+
+      # The macos-15 runner image ships with BOTH Xcode 16.x (default)
+      # and Xcode 26.x pre-installed. The default `xcode-select`
+      # points at 16.4, which caps iOS testing at 18.5. iOS 26.2 (the
+      # latest simulator runtime) is only available inside Xcode 26.x.
+      # Switching to Xcode 26.3 at the START of build-ios means the
+      # produced .xctest bundle and KMP framework are built against
+      # the latest SDK — backward-compatible to iOS 16.0 deployment
+      # target, but ready for iOS 26.2 simulators in test-ios.
+      - name: Select Xcode 26.3
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.3.app
+          xcodebuild -version
 
       - uses: ./.github/actions/setup-jdk-gradle
 
@@ -106,6 +127,21 @@ jobs:
         with:
           dev-base64: ${{ secrets.GOOGLE_SERVICES_DEV_BASE64 }}
           include-local: 'true'
+
+      # Mirror of deploy-dev.yml's `~/.konan` cache step (added by
+      # PR #690). Without this, every iOS E2E run on a fresh macos-15
+      # VM re-downloads the Kotlin/Native toolchain (~hundreds of MB)
+      # — a few minutes that compound on top of the K/N compile.
+      # Cache key uses the gradle versions-catalog hash so a Kotlin
+      # version bump correctly invalidates; restore-keys provide
+      # partial warmth on bumps.
+      - name: Cache Kotlin/Native (~/.konan)
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            konan-${{ runner.os }}-
 
       - name: Check for iOS test targets
         id: check-tests
@@ -119,7 +155,35 @@ jobs:
 
       - name: Build shared KMP framework for iOS Simulator
         if: steps.check-tests.outputs.has_tests == 'true'
-        run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64
+        # --max-workers=1 — see deploy-dev.yml's matching step. The KMP
+        # plugin can deadlock on parallel K/N link tasks under macOS
+        # runner memory pressure; serializing is safer than fast.
+        run: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64 --max-workers=1
+
+      # Phase 3.2 pbxproj-mutation idempotency check. MUST run BEFORE
+      # `Install CocoaPods` — `pod install` rewrites the pbxproj by
+      # adding baseConfigurationReference entries for Pods-iosApp.*
+      # xcconfigs onto every target-level config (including
+      # Debug-Local/Release-Local). My Phase 3.2 contract asserts
+      # those target-level Local configs have NO base reference
+      # (Phase 3.4 scope). Running this test AFTER pod install reads
+      # the mutated state and fails those assertions.
+      #
+      # Explicit `gem install xcodeproj` because we're now BEFORE
+      # pod install (which would otherwise pull xcodeproj as a
+      # transitive dep). The runner ships with Ruby; gem install is
+      # ~5s.
+      #
+      # NO `if:` guard — the step's precondition is "ruby+xcodeproj
+      # available", which is true on macos-15 after the explicit
+      # gem install below. Inheriting the `has_tests` guard would
+      # silently skip this check if XCTest targets are ever removed
+      # (Round 3 I-1 review fix).
+      - name: Verify pbxproj-mutation script idempotency
+        run: |
+          gem install --user-install xcodeproj
+          cd express-api && \
+          npx jest tests/scripts/ios-local-configurations.test.js
 
       - name: Install CocoaPods
         if: steps.check-tests.outputs.has_tests == 'true'
@@ -127,13 +191,45 @@ jobs:
 
       - name: Build iOS app for testing
         if: steps.check-tests.outputs.has_tests == 'true'
+        # `set -o pipefail` is REQUIRED so xcodebuild's non-zero exit
+        # propagates through the tee pipe. Without it, tee always
+        # exits 0 and a failed build looks successful at the step
+        # level. `mkdir -p` is idempotent and must precede the pipe
+        # because tee will refuse to create a file in a missing
+        # directory.
+        #
+        # The build/ios-build-logs/ output is uploaded by the next
+        # step (Upload xcodebuild logs) as the `ios-xcodebuild-logs`
+        # workflow artifact so any future build failure is
+        # downloadable via `gh run download <run-id> -n
+        # ios-xcodebuild-logs`. GH Actions truncates inline logs on
+        # long compiles (~48k lines hard limit on PR Checks UI), so
+        # the artifact is the only reliable failure-debug surface.
         run: |
+          set -o pipefail
+          mkdir -p build/ios-build-logs
           xcodebuild build-for-testing \
             -workspace iosApp/iosApp.xcworkspace \
             -scheme iosApp \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build/ios-derived-data \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee build/ios-build-logs/xcodebuild-build-for-testing.log
+
+      - name: Upload xcodebuild logs
+        # `if: always()` is the load-bearing keyword. The whole point
+        # of this artifact is debugging FAILURES. Without always(),
+        # the upload only runs on green builds — exactly the opposite
+        # of when the log matters. `if-no-files-found: error` defends
+        # against the tee never receiving output (e.g. xcodebuild
+        # crashed before producing any stdout).
+        if: always() && steps.check-tests.outputs.has_tests == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: ios-xcodebuild-logs
+          path: build/ios-build-logs/
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Upload iOS test bundle
         if: steps.check-tests.outputs.has_tests == 'true'
@@ -161,6 +257,15 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ needs.resolve-inputs.outputs.ref }}
+
+      # Match the build-ios Xcode selection. xcrun simctl uses the
+      # ACTIVE Xcode's runtime catalog — without selecting 26.3 here,
+      # iOS 26.2 simulators are invisible to `simctl list runtimes`
+      # and `simctl create` for the matrix's 26.2 entry would fail.
+      - name: Select Xcode 26.3
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.3.app
+          xcodebuild -version
 
       - name: Download iOS test bundle
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
