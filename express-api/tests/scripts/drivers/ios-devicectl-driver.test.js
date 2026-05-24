@@ -3600,6 +3600,94 @@ describe('ios-devicectl-driver — iosShowsBeansPerWeekChart', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosShowsContributorsList', () => {
+  // Wake 92 — `<Name>'s <Plat> UI shows the list of contributors with
+  // amounts`. Foundation: presence-check giftWall_grid identifier.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('giftWall_grid present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="giftWall_grid" />');
+    expect(await driver.iosShowsContributorsList('Marcus')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosShowsContributorsList('Marcus')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosShowsContributorsList('Marcus')).toBe(false);
+  });
+
+  test('non-self-closing form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftWall_grid"><XCUIElementTypeStaticText name="Bao: 100" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsContributorsList('Marcus')).toBe(true);
+  });
+
+  test('left-boundary — pre_giftWall_grid does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="pre_giftWall_grid" />');
+    expect(await driver.iosShowsContributorsList('Marcus')).toBe(false);
+  });
+
+  test('right-boundary — giftWall_gridExtra does NOT match (closing quote anchors)', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="giftWall_gridExtra" />');
+    expect(await driver.iosShowsContributorsList('Marcus')).toBe(false);
+  });
+
+  test('confusable prefix — giftWallExtras_grid does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="giftWallExtras_grid" />',
+    );
+    expect(await driver.iosShowsContributorsList('Marcus')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther name="giftWall_grid" />');
+    expect(await driver.iosShowsContributorsList('Marcus')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosShowsContributorsList('Marcus')).rejects.toThrow();
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="giftWall_grid" />');
+    expect(await driver.iosShowsContributorsList('Bao')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="giftWall_grid" />');
+    expect(await driver.iosShowsContributorsList(null)).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="giftWall_grid" />');
+    expect(await driver.iosShowsContributorsList(undefined)).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="giftWall_grid" />');
+    expect(await driver.iosShowsContributorsList('')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="giftWall_grid" />');
+    expect(await driver.iosShowsContributorsList('   ')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't

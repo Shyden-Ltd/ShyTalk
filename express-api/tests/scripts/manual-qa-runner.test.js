@@ -19515,6 +19515,80 @@ describe('Wake 92 — "<Name>\'s <Plat> UI shows the list of contributors with a
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/Selma|contributors/);
   });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Selma's Android UI shows the list of contributors with amounts" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/androidShowsContributorsList/);
+  });
+
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsContributorsList: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Nora's iOS Sim UI shows the list of contributors with amounts" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Nora');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsContributorsList: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Nora's iOS Sim UI shows the list of contributors with amounts" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Nora|contributors/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Nora's iOS Sim UI shows the list of contributors with amounts" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/iosShowsContributorsList/);
+  });
+
+  test('Web matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsContributorsList: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web UI shows the list of contributors with amounts" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice');
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsContributorsList: spy } });
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web UI shows the list of contributors with amounts" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|contributors/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Then', text: "Alice's Web UI shows the list of contributors with amounts" },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/webShowsContributorsList/);
+  });
 });
 
 describe('Wake 92 — "<Name>\'s <Plat> UI shows the PM thread with document direction "<X>""', () => {

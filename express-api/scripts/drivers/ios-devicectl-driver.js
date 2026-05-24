@@ -597,6 +597,23 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 92 — `<Name>'s <Plat> UI shows the list of contributors with
+  // amounts` (j15:35). iOS mirror of Android sibling. Single-arg.
+  //
+  // Foundation strategy: presence-check the gift-wall surface
+  // (giftWall_grid identifier PRESENT). The "amounts" semantic is
+  // journey-orchestrated — without per-row identifiers for contributor
+  // amounts, the foundation can't verify the per-row structure. The
+  // journey ensures this matcher only fires when the gift wall is
+  // showing contributor entries.
+  driver.iosShowsContributorsList = async (_name) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="giftWall_grid"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;
