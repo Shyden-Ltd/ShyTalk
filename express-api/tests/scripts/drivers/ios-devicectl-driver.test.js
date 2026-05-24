@@ -2559,6 +2559,138 @@ describe('ios-devicectl-driver — iosOpenProfileFrom', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosOpensTab', () => {
+  // Wake 92 — `<Name> [P-NN] (cohort) opens the <tab> tab on iOS`.
+  // Sister to iosNavigatesBackToTab (Wake 95); same `main_*Tab`
+  // presence-check. Both args (_name, _tab) accepted-and-ignored.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('main_roomsTab present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosOpensTab('Marcus', 'rooms')).toBe(true);
+  });
+
+  test('main_messagesTab present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_messagesTab" />');
+    expect(await driver.iosOpensTab('Marcus', 'messages')).toBe(true);
+  });
+
+  test('main_walletTab present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_walletTab" />');
+    expect(await driver.iosOpensTab('Marcus', 'wallet')).toBe(true);
+  });
+
+  test('absent (no nav bar) → false', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpensTab('Marcus', 'rooms')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosOpensTab('Marcus', 'rooms')).toBe(false);
+  });
+
+  test('non-self-closing form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="main_roomsTab"><XCUIElementTypeStaticText name="Rooms" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosOpensTab('Marcus', 'rooms')).toBe(true);
+  });
+
+  test('left-boundary — pre_main_roomsTab does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="pre_main_roomsTab" />');
+    expect(await driver.iosOpensTab('Marcus', 'rooms')).toBe(false);
+  });
+
+  test('right-boundary — main_roomsTabExtra does NOT match (Tab" anchors right)', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTabExtra" />');
+    expect(await driver.iosOpensTab('Marcus', 'rooms')).toBe(false);
+  });
+
+  test('confusable prefix — mainPage_tab does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="mainPage_tab" />');
+    expect(await driver.iosOpensTab('Marcus', 'rooms')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther name="main_roomsTab" />');
+    expect(await driver.iosOpensTab('Marcus', 'rooms')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosOpensTab('Marcus', 'rooms')).rejects.toThrow();
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosOpensTab('Bao', 'rooms')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosOpensTab(null, 'rooms')).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosOpensTab(undefined, 'rooms')).toBe(true);
+  });
+
+  test('empty name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosOpensTab('', 'rooms')).toBe(true);
+  });
+
+  test('whitespace name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosOpensTab('   ', 'rooms')).toBe(true);
+  });
+
+  test('null tab → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosOpensTab('Marcus', null)).toBe(true);
+  });
+
+  test('undefined tab → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosOpensTab('Marcus', undefined)).toBe(true);
+  });
+
+  test('empty tab → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosOpensTab('Marcus', '')).toBe(true);
+  });
+
+  test('whitespace tab → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosOpensTab('Marcus', '   ')).toBe(true);
+  });
+
+  test('different tab still passes (foundation does not verify specific tab)', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosOpensTab('Marcus', 'AnyTabName')).toBe(true);
+  });
+
+  test('first-match contract — two main_*Tab nodes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="main_roomsTab" />' +
+        '<XCUIElementTypeOther identifier="main_messagesTab" />',
+    );
+    expect(await driver.iosOpensTab('Marcus', 'rooms')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't

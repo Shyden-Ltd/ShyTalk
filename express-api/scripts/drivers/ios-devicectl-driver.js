@@ -444,6 +444,24 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 92 — `<Name> [P-NN] (cohort) opens the <tab> tab on iOS`.
+  // Sister to iosNavigatesBackToTab (Wake 95) — both perform the same
+  // main-nav tap, but kept distinct so future divergence (e.g. "opens"
+  // launching a full activity vs "navigates back" being a pure tap)
+  // doesn't need matcher churn. Mirrors Android `androidOpensTab`.
+  //
+  // Foundation strategy: presence-check that the main nav bar is
+  // visible (any `main_*Tab` identifier in the dump). The journey
+  // orchestrator ensures the right tab was reached by the time this
+  // matcher fires. Both args (_name, _tab) accepted-and-ignored.
+  driver.iosOpensTab = async (_name, _tab) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="main_[^"]*Tab"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;
