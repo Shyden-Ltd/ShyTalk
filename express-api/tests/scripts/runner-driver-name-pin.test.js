@@ -31,7 +31,7 @@ const fs = require('fs');
 const path = require('path');
 
 const RUNNER_PATH = path.resolve(__dirname, '../../scripts/manual-qa-runner.js');
-const RUNNER_SRC = fs.readFileSync(RUNNER_PATH, 'utf8');
+let RUNNER_SRC;
 
 const DISPATCH_LINE = "const driver = platform.startsWith('Web') ? ctx.webDriver : ctx.uiDriver;";
 const DRIVER_NAME_LINE =
@@ -50,6 +50,14 @@ function countOccurrences(haystack, needle) {
 }
 
 describe('manual-qa-runner — driver-name error-message pin', () => {
+  beforeAll(() => {
+    // Load the runner source inside beforeAll (rather than at module
+    // level) so a missing/renamed file produces a named test failure
+    // instead of a Jest module-load error. Matches the convention
+    // used in manual-qa-runner.test.js.
+    RUNNER_SRC = fs.readFileSync(RUNNER_PATH, 'utf8');
+  });
+
   test('zero handlers retain the buggy hardcoded ctx.uiDriver template', () => {
     // The bug being pinned: `ctx.uiDriver.${methodName} not configured`
     // anywhere in the runner. Every occurrence was migrated to the
@@ -75,7 +83,7 @@ describe('manual-qa-runner — driver-name error-message pin', () => {
     expect(offendingLineNumbers).toEqual([]);
   });
 
-  test('dispatch and driverName line counts match (110 each as of PR #815)', () => {
+  test('dispatch and driverName line counts match, and total is at least 110', () => {
     // 1:1 ratio pins the invariant: any new dispatch handler that
     // forgets driverName, or any driverName declaration orphaned from
     // its dispatch, breaks this count.
