@@ -722,6 +722,26 @@ async function createIosDriver({ udid: preferred } = {}) {
     return senderRx.test(dump);
   };
 
+  // Wake 100 — `<Name>'s <Plat> UI shows the in-app gift notification
+  // with sender "<X>" and gift "<Y>"` (j05). iOS mirror of Android
+  // sibling. Toast/banner when a gift is received in real time. Driver
+  // receives (recipient, sender, giftId).
+  //
+  // Foundation strategy: presence-check `giftNotification_*` identifier
+  // PREFIX. No such identifier exists in commonMain yet — the real-time
+  // gift notification toast is unbuilt. Returns false in real journeys
+  // today; lands true when commonMain ships giftNotification_toast /
+  // giftNotification_giftIcon identifiers. Per-sender and per-gift
+  // verification need attribute extraction; deferred. All 3 args
+  // accepted-and-ignored.
+  driver.iosShowsInAppGiftNotification = async (_recipient, _sender, _giftId) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="giftNotification_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;
