@@ -4606,6 +4606,182 @@ describe('ios-devicectl-driver — iosShowsInAppGiftNotification', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosShowsInResults', () => {
+  // Wake 101 — `<Name>'s <Plat> UI shows <Other> in results[ with
+  // displayName "<X>"]`. Foundation: presence-check searchResults_*
+  // identifier PREFIX.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('searchResults_userTile present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile" />',
+    );
+    expect(await driver.iosShowsInResults('Greta', 'Raul', 'Raul Z.')).toBe(true);
+  });
+
+  test('searchResults_container present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_container" />',
+    );
+    expect(await driver.iosShowsInResults('Greta', 'Raul', null)).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosShowsInResults('Greta', 'Raul', null)).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosShowsInResults('Greta', 'Raul', null)).toBe(false);
+  });
+
+  test('non-self-closing form → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile"><XCUIElementTypeStaticText name="Raul" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosShowsInResults('Greta', 'Raul', null)).toBe(true);
+  });
+
+  test('left-boundary — pre_searchResults_X does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="pre_searchResults_userTile" />',
+    );
+    expect(await driver.iosShowsInResults('Greta', 'Raul', null)).toBe(false);
+  });
+
+  test('right-boundary — searchResults_userTileExtra still matches', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTileExtra" />',
+    );
+    expect(await driver.iosShowsInResults('Greta', 'Raul', null)).toBe(true);
+  });
+
+  test('confusable — searchResultsExtras_panel does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResultsExtras_panel" />',
+    );
+    expect(await driver.iosShowsInResults('Greta', 'Raul', null)).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther name="searchResults_userTile" />');
+    expect(await driver.iosShowsInResults('Greta', 'Raul', null)).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosShowsInResults('Greta', 'Raul', null)).rejects.toThrow();
+  });
+
+  test('null viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile" />',
+    );
+    expect(await driver.iosShowsInResults(null, 'Raul', null)).toBe(true);
+  });
+
+  test('undefined viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile" />',
+    );
+    expect(await driver.iosShowsInResults(undefined, 'Raul', null)).toBe(true);
+  });
+
+  test('empty viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile" />',
+    );
+    expect(await driver.iosShowsInResults('', 'Raul', null)).toBe(true);
+  });
+
+  test('whitespace viewer → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile" />',
+    );
+    expect(await driver.iosShowsInResults('   ', 'Raul', null)).toBe(true);
+  });
+
+  test('null target → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile" />',
+    );
+    expect(await driver.iosShowsInResults('Greta', null, null)).toBe(true);
+  });
+
+  test('undefined target → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile" />',
+    );
+    expect(await driver.iosShowsInResults('Greta', undefined, null)).toBe(true);
+  });
+
+  test('empty target → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile" />',
+    );
+    expect(await driver.iosShowsInResults('Greta', '', null)).toBe(true);
+  });
+
+  test('whitespace target → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile" />',
+    );
+    expect(await driver.iosShowsInResults('Greta', '   ', null)).toBe(true);
+  });
+
+  test('non-null displayName → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile" />',
+    );
+    expect(await driver.iosShowsInResults('Greta', 'Raul', 'Raul Z.')).toBe(true);
+  });
+
+  test('null displayName → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile" />',
+    );
+    expect(await driver.iosShowsInResults('Greta', 'Raul', null)).toBe(true);
+  });
+
+  test('undefined displayName → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile" />',
+    );
+    expect(await driver.iosShowsInResults('Greta', 'Raul', undefined)).toBe(true);
+  });
+
+  test('empty displayName → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile" />',
+    );
+    expect(await driver.iosShowsInResults('Greta', 'Raul', '')).toBe(true);
+  });
+
+  test('whitespace displayName → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile" />',
+    );
+    expect(await driver.iosShowsInResults('Greta', 'Raul', '   ')).toBe(true);
+  });
+
+  test('first-match contract — two searchResults_* nodes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="searchResults_userTile" />' +
+        '<XCUIElementTypeOther identifier="searchResults_container" />',
+    );
+    expect(await driver.iosShowsInResults('Greta', 'Raul', null)).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't
