@@ -906,8 +906,32 @@ describe('ios-tests.yml — Verify pbxproj-mutation script idempotency step', ()
     // ordering on top.
     expect(idempotencyStep).toContain('gem install xcodeproj');
     expect(idempotencyStep).toContain('npx jest');
-    expect(idempotencyStep.indexOf('gem install xcodeproj')).toBeLessThan(
-      idempotencyStep.indexOf('npx jest'),
-    );
+    // R6 I-1: the YAML comments captured by extractStep also mention
+    // `gem install xcodeproj` (the R4 I-2 explanatory comment),
+    // so indexOf on the full step would hit the COMMENT first and
+    // silently pass a swapped ordering inside the `run: |` block.
+    // Scope the ordering check to the run-block contents only.
+    const runBlock = idempotencyStep.slice(idempotencyStep.indexOf('run: |'));
+    expect(runBlock.indexOf('gem install xcodeproj')).toBeLessThan(runBlock.indexOf('npx jest'));
+  });
+
+  test('runBlock scoping excludes the comment mention of `gem install xcodeproj` (R6 regression pin)', () => {
+    // R6 review I-1 regression pin: prove the `run: |` scoping is
+    // load-bearing. The R4 explanatory comment in ios-tests.yml
+    // mentions the literal string `gem install xcodeproj` BEFORE
+    // the `run: |` block. Without the slice, `indexOf` would hit
+    // the comment occurrence and an inverted ordering inside the
+    // run-block would silently pass.
+    //
+    // This test pins the scoping behaviour: the runBlock substring
+    // must NOT contain the comment-line prefix `# R4 review I-2:`
+    // (which is what the comment line starts with), and the
+    // `gem install xcodeproj` text inside runBlock must come from
+    // the actual shell command, not the comment.
+    const runBlockStart = idempotencyStep.indexOf('run: |');
+    expect(runBlockStart).toBeGreaterThanOrEqual(0);
+    const runBlock = idempotencyStep.slice(runBlockStart);
+    expect(runBlock).not.toContain('# R4 review I-2');
+    expect(runBlock).toContain('gem install xcodeproj');
   });
 });
