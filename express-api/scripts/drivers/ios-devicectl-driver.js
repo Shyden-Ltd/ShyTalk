@@ -417,6 +417,19 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 88 — `<Name> on <Plat> opens <Other>'s profile and taps
+  // "<X>"` (j11:33). Mirrors Android sibling #767. Foundation:
+  // presence-check on `profile_*` identifier PREFIX. Per-button
+  // tap (Block/Report/Follow) is deferred until per-action testTags
+  // exist. All 3 args (_actor, _target, _button) accepted-and-ignored.
+  driver.iosOpenProfileAndTap = async (_actor, _target, _button) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="profile_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;
