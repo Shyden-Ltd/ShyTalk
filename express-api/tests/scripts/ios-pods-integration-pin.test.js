@@ -62,7 +62,9 @@ describe('iOS Pods integration — Podfile contract', () => {
     // The inherit must be specifically :search_paths — re-embedding
     // (:complete or default) would duplicate-symbol since iosApp.app
     // already links them and TEST_HOST loads that.
-    const inheritMatch = PODFILE_SRC.match(/target ['"]iosAppTests['"]\s+do\s+inherit!\s+:search_paths\s+end/);
+    const inheritMatch = PODFILE_SRC.match(
+      /target ['"]iosAppTests['"]\s+do\s+inherit!\s+:search_paths\s+end/,
+    );
     expect(inheritMatch).not.toBeNull();
   });
 

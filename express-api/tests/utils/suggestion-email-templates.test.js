@@ -815,7 +815,6 @@ describe('environment-aware fallbacks (env-isolation regression)', () => {
   function loadFresh() {
     let mod;
     jest.isolateModules(() => {
-      // eslint-disable-next-line global-require
       mod = require('../../src/utils/suggestion-email-templates');
     });
     return mod;

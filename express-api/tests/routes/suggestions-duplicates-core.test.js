@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 /**
  * Tests for suggestion duplicate detection, merge, dispute, admin search,
  * and blocked-topic similarity matching.

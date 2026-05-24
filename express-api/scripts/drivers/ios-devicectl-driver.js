@@ -1,3 +1,6 @@
+/* eslint-disable sonarjs/no-os-command-from-path -- `xcrun` is the
+   Xcode command-line dispatcher; resolving via PATH is the standard
+   macOS pattern. Operator-installed; not user input. */
 /**
  * iOS driver backed by `xcrun devicectl` — physical iPhone target.
  *
@@ -376,7 +379,7 @@ async function createIosDriver({ udid: preferred } = {}) {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
     const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = new RegExp(`<XCUIElementType\\w+[^>]*\\bidentifier="${escTag}"[^>]*\\/?>`);
     return tagRx.test(dump);
   };
@@ -541,7 +544,7 @@ async function createIosDriver({ udid: preferred } = {}) {
     const escBalance = balance.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // Scan within the captured tag for label=, name=, or value=
     // carrying the balance value with digit-boundary protection.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const valueRx = new RegExp(
       `\\b(?:label|name|value)="[^"]*(?<![\\w-])${escBalance}(?!\\w)[^"]*"`,
     );
@@ -573,7 +576,7 @@ async function createIosDriver({ udid: preferred } = {}) {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
     const escBanner = banner.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     return new RegExp(`\\b(?:label|name|value)="[^"]*${escBanner}[^"]*"`).test(dump);
   };
 
@@ -708,14 +711,14 @@ async function createIosDriver({ udid: preferred } = {}) {
     // both word-char AND hyphen on either side, so "roses"/
     // "wildrose"/"rose-gold" are all rejected for giftId="rose".
     const escGift = giftId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const giftRx = new RegExp(
       `\\b(?:label|name|value)="[^"]*(?<![\\w-])${escGift}(?![\\w-])[^"]*"`,
     );
     if (!giftRx.test(dump)) return false;
     // Step 3: sender appears with symmetric word-boundary.
     const escSender = sender.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const senderRx = new RegExp(
       `\\b(?:label|name|value)="[^"]*(?<![\\w-])${escSender}(?![\\w-])[^"]*"`,
     );
@@ -785,7 +788,7 @@ async function createIosDriver({ udid: preferred } = {}) {
     if (!gridRx.test(dump)) return false;
     // Step 2: target name appears with symmetric word-boundary.
     const escTarget = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const targetRx = new RegExp(
       `\\b(?:label|name|value)="[^"]*(?<![\\w-])${escTarget}(?![\\w-])[^"]*"`,
     );
@@ -800,11 +803,11 @@ async function createIosDriver({ udid: preferred } = {}) {
     const dump = await driver.iosUiDump();
     if (!dump) return false;
     const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = new RegExp(`<XCUIElementType\\w+[^>]*\\bidentifier="${escTag}"[^>]*\\/?>`);
     const tagMatch = dump.match(tagRx);
     if (!tagMatch) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     return /(?<![\w-])enabled="false"/.test(tagMatch[0]);
   };
 

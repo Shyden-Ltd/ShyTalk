@@ -37,11 +37,16 @@ export default [
     },
   },
   {
-    // Relax rules for test files — test scaffolding often needs let + reassign patterns
+    // Relax rules for test files — test scaffolding often needs let +
+    // reassign patterns, AND test setups commonly redeclare helpers
+    // inside describe/test blocks for isolation (intentional shadow of
+    // the file-scope import). no-shadow as a warning floods CI on a
+    // pattern that's correct-by-convention in jest test layouts.
     files: ['tests/**/*.test.js', 'src/__tests__/**/*.test.js'],
     rules: {
       'prefer-const': 'off',
       'no-undef': 'off',
+      'no-shadow': 'off',
     },
   },
   {

@@ -235,7 +235,6 @@ describe('CDN_URL env-isolation fallback', () => {
   function loadFresh() {
     let mod;
     jest.isolateModules(() => {
-      // eslint-disable-next-line global-require
       mod = require('../../src/utils/email-templates');
     });
     return mod;

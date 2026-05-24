@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+/* eslint-disable no-console -- operator-facing CLI; console output is
+   the interface, not a side-effect. */
 /**
  * Provision a dedicated Dev QA Firebase Auth user + Firestore identity
  * + custom claims, so an operator (or autonomous QA loop) can sign into
