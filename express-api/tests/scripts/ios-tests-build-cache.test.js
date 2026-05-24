@@ -911,7 +911,16 @@ describe('ios-tests.yml — Verify pbxproj-mutation script idempotency step', ()
     // so indexOf on the full step would hit the COMMENT first and
     // silently pass a swapped ordering inside the `run: |` block.
     // Scope the ordering check to the run-block contents only.
-    const runBlock = idempotencyStep.slice(idempotencyStep.indexOf('run: |'));
+    //
+    // R7 I-1: guard runBlockStart >= 0 for symmetry with the
+    // regression pin test below — if `run: |` is ever absent (e.g.,
+    // the step migrates to `run: |-` or `run: >`), the slice would
+    // become a no-op (slice(-1) = last char) and the comparison
+    // would produce the cryptic `-1 < -1` failure message. The
+    // guard fails first with a clear diagnostic.
+    const runBlockStart = idempotencyStep.indexOf('run: |');
+    expect(runBlockStart).toBeGreaterThanOrEqual(0);
+    const runBlock = idempotencyStep.slice(runBlockStart);
     expect(runBlock.indexOf('gem install xcodeproj')).toBeLessThan(runBlock.indexOf('npx jest'));
   });
 
