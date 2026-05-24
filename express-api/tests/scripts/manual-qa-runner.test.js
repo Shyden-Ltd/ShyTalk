@@ -22572,6 +22572,101 @@ describe('Wake 100 — `<Name>\'s <Plat> UI shows the new "<X>" balance via Fire
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/Alice|balance|1,234/);
   });
+
+  test('Android driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s Android UI shows the new "5,000" balance via Firestore listener',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/androidShowsBalanceViaListener/);
+  });
+
+  test('iOS Sim matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ uiDriver: { iosShowsBalanceViaListener: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Nora\'s iOS Sim UI shows the new "5,000" balance via Firestore listener',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Nora', '5,000');
+  });
+
+  test('iOS Sim driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ uiDriver: { iosShowsBalanceViaListener: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Nora\'s iOS Sim UI shows the new "1,234" balance via Firestore listener',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Nora|balance|1,234/);
+  });
+
+  test('iOS Sim driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Nora\'s iOS Sim UI shows the new "5,000" balance via Firestore listener',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/iosShowsBalanceViaListener/);
+  });
+
+  test('Web matching → ok', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({ webDriver: { webShowsBalanceViaListener: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s Web UI shows the new "$5,000" balance via Firestore listener',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('Alice', '$5,000');
+  });
+
+  test('Web driver returns false → fail', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({ webDriver: { webShowsBalanceViaListener: spy } });
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s Web UI shows the new "1,234" balance via Firestore listener',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Alice|balance|1,234/);
+  });
+
+  test('Web driver missing → fail', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'Alice\'s Web UI shows the new "5,000" balance via Firestore listener',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/webShowsBalanceViaListener/);
+  });
 });
 
 // ── Wake 101 — j09/j10 voice-room cluster ───────────────────────────

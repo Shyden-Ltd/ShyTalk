@@ -514,6 +514,40 @@ async function createIosDriver({ udid: preferred } = {}) {
     return false;
   };
 
+  // Wake 100 — `<Name>'s <Plat> UI shows the new "<X>" balance via
+  // Firestore listener` (j06 — wallet refresh via real-time listener).
+  // iOS mirror of Android sibling. Inspects the `wallet_balance`
+  // identifier node's label/name/value XCUITest attrs for the balance
+  // string.
+  //
+  // Balance shape: user-facing decimal with optional digit separators
+  // ("5,000"), currency prefix ("$5,000"), and label padding
+  // ("Balance: 5,000 coins"). Word-boundary regex prevents numeric-
+  // prefix collisions ("45,000" must NOT match "5,000") and numeric-
+  // suffix collisions ("5,0000" must NOT match "5,000"). Balance arg
+  // is regex-escaped so "." matches a literal dot.
+  //
+  // Two-step extraction (Phase-5 pattern, same as iosReplacesFollowButton):
+  // capture the wallet_balance tag, then scan its attributes — order
+  // independent across label/name/value.
+  driver.iosShowsBalanceViaListener = async (_name, balance) => {
+    if (!balance || !balance.trim()) return false;
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="wallet_balance"[^>]*\/?>/;
+    const tagMatch = dump.match(tagRx);
+    if (!tagMatch) return false;
+    const escBalance = balance.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Scan within the captured tag for label=, name=, or value=
+    // carrying the balance value with digit-boundary protection.
+    // eslint-disable-next-line sonarjs/slow-regex
+    const valueRx = new RegExp(
+      `\\b(?:label|name|value)="[^"]*(?<![\\w-])${escBalance}(?!\\w)[^"]*"`,
+    );
+    return valueRx.test(tagMatch[0]);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;

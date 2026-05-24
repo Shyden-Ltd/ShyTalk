@@ -3033,6 +3033,250 @@ describe('ios-devicectl-driver — iosReplacesFollowButton', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosShowsBalanceViaListener', () => {
+  // Wake 100 — `<Name>'s <Plat> UI shows the new "<X>" balance via
+  // Firestore listener`. Foundation: capture wallet_balance tag, scan
+  // label/name/value attrs for balance with word-boundary protection.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  // Happy paths across each label-bearing attribute.
+  test('label="5,000" matches "5,000" → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(true);
+  });
+
+  test('name="$5,000" matches "$5,000" → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" name="$5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '$5,000')).toBe(true);
+  });
+
+  test('value="5,000" matches "5,000" → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" value="5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(true);
+  });
+
+  // Substring tolerance with padding (label-style and currency-prefix).
+  test('label="Balance: 5,000 coins" matches "5,000" → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="Balance: 5,000 coins" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(true);
+  });
+
+  test('value="$5,000" matches "5,000" (currency prefix tolerated)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" value="$5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(true);
+  });
+
+  // Numeric-prefix collision: "45,000" must NOT match "5,000".
+  test('label="45,000" does NOT match "5,000" (prefix collision)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="45,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(false);
+  });
+
+  // Numeric-suffix collision: "5,0000" must NOT match "5,000".
+  test('label="5,0000" does NOT match "5,000" (suffix collision)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="5,0000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(false);
+  });
+
+  // Decimal point literal protection.
+  test('balance "1,234.56" matches "1,234.56" exactly', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="1,234.56" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '1,234.56')).toBe(true);
+  });
+
+  test('balance "1,234.56" does NOT match label "1,234X56" (regex-escape protects .)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="1,234X56" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '1,234.56')).toBe(false);
+  });
+
+  // Asymmetric boundary discipline (mirrors Android sibling): the LEFT
+  // boundary excludes both \w and hyphen, but the RIGHT boundary only
+  // excludes \w. Hyphen-suffix is therefore tolerated as a label
+  // separator ("5,000-coin minimum" still matches "5,000"). Underscore-
+  // suffix is REJECTED because underscore IS a word char.
+  test('label="5,000-coin" still matches "5,000" (hyphen tolerated on right)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="5,000-coin" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(true);
+  });
+
+  test('label="5,000_extra" does NOT match "5,000" (underscore is \\w)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="5,000_extra" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(false);
+  });
+
+  test('label="extra-5,000" does NOT match "5,000" (hyphen blocked on LEFT only)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="extra-5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(false);
+  });
+
+  // Tag absence.
+  test('wallet_balance absent → false', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="profile_displayName" label="5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(false);
+  });
+
+  test('tag present but no label/name/value attrs → false', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(false);
+  });
+
+  test('tag present with non-matching label → false', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="0" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(false);
+  });
+
+  // identifier value itself never leaks as a label candidate (\bidentifier=
+  // is excluded from attrRx alternation).
+  test('balance "wallet_balance" does NOT match identifier value itself', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', 'wallet_balance')).toBe(false);
+  });
+
+  // Cross-tag scan-confinement.
+  test('label="5,000" on a DIFFERENT tag → false', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="other_widget" label="5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(false);
+  });
+
+  // Boundary checks on identifier.
+  test('left-boundary — pre_wallet_balance does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="pre_wallet_balance" label="5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(false);
+  });
+
+  test('right-boundary — wallet_balanceExtra does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balanceExtra" label="5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(false);
+  });
+
+  // attr-scan continues past mismatched name to match value.
+  test('label mismatches but value matches → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="Wallet" value="5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(true);
+  });
+
+  // Input-rejection isolation: throwing iosUiDump proves guard short-
+  // circuits before any dump fetch.
+  test('null balance → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
+    expect(await driver.iosShowsBalanceViaListener('Alice', null)).toBe(false);
+  });
+
+  test('undefined balance → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
+    expect(await driver.iosShowsBalanceViaListener('Alice', undefined)).toBe(false);
+  });
+
+  test('empty balance → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
+    expect(await driver.iosShowsBalanceViaListener('Alice', '')).toBe(false);
+  });
+
+  test('whitespace balance → false, iosUiDump not called', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('must not be called');
+    };
+    expect(await driver.iosShowsBalanceViaListener('Alice', '   ')).toBe(false);
+  });
+
+  // name (first arg) accepted-and-ignored.
+  test('null name → still evaluates balance', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener(null, '5,000')).toBe(true);
+  });
+
+  test('undefined name → still evaluates balance', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener(undefined, '5,000')).toBe(true);
+  });
+
+  test('empty name → still evaluates balance', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('', '5,000')).toBe(true);
+  });
+
+  test('whitespace name → still evaluates balance', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('   ', '5,000')).toBe(true);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosShowsBalanceViaListener('Alice', '5,000')).rejects.toThrow();
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't
