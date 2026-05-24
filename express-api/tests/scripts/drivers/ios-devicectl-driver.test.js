@@ -2378,6 +2378,187 @@ describe('ios-devicectl-driver — iosOpenProfileAndTap', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosOpenProfileFrom', () => {
+  // Wake 89 — `<Name> on <Plat> opens <Other>'s profile from "<Src>"`
+  // (j10:14). Mirrors Android sibling. `_source` is the surface
+  // (room|chat|search|...); accepted-and-ignored at foundation tier.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('profile_displayName present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom('Greta', 'Raul', 'room')).toBe(true);
+  });
+
+  test('profile_avatar present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="profile_avatar" />');
+    expect(await driver.iosOpenProfileFrom('Greta', 'Raul', 'chat')).toBe(true);
+  });
+
+  test('absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosOpenProfileFrom('Greta', 'Raul', 'room')).toBe(false);
+  });
+
+  test('empty dump → false', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosOpenProfileFrom('Greta', 'Raul', 'room')).toBe(false);
+  });
+
+  test('non-self-closing → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName"><XCUIElementTypeStaticText name="Raul" /></XCUIElementTypeOther>',
+    );
+    expect(await driver.iosOpenProfileFrom('Greta', 'Raul', 'room')).toBe(true);
+  });
+
+  test('left-boundary — pre_profile_X does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="pre_profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom('Greta', 'Raul', 'room')).toBe(false);
+  });
+
+  test('right-boundary — profile_displayNameExtra still matches', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayNameExtra" />',
+    );
+    expect(await driver.iosOpenProfileFrom('Greta', 'Raul', 'room')).toBe(true);
+  });
+
+  test('confusable prefix — profileSettings_panel does NOT match', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profileSettings_panel" />',
+    );
+    expect(await driver.iosOpenProfileFrom('Greta', 'Raul', 'room')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther name="profile_displayName" />');
+    expect(await driver.iosOpenProfileFrom('Greta', 'Raul', 'room')).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosOpenProfileFrom('Greta', 'Raul', 'room')).rejects.toThrow();
+  });
+
+  test('actor accepted-and-ignored — Bao passes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom('Bao', 'Raul', 'room')).toBe(true);
+  });
+
+  test('null actor → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom(null, 'Raul', 'room')).toBe(true);
+  });
+
+  test('undefined actor → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom(undefined, 'Raul', 'room')).toBe(true);
+  });
+
+  test('empty actor → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom('', 'Raul', 'room')).toBe(true);
+  });
+
+  test('whitespace actor → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom('   ', 'Raul', 'room')).toBe(true);
+  });
+
+  test('null target → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom('Greta', null, 'room')).toBe(true);
+  });
+
+  test('undefined target → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom('Greta', undefined, 'room')).toBe(true);
+  });
+
+  test('empty target → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom('Greta', '', 'room')).toBe(true);
+  });
+
+  test('whitespace target → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom('Greta', '   ', 'room')).toBe(true);
+  });
+
+  test('null source → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom('Greta', 'Raul', null)).toBe(true);
+  });
+
+  test('undefined source → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom('Greta', 'Raul', undefined)).toBe(true);
+  });
+
+  test('empty source → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom('Greta', 'Raul', '')).toBe(true);
+  });
+
+  test('whitespace source → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom('Greta', 'Raul', '   ')).toBe(true);
+  });
+
+  test('different source still passes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosOpenProfileFrom('Greta', 'Raul', 'search')).toBe(true);
+  });
+
+  test('first-match contract — two profile_* nodes', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />' +
+        '<XCUIElementTypeOther identifier="profile_avatar" />',
+    );
+    expect(await driver.iosOpenProfileFrom('Greta', 'Raul', 'room')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't
