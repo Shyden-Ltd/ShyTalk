@@ -99,7 +99,14 @@ jobs:
 
   lint:
     needs: [detect-changes]
-    if: needs.detect-changes.outputs.workflow_only != 'true'
+    # No workflow_only short-circuit: lint.yml's unconditional steps
+    # (actionlint, check-no-paid-runners, check-workflow-concurrency-
+    # scoping, check-orphan-i18n-keys, check-release-trigger) MUST run
+    # on workflow-only PRs — that's the case where they matter most,
+    # since those PRs are the ones changing workflows. The heavyweight
+    # steps inside lint.yml (ktlint, Express lint, Gherkin lint) are
+    # already gated on app_changed / backend_changed, so the cost on
+    # workflow-only PRs is ~30s of cheap shellcheck/script invocations.
     uses: ./.github/workflows/lint.yml
     with:
       ref: ${{ github.event.pull_request.head.sha }}

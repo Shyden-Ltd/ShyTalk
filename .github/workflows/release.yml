@@ -130,7 +130,7 @@ jobs:
               if gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$branch" 2>/tmp/delete-err; then
                 echo "Auto-deleted orphan release branch: $branch"
               else
-                echo "::warning::Could not auto-delete orphan branch '$branch' (likely ruleset-blocked). Proceeding — this run uses a unique per-run-id branch name and won't collide. To clean up the orphan later, delete via GitHub UI (Settings > Branches > $branch > Delete) or add the Release app to the no-force-push-anywhere ruleset's bypass list."
+                echo "::warning::Could not auto-delete orphan branch '$branch' (likely ruleset-blocked). Proceeding — this run uses a unique per-run-id branch name and won't collide. To clean up the orphan later, delete via GitHub UI (Branches page (github.com/${{ github.repository }}/branches) > find $branch > trash icon) or add the Release app to the no-force-push-anywhere ruleset's bypass list."
                 echo "API error output (informational):"
                 cat /tmp/delete-err
               fi
@@ -382,12 +382,17 @@ jobs:
           # of this same run created the branch), accept it and move
           # on. If it exists at a DIFFERENT sha, error out — that's
           # unexpected state that the operator should investigate.
-          EXISTING_SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/${BRANCH}" --jq '.object.sha' 2>/dev/null || true)
+          # jq's `// empty` converts a missing key (returns `null`) to no
+          # output, so EXISTING_SHA stays empty when the API returns a
+          # 200 with a body that lacks `.object.sha` (e.g. a malformed
+          # response or a future API contract drift). The `|| true` on
+          # the outer pipeline already handles 404 exit codes.
+          EXISTING_SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/${BRANCH}" --jq '.object.sha // empty' 2>/dev/null || true)
           if [ -n "${EXISTING_SHA:-}" ]; then
             if [ "${EXISTING_SHA}" = "${PARENT_SHA}" ]; then
               echo "Branch ${BRANCH} already exists at ${PARENT_SHA} (idempotent re-run); skipping creation."
             else
-              echo "::error::Branch ${BRANCH} already exists but points at ${EXISTING_SHA} (expected ${PARENT_SHA}). This usually means a prior attempt of this run advanced the branch before failing. Delete the branch via GitHub UI (Settings > Branches > ${BRANCH} > Delete) and re-trigger."
+              echo "::error::Branch ${BRANCH} already exists but points at ${EXISTING_SHA} (expected ${PARENT_SHA}). This usually means a prior attempt of this run advanced the branch before failing. Delete the branch via the Branches page (github.com/${{ github.repository }}/branches > find ${BRANCH} > trash icon) and re-trigger."
               exit 1
             fi
           else
@@ -503,7 +508,11 @@ jobs:
             echo "----- PR body (from $PR_BODY_FILE) -----"
             cat "$PR_BODY_FILE"
             echo "----------------------------------------"
-            echo "Recovery command: gh pr create --base main --head ${BRANCH} --title 'chore: release v${VERSION}' --body \"<paste body above>\""
+            # Recovery via --body-file rather than --body to avoid the
+            # quoting trap (the body contains literal " in markdown
+            # footnotes, which would break a shell --body argument).
+            echo "Recovery: save the body above to /tmp/pr-body.md, then run:"
+            echo "  gh pr create --base main --head ${BRANCH} --title 'chore: release v${VERSION}' --body-file /tmp/pr-body.md"
             exit 1
           fi
           PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
