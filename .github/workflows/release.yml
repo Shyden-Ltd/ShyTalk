@@ -382,13 +382,20 @@ jobs:
           # of this same run created the branch), accept it and move
           # on. If it exists at a DIFFERENT sha, error out — that's
           # unexpected state that the operator should investigate.
-          # jq's `// empty` converts a missing key (returns `null`) to no
-          # output, so EXISTING_SHA stays empty when the API returns a
-          # 200 with a body that lacks `.object.sha` (e.g. a malformed
-          # response or a future API contract drift). The `|| true` on
-          # the outer pipeline already handles 404 exit codes.
-          EXISTING_SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/${BRANCH}" --jq '.object.sha // empty' 2>/dev/null || true)
-          if [ -n "${EXISTING_SHA:-}" ]; then
+          #
+          # IMPORTANT: gh api with `--jq` on a 404 response prints the
+          # raw error JSON body to stdout (the --jq filter is bypassed
+          # when gh detects an HTTP error). That's why we split the
+          # exit-code check from the body parse — checking the exit
+          # code via `if gh api ...` is the only reliable way to
+          # distinguish "branch exists (200)" from "branch missing
+          # (404)". Both write to stdout; only the exit code is
+          # diagnostic.
+          if gh api "repos/${{ github.repository }}/git/ref/heads/${BRANCH}" \
+                > /tmp/ref-response.json 2>/dev/null; then
+            # 200 — branch exists. Parse sha from the response body.
+            # `// empty` covers a hypothetical 200-but-missing-key case.
+            EXISTING_SHA=$(jq -r '.object.sha // empty' /tmp/ref-response.json)
             if [ "${EXISTING_SHA}" = "${PARENT_SHA}" ]; then
               echo "Branch ${BRANCH} already exists at ${PARENT_SHA} (idempotent re-run); skipping creation."
             else
@@ -396,6 +403,7 @@ jobs:
               exit 1
             fi
           else
+            # 404 — branch doesn't exist. Create it.
             if ! gh api -X POST "repos/${{ github.repository }}/git/refs" \
                   -f "ref=refs/heads/${BRANCH}" \
                   -f "sha=${PARENT_SHA}" > /tmp/refs-response.json 2>&1; then
