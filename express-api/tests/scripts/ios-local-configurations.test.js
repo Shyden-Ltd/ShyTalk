@@ -223,9 +223,13 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
     });
 
     // Removed 'test targets are NOT modified in Phase 3.2 (deferred
-    // to 3.3)' — Phase 3.4 (PR #827, iosAppTests Pods integration only; the original PR #722 combined 3.3+3.4 never merged) intentionally
-    // crosses that boundary. The positive-state assertions for test-
-    // target Local configs are in ios-local-3-3-3-4-combined.test.js.
+    // to 3.3)' — Phase 3.4 (PR #827, iosAppTests Pods integration
+    // only) intentionally crosses that boundary. The original
+    // combined Phase 3.3 + 3.4 branch `ios-local/3-3-3-4-combined`
+    // (commit c2101fc3216) was authored but never merged; PR #827
+    // landed only the Pods integration slice. The positive-state
+    // assertions for test-target Local configs are in
+    // ios-local-3-3-3-4-combined.test.js.
 
     test('project-level defaultConfigurationName remains Release (not changed by Local addition)', () => {
       const block = extractConfigurationList(pbxproj, '058558B0273AAA2400C9D062');

@@ -24,6 +24,21 @@
  *   - extractStep helper error branches (unknown name + non-6-space
  *     indent) — ambiguous-name omitted because no step names
  *     duplicate across jobs in ios-tests.yml today
+ *
+ * PR #827 R2 + R3 additions:
+ *   - 4 cache steps pinned (cocoapods-repos, iosApp/Pods,
+ *     ios-derived, ios-spm) — SHA, path, key, restore-keys,
+ *     ordering, has_tests guard on Install CocoaPods
+ *   - xcodebuild perf flags pinned (--quiet, -clonedSourcePackagesDirPath,
+ *     -skipPackagePluginValidation, -skipMacroValidation)
+ *   - extractCacheKeyLines helper + 7 direct contract tests
+ *     (key + restore-keys capture, metadata exclusion, multi-entry
+ *     block-scalar, sibling-indent termination, empty-line
+ *     termination, no-cache-step empty result, YAML-comment-line
+ *     rejection — added R3 I-2)
+ *   - Verify iosAppTests Pods integration step (jest invocation,
+ *     AFTER install, no has_tests guard) — wires the new
+ *     ios-pods-integration-pin.test.js into CI
  */
 
 const fs = require('fs');
@@ -455,6 +470,27 @@ describe('ios-tests.yml — build-ios job cold-cache survival', () => {
       const step = ['      - name: Run something', '        run: echo hi'].join('\n');
       expect(extractCacheKeyLines(step)).toEqual([]);
     });
+
+    test('does not capture YAML comment lines whose text starts with key:', () => {
+      // R3 review I-2: the helper uses `trimmed.startsWith('key:')`
+      // which correctly rejects a comment line because comments are
+      // prefixed with `#`, so the trimmed line starts with `#`, not
+      // `key:`. This test pins that — a refactor that swapped
+      // `startsWith` for `includes` would silently capture the
+      // commented-out cache key as a violation candidate.
+      const step = [
+        '      - name: Cache',
+        '        with:',
+        '          # key: do-not-capture-me',
+        "          key: foo-${{ runner.os }}-${{ hashFiles('x') }}",
+        '          restore-keys: |',
+        '            foo-${{ runner.os }}-',
+      ].join('\n');
+      const captured = extractCacheKeyLines(step);
+      expect(captured).toHaveLength(2);
+      expect(captured.join('\n')).not.toContain('# key:');
+      expect(captured.join('\n')).not.toContain('do-not-capture-me');
+    });
   });
 
   // Round 3 I-2 rebuttal: the reviewer claimed extractJob would
@@ -805,5 +841,44 @@ describe('ios-tests.yml — Verify iosAppTests Pods integration CI step', () => 
     const lines = pinStep.split('\n');
     const ifLines = lines.filter((l) => /^\s+if:/.test(l));
     expect(ifLines).toEqual([]);
+  });
+
+  test('Verify iosAppTests step uses working-directory: express-api (not inline cd)', () => {
+    // R3 review M-2: GitHub Actions idiomatic form is
+    // `working-directory:` not `cd express-api &&` chained into the
+    // run command. Pin the idiomatic form so a future PR can't
+    // regress to the inline cd (which conflicts with the project
+    // convention for non-Bash steps).
+    expect(pinStep).toContain('working-directory: express-api');
+    expect(pinStep).not.toContain('cd express-api');
+  });
+});
+
+describe('ios-tests.yml — Verify pbxproj-mutation script idempotency step', () => {
+  let yamlText;
+  let idempotencyStep;
+
+  beforeAll(() => {
+    yamlText = fs.readFileSync(IOS_TESTS_PATH, 'utf8');
+    idempotencyStep = extractStep(yamlText, 'Verify pbxproj-mutation script idempotency');
+  });
+
+  test('step uses working-directory: express-api (R3 M-2 consistency)', () => {
+    // Companion to the Verify iosAppTests step — both jest-driving
+    // verification steps must use the idiomatic GitHub Actions form
+    // for the working directory.
+    expect(idempotencyStep).toContain('working-directory: express-api');
+    // `gem install` happens before the jest invocation but it
+    // user-installs to ~/.gem so working-directory doesn't affect
+    // it; the step is still correct. What MUST be absent is the
+    // inline `cd express-api` form.
+    expect(idempotencyStep).not.toContain('cd express-api');
+  });
+
+  test('step still invokes jest on ios-local-configurations.test.js', () => {
+    // Pin the contract — the step's purpose is to run the
+    // idempotency assertions. A working-directory refactor must NOT
+    // accidentally drop the jest call.
+    expect(idempotencyStep).toContain('npx jest tests/scripts/ios-local-configurations.test.js');
   });
 });

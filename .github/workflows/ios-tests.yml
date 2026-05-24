@@ -249,9 +249,13 @@ jobs:
       # silently skip this check if XCTest targets are ever removed
       # (Round 3 I-1 review fix).
       - name: Verify pbxproj-mutation script idempotency
+        working-directory: express-api
+        # `gem install` must run BEFORE the cwd matters — it installs
+        # to ~/.gem (user-install), not the cwd — so the chained form
+        # is functionally equivalent to running it before the cd. The
+        # working-directory only affects the jest invocation.
         run: |
           gem install --user-install xcodeproj
-          cd express-api && \
           npx jest tests/scripts/ios-local-configurations.test.js
 
       - name: Install CocoaPods
@@ -273,7 +277,8 @@ jobs:
       # contract being pinned is `iosAppTests target's xcconfigs are
       # wired`, which is independent of whether tests exist for it.
       - name: Verify iosAppTests Pods integration (pin contract)
-        run: cd express-api && npx jest tests/scripts/ios-pods-integration-pin.test.js
+        working-directory: express-api
+        run: npx jest tests/scripts/ios-pods-integration-pin.test.js
 
       - name: Build iOS app for testing
         if: steps.check-tests.outputs.has_tests == 'true'

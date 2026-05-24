@@ -54,6 +54,20 @@ describe('iOS Pods integration — Podfile contract', () => {
     expect(PODFILE_SRC).toMatch(/['"]Release-Local['"]\s*=>\s*:release/);
   });
 
+  test('`project` directive appears before the first `target` block', () => {
+    // R3 review M-3: CocoaPods Ruby DSL requires `project` at the
+    // top level BEFORE any `target` block opens — once the target
+    // DSL is active, a `project` call inside it would be misparsed.
+    // The Podfile is currently correct (project at line ~12, first
+    // target at line ~16), but a future PR reordering the file
+    // could break Ruby parsing at pod install time. Pin the ordering.
+    const projectIdx = PODFILE_SRC.indexOf("project 'iosApp.xcodeproj'");
+    const targetIdx = PODFILE_SRC.indexOf("target 'iosApp' do");
+    expect(projectIdx).toBeGreaterThanOrEqual(0);
+    expect(targetIdx).toBeGreaterThanOrEqual(0);
+    expect(projectIdx).toBeLessThan(targetIdx);
+  });
+
   test('declares nested `target "iosAppTests"` block with inherit! :search_paths', () => {
     // iosAppTests has @testable import iosApp which requires resolving
     // Firebase/LiveKit modules at build-for-testing. Without this
@@ -168,12 +182,14 @@ describe('iOS Pods integration — pbxproj contract', () => {
         const declaredName = m[2].trim();
         if (declaredName === configName) blocks.push(m[3]);
       }
-      // There are EXACTLY TWO Debug-Local blocks (project-level +
-      // iosApp target). The count is pinned exactly — Phase 3.3 (if
-      // it lands separately) would add Local configs to iosAppTests
-      // + iosAppUITests, bumping to 4. When that happens, update
-      // this count alongside (forcing the dev to think about whether
-      // those new configs also need SWIFT_VERSION = 5.0).
+      // PHASE 3.3 MIGRATION INSTRUCTION: bump this count to 4 when
+      // Phase 3.3 lands (adds Local configs to iosAppTests +
+      // iosAppUITests). The new blocks MUST also carry SWIFT_VERSION
+      // = 5.0 — the inner `for (const block of blocks)` loop below
+      // will catch a missing SWIFT_VERSION on any new block, but you
+      // must update THIS line first so the loop reaches the new
+      // blocks. There are EXACTLY TWO blocks today: project-level +
+      // iosApp target.
       expect(blocks.length).toBe(2);
       for (const block of blocks) {
         expect(block).toMatch(/SWIFT_VERSION = 5\.0;/);
