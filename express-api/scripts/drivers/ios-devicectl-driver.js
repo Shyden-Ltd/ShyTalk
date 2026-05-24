@@ -333,6 +333,54 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 99 — `<Name>'s <Plat> UI navigates to "<Path>"`. Generic
+  // path-based navigation assertion. Mirrors Android sibling.
+  //
+  // Foundation strategy: IOS_PATH_TAGS map with prefix-resolver
+  //   1. Exact match (handles `/` — must not greedy-match other paths)
+  //   2. Longest-prefix match: `/profile/42` → `/profile` mapping
+  //
+  // 5 mappings, grounded in expected iOS testTag naming (mirroring
+  // Android sibling PATH_TAGS):
+  //   - "/"         → main_roomsTab
+  //   - "/profile"  → profile_displayName
+  //   - "/messages" → main_messagesTab
+  //   - "/wallet"   → wallet_balance
+  //   - "/settings" → securitySettingsScreen
+  //
+  // Unmapped paths return false — FAIL-loud (consistent with other
+  // *_TAGS scaffolds). Both args (_name, path) — name accepted-and-
+  // ignored; path REQUIRED and used in lookup.
+  const IOS_PATH_TAGS = {
+    '/': 'main_roomsTab',
+    '/profile': 'profile_displayName',
+    '/messages': 'main_messagesTab',
+    '/wallet': 'wallet_balance',
+    '/settings': 'securitySettingsScreen',
+  };
+  function resolveIosPathTag(path) {
+    if (IOS_PATH_TAGS[path]) return IOS_PATH_TAGS[path];
+    let best = null;
+    for (const prefix of Object.keys(IOS_PATH_TAGS)) {
+      if (prefix === '/') continue;
+      if (path === prefix || path.startsWith(prefix + '/')) {
+        if (!best || prefix.length > best.length) best = prefix;
+      }
+    }
+    return best ? IOS_PATH_TAGS[best] : null;
+  }
+  driver.iosNavigatesToPath = async (_name, path) => {
+    if (typeof path !== 'string' || !path.trim()) return false;
+    const tag = resolveIosPathTag(path.trim());
+    if (!tag) return false;
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = new RegExp(`<XCUIElementType\\w+[^>]*\\bidentifier="${escTag}"[^>]*\\/?>`);
+    return tagRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;

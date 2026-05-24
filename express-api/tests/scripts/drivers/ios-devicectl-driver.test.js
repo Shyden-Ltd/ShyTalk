@@ -1707,6 +1707,145 @@ describe('ios-devicectl-driver — iosNavigatesBackToTab', () => {
   });
 });
 
+describe('ios-devicectl-driver — iosNavigatesToPath', () => {
+  // Wake 99 — `<Name>'s <Plat> UI navigates to "<Path>"`. Generic
+  // path-based navigation. PATH_TAGS scaffold with prefix-resolver.
+  function driverWithDump(xml) {
+    return createIosDriver({ udid: 'X' }).then((d) => {
+      d.iosUiDump = async () => xml;
+      return d;
+    });
+  }
+
+  test('"/" exact match → main_roomsTab present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesToPath('Alice', '/')).toBe(true);
+  });
+
+  test('"/profile" exact match → profile_displayName present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosNavigatesToPath('Alice', '/profile')).toBe(true);
+  });
+
+  test('"/profile/42" longest-prefix → profile_displayName present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosNavigatesToPath('Alice', '/profile/42')).toBe(true);
+  });
+
+  test('"/messages" exact → main_messagesTab present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_messagesTab" />');
+    expect(await driver.iosNavigatesToPath('Alice', '/messages')).toBe(true);
+  });
+
+  test('"/wallet" exact → wallet_balance present → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="wallet_balance" />');
+    expect(await driver.iosNavigatesToPath('Alice', '/wallet')).toBe(true);
+  });
+
+  test('"/settings" exact → securitySettingsScreen present → true', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="securitySettingsScreen" />',
+    );
+    expect(await driver.iosNavigatesToPath('Alice', '/settings')).toBe(true);
+  });
+
+  test('"/" exact does NOT prefix-match other paths', async () => {
+    // CRITICAL pin: "/" must be exact-match-only. If "/" were treated
+    // as a prefix, every path would match. Use a dump WITHOUT
+    // main_roomsTab to verify the path-resolver returns null for
+    // unmapped paths even when "/" could greedily prefix them.
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    // "/unknown" should NOT resolve to "/" → main_roomsTab.
+    expect(await driver.iosNavigatesToPath('Alice', '/unknown')).toBe(false);
+  });
+
+  test('unmapped path returns false (FAIL-loud)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeOther identifier="profile_displayName" />',
+    );
+    expect(await driver.iosNavigatesToPath('Alice', '/unmapped/path')).toBe(false);
+  });
+
+  test('mapped path + tag absent → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesToPath('Alice', '/profile')).toBe(false);
+  });
+
+  test('empty dump → false (mapped path)', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    expect(await driver.iosNavigatesToPath('Alice', '/profile')).toBe(false);
+  });
+
+  test('empty path → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesToPath('Alice', '')).toBe(false);
+  });
+
+  test('whitespace path → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesToPath('Alice', '   ')).toBe(false);
+  });
+
+  test('null path → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesToPath('Alice', null)).toBe(false);
+  });
+
+  test('undefined path → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesToPath('Alice', undefined)).toBe(false);
+  });
+
+  test('non-string path (number) → false', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesToPath('Alice', 123)).toBe(false);
+  });
+
+  test('iosUiDump throws → rejects', async () => {
+    const driver = await createIosDriver({ udid: 'X' });
+    driver.iosUiDump = async () => {
+      throw new Error('WDA lost');
+    };
+    await expect(driver.iosNavigatesToPath('Alice', '/')).rejects.toThrow();
+  });
+
+  test('name accepted-and-ignored — Bao passes', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesToPath('Bao', '/')).toBe(true);
+  });
+
+  test('null name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesToPath(null, '/')).toBe(true);
+  });
+
+  test('undefined name → true', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesToPath(undefined, '/')).toBe(true);
+  });
+
+  test('left-boundary — pre_main_roomsTab does NOT match', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="pre_main_roomsTab" />');
+    expect(await driver.iosNavigatesToPath('Alice', '/')).toBe(false);
+  });
+
+  test('attribute-specificity — name= does NOT trigger', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther name="main_roomsTab" />');
+    expect(await driver.iosNavigatesToPath('Alice', '/')).toBe(false);
+  });
+
+  test('path trimmed before resolve — leading/trailing whitespace', async () => {
+    const driver = await driverWithDump('<XCUIElementTypeOther identifier="main_roomsTab" />');
+    expect(await driver.iosNavigatesToPath('Alice', '  /  ')).toBe(true);
+  });
+});
+
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
   // Stubs accept any number of args (0, 1, 2, 3, 4). Pin this so a
   // future refactor that adds arg-validation to the stub loop doesn't
