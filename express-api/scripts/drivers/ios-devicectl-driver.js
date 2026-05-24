@@ -381,6 +381,19 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 101 — `<Name>'s <Plat> UI navigates to <Other>'s profile
+  // screen`. Mirrors Android sibling. Foundation: presence-check on
+  // `profile_*` identifier PREFIX. Both args (_name, _target)
+  // accepted-and-ignored; per-target verification needs
+  // profile_displayName text-extraction.
+  driver.iosNavigatesToProfileScreen = async (_name, _target) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="profile_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;
