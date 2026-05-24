@@ -614,6 +614,26 @@ async function createIosDriver({ udid: preferred } = {}) {
     return tagRx.test(dump);
   };
 
+  // Wake 98 — `<Name>'s <Plat> UI shows a +N in the "<X>" count`
+  // (j01/j02/j07). iOS mirror of Android sibling. Generic delta-
+  // badge assertion. Driver receives (name, delta, label).
+  //
+  // Foundation strategy: presence-check on `countBadge_*` identifier
+  // PREFIX. No `countBadge_*` identifier exists in commonMain yet —
+  // delta-badge UI is unbuilt. Returns false in real journeys today;
+  // lands true when it ships with countBadge_followersDelta /
+  // countBadge_likesDelta identifiers. Per-label verification
+  // (Followers vs Likes) needs a label → identifier map; per-delta
+  // verification needs attribute extraction; both deferred. All 3
+  // args accepted-and-ignored.
+  driver.iosShowsCountBadge = async (_name, _delta, _label) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // eslint-disable-next-line sonarjs/slow-regex
+    const tagRx = /<XCUIElementType\w+[^>]*\bidentifier="countBadge_[^"]*"[^>]*\/?>/;
+    return tagRx.test(dump);
+  };
+
   const IOS_INPUT_TAGS = { chat: 'room_chatInput' };
   driver.iosDisablesInput = async (_name, inputName) => {
     if (!inputName || !inputName.trim()) return false;
