@@ -3275,6 +3275,28 @@ describe('ios-devicectl-driver — iosShowsBalanceViaListener', () => {
     };
     await expect(driver.iosShowsBalanceViaListener('Alice', '5,000')).rejects.toThrow();
   });
+
+  // Contract pins (R1 from review):
+  // - Padded balance is NOT trimmed before regex construction. ' 5,000'
+  //   passes the !balance.trim() guard but the regex then looks for
+  //   the literal ' 5,000' substring, which won't match label="5,000".
+  //   Mirrors Android sibling behavior.
+  test('padded balance " 5,000" does not match trimmed label "5,000" (no trim before regex)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" label="5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', ' 5,000')).toBe(false);
+  });
+
+  // - The \b on \b(?:label|name|value)= guards against compound attribute
+  //   names like accessibilityLabel=. iOS XCUITest WDA dumps use plain
+  //   label= but the guard is defence-in-depth.
+  test('accessibilityLabel="5,000" does NOT match (\\b guards compound attr name)', async () => {
+    const driver = await driverWithDump(
+      '<XCUIElementTypeStaticText identifier="wallet_balance" accessibilityLabel="5,000" />',
+    );
+    expect(await driver.iosShowsBalanceViaListener('Alice', '5,000')).toBe(false);
+  });
 });
 
 describe('ios-devicectl-driver — stub call-arity tolerance', () => {
