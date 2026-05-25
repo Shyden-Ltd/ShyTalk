@@ -155,8 +155,11 @@ function classifyFiles(yamlText, files) {
   // Build a synthetic bash script that initialises all flags,
   // iterates the provided files, runs the case statement on each,
   // and prints the final flag values as KEY=VALUE pairs.
+  // R1 C2: GRADLE_INFRA was scaffolded but never assigned by the
+  // production case statement — dropped to avoid implying a
+  // production variable that doesn't exist.
   const flagsInit =
-    'ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false OTHER=false GRADLE_INFRA=false';
+    'ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false OTHER=false';
   const fileList = files.map((f) => `'${f.replace(/'/g, "'\\''")}'`).join(' ');
   const script = `
 set -e
@@ -171,7 +174,6 @@ echo "BACKEND=$BACKEND"
 echo "WEB=$WEB"
 echo "INTEGRATION=$INTEGRATION"
 echo "OTHER=$OTHER"
-echo "GRADLE_INFRA=$GRADLE_INFRA"
 `;
   // Use absolute path /bin/bash (not PATH lookup) to satisfy
   // sonarjs/no-os-command-from-path — and because the test must
@@ -228,14 +230,14 @@ describe('pr-checks.yml — APP_CHANGED granular-split contract', () => {
       expect(detectStep).toMatch(/shared\/src\/iosMain\/\*\).*?IOS_APP=true/);
       // Negative: this arm must NOT also set ANDROID_APP, because
       // iosMain is iOS-actual-only.
-      const iosMainArm = detectStep.match(/shared\/src\/iosMain\/\*\)([^\n]*?);;/);
+      const iosMainArm = detectStep.match(/shared\/src\/iosMain\/\*\)([\s\S]*?);;/);
       expect(iosMainArm).not.toBeNull();
       expect(iosMainArm[1]).not.toMatch(/ANDROID_APP=true/);
     });
 
     test('shared/src/androidMain/* sets ANDROID_APP only', () => {
       expect(detectStep).toMatch(/shared\/src\/androidMain\/\*\).*?ANDROID_APP=true/);
-      const androidMainArm = detectStep.match(/shared\/src\/androidMain\/\*\)([^\n]*?);;/);
+      const androidMainArm = detectStep.match(/shared\/src\/androidMain\/\*\)([\s\S]*?);;/);
       expect(androidMainArm).not.toBeNull();
       expect(androidMainArm[1]).not.toMatch(/IOS_APP=true/);
     });
@@ -243,7 +245,7 @@ describe('pr-checks.yml — APP_CHANGED granular-split contract', () => {
     test('shared/* (commonMain et al.) sets BOTH ANDROID_APP and IOS_APP', () => {
       // The generic `shared/*` arm catches commonMain and anything
       // else under shared/ that doesn't match an earlier arm.
-      const sharedArm = detectStep.match(/\bshared\/\*\)([^\n]*?);;/);
+      const sharedArm = detectStep.match(/\bshared\/\*\)([\s\S]*?);;/);
       expect(sharedArm).not.toBeNull();
       expect(sharedArm[1]).toMatch(/ANDROID_APP=true/);
       expect(sharedArm[1]).toMatch(/IOS_APP=true/);
@@ -252,7 +254,7 @@ describe('pr-checks.yml — APP_CHANGED granular-split contract', () => {
     test('gradle/* + *.gradle.kts + gradle.properties + gradlew set BOTH platforms', () => {
       // Gradle infra affects every Gradle invocation, including the
       // KMP framework build that iOS depends on.
-      const gradleArm = detectStep.match(/gradle\/\*\|[^)\n]*\)([^\n]*?);;/);
+      const gradleArm = detectStep.match(/gradle\/\*\|[^)\n]*\)([\s\S]*?);;/);
       expect(gradleArm).not.toBeNull();
       expect(gradleArm[1]).toMatch(/ANDROID_APP=true/);
       expect(gradleArm[1]).toMatch(/IOS_APP=true/);
@@ -294,6 +296,32 @@ describe('pr-checks.yml — APP_CHANGED granular-split contract', () => {
       const job = extractJob(yamlText, 'android-e2e');
       expect(job).toMatch(/android_app_changed\s*==\s*'true'/);
     });
+
+    // R1 I-3: backward-compat pins — sonarcloud + integration-tests
+    // intentionally keep using `app_changed` (the union flag) so
+    // they still run on cross-platform changes. Without these
+    // pins, a future PR that "consistency-refactors" them to use
+    // android_app_changed or ios_app_changed would silently skip
+    // Sonar / integration on the unrelated platform's PRs.
+    test('sonarcloud keeps app_changed (covers both platforms — backward compat)', () => {
+      // sonarcloud is invoked via `uses:` and receives app_changed
+      // as an INPUT (line ~244 of pr-checks.yml), not via a job
+      // if-gate. Pin the input wiring.
+      const job = extractJob(yamlText, 'sonarcloud');
+      expect(job).toContain('app_changed: ${{ needs.detect-changes.outputs.app_changed');
+      expect(job).not.toContain('android_app_changed: ${{ needs.detect-changes');
+      expect(job).not.toContain('ios_app_changed: ${{ needs.detect-changes');
+    });
+
+    test('integration-tests keeps app_changed in its if-gate', () => {
+      const job = extractJob(yamlText, 'integration-tests');
+      expect(job).toMatch(/needs\.detect-changes\.outputs\.app_changed\s*==\s*'true'/);
+    });
+
+    test('lint keeps receiving app_changed as input (covers both platforms via ktlint)', () => {
+      const job = extractJob(yamlText, 'lint');
+      expect(job).toContain('app_changed: ${{ needs.detect-changes.outputs.app_changed');
+    });
   });
 
   describe('behavioral pin: case statement classifies real PR file lists correctly', () => {
@@ -333,6 +361,38 @@ describe('pr-checks.yml — APP_CHANGED granular-split contract', () => {
 
     test('gradle.properties change → BOTH (affects every Gradle invocation)', () => {
       const result = classifyFiles(yamlText, ['gradle.properties']);
+      expect(result.ANDROID_APP).toBe('true');
+      expect(result.IOS_APP).toBe('true');
+    });
+
+    // R1 reviewer raised gradle/wrapper/* as a concern (incorrectly
+    // claiming shell case globs are non-recursive — `*` in shell
+    // case DOES match across slashes, unlike filesystem glob).
+    // Verified via direct bash invocation: `gradle/*` matches
+    // `gradle/wrapper/gradle-wrapper.properties`. The reviewer's
+    // underlying concern about gradle wrapper bumps being load-
+    // bearing is correct though, so pinning it as a behavioral
+    // test prevents a future "narrow the gradle/* glob to single
+    // level" refactor from regressing it silently.
+    test('gradle/wrapper/gradle-wrapper.properties → BOTH (wrapper bump = full toolchain change)', () => {
+      const result = classifyFiles(yamlText, ['gradle/wrapper/gradle-wrapper.properties']);
+      expect(result.ANDROID_APP).toBe('true');
+      expect(result.IOS_APP).toBe('true');
+    });
+
+    test('shared/src/androidMain deep path → ANDROID only (regression pin against shared/* fallthrough)', () => {
+      const result = classifyFiles(yamlText, [
+        'shared/src/androidMain/kotlin/com/shyden/shytalk/foo/AndroidFooImpl.kt',
+      ]);
+      expect(result.ANDROID_APP).toBe('true');
+      expect(result.IOS_APP).toBe('false');
+    });
+
+    test('mixed iosApp/ + app/ PR → BOTH (each arm fires on its own files)', () => {
+      const result = classifyFiles(yamlText, [
+        'iosApp/iosApp/LiveKitBridge.swift',
+        'app/src/main/java/com/shyden/shytalk/MainActivity.kt',
+      ]);
       expect(result.ANDROID_APP).toBe('true');
       expect(result.IOS_APP).toBe('true');
     });
