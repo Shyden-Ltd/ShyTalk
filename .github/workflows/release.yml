@@ -461,18 +461,30 @@ jobs:
 
       - name: Open release PR
         env:
-          # Use the workflow's built-in GITHUB_TOKEN here rather than the
-          # Release App token. The App's installation does NOT grant
-          # `pull_requests: write`, so `gh pr create` fails with
-          # `GraphQL: Resource not accessible by integration` (observed
-          # in release run 26364598123 on 2026-05-24). The workflow's
-          # `permissions:` block at the top grants `pull-requests: write`
-          # to GITHUB_TOKEN, which is sufficient for both `gh pr create`
-          # and `gh pr merge --auto`. The release commit itself stays
-          # App-signed (created via createCommitOnBranch in the prior
-          # step using the App token); only the PR-open and merge ops
-          # use GITHUB_TOKEN.
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use the Release App token (NOT the workflow's built-in
+          # GITHUB_TOKEN) for both `gh pr create` and `gh pr merge
+          # --auto`. The App's installation was granted
+          # `pull_requests: write` on 2026-05-25, so the original PR
+          # #818 workaround that fell back to GITHUB_TOKEN here is no
+          # longer required.
+          #
+          # CRITICAL: this MUST stay as the App token. Using
+          # GITHUB_TOKEN here triggers GitHub's documented loop-
+          # prevention rule — any action performed by GITHUB_TOKEN
+          # does NOT fire downstream workflows. Two consequences:
+          #   1. The release PR's `pull_request: opened` event does
+          #      not fire pr-checks.yml — release PR sits without CI
+          #      until something else triggers a `synchronize` event.
+          #   2. The auto-merge (enabled by GITHUB_TOKEN) results in
+          #      a squash-merge commit authored by GITHUB_TOKEN, so
+          #      the `push: branches: main` trigger on release-tag.yml
+          #      does not fire — no git tag, no GitHub Release.
+          # Both observed on PR #835 (v0.97.6 release attempt on
+          # 2026-05-25): had to push an empty commit to trigger CI
+          # AND manually re-cut v0.97.6 because the tag never
+          # appeared. See release-workflow-pin.test.js for the
+          # structural pin that catches a regression.
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
