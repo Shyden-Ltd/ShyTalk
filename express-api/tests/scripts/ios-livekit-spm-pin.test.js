@@ -100,7 +100,16 @@ describe('LiveKit migrated from CocoaPods to SPM', () => {
     test('LiveKitClient product is wired as XCSwiftPackageProductDependency', () => {
       // The Frameworks build phase needs an entry that references
       // the product, otherwise the linker doesn't see LiveKit.
-      expect(pbxproj).toMatch(/productName\s*=\s*LiveKitClient/);
+      //
+      // R1 review: anchor the `productName = LiveKitClient` line to
+      // an XCSwiftPackageProductDependency block (not a bare
+      // substring search that could match a stale entry or a
+      // comment elsewhere in the pbxproj). Match the canonical
+      // shape: `isa = XCSwiftPackageProductDependency;` followed
+      // within a small window by `productName = LiveKitClient;`.
+      expect(pbxproj).toMatch(
+        /isa = XCSwiftPackageProductDependency[\s\S]{0,200}productName = LiveKitClient/,
+      );
     });
   });
 
@@ -111,15 +120,16 @@ describe('LiveKit migrated from CocoaPods to SPM', () => {
       resolved = JSON.parse(src);
     });
 
-    test('pins LiveKit client-sdk-swift to >= 2.14.1', () => {
+    test('pins LiveKit client-sdk-swift to exactly 2.14.1', () => {
       const lk = resolved.pins.find((p) => p.identity === 'client-sdk-swift');
       expect(lk).toBeDefined();
-      // Parse the version string and assert it's at least 2.14.1.
-      // Major+minor+patch comparison via simple split.
-      const [maj, min, patch] = lk.state.version.split('.').map((n) => parseInt(n, 10));
-      const versionOk =
-        maj > 2 || (maj === 2 && min > 14) || (maj === 2 && min === 14 && patch >= 1);
-      expect(versionOk).toBe(true);
+      // R1 review: exact-pin instead of >= comparison. The earlier
+      // semver split via parseInt silently passed pre-release
+      // suffixes (`2.14.1-rc.1` would parse the patch as `1` and
+      // succeed the >=2.14.1 check, which is wrong). An exact pin
+      // forces a deliberate test update on any upgrade — exactly
+      // the right friction-level for a load-bearing SPM dep.
+      expect(lk.state.version).toBe('2.14.1');
     });
 
     test('pins LiveKitWebRTC transitive dep (LiveKit core requires it)', () => {
@@ -155,9 +165,27 @@ describe('LiveKit migrated from CocoaPods to SPM', () => {
     test('checks for existing XCRemoteSwiftPackageReference before adding', () => {
       // The script must find-or-create, not always-create — otherwise
       // re-running it would duplicate the package reference.
-      expect(script).toMatch(
-        /existing_package\s*=\s*project\.root_object\.package_references\.find/,
-      );
+      // R1 review fix added a nil-guard intermediate `package_refs`
+      // local so the find is on that array, not directly on the
+      // `package_references` accessor (which returns nil on a
+      // never-touched-by-SPM project and would raise NoMethodError).
+      expect(script).toContain('package_refs = project.root_object.package_references || []');
+      expect(script).toMatch(/existing_package\s*=\s*package_refs\.find/);
+    });
+
+    test('R1 fix: guards `package_references` accessor against nil (fresh-project safety)', () => {
+      // Without the `|| []` guard, a freshly-cloned repo whose
+      // pbxproj has no SPM section would raise
+      // `NoMethodError: undefined method 'find' for nil:NilClass`
+      // before any write. Pin the guard.
+      expect(script).toContain('|| []');
+    });
+
+    test('R1 fix: existing_product check also matches package (not just product_name)', () => {
+      // Without `dep.package == package_ref`, a future PR that adds
+      // a different SPM package also exporting "LiveKitClient" would
+      // silently bind to the wrong package. Pin the dual check.
+      expect(script).toContain('dep.product_name == PRODUCT_NAME && dep.package == package_ref');
     });
 
     test('checks for existing XCSwiftPackageProductDependency before adding', () => {

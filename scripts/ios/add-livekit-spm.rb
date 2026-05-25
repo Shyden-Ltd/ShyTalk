@@ -46,7 +46,13 @@ project = Xcodeproj::Project.open(PROJECT_PATH)
 
 # ---- 1. Find or create XCRemoteSwiftPackageReference ----
 
-existing_package = project.root_object.package_references.find do |ref|
+# `package_references` returns nil (not []) on a project that has
+# never had an SPM dep — calling `.find` on nil raises NoMethodError.
+# This script is contracted to be re-runnable on any iosApp checkout
+# (including a freshly-cloned repo with the pbxproj stripped back),
+# so guard the accessor with `|| []`.
+package_refs = project.root_object.package_references || []
+existing_package = package_refs.find do |ref|
   ref.is_a?(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference) &&
     ref.repositoryURL == PACKAGE_URL
 end
@@ -72,8 +78,14 @@ abort "FATAL: target '#{TARGET_NAME}' not found in #{PROJECT_PATH}" unless targe
 
 # ---- 3. Find or create XCSwiftPackageProductDependency ----
 
+# Match BOTH product_name AND package — if a future PR adds a
+# different SPM package that also exports a product called
+# "LiveKitClient" (unlikely but legal), matching on name alone
+# would silently bind to the wrong package. The package match
+# ensures we only re-use a product dependency that points at the
+# LiveKit Swift SDK we just added/found above.
 existing_product = target.package_product_dependencies.find do |dep|
-  dep.product_name == PRODUCT_NAME
+  dep.product_name == PRODUCT_NAME && dep.package == package_ref
 end
 
 if existing_product
@@ -107,4 +119,4 @@ project.save
 
 puts "\nSaved iosApp.xcodeproj."
 puts "Next: `cd iosApp && pod install` (regenerates Pods workspace WITHOUT LiveKitClient pod)."
-puts "Then: open iosApp.xcworkspace in Xcode to let SPM resolve + build, OR run xcodebuild."
+puts "Then: open iosApp/iosApp.xcworkspace in Xcode to let SPM resolve + build, OR run xcodebuild."
