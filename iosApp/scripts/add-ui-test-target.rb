@@ -74,7 +74,7 @@ ui_test_target.build_configurations.each do |config|
   config.build_settings['CODE_SIGN_STYLE'] = 'Automatic'
   config.build_settings['DEVELOPMENT_TEAM'] = app_target.build_configurations.first.build_settings['DEVELOPMENT_TEAM'] || ''
   config.build_settings['TARGETED_DEVICE_FAMILY'] = '1,2'
-  config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+  config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '26.0'
 end
 
 # Wire the dependency so the app builds before UI tests.
