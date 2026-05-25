@@ -36,16 +36,29 @@
  * explanation, instead of silently re-introducing the publishing
  * outage we just experienced.
  *
- * Coverage:
- *   - The `Generate Release App token` step exists and uses
- *     actions/create-github-app-token@v3.2.0 with `client-id`
- *   - The `Open release PR` step uses `GH_TOKEN: ${{
- *     steps.app-token.outputs.token }}`, NOT `secrets.GITHUB_TOKEN`
- *   - The `Open release PR` step has BOTH `gh pr create` AND
- *     `gh pr merge --auto` invocations (auto-merge must use the same
- *     non-GITHUB_TOKEN identity to keep release-tag.yml firing)
- *   - The `Create signed release commit` step also uses the App token
- *     (this was already correct, but pinning it prevents drift)
+ * Coverage (13 tests across 5 describe blocks):
+ *   - `Generate app token` step (3 tests): pins actions/create-
+ *     github-app-token@v3.2.0 SHA, uses `client-id` not deprecated
+ *     `app-id`, references RELEASE_APP_ID + RELEASE_APP_PRIVATE_KEY
+ *     secrets
+ *   - `Create release branch and signed commit via GraphQL` step
+ *     (1 test): uses App token, NOT GITHUB_TOKEN
+ *   - `Open release PR` step (4 tests): uses App token NOT
+ *     GITHUB_TOKEN; invokes `gh pr create`; invokes `gh pr merge
+ *     --auto --squash` (the `--squash` flag is load-bearing —
+ *     release-tag.yml matches `chore: release vX.Y.Z` against the
+ *     squash-merge's PR-title-as-commit-subject; `--merge` would
+ *     produce `Merge pull request #N ...` which never matches);
+ *     GH_TOKEN is declared in step-level `env:` block (not inline
+ *     export inside `run:`) and env: precedes run:
+ *   - `Guard against double-fired releases` step (1 test): uses
+ *     App token, NOT GITHUB_TOKEN (the orphan-branch detection
+ *     calls `gh api` + `gh pr list` and must see the repo as the
+ *     App identity)
+ *   - `extractStep` helper error branches (4 tests): unknown step
+ *     name throws, non-6-space step indent throws, ambiguous step
+ *     name throws with all matched line numbers, CRLF line endings
+ *     captured without bleed-through
  */
 
 const fs = require('fs');
@@ -223,6 +236,38 @@ describe('release.yml — Release App token + PR-open contract', () => {
       const fourSpaceIndent = '    - name: Some Step\n      run: echo hi\n';
       expect(() => extractStep(fourSpaceIndent, 'Some Step')).toThrow(
         /Could not find step "Some Step"/,
+      );
+    });
+
+    // R2 review test-gap fix: the canonical helper in
+    // ios-tests-build-cache.test.js intentionally omits the
+    // ambiguous-name branch because no step names duplicate across
+    // jobs in ios-tests.yml today (documented at line 335-336
+    // there). But release.yml is a different file with different
+    // job structures, so the safer move is to actually test the
+    // branch with a synthetic two-job YAML where the same step
+    // name appears in both jobs — this exercises the contract
+    // without depending on the current release.yml structure.
+    test('throws on ambiguous step names (same step in two jobs)', () => {
+      const ambiguous = [
+        'jobs:',
+        '  jobA:',
+        '    steps:',
+        '      - name: Shared Step',
+        '        run: echo a',
+        '  jobB:',
+        '    steps:',
+        '      - name: Shared Step',
+        '        run: echo b',
+      ].join('\n');
+      expect(() => extractStep(ambiguous, 'Shared Step')).toThrow(
+        /Ambiguous step name "Shared Step": found at lines \d+, \d+/,
+      );
+      // Also verify the recovery hint is present in the message —
+      // helps developers fix it without having to read the helper's
+      // source.
+      expect(() => extractStep(ambiguous, 'Shared Step')).toThrow(
+        /Use a more specific name or scope to a single job/,
       );
     });
 
