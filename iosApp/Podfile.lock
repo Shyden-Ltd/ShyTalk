@@ -1393,12 +1393,6 @@ PODS:
     - GTMSessionFetcher/Core (< 4.0, >= 3.3)
   - GTMSessionFetcher/Core (3.5.0)
   - leveldb-library (1.22.6)
-  - LiveKitClient (2.0.18):
-    - LiveKitWebRTC (= 125.6422.11)
-    - Logging
-    - SwiftProtobuf
-  - LiveKitWebRTC (125.6422.11)
-  - Logging (1.4.0)
   - nanopb (3.30910.0):
     - nanopb/decode (= 3.30910.0)
     - nanopb/encode (= 3.30910.0)
@@ -1406,7 +1400,6 @@ PODS:
   - nanopb/encode (3.30910.0)
   - PromisesObjC (2.4.0)
   - RecaptchaInterop (101.0.0)
-  - SwiftProtobuf (1.37.0)
 
 DEPENDENCIES:
   - FirebaseAuth
@@ -1415,7 +1408,6 @@ DEPENDENCIES:
   - FirebaseFirestore
   - FirebaseMessaging
   - GoogleSignIn
-  - LiveKitClient
 
 SPEC REPOS:
   trunk:
@@ -1443,13 +1435,9 @@ SPEC REPOS:
     - GTMAppAuth
     - GTMSessionFetcher
     - leveldb-library
-    - LiveKitClient
-    - LiveKitWebRTC
-    - Logging
     - nanopb
     - PromisesObjC
     - RecaptchaInterop
-    - SwiftProtobuf
 
 SPEC CHECKSUMS:
   abseil: a05cc83bf02079535e17169a73c5be5ba47f714b
@@ -1476,14 +1464,10 @@ SPEC CHECKSUMS:
   GTMAppAuth: 217a876b249c3c585a54fd6f73e6b58c4f5c4238
   GTMSessionFetcher: 5aea5ba6bd522a239e236100971f10cb71b96ab6
   leveldb-library: cc8b8f8e013647a295ad3f8cd2ddf49a6f19be19
-  LiveKitClient: 051bd7a7562c12df4dc0fca5ff70a414a2c11eaf
-  LiveKitWebRTC: fd39d4e51ea51db3367f98c8c82cbf33e50b88c2
-  Logging: beeb016c9c80cf77042d62e83495816847ef108b
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
-  SwiftProtobuf: 3fafd1b2fb97e6d95ad9c8adb2215da9afec7c83
 
-PODFILE CHECKSUM: 2454a36d01fd3af50099d25586588a0084818413
+PODFILE CHECKSUM: 740d472e759d8e47f29a986e75971c239f2f9ae2
 
 COCOAPODS: 1.16.2

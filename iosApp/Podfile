@@ -26,12 +26,16 @@ target 'iosApp' do
   # Google Sign-In
   pod 'GoogleSignIn'
 
-  # LiveKit — voice rooms
-  pod 'LiveKitClient'
+  # LiveKit migrated to Swift Package Manager 2026-05-26 (task #24b).
+  # CocoaPods Trunk pinned LiveKitClient at 2.0.18 — LiveKit stopped
+  # publishing to Trunk after that and now distributes exclusively
+  # via SPM. The SPM dependency lives in iosApp.xcodeproj (added by
+  # `ruby scripts/ios/add-livekit-spm.rb`); current pinned-minimum
+  # version is 2.14.1.
 
   # iosAppTests target hosts the iosApp executable (TEST_HOST=...) and
   # must therefore be able to import the same Swift modules the app
-  # uses (FirebaseCore, GoogleSignIn, LiveKitClient). Without this
+  # uses (FirebaseCore, GoogleSignIn, LiveKitClient via SPM). Without this
   # nested declaration, `pod install` generates xcconfigs for the
   # `iosApp` target only; the test target ends up with no
   # baseConfigurationReference and xcodebuild's `build-for-testing`
