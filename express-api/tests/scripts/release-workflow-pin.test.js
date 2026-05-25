@@ -70,12 +70,15 @@ function extractStep(yamlText, stepName) {
   if (matches.length === 0) {
     throw new Error(
       `Could not find step "${stepName}" in workflow file. ` +
-        'Step was renamed, removed, or indentation changed — update this test to match.',
+        'Step was renamed, removed, or indentation changed (helper ' +
+        'requires 6-space step indent) — update this test to match.',
     );
   }
   if (matches.length > 1) {
     throw new Error(
-      `Ambiguous step name "${stepName}": found at lines ${matches.map((i) => i + 1).join(', ')}.`,
+      `Ambiguous step name "${stepName}": found at lines ${matches
+        .map((i) => i + 1)
+        .join(', ')}. Use a more specific name or scope to a single job.`,
     );
   }
   const startIdx = matches[0];
@@ -96,12 +99,14 @@ describe('release.yml — Release App token + PR-open contract', () => {
   //   "Create release branch and signed commit via GraphQL"
   //   "Open release PR"
   let appTokenStep;
+  let guardStep;
   let createCommitStep;
   let openPrStep;
 
   beforeAll(() => {
     yamlText = fs.readFileSync(RELEASE_YAML_PATH, 'utf8');
     appTokenStep = extractStep(yamlText, 'Generate app token');
+    guardStep = extractStep(yamlText, 'Guard against double-fired releases');
     createCommitStep = extractStep(yamlText, 'Create release branch and signed commit via GraphQL');
     openPrStep = extractStep(yamlText, 'Open release PR');
   });
@@ -158,11 +163,93 @@ describe('release.yml — Release App token + PR-open contract', () => {
       expect(openPrStep).toContain('gh pr create');
     });
 
-    test('invokes `gh pr merge --auto` (auto-merge enable)', () => {
+    test('invokes `gh pr merge --auto --squash` (R1 I-1: squash strategy is load-bearing)', () => {
       // Auto-merge MUST be enabled by the App, not GITHUB_TOKEN, so
       // the eventual squash-merge commit on main is authored by the
-      // App and triggers release-tag.yml.
-      expect(openPrStep).toContain('gh pr merge --auto');
+      // App and triggers release-tag.yml. The `--squash` flag is
+      // load-bearing: release-tag.yml's `Inspect commit subject`
+      // step matches `chore: release vX.Y.Z` against the squash-
+      // merge's commit subject (which is the PR title). A merge
+      // commit (default `--merge`) would produce a subject like
+      // `Merge pull request #N from release/v...` — release-tag.yml
+      // would skip it. So both `--auto` AND `--squash` are required.
+      expect(openPrStep).toContain('gh pr merge --auto --squash');
+    });
+
+    test('GH_TOKEN is declared in step-level `env:` block (R1 I-2)', () => {
+      // GH_TOKEN must be set at the step level so EVERY `gh` sub-
+      // command in the step's `run:` block inherits the App token.
+      // Setting it via `export GH_TOKEN=...` inside `run:` instead
+      // would leak ordering bugs — any `gh` call before the export
+      // would silently fall through to the default GITHUB_TOKEN.
+      expect(openPrStep).toContain('env:');
+      const envIdx = openPrStep.indexOf('env:');
+      const runIdx = openPrStep.indexOf('run:');
+      // Ordering guard: `-1` slipping through would still satisfy a
+      // naive `envIdx < runIdx` check if env is absent (-1 < positive).
+      expect(envIdx).toBeGreaterThanOrEqual(0);
+      expect(runIdx).toBeGreaterThanOrEqual(0);
+      expect(envIdx).toBeLessThan(runIdx);
+    });
+  });
+
+  describe('Guard against double-fired releases step (R1 I-3)', () => {
+    test('uses the App token (NOT GITHUB_TOKEN)', () => {
+      // The guard step calls `gh api` and `gh pr list` to detect
+      // orphan release branches and open release PRs. Both need to
+      // see the repo as the App identity for consistency with the
+      // PR-open step's view. Using GITHUB_TOKEN here would also
+      // hit the loop-prevention rule for any future branch-creation
+      // side effects.
+      expect(guardStep).toContain('GH_TOKEN: ${{ steps.app-token.outputs.token }}');
+      expect(guardStep).not.toContain('GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}');
+    });
+  });
+
+  // R1 C-1: extractStep error-branch coverage matching the canonical
+  // contract in ios-tests-build-cache.test.js. Without these, a
+  // rename of any of the four pinned steps surfaces as a generic
+  // `beforeAll` crash across every test in the file, with no
+  // targeted diagnostic — the developer has to read four error
+  // messages to know which step they renamed.
+  describe('extractStep helper — error branches', () => {
+    test('throws a clear error for unknown step names', () => {
+      expect(() =>
+        extractStep('jobs:\n  foo:\n    steps:\n      - name: Real\n', 'Nonexistent Step Name'),
+      ).toThrow(/Could not find step "Nonexistent Step Name"/);
+    });
+
+    test('throws when YAML uses non-6-space step indentation', () => {
+      const fourSpaceIndent = '    - name: Some Step\n      run: echo hi\n';
+      expect(() => extractStep(fourSpaceIndent, 'Some Step')).toThrow(
+        /Could not find step "Some Step"/,
+      );
+    });
+
+    // Mirror of the canonical CRLF test in ios-tests-build-cache.test.js.
+    // The blank line is placed INSIDE the First step's body — this is
+    // the configuration that would expose a trimEnd regression. With
+    // trimEnd the blank `\r` line trims to '' (length 0, fails the
+    // column-0 guard), the loop continues, and `if: always()` is
+    // captured. Without trimEnd, the loop breaks early.
+    test('extractStep handles CRLF line endings without bleed-through', () => {
+      const crlf = [
+        'jobs:',
+        '  build:',
+        '    steps:',
+        '      - name: First',
+        '        run: echo a',
+        '',
+        '        if: always()',
+        '      - name: Second',
+        '        run: echo b',
+        '',
+      ].join('\r\n');
+      const block = extractStep(crlf, 'First');
+      expect(block).toContain('run: echo a');
+      expect(block).toContain('if: always()');
+      expect(block).not.toContain('Second');
+      expect(block).not.toContain('echo b');
     });
   });
 });
