@@ -60,6 +60,18 @@ describe('iOS deployment target = 26.0 (pinned across all configs)', () => {
     expect(lines16).toEqual([]);
   });
 
+  test('iosApp.xcodeproj/project.pbxproj has zero `IPHONEOS_DEPLOYMENT_TARGET = 15.0` lines (R1 C-3 fix)', () => {
+    // R1 review C-1+C-3: the iosAppUITests XCBuildConfiguration
+    // blocks (committed by an earlier run of add-ui-test-target.rb
+    // when the script's initial new_target arg was '15.0') had 2
+    // surviving `15.0` lines that the original test missed. Now
+    // pinned: any deployment target older than 26.0 in pbxproj is
+    // a regression that re-introduces the object-file mismatch.
+    const src = fs.readFileSync(PBXPROJ, 'utf8');
+    const lines15 = src.split('\n').filter((l) => l.includes('IPHONEOS_DEPLOYMENT_TARGET = 15.0;'));
+    expect(lines15).toEqual([]);
+  });
+
   test('iosApp.xcodeproj/project.pbxproj has at least 6 `IPHONEOS_DEPLOYMENT_TARGET = 26.0` lines', () => {
     // 6 occurrences: app target (Debug, Release, Debug-Local,
     // Release-Local) + tests + UI tests targets. The exact count
@@ -85,5 +97,35 @@ describe('iOS deployment target = 26.0 (pinned across all configs)', () => {
     // target script previously set 15.0 (older than even the app's
     // pre-bump 16.0). Inconsistency caught here.
     expect(src).not.toContain("'IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'");
+  });
+
+  test('iosApp/scripts/add-ui-test-target.rb new_target call uses initial deployment target 26.0 (R1 C-2 fix)', () => {
+    // R1 review C-2: line 49 passed '15.0' as the 4th positional
+    // argument to `project.new_target(...)`. The xcodeproj gem
+    // writes that value into each new XCBuildConfiguration's
+    // settings BEFORE the override loop at line ~77 fires. On a
+    // clean script run the override wins, but the initial '15.0'
+    // value also persisted into the committed pbxproj (caught by
+    // the new 15.0-zero-lines test above). Pin the new_target call
+    // to '26.0' so even a script-run that skips the override leaves
+    // a consistent deployment target.
+    const src = fs.readFileSync(UI_TEST_SCRIPT, 'utf8');
+    // Match the multi-line `project.new_target(... :ios, '26.0', ...)` form.
+    // The `:ios,` line is followed by an optional comment-only line then
+    // the deployment-target string. Anchor on `:ios,` to find the call
+    // and assert the next non-comment line contains '26.0' (not '15.0').
+    const lines = src.split('\n');
+    const iosIdx = lines.findIndex((l) => l.trim() === ':ios,');
+    expect(iosIdx).toBeGreaterThanOrEqual(0);
+    // Walk forward, skipping comment-only lines (Ruby `# ...`), find the
+    // first non-comment non-blank line — that's the deployment target.
+    let targetLine = '';
+    for (let j = iosIdx + 1; j < lines.length; j++) {
+      const trimmed = lines[j].trim();
+      if (trimmed === '' || trimmed.startsWith('#')) continue;
+      targetLine = trimmed;
+      break;
+    }
+    expect(targetLine).toBe("'26.0',");
   });
 });

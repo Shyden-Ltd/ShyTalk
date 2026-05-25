@@ -46,7 +46,13 @@ ui_test_target = project.new_target(
   :ui_test_bundle,
   TARGET_NAME,
   :ios,
-  '15.0',
+  # Initial deployment target passed to xcodeproj's new_target. The
+  # build-settings override at line ~77 below sets the same value
+  # again on each config, but on a fresh `new_target` call the
+  # initial value gets written into the configs BEFORE the override
+  # loop fires. Keeping both aligned to 26.0 prevents a stale 15.0
+  # from being committed if the override loop is skipped or fails.
+  '26.0',
   nil,
   :swift,
 )
