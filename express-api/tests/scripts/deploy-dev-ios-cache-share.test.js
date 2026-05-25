@@ -37,16 +37,21 @@
  * Expected impact: ~7-10 min off cold-cache PR iOS Build, made
  * possible by main pushes warming the 3 shared caches.
  *
- * Coverage (12 tests):
- *   - 3 shared cache steps exist in deploy-dev.yml with matching
- *     keys to ios-tests.yml (cocoapods-repos, iosApp/Pods,
- *     ios-spm-packages)
- *   - Each cache step has the same restore-key shape (runner.os
- *     scope, defence-in-depth via positive-scope check)
- *   - Pods cache step has `id: pods-cache` for the install skip
- *   - Install CocoaPods step has `--deployment` + cache-hit skip
- *   - Archive xcodebuild has `-clonedSourcePackagesDirPath`
+ * Coverage (21 tests):
+ *   - CocoaPods spec repos cache (4 tests): SHA, path, key
+ *     byte-equality with ios-tests.yml, OS-scoped restore-key
+ *   - iosApp/Pods cache (4 tests): SHA, `id: pods-cache`, path,
+ *     key byte-equality
+ *   - SwiftPM packages cache (3 tests): SHA, path, key
+ *     byte-equality
+ *   - Install CocoaPods step (2 tests): cache-hit skip wiring,
+ *     `--deployment` flag
+ *   - Archive xcodebuild (1 test): `-clonedSourcePackagesDirPath`
  *     pointing at build/ios-spm-packages
+ *   - extractCacheKey defensive throw (7 tests): R2 review
+ *     test-gap fix — explicit throw for ALL 6 YAML block-scalar
+ *     indicators (`>`, `>-`, `>+`, `|`, `|-`, `|+`) + 1 control
+ *     case asserting normal single-line keys do NOT throw
  */
 
 const fs = require('fs');
@@ -75,11 +80,11 @@ function extractCacheKey(stepBlock) {
     const trimmed = line.trimStart();
     if (trimmed.startsWith('key: ')) {
       const value = trimmed.slice('key: '.length).trim();
-      // Defensive: if the value is the YAML block-scalar
-      // indicator (`>-`, `>`, `|`, `|-`, `|+`), the actual key
-      // lives on continuation lines this parser doesn't read.
-      // Throw loudly so the test fails with a clear diagnostic
-      // instead of silently passing on a `>-` literal compare.
+      // Defensive: if the value is a YAML block-scalar indicator
+      // (`>`, `>-`, `>+`, `|`, `|-`, `|+`), the actual key lives
+      // on continuation lines this parser doesn't read. Throw
+      // loudly so the test fails with a clear diagnostic instead
+      // of silently passing on a literal-indicator compare.
       if (/^[>|][-+]?$/.test(value)) {
         throw new Error(
           `Cache key is a YAML block scalar (value=${value}). ` +
@@ -267,6 +272,36 @@ describe('deploy-dev.yml ↔ ios-tests.yml — shared iOS caches', () => {
       // so its flag value is bare `build/...`. Accept either form
       // since both resolve to the same location.
       expect(step).toMatch(/-clonedSourcePackagesDirPath\s+(\.\.\/)?build\/ios-spm-packages/);
+    });
+  });
+
+  // R2 review test-gap: the extractCacheKey defensive throw for
+  // YAML block-scalar indicators is load-bearing — if the regex
+  // were corrupted (e.g., `[-+]` typo'd to `[-]` dropping `+`),
+  // no test would catch the silent regression. Pin the throw
+  // behaviour for ALL 6 block-scalar indicators explicitly.
+  describe('extractCacheKey defensive throw on block-scalar indicators', () => {
+    for (const indicator of ['>', '>-', '>+', '|', '|-', '|+']) {
+      test(`throws when key value is the block-scalar indicator "${indicator}"`, () => {
+        const stepBlock = [
+          '      - name: Fake',
+          '        with:',
+          `          key: ${indicator}`,
+          '            some-continuation',
+        ].join('\n');
+        expect(() => extractCacheKey(stepBlock)).toThrow(
+          /extractCacheKey only supports single-line keys/,
+        );
+      });
+    }
+
+    test('does NOT throw on a normal single-line key (control case)', () => {
+      const stepBlock = [
+        '      - name: Fake',
+        '        with:',
+        "          key: foo-${{ runner.os }}-${{ hashFiles('x') }}",
+      ].join('\n');
+      expect(() => extractCacheKey(stepBlock)).not.toThrow();
     });
   });
 });
