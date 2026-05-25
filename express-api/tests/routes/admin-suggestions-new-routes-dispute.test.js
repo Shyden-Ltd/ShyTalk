@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 /**
  * Tests for new admin suggestion routes.
  *

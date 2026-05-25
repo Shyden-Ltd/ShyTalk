@@ -1,3 +1,8 @@
+/* eslint-disable no-console -- driver methods log diagnostics for the
+   manual QA runner (operator-facing CLI), not application code. */
+/* eslint-disable sonarjs/no-os-command-from-path -- `xcrun` is the
+   Xcode command-line dispatcher; resolving via PATH is the standard
+   macOS pattern. Operator-installed; not user input. */
 /**
  * iOS driver backed by `xcrun simctl`.
  *

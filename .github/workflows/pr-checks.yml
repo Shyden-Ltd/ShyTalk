@@ -24,6 +24,8 @@ jobs:
     timeout-minutes: 5
     outputs:
       app_changed: ${{ steps.changes.outputs.app_changed }}
+      android_app_changed: ${{ steps.changes.outputs.android_app_changed }}
+      ios_app_changed: ${{ steps.changes.outputs.ios_app_changed }}
       backend_changed: ${{ steps.changes.outputs.backend_changed }}
       web_changed: ${{ steps.changes.outputs.web_changed }}
       integration_changed: ${{ steps.changes.outputs.integration_changed }}
@@ -45,7 +47,13 @@ jobs:
           # latest push only touches workflow files.
           MERGE_BASE=$(git merge-base "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}")
           CHANGED=$(git diff --name-only "$MERGE_BASE...${{ github.event.pull_request.head.sha }}")
-          APP=false BACKEND=false WEB=false INTEGRATION=false OTHER=false
+          # Granular per-platform app flags (added 2026-05-25 to skip
+          # expensive iOS/Android pipelines when a PR touches only
+          # the other platform). APP is the legacy union flag,
+          # retained for lint/sonarcloud/integration-tests which
+          # cover both platforms; only the heavy build/E2E jobs
+          # gate on the granular ANDROID_APP / IOS_APP flags.
+          ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false OTHER=false
           while IFS= read -r file; do
             [ -z "$file" ] && continue
             case "$file" in
@@ -58,7 +66,27 @@ jobs:
               # skip the entire playwright-web pipeline (the test would
               # only run locally before push, never in CI).
               tests/web/*|playwright.config.ts|playwright.config.js) WEB=true ;;
-              app/*|shared/*|iosApp/*|gradle/*|*.gradle.kts|gradle.properties|gradlew|gradlew.bat) APP=true ;;
+              # Per-platform shared-source classification. ORDER
+              # MATTERS — shell `case` is first-match, so the
+              # specific iosMain/androidMain arms MUST precede the
+              # generic `shared/*` arm. Without this ordering, a
+              # PR that changes only shared/src/iosMain/... would
+              # fall through to `shared/*` and trigger both Android
+              # and iOS pipelines, defeating the speedup.
+              shared/src/iosMain/*) IOS_APP=true; APP=true ;;
+              shared/src/androidMain/*) ANDROID_APP=true; APP=true ;;
+              # commonMain et al affects every platform consumer of
+              # the shared module. Setting both flags is the safe
+              # conservative behaviour.
+              shared/*) ANDROID_APP=true; IOS_APP=true; APP=true ;;
+              # Platform-specific top-level dirs.
+              iosApp/*) IOS_APP=true; APP=true ;;
+              app/*) ANDROID_APP=true; APP=true ;;
+              # Gradle infra (root build files, gradle wrapper,
+              # gradle.properties) affects every Gradle invocation
+              # — including the KMP framework build iOS depends on.
+              # Conservatively trigger both pipelines.
+              gradle/*|*.gradle.kts|gradle.properties|gradlew|gradlew.bat) ANDROID_APP=true; IOS_APP=true; APP=true ;;
               # Integration test files match BEFORE express-api/* so a
               # PR that changes ONLY tests/integration/ files runs the
               # integration job without dragging in the heavier
@@ -92,10 +120,10 @@ jobs:
           if printf '%s' "$PR_BODY" | grep -qE '^[[:space:]]*\[skip-ios-e2e\][[:space:]]*$'; then
             SKIP_IOS_E2E=true
           fi
-          for v in app_changed=$APP backend_changed=$BACKEND web_changed=$WEB integration_changed=$INTEGRATION workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E; do
+          for v in app_changed=$APP android_app_changed=$ANDROID_APP ios_app_changed=$IOS_APP backend_changed=$BACKEND web_changed=$WEB integration_changed=$INTEGRATION workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E; do
             echo "$v" >> "$GITHUB_OUTPUT"
           done
-          echo "Detection results: app=$APP backend=$BACKEND web=$WEB integration=$INTEGRATION workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E"
+          echo "Detection results: app=$APP android_app=$ANDROID_APP ios_app=$IOS_APP backend=$BACKEND web=$WEB integration=$INTEGRATION workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E"
 
   lint:
     needs: [detect-changes]
@@ -119,7 +147,7 @@ jobs:
     needs: [detect-changes, lint, test-backend]
     if: |
       always() &&
-      needs.detect-changes.outputs.app_changed == 'true' &&
+      needs.detect-changes.outputs.android_app_changed == 'true' &&
       (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
       (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped')
     runs-on: ubuntu-latest
@@ -260,7 +288,7 @@ jobs:
     needs: [detect-changes, build-and-test, sonarcloud, test-backend]
     if: |
       always() &&
-      needs.detect-changes.outputs.app_changed == 'true' &&
+      needs.detect-changes.outputs.android_app_changed == 'true' &&
       needs.detect-changes.outputs.skip_android_e2e != 'true' &&
       needs.build-and-test.result == 'success' &&
       (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
@@ -313,9 +341,9 @@ jobs:
     needs: [detect-changes, build-and-test, sonarcloud, test-backend]
     if: |
       always() &&
-      needs.detect-changes.outputs.app_changed == 'true' &&
+      needs.detect-changes.outputs.ios_app_changed == 'true' &&
       needs.detect-changes.outputs.skip_ios_e2e != 'true' &&
-      needs.build-and-test.result == 'success' &&
+      (needs.build-and-test.result == 'success' || needs.build-and-test.result == 'skipped') &&
       (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
       (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped')
     uses: ./.github/workflows/ios-tests.yml

@@ -281,6 +281,7 @@ class ProfileViewModel(
                     logI(TAG, "User created with uniqueId=$uniqueId")
                     // Set resolvedUniqueId so currentUserId returns the new uniqueId
                     authRepository.resolvedUniqueId = uniqueId.toString()
+                    authRepository.resolvedDisplayName = displayName
                     // Refresh token to pick up custom claims (uniqueId)
                     identityRepository.forceRefreshToken()
                     val user =
@@ -358,6 +359,7 @@ class ProfileViewModel(
             }
             when (val result = userRepository.updateProfile(userId, fields)) {
                 is Resource.Success -> {
+                    authRepository.resolvedDisplayName = displayName
                     _uiState.update {
                         it.copy(
                             isLoading = false,

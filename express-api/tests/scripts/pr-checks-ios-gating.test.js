@@ -83,13 +83,20 @@ describe('pr-checks.yml — ios-e2e job gating', () => {
     expect(iosE2eBlock).toMatch(/\bios:\s+'26\.2-iphone'/);
   });
 
-  test('job-level if-gate matches android-e2e symmetric pattern (app_changed + skip-marker)', () => {
-    // Same shape as android-e2e — fires when KMP/iOS code changes
-    // AND the PR-body marker `[skip-ios-e2e]` is not set. Without
-    // both checks present we either over-fire (every PR including
-    // workflow-only) or fail to honour the operator escape hatch.
-    expect(iosE2eBlock).toMatch(/needs\.detect-changes\.outputs\.app_changed\s*==\s*'true'/);
+  test('job-level if-gate uses ios_app_changed + skip-marker (updated 2026-05-25 from app_changed split)', () => {
+    // The ios-e2e job fires when iOS-relevant code changes AND
+    // the PR-body marker `[skip-ios-e2e]` is not set. Originally
+    // gated on `app_changed`; switched to `ios_app_changed`
+    // 2026-05-25 so Android-only PRs (and release PRs touching
+    // only app/build.gradle.kts) no longer trigger the ~45min
+    // iOS pipeline. Without both checks present we either
+    // over-fire (every PR including workflow-only) or fail to
+    // honour the operator escape hatch.
+    expect(iosE2eBlock).toMatch(/needs\.detect-changes\.outputs\.ios_app_changed\s*==\s*'true'/);
     expect(iosE2eBlock).toMatch(/needs\.detect-changes\.outputs\.skip_ios_e2e\s*!=\s*'true'/);
+    // Negative: the legacy app_changed reference must NOT appear
+    // in this job's if: block — the whole point of the split.
+    expect(iosE2eBlock).not.toMatch(/needs\.detect-changes\.outputs\.app_changed/);
   });
 
   test('parallel mode is on (same as android-e2e)', () => {

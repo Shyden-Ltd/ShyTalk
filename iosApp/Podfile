@@ -1,5 +1,18 @@
 platform :ios, '16.0'
 
+# Local-flavour configuration mapping. Without this, CocoaPods sees
+# Debug-Local + Release-Local in iosApp.xcodeproj (project-level
+# configs added for the iOS local-flavour build-out) but doesn't know
+# whether to treat them as debug-style or release-style. Result:
+# refuses to generate Pods-iosApp.debug-local.xcconfig /
+# .release-local.xcconfig — and pod install errors with "There may
+# only be up to 1 unique SWIFT_VERSION per target" when iosAppTests
+# is integrated below (because SWIFT_VERSION resolves to empty on
+# Local configs that lack a known mapping).
+project 'iosApp.xcodeproj',
+  'Debug-Local' => :debug,
+  'Release-Local' => :release
+
 target 'iosApp' do
   use_frameworks! :linkage => :static
 
@@ -15,6 +28,23 @@ target 'iosApp' do
 
   # LiveKit — voice rooms
   pod 'LiveKitClient'
+
+  # iosAppTests target hosts the iosApp executable (TEST_HOST=...) and
+  # must therefore be able to import the same Swift modules the app
+  # uses (FirebaseCore, GoogleSignIn, LiveKitClient). Without this
+  # nested declaration, `pod install` generates xcconfigs for the
+  # `iosApp` target only; the test target ends up with no
+  # baseConfigurationReference and xcodebuild's `build-for-testing`
+  # phase fails with `error: Unable to find module dependency:
+  # 'FirebaseCore'` (release run 26367863711 on 2026-05-24).
+  #
+  # `inherit! :search_paths` shares the parent's framework + header
+  # search paths WITHOUT re-embedding pods in the test bundle — the
+  # frameworks are already linked into iosApp.app, which TEST_HOST
+  # loads. Re-embedding would duplicate-symbols at link time.
+  target 'iosAppTests' do
+    inherit! :search_paths
+  end
 end
 
 post_install do |installer|

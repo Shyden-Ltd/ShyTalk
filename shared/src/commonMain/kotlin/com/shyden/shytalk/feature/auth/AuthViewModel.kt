@@ -503,6 +503,7 @@ class AuthViewModel(
                     when (val userResult = userRepository.getUser(userId)) {
                         is Resource.Success -> {
                             val user = userResult.data
+                            authRepository.resolvedDisplayName = user.displayName
                             if (user.isActivelySuspended) {
                                 logI(TAG, "Suspension detected: reason=${user.suspensionReason}")
                                 _uiState.update {

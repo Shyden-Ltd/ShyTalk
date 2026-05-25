@@ -1,3 +1,5 @@
+/* eslint-disable sonarjs/pseudo-random -- test mock doc-id generation;
+   not security-sensitive. */
 /**
  * Tests for roadmap update notifications.
  *

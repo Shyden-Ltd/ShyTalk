@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 /**
  * Identity System Tests — Multi-Provider Auth
  *

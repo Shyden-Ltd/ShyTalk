@@ -386,7 +386,7 @@ router.post('/admin/age-verification/:id/modify-dob', async (req, res) => {
         const followerIds = Array.isArray(userData.followerIds) ? userData.followerIds : [];
         const uniqueCounterparties = [...new Set([...followingIds, ...followerIds])];
         const counterpartySnaps = await Promise.all(
-          uniqueCounterparties.map((id) => tx.get(db.doc(`users/${id}`))),
+          uniqueCounterparties.map((counterpartyId) => tx.get(db.doc(`users/${counterpartyId}`))),
         );
         const cohortByCounterparty = new Map();
         counterpartySnaps.forEach((snap, idx) => {

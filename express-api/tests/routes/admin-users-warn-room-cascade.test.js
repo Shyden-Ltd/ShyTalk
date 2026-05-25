@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 /**
  * Warning behaviour matrix.
  *

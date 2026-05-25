@@ -143,6 +143,75 @@ jobs:
           restore-keys: |
             konan-${{ runner.os }}-
 
+      # CocoaPods spec-repo cache. Mirrors deploy-dev's pattern but
+      # scoped to ~/.cocoapods/repos — the master spec mirror
+      # (~1GB) that pod install hydrates from. Without this, every
+      # cold runner re-clones the trunk over slow network (~1-3 min
+      # before any actual pod download begins).
+      - name: Cache CocoaPods spec repos (~/.cocoapods/repos)
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cocoapods/repos
+          key: cocoapods-repos-${{ runner.os }}-${{ hashFiles('iosApp/Podfile.lock') }}
+          restore-keys: |
+            cocoapods-repos-${{ runner.os }}-
+
+      # iosApp/Pods/ cache. Single-largest cold-cache cost in the
+      # build (gRPC-Core compiles ~1000 files; Firebase Firestore
+      # ~600 more). Keyed on Podfile.lock — when deps don't change,
+      # warm hit means `pod install` is a no-op verification.
+      # Restore-keys provide partial warmth on Podfile changes.
+      - name: Cache iosApp/Pods
+        id: pods-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: iosApp/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('iosApp/Podfile.lock') }}
+          restore-keys: |
+            pods-${{ runner.os }}-
+
+      # Xcode DerivedData cache. Project-local path (NOT the default
+      # ~/Library/Developer/Xcode/DerivedData) per the xcodebuild
+      # `-derivedDataPath build/ios-derived-data` flag below. Without
+      # this, xcodebuild re-compiles every Pods + KMP framework object
+      # from scratch (~15-20 min cold).
+      #
+      # Key components — DO NOT use `iosApp/**` glob: the iosApp/Pods
+      # cache step (above) restores Pods files into iosApp/Pods/ BEFORE
+      # this hashFiles runs, and Pods generated files would then poison
+      # the key on every warm-Pods run (guaranteed DerivedData miss).
+      # Instead, list the specific committed dirs/files under iosApp/
+      # that legitimately invalidate DerivedData when changed:
+      #   - iosApp/iosApp/**             — Swift sources of the app target
+      #   - iosApp/iosAppTests/**        — Swift sources of the tests target
+      #   - iosApp/iosAppUITests/**      — Swift sources of the UI tests target
+      #   - iosApp/iosApp.xcodeproj/**   — project file changes
+      #   - iosApp/Podfile.lock          — pod version pin
+      #   - iosApp/Configurations/**     — xcconfigs
+      # Then the KMP simulator framework hash so KMP-source changes
+      # invalidate too.
+      - name: Cache Xcode DerivedData (build/ios-derived-data)
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: build/ios-derived-data
+          key: ios-derived-${{ runner.os }}-${{ hashFiles('iosApp/iosApp/**', 'iosApp/iosAppTests/**', 'iosApp/iosAppUITests/**', 'iosApp/iosApp.xcodeproj/**', 'iosApp/Podfile.lock', 'iosApp/Configurations/**', 'shared/build/bin/iosSimulatorArm64/**') }}
+          restore-keys: |
+            ios-derived-${{ runner.os }}-
+
+      # Swift Package Manager cloned-packages cache. xcodebuild's
+      # `-clonedSourcePackagesDirPath build/ios-spm-packages` flag
+      # below stages SPM clones here instead of inside DerivedData.
+      # Caching them keeps Package.resolved hits warm across runs
+      # so xcodebuild doesn't re-clone (e.g. github.com/firebase/...
+      # ~400MB) every build.
+      - name: Cache SwiftPM packages (build/ios-spm-packages)
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: build/ios-spm-packages
+          key: ios-spm-${{ runner.os }}-${{ hashFiles('iosApp/**/Package.resolved', 'iosApp/**/Package.swift') }}
+          restore-keys: |
+            ios-spm-${{ runner.os }}-
+
       - name: Check for iOS test targets
         id: check-tests
         run: |
@@ -180,14 +249,40 @@ jobs:
       # silently skip this check if XCTest targets are ever removed
       # (Round 3 I-1 review fix).
       - name: Verify pbxproj-mutation script idempotency
+        working-directory: express-api
+        # R4 review I-2: `gem install xcodeproj` (no --user-install)
+        # is the standard form on macOS GitHub runners. The runner
+        # user has write access to the system Ruby gem directory and
+        # the gem becomes available via the standard $LOAD_PATH on
+        # the next Ruby invocation. `--user-install` would place the
+        # gem in `~/.gem/...` which (while still on Ruby's GEM_PATH)
+        # adds a subtle correctness-vs-PATH mismatch if a later step
+        # invokes a different Ruby.
         run: |
-          gem install --user-install xcodeproj
-          cd express-api && \
+          gem install xcodeproj
           npx jest tests/scripts/ios-local-configurations.test.js
 
       - name: Install CocoaPods
-        if: steps.check-tests.outputs.has_tests == 'true'
-        run: cd iosApp && pod install
+        # Skip when iosApp/Pods/ cache hit AND Podfile.lock unchanged —
+        # pods are already installed and the pbxproj already wired.
+        # On miss (or new Podfile.lock), runs fresh `pod install`.
+        #
+        # --deployment enforces that the committed Podfile.lock is the
+        # source of truth: pod install fails loudly on lock mismatch
+        # instead of silently regenerating. Catches stale-lock bugs
+        # before they corrupt the Pods cache.
+        if: steps.check-tests.outputs.has_tests == 'true' && steps.pods-cache.outputs.cache-hit != 'true'
+        run: cd iosApp && pod install --deployment
+
+      # Pin contract for the iosAppTests CocoaPods integration. Runs
+      # AFTER `pod install` so it reads the post-install pbxproj
+      # state for baseConfigurationReference assertions. Must run
+      # unconditionally on every iOS PR (no `has_tests` guard) — the
+      # contract being pinned is `iosAppTests target's xcconfigs are
+      # wired`, which is independent of whether tests exist for it.
+      - name: Verify iosAppTests Pods integration (pin contract)
+        working-directory: express-api
+        run: npx jest tests/scripts/ios-pods-integration-pin.test.js
 
       - name: Build iOS app for testing
         if: steps.check-tests.outputs.has_tests == 'true'
@@ -208,11 +303,27 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p build/ios-build-logs
+          # -quiet drops the per-file CpHeader / CompileC chatter (the
+          #   noise that flooded the 48k log line ceiling and made the
+          #   2026-05-24 failure invisible until the artifact was downloaded).
+          #   Errors + warnings still surface. ~30% throughput improvement
+          #   on log-bound builds.
+          # -clonedSourcePackagesDirPath puts SwiftPM cloned packages in
+          #   a cacheable location instead of inside DerivedData where
+          #   they'd be cache-thrashed alongside build products.
+          # -skipPackagePluginValidation + -skipMacroValidation skip the
+          #   Xcode 26 trust prompts for build-time package plugins +
+          #   Swift macros (~5-10s per launch on cold runner; we don't
+          #   need interactive trust in CI).
           xcodebuild build-for-testing \
             -workspace iosApp/iosApp.xcworkspace \
             -scheme iosApp \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build/ios-derived-data \
+            -clonedSourcePackagesDirPath build/ios-spm-packages \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            -quiet \
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee build/ios-build-logs/xcodebuild-build-for-testing.log
 

@@ -105,22 +105,23 @@ private const val USER_ID_POLL_INTERVAL_MS = 2_000L
 @Composable
 private fun WatermarkBadge(modifier: Modifier = Modifier) {
     var uniqueId by remember { mutableStateOf<String?>(null) }
+    var displayName by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
-        // Sample AuthRepository.resolvedUniqueId on a tick rather than
-        // observe a flow — `resolvedUniqueId` is a plain `var` and a
-        // watermark refresh latency of up to 2s is unnoticeable to the
-        // human eye, while threading a StateFlow through every auth
-        // call site for this single display would be invasive.
+        // Sample AuthRepository.resolvedUniqueId / resolvedDisplayName
+        // on a tick rather than observe flows — both are plain `var`s
+        // and a watermark refresh latency of up to 2s is unnoticeable
+        // to the human eye, while threading StateFlows through every
+        // auth call site for this single display would be invasive.
         // `getOrNull()` on the context returns the Koin instance (or
         // null if Koin hasn't started yet — possible early in
         // `setContent` before `doInitKoin` completes).
         while (true) {
-            uniqueId =
+            val repo =
                 runCatching {
-                    val koin = KoinPlatformTools.defaultContext().getOrNull()
-                    val repo = koin?.getOrNull<AuthRepository>()
-                    repo?.resolvedUniqueId
+                    KoinPlatformTools.defaultContext().getOrNull()?.getOrNull<AuthRepository>()
                 }.getOrNull()
+            uniqueId = repo?.resolvedUniqueId
+            displayName = repo?.resolvedDisplayName?.takeIf { it.isNotBlank() }
             delay(USER_ID_POLL_INTERVAL_MS)
         }
     }
@@ -152,6 +153,12 @@ private fun WatermarkBadge(modifier: Modifier = Modifier) {
         )
         Text(
             text = "UID: ${uniqueId ?: "-"}",
+            color = Color.White,
+            fontSize = WATERMARK_DETAIL_SIZE_SP.sp,
+            fontFamily = FontFamily.Monospace,
+        )
+        Text(
+            text = "Name: ${displayName ?: "-"}",
             color = Color.White,
             fontSize = WATERMARK_DETAIL_SIZE_SP.sp,
             fontFamily = FontFamily.Monospace,

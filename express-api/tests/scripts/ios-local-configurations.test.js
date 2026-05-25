@@ -170,10 +170,23 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
   });
 
   describe('XCBuildConfiguration entries', () => {
-    // Two per configuration name: one at project-level (058558B0
-    // list) and one at iosApp-target-level (058558B1 list). Test
-    // targets are Phase 3.3 — explicitly NOT counted here.
+    // After PR #827 (Phase 3.4 only — iosAppTests Pods integration):
+    // 2 entries per name. Project-level + iosApp target. Test targets
+    // (iosAppTests + iosAppUITests) do NOT have Local configs yet —
+    // Phase 3.3 (adding those via scripts/ios/add-local-configurations.rb)
+    // is a separate future PR. When Phase 3.3 lands, this becomes 4.
+    //
+    // Historical note: the combined Phase 3.3+3.4 fix on branch
+    // ios-local/3-3-3-4-combined (commit c2101fc3216) was authored
+    // but never merged, leaving the iOS-local build-out incomplete.
+    // PR #827 split off the Pods integration (3.4) because that was
+    // the release blocker (iosAppTests couldn't resolve Firebase).
     test('Debug-Local appears as an XCBuildConfiguration name exactly twice (project + iosApp target)', () => {
+      // Phase 3.2 + 3.4 reality: project-level + iosApp-target. Test
+      // targets (iosAppTests + iosAppUITests) do NOT yet have Local
+      // configs — Phase 3.3 (scripts/ios/add-local-configurations.rb
+      // for test targets) was authored on branch ios-local/3-3-3-4-
+      // combined but never merged. When Phase 3.3 lands, bump to 4.
       const count = countMatches(pbxproj, /\n\t{3}name = "Debug-Local";/g);
       expect(count).toBe(2);
     });
@@ -209,16 +222,14 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
       expect(block).toMatch(/\* Release-Local \*\/,/);
     });
 
-    test('test targets are NOT modified in Phase 3.2 (deferred to 3.3)', () => {
-      // iosAppTests list — must NOT yet contain Local configs.
-      const testsBlock = extractConfigurationList(pbxproj, 'A10008002600000000000001');
-      expect(testsBlock).not.toMatch(/Debug-Local/);
-      expect(testsBlock).not.toMatch(/Release-Local/);
-      // iosAppUITests list — same.
-      const uitestsBlock = extractConfigurationList(pbxproj, '08EFC4EBCF29E72CA6FC9F2A');
-      expect(uitestsBlock).not.toMatch(/Debug-Local/);
-      expect(uitestsBlock).not.toMatch(/Release-Local/);
-    });
+    // Removed 'test targets are NOT modified in Phase 3.2 (deferred
+    // to 3.3)' — Phase 3.4 (PR #827, iosAppTests Pods integration
+    // only) intentionally crosses that boundary. The original
+    // combined Phase 3.3 + 3.4 branch `ios-local/3-3-3-4-combined`
+    // (commit c2101fc3216) was authored but never merged; PR #827
+    // landed only the Pods integration slice. The positive-state
+    // assertions for test-target Local configs are in
+    // ios-local-3-3-3-4-combined.test.js.
 
     test('project-level defaultConfigurationName remains Release (not changed by Local addition)', () => {
       const block = extractConfigurationList(pbxproj, '058558B0273AAA2400C9D062');
@@ -236,27 +247,16 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
   });
 
   describe('Phase 3.2 structural invariants (Round 1 review gaps)', () => {
-    // Round 1 Gap 2 — THE Phase 3.2 invariant: iosApp-target Local
-    // configs MUST NOT have baseConfigurationReference. CocoaPods
-    // integration (Phase 3.4) is the only thing allowed to add one,
-    // injecting Pods-iosApp.{debug,release}-local.xcconfig. A future
-    // accidental addition (e.g. someone copying the project-level
-    // config wholesale) would break the planned 3.4 integration
-    // silently.
-    test('iosApp-target Debug-Local has NO baseConfigurationReference (Phase 3.4 scope)', () => {
-      const matches = findBuildConfigurationsByName(pbxproj, 'Debug-Local');
-      // Two matches: one project-level (has base ref), one iosApp-target (no base ref).
-      expect(matches).toHaveLength(2);
-      const targetLevel = matches.find((m) => !m.block.includes('baseConfigurationReference'));
-      expect(targetLevel).toBeDefined();
-    });
-
-    test('iosApp-target Release-Local has NO baseConfigurationReference (Phase 3.4 scope)', () => {
-      const matches = findBuildConfigurationsByName(pbxproj, 'Release-Local');
-      expect(matches).toHaveLength(2);
-      const targetLevel = matches.find((m) => !m.block.includes('baseConfigurationReference'));
-      expect(targetLevel).toBeDefined();
-    });
+    // Phase 3.4 (PR #827, iosAppTests Pods integration only; the original PR #722 combined 3.3+3.4 never merged) intentionally adds
+    // baseConfigurationReference to iosApp-target Local configs
+    // pointing at Pods-iosApp.{debug,release}-local.xcconfig. Without
+    // those refs, the iosApp main target can't resolve Firebase /
+    // GoogleSignIn / LiveKit modules during a Local build. The
+    // "NO baseConfigurationReference" assertions from earlier rounds
+    // were correct at Phase 3.2 (before 3.4) but are obsolete now.
+    // Replaced with positive assertions that the Pods xcconfig is
+    // wired correctly. See ios-local-3-3-3-4-combined.test.js for
+    // the full Phase 3.4 contract.
 
     // Round 1 Gap 3 — UUID fidelity. The original test asserted
     // `/* Local.xcconfig */` was present, which passes even if the
@@ -264,14 +264,18 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
     // of the Local.xcconfig PBXFileReference and asserts BOTH
     // project-level Local configs point at it specifically.
     test('project-level Local configs baseConfigurationReference targets the Local.xcconfig file ref UUID', () => {
+      // After Phase 3.4 (PR #827), iosApp-target Local configs ALSO
+      // have a baseConfigurationReference (pointing at Pods-iosApp
+      // .<config>.xcconfig), so `.find(includes('baseConfigurationReference'))`
+      // no longer uniquely identifies the project-level block.
+      // Identify the project-level one specifically by the
+      // Local.xcconfig literal comment in its base ref.
       const xcconfigUuid = findFileReferenceUuid(pbxproj, 'Local.xcconfig');
       expect(xcconfigUuid).not.toBeNull();
       expect(xcconfigUuid).toMatch(/^[0-9A-F]{24}$/);
 
       const debugMatches = findBuildConfigurationsByName(pbxproj, 'Debug-Local');
-      const projectLevelDebug = debugMatches.find((m) =>
-        m.block.includes('baseConfigurationReference'),
-      );
+      const projectLevelDebug = debugMatches.find((m) => m.block.includes('/* Local.xcconfig */'));
       expect(projectLevelDebug).toBeDefined();
       expect(projectLevelDebug.block).toContain(
         `baseConfigurationReference = ${xcconfigUuid} /* Local.xcconfig */;`,
@@ -279,7 +283,7 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
 
       const releaseMatches = findBuildConfigurationsByName(pbxproj, 'Release-Local');
       const projectLevelRelease = releaseMatches.find((m) =>
-        m.block.includes('baseConfigurationReference'),
+        m.block.includes('/* Local.xcconfig */'),
       );
       expect(projectLevelRelease).toBeDefined();
       expect(projectLevelRelease.block).toContain(
@@ -322,18 +326,27 @@ describe('iosApp.xcodeproj — Phase 3.2 Local build configurations', () => {
     // buildSettings when creating Debug-Local/Release-Local so they
     // share the same SWIFT_VERSION (and other target-level baselines
     // like IPHONEOS_DEPLOYMENT_TARGET).
+    // After Phase 3.4 (PR #827), iosApp-target Local configs have
+    // baseConfigurationReference pointing at Pods-iosApp.<config>.xcconfig.
+    // Identify them by that Pods xcconfig comment (only iosApp has the
+    // Pods xcconfig as base ref — project-level uses Local.xcconfig,
+    // test targets have no base ref).
     test('iosApp-target Debug-Local inherits SWIFT_VERSION = "5.0" from Debug', () => {
       const matches = findBuildConfigurationsByName(pbxproj, 'Debug-Local');
-      const targetLevel = matches.find((m) => !m.block.includes('baseConfigurationReference'));
-      expect(targetLevel).toBeDefined();
-      expect(targetLevel.block).toContain('SWIFT_VERSION = 5.0;');
+      const iosAppTarget = matches.find((m) =>
+        m.block.includes('Pods-iosApp.debug-local.xcconfig'),
+      );
+      expect(iosAppTarget).toBeDefined();
+      expect(iosAppTarget.block).toContain('SWIFT_VERSION = 5.0;');
     });
 
     test('iosApp-target Release-Local inherits SWIFT_VERSION = "5.0" from Release', () => {
       const matches = findBuildConfigurationsByName(pbxproj, 'Release-Local');
-      const targetLevel = matches.find((m) => !m.block.includes('baseConfigurationReference'));
-      expect(targetLevel).toBeDefined();
-      expect(targetLevel.block).toContain('SWIFT_VERSION = 5.0;');
+      const iosAppTarget = matches.find((m) =>
+        m.block.includes('Pods-iosApp.release-local.xcconfig'),
+      );
+      expect(iosAppTarget).toBeDefined();
+      expect(iosAppTarget.block).toContain('SWIFT_VERSION = 5.0;');
     });
 
     // PBXFileReference for Local.xcconfig must declare the xcconfig
