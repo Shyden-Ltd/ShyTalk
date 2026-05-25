@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 /**
  * Comprehensive coverage tests for src/routes/reports.js
  */

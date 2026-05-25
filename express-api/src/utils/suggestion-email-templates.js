@@ -84,12 +84,11 @@ function getSubject(type, language, title) {
 // suggestion notifications. See feedback-environment-isolation memory.
 // Kept on one line each (prettier-ignore) so the pre-commit URL-
 // isolation guard sees the localhost fallback alongside the prod URL.
-/* eslint-disable no-nested-ternary, max-len */
+
 // prettier-ignore
 const SITE_BASE = process.env.SITE_BASE_URL || (process.env.NODE_ENV === 'production' ? 'https://shytalk.shyden.co.uk' : process.env.NODE_ENV === 'local' ? 'http://localhost:8888' : 'https://dev.shytalk.shyden.co.uk');
 // prettier-ignore
 const API_BASE = process.env.API_BASE_URL || (process.env.NODE_ENV === 'production' ? 'https://api.shytalk.shyden.co.uk' : process.env.NODE_ENV === 'local' ? 'http://localhost:3000' : 'https://dev-api.shytalk.shyden.co.uk');
-/* eslint-enable no-nested-ternary, max-len */
 
 function buildHeaders(uid) {
   const unsubUrl = `${API_BASE}/api/subscriptions/unsubscribe?token=${uid}`;

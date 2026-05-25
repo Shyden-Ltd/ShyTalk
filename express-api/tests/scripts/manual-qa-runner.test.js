@@ -13854,8 +13854,13 @@ describe('Wake 74 — "no rendered <text|character> contains|has the Unicode rep
   // j13-locales-rtl-cjk.feature lines 14, 96
   //   Then no rendered text contains the Unicode replacement glyph U+FFFD
   //   Then no rendered character has the Unicode replacement glyph U+FFFD
-  // Both shapes share one matcher. U+FFFD (`�`) is what renders when a
-  // glyph can't be resolved — its presence means a missing font fallback.
+  // Both shapes share one matcher. U+FFFD (the Unicode replacement
+  // character, codepoint 0xFFFD) is what renders when a glyph can't
+  // be resolved — its presence means a missing font fallback. We
+  // avoid the literal codepoint anywhere in source files (including
+  // comments) because Sonar's source-encoding probe rejects files
+  // containing the replacement char (it treats it as a sign of an
+  // upstream decoding error).
   test('no glyph found → ok', async () => {
     const spy = jest.fn(async () => false);
     const ctx = makeCtx({ webDriver: { webHasReplacementGlyph: spy } });

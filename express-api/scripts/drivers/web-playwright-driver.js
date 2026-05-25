@@ -1,4 +1,6 @@
 /* global document, window, NodeFilter */
+/* eslint-disable no-console -- driver methods log diagnostics for the
+   manual QA runner (operator-facing CLI), not application code. */
 /**
  * Web driver backed by the `playwright` package.
  *
@@ -30,7 +32,7 @@ function loadPlaywright() {
   // Resolve `playwright` from the repo root node_modules (not express-api/).
   const repoRoot = path.resolve(__dirname, '../../..');
   const playwrightPath = path.join(repoRoot, 'node_modules', 'playwright');
-  // eslint-disable-next-line global-require, sonarjs/no-require-or-define
+
   _playwright = require(playwrightPath);
   return _playwright;
 }

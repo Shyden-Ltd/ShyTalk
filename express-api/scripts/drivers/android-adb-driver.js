@@ -1,3 +1,8 @@
+/* eslint-disable no-console -- driver methods log diagnostics for the
+   manual QA runner (operator-facing CLI), not application code. */
+/* eslint-disable sonarjs/no-os-command-from-path -- `adb` is the Android
+   Debug Bridge CLI; resolving via PATH is the standard pattern.
+   Operator-installed; not user input. */
 /**
  * Android driver backed by `adb` (shell + uiautomator).
  *
@@ -33,6 +38,8 @@ const { execSync } = require('child_process');
 function selectSerial(preferredSerial) {
   let devices;
   try {
+    // is the Android Debug Bridge CLI; resolving it via PATH is the
+    // standard pattern. Operator-installed; not user-supplied input.
     devices = execSync('adb devices', { encoding: 'utf8' });
   } catch (_e) {
     return null;
@@ -213,7 +220,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     try {
       const dump = await driver.androidUiDump();
       const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      // eslint-disable-next-line sonarjs/slow-regex
+
       const re = new RegExp(
         `resource-id="(?:[^"]*:id/)?${escTag}"[^<]*?bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"`,
       );
@@ -304,7 +311,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
     const escBanner = banner.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     return new RegExp(`(?<![\\w-])(?:text|content-desc)="[^"]*${escBanner}[^"]*"`).test(dump);
   };
 
@@ -318,7 +325,6 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // live in one place and Phase 4 methods that follow can just pass
   // a marker list.
   function dumpHasAnyMarker(dump, markers) {
-    // eslint-disable-next-line sonarjs/slow-regex
     return markers.some((m) => new RegExp(`resource-id="(?:[^"]*:id/)?${m}"`).test(dump));
   }
 
@@ -414,7 +420,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     if (!dump) return false;
     if (!isOnWarningScreen(dump)) return false;
     const escReason = reason.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     return new RegExp(`(?<![\\w-])(?:text|content-desc)="[^"]*${escReason}[^"]*"`).test(dump);
   };
 
@@ -498,7 +504,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     if (!hints) return false;
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?room_micToggleButton"[^>]*\/?>/;
     const tagMatch = dump.match(tagRx);
     if (!tagMatch) return false;
@@ -526,7 +532,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
         return contentDesc.toLowerCase() === h.toLowerCase();
       }
       const escH = h.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      // eslint-disable-next-line sonarjs/slow-regex
+
       return new RegExp(`(?<![\\w-])${escH}(?!\\w)`).test(contentDesc);
     });
   };
@@ -555,14 +561,14 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     if (!balance || !balance.trim()) return false;
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?wallet_balance"[^>]*\/?>/;
     const tagMatch = dump.match(tagRx);
     if (!tagMatch) return false;
     const escBalance = balance.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     // Scan within the captured tag for either text= or content-desc=
     // carrying the balance value with digit-boundary protection.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const valueRx = new RegExp(`(?:text|content-desc)="[^"]*(?<![\\w-])${escBalance}(?!\\w)[^"]*"`);
     return valueRx.test(tagMatch[0]);
   };
@@ -592,7 +598,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     if (!buttonId || !buttonId.trim()) return false;
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?profile_followButton"[^>]*\/?>/;
     const tagMatch = dump.match(tagRx);
     if (!tagMatch) return false;
@@ -625,7 +631,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     if (!tag) return false;
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${tag}"[^>]*\\/?>`);
     const tagMatch = dump.match(tagRx);
     if (!tagMatch) return false;
@@ -636,7 +642,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // uiautomator vocabulary the standard `enabled` is the only
     // such attribute, but the anchor defends against future surface
     // growth without cost.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     return /(?<![\w-])enabled="false"/.test(tagMatch[0]);
   };
 
@@ -657,7 +663,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsFrozenBanner = async (_viewer, _convId, _suffix) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_frozenBanner"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -682,10 +688,10 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidAdminShowsNewReportInQueue = async (_reviewer) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const listRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?reportReview_list"[^>]*\/?>/;
     if (!listRx.test(dump)) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const emptyRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?reportReview_emptyState"[^>]*\/?>/;
     return !emptyRx.test(dump);
   };
@@ -722,7 +728,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
     const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${escTag}"[^>]*\\/?>`);
     return tagRx.test(dump);
   };
@@ -825,7 +831,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // internal placeholder/error labels would pollute the scanned-
     // strings array and break downstream locale-fallback assertions.
     // Mirrors the boundary used in androidShowsBanner (line 308).
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const attrRx = /(?<![\w-])(?:text|content-desc)="([^"]*)"/g;
     for (const m of dump.matchAll(attrRx)) {
       const value = m[1].trim();
@@ -869,7 +875,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // because uiautomator emits bounds AFTER resource-id (verified
     // standard order), but the two-step is the stricter
     // foundation for the rest of the cluster.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?roomList_roomCard_[^"]*"[^>]*\/?>/;
     const tagMatch = dump.match(tagRx);
     if (!tagMatch) return false;
@@ -930,7 +936,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
     const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${escTag}"[^>]*\\/?>`);
     return tagRx.test(dump);
   };
@@ -957,7 +963,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
     // Step 1: gift wall must be visible
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const wallRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?giftWall_grid"[^>]*\/?>/;
     if (!wallRx.test(dump)) return false;
     // Step 2: giftId text appears with word-boundary protection
@@ -976,7 +982,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // `crown`, while `Adam sent crown today` (space-padded) still
     // does. Defends against compound gift labels like "rose-gold
     // pendant" false-matching the "rose" hint.
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const giftRx = new RegExp(
       `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escGift}(?![\\w-])[^"]*"`,
     );
@@ -1003,12 +1009,12 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
     // Step 1: seat-grid must be visible
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const gridRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?room_seatGrid"[^>]*\/?>/;
     if (!gridRx.test(dump)) return false;
     // Step 2: target name appears with symmetric word-boundary
     const escTarget = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const targetRx = new RegExp(
       `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escTarget}(?![\\w-])[^"]*"`,
     );
@@ -1036,19 +1042,19 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
     // Step 1: gift wall must be visible
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const wallRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?giftWall_grid"[^>]*\/?>/;
     if (!wallRx.test(dump)) return false;
     // Step 2: giftId appears with symmetric word-boundary
     const escGift = giftId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const giftRx = new RegExp(
       `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escGift}(?![\\w-])[^"]*"`,
     );
     if (!giftRx.test(dump)) return false;
     // Step 3: sender appears with symmetric word-boundary
     const escSender = sender.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const senderRx = new RegExp(
       `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escSender}(?![\\w-])[^"]*"`,
     );
@@ -1073,7 +1079,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsMessageInConversationThread = async (_name) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1097,12 +1103,12 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
     // Step 1: messages tab visible
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tabRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?main_messagesTab"[^>]*\/?>/;
     if (!tabRx.test(dump)) return false;
     // Step 2: other name appears with symmetric word-boundary
     const escOther = other.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const otherRx = new RegExp(
       `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escOther}(?![\\w-])[^"]*"`,
     );
@@ -1134,19 +1140,19 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
     // Step 1: admin queue visible
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const listRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?reportReview_list"[^>]*\/?>/;
     if (!listRx.test(dump)) return false;
     // Step 2: targetId appears with symmetric word-boundary
     const escTarget = targetId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const targetRx = new RegExp(
       `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escTarget}(?![\\w-])[^"]*"`,
     );
     if (!targetRx.test(dump)) return false;
     // Step 3: status appears with symmetric word-boundary
     const escStatus = status.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const statusRx = new RegExp(
       `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escStatus}(?![\\w-])[^"]*"`,
     );
@@ -1179,7 +1185,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
     const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${escTag}"[^>]*\\/?>`);
     return tagRx.test(dump);
   };
@@ -1202,7 +1208,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsInThread = async (_name, _noun, _suffix) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1233,19 +1239,19 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
     // Step 1: seat grid visible
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const gridRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?room_seatGrid"[^>]*\/?>/;
     if (!gridRx.test(dump)) return false;
     // Step 2: target appears with symmetric word-boundary
     const escTarget = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const targetRx = new RegExp(
       `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escTarget}(?![\\w-])[^"]*"`,
     );
     if (!targetRx.test(dump)) return false;
     // Step 3: indicator appears with symmetric word-boundary
     const escIndicator = indicator.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const indicatorRx = new RegExp(
       `(?<![\\w-])(?:text|content-desc)="[^"]*(?<![\\w-])${escIndicator}(?![\\w-])[^"]*"`,
     );
@@ -1268,7 +1274,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsSecondOffensiveMessage = async (_name) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1288,7 +1294,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsContributorsList = async (_name) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?giftWall_grid"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1310,7 +1316,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsSystemPmFromOfficia = async (_name) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1332,7 +1338,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsPmThreadDirection = async (_name, _direction) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1359,7 +1365,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsWelcomePmInLanguage = async (_name, _code) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1387,7 +1393,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidSubmitStarFeedback = async (_name, _stars, _feedback) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?feedbackScreen_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1434,7 +1440,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // `[A-Za-z_]`, but a future map value containing a regex metacharacter
     // (e.g. `.` or `+`) would silently broaden the match without this guard.
     const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${escTag}"[^>]*\\/?>`);
     return tagRx.test(dump);
   };
@@ -1457,7 +1463,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidAdminShowsAppealText = async (_viewer, _target) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?adminAppeal_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1482,7 +1488,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidAdminShowsDashboardCounters = async (_viewer, _counters) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?adminDashboard_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1505,7 +1511,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidAdminShowsStat = async (_viewer, _statName) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?adminStat_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1528,7 +1534,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidAlsoShowsInParticipantsList = async (_viewer, _other) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?participantsList_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1555,7 +1561,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidApproveSeatRequest = async (_host, _requester) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?seatRequest_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1584,7 +1590,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidOpenProfileAndTap = async (_actor, _target, _button) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?profile_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1610,7 +1616,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidOpenProfileFrom = async (_actor, _target, _source) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?profile_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1632,7 +1638,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidRefreshLanguageRail = async (_name) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?languageRail_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1653,7 +1659,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsBeansPerWeekChart = async (_name) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?beansChart_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1675,7 +1681,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsCountBadge = async (_name, _delta, _label) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?countBadge_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1699,7 +1705,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsEditedBodyWithTag = async (_name, _body, _tag) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?editedBody_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1721,7 +1727,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsInAppGiftNotification = async (_recipient, _sender, _giftId) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?giftNotification_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1746,7 +1752,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsInResults = async (_viewer, _target, _displayName) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?searchResults_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1785,7 +1791,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsNonEmptyLocaleText = async (_name, _code, _section) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?localeText_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1806,7 +1812,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsOfficialBadge = async (_name, _suffix) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?officialBadge_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1827,7 +1833,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsOnlyMinorCohortInRankings = async (_name) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?rankings_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1848,7 +1854,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsOwnRankInTop = async (_name, _topN) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?ownRank_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1867,7 +1873,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsRoomClosedSummary = async (_name) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?roomClosedSummary_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1888,7 +1894,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsRoomWarningBanner = async (_name) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?roomWarningBanner_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1909,7 +1915,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsSeatRequestNotification = async (_host, _requester) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?seatRequestNotification_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1930,7 +1936,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsStalkersDelta = async (_name, _delta) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?stalkersDelta_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1950,7 +1956,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsToastAndNavigates = async (_name, _toast, _route, _timeout) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?toastWithRoute_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1970,7 +1976,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsToastAndNavigatesBack = async (_name, _toast, _route) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?toastWithRoute_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -1990,7 +1996,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsUserCard = async (_viewer, _target) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?userCard_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -2011,7 +2017,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.androidShowsUserCardSkeletons = async (_name) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?userCardSkeleton_[^"]*"[^>]*\/?>/;
     return tagRx.test(dump);
   };
@@ -2032,7 +2038,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // SURFACE_TARGET_TAGS. The single mapped entry is `[A-Za-z_]`-only
     // today, but future map values could contain regex metacharacters.
     const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // eslint-disable-next-line sonarjs/slow-regex
+
     const tagRx = new RegExp(`<node[^>]*resource-id="(?:[^"]*:id\\/)?${escTag}"[^>]*\\/?>`);
     return tagRx.test(dump);
   };

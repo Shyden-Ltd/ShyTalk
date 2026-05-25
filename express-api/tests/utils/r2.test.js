@@ -454,7 +454,7 @@ describe('CDN_URL env-isolation fallback', () => {
       jest.doMock('@aws-sdk/s3-request-presigner', () => ({
         getSignedUrl: jest.fn(),
       }));
-      // eslint-disable-next-line global-require
+
       mod = require('../../src/utils/r2');
     });
     return mod;
