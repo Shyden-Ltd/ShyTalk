@@ -503,12 +503,12 @@ jobs:
           restore-keys: xcode-derived-
 
       # 3 cache steps mirrored from ios-tests.yml with byte-identical
-      # keys (2026-05-25 PR #~838's follow-up). These caches are
-      # populated on every push to main (deploy-dev runs on every
-      # main commit) and restored by PR-branch CI (ios-tests.yml)
-      # via GitHub Actions' default-branch fallback rule. Without
-      # this alignment, PR-branch iOS Build hits cold caches even
-      # though main has been building iOS continuously.
+      # keys (2026-05-25 — follow-up to PR #838's APP_CHANGED split).
+      # These caches are populated on every push to main (deploy-dev
+      # runs on every main commit) and restored by PR-branch CI
+      # (ios-tests.yml) via GitHub Actions' default-branch fallback
+      # rule. Without this alignment, PR-branch iOS Build hits cold
+      # caches even though main has been building iOS continuously.
       #
       # CAN'T be shared with PR branches: DerivedData (different
       # target SDK: deploy-dev is iphoneos device, ios-tests.yml is

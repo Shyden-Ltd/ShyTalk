@@ -60,12 +60,34 @@ const IOS_TESTS_PATH = path.join(REPO_ROOT, '.github/workflows/ios-tests.yml');
  * Extract the value of `key:` from a cache step block. Uses
  * line-by-line scanning rather than a `\s+`-anchored regex to
  * avoid ReDoS susceptibility flagged by sonarjs/slow-regex.
+ *
+ * NOTE: Only handles SINGLE-LINE keys. A block-scalar value
+ * (`key: >-` / `key: |` followed by indented continuation lines)
+ * would return the scalar indicator (`>-` / `|`) rather than the
+ * resolved value. If a key ever needs to span lines for
+ * readability, update this helper before splitting it — and
+ * update the corresponding key in the OTHER workflow at the same
+ * time, since the whole purpose of this test is to prove the two
+ * keys are byte-identical.
  */
 function extractCacheKey(stepBlock) {
   for (const line of stepBlock.split('\n')) {
     const trimmed = line.trimStart();
     if (trimmed.startsWith('key: ')) {
-      return trimmed.slice('key: '.length).trim();
+      const value = trimmed.slice('key: '.length).trim();
+      // Defensive: if the value is the YAML block-scalar
+      // indicator (`>-`, `>`, `|`, `|-`, `|+`), the actual key
+      // lives on continuation lines this parser doesn't read.
+      // Throw loudly so the test fails with a clear diagnostic
+      // instead of silently passing on a `>-` literal compare.
+      if (/^[>|][-+]?$/.test(value)) {
+        throw new Error(
+          `Cache key is a YAML block scalar (value=${value}). ` +
+            'extractCacheKey only supports single-line keys; ' +
+            'update the helper before allowing block-scalar keys.',
+        );
+      }
+      return value;
     }
   }
   throw new Error('No `key:` line found in cache step block.');
