@@ -72,13 +72,16 @@ describe('iOS deployment target = 26.0 (pinned across all configs)', () => {
     expect(lines15).toEqual([]);
   });
 
-  test('iosApp.xcodeproj/project.pbxproj has at least 6 `IPHONEOS_DEPLOYMENT_TARGET = 26.0` lines', () => {
-    // 6 occurrences: app target (Debug, Release, Debug-Local,
-    // Release-Local) + tests + UI tests targets. The exact count
+  test('iosApp.xcodeproj/project.pbxproj has at least 8 `IPHONEOS_DEPLOYMENT_TARGET = 26.0` lines', () => {
+    // 8 occurrences as of R1 fix (2026-05-25): app target (Debug,
+    // Release, Debug-Local, Release-Local) + iosAppTests (Debug,
+    // Release) + iosAppUITests (Debug, Release). The original PR
+    // claimed 6 (missed the 2 UITests configs); R1 fix bumped those
+    // 2 from 15.0 → 26.0 so the floor is now 8. The exact count
     // could grow with future targets; pin a lower-bound.
     const src = fs.readFileSync(PBXPROJ, 'utf8');
     const lines26 = src.split('\n').filter((l) => l.includes('IPHONEOS_DEPLOYMENT_TARGET = 26.0;'));
-    expect(lines26.length).toBeGreaterThanOrEqual(6);
+    expect(lines26.length).toBeGreaterThanOrEqual(8);
   });
 
   test('iosApp/iosApp/iOSApp.swift comment references iOS 26 (not iOS 16)', () => {
