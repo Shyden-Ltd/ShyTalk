@@ -117,9 +117,39 @@ jobs:
       # the latest SDK — backward-compatible to iOS 16.0 deployment
       # target, but ready for iOS 26.2 simulators in test-ios.
       - name: Select Xcode 26.3
+        id: xcode
         run: |
           sudo xcode-select -s /Applications/Xcode_26.3.app
           xcodebuild -version
+          # Capture the Xcode build number for version-aware caching of the
+          # Metal toolchain below: a newer Xcode → new cache key → re-download.
+          echo "build=$(xcodebuild -version | awk '/Build version/{print $3}')" >> "$GITHUB_OUTPUT"
+
+      # Since Xcode 26 the Metal toolchain is an optional ~700MB component that
+      # is NOT bundled in the macos runner image (actions/runner-images#13014).
+      # Its absence makes the linker warn "search path
+      # '.../Metal.xctoolchain/usr/lib/swift/iphonesimulator' not found" (6× in
+      # Build iOS). We install it — a real fix, not a suppression. The exported
+      # bundle is cached keyed on the Xcode build, so it downloads once per
+      # Xcode version and an Xcode bump re-fetches the matching toolchain.
+      - name: Cache Metal toolchain bundle
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: /tmp/metal-toolchain-export
+          key: metal-toolchain-${{ runner.os }}-xcode-${{ steps.xcode.outputs.build }}
+
+      - name: Install Metal toolchain
+        run: |
+          if ls /tmp/metal-toolchain-export/*.exportedBundle >/dev/null 2>&1; then
+            echo "↻ Importing Metal toolchain from cache"
+            xcodebuild -importComponent MetalToolchain -importPath /tmp/metal-toolchain-export/*.exportedBundle
+          else
+            echo "⬇ Downloading Metal toolchain (~700MB; cached per Xcode build hereafter)"
+            mkdir -p /tmp/metal-toolchain-export
+            xcodebuild -downloadComponent MetalToolchain -exportPath /tmp/metal-toolchain-export/
+            xcodebuild -importComponent MetalToolchain -importPath /tmp/metal-toolchain-export/*.exportedBundle
+          fi
+          xcodebuild -showComponent MetalToolchain || true
 
       - uses: ./.github/actions/setup-jdk-gradle
 
