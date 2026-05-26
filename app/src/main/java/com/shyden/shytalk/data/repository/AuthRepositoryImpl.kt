@@ -166,6 +166,5 @@ class AuthRepositoryImpl(
             // Firebase's local cache.
             val user = auth.currentUser ?: throw IllegalStateException("No signed-in user")
             user.getIdToken(true).await()
-            Unit
         }
 }
