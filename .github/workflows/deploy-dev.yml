@@ -621,8 +621,18 @@ jobs:
           # — both fine for non-distributed local builds.
           echo "Setting CFBundleVersion=${BUILD_NUMBER} MARKETING_VERSION=${VERSION_NAME}"
           cd iosApp
-          # Archive — pass build settings so we don't have to mutate
-          # Info.plist or the .pbxproj on disk.
+          # Archive with AUTOMATIC signing, then re-sign for distribution at
+          # export (ExportOptions.plist maps the profile per-bundle-ID). We do
+          # NOT pass CODE_SIGN_STYLE=Manual / PROVISIONING_PROFILE_SPECIFIER as
+          # global build settings — those apply to EVERY target, including the
+          # SwiftPM resource bundles (SwiftProtobuf_SwiftProtobuf,
+          # LiveKit_LiveKit) pulled in by the #841 SPM migration, which "do not
+          # support provisioning profiles" and fail the archive with exit 65.
+          # Automatic signing lets every target sign cleanly; -exportArchive
+          # then applies the distribution profile only to com.shyden.shytalk.
+          # -allowProvisioningUpdates + the ASC API key let Xcode resolve the
+          # app target's profile headlessly in CI. Build settings (not Info.plist
+          # / .pbxproj mutation) still carry the version numbers.
           xcodebuild \
             -workspace iosApp.xcworkspace \
             -scheme iosApp \
@@ -631,9 +641,10 @@ jobs:
             -archivePath $RUNNER_TEMP/iosApp.xcarchive \
             -clonedSourcePackagesDirPath ../build/ios-spm-packages \
             -parallelizeTargets \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="ShyTalk App Store Distribution" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8" \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
             DEVELOPMENT_TEAM=F3XX4PM3MF \
             CURRENT_PROJECT_VERSION="${BUILD_NUMBER}" \
             MARKETING_VERSION="${VERSION_NAME}" \
@@ -644,7 +655,7 @@ jobs:
             -archivePath $RUNNER_TEMP/iosApp.xcarchive \
             -exportOptionsPlist ExportOptions.plist \
             -exportPath $RUNNER_TEMP/export \
-            -authenticationKeyPath $RUNNER_TEMP/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8 \
+            -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8" \
             -authenticationKeyID $APP_STORE_CONNECT_KEY_ID \
             -authenticationKeyIssuerID $APP_STORE_CONNECT_ISSUER_ID
           # Verify a single IPA was produced (catches `destination: upload` regressions
