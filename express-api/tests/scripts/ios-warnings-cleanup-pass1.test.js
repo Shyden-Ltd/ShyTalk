@@ -57,14 +57,55 @@ describe('iOS Build warnings cleanup — pass 1', () => {
       expect(src).toMatch(/^final class LiveKitBridgeImpl\b/m);
     });
 
-    test('class declares `@unchecked Sendable` conformance', () => {
+    test('class declares `@unchecked Sendable` conformance on the class declaration line', () => {
       // The explicit opt-out — author guarantees thread safety
-      // via the documented invariants in the class docstring
-      // (write-once lifecycle on `room` + `kotlinDelegate`).
+      // via the documented invariants in the class docstring.
       // Swift 6 strict-concurrency mode requires this when a
       // protocol the class adopts (RoomDelegate) is Sendable
       // but the class has mutable stored properties.
-      expect(src).toContain('@unchecked Sendable');
+      //
+      // R1 review test-gap fix: anchor on the class declaration
+      // line specifically. A bare `toContain('@unchecked Sendable')`
+      // would also pass if someone moved the conformance to a
+      // retroactive extension (`extension LiveKitBridgeImpl:
+      // @unchecked Sendable {}`) or mentioned the phrase in a
+      // comment — neither of which is the form we want pinned.
+      expect(src).toMatch(/^final class LiveKitBridgeImpl[^{]*@unchecked Sendable/m);
+    });
+
+    test('`disconnect()` wraps `room = nil` in `MainActor.run` (R1 I-2 fix)', () => {
+      // R1 review I-2: the original disconnect() body wrote
+      //   `room = nil`
+      // directly from inside an unstructured Task, which runs
+      // on the cooperative thread pool — a data race against
+      // the main-thread write in connect() and any concurrent
+      // delegate-callback reads of `room`. Fixed by wrapping
+      // the nil-write in `await MainActor.run { self.room = nil }`
+      // so it serialises with the connect() write site.
+      //
+      // Pin the fix so a future "simplification" that removes
+      // the MainActor wrapper re-introduces the race silently.
+      // Line-by-line scan (no ReDoS-prone regex) to extract the
+      // disconnect() body. Find the line that opens the function,
+      // walk forward collecting lines until we hit the matching
+      // closing brace at the function's indent level.
+      const lines = src.split('\n');
+      const startIdx = lines.findIndex((l) => l.includes('func disconnect()'));
+      expect(startIdx).toBeGreaterThanOrEqual(0);
+      const bodyLines = [];
+      // The function header starts at indent 4 (`    func ...`),
+      // body at indent 8+, closing brace at indent 4.
+      for (let i = startIdx + 1; i < lines.length; i++) {
+        if (lines[i] === '    }') break;
+        bodyLines.push(lines[i]);
+      }
+      const body = bodyLines.join('\n');
+      expect(body).toContain('await MainActor.run');
+      expect(body).toContain('self.room = nil');
+      // Negative: the bare `room = nil` (8-space indent, no
+      // `self.` prefix, outside MainActor.run) was the pre-fix
+      // form. Pin it as absent.
+      expect(bodyLines).not.toContain('            room = nil');
     });
 
     test('thread-safety reasoning is documented in the class docstring', () => {

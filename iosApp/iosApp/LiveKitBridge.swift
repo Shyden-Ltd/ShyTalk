@@ -12,29 +12,46 @@ import shared
 ///
 /// Marked `final` + `@unchecked Sendable` to satisfy Swift 6
 /// strict-concurrency on the `RoomDelegate` conformance (LiveKit
-/// 2.14.1's RoomDelegate inherits Sendable). Thread-safety
-/// justification:
-///   - `room` and `kotlinDelegate` are written ONLY from the
-///     `connect(...)` and `setDelegate(...)` entry points, which
-///     are called by Koin DI / Kotlin-side ViewModel code on the
-///     main thread (this is enforced by the Kotlin LiveKitBridge
-///     interface's `@MainThread` annotation on those methods).
-///   - `room` is read from RoomDelegate callbacks (LiveKit's
-///     internal threads) and from the disconnect / setMicrophone
-///     async Tasks. These reads are independent of the writes
-///     because writes only happen during the connect/disconnect
-///     lifecycle transitions, never concurrent with delegate
-///     callbacks for the same room instance.
-///   - `kotlinDelegate` writes are bookended by main-thread
-///     dispatch (via `MainActor.run` inside Tasks) so callbacks
-///     see a consistent value.
+/// 2.14.1's RoomDelegate inherits Sendable).
 ///
-/// Switching to `@MainActor` would be cleaner but would force
-/// every RoomDelegate callback to dispatch through main, which
-/// adds latency to high-frequency events like
-/// `didUpdateSpeakingParticipants` (fires multiple times per
-/// second per room). `@unchecked Sendable` keeps the callback
-/// path lock-free while preserving the write-once lifecycle.
+/// Thread-safety justification (per-property):
+///
+///   `kotlinDelegate` — effectively write-once at Koin DI init.
+///   The Kotlin side calls `setDelegate(...)` ONCE during DI
+///   wiring, before any Room is created and before any
+///   RoomDelegate callback can fire. So the bare `self.kotlinDelegate
+///   = delegate` store in setDelegate is safe: by the time any
+///   read happens (from a RoomDelegate callback OR from a Task's
+///   error path inside connect/setMicrophoneEnabled), the value
+///   is established and stable for the app's lifetime. The reads
+///   that DO use `await MainActor.run { ... }` (the error-path
+///   forwards inside connect/setMicrophoneEnabled) are there to
+///   marshal the kotlinDelegate INVOCATION onto the main thread
+///   for UI safety on the Kotlin side, not to synchronise access
+///   to the property itself.
+///
+///   `room` — written in TWO places:
+///     1. `connect(...)` — synchronous main-thread write before
+///        the async Task is launched. Safe.
+///     2. `disconnect()` — the `room = nil` write is dispatched
+///        via `await MainActor.run { ... }` to serialise it with
+///        the main-thread write in connect(...) and with any
+///        callback that might be holding a reference. Without
+///        the MainActor.run wrapper, this would be a data race
+///        against concurrent reads in delegate callbacks. (R1
+///        review fix.)
+///   Reads of `room` from delegate callbacks and from
+///   setMicrophoneEnabled's Task may see a transient nil during
+///   disconnect, which is acceptable — the call sites all use
+///   `room?.<method>` optional chaining and treat nil as no-op.
+///
+/// Switching to `@MainActor` for the entire class would be
+/// cleaner but would force every RoomDelegate callback to
+/// dispatch through main, adding latency to high-frequency
+/// events like `didUpdateSpeakingParticipants` (fires multiple
+/// times per second per room). `@unchecked Sendable` + targeted
+/// MainActor dispatches on writes preserves the callback path
+/// lock-free.
 final class LiveKitBridgeImpl: NSObject, @unchecked Sendable, shared.LiveKitBridge, RoomDelegate {
     private var room: Room?
     private var kotlinDelegate: shared.LiveKitBridgeDelegate?
@@ -104,7 +121,15 @@ final class LiveKitBridgeImpl: NSObject, @unchecked Sendable, shared.LiveKitBrid
     func disconnect() {
         Task {
             await room?.disconnect()
-            room = nil
+            // R1 review fix: write must be on the main actor to
+            // serialise with the main-thread write in connect()
+            // and with any concurrent reads from delegate callbacks
+            // or Tasks. Without this dispatch, the bare `room = nil`
+            // would be a data race that @unchecked Sendable cannot
+            // legitimately guarantee away.
+            await MainActor.run {
+                self.room = nil
+            }
         }
     }
 
