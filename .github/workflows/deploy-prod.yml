@@ -493,23 +493,20 @@ jobs:
           fi
           echo "Archiving iOS as v${VERSION_NAME} (build ${VERSION_CODE}) — matches Android"
           cd iosApp
-          # Archive with AUTOMATIC signing; -exportArchive re-signs for
-          # distribution (ExportOptions.plist, per-bundle-ID). A global manual
-          # PROVISIONING_PROFILE_SPECIFIER breaks the SwiftPM resource bundles
-          # (SwiftProtobuf_SwiftProtobuf / LiveKit_LiveKit "do not support
-          # provisioning profiles" → exit 65). See deploy-dev.yml for the full
-          # rationale. -allowProvisioningUpdates + the ASC key resolve the app
-          # target's profile headlessly in CI.
+          # The app's Release config is manual-signed for App Store distribution
+          # PER-TARGET in project.pbxproj, NOT via global xcodebuild build
+          # settings — those would hit the SwiftPM resource bundles
+          # (SwiftProtobuf_SwiftProtobuf / LiveKit_LiveKit) which can't hold a
+          # profile → exit 65. An App Store profile needs no devices (avoids the
+          # automatic "team has no devices" failure). DEVELOPMENT_TEAM lets the
+          # SPM bundles sign with the team identity. See deploy-dev.yml for the
+          # full rationale. -exportArchive exports via ExportOptions.plist.
           xcodebuild \
             -workspace iosApp.xcworkspace \
             -scheme iosApp \
             -sdk iphoneos \
             -configuration Release \
             -archivePath $RUNNER_TEMP/iosApp.xcarchive \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8" \
-            -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
-            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
             DEVELOPMENT_TEAM=F3XX4PM3MF \
             CURRENT_PROJECT_VERSION="${VERSION_CODE}" \
             MARKETING_VERSION="${VERSION_NAME}" \

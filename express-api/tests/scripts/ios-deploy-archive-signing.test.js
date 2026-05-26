@@ -1,19 +1,27 @@
 /**
- * iOS deploy archive must NOT force a global manual provisioning profile (#8).
+ * iOS deploy archive signing (#8 regression guard).
  *
- * The #841 LiveKit CocoaPods→SPM migration added SwiftPM resource-bundle
- * targets (SwiftProtobuf_SwiftProtobuf, LiveKit_LiveKit) that "do not support
- * provisioning profiles". Passing PROVISIONING_PROFILE_SPECIFIER /
- * CODE_SIGN_STYLE=Manual as GLOBAL xcodebuild build settings at archive time
- * applied the distribution profile to those targets too and failed the archive
- * (`** ARCHIVE FAILED **`, exit 65) — blocking all iOS dev + prod deploys.
+ * The #841 LiveKit CocoaPods→SPM migration broke the deploy archive. Three
+ * CLI-global signing approaches all fail, because xcodebuild build settings are
+ * GLOBAL (they hit every target, including the SwiftPM resource bundles
+ * SwiftProtobuf_SwiftProtobuf / LiveKit_LiveKit):
+ *   - manual-global (CODE_SIGN_STYLE=Manual + PROVISIONING_PROFILE_SPECIFIER)
+ *     forces a profile onto those bundles, which "do not support provisioning
+ *     profiles" → ** ARCHIVE FAILED ** (exit 65);
+ *   - automatic (-allowProvisioningUpdates) tries to mint an iOS *Development*
+ *     profile, which needs registered devices the runner lacks (exit 65);
+ *   - unsigned archive + export-resign risks dropping Push entitlements.
  *
- * The fix archives with AUTOMATIC signing (-allowProvisioningUpdates + the ASC
- * API key so Xcode resolves the app target's profile headlessly), then
- * -exportArchive re-signs for distribution via ExportOptions.plist, which maps
- * the profile per-bundle-ID (com.shyden.shytalk only). This test locks that in
- * so a future edit can't reintroduce the global manual override that breaks the
- * SPM targets.
+ * The fix signs the app PER-TARGET in project.pbxproj (the iosApp Release
+ * config: CODE_SIGN_STYLE=Manual + "Apple Distribution" identity + "ShyTalk App
+ * Store Distribution" profile). Per-target reaches only the app, so the SPM
+ * bundles keep their defaults; the App Store profile needs no devices; and the
+ * entitlements (CODE_SIGN_ENTITLEMENTS) are preserved by a real archive sign.
+ * -exportArchive then exports for App Store via ExportOptions.plist.
+ *
+ * Pins: (a) the workflows pass NO global signing override on the archive;
+ * (b) the pbxproj app Release config carries the manual distribution signing;
+ * (c) ExportOptions still does manual per-bundle-ID distribution.
  */
 
 const fs = require('fs');
@@ -22,10 +30,10 @@ const path = require('path');
 const WORKFLOWS = ['deploy-dev.yml', 'deploy-prod.yml'];
 const workflowPath = (name) => path.join(__dirname, '../../../.github/workflows', name);
 const EXPORT_OPTIONS = path.join(__dirname, '../../../iosApp/ExportOptions.plist');
+const PBXPROJ = path.join(__dirname, '../../../iosApp/iosApp.xcodeproj/project.pbxproj');
 
 // Strip comment lines so the explanatory comments — which intentionally name
-// the very tokens we forbid, to document why — don't cause false matches. We
-// assert against the actual xcodebuild commands only.
+// the forbidden tokens to document why — don't cause false matches.
 const stripComments = (yaml) =>
   yaml
     .split('\n')
@@ -33,19 +41,26 @@ const stripComments = (yaml) =>
     .join('\n');
 
 describe('iOS deploy archive signing (#8 regression guard)', () => {
-  test.each(WORKFLOWS)('%s archives with automatic signing, no global manual profile', (name) => {
+  test.each(WORKFLOWS)('%s passes no global signing override on the archive', (name) => {
     const src = stripComments(fs.readFileSync(workflowPath(name), 'utf8'));
-    // The global manual override (build settings, `TOKEN=value`) is exactly
-    // what broke the SPM resource bundles.
+    // Global build settings hit every target incl. the SPM resource bundles —
+    // signing belongs in the pbxproj (per-target), not on the CLI.
     expect(src).not.toMatch(/PROVISIONING_PROFILE_SPECIFIER=/);
     expect(src).not.toMatch(/CODE_SIGN_STYLE=Manual/);
-    // Automatic signing + ASC key so Xcode resolves the app's profile in CI.
-    expect(src).toMatch(/-allowProvisioningUpdates/);
+    expect(src).not.toMatch(/CODE_SIGN_IDENTITY=/);
+    // -allowProvisioningUpdates is the automatic path that needs devices.
+    expect(src).not.toMatch(/-allowProvisioningUpdates/);
   });
 
-  test('ExportOptions.plist still re-signs for distribution, scoped per-bundle-ID', () => {
+  test('iosApp Release config is manual-signed for distribution in pbxproj', () => {
+    const src = fs.readFileSync(PBXPROJ, 'utf8');
+    expect(src).toMatch(/CODE_SIGN_STYLE = Manual;/);
+    expect(src).toMatch(/PROVISIONING_PROFILE_SPECIFIER = "ShyTalk App Store Distribution";/);
+    expect(src).toMatch(/CODE_SIGN_IDENTITY = "Apple Distribution";/);
+  });
+
+  test('ExportOptions.plist exports for distribution, scoped per-bundle-ID', () => {
     const src = fs.readFileSync(EXPORT_OPTIONS, 'utf8');
-    // Distribution signing now happens ONLY at export, mapped to the app bundle.
     expect(src).toMatch(/<key>signingStyle<\/key>\s*<string>manual<\/string>/);
     expect(src).toMatch(/com\.shyden\.shytalk/);
     expect(src).toMatch(/ShyTalk App Store Distribution/);
