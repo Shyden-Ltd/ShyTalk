@@ -39,7 +39,12 @@ REPO_ROOT = File.expand_path('../..', __dir__)
 PROJECT_PATH = File.join(REPO_ROOT, 'iosApp/iosApp.xcodeproj')
 TARGET_NAME = 'iosApp'
 PACKAGE_URL = 'https://github.com/livekit/client-sdk-swift'
-PRODUCT_NAME = 'LiveKitClient'
+# The SPM product is named "LiveKit" (per client-sdk-swift's
+# Package.swift), NOT "LiveKitClient" — that latter name is the
+# CocoaPods spec name only. Mixing them gives a confusing
+# `Missing package product 'LiveKitClient'` linker error.
+# Source: https://github.com/livekit/client-sdk-swift/blob/main/Package.swift
+PRODUCT_NAME = 'LiveKit'
 MIN_VERSION = '2.14.1'
 
 project = Xcodeproj::Project.open(PROJECT_PATH)
@@ -89,7 +94,7 @@ existing_product = target.package_product_dependencies.find do |dep|
 end
 
 if existing_product
-  puts "LiveKitClient product dependency already wired on #{TARGET_NAME} target — leaving as-is."
+  puts "LiveKit product dependency already wired on #{TARGET_NAME} target — leaving as-is."
   product_dep = existing_product
 else
   product_dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
@@ -107,12 +112,12 @@ existing_build_file = frameworks_phase.files.find do |f|
 end
 
 if existing_build_file
-  puts "LiveKitClient already in Frameworks build phase — leaving as-is."
+  puts "LiveKit already in Frameworks build phase — leaving as-is."
 else
   build_file = project.new(Xcodeproj::Project::Object::PBXBuildFile)
   build_file.product_ref = product_dep
   frameworks_phase.files << build_file
-  puts "Wired LiveKitClient into Frameworks build phase for #{TARGET_NAME} target."
+  puts "Wired LiveKit into Frameworks build phase for #{TARGET_NAME} target."
 end
 
 project.save

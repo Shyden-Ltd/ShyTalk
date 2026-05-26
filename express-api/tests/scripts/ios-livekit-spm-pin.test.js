@@ -97,18 +97,20 @@ describe('LiveKit migrated from CocoaPods to SPM', () => {
       expect(pbxproj).toContain('2.14.1');
     });
 
-    test('LiveKitClient product is wired as XCSwiftPackageProductDependency', () => {
+    test('LiveKit product is wired as XCSwiftPackageProductDependency', () => {
       // The Frameworks build phase needs an entry that references
       // the product, otherwise the linker doesn't see LiveKit.
       //
-      // R1 review: anchor the `productName = LiveKitClient` line to
-      // an XCSwiftPackageProductDependency block (not a bare
-      // substring search that could match a stale entry or a
-      // comment elsewhere in the pbxproj). Match the canonical
-      // shape: `isa = XCSwiftPackageProductDependency;` followed
-      // within a small window by `productName = LiveKitClient;`.
+      // The SPM product is named `LiveKit` (per client-sdk-swift's
+      // Package.swift), NOT `LiveKitClient` (that was the CocoaPods
+      // spec name). The R1 push used the CocoaPods name and CI's
+      // Build iOS failed with `Missing package product 'LiveKitClient'`.
+      //
+      // R1 review: anchor the `productName = LiveKit` line to an
+      // XCSwiftPackageProductDependency block (not a bare substring
+      // search that could match a stale entry or a comment).
       expect(pbxproj).toMatch(
-        /isa = XCSwiftPackageProductDependency[\s\S]{0,200}productName = LiveKitClient/,
+        /isa = XCSwiftPackageProductDependency[\s\S]{0,200}productName = LiveKit/,
       );
     });
   });

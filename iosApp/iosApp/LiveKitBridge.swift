@@ -1,5 +1,10 @@
 import Foundation
-import LiveKitClient
+// SPM product is named `LiveKit` (per client-sdk-swift's
+// Package.swift). The legacy `import LiveKitClient` was the
+// CocoaPods spec name (still resolved via `pod 'LiveKitClient'`)
+// — migrated to SPM in PR #841 (2026-05-26), which exposes the
+// module under its real product name.
+import LiveKit
 import shared
 
 /// Swift implementation of the Kotlin LiveKitBridge interface.
