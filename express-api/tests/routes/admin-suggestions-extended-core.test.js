@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 /**
  * Extended tests for admin suggestion routes — gap coverage.
  *

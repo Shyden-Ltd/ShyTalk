@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+/* eslint-disable no-console -- operator-facing CLI; console output is
+   the interface, not a side-effect. */
 /**
  * Generate a CSV of journey-test persona accounts for operator reference.
  *

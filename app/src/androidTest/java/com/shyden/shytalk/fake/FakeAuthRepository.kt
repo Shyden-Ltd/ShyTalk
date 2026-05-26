@@ -16,9 +16,11 @@ class FakeAuthRepository : AuthRepository {
         fakeUserEmail = "test@example.com"
         fakeProviderInfo = "google" to "test@example.com"
         resolvedUniqueId = null
+        resolvedDisplayName = null
     }
 
     override var resolvedUniqueId: String? = null
+    override var resolvedDisplayName: String? = null
     override val currentUserId: String? get() = resolvedUniqueId ?: fakeUserId
     override val currentFirebaseUid: String? get() = fakeUserId
     override val isAuthenticated: Boolean get() = fakeAuthenticated
@@ -66,6 +68,7 @@ class FakeAuthRepository : AuthRepository {
 
     override suspend fun signOut() {
         resolvedUniqueId = null
+        resolvedDisplayName = null
         fakeAuthenticated = false
         fakeUserId = null
     }

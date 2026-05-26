@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.resources.*
@@ -200,7 +201,9 @@ fun RoomSettingsSheet(
             HorizontalDivider()
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Close Room Button (owner only)
+            // Close Room Button (owner only). j09:46 / j15:78 close-room
+            // scenarios. Tag aligned with corpus naming (room_endRoomButton
+            // not room_closeRoomButton — scenarios prefer the "end" verb).
             if (isOwner) {
                 Button(
                     onClick = onCloseRoom,
@@ -208,7 +211,7 @@ fun RoomSettingsSheet(
                         ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error,
                         ),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().testTag("room_endRoomButton"),
                 ) {
                     Text(stringResource(Res.string.close_room))
                 }

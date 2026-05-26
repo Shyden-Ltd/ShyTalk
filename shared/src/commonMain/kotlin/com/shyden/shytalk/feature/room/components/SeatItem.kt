@@ -45,6 +45,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -131,7 +132,15 @@ fun SeatItem(
         modifier =
             modifier
                 .padding(4.dp)
-                .alpha(if (isDisconnected) 0.4f else 1f),
+                .alpha(if (isDisconnected) 0.4f else 1f)
+                .let { m ->
+                    // Tag the special "request seat" CTA cell so the manual-qa
+                    // runner can tap it via XCUITest accessibilityIdentifier /
+                    // uiautomator resource-id. j09:11, j15:25 scenarios.
+                    // Conditional — the same SeatItem renders both occupied
+                    // seats and the request-seat call-to-action.
+                    if (isRequestSeat) m.testTag("room_requestSeatButton") else m
+                },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {

@@ -316,6 +316,9 @@ fun ChatPanel(
                         currentSeatEntry.key.toIntOrNull()?.let { onToggleMic(it) }
                     },
                     enabled = !isVoiceUnavailable,
+                    // Tagged for manual-qa-runner: j09 (host mic on/off),
+                    // j10 (warning auto-mutes), j15 (MC unmutes between sets).
+                    modifier = Modifier.testTag("room_micToggleButton"),
                 ) {
                     Icon(
                         imageVector = if (isVoiceUnavailable || isSelfMuted) Icons.Default.MicOff else Icons.Default.Mic,

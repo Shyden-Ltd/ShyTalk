@@ -50,5 +50,5 @@ Feature: Room
     When I tap the element with tag "main_createRoomFab"
     And I wait for the element with tag "createRoom_nameField"
     And I type "My New Room" into the field with tag "createRoom_nameField"
-    And I tap the element with tag "createRoom_createButton"
+    And I tap the element with tag "createRoom_confirmButton"
     Then I should see the element with tag "room_roomName"

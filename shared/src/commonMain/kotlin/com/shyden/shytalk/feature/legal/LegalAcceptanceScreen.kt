@@ -72,42 +72,46 @@ fun LegalAcceptanceScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // Privacy Policy
+            // Privacy Policy. testTag is the scenario-facing name
+            // ("legal_acceptPrivacyCheckbox") rather than the
+            // implementation-derived legal_checkbox_PrivacyPolicy so the
+            // manual-qa runner can find it without name-translation.
             LegalCheckRow(
                 title = stringResource(Res.string.privacy_policy),
                 checked = privacyChecked,
                 onCheckedChange = { privacyChecked = it },
                 onViewDocument = onViewPrivacyPolicy,
+                checkboxTestTag = "legal_acceptPrivacyCheckbox",
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Community Standards
             LegalCheckRow(
                 title = stringResource(Res.string.community_standards),
                 checked = communityChecked,
                 onCheckedChange = { communityChecked = it },
                 onViewDocument = onViewCommunityStandards,
+                checkboxTestTag = "legal_acceptCommunityCheckbox",
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Terms & Conditions
             LegalCheckRow(
                 title = stringResource(Res.string.terms_and_conditions),
                 checked = termsChecked,
                 onCheckedChange = { termsChecked = it },
                 onViewDocument = onViewTerms,
+                checkboxTestTag = "legal_acceptTermsCheckbox",
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Cyber Bullying Policy
             LegalCheckRow(
                 title = stringResource(Res.string.cyber_bullying_policy),
                 checked = cyberBullyingChecked,
                 onCheckedChange = { cyberBullyingChecked = it },
                 onViewDocument = onViewCyberBullyingPolicy,
+                checkboxTestTag = "legal_acceptCyberBullyingCheckbox",
             )
 
             Spacer(modifier = Modifier.weight(1f))
@@ -115,7 +119,9 @@ fun LegalAcceptanceScreen(
             Button(
                 onClick = onAccept,
                 enabled = allChecked,
-                modifier = Modifier.fillMaxWidth().testTag("legal_acceptButton"),
+                // Renamed from "legal_acceptButton" to match scenario corpus.
+                // Same node, scenario-aligned tag.
+                modifier = Modifier.fillMaxWidth().testTag("legal_continueButton"),
             ) {
                 Text(stringResource(Res.string.accept_all_and_continue))
             }
@@ -131,8 +137,13 @@ private fun LegalCheckRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     onViewDocument: () -> Unit,
+    checkboxTestTag: String? = null,
 ) {
-    val tag = title.replace("\\s+".toRegex(), "").replace("&", "And")
+    // Caller-provided testTag wins (j01 scenarios use specific names);
+    // fall back to the original derived form for compat with any test
+    // that still references the legal_checkbox_X shape.
+    val derivedTag = title.replace("\\s+".toRegex(), "").replace("&", "And")
+    val resolvedTag = checkboxTestTag ?: "legal_checkbox_$derivedTag"
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -140,7 +151,7 @@ private fun LegalCheckRow(
         Checkbox(
             checked = checked,
             onCheckedChange = onCheckedChange,
-            modifier = Modifier.testTag("legal_checkbox_$tag"),
+            modifier = Modifier.testTag(resolvedTag),
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(

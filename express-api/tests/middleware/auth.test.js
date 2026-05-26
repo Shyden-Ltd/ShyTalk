@@ -1003,3 +1003,113 @@ describe('requireAdmin — live customClaims re-fetch (Phase 2H finding #2)', ()
     expect(res.status).toHaveBeenCalledWith(403);
   });
 });
+
+// ─── Synthetic-token bypass (NODE_ENV=local ONLY) ──────────────────
+//
+// The manual-qa-runner sends `synthetic:<name>:<uniqueId>` Bearer tokens
+// for personas it can't sign in via the Firebase Auth emulator. The
+// bypass accepts these ONLY when NODE_ENV=local — any other value
+// (production, staging, undefined) MUST refuse them.
+
+describe('Synthetic-token bypass', () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  afterEach(() => {
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+  });
+
+  test('accepts synthetic:<name>:<uniqueId> in NODE_ENV=local', async () => {
+    process.env.NODE_ENV = 'local';
+    const res = await request(createApp())
+      .get('/api/users/50000010')
+      .set('Authorization', 'Bearer synthetic:Alice:50000010');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true });
+    // The bypass must NOT call verifyIdToken at all — synthetic tokens
+    // are explicitly NOT real Firebase JWTs.
+    expect(mockVerifyIdToken).not.toHaveBeenCalled();
+  });
+
+  test('refuses synthetic:* in NODE_ENV=production (falls through to verifyIdToken)', async () => {
+    process.env.NODE_ENV = 'production';
+    mockVerifyIdToken.mockRejectedValueOnce(new Error('Invalid token'));
+    const res = await request(createApp())
+      .get('/api/users/50000010')
+      .set('Authorization', 'Bearer synthetic:Mia:60000010');
+    expect(res.status).toBe(401);
+    // In production the bypass is inert — the token reaches verifyIdToken
+    // and fails the real check.
+    expect(mockVerifyIdToken).toHaveBeenCalledWith('synthetic:Mia:60000010');
+  });
+
+  test('refuses synthetic:* with NODE_ENV undefined', async () => {
+    delete process.env.NODE_ENV;
+    mockVerifyIdToken.mockRejectedValueOnce(new Error('Invalid token'));
+    const res = await request(createApp())
+      .get('/api/users/50000010')
+      .set('Authorization', 'Bearer synthetic:Mia:60000010');
+    expect(res.status).toBe(401);
+  });
+
+  test('refuses malformed synthetic token (wrong number of parts)', async () => {
+    process.env.NODE_ENV = 'local';
+    mockVerifyIdToken.mockRejectedValueOnce(new Error('Invalid token'));
+    const res = await request(createApp())
+      .get('/api/users/50000010')
+      .set('Authorization', 'Bearer synthetic:Alice'); // missing uniqueId
+    expect(res.status).toBe(401);
+  });
+
+  test('refuses synthetic token with non-numeric uniqueId', async () => {
+    process.env.NODE_ENV = 'local';
+    mockVerifyIdToken.mockRejectedValueOnce(new Error('Invalid token'));
+    const res = await request(createApp())
+      .get('/api/users/50000010')
+      .set('Authorization', 'Bearer synthetic:Alice:NaN');
+    expect(res.status).toBe(401);
+  });
+
+  test('refuses synthetic token with zero uniqueId', async () => {
+    process.env.NODE_ENV = 'local';
+    mockVerifyIdToken.mockRejectedValueOnce(new Error('Invalid token'));
+    const res = await request(createApp())
+      .get('/api/users/50000010')
+      .set('Authorization', 'Bearer synthetic::0');
+    expect(res.status).toBe(401);
+  });
+
+  test('falls through to real verification for non-synthetic tokens even in NODE_ENV=local', async () => {
+    process.env.NODE_ENV = 'local';
+    mockVerifyIdToken.mockResolvedValueOnce({ uid: 'real-uid' });
+    mockCollectionQuery.mockResolvedValueOnce({
+      empty: false,
+      docs: [{ id: '50000010', data: () => ({ uniqueId: 50000010 }) }],
+    });
+    // Suspension lookup mock — checkSuspension reads users/<uniqueId>.
+    mockDocGet.mockResolvedValue({ exists: true, data: () => ({ isSuspended: false }) });
+    const res = await request(createApp())
+      .get('/api/users/50000010')
+      .set('Authorization', 'Bearer real.firebase.jwt');
+    expect(res.status).toBe(200);
+    expect(mockVerifyIdToken).toHaveBeenCalledWith('real.firebase.jwt');
+  });
+
+  test('synthetic-uid is namespaced so it cannot collide with a real Firebase UID', async () => {
+    process.env.NODE_ENV = 'local';
+    let capturedAuth;
+    const app = express();
+    app.use(express.json());
+    app.use(authMiddleware);
+    app.get('/api/test', (req, res) => {
+      capturedAuth = req.auth;
+      res.json({ ok: true });
+    });
+    await request(app).get('/api/test').set('Authorization', 'Bearer synthetic:Alice:50000010');
+    expect(capturedAuth.uid).toMatch(/^synthetic-/);
+    expect(capturedAuth.uniqueId).toBe(50000010);
+    expect(capturedAuth.token.synthetic).toBe(true);
+  });
+});

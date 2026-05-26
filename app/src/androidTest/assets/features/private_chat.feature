@@ -14,14 +14,14 @@ Feature: Private Chat
     When I tap the "Messages" tab
     And I tap the text "OtherUser"
     Then I should see the element with tag "privateChat_messageInput"
-    And I should see the element with tag "privateChat_sendButton"
+    And I should see the element with tag "conversation_sendButton"
 
   Scenario: Type a message in chat
     When I tap the "Messages" tab
     And I tap the text "OtherUser"
     And I wait for the element with tag "privateChat_messageInput"
     And I type "Hello there!" into the field with tag "privateChat_messageInput"
-    Then I should see the element with tag "privateChat_sendButton"
+    Then I should see the element with tag "conversation_sendButton"
 
   Scenario: Back button returns to messages
     When I tap the "Messages" tab
@@ -38,7 +38,7 @@ Feature: Private Chat
   Scenario: Shows send button
     When I tap the "Messages" tab
     And I tap the text "OtherUser"
-    Then I should see the element with tag "privateChat_sendButton"
+    Then I should see the element with tag "conversation_sendButton"
 
   Scenario: Shows back button
     When I tap the "Messages" tab

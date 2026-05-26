@@ -11,4 +11,4 @@ Feature: Group Chat
   Scenario: Shows send button
     Given I am authenticated as "test-user-1"
     And I am on the "group_chat" screen
-    Then I should see the element with tag "privateChat_sendButton"
+    Then I should see the element with tag "conversation_sendButton"

@@ -52,10 +52,9 @@ if (isLocal) {
 // isolation memory.
 // Single-line ternary kept (prettier-ignore) so the pre-commit URL-
 // isolation guard sees the localhost fallback alongside the prod URL.
-/* eslint-disable no-nested-ternary, max-len */
+
 // prettier-ignore
 const CDN_URL = process.env.CDN_URL || (isLocal ? `${process.env.MINIO_ENDPOINT || 'http://localhost:9002'}/${bucketName}` : process.env.NODE_ENV === 'production' ? 'https://images.shytalk.shyden.co.uk' : 'https://dev-images.shytalk.shyden.co.uk');
-/* eslint-enable no-nested-ternary, max-len */
 
 async function putObject(key, body, contentType, metadata = {}, options = {}) {
   await s3.send(

@@ -370,6 +370,59 @@ describe('scanCrossCohortEdges', () => {
       toBlockedFromUser: false,
     });
   });
+
+  // SHYTALK_OFFICIAL exemption — system accounts (Officia, support
+  // bots) are reachable from every cohort by design so system PMs can
+  // reach users of any cohort. The migration MUST preserve cross-cohort
+  // edges that touch an official account on either side. Pinned here
+  // to defend against accidental removal of the exemption.
+
+  test('preserves cross-cohort edge when target is SHYTALK_OFFICIAL', async () => {
+    const uMarcus = userDoc(60000010, { cohort: 'minor', following: [1] });
+    const uOfficia = {
+      id: '1',
+      data: () => ({
+        id: 1,
+        userType: 'SHYTALK_OFFICIAL',
+        isOfficial: true,
+        cohort: 'adult',
+        blockedUserIds: [],
+      }),
+    };
+    seedUsers([uMarcus, uOfficia]);
+    const result = await scanCrossCohortEdges();
+    expect(result.crossCohortEdges).toHaveLength(0);
+    expect(result.preservedFollowsCount).toBe(1);
+  });
+
+  test('preserves cross-cohort edge when source is SHYTALK_OFFICIAL via isOfficial flag', async () => {
+    const uOfficia = {
+      id: '1',
+      data: () => ({
+        id: 1,
+        isOfficial: true,
+        cohort: 'adult',
+        followingIds: [60000010],
+        blockedUserIds: [],
+      }),
+    };
+    const uMarcus = userDoc(60000010, { cohort: 'minor' });
+    seedUsers([uOfficia, uMarcus]);
+    const result = await scanCrossCohortEdges();
+    expect(result.crossCohortEdges).toHaveLength(0);
+    expect(result.preservedFollowsCount).toBe(1);
+  });
+
+  test('non-official cross-cohort edge still flagged (regression-guard for the exemption gate)', async () => {
+    // Defend against the exemption gate accidentally over-matching
+    // (e.g. evaluating `isOfficial` against undefined as truthy).
+    const u100 = userDoc(100, { cohort: 'adult', following: [200] });
+    const u200 = userDoc(200, { cohort: 'minor' });
+    seedUsers([u100, u200]);
+    const result = await scanCrossCohortEdges();
+    expect(result.crossCohortEdges).toHaveLength(1);
+    expect(result.preservedFollowsCount).toBe(0);
+  });
 });
 
 // ──────────────────────────────────────────────────────────────────

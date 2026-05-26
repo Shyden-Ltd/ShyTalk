@@ -6,7 +6,7 @@ Feature: Warning Cascade
     Given I am <role> "<user>" in seat <seat> of a fully-occupied 8-seat room
     When admin issues a warning for me
     Then I should see the element with tag "warning_title"
-    When I tap the element with tag "warning_acceptButton"
+    When I tap the element with tag "warning_acknowledgeButton"
     Then I should still be in seat <seat>
     And the room should still be active
 
@@ -20,13 +20,13 @@ Feature: Warning Cascade
     Given I am visitor "User V" in the audience of a room
     When admin issues a warning for me
     Then I should see the element with tag "warning_title"
-    When I tap the element with tag "warning_acceptButton"
+    When I tap the element with tag "warning_acknowledgeButton"
     Then I should still be in the room as a visitor
 
   Scenario: Warned host retains host privileges after acknowledging
     Given I am host "User B" seated in seat 1 of a fully-occupied 8-seat room
     When admin issues a warning for me
-    And I tap the element with tag "warning_acceptButton"
+    And I tap the element with tag "warning_acknowledgeButton"
     Then I should still have host privileges in the room
 
   Scenario: Warning fields update on user doc but room doc is untouched

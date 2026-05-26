@@ -11,6 +11,7 @@ class IosAuthRepositoryImpl(
     private val emailLinkDomain: String = "shytalk.shyden.co.uk",
 ) : AuthRepository {
     override var resolvedUniqueId: String? = null
+    override var resolvedDisplayName: String? = null
 
     override val currentUserId: String?
         get() = resolvedUniqueId ?: auth.currentUser?.uid
@@ -102,6 +103,7 @@ class IosAuthRepositoryImpl(
 
     override suspend fun signOut() {
         resolvedUniqueId = null
+        resolvedDisplayName = null
         auth.signOut()
     }
 

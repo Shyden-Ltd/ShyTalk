@@ -6,10 +6,9 @@
 // the pattern shipped in PR #565 for suggestion-email-templates.js.
 // Single-line ternary kept (prettier-ignore) so the pre-commit URL-
 // isolation guard sees the localhost fallback alongside the prod URL.
-/* eslint-disable no-nested-ternary, max-len */
+
 // prettier-ignore
 const CDN_URL = process.env.CDN_URL || (process.env.NODE_ENV === 'production' ? 'https://images.shytalk.shyden.co.uk' : process.env.NODE_ENV === 'local' ? 'http://localhost:9002/shytalk-media' : 'https://dev-images.shytalk.shyden.co.uk');
-/* eslint-enable no-nested-ternary, max-len */
 
 const LOGO_URL = `${CDN_URL}/branding/logo.png`;
 

@@ -227,6 +227,11 @@ async function scanCrossCohortEdges() {
       cohort: effectiveCohort(data),
       displayName: data?.displayName ?? null,
       blockedUserIds: Array.isArray(data?.blockedUserIds) ? data.blockedUserIds : [],
+      // SHYTALK_OFFICIAL exemption: system accounts (Officia, support
+      // bots) are reachable from every cohort by design — they deliver
+      // system PMs to users of any cohort. Cross-cohort edges touching
+      // an official account must be preserved by the migration.
+      isOfficial: data?.userType === 'SHYTALK_OFFICIAL' || data?.isOfficial === true,
     });
   }
 
@@ -259,6 +264,15 @@ async function scanCrossCohortEdges() {
         continue;
       }
       if (fromEntry.cohort === toEntry.cohort) {
+        preservedFollowsCount += 1;
+        continue;
+      }
+      // SHYTALK_OFFICIAL exemption (see index-builder comment above):
+      // edges touching an official account on either side are preserved
+      // regardless of cohort difference, so j18 system-PM delivery
+      // works across cohorts and j19's "Officia preserves cross-cohort
+      // follows" invariant holds.
+      if (fromEntry.isOfficial || toEntry.isOfficial) {
         preservedFollowsCount += 1;
         continue;
       }

@@ -1,3 +1,7 @@
+/* eslint-disable sonarjs/no-os-command-from-path, sonarjs/pseudo-random
+   -- test harness invokes `bash` to exec the shell hook under controlled
+   inputs; Math.random is used for fixture file-name jitter. Neither is
+   security-sensitive. */
 /**
  * Tests for `.claude/hooks/check-kmp-compat.sh`.
  *
@@ -55,6 +59,7 @@ function withCommonMainFile(content, fn) {
     '__test_kmp_compat_fixtures',
   );
   fs.mkdirSync(stagingDir, { recursive: true });
+
   const fixturePath = path.join(
     stagingDir,
     `Fixture_${Date.now()}_${Math.random().toString(36).slice(2)}.kt`,

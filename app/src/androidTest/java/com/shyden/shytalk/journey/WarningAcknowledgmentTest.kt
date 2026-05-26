@@ -38,8 +38,8 @@ class WarningAcknowledgmentTest {
     @Test
     fun acceptWarning_navigatesToMain() {
         composeTestRule.launchNavGraph(startDestination = Screen.Warning.route)
-        composeTestRule.waitForTag("warning_acceptButton")
-        composeTestRule.onNodeWithTag("warning_acceptButton").performClick()
+        composeTestRule.waitForTag("warning_acknowledgeButton")
+        composeTestRule.onNodeWithTag("warning_acknowledgeButton").performClick()
         composeTestRule.waitForTag("main_roomsTab")
         composeTestRule.onNodeWithTag("main_roomsTab").assertIsDisplayed()
     }
