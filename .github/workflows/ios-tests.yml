@@ -59,11 +59,13 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
+            // Deployment target is iOS 18.0 (#850): the app cannot install on
+            // pre-18 simulators — `test-without-building` reports "Unable to
+            // find a destination matching the provided destination specifier"
+            // for 16.4 / 17.5. So the matrix tests only >= 18.0: the near-floor
+            // 18.1 (iphone + ipad) plus the latest 26.2. Re-add older rows only
+            // if the deployment target is ever lowered below them.
             const IOS_ALL = [
-              { 'ios-version': '16.4', 'form-factor': 'iphone', simulator: 'iPhone 14' },
-              { 'ios-version': '16.4', 'form-factor': 'ipad', simulator: 'iPad (10th generation)' },
-              { 'ios-version': '17.5', 'form-factor': 'iphone', simulator: 'iPhone 15' },
-              { 'ios-version': '17.5', 'form-factor': 'ipad', simulator: 'iPad Air (M2)' },
               { 'ios-version': '18.1', 'form-factor': 'iphone', simulator: 'iPhone 16' },
               { 'ios-version': '18.1', 'form-factor': 'ipad', simulator: 'iPad Air (M3)' },
               { 'ios-version': '26.2', 'form-factor': 'iphone', simulator: 'iPhone 17' },
