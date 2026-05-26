@@ -267,6 +267,18 @@ android {
     }
 }
 
+// Enforce our-code warnings-as-errors on the Android app module — the sibling
+// of shared's allWarningsAsErrors (#852). The app module is verified
+// warning-clean across its main, unit-test, and androidTest Kotlin
+// compilations; this gate keeps it that way: any Kotlin compiler warning in
+// app/ now fails the build. Android-SDK / library deprecations that surface
+// here must be fixed (or the dependency upgraded), never suppressed.
+kotlin {
+    compilerOptions {
+        allWarningsAsErrors.set(true)
+    }
+}
+
 // Workaround: Copy compose resources with the correct package-prefixed path for Android assets
 val copyComposeResources =
     tasks.register<Copy>("copySharedComposeResourcesToAssets") {
