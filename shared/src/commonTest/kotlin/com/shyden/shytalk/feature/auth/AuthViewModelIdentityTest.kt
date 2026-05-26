@@ -30,6 +30,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -60,6 +61,7 @@ class AuthViewModelIdentityTest {
         private val providerInfo: Pair<String, String>? = null,
     ) : AuthRepository {
         override var resolvedUniqueId: String? = null
+        override var resolvedDisplayName: String? = null
         override val currentUserId: String? get() = resolvedUniqueId ?: firebaseUid
         override val currentFirebaseUid: String? get() = firebaseUid
         var signInResult: Resource<String> = Resource.Success("firebase-uid-1")
@@ -93,6 +95,7 @@ class AuthViewModelIdentityTest {
             if (signOutShouldThrow) throw RuntimeException("signOut deliberately failing in test")
             signedOut = true
             resolvedUniqueId = null
+            resolvedDisplayName = null
             firebaseUid = null
         }
 
@@ -504,6 +507,76 @@ class AuthViewModelIdentityTest {
             assertEquals("10000005", authRepo.resolvedUniqueId, "resolvedUniqueId should be set after identity resolution")
             // And currentUserId should return the uniqueId, not the Firebase UID
             assertEquals("10000005", authRepo.currentUserId, "currentUserId should return uniqueId, not Firebase UID")
+        }
+
+    @Test
+    fun afterProfileLoad_resolvedDisplayNameIsSet_fromUserDisplayName() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Success(SignInResult.Found(10000005))
+                }
+            val userRepo =
+                FakeUserRepository().apply {
+                    existsResult = Resource.Success(true)
+                    getUserResult =
+                        Resource.Success(
+                            User(
+                                uid = "10000005",
+                                uniqueId = 10000005,
+                                displayName = "Alice",
+                                acceptedLegalVersion = 999,
+                            ),
+                        )
+                }
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = null,
+                    isAuthenticated = false,
+                    currentUserEmail = "alice@gmail.com",
+                )
+
+            val vm = AuthViewModel(authRepo, userRepo, FakeDeviceRepository(), identityRepo, "device-1", bypassDeviceChecks = true)
+            advanceUntilIdle()
+
+            vm.signInWithGoogle("fake-id-token")
+            advanceUntilIdle()
+
+            assertEquals(
+                "Alice",
+                authRepo.resolvedDisplayName,
+                "resolvedDisplayName should be set from User.displayName after profile load",
+            )
+        }
+
+    @Test
+    fun afterSignOut_resolvedDisplayNameIsCleared() =
+        runTest {
+            val authRepo =
+                FakeAuthRepository(
+                    firebaseUid = "firebase-uid",
+                    isAuthenticated = true,
+                    currentUserEmail = "alice@gmail.com",
+                ).apply {
+                    resolvedUniqueId = "10000005"
+                    resolvedDisplayName = "Alice"
+                }
+
+            val vm =
+                AuthViewModel(
+                    authRepo,
+                    FakeUserRepository(),
+                    FakeDeviceRepository(),
+                    FakeIdentityRepository(),
+                    "device-1",
+                    bypassDeviceChecks = true,
+                )
+            advanceUntilIdle()
+
+            vm.signOut()
+            advanceUntilIdle()
+
+            assertNull(authRepo.resolvedDisplayName, "resolvedDisplayName must be cleared on sign-out")
         }
 
     // ─── F-CYCLE5-01: Auth-error misclassifier tests ─────────────────

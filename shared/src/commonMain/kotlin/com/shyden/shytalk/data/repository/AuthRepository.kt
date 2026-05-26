@@ -22,6 +22,19 @@ interface AuthRepository {
     var resolvedUniqueId: String?
 
     /**
+     * The signed-in user's chosen display name, cached from the User
+     * doc fetched in `AuthViewModel.resolveProfileState` (and refreshed
+     * by `ProfileViewModel.saveProfile`). Read by the dev-only
+     * `PreviewWatermark` so leaked screenshots identify both the
+     * uniqueId and the operator-facing name without an extra Firestore
+     * round-trip from the watermark.
+     *
+     * Null until the first profile load completes, and cleared on
+     * sign-out alongside [resolvedUniqueId].
+     */
+    var resolvedDisplayName: String?
+
+    /**
      * Returns the first linked provider's type and identifier from the current
      * Firebase Auth user, or null if not authenticated.
      *

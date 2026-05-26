@@ -46,7 +46,15 @@ ui_test_target = project.new_target(
   :ui_test_bundle,
   TARGET_NAME,
   :ios,
-  '15.0',
+  # Initial deployment target passed to xcodeproj's new_target. The
+  # build-settings override loop further down (the
+  # `ui_test_target.build_configurations.each` block) sets the same
+  # value again on each config, but on a fresh `new_target` call
+  # the initial value gets written into the configs BEFORE the
+  # override loop fires. Keeping both aligned to 26.0 prevents a
+  # stale 15.0 from being committed if the override loop is skipped
+  # or fails.
+  '26.0',
   nil,
   :swift,
 )
@@ -74,7 +82,7 @@ ui_test_target.build_configurations.each do |config|
   config.build_settings['CODE_SIGN_STYLE'] = 'Automatic'
   config.build_settings['DEVELOPMENT_TEAM'] = app_target.build_configurations.first.build_settings['DEVELOPMENT_TEAM'] || ''
   config.build_settings['TARGETED_DEVICE_FAMILY'] = '1,2'
-  config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+  config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '26.0'
 end
 
 # Wire the dependency so the app builds before UI tests.

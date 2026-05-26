@@ -502,11 +502,55 @@ jobs:
           key: xcode-derived-${{ hashFiles('iosApp/**', 'shared/build/bin/iosArm64/releaseFramework/**') }}
           restore-keys: xcode-derived-
 
+      # 3 cache steps mirrored from ios-tests.yml with byte-identical
+      # keys (2026-05-25 — follow-up to PR #838's APP_CHANGED split).
+      # These caches are populated on every push to main (deploy-dev
+      # runs on every main commit) and restored by PR-branch CI
+      # (ios-tests.yml) via GitHub Actions' default-branch fallback
+      # rule. Without this alignment, PR-branch iOS Build hits cold
+      # caches even though main has been building iOS continuously.
+      #
+      # CAN'T be shared with PR branches: DerivedData (different
+      # target SDK: deploy-dev is iphoneos device, ios-tests.yml is
+      # iOS Simulator) and KMP framework (same reason, different
+      # arm64 variant). Those caches stay separate, scoped per
+      # workflow.
+      - name: Cache CocoaPods spec repos (~/.cocoapods/repos)
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.cocoapods/repos
+          key: cocoapods-repos-${{ runner.os }}-${{ hashFiles('iosApp/Podfile.lock') }}
+          restore-keys: |
+            cocoapods-repos-${{ runner.os }}-
+
+      - name: Cache iosApp/Pods
+        id: pods-cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: iosApp/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('iosApp/Podfile.lock') }}
+          restore-keys: |
+            pods-${{ runner.os }}-
+
+      - name: Cache SwiftPM packages (build/ios-spm-packages)
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: build/ios-spm-packages
+          key: ios-spm-${{ runner.os }}-${{ hashFiles('iosApp/**/Package.resolved', 'iosApp/**/Package.swift') }}
+          restore-keys: |
+            ios-spm-${{ runner.os }}-
+
       - name: Install CocoaPods
+        # Skip when iosApp/Pods/ cache hit AND Podfile.lock unchanged —
+        # pods are already installed. On miss (or new Podfile.lock),
+        # runs fresh `pod install --deployment` which fails loud on
+        # lock mismatch instead of silently regenerating (catches
+        # stale-lock bugs before they corrupt the cached Pods).
+        if: steps.pods-cache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           cd iosApp
-          pod install
+          pod install --deployment
 
       # Stop any gradle daemon left running by "Build KMP shared framework for
       # iOS" before xcodebuild starts. xcodebuild's `Compile Kotlin Framework`
@@ -585,6 +629,7 @@ jobs:
             -sdk iphoneos \
             -configuration Release \
             -archivePath $RUNNER_TEMP/iosApp.xcarchive \
+            -clonedSourcePackagesDirPath ../build/ios-spm-packages \
             -parallelizeTargets \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
