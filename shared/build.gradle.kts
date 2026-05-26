@@ -8,6 +8,14 @@ plugins {
 kotlin {
     compilerOptions {
         freeCompilerArgs.add("-Xexpect-actual-classes")
+        // Enforce our-code warnings-as-errors (#24c finale): any Kotlin
+        // compiler warning across shared (commonMain / jvm / android / iOS)
+        // now fails the build. Our Kotlin is warning-clean. The remaining iOS
+        // build warnings (pod deprecations, the gitlive cinterop import, the
+        // Xcode-26.3 Metal-toolchain ld: quirk) are upstream/environment and
+        // are NOT Kotlin-compiler warnings, so this gate does not touch them —
+        // they are tracked as upstream debt instead.
+        allWarningsAsErrors = true
     }
 
     // JVM target exists solely to run commonTest on Windows/Linux/CI

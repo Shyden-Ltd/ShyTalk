@@ -2,6 +2,7 @@ package com.shyden.shytalk.feature.auth
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -85,12 +86,17 @@ class GoogleSignInHelperTest {
         val cancelled: Throwable = GoogleSignInCancelledException()
         assertIs<GoogleSignInNoAccountException>(noAccount)
         assertIs<GoogleSignInCancelledException>(cancelled)
-        assertTrue(
-            noAccount !is GoogleSignInCancelledException,
+        // Runtime distinctness via reflection: KClass.isInstance is not folded
+        // to a constant the way `!is` is (which trips allWarningsAsErrors as
+        // "Check for instance is always 'true'"), so these survive -Werror while
+        // still catching a future refactor that makes either exception inherit
+        // from the other and breaks SignInScreen's catch-order branching.
+        assertFalse(
+            GoogleSignInCancelledException::class.isInstance(noAccount),
             "no-account must NOT match the cancelled catch arm",
         )
-        assertTrue(
-            cancelled !is GoogleSignInNoAccountException,
+        assertFalse(
+            GoogleSignInNoAccountException::class.isInstance(cancelled),
             "cancelled must NOT match the no-account catch arm",
         )
     }
