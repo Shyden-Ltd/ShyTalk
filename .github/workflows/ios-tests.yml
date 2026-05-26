@@ -146,8 +146,11 @@ jobs:
           else
             echo "⬇ Downloading Metal toolchain (~700MB; cached per Xcode build hereafter)"
             mkdir -p /tmp/metal-toolchain-export
+            # -downloadComponent installs the toolchain directly AND exports the
+            # bundle for caching — a separate -importComponent here fails with
+            # "Asset is already installed". Import is only needed on a cache
+            # HIT (above), where no download ran.
             xcodebuild -downloadComponent MetalToolchain -exportPath /tmp/metal-toolchain-export/
-            xcodebuild -importComponent MetalToolchain -importPath /tmp/metal-toolchain-export/*.exportedBundle
           fi
           xcodebuild -showComponent MetalToolchain || true
 
