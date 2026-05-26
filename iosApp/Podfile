@@ -63,5 +63,25 @@ post_install do |installer|
       # provisioning profiles" error during release archives.
       config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
     end
+
+    # Silence "Run script build phase '…' will be run during every build
+    # because it does not specify any outputs" for CocoaPods-generated script
+    # phases that legitimately must run on every build. The gRPC-Core /
+    # gRPC-C++ / BoringSSL-GRPC / abseil "Create Symlinks to Header Folders"
+    # phases recreate header symlinks idempotently and have no practical
+    # declarable output. We apply the warning's OWN second remedy — mark them
+    # always-out-of-date (equivalent to unchecking "Based on dependency
+    # analysis"). This is intent-declaration, NOT suppression: the phases
+    # already ran on every build; we are only telling Xcode that is
+    # deliberate. Guard on `isa` so it covers any no-output shell phase a pod
+    # adds in future, and never touches phases that DO declare outputs (the
+    # Kotlin-framework and Check-Manifest phases keep their incremental
+    # behaviour).
+    target.build_phases.each do |phase|
+      next unless phase.isa == 'PBXShellScriptBuildPhase'
+      has_outputs = (phase.output_paths && !phase.output_paths.empty?) ||
+                    (phase.output_file_list_paths && !phase.output_file_list_paths.empty?)
+      phase.always_out_of_date = '1' unless has_outputs
+    end
   end
 end
