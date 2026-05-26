@@ -70,7 +70,11 @@ const val TAG_AGE_VERIF_METHOD_PASSPORT = "ageVerif_method_passport"
 const val TAG_AGE_VERIF_METHOD_DRIVERS = "ageVerif_method_drivers"
 const val TAG_AGE_VERIF_METHOD_NATIONAL = "ageVerif_method_national"
 const val TAG_AGE_VERIF_PICK_IMAGE = "ageVerif_pickImage"
-const val TAG_AGE_VERIF_SUBMIT = "ageVerif_submit"
+
+// Renamed to match manual-qa corpus (j01 step
+// "tap ageVerification_submitButton"). Other ageVerif_* tags keep
+// their shorter form because no journey-scenario references them yet.
+const val TAG_AGE_VERIF_SUBMIT = "ageVerification_submitButton"
 const val TAG_AGE_VERIF_DONE = "ageVerif_done"
 const val TAG_AGE_VERIF_BACK = "ageVerif_back"
 const val TAG_AGE_VERIF_TEST_ENV_WARNING = "ageVerif_testEnvWarning"

@@ -1,9 +1,9 @@
 # actionlint configuration
 # https://github.com/rhysd/actionlint/blob/main/docs/config.md
-
-# Register the self-hosted runner labels we use so actionlint doesn't flag them
-# as unknown. The shytalk-mac runner is a dedicated Mac mini for iOS deploys
-# (memory: project-feature-roadmap.md).
-self-hosted-runner:
-  labels:
-    - shytalk-mac
+#
+# No self-hosted runner labels are registered here. Per the
+# no-self-hosted-runners policy (2026-05-20), all jobs use GitHub-hosted
+# runners (ubuntu-latest, macos-latest, etc.). If a `runs-on:` entry
+# references a self-hosted label, actionlint will (correctly) flag it
+# as unknown — that's the desired behavior; the workflow should be
+# converted to a hosted runner instead.

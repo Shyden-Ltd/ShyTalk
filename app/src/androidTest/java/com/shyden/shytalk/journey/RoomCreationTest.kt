@@ -52,9 +52,9 @@ class RoomCreationTest {
         composeTestRule.launchMainScreen()
         composeTestRule.waitForTag("main_createRoomFab")
         composeTestRule.onNodeWithTag("main_createRoomFab").performClick()
-        composeTestRule.waitForTag("createRoom_createButton")
+        composeTestRule.waitForTag("createRoom_confirmButton")
         // The Create button should be disabled with empty name
-        composeTestRule.onNodeWithTag("createRoom_createButton").assertIsNotEnabled()
+        composeTestRule.onNodeWithTag("createRoom_confirmButton").assertIsNotEnabled()
     }
 
     @Test
@@ -64,7 +64,7 @@ class RoomCreationTest {
         composeTestRule.onNodeWithTag("main_createRoomFab").performClick()
         composeTestRule.waitForTag("createRoom_nameField")
         composeTestRule.onNodeWithTag("createRoom_nameField").performTextInput("My New Room")
-        composeTestRule.onNodeWithTag("createRoom_createButton").performClick()
+        composeTestRule.onNodeWithTag("createRoom_confirmButton").performClick()
         // Should navigate to the new room (room_roomName is merged, use unmerged tree)
         composeTestRule.waitForTag("room_roomName", useUnmergedTree = true)
     }

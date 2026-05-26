@@ -24,6 +24,7 @@ INTENTIONAL_GLOBALS=(
   "e2e-tests"           # Android emulator resource contention on gh-hosted runner
   "ios-tests"           # iOS simulator resource contention on gh-hosted runner
   "gh-pages-deploy"     # only one gh-pages deploy can land at a time
+  "deploy-dev"          # single dev environment (London Express VM + Firebase App Distribution + TestFlight queue), no parallel deploys
   "deploy-prod"         # single prod environment, no parallel deploys
   "release-main"        # single release pipeline owns version bump + tag
 )

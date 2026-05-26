@@ -118,7 +118,9 @@ fun WarningScreen(
 
                 Button(
                     onClick = onAccept,
-                    modifier = Modifier.fillMaxWidth().testTag("warning_acceptButton"),
+                    // Tag aligned with manual-qa corpus (j10:29, j11:67):
+                    // warning_acknowledgeButton, not warning_acceptButton.
+                    modifier = Modifier.fillMaxWidth().testTag("warning_acknowledgeButton"),
                 ) {
                     Text(stringResource(Res.string.i_understand_and_accept))
                 }

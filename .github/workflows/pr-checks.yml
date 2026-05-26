@@ -24,6 +24,8 @@ jobs:
     timeout-minutes: 5
     outputs:
       app_changed: ${{ steps.changes.outputs.app_changed }}
+      android_app_changed: ${{ steps.changes.outputs.android_app_changed }}
+      ios_app_changed: ${{ steps.changes.outputs.ios_app_changed }}
       backend_changed: ${{ steps.changes.outputs.backend_changed }}
       web_changed: ${{ steps.changes.outputs.web_changed }}
       integration_changed: ${{ steps.changes.outputs.integration_changed }}
@@ -45,7 +47,13 @@ jobs:
           # latest push only touches workflow files.
           MERGE_BASE=$(git merge-base "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}")
           CHANGED=$(git diff --name-only "$MERGE_BASE...${{ github.event.pull_request.head.sha }}")
-          APP=false BACKEND=false WEB=false INTEGRATION=false OTHER=false
+          # Granular per-platform app flags (added 2026-05-25 to skip
+          # expensive iOS/Android pipelines when a PR touches only
+          # the other platform). APP is the legacy union flag,
+          # retained for lint/sonarcloud/integration-tests which
+          # cover both platforms; only the heavy build/E2E jobs
+          # gate on the granular ANDROID_APP / IOS_APP flags.
+          ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false OTHER=false
           while IFS= read -r file; do
             [ -z "$file" ] && continue
             case "$file" in
@@ -58,7 +66,27 @@ jobs:
               # skip the entire playwright-web pipeline (the test would
               # only run locally before push, never in CI).
               tests/web/*|playwright.config.ts|playwright.config.js) WEB=true ;;
-              app/*|shared/*|iosApp/*|gradle/*|*.gradle.kts|gradle.properties|gradlew|gradlew.bat) APP=true ;;
+              # Per-platform shared-source classification. ORDER
+              # MATTERS — shell `case` is first-match, so the
+              # specific iosMain/androidMain arms MUST precede the
+              # generic `shared/*` arm. Without this ordering, a
+              # PR that changes only shared/src/iosMain/... would
+              # fall through to `shared/*` and trigger both Android
+              # and iOS pipelines, defeating the speedup.
+              shared/src/iosMain/*) IOS_APP=true; APP=true ;;
+              shared/src/androidMain/*) ANDROID_APP=true; APP=true ;;
+              # commonMain et al affects every platform consumer of
+              # the shared module. Setting both flags is the safe
+              # conservative behaviour.
+              shared/*) ANDROID_APP=true; IOS_APP=true; APP=true ;;
+              # Platform-specific top-level dirs.
+              iosApp/*) IOS_APP=true; APP=true ;;
+              app/*) ANDROID_APP=true; APP=true ;;
+              # Gradle infra (root build files, gradle wrapper,
+              # gradle.properties) affects every Gradle invocation
+              # — including the KMP framework build iOS depends on.
+              # Conservatively trigger both pipelines.
+              gradle/*|*.gradle.kts|gradle.properties|gradlew|gradlew.bat) ANDROID_APP=true; IOS_APP=true; APP=true ;;
               # Integration test files match BEFORE express-api/* so a
               # PR that changes ONLY tests/integration/ files runs the
               # integration job without dragging in the heavier
@@ -92,14 +120,21 @@ jobs:
           if printf '%s' "$PR_BODY" | grep -qE '^[[:space:]]*\[skip-ios-e2e\][[:space:]]*$'; then
             SKIP_IOS_E2E=true
           fi
-          for v in app_changed=$APP backend_changed=$BACKEND web_changed=$WEB integration_changed=$INTEGRATION workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E; do
+          for v in app_changed=$APP android_app_changed=$ANDROID_APP ios_app_changed=$IOS_APP backend_changed=$BACKEND web_changed=$WEB integration_changed=$INTEGRATION workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E; do
             echo "$v" >> "$GITHUB_OUTPUT"
           done
-          echo "Detection results: app=$APP backend=$BACKEND web=$WEB integration=$INTEGRATION workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E"
+          echo "Detection results: app=$APP android_app=$ANDROID_APP ios_app=$IOS_APP backend=$BACKEND web=$WEB integration=$INTEGRATION workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E"
 
   lint:
     needs: [detect-changes]
-    if: needs.detect-changes.outputs.workflow_only != 'true'
+    # No workflow_only short-circuit: lint.yml's unconditional steps
+    # (actionlint, check-no-paid-runners, check-workflow-concurrency-
+    # scoping, check-orphan-i18n-keys, check-release-trigger) MUST run
+    # on workflow-only PRs — that's the case where they matter most,
+    # since those PRs are the ones changing workflows. The heavyweight
+    # steps inside lint.yml (ktlint, Express lint, Gherkin lint) are
+    # already gated on app_changed / backend_changed, so the cost on
+    # workflow-only PRs is ~30s of cheap shellcheck/script invocations.
     uses: ./.github/workflows/lint.yml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
@@ -112,7 +147,7 @@ jobs:
     needs: [detect-changes, lint, test-backend]
     if: |
       always() &&
-      needs.detect-changes.outputs.app_changed == 'true' &&
+      needs.detect-changes.outputs.android_app_changed == 'true' &&
       (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
       (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped')
     runs-on: ubuntu-latest
@@ -138,7 +173,44 @@ jobs:
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'android' }}
           LIVEKIT_URL: ${{ secrets.LIVEKIT_URL || 'wss://placeholder.livekit.cloud' }}
+          # Bake the persona-picker password into the dev APK so journey-based
+          # manual QA on dev variant can sign in as P-02..P-19 personas
+          # without OAuth. Must match the value the express-api provisioner
+          # used to create the dev Firebase Auth accounts (PERSONAS_PASSWORD).
+          # Falls back to empty → picker UI fails closed (BuildVariant.kt's
+          # isPersonaPickerAvailable returns false). See app/build.gradle.kts
+          # line 105 for the buildConfigField wiring.
+          DEV_QA_PERSONAS_PASSWORD: ${{ secrets.DEV_QA_PERSONAS_PASSWORD }}
         run: ./gradlew testDevDebugUnitTest :shared:jvmTest detekt assembleDevRelease jacocoDevDebugUnitTestReport --parallel
+
+      # Also build the local-flavor APK so AFK operators / automation
+      # can install it on test devices without needing a local Firebase
+      # emulator + Express stack running just to produce the APK. The
+      # KMP shared framework is already compiled by assembleDevRelease
+      # above; this only adds the Android local-flavor link + package
+      # step (~30-60s incremental cost).
+      #
+      # No env vars needed: the `local` flavor hardcodes its LiveKit
+      # URL (`ws://$localHostAlias:7880`) and DEV_QA_PERSONAS_PASSWORD
+      # (`localdev123`) in app/build.gradle.kts, and `assembleLocalDebug`
+      # uses the debug build type which does NOT reference the release
+      # signing config (so KEYSTORE_PASSWORD is dead). Removing them
+      # avoids misleading future maintainers.
+      - name: Build localDebug APK
+        run: ./gradlew assembleLocalDebug
+
+      - name: Upload localDebug APK
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: local-debug-apk
+          path: app/build/outputs/apk/local/debug/*.apk
+          # if-no-files-found: error — failing-loud when the glob
+          # matches zero files. Default `warn` would produce a
+          # SUCCESSFUL empty-zip upload, breaking AFK install
+          # silently (gh run download would succeed with an empty
+          # directory).
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Publish unit test report
         uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # v2
@@ -180,7 +252,7 @@ jobs:
         # github.head_ref so a merge commit added by a human doesn't
         # bypass the skip (github.actor would resolve to the human).
         if: always() && !startsWith(github.head_ref, 'dependabot/')
-        uses: peaceiris/actions-gh-pages@4f9cc6602d3f66b9c108549d475ec49e8ef4d45e # v4
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: kotlin-report
@@ -216,7 +288,7 @@ jobs:
     needs: [detect-changes, build-and-test, sonarcloud, test-backend]
     if: |
       always() &&
-      needs.detect-changes.outputs.app_changed == 'true' &&
+      needs.detect-changes.outputs.android_app_changed == 'true' &&
       needs.detect-changes.outputs.skip_android_e2e != 'true' &&
       needs.build-and-test.result == 'success' &&
       (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
@@ -269,14 +341,32 @@ jobs:
     needs: [detect-changes, build-and-test, sonarcloud, test-backend]
     if: |
       always() &&
-      needs.detect-changes.outputs.app_changed == 'true' &&
+      needs.detect-changes.outputs.ios_app_changed == 'true' &&
       needs.detect-changes.outputs.skip_ios_e2e != 'true' &&
-      needs.build-and-test.result == 'success' &&
+      (needs.build-and-test.result == 'success' || needs.build-and-test.result == 'skipped') &&
       (needs.sonarcloud.result == 'success' || needs.sonarcloud.result == 'skipped') &&
       (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped')
     uses: ./.github/workflows/ios-tests.yml
     with:
-      ios: 'none'
+      # Default iOS device for PR runs. Mirror of android-e2e's
+      # `android: '33-phone'` — one device, latest stable iOS, single
+      # form-factor. The job-level `if:` above already gates on
+      # `app_changed` + `skip_ios_e2e`, so this only runs when
+      # iOS-relevant code changes (and not when the PR body has the
+      # `[skip-ios-e2e]` marker).
+      #
+      # Was 'none' until 2026-05-21, which made the matrix expand to
+      # zero devices in ios-tests.yml's resolve-inputs job — the
+      # entire iOS E2E surface was symbolic. Pinned to a specific
+      # device via tests/scripts/pr-checks-ios-gating.test.js to
+      # prevent silent regression back to 'none'.
+      #
+      # Bumped 2026-05-22 from `18.1-iphone` to `26.2-iphone` to
+      # exercise the LATEST iOS runtime the macos-15 runner ships
+      # pre-installed (via Xcode 26.3). Older versions remain
+      # available via workflow_dispatch with `ios: 'all'`. Pinned by
+      # tests/scripts/ios-26-xcode-bump.test.js.
+      ios: '26.2-iphone'
       parallel: true
       ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit

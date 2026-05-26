@@ -85,6 +85,12 @@ app.get('/api/health', generalLimiter, (req, res) => {
 // Each auth route already applies sensitiveLimiter internally.
 app.use('/api', require('./routes/auth'));
 
+// Public legal-versions endpoint — pre-auth (sign-up screen needs the
+// numeric version BEFORE the user has a session). Mounted before the
+// auth middleware so it isn't gated. See src/routes/legal-versions.js
+// for the rationale on why versions are hardcoded.
+app.use('/api', require('./routes/legal-versions'));
+
 // Auth middleware for all /api routes (except health, log-config, auth, and pre-auth endpoints)
 app.use('/api', (req, res, next) => {
   if (

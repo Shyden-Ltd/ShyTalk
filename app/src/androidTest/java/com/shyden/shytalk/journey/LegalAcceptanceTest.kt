@@ -30,26 +30,26 @@ class LegalAcceptanceTest {
     @Test
     fun legalScreen_showsAcceptanceForm() {
         composeTestRule.launchNavGraph(startDestination = Screen.LegalAcceptance.route)
-        composeTestRule.waitForTag("legal_acceptButton")
-        composeTestRule.onNodeWithTag("legal_acceptButton").assertIsDisplayed()
+        composeTestRule.waitForTag("legal_continueButton")
+        composeTestRule.onNodeWithTag("legal_continueButton").assertIsDisplayed()
         composeTestRule.onNodeWithText("Welcome to ShyTalk").assertIsDisplayed()
     }
 
     @Test
     fun legalScreen_acceptButton_disabledUntilAllChecked() {
         composeTestRule.launchNavGraph(startDestination = Screen.LegalAcceptance.route)
-        composeTestRule.waitForTag("legal_acceptButton")
+        composeTestRule.waitForTag("legal_continueButton")
         // Initially disabled — not all checkboxes checked
-        composeTestRule.onNodeWithTag("legal_acceptButton").assertIsNotEnabled()
+        composeTestRule.onNodeWithTag("legal_continueButton").assertIsNotEnabled()
 
         // Check all four checkboxes
-        composeTestRule.onNodeWithTag("legal_checkbox_PrivacyPolicy").performClick()
-        composeTestRule.onNodeWithTag("legal_checkbox_CommunityStandards").performClick()
-        composeTestRule.onNodeWithTag("legal_checkbox_TermsAndConditions").performClick()
-        composeTestRule.onNodeWithTag("legal_checkbox_CyberBullyingPolicy").performClick()
+        composeTestRule.onNodeWithTag("legal_acceptPrivacyCheckbox").performClick()
+        composeTestRule.onNodeWithTag("legal_acceptCommunityCheckbox").performClick()
+        composeTestRule.onNodeWithTag("legal_acceptTermsCheckbox").performClick()
+        composeTestRule.onNodeWithTag("legal_acceptCyberBullyingCheckbox").performClick()
 
         // Now the accept button should be enabled
-        composeTestRule.onNodeWithTag("legal_acceptButton").assertIsDisplayed()
+        composeTestRule.onNodeWithTag("legal_continueButton").assertIsDisplayed()
     }
 
     @Test
