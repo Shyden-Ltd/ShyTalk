@@ -8,8 +8,34 @@ import LiveKit
 import shared
 
 /// Swift implementation of the Kotlin LiveKitBridge interface.
-/// Uses LiveKit 2.0 RoomDelegate pattern for event handling.
-class LiveKitBridgeImpl: NSObject, shared.LiveKitBridge, RoomDelegate {
+/// Uses LiveKit 2.x RoomDelegate pattern for event handling.
+///
+/// Marked `final` + `@unchecked Sendable` to satisfy Swift 6
+/// strict-concurrency on the `RoomDelegate` conformance (LiveKit
+/// 2.14.1's RoomDelegate inherits Sendable). Thread-safety
+/// justification:
+///   - `room` and `kotlinDelegate` are written ONLY from the
+///     `connect(...)` and `setDelegate(...)` entry points, which
+///     are called by Koin DI / Kotlin-side ViewModel code on the
+///     main thread (this is enforced by the Kotlin LiveKitBridge
+///     interface's `@MainThread` annotation on those methods).
+///   - `room` is read from RoomDelegate callbacks (LiveKit's
+///     internal threads) and from the disconnect / setMicrophone
+///     async Tasks. These reads are independent of the writes
+///     because writes only happen during the connect/disconnect
+///     lifecycle transitions, never concurrent with delegate
+///     callbacks for the same room instance.
+///   - `kotlinDelegate` writes are bookended by main-thread
+///     dispatch (via `MainActor.run` inside Tasks) so callbacks
+///     see a consistent value.
+///
+/// Switching to `@MainActor` would be cleaner but would force
+/// every RoomDelegate callback to dispatch through main, which
+/// adds latency to high-frequency events like
+/// `didUpdateSpeakingParticipants` (fires multiple times per
+/// second per room). `@unchecked Sendable` keeps the callback
+/// path lock-free while preserving the write-once lifecycle.
+final class LiveKitBridgeImpl: NSObject, @unchecked Sendable, shared.LiveKitBridge, RoomDelegate {
     private var room: Room?
     private var kotlinDelegate: shared.LiveKitBridgeDelegate?
 
