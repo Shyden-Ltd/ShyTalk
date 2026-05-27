@@ -181,7 +181,7 @@ jobs:
           # isPersonaPickerAvailable returns false). See app/build.gradle.kts
           # line 105 for the buildConfigField wiring.
           DEV_QA_PERSONAS_PASSWORD: ${{ secrets.DEV_QA_PERSONAS_PASSWORD }}
-        run: ./gradlew testDevDebugUnitTest :shared:jvmTest detekt assembleDevRelease jacocoDevDebugUnitTestReport --parallel
+        run: ./gradlew testDevDebugUnitTest :shared:jvmTest :shared:testAndroidHostTest detekt assembleDevRelease jacocoDevDebugUnitTestReport --parallel
 
       # Also build the local-flavor APK so AFK operators / automation
       # can install it on test devices without needing a local Firebase

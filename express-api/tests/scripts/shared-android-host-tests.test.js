@@ -17,11 +17,20 @@ const fs = require('fs');
 const path = require('path');
 
 const SHARED_BUILD_GRADLE = path.join(__dirname, '../../../shared/build.gradle.kts');
+const PR_CHECKS = path.join(__dirname, '../../../.github/workflows/pr-checks.yml');
 
 describe('shared android host tests (#10)', () => {
   test('shared/build.gradle.kts enables withHostTest with returnDefaultValues', () => {
     const src = fs.readFileSync(SHARED_BUILD_GRADLE, 'utf8');
     expect(src).toMatch(/withHostTest\s*\{/);
     expect(src).toMatch(/isReturnDefaultValues\s*=\s*true/);
+  });
+
+  test('pr-checks.yml runs :shared:testAndroidHostTest in CI (#12)', () => {
+    // Enabling host tests is only meaningful if CI runs them — otherwise the
+    // androidMain-actual coverage rots (it never reaches the pipeline). Pin
+    // the CI invocation so the coverage stays live.
+    const src = fs.readFileSync(PR_CHECKS, 'utf8');
+    expect(src).toMatch(/:shared:testAndroidHostTest/);
   });
 });
