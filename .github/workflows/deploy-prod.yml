@@ -468,9 +468,6 @@ jobs:
       # the rationale. 50-min cap catches recurrence cheaply.
       - name: Build and archive iOS app
         timeout-minutes: 50
-        env:
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           set -euo pipefail
           # Read the bumped versionCode/versionName from app/build.gradle.kts
