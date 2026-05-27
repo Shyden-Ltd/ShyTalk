@@ -755,14 +755,21 @@ async function signInAs(device, reporter, ctx, email, nameToken) {
     await ensureAtSignIn(device, ctx.pkg);
     return 'at SignIn (persona picker available)';
   });
-  await reporter.step(device, `Open persona picker`, async () => {
-    await tapId(device, 'persona_picker_open');
-    await waitForText(device, 'Sign in as test persona', 8000);
-    return 'picker dialog open';
-  });
-  await reporter.step(device, `Select ${email}`, async () => {
-    await selectPersonaByText(device, email);
-    return `tapped row for ${email}`;
+  await reporter.step(device, `Pick persona ${email}`, async () => {
+    // Open the dev picker + select the persona. A scroll-to-row mistap on a
+    // below-the-fold persona can dismiss the picker WITHOUT signing in (bounces
+    // back to SignIn). Detect that — the persona_picker_open button is back on
+    // screen after the tap settles — and retry the whole open+select.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      await tapId(device, 'persona_picker_open');
+      await waitForText(device, 'Sign in as test persona', 8000);
+      await selectPersonaByText(device, email);
+      await sleep(2500);
+      if (!byId(await dump(device), 'persona_picker_open')) {
+        return `selected ${email} (attempt ${attempt})`;
+      }
+    }
+    throw new Error(`selecting ${email} bounced back to SignIn 3x (sign-in failing?)`);
   });
   await reporter.step(device, `Land on Home`, async () => {
     await advanceToMain(device);
@@ -1183,6 +1190,47 @@ const J07 = {
   },
 };
 
+// j12 — admin daily routine (gate check). Greta (admin) reaches the moderation
+// queues; a regular member is rejected (403). Verifies the requireAdmin
+// boundary on the admin endpoints — read-only, no mutations.
+const J12 = {
+  id: 'J12',
+  title: 'j12 — admin routine: admin reaches moderation queues; non-admin rejected',
+  async run(device, reporter, ctx) {
+    await signInAs(device, reporter, ctx, 'admin@shytalk.dev', 'Greta (P-12');
+    if (!ctx.db) return;
+    let gretaToken;
+    let aliceToken;
+    await reporter.step(device, 'Mint admin (Greta) + non-admin (Alice) tokens', async () => {
+      gretaToken = await getIdToken('admin@shytalk.dev');
+      aliceToken = await getIdToken('adult-power@shytalk.dev');
+      return 'tokens minted';
+    });
+    await reporter.step(device, 'API: admin GETs the reports queue (200)', async () => {
+      const r = await apiCall('GET', '/api/reports', { token: gretaToken });
+      if (r.status !== 200)
+        throw new Error(`expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
+      return 'GET /api/reports → 200 (admin)';
+    });
+    await reporter.step(device, 'API: admin GETs the appeals queue (200)', async () => {
+      const r = await apiCall('GET', '/api/appeals', { token: gretaToken });
+      if (r.status !== 200)
+        throw new Error(`expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
+      return 'GET /api/appeals → 200 (admin)';
+    });
+    await reporter.step(
+      device,
+      'API: non-admin (Alice) is REJECTED from reports (403)',
+      async () => {
+        const r = await apiCall('GET', '/api/reports', { token: aliceToken });
+        if (r.status !== 403)
+          throw new Error(`expected 403 admin gate; got ${r.status}: ${JSON.stringify(r.body)}`);
+        return 'Alice GET /api/reports → 403 (requireAdmin gate)';
+      },
+    );
+  },
+};
+
 function buildJourneys(ctx) {
   const smoke = {
     id: 'J-SMOKE',
@@ -1242,6 +1290,7 @@ function buildJourneys(ctx) {
     J04,
     J11,
     J07,
+    J12,
   ];
   return all;
 }
