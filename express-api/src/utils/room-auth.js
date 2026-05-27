@@ -59,10 +59,54 @@ function userSeatIndex(room, userId) {
   return -1;
 }
 
+/**
+ * Mirror of ChatRoom.canKickUser: may `actorId` kick/ban `targetId`?
+ * Owners are never kickable; owner may kick anyone; host may kick non-hosts;
+ * attendees may kick no one.
+ */
+function canKickUser(room, actorId, targetId) {
+  if (String(targetId) === String(room.ownerId)) return false;
+  const role = resolveRole(room, actorId);
+  if (role === 'OWNER') return true;
+  if (role === 'HOST') return !asIds(room.hostIds).includes(String(targetId));
+  return false;
+}
+
+/**
+ * Mirror of ChatRoom.canRemoveFromSeat: may `actorId` force-vacate the
+ * occupant of `seatIndex` (without banning)? Seat 0 can never be force-
+ * vacated; otherwise the actor must be able to kick the occupant.
+ */
+function canRemoveFromSeat(room, actorId, seatIndex) {
+  if (Number(seatIndex) === OWNER_SEAT_INDEX) return false;
+  const occupantId = ((room.seats || {})[String(seatIndex)] || {}).userId;
+  if (!occupantId) return false;
+  return canKickUser(room, actorId, occupantId);
+}
+
+/**
+ * Mirror of ChatRoom.canForceMute: may `actorId` force-MUTE the occupant of
+ * `seatIndex`? Never the owner; never an already-muted seat (only the
+ * occupant may unmute themselves); a host may not mute another host.
+ */
+function canForceMute(room, actorId, seatIndex) {
+  const seat = (room.seats || {})[String(seatIndex)];
+  if (!seat || !seat.userId) return false;
+  if (String(seat.userId) === String(room.ownerId)) return false;
+  if (seat.isMuted) return false;
+  const role = resolveRole(room, actorId);
+  if (role === 'OWNER') return true;
+  if (role === 'HOST') return !asIds(room.hostIds).includes(String(seat.userId));
+  return false;
+}
+
 module.exports = {
   OWNER_SEAT_INDEX,
   MAX_SEATS,
   resolveRole,
   canTakeSeatDirectly,
   userSeatIndex,
+  canKickUser,
+  canRemoveFromSeat,
+  canForceMute,
 };

@@ -23,6 +23,10 @@ const { cohortFromClaim } = require('../utils/firebase-claims');
 const {
   canTakeSeatDirectly,
   userSeatIndex,
+  canKickUser,
+  canRemoveFromSeat,
+  canForceMute,
+  resolveRole,
   MAX_SEATS,
   OWNER_SEAT_INDEX,
 } = require('../utils/room-auth');
@@ -161,6 +165,150 @@ router.post('/rooms/:roomId/seats/:seatIndex/leave', async (req, res) => {
     return res.status(result.status).json(result.body);
   } catch (err) {
     log.error('room-mutations', 'Leave seat failed', { roomId, seatIndex, error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /rooms/:roomId/kick — owner/host bans + removes a target user.
+router.post('/rooms/:roomId/kick', async (req, res) => {
+  const { roomId } = req.params;
+  const targetId = String(req.body?.userId ?? '') || null;
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason : '';
+  const kickerName = typeof req.body?.kickerName === 'string' ? req.body.kickerName : '';
+  if (!targetId) return res.status(400).json({ error: 'userId required' });
+  const callerId = String(req.auth.uniqueId);
+  try {
+    const result = await inRoomTransaction(req, roomId, (room, t, roomRef) => {
+      if (!canKickUser(room, callerId, targetId)) {
+        return { status: 403, body: { error: 'Not allowed to kick this user' } };
+      }
+      const update = {
+        bannedUserIds: FieldValue.arrayUnion(targetId),
+        participantIds: FieldValue.arrayRemove(targetId),
+        [`kickInfo.${targetId}`]: { kickerName, reason },
+      };
+      const seatIdx = userSeatIndex(room, targetId);
+      if (seatIdx !== -1) {
+        update[`seats.${seatIdx}.userId`] = null;
+        update[`seats.${seatIdx}.state`] = 'EMPTY';
+        update[`seats.${seatIdx}.isMuted`] = false;
+      }
+      t.update(roomRef, update);
+      return { status: 200, body: { success: true } };
+    });
+    if (result.status === 200) await broadcastRoomUpdated(roomId);
+    return res.status(result.status).json(result.body);
+  } catch (err) {
+    log.error('room-mutations', 'Kick failed', { roomId, error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /rooms/:roomId/seats/:seatIndex/remove — owner/host vacates a seat (no ban).
+router.post('/rooms/:roomId/seats/:seatIndex/remove', async (req, res) => {
+  const { roomId } = req.params;
+  const seatIndex = parseSeatIndex(req.params.seatIndex);
+  if (seatIndex === null) return res.status(400).json({ error: 'Invalid seat index' });
+  const callerId = String(req.auth.uniqueId);
+  try {
+    const result = await inRoomTransaction(req, roomId, (room, t, roomRef) => {
+      if (!canRemoveFromSeat(room, callerId, seatIndex)) {
+        return { status: 403, body: { error: 'Not allowed to remove this occupant' } };
+      }
+      t.update(roomRef, {
+        [`seats.${seatIndex}.userId`]: null,
+        [`seats.${seatIndex}.state`]: 'EMPTY',
+        [`seats.${seatIndex}.isMuted`]: false,
+      });
+      return { status: 200, body: { success: true } };
+    });
+    if (result.status === 200) await broadcastRoomUpdated(roomId);
+    return res.status(result.status).json(result.body);
+  } catch (err) {
+    log.error('room-mutations', 'Remove from seat failed', { roomId, error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PATCH /rooms/:roomId/seats/:seatIndex/mute — force-mute (owner/host) or self-unmute.
+router.patch('/rooms/:roomId/seats/:seatIndex/mute', async (req, res) => {
+  const { roomId } = req.params;
+  const seatIndex = parseSeatIndex(req.params.seatIndex);
+  if (seatIndex === null) return res.status(400).json({ error: 'Invalid seat index' });
+  if (typeof req.body?.isMuted !== 'boolean') {
+    return res.status(400).json({ error: 'isMuted (boolean) required' });
+  }
+  const { isMuted } = req.body;
+  const callerId = String(req.auth.uniqueId);
+  try {
+    const result = await inRoomTransaction(req, roomId, (room, t, roomRef) => {
+      const seat = (room.seats || {})[String(seatIndex)] || {};
+      if (!seat.userId) return { status: 409, body: { error: 'Seat is empty' } };
+      if (isMuted) {
+        // Force-mute: moderator gate (owner/host, not owner/other-host, not already muted).
+        if (!canForceMute(room, callerId, seatIndex)) {
+          return { status: 403, body: { error: 'Not allowed to mute this seat' } };
+        }
+      } else if (String(seat.userId) !== callerId) {
+        // Unmute: only the seat's own occupant may unmute themselves.
+        return { status: 403, body: { error: 'Only the occupant can unmute' } };
+      }
+      t.update(roomRef, { [`seats.${seatIndex}.isMuted`]: isMuted });
+      return { status: 200, body: { success: true } };
+    });
+    if (result.status === 200) await broadcastRoomUpdated(roomId);
+    return res.status(result.status).json(result.body);
+  } catch (err) {
+    log.error('room-mutations', 'Mute toggle failed', { roomId, error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /rooms/:roomId/hosts — OWNER promotes a participant to host.
+router.post('/rooms/:roomId/hosts', async (req, res) => {
+  const { roomId } = req.params;
+  const targetId = String(req.body?.userId ?? '') || null;
+  if (!targetId) return res.status(400).json({ error: 'userId required' });
+  const callerId = String(req.auth.uniqueId);
+  try {
+    const result = await inRoomTransaction(req, roomId, (room, t, roomRef) => {
+      if (resolveRole(room, callerId) !== 'OWNER') {
+        return { status: 403, body: { error: 'Only the owner can add hosts' } };
+      }
+      if (String(targetId) === String(room.ownerId)) {
+        return { status: 400, body: { error: 'Owner is not a host' } };
+      }
+      t.update(roomRef, {
+        hostIds: FieldValue.arrayUnion(targetId),
+        allTimeHostIds: FieldValue.arrayUnion(targetId),
+      });
+      return { status: 200, body: { success: true } };
+    });
+    if (result.status === 200) await broadcastRoomUpdated(roomId);
+    return res.status(result.status).json(result.body);
+  } catch (err) {
+    log.error('room-mutations', 'Add host failed', { roomId, error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /rooms/:roomId/hosts/:userId — OWNER demotes a host.
+router.delete('/rooms/:roomId/hosts/:userId', async (req, res) => {
+  const { roomId } = req.params;
+  const targetId = String(req.params.userId);
+  const callerId = String(req.auth.uniqueId);
+  try {
+    const result = await inRoomTransaction(req, roomId, (room, t, roomRef) => {
+      if (resolveRole(room, callerId) !== 'OWNER') {
+        return { status: 403, body: { error: 'Only the owner can remove hosts' } };
+      }
+      t.update(roomRef, { hostIds: FieldValue.arrayRemove(targetId) });
+      return { status: 200, body: { success: true } };
+    });
+    if (result.status === 200) await broadcastRoomUpdated(roomId);
+    return res.status(result.status).json(result.body);
+  } catch (err) {
+    log.error('room-mutations', 'Remove host failed', { roomId, error: err.message });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

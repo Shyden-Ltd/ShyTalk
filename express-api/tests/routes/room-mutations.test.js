@@ -15,6 +15,7 @@ jest.mock('../../src/utils/firebase', () => ({
   rtdb: { ref: jest.fn(() => ({ set: (...a) => mockRtdbSet(...a) })) },
   FieldValue: {
     arrayUnion: (...args) => ({ __arrayUnion: args }),
+    arrayRemove: (...args) => ({ __arrayRemove: args }),
     delete: () => ({ __delete: true }),
   },
 }));
@@ -276,5 +277,214 @@ describe('POST /api/rooms/:roomId/seats/:seatIndex/leave', () => {
     const res = await request(createApp(10)).post('/api/rooms/room-1/seats/3/leave').send({});
     expect(res.status).toBe(403);
     expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/rooms/:roomId/kick', () => {
+  test('400 when userId is missing', async () => {
+    const res = await request(createApp(1)).post('/api/rooms/room-1/kick').send({});
+    expect(res.status).toBe(400);
+  });
+
+  test('403 when an attendee tries to kick', async () => {
+    mockTxnGet.mockResolvedValue(snap(mkRoom()));
+    const res = await request(createApp(99)).post('/api/rooms/room-1/kick').send({ userId: '88' });
+    expect(res.status).toBe(403);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+
+  test('403 when a host tries to kick the owner', async () => {
+    mockTxnGet.mockResolvedValue(snap(mkRoom()));
+    const res = await request(createApp(10)).post('/api/rooms/room-1/kick').send({ userId: '1' });
+    expect(res.status).toBe(403);
+  });
+
+  test('403 when a host tries to kick another host', async () => {
+    mockTxnGet.mockResolvedValue(snap(mkRoom({ hostIds: ['10', '55'] })));
+    const res = await request(createApp(10)).post('/api/rooms/room-1/kick').send({ userId: '55' });
+    expect(res.status).toBe(403);
+  });
+
+  test('200 owner bans + removes the target and clears their seat', async () => {
+    mockTxnGet.mockResolvedValue(
+      snap(mkRoom({ seats: { 4: { userId: '99', state: 'OCCUPIED', isMuted: false } } })),
+    );
+    const res = await request(createApp(1))
+      .post('/api/rooms/room-1/kick')
+      .send({ userId: '99', reason: 'spam', kickerName: 'Alice' });
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).toHaveBeenCalledWith(
+      mockRoomRef,
+      expect.objectContaining({
+        bannedUserIds: { __arrayUnion: ['99'] },
+        participantIds: { __arrayRemove: ['99'] },
+        'kickInfo.99': { kickerName: 'Alice', reason: 'spam' },
+        'seats.4.userId': null,
+        'seats.4.state': 'EMPTY',
+      }),
+    );
+  });
+
+  test('200 host kicks an attendee who is not seated (no seat fields written)', async () => {
+    mockTxnGet.mockResolvedValue(snap(mkRoom({ participantIds: ['1', '10', '99'] })));
+    const res = await request(createApp(10)).post('/api/rooms/room-1/kick').send({ userId: '99' });
+    expect(res.status).toBe(200);
+    const update = mockTxnUpdate.mock.calls[0][1];
+    expect(update.bannedUserIds).toEqual({ __arrayUnion: ['99'] });
+    expect(Object.keys(update).some((k) => k.startsWith('seats.'))).toBe(false);
+  });
+});
+
+describe('POST /api/rooms/:roomId/seats/:seatIndex/remove', () => {
+  test('403 when an attendee tries to remove an occupant', async () => {
+    mockTxnGet.mockResolvedValue(
+      snap(mkRoom({ seats: { 4: { userId: '88', state: 'OCCUPIED', isMuted: false } } })),
+    );
+    const res = await request(createApp(99)).post('/api/rooms/room-1/seats/4/remove').send({});
+    expect(res.status).toBe(403);
+  });
+
+  test('403 when removing the occupant of seat 0 (owner seat is protected)', async () => {
+    mockTxnGet.mockResolvedValue(snap(mkRoom()));
+    const res = await request(createApp(1)).post('/api/rooms/room-1/seats/0/remove').send({});
+    expect(res.status).toBe(403);
+  });
+
+  test('200 host removes an attendee from a seat (no ban)', async () => {
+    mockTxnGet.mockResolvedValue(
+      snap(mkRoom({ seats: { 4: { userId: '88', state: 'OCCUPIED', isMuted: false } } })),
+    );
+    const res = await request(createApp(10)).post('/api/rooms/room-1/seats/4/remove').send({});
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).toHaveBeenCalledWith(
+      mockRoomRef,
+      expect.objectContaining({ 'seats.4.userId': null, 'seats.4.state': 'EMPTY' }),
+    );
+  });
+});
+
+describe('PATCH /api/rooms/:roomId/seats/:seatIndex/mute', () => {
+  test('400 when isMuted is missing', async () => {
+    const res = await request(createApp(1)).patch('/api/rooms/room-1/seats/4/mute').send({});
+    expect(res.status).toBe(400);
+  });
+
+  test('409 when the seat is empty', async () => {
+    mockTxnGet.mockResolvedValue(snap(mkRoom()));
+    const res = await request(createApp(1))
+      .patch('/api/rooms/room-1/seats/3/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(409);
+  });
+
+  test('403 when an attendee tries to force-mute', async () => {
+    mockTxnGet.mockResolvedValue(
+      snap(mkRoom({ seats: { 4: { userId: '88', state: 'OCCUPIED', isMuted: false } } })),
+    );
+    const res = await request(createApp(99))
+      .patch('/api/rooms/room-1/seats/4/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(403);
+  });
+
+  test('403 when a host tries to mute another host', async () => {
+    mockTxnGet.mockResolvedValue(
+      snap(
+        mkRoom({
+          hostIds: ['10', '55'],
+          seats: { 4: { userId: '55', state: 'OCCUPIED', isMuted: false } },
+        }),
+      ),
+    );
+    const res = await request(createApp(10))
+      .patch('/api/rooms/room-1/seats/4/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(403);
+  });
+
+  test('200 owner force-mutes an attendee', async () => {
+    mockTxnGet.mockResolvedValue(
+      snap(mkRoom({ seats: { 4: { userId: '88', state: 'OCCUPIED', isMuted: false } } })),
+    );
+    const res = await request(createApp(1))
+      .patch('/api/rooms/room-1/seats/4/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).toHaveBeenCalledWith(
+      mockRoomRef,
+      expect.objectContaining({ 'seats.4.isMuted': true }),
+    );
+  });
+
+  test('403 when a non-occupant tries to unmute someone', async () => {
+    mockTxnGet.mockResolvedValue(
+      snap(mkRoom({ seats: { 4: { userId: '88', state: 'OCCUPIED', isMuted: true } } })),
+    );
+    const res = await request(createApp(10))
+      .patch('/api/rooms/room-1/seats/4/mute')
+      .send({ isMuted: false });
+    expect(res.status).toBe(403);
+  });
+
+  test('200 the occupant unmutes themselves', async () => {
+    mockTxnGet.mockResolvedValue(
+      snap(mkRoom({ seats: { 4: { userId: '88', state: 'OCCUPIED', isMuted: true } } })),
+    );
+    const res = await request(createApp(88))
+      .patch('/api/rooms/room-1/seats/4/mute')
+      .send({ isMuted: false });
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).toHaveBeenCalledWith(
+      mockRoomRef,
+      expect.objectContaining({ 'seats.4.isMuted': false }),
+    );
+  });
+});
+
+describe('POST /api/rooms/:roomId/hosts (add) + DELETE .../hosts/:userId (remove)', () => {
+  test('400 when userId is missing on add', async () => {
+    const res = await request(createApp(1)).post('/api/rooms/room-1/hosts').send({});
+    expect(res.status).toBe(400);
+  });
+
+  test('403 when a non-owner tries to add a host', async () => {
+    mockTxnGet.mockResolvedValue(snap(mkRoom()));
+    const res = await request(createApp(10)).post('/api/rooms/room-1/hosts').send({ userId: '99' });
+    expect(res.status).toBe(403);
+  });
+
+  test('400 when trying to add the owner as a host', async () => {
+    mockTxnGet.mockResolvedValue(snap(mkRoom()));
+    const res = await request(createApp(1)).post('/api/rooms/room-1/hosts').send({ userId: '1' });
+    expect(res.status).toBe(400);
+  });
+
+  test('200 owner promotes a participant to host', async () => {
+    mockTxnGet.mockResolvedValue(snap(mkRoom()));
+    const res = await request(createApp(1)).post('/api/rooms/room-1/hosts').send({ userId: '99' });
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).toHaveBeenCalledWith(
+      mockRoomRef,
+      expect.objectContaining({
+        hostIds: { __arrayUnion: ['99'] },
+        allTimeHostIds: { __arrayUnion: ['99'] },
+      }),
+    );
+  });
+
+  test('403 when a non-owner tries to remove a host', async () => {
+    mockTxnGet.mockResolvedValue(snap(mkRoom({ hostIds: ['10', '55'] })));
+    const res = await request(createApp(10)).delete('/api/rooms/room-1/hosts/55').send({});
+    expect(res.status).toBe(403);
+  });
+
+  test('200 owner demotes a host', async () => {
+    mockTxnGet.mockResolvedValue(snap(mkRoom()));
+    const res = await request(createApp(1)).delete('/api/rooms/room-1/hosts/10').send({});
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).toHaveBeenCalledWith(
+      mockRoomRef,
+      expect.objectContaining({ hostIds: { __arrayRemove: ['10'] } }),
+    );
   });
 });
