@@ -1279,6 +1279,50 @@ const J05 = {
   },
 };
 
+// j06 — IAP failure handling. Same /economy/purchase endpoint: an unknown
+// product is rejected (404) and a replayed purchaseToken is rejected (409,
+// the sha256-receipt idempotency guard). No real money, no second device.
+const J06 = {
+  id: 'J06',
+  title: 'j06 — IAP failure handling: unknown product (404) + receipt replay (409)',
+  async run(device, reporter, ctx) {
+    await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev', 'Alice (P-02');
+    if (!ctx.db) return;
+    let token;
+    await reporter.step(device, 'Mint Alice token', async () => {
+      token = await getIdToken('adult-power@shytalk.dev');
+      return 'token minted';
+    });
+    await reporter.step(device, 'API: unknown coin package → 404', async () => {
+      const r = await apiCall('POST', '/api/economy/purchase', {
+        token,
+        body: { productId: 'definitely_not_a_real_pack', purchaseToken: `jr-bad-${Date.now()}` },
+      });
+      if (r.status !== 404)
+        throw new Error(`expected 404; got ${r.status}: ${JSON.stringify(r.body)}`);
+      return `unknown product → 404 "${r.body?.error ?? r.status}"`;
+    });
+    await reporter.step(device, 'API: receipt replay rejected (409)', async () => {
+      const dupToken = `jr-replay-${Date.now()}`;
+      const first = await apiCall('POST', '/api/economy/purchase', {
+        token,
+        body: { productId: 'local_100_coins', purchaseToken: dupToken },
+      });
+      if (first.status !== 200) throw new Error(`first purchase expected 200; got ${first.status}`);
+      const replay = await apiCall('POST', '/api/economy/purchase', {
+        token,
+        body: { productId: 'local_100_coins', purchaseToken: dupToken },
+      });
+      if (replay.status !== 409) {
+        throw new Error(
+          `replay expected 409; got ${replay.status}: ${JSON.stringify(replay.body)}`,
+        );
+      }
+      return `same token replayed → 409 (sha256-receipt idempotency guard)`;
+    });
+  },
+};
+
 function buildJourneys(ctx) {
   const smoke = {
     id: 'J-SMOKE',
@@ -1340,6 +1384,7 @@ function buildJourneys(ctx) {
     J07,
     J12,
     J05,
+    J06,
   ];
   return all;
 }
