@@ -851,7 +851,7 @@ const J02 = {
               `expected 404 cross-cohort gate; got ${res.status}: ${JSON.stringify(res.body)}`,
             );
           }
-          return `POST /users/60000010/follow {target: Alice} → 404 "${res.body.error}" (OSA gate)`;
+          return `POST /users/60000010/follow {target: Alice} → 404 "${res.body?.error ?? res.status}" (OSA gate)`;
         },
       );
       await reporter.step(device, 'DB: minor did NOT follow the adult', async () => {
@@ -891,7 +891,7 @@ const J08 = {
       });
       if (r.status !== 404)
         throw new Error(`expected 404; got ${r.status}: ${JSON.stringify(r.body)}`);
-      return `follow Marcus → 404 "${r.body.error}"`;
+      return `follow Marcus → 404 "${r.body?.error ?? r.status}"`;
     });
     await reporter.step(device, 'API: adult→minor profile view blocked (404)', async () => {
       const r = await apiCall('GET', `/api/users/${marcus}`, { token: vToken });
@@ -907,10 +907,11 @@ const J08 = {
       if (r.status !== 200)
         throw new Error(`expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
       // Unfollow so re-runs stay idempotent (same-cohort, so allowed).
-      await apiCall('POST', `/api/users/${vexa}/unfollow`, {
+      const un = await apiCall('POST', `/api/users/${vexa}/unfollow`, {
         token: vToken,
         body: { targetUserId: lena },
       });
+      if (un.status !== 200) throw new Error(`control unfollow cleanup failed: ${un.status}`);
       return `follow Lena → 200 (gate is cohort-specific); unfollowed for idempotency`;
     });
     await reporter.step(device, 'DB: Vexa followingIds excludes the minor', async () => {
@@ -937,7 +938,7 @@ const J04 = {
     let gToken;
     await reporter.step(device, 'Mint Greta admin token (isAdmin claim)', async () => {
       gToken = await getIdToken('admin@shytalk.dev');
-      const claims = JSON.parse(Buffer.from(gToken.split('.')[1], 'base64').toString());
+      const claims = JSON.parse(Buffer.from(gToken.split('.')[1], 'base64url').toString());
       if (!claims.admin) throw new Error('Greta token missing admin custom claim');
       return `admin token minted (admin=${claims.admin}, uniqueId=${claims.uniqueId})`;
     });
@@ -1009,6 +1010,8 @@ const J11 = {
     let gretaToken;
     let raulToken;
     await reporter.step(device, 'Mint Nora + Greta + Raul tokens', async () => {
+      // Order is load-bearing: mint Raul's token BEFORE he is suspended so the
+      // appeal step has a valid ID token (ID tokens stay valid ~1h regardless).
       noraToken = await getIdToken('victim@shytalk.dev');
       gretaToken = await getIdToken('admin@shytalk.dev');
       raulToken = await getIdToken('harasser@shytalk.dev');
@@ -1098,6 +1101,88 @@ const J11 = {
   },
 };
 
+// j07 — social round-trip. Alice (P-02) follows Lena (P-05), then they PM each
+// other (both adult → same-cohort, so the conversation cohort gate passes).
+// The express-api message-send path needs the conversation doc to pre-exist —
+// the app writes it directly to Firestore, so the runner mirrors that. Cleans
+// up the conversation + follow so re-runs are idempotent.
+const J07 = {
+  id: 'J07',
+  title: 'j07 — social: follow + same-cohort PM round-trip (Alice ↔ Lena)',
+  async run(device, reporter, ctx) {
+    await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev', 'Alice (P-02');
+    if (!ctx.db) return;
+    const alice = 50000010;
+    const lena = 50000020;
+    const convId = `jr-j07-${alice}-${lena}`;
+    let aliceToken;
+    let lenaToken;
+    await reporter.step(device, 'Mint Alice + Lena tokens', async () => {
+      aliceToken = await getIdToken('adult-power@shytalk.dev');
+      lenaToken = await getIdToken('lapsed-adult@shytalk.dev');
+      return 'tokens minted';
+    });
+    await reporter.step(device, 'API: Alice follows Lena (same-cohort → 200)', async () => {
+      const r = await apiCall('POST', `/api/users/${alice}/follow`, {
+        token: aliceToken,
+        body: { targetUserId: lena },
+      });
+      if (r.status !== 200)
+        throw new Error(`expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
+      await dbWaitField(
+        ctx.db,
+        `users/${alice}`,
+        'followingIds',
+        (v) => arrayContains(v, lena),
+        6000,
+      );
+      return 'followingIds contains Lena';
+    });
+    await reporter.step(device, 'Setup: create the Alice↔Lena conversation doc', async () => {
+      await ctx.db.doc(`conversations/${convId}`).set({
+        participantIds: [alice, lena],
+        isGroup: false,
+        createdAt: Date.now(),
+      });
+      return `conversations/${convId} created`;
+    });
+    await reporter.step(device, 'API: Alice sends Lena a PM', async () => {
+      const r = await apiCall('POST', `/api/conversations/${convId}/messages`, {
+        token: aliceToken,
+        body: { text: 'hi Lena (journey-runner)', type: 'TEXT' },
+      });
+      if (r.status !== 200)
+        throw new Error(`send expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
+      return 'Alice → message sent';
+    });
+    await reporter.step(device, 'API: Lena replies (round-trip)', async () => {
+      const r = await apiCall('POST', `/api/conversations/${convId}/messages`, {
+        token: lenaToken,
+        body: { text: 'hi Alice (reply)', type: 'TEXT' },
+      });
+      if (r.status !== 200)
+        throw new Error(`reply expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
+      return 'Lena → reply sent';
+    });
+    await reporter.step(device, 'DB: conversation holds both messages', async () => {
+      const msgs = await ctx.db.collection(`conversations/${convId}/messages`).get();
+      if (msgs.size < 2) throw new Error(`expected >=2 messages; got ${msgs.size}`);
+      return `${msgs.size} messages in conversations/${convId}`;
+    });
+    await reporter.step(device, 'Cleanup: delete conversation + Alice unfollows Lena', async () => {
+      const msgs = await ctx.db.collection(`conversations/${convId}/messages`).get();
+      for (const d of msgs.docs) await d.ref.delete();
+      await ctx.db.doc(`conversations/${convId}`).delete();
+      const un = await apiCall('POST', `/api/users/${alice}/unfollow`, {
+        token: aliceToken,
+        body: { targetUserId: lena },
+      });
+      if (un.status !== 200) throw new Error(`unfollow cleanup failed: ${un.status}`);
+      return 'conversation + messages deleted; unfollowed';
+    });
+  },
+};
+
 function buildJourneys(ctx) {
   const smoke = {
     id: 'J-SMOKE',
@@ -1156,6 +1241,7 @@ function buildJourneys(ctx) {
     J08,
     J04,
     J11,
+    J07,
   ];
   return all;
 }
