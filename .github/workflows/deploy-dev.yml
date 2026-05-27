@@ -671,13 +671,15 @@ jobs:
           fi
           echo "Exported IPA: ${ipas[0]} ($(du -h "${ipas[0]}" | cut -f1))"
 
-      # Surface the IPA as a workflow artifact so an AFK operator can
-      # pull it via `gh run download <run-id> -n dev-ios-ipa` and
-      # install on a physical iPhone via
-      # `xcrun devicectl device install app --device <UDID> path/to/*.ipa`
-      # without needing a TestFlight tester invite + waiting for App
-      # Store Connect processing. TestFlight upload still happens in
-      # the next step for the normal tester-distribution flow.
+      # Surface the exported IPA as a workflow artifact — a downloadable record
+      # of exactly what shipped, useful for inspection / App Store Connect
+      # troubleshooting. NOTE: this IPA is App Store-signed (ExportOptions
+      # method: app-store-connect), so it CANNOT be sideloaded onto a device via
+      # `xcrun devicectl device install app` — that fails with "Attempted to
+      # install a Beta profile without the proper entitlement". On-device
+      # testing goes through TestFlight (uploaded in the next step); sideloading
+      # would need a separate ad-hoc-signed export whose profile lists the
+      # target device UDIDs.
       - name: Upload IPA as workflow artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
