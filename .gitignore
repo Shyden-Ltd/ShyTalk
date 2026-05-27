@@ -117,3 +117,4 @@ database-debug.log
 
 # Deployed git SHA marker — written by deploy workflow on the server
 express-api/.deployed-sha
+journey-results/
