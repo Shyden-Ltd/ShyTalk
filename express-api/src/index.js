@@ -212,6 +212,7 @@ app.use('/api', require('./routes/livekit'));
 app.use('/api', require('./routes/reports'));
 app.use('/api', require('./routes/notifications'));
 app.use('/api', require('./routes/rooms'));
+app.use('/api', require('./routes/room-mutations'));
 app.use('/api', require('./routes/data-export'));
 app.use('/api', require('./routes/age-verification'));
 app.use('/api', require('./routes/pm-lock-check'));
