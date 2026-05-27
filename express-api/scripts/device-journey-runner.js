@@ -1231,6 +1231,54 @@ const J12 = {
   },
 };
 
+// j05 — monetization (IAP). In non-prod the /economy/purchase endpoint SKIPS
+// real store verification (only NODE_ENV=production hits Google/Apple), so a
+// test purchaseToken credits coins — the real IAP code path, no money. Alice
+// buys a coin pack and her shyCoins go up. A unique token per run avoids the
+// 409 replay guard (receiptId = sha256(purchaseToken)).
+const J05 = {
+  id: 'J05',
+  title: 'j05 — monetization: IAP coin purchase (non-prod test path) credits coins',
+  async run(device, reporter, ctx) {
+    await signInAs(device, reporter, ctx, 'adult-power@shytalk.dev', 'Alice (P-02');
+    if (!ctx.db) return;
+    const alice = 50000010;
+    let token;
+    let before = 0;
+    await reporter.step(device, 'Mint Alice token + read starting coins', async () => {
+      token = await getIdToken('adult-power@shytalk.dev');
+      const d = await dbGet(ctx.db, `users/${alice}`);
+      before = typeof d?.shyCoins === 'number' ? d.shyCoins : 0;
+      return `starting shyCoins=${before}`;
+    });
+    await reporter.step(
+      device,
+      'API: IAP purchase (non-prod skips store verification)',
+      async () => {
+        const purchaseToken = `jr-iap-${Date.now()}`;
+        const r = await apiCall('POST', '/api/economy/purchase', {
+          token,
+          body: { productId: 'local_100_coins', purchaseToken },
+        });
+        if (r.status !== 200) {
+          throw new Error(`purchase expected 200; got ${r.status}: ${JSON.stringify(r.body)}`);
+        }
+        return `POST /economy/purchase {local_100_coins} → 200 ${JSON.stringify(r.body).slice(0, 100)}`;
+      },
+    );
+    await reporter.step(device, 'DB: Alice shyCoins increased', async () => {
+      const got = await dbWaitField(
+        ctx.db,
+        `users/${alice}`,
+        'shyCoins',
+        (v) => typeof v === 'number' && v > before,
+        6000,
+      );
+      return `shyCoins ${before} → ${got}`;
+    });
+  },
+};
+
 function buildJourneys(ctx) {
   const smoke = {
     id: 'J-SMOKE',
@@ -1291,6 +1339,7 @@ function buildJourneys(ctx) {
     J11,
     J07,
     J12,
+    J05,
   ];
   return all;
 }
