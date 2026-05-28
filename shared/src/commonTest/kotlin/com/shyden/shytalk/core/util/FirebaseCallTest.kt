@@ -14,16 +14,9 @@ import kotlin.test.fail
  * repository uses to convert thrown exceptions into [Resource.Error] and
  * non-throwing results into [Resource.Success].
  *
- * Why test the wrapper rather than each repo method individually: every
- * repository in the codebase (`RoomRepositoryImpl` on Android,
- * `IosRoomRepositoryImpl` on iOS, `IosUserRepositoryImpl`, …) routes through
- * `firebaseCall`, so the error-mapping contract proven here applies
- * uniformly — including the 409 → Resource.Error path that PR E surfaced
- * via the new CLOSED gates on `/kick`, `/seats/:i/mute`, `/hosts POST`,
- * `/disconnect-user`. Per the code-reviewer agent's I2 finding on PR #863:
- * "the iOS client path to surface those errors (via firebaseCall →
- * Resource.Error) is untested on iOS" — closing the systemic gap here is
- * the minimum-viable closure for that finding.
+ * The wrapper is in commonMain and is exercised here from commonTest so the
+ * contract is verified for both Android and iOS targets without requiring
+ * platform-specific test infrastructure.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class FirebaseCallTest {
@@ -55,6 +48,18 @@ class FirebaseCallTest {
             val result = firebaseCall { "room-abc-123" }
             assertTrue(result is Resource.Success, "expected Success, got $result")
             assertEquals("room-abc-123", result.data)
+        }
+
+    @Test
+    fun `success path handles null return for nullable T`() =
+        runTest {
+            // Some repository methods return `Resource<T?>` where the block
+            // legitimately returns null (e.g. "lookup a user that may not exist").
+            // The wrapper must propagate null through Resource.Success(null), NOT
+            // convert it to Resource.Error or short-circuit.
+            val result: Resource<String?> = firebaseCall { null }
+            assertTrue(result is Resource.Success, "expected Success, got $result")
+            assertEquals(null, result.data)
         }
 
     // ── Error path: exception with a message ───────────────────────────
@@ -96,6 +101,22 @@ class FirebaseCallTest {
             assertEquals("Failed to kick user", result.message)
         }
 
+    @Test
+    fun `exception with empty string message also falls back to the errorMessage`() =
+        runTest {
+            // A bare `?:` operator only catches `null`, not empty string.
+            // An empty exception message gives the user no actionable info,
+            // so empty must also fall back to the call-site's descriptive
+            // errorMessage. The production fix uses `?.takeIf { it.isNotEmpty() } ?:`
+            // to handle both null and empty cases uniformly.
+            val result =
+                firebaseCall<Unit>(errorMessage = "Failed to kick user") {
+                    throw RuntimeException("")
+                }
+            assertTrue(result is Resource.Error, "expected Error, got $result")
+            assertEquals("Failed to kick user", result.message)
+        }
+
     // ── Error path: original exception preserved ───────────────────────
 
     @Test
@@ -113,21 +134,38 @@ class FirebaseCallTest {
     // ── Structured concurrency: CancellationException rethrows ─────────
 
     @Test
-    fun `CancellationException is rethrown unchanged (structured concurrency)`() =
+    fun `CancellationException is rethrown as the exact same instance (structured concurrency)`() =
         runTest {
             // Swallowing CancellationException breaks coroutine cancellation
             // propagation — a scope canceller would never get its cancel signal.
-            // The wrapper's contract is to RETHROW it verbatim, NOT convert
-            // to Resource.Error.
+            // The wrapper's contract is to RETHROW it verbatim (same instance,
+            // not a wrapper), NOT convert to Resource.Error.
+            val original = CancellationException("user-cancelled")
             try {
-                firebaseCall<Unit> { throw CancellationException("user-cancelled") }
+                firebaseCall<Unit> { throw original }
                 fail("expected CancellationException to propagate, but firebaseCall returned normally")
             } catch (e: CancellationException) {
-                assertEquals("user-cancelled", e.message)
+                assertSame(original, e, "rethrown exception must be the exact same instance")
             }
         }
 
     // ── Generic exception types ────────────────────────────────────────
+
+    @Test
+    fun `non-Exception Error subtypes (OutOfMemoryError, etc) propagate uncaught — not converted to Resource Error`() =
+        runTest {
+            // The catch on `Exception` is deliberately narrower than `Throwable`:
+            // fatal JVM errors (OOM, stack overflow, etc.) should crash the
+            // coroutine rather than be silently wrapped. This test pins that
+            // intentional catch boundary — a future "let me catch Throwable
+            // instead" change would now be a deliberate, reviewable diff.
+            try {
+                firebaseCall<Unit> { throw OutOfMemoryError("test OOM") }
+                fail("expected OutOfMemoryError to propagate uncaught, but firebaseCall returned normally")
+            } catch (e: OutOfMemoryError) {
+                assertEquals("test OOM", e.message)
+            }
+        }
 
     @Test
     fun `wrapper handles arbitrary Exception subtypes (IllegalStateException, IllegalArgumentException, etc)`() =

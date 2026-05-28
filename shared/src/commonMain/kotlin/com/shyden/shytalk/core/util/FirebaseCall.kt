@@ -21,5 +21,9 @@ suspend inline fun <T> firebaseCall(
         throw e
     } catch (e: Exception) {
         logE("firebaseCall", errorMessage, e)
-        Resource.Error(e.message ?: errorMessage, e)
+        // Fall back to `errorMessage` when the exception's own message is null OR
+        // empty. A bare `?:` only catches null, but an empty-string message gives
+        // the user no actionable information either — so empty must also fall back
+        // to the call-site's descriptive errorMessage (e.g. "Failed to kick user").
+        Resource.Error(e.message?.takeIf { it.isNotEmpty() } ?: errorMessage, e)
     }
