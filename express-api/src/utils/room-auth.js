@@ -100,13 +100,97 @@ function canForceMute(room, actorId, seatIndex) {
   return false;
 }
 
+// mirrors Constants.OWNER_LEAVE_TIMEOUT_MS (5 minutes) — the owner-away grace
+// window after which any remaining participant may close the room.
+const OWNER_LEAVE_TIMEOUT_MS = 300000;
+
+/**
+ * True if any seat is OCCUPIED by a non-owner, optionally excluding `exceptId`
+ * (e.g. the caller who is in the act of leaving). Mirrors the client's
+ * `hasSeatedNonOwners` + staleRooms.js predicate; used to decide when an
+ * OWNER_AWAY room is empty enough to close.
+ */
+function hasNonOwnerSeated(room, exceptId = null) {
+  const ownerId = String(room.ownerId);
+  const except = exceptId === null ? null : String(exceptId);
+  return Object.values(room.seats || {}).some(
+    (seat) =>
+      seat &&
+      seat.userId &&
+      seat.state === 'OCCUPIED' &&
+      String(seat.userId) !== ownerId &&
+      String(seat.userId) !== except,
+  );
+}
+
+/**
+ * Mirror of ActiveRoomManager.moveSeat: may `actorId` move the occupant of
+ * `fromIndex` to `toIndex`? Owner/host only (attendees never); neither seat may
+ * be the owner seat; the source must be occupied; a host may not move the owner
+ * or another host. The actual swap (and per-user uniqueness, preserved by
+ * construction) is applied transactionally by the caller.
+ */
+function canMoveSeat(room, actorId, fromIndex, toIndex) {
+  if (Number(fromIndex) === OWNER_SEAT_INDEX || Number(toIndex) === OWNER_SEAT_INDEX) return false;
+  const role = resolveRole(room, actorId);
+  if (role === 'ATTENDEE') return false;
+  const occupantId = ((room.seats || {})[String(fromIndex)] || {}).userId;
+  if (!occupantId) return false;
+  if (role === 'HOST') {
+    if (String(occupantId) === String(room.ownerId)) return false;
+    if (asIds(room.hostIds).includes(String(occupantId))) return false;
+  }
+  return true;
+}
+
+/**
+ * May `callerId` close the room (at server time `nowMs`)?
+ *  - the OWNER may always close;
+ *  - otherwise a PARTICIPANT may close only an OWNER_AWAY room, and only once
+ *    either no other non-owner is still seated OR the owner-away grace window
+ *    has elapsed.
+ * Mirrors ActiveRoomManager.leaveRoom (close when no seated non-owners remain)
+ * + handleOwnerAwayCountdown (any participant closes an expired OWNER_AWAY
+ * room). The state/precondition gate is what stops a malicious non-owner from
+ * closing a live room.
+ */
+function canCloseRoom(room, callerId, nowMs) {
+  if (resolveRole(room, callerId) === 'OWNER') return true;
+  if (room.state !== 'OWNER_AWAY') return false;
+  if (!asIds(room.participantIds).includes(String(callerId))) return false;
+  if (!hasNonOwnerSeated(room, callerId)) return true;
+  // `?? NaN` makes a missing/null ownerLeftAt yield NaN, so the comparison is
+  // false (not-yet-expired) without a loose `!= null` check.
+  return nowMs - Number(room.ownerLeftAt ?? NaN) >= OWNER_LEAVE_TIMEOUT_MS;
+}
+
+/**
+ * May `callerId` transition the room to OWNER_AWAY? The OWNER always may
+ * (graceful leave with others present). A non-owner may ONLY as the presence-
+ * monitor safety net: the room must be ACTIVE, the caller a participant, and
+ * the owner verifiably ABSENT (`ownerPresent === false`, read from RTDB
+ * presence by the caller before the transaction). This blocks a forged
+ * owner-away while the owner is actually connected.
+ */
+function canSetOwnerAway(room, callerId, ownerPresent) {
+  if (resolveRole(room, callerId) === 'OWNER') return true;
+  if (room.state !== 'ACTIVE') return false;
+  if (ownerPresent) return false;
+  return asIds(room.participantIds).includes(String(callerId));
+}
+
 module.exports = {
   OWNER_SEAT_INDEX,
   MAX_SEATS,
+  OWNER_LEAVE_TIMEOUT_MS,
   resolveRole,
   canTakeSeatDirectly,
   userSeatIndex,
   canKickUser,
   canRemoveFromSeat,
   canForceMute,
+  hasNonOwnerSeated,
+  canMoveSeat,
+  canCloseRoom,
+  canSetOwnerAway,
 };
