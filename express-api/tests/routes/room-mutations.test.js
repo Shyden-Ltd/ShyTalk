@@ -739,11 +739,12 @@ describe('POST /api/rooms/:roomId/owner-away', () => {
     expect(mockRtdbGet).not.toHaveBeenCalled(); // owner path skips presence verification
   });
 
-  test('200 idempotent when already OWNER_AWAY — no write', async () => {
+  test('200 idempotent when already OWNER_AWAY — no write + no spurious broadcast', async () => {
     primeOwnerAway(mkRoom({ state: 'OWNER_AWAY', ownerLeftAt: 123 }));
     const res = await request(createApp(1)).post('/api/rooms/room-1/owner-away').send({});
     expect(res.status).toBe(200);
     expect(mockTxnUpdate).not.toHaveBeenCalled();
+    expect(mockRtdbSet).not.toHaveBeenCalled();
   });
 
   test('409 when the room is CLOSED', async () => {
@@ -1383,6 +1384,17 @@ describe('POST /api/rooms/:roomId/leave', () => {
     expect(payload).toEqual({ participantIds: { __arrayRemove: ['99'] } });
   });
 
+  test('200 idempotent no-op: no write + no broadcast when caller is neither a participant nor seated', async () => {
+    // Common on a client retrying /leave after a disconnect — the arrayRemove
+    // would be a no-op anyway; the noop branch additionally suppresses the
+    // spurious RTDB nudge that would wake every connected client.
+    mockTxnGet.mockResolvedValue(snap(mkRoom({ participantIds: ['1', '10'] }))); // 99 absent
+    const res = await request(createApp(99)).post('/api/rooms/room-1/leave').send({});
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+    expect(mockRtdbSet).not.toHaveBeenCalled();
+  });
+
   test('500 when the transaction throws', async () => {
     mockTxnGet.mockRejectedValue(new Error('boom'));
     const res = await request(createApp(10)).post('/api/rooms/room-1/leave').send({});
@@ -1390,6 +1402,10 @@ describe('POST /api/rooms/:roomId/leave', () => {
   });
 });
 
+// TOCTOU note for the disconnect-user presence gate: a test for the reconnect-
+// between-pre-read-and-txn race is intentionally absent — that window is
+// accepted and documented in isUserPresent(). It cannot be closed without a
+// Firestore-visible presence token (tracked for the rules-lockdown phase).
 describe('POST /api/rooms/:roomId/disconnect-user', () => {
   test('400 when userId is missing', async () => {
     const res = await request(createApp(10)).post('/api/rooms/room-1/disconnect-user').send({});
@@ -1461,6 +1477,7 @@ describe('POST /api/rooms/:roomId/disconnect-user', () => {
   });
 
   test('200 removes an absent non-owner, clears their seat + currentRoomId', async () => {
+    const { db } = require('../../src/utils/firebase');
     const room = mkRoom({ seats: { 3: { userId: '99', state: 'OCCUPIED', isMuted: false } } });
     mockDocGet.mockResolvedValue(snap(room));
     mockTxnGet.mockResolvedValue(snap(room));
@@ -1478,7 +1495,46 @@ describe('POST /api/rooms/:roomId/disconnect-user', () => {
         'seats.3.isMuted': false,
       }),
     );
+    // Pin the foreign-doc address: the currentRoomId clear must target the
+    // EVICTED user's doc (users/99), not the room doc. Without this guard a
+    // refactor could silently write the clear against the wrong path and the
+    // mockDocSet assertion alone would still pass (db.doc returns the same
+    // shared mockRoomRef for any path).
+    expect(db.doc).toHaveBeenCalledWith('users/99');
     expect(mockDocSet).toHaveBeenCalledWith({ currentRoomId: null }, { merge: true });
+  });
+
+  test('403 when the target is already removed (not in participantIds)', async () => {
+    // Race window: a concurrent /leave or another presence-monitor
+    // /disconnect-user may have removed the target between the client deciding
+    // to evict and this request landing. Without the target-membership gate we
+    // would no-op write a clean room + fire a spurious broadcast.
+    const room = mkRoom({ participantIds: ['1', '10'] }); // 99 already removed
+    mockDocGet.mockResolvedValue(snap(room));
+    mockTxnGet.mockResolvedValue(snap(room));
+    mockRtdbGet.mockResolvedValue({ exists: () => false });
+    const res = await request(createApp(10))
+      .post('/api/rooms/room-1/disconnect-user')
+      .send({ userId: '99' });
+    expect(res.status).toBe(403);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+
+  test('200 still succeeds when the currentRoomId clear fails (best-effort)', async () => {
+    // The post-txn user-doc clear is wrapped in try/catch (mirrors /close):
+    // the room mutation already committed, the kicked user self-clears on
+    // observing the ban, and the foreign user-doc write must not undo the
+    // already-committed eviction.
+    const room = mkRoom({ seats: { 3: { userId: '99', state: 'OCCUPIED', isMuted: false } } });
+    mockDocGet.mockResolvedValue(snap(room));
+    mockTxnGet.mockResolvedValue(snap(room));
+    mockRtdbGet.mockResolvedValue({ exists: () => false });
+    mockDocSet.mockRejectedValue(new Error('user doc write failed'));
+    const res = await request(createApp(10))
+      .post('/api/rooms/room-1/disconnect-user')
+      .send({ userId: '99' });
+    expect(res.status).toBe(200);
+    expect(log.error).toHaveBeenCalled();
   });
 
   test('500 when the transaction throws', async () => {

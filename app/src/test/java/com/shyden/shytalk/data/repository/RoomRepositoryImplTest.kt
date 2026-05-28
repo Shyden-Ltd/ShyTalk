@@ -11,6 +11,7 @@ import com.google.firebase.firestore.Transaction
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -164,8 +165,10 @@ class RoomRepositoryImplTest {
     @Test
     fun `leaveRoom returns Error on exception`() =
         runTest {
-            // leaveRoom now routes participant removal through the /leave endpoint.
-            coEvery { api.post(any(), any()) } throws RuntimeException("Fail")
+            // Pin: must be the /leave api call that throws (not the subsequent
+            // currentRoomId firestore write) — guards against a refactor that
+            // accidentally moved the failure-mode to the wrong call.
+            coEvery { api.post(eq("/api/rooms/room-1/leave"), any()) } throws RuntimeException("Fail")
 
             val result = repo.leaveRoom("room-1", "user-1")
             assertTrue(result is Resource.Error)
@@ -185,7 +188,7 @@ class RoomRepositoryImplTest {
     @Test
     fun `takeSeat returns Error on exception`() =
         runTest {
-            coEvery { api.post(any(), any()) } throws RuntimeException("No seats")
+            coEvery { api.post(eq("/api/rooms/room-1/seats/2/claim"), any()) } throws RuntimeException("No seats")
 
             val result = repo.takeSeat("room-1", 2, "user-1")
             assertTrue(result is Resource.Error)
@@ -227,7 +230,7 @@ class RoomRepositoryImplTest {
     @Test
     fun `moveSeat returns Error on exception`() =
         runTest {
-            coEvery { api.post(any(), any()) } throws RuntimeException("Fail")
+            coEvery { api.post(eq("/api/rooms/room-1/seats/2/move"), any()) } throws RuntimeException("Fail")
 
             val result = repo.moveSeat("room-1", 2, 5, "user-a")
             assertTrue(result is Resource.Error)
@@ -480,6 +483,116 @@ class RoomRepositoryImplTest {
             coEvery { api.post(any(), any()) } throws RuntimeException("Fail")
 
             val result = repo.removeDisconnectedUser("room-1", "user-1")
+            assertTrue(result is Resource.Error)
+        }
+
+    // endregion
+
+    // region migration error-injection coverage (PR #858 reviewer I3 + I4)
+    //
+    // Each migrated method's failure path changed from a Firestore
+    // Tasks.forException to an api.* throw. The Success tests pass via relaxed
+    // mocks (any api call returns a relaxed JSONObject → Resource.Success), but
+    // the error path needs a dedicated stub to confirm ApiException → firebaseCall
+    // → Resource.Error still holds.
+
+    @Test
+    fun `leaveSeat returns Error on exception`() =
+        runTest {
+            coEvery { api.post(any(), any()) } throws RuntimeException("Fail")
+            val result = repo.leaveSeat("room-1", 3)
+            assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `removeFromSeat returns Error on exception`() =
+        runTest {
+            coEvery { api.post(any(), any()) } throws RuntimeException("Fail")
+            val result = repo.removeFromSeat("room-1", 3)
+            assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `toggleMute returns Error on exception`() =
+        runTest {
+            coEvery { api.patch(any(), any()) } throws RuntimeException("Fail")
+            val result = repo.toggleMute("room-1", 2, true)
+            assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `addHost returns Error on exception`() =
+        runTest {
+            coEvery { api.post(any(), any()) } throws RuntimeException("Fail")
+            val result = repo.addHost("room-1", "user-1")
+            assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `removeHost returns Error on exception`() =
+        runTest {
+            coEvery { api.delete(any<String>()) } throws RuntimeException("Fail")
+            val result = repo.removeHost("room-1", "user-1")
+            assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `setRequireApproval returns Error on exception`() =
+        runTest {
+            coEvery { api.patch(any(), any()) } throws RuntimeException("Fail")
+            val result = repo.setRequireApproval("room-1", true)
+            assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `setOwnerAway returns Error on exception`() =
+        runTest {
+            coEvery { api.post(any(), any()) } throws RuntimeException("Fail")
+            val result = repo.setOwnerAway("room-1")
+            assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `setOwnerReturned returns Error on exception`() =
+        runTest {
+            coEvery { api.post(any(), any()) } throws RuntimeException("Fail")
+            val result = repo.setOwnerReturned("room-1", "owner-1")
+            assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `cancelInvite returns Error on exception`() =
+        runTest {
+            coEvery { api.post(any(), any()) } throws RuntimeException("Fail")
+            val result = repo.cancelInvite("room-1", "user-1")
+            assertTrue(result is Resource.Error)
+        }
+
+    // Reviewer I4: pin that cancelInvite routes to /decline-invite (not a path
+    // derived from the user-supplied userId arg) — the interface accepts a
+    // userId param but the migrated impl ignores it and is self-scoped
+    // server-side via req.auth. Without this pin, a refactor that started
+    // honouring the param could silently regress to a foreign-invite cancel.
+    @Test
+    fun `cancelInvite posts to decline-invite endpoint regardless of userId arg`() =
+        runTest {
+            repo.cancelInvite("room-1", "user-1")
+            coVerify { api.post(eq("/api/rooms/room-1/decline-invite"), any()) }
+        }
+
+    @Test
+    fun `acceptInvite returns Error on exception`() =
+        runTest {
+            coEvery { api.post(any(), any()) } throws RuntimeException("Fail")
+            val result = repo.acceptInvite("room-1", "user-1", 2)
+            assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `recordFirstJoinTimestamp returns Error on exception`() =
+        runTest {
+            coEvery { api.post(any(), any()) } throws RuntimeException("Fail")
+            val result = repo.recordFirstJoinTimestamp("room-1", "user-1")
             assertTrue(result is Resource.Error)
         }
 

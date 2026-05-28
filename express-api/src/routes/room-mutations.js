@@ -515,8 +515,15 @@ router.post('/rooms/:roomId/decline-invite', async (req, res) =>
 // self-write. Idempotent: a no-op arrayRemove if the caller isn't a member.
 router.post('/rooms/:roomId/leave', async (req, res) =>
   executeRoomMutation(req, res, 'Leave room', ({ room, t, roomRef, callerId }) => {
-    const update = { participantIds: FieldValue.arrayRemove(callerId) };
+    const isMember = (room.participantIds || []).map(String).includes(callerId);
     const seatIdx = userSeatIndex(room, callerId);
+    // Idempotent no-op: caller isn't a member and isn't seated. Skip the
+    // unnecessary t.update + RTDB broadcast (the arrayRemove was a no-op
+    // anyway). Common on a client retrying after a disconnect.
+    if (!isMember && seatIdx === -1) {
+      return { status: 200, body: { success: true }, noop: true };
+    }
+    const update = { participantIds: FieldValue.arrayRemove(callerId) };
     if (seatIdx !== -1) {
       update[`seats.${seatIdx}.userId`] = null;
       update[`seats.${seatIdx}.state`] = 'EMPTY';

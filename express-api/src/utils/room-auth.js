@@ -191,6 +191,12 @@ function canSetOwnerAway(room, callerId, ownerPresent) {
 function canRemoveDisconnected(room, callerId, targetId, targetPresent) {
   if (String(targetId) === String(room.ownerId)) return false;
   if (targetPresent) return false;
+  // Already-removed guard: a concurrent /leave or another presence-monitor
+  // /disconnect-user may have removed the target between the client deciding
+  // to evict and this request landing. Without this check the gate passes,
+  // the arrayRemove is a no-op, but we still write an unnecessary user-doc
+  // currentRoomId clear and fire a broadcast.
+  if (!asIds(room.participantIds).includes(String(targetId))) return false;
   return asIds(room.participantIds).includes(String(callerId));
 }
 
