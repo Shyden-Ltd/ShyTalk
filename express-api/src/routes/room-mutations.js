@@ -211,6 +211,12 @@ router.post('/rooms/:roomId/kick', async (req, res) => {
     if (!canKickUser(room, callerId, targetId)) {
       return { status: 403, body: { error: 'Not allowed to kick this user' } };
     }
+    // CLOSED gate positioned AFTER the role check (info-hiding): unprivileged
+    // callers still see 403 regardless of room state, so an attacker cannot
+    // probe CLOSED state by switching between role-lacking and privileged
+    // accounts. Kicking a user from a dead room is a state-extending write
+    // (the ban persists in bannedUserIds) and must be rejected.
+    if (room.state === 'CLOSED') return { status: 409, body: { error: 'Room is closed' } };
     const update = {
       bannedUserIds: FieldValue.arrayUnion(targetId),
       participantIds: FieldValue.arrayRemove(targetId),
@@ -253,6 +259,12 @@ router.patch('/rooms/:roomId/seats/:seatIndex/mute', async (req, res) => {
   }
   const { isMuted } = req.body;
   return executeRoomMutation(req, res, 'Mute toggle', ({ room, t, roomRef, callerId }) => {
+    // CLOSED gate fires FIRST — before the seat-empty probe. Otherwise an
+    // attacker could compare the seat-empty 409 vs seat-occupied 200/403
+    // responses to learn the room's seat state after CLOSE. Muting in a dead
+    // room is also a state-extending write (`seats.{i}.isMuted` persists on
+    // a room nobody can hear).
+    if (room.state === 'CLOSED') return { status: 409, body: { error: 'Room is closed' } };
     const seat = (room.seats || {})[String(seatIndex)] || {};
     if (!seat.userId) return { status: 409, body: { error: 'Seat is empty' } };
     if (isMuted) {
@@ -280,6 +292,10 @@ router.post('/rooms/:roomId/hosts', async (req, res) => {
     if (String(targetId) === String(room.ownerId)) {
       return { status: 400, body: { error: 'Owner is not a host' } };
     }
+    // CLOSED gate positioned AFTER role + input checks (info-hiding for the
+    // role probe). Promoting a host of a dead room is a state-extending write
+    // — the host role persists on a room whose lifecycle is over.
+    if (room.state === 'CLOSED') return { status: 409, body: { error: 'Room is closed' } };
     t.update(roomRef, {
       hostIds: FieldValue.arrayUnion(targetId),
       allTimeHostIds: FieldValue.arrayUnion(targetId),
@@ -552,6 +568,12 @@ router.post('/rooms/:roomId/disconnect-user', async (req, res) => {
     if (cohortFromClaim(req) !== (preRoom.cohort ?? 'minor')) {
       return res.status(404).json({ error: 'Not found' });
     }
+    // CLOSED gate fires HERE — after the cohort check, before the RTDB
+    // presence read. Saves a roundtrip on a CLOSED room and avoids leaking
+    // RTDB error behaviour for a state that no longer matters. Disconnecting
+    // from a dead room is a state-extending write (clears the target's
+    // `currentRoomId` on a room nobody can rejoin).
+    if (preRoom.state === 'CLOSED') return res.status(409).json({ error: 'Room is closed' });
     const targetPresent = await isUserPresent(roomId, targetId);
 
     const result = await db.runTransaction(async (t) => {

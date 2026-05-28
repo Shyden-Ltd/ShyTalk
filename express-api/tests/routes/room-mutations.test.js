@@ -450,6 +450,20 @@ describe('POST /api/rooms/:roomId/kick', () => {
     expect(update.bannedUserIds).toEqual({ __arrayUnion: ['99'] });
     expect(Object.keys(update).some((k) => k.startsWith('seats.'))).toBe(false);
   });
+
+  test('409 when the room is CLOSED — gate fires AFTER role check (info-hiding ordering)', async () => {
+    // The CLOSED gate is positioned AFTER the canKickUser role check so an
+    // unprivileged caller still sees 403 regardless of room state — preventing
+    // a state-probe by switching between role-lacking and privileged accounts.
+    // This test uses the OWNER (uid=1) to clear the role gate and isolate the
+    // CLOSED branch. Kicking a user from a dead room is a state-extending write
+    // (the ban persists in bannedUserIds) so CLOSED rooms must reject it,
+    // matching the universal invariant from the matrix doc.
+    mockTxnGet.mockResolvedValue(snap(mkRoom({ state: 'CLOSED' })));
+    const res = await request(createApp(1)).post('/api/rooms/room-1/kick').send({ userId: '99' });
+    expect(res.status).toBe(409);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/rooms/:roomId/seats/:seatIndex/remove', () => {
@@ -556,6 +570,30 @@ describe('PATCH /api/rooms/:roomId/seats/:seatIndex/mute', () => {
       expect.objectContaining({ 'seats.4.isMuted': false }),
     );
   });
+
+  test('409 when the room is CLOSED — gate fires BEFORE seat-empty probe', async () => {
+    // The CLOSED gate sits at the top of the handler — before the seat-empty
+    // 409 branch — so an attacker cannot probe "is seat N still occupied in
+    // that dead room?" by comparing the error message between empty vs
+    // occupied seats. The test uses an OCCUPIED seat (so the write would
+    // otherwise succeed, 200) to prove the CLOSED gate fires before any
+    // state-read or write — masking occupancy state from the caller.
+    // Muting in a dead room is a state-extending write (it persists
+    // `seats.{i}.isMuted` on a room nobody can hear).
+    mockTxnGet.mockResolvedValue(
+      snap(
+        mkRoom({
+          state: 'CLOSED',
+          seats: { 4: { userId: '99', state: 'OCCUPIED', isMuted: false } },
+        }),
+      ),
+    );
+    const res = await request(createApp(1))
+      .patch('/api/rooms/room-1/seats/4/mute')
+      .send({ isMuted: true });
+    expect(res.status).toBe(409);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/rooms/:roomId/hosts (add) + DELETE .../hosts/:userId (remove)', () => {
@@ -589,6 +627,19 @@ describe('POST /api/rooms/:roomId/hosts (add) + DELETE .../hosts/:userId (remove
     );
   });
 
+  test('409 when the room is CLOSED on POST add — gate fires AFTER owner-role check', async () => {
+    // The CLOSED gate is positioned AFTER the owner-role 403 check + AFTER the
+    // owner-is-not-a-host 400 sanity, so unprivileged callers still see their
+    // 403 regardless of room state (info-hiding). Owner caller (uid=1) clears
+    // the role gate; target uid=99 is a regular participant, not the owner.
+    // Promoting a host of a dead room is a state-extending write — the host
+    // role persists on a room whose lifecycle is over.
+    mockTxnGet.mockResolvedValue(snap(mkRoom({ state: 'CLOSED' })));
+    const res = await request(createApp(1)).post('/api/rooms/room-1/hosts').send({ userId: '99' });
+    expect(res.status).toBe(409);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+
   test('403 when a non-owner tries to remove a host', async () => {
     mockTxnGet.mockResolvedValue(snap(mkRoom({ hostIds: ['10', '55'] })));
     const res = await request(createApp(10)).delete('/api/rooms/room-1/hosts/55').send({});
@@ -609,8 +660,7 @@ describe('POST /api/rooms/:roomId/hosts (add) + DELETE .../hosts/:userId (remove
     // CLEANUP-ON-CLOSED invariant: host removal is a role-clearing cleanup
     // (mirror of /seats/:i/leave for seat occupancy). Documents intentional
     // design — the inverse `/hosts POST` (promotion) is a state-extending
-    // write and is queued for a separate operator-gated PR to add a CLOSED
-    // gate.
+    // write and gets a CLOSED gate in this same PR (test above).
     mockTxnGet.mockResolvedValue(snap(mkRoom({ state: 'CLOSED' })));
     const res = await request(createApp(1)).delete('/api/rooms/room-1/hosts/10').send({});
     expect(res.status).toBe(200);
@@ -1696,6 +1746,29 @@ describe('POST /api/rooms/:roomId/disconnect-user', () => {
       .post('/api/rooms/room-1/disconnect-user')
       .send({ userId: '99' });
     expect(res.status).toBe(500);
+  });
+
+  test('409 when the room is CLOSED — pre-read short-circuit (no RTDB, no txn, no user-doc clear)', async () => {
+    // The CLOSED gate sits BETWEEN the cohort gate on preRoom and the
+    // isUserPresent() RTDB roundtrip. Three not-called assertions isolate the
+    // short-circuit:
+    //   - mockRtdbGet not called → the presence read was skipped (saved roundtrip)
+    //   - mockTxnGet not called → the transaction was never entered
+    //   - mockDocSet not called → the post-txn currentRoomId clear didn't fire
+    // The mockDocSet pin specifically guards against a future refactor that
+    // moves the user-doc clear ahead of the txn (which would silently break
+    // the 409 path's "no state writes" invariant). Disconnecting a user from
+    // a dead room is a state-extending write — clearing currentRoomId mutates
+    // the target user's doc based on a room that no longer matters.
+    mockDocGet.mockResolvedValue(snap(mkRoom({ state: 'CLOSED' })));
+    const res = await request(createApp(10))
+      .post('/api/rooms/room-1/disconnect-user')
+      .send({ userId: '99' });
+    expect(res.status).toBe(409);
+    expect(mockRtdbGet).not.toHaveBeenCalled();
+    expect(mockTxnGet).not.toHaveBeenCalled();
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+    expect(mockDocSet).not.toHaveBeenCalled();
   });
 });
 
