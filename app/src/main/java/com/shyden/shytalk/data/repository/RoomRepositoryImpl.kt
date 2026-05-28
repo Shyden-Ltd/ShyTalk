@@ -1,10 +1,8 @@
 package com.shyden.shytalk.data.repository
 
 import android.util.Log
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.model.ChatRoom
-import com.shyden.shytalk.core.model.Seat
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.data.remote.WorkerApiClient
@@ -137,13 +135,8 @@ class RoomRepositoryImpl(
         userId: String,
     ): Resource<Unit> =
         firebaseCall("Failed to join room") {
-            firestore
-                .document("rooms/$roomId")
-                .update(
-                    mapOf(
-                        "participantIds" to FieldValue.arrayUnion(userId),
-                    ),
-                ).await()
+            api.post("/api/rooms/$roomId/join")
+            // currentRoomId is the caller's own user doc (allowed by rules); stays client-side.
             firestore.document("users/$userId").update("currentRoomId", roomId).await()
         }
 
@@ -152,38 +145,10 @@ class RoomRepositoryImpl(
         userId: String,
     ): Resource<Unit> =
         firebaseCall("Failed to leave room") {
-            // Atomic: read seats + clear-by-user in one transaction so a
-            // concurrent moveSeat (also transactional) can't swap the seat
-            // mid-flight, which would otherwise leave us writing the
-            // pre-move user's seat clear (stale data) or missing the
-            // target's actual seat. moveSeat at line 219 uses the same
-            // pattern; this brings leaveRoom's read-then-write to parity.
-            val roomRef = firestore.document("rooms/$roomId")
-            firestore
-                .runTransaction { transaction ->
-                    val doc = transaction.get(roomRef)
-                    val data = doc.data
-                    val updates =
-                        mutableMapOf<String, Any?>(
-                            "participantIds" to FieldValue.arrayRemove(userId),
-                        )
-                    if (data != null) {
-                        val seatsRaw = data["seats"] as? Map<*, *>
-                        seatsRaw?.forEach { (index, seatData) ->
-                            val seat = seatData as? Map<*, *>
-                            if (seat?.get("userId") == userId) {
-                                updates["seats.$index.userId"] = null
-                                updates["seats.$index.state"] = "EMPTY"
-                                updates["seats.$index.isMuted"] = false
-                            }
-                        }
-                    }
-                    transaction.update(roomRef, updates)
-                }.await()
-            // user-doc update is intentionally outside the transaction —
-            // Firestore transactions can't span unrelated docs without a
-            // multi-doc read; if the user-doc write fails, the user has a
-            // stale currentRoomId but the room is correctly cleared.
+            // Server-authoritative: participant removal + own-seat clear happen
+            // transactionally inside the /leave endpoint.
+            api.post("/api/rooms/$roomId/leave")
+            // currentRoomId is the caller's own user doc; stays client-side.
             firestore.document("users/$userId").update("currentRoomId", null).await()
         }
 
@@ -193,16 +158,7 @@ class RoomRepositoryImpl(
         userId: String,
     ): Resource<Unit> =
         firebaseCall("Failed to take seat") {
-            firestore
-                .document("rooms/$roomId")
-                .update(
-                    mapOf(
-                        "seats.$seatIndex.userId" to userId,
-                        "seats.$seatIndex.state" to "OCCUPIED",
-                        "seats.$seatIndex.isMuted" to false,
-                        "allTimeSeatUserIds" to FieldValue.arrayUnion(userId),
-                    ),
-                ).await()
+            api.post("/api/rooms/$roomId/seats/$seatIndex/claim")
         }
 
     override suspend fun leaveSeat(
@@ -210,21 +166,16 @@ class RoomRepositoryImpl(
         seatIndex: Int,
     ): Resource<Unit> =
         firebaseCall("Failed to leave seat") {
-            firestore
-                .document("rooms/$roomId")
-                .update(
-                    mapOf(
-                        "seats.$seatIndex.userId" to null,
-                        "seats.$seatIndex.state" to "EMPTY",
-                        "seats.$seatIndex.isMuted" to false,
-                    ),
-                ).await()
+            api.post("/api/rooms/$roomId/seats/$seatIndex/leave")
         }
 
     override suspend fun removeFromSeat(
         roomId: String,
         seatIndex: Int,
-    ): Resource<Unit> = leaveSeat(roomId, seatIndex)
+    ): Resource<Unit> =
+        firebaseCall("Failed to remove from seat") {
+            api.post("/api/rooms/$roomId/seats/$seatIndex/remove")
+        }
 
     override suspend fun moveSeat(
         roomId: String,
@@ -233,33 +184,7 @@ class RoomRepositoryImpl(
         userId: String,
     ): Resource<Unit> =
         firebaseCall("Failed to move seat") {
-            val roomRef = firestore.document("rooms/$roomId")
-            firestore
-                .runTransaction { transaction ->
-                    val doc = transaction.get(roomRef)
-                    val data = doc.data ?: throw Exception("Room not found")
-                    val seatsRaw = data["seats"] as? Map<*, *> ?: throw Exception("No seats data")
-                    val fromSeat =
-                        (seatsRaw[fromIndex.toString()] as? Map<*, *>)?.let { raw ->
-                            raw.entries.associate { (k, v) -> k.toString() to v }
-                        } ?: Seat.EMPTY_MAP
-                    val toSeat =
-                        (seatsRaw[toIndex.toString()] as? Map<*, *>)?.let { raw ->
-                            raw.entries.associate { (k, v) -> k.toString() to v }
-                        } ?: Seat.EMPTY_MAP
-
-                    transaction.update(
-                        roomRef,
-                        mapOf(
-                            "seats.$fromIndex.userId" to toSeat["userId"],
-                            "seats.$fromIndex.state" to (toSeat["state"] ?: "EMPTY"),
-                            "seats.$fromIndex.isMuted" to (toSeat["isMuted"] ?: false),
-                            "seats.$toIndex.userId" to fromSeat["userId"],
-                            "seats.$toIndex.state" to (fromSeat["state"] ?: "EMPTY"),
-                            "seats.$toIndex.isMuted" to (fromSeat["isMuted"] ?: false),
-                        ),
-                    )
-                }.await()
+            api.post("/api/rooms/$roomId/seats/$fromIndex/move", JSONObject().put("toIndex", toIndex))
         }
 
     override suspend fun kickUser(
@@ -270,44 +195,16 @@ class RoomRepositoryImpl(
         reason: String,
     ): Resource<Unit> =
         firebaseCall("Failed to kick user") {
-            val effectiveReason = reason.ifBlank { "No reason given" }
-            val roomRef = firestore.document("rooms/$roomId")
-            // Atomic: when seatIndex is unknown we MUST read seats inside
-            // the same transaction as the clear, otherwise a concurrent
-            // moveSeat can shuffle the target's seat between our read and
-            // write, leaving us blanking the wrong seat.
-            firestore
-                .runTransaction { transaction ->
-                    val updates =
-                        mutableMapOf<String, Any?>(
-                            "participantIds" to FieldValue.arrayRemove(userId),
-                            "bannedUserIds" to FieldValue.arrayUnion(userId),
-                            "kickInfo.$userId" to
-                                mapOf(
-                                    "kickerName" to kickerName,
-                                    "reason" to effectiveReason,
-                                ),
-                        )
-                    if (seatIndex != null) {
-                        updates["seats.$seatIndex.userId"] = null
-                        updates["seats.$seatIndex.state"] = "EMPTY"
-                        updates["seats.$seatIndex.isMuted"] = false
-                    } else {
-                        val doc = transaction.get(roomRef)
-                        val data = doc.data
-                        val seatsRaw = data?.get("seats") as? Map<*, *>
-                        seatsRaw?.forEach { (index, seatData) ->
-                            val seat = seatData as? Map<*, *>
-                            if (seat?.get("userId") == userId) {
-                                updates["seats.$index.userId"] = null
-                                updates["seats.$index.state"] = "EMPTY"
-                                updates["seats.$index.isMuted"] = false
-                            }
-                        }
-                    }
-                    transaction.update(roomRef, updates)
-                }.await()
-            firestore.document("users/$userId").update("currentRoomId", null).await()
+            // Server derives the target's seat + clears it transactionally; the
+            // kicked user self-clears their own currentRoomId on observing the ban.
+            api.post(
+                "/api/rooms/$roomId/kick",
+                JSONObject().apply {
+                    put("userId", userId)
+                    put("reason", reason.ifBlank { "No reason given" })
+                    put("kickerName", kickerName)
+                },
+            )
         }
 
     override suspend fun toggleMute(
@@ -316,12 +213,7 @@ class RoomRepositoryImpl(
         isMuted: Boolean,
     ): Resource<Unit> =
         firebaseCall("Failed to toggle mute") {
-            firestore
-                .document("rooms/$roomId")
-                .update(
-                    "seats.$seatIndex.isMuted",
-                    isMuted,
-                ).await()
+            api.patch("/api/rooms/$roomId/seats/$seatIndex/mute", JSONObject().put("isMuted", isMuted))
         }
 
     override suspend fun addHost(
@@ -329,14 +221,7 @@ class RoomRepositoryImpl(
         userId: String,
     ): Resource<Unit> =
         firebaseCall("Failed to add host") {
-            firestore
-                .document("rooms/$roomId")
-                .update(
-                    mapOf(
-                        "hostIds" to FieldValue.arrayUnion(userId),
-                        "allTimeHostIds" to FieldValue.arrayUnion(userId),
-                    ),
-                ).await()
+            api.post("/api/rooms/$roomId/hosts", JSONObject().put("userId", userId))
         }
 
     override suspend fun removeHost(
@@ -344,12 +229,7 @@ class RoomRepositoryImpl(
         userId: String,
     ): Resource<Unit> =
         firebaseCall("Failed to remove host") {
-            firestore
-                .document("rooms/$roomId")
-                .update(
-                    "hostIds",
-                    FieldValue.arrayRemove(userId),
-                ).await()
+            api.delete("/api/rooms/$roomId/hosts/$userId")
         }
 
     override suspend fun updateRoomName(
@@ -357,7 +237,7 @@ class RoomRepositoryImpl(
         newName: String,
     ): Resource<Unit> =
         firebaseCall("Failed to update room name") {
-            firestore.document("rooms/$roomId").update("name", newName).await()
+            api.patch("/api/rooms/$roomId/name", JSONObject().put("name", newName))
         }
 
     override suspend fun setRequireApproval(
@@ -365,19 +245,15 @@ class RoomRepositoryImpl(
         requireApproval: Boolean,
     ): Resource<Unit> =
         firebaseCall("Failed to update approval setting") {
-            firestore.document("rooms/$roomId").update("requireApproval", requireApproval).await()
+            api.patch(
+                "/api/rooms/$roomId/require-approval",
+                JSONObject().put("requireApproval", requireApproval),
+            )
         }
 
     override suspend fun setOwnerAway(roomId: String): Resource<Unit> =
         firebaseCall("Failed to set owner away") {
-            firestore
-                .document("rooms/$roomId")
-                .update(
-                    mapOf(
-                        "state" to "OWNER_AWAY",
-                        "ownerLeftAt" to System.currentTimeMillis(),
-                    ),
-                ).await()
+            api.post("/api/rooms/$roomId/owner-away")
         }
 
     override suspend fun setOwnerReturned(
@@ -385,14 +261,7 @@ class RoomRepositoryImpl(
         ownerId: String,
     ): Resource<Unit> =
         firebaseCall("Failed to set owner returned") {
-            firestore
-                .document("rooms/$roomId")
-                .update(
-                    mapOf(
-                        "state" to "ACTIVE",
-                        "ownerLeftAt" to null,
-                    ),
-                ).await()
+            api.post("/api/rooms/$roomId/owner-returned")
         }
 
     // Keep as Worker API — needs FCM push notification
@@ -415,12 +284,8 @@ class RoomRepositoryImpl(
         userId: String,
     ): Resource<Unit> =
         firebaseCall("Failed to cancel invite") {
-            firestore
-                .document("rooms/$roomId")
-                .update(
-                    "pendingInvites.$userId",
-                    FieldValue.delete(),
-                ).await()
+            // Self-scoped on the server (deletes the caller's own pending invite).
+            api.post("/api/rooms/$roomId/decline-invite")
         }
 
     override suspend fun acceptInvite(
@@ -429,52 +294,15 @@ class RoomRepositoryImpl(
         seatIndex: Int,
     ): Resource<Unit> =
         firebaseCall("Failed to accept invite") {
-            firestore
-                .document("rooms/$roomId")
-                .update(
-                    mapOf(
-                        "pendingInvites.$userId" to FieldValue.delete(),
-                        "participantIds" to FieldValue.arrayUnion(userId),
-                        "seats.$seatIndex.userId" to userId,
-                        "seats.$seatIndex.state" to "OCCUPIED",
-                        "seats.$seatIndex.isMuted" to false,
-                        "allTimeSeatUserIds" to FieldValue.arrayUnion(userId),
-                    ),
-                ).await()
+            api.post("/api/rooms/$roomId/seats/$seatIndex/accept-invite")
+            // currentRoomId is the caller's own user doc; stays client-side.
             firestore.document("users/$userId").update("currentRoomId", roomId).await()
         }
 
     override suspend fun closeRoom(roomId: String): Resource<Unit> =
         firebaseCall("Failed to close room") {
-            // Read current room to get participant list
-            val doc = firestore.document("rooms/$roomId").get().await()
-            val data = doc.data ?: throw Exception("Room not found")
-            val participantIds = (data["participantIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
-
-            val emptySeat = mapOf("userId" to null, "state" to "EMPTY", "isMuted" to false)
-            val emptySeats = (0..7).associate { it.toString() to emptySeat }
-
-            firestore
-                .document("rooms/$roomId")
-                .update(
-                    mapOf(
-                        "state" to "CLOSED",
-                        "closedAt" to System.currentTimeMillis(),
-                        "participantIds" to emptyList<String>(),
-                        "seats" to emptySeats,
-                    ),
-                ).await()
-
-            // Clear currentRoomId for all participants
-            for (uid in participantIds) {
-                try {
-                    firestore.document("users/$uid").update("currentRoomId", null).await()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Log.w(TAG, "Room operation failed", e)
-                }
-            }
+            // Server empties the room + clears every participant's currentRoomId.
+            api.post("/api/rooms/$roomId/close")
         }
 
     override suspend fun findActiveRoomByOwner(ownerId: String): String? =
@@ -499,12 +327,7 @@ class RoomRepositoryImpl(
         userId: String,
     ): Resource<Unit> =
         firebaseCall("Failed to record first join timestamp") {
-            firestore
-                .document("rooms/$roomId")
-                .update(
-                    "firstJoinTimestamps.$userId",
-                    System.currentTimeMillis(),
-                ).await()
+            api.post("/api/rooms/$roomId/first-join")
         }
 
     override suspend fun leaveAllRooms(
@@ -512,6 +335,8 @@ class RoomRepositoryImpl(
         exceptRoomId: String?,
     ): Resource<Unit> =
         firebaseCall("Failed to leave all rooms") {
+            // Query stays client-side (reads allowed); each room's mutation
+            // routes through the server-authoritative /leave endpoint.
             val snapshot =
                 firestore
                     .collection("rooms")
@@ -521,31 +346,8 @@ class RoomRepositoryImpl(
                     .await()
             for (doc in snapshot.documents) {
                 if (doc.id == exceptRoomId) continue
-                // Atomic per-room: read seats + clear under one transaction
-                // so a concurrent moveSeat can't shuffle this user's seat
-                // between our read and write. Each room is independent so
-                // a per-room transaction (not multi-doc) is sufficient.
-                val roomRef = firestore.document("rooms/${doc.id}")
                 try {
-                    firestore
-                        .runTransaction { transaction ->
-                            val freshDoc = transaction.get(roomRef)
-                            val data = freshDoc.data ?: return@runTransaction
-                            val updates =
-                                mutableMapOf<String, Any?>(
-                                    "participantIds" to FieldValue.arrayRemove(userId),
-                                )
-                            val seatsRaw = data["seats"] as? Map<*, *>
-                            seatsRaw?.forEach { (index, seatData) ->
-                                val seat = seatData as? Map<*, *>
-                                if (seat?.get("userId") == userId) {
-                                    updates["seats.$index.userId"] = null
-                                    updates["seats.$index.state"] = "EMPTY"
-                                    updates["seats.$index.isMuted"] = false
-                                }
-                            }
-                            transaction.update(roomRef, updates)
-                        }.await()
+                    api.post("/api/rooms/${doc.id}/leave")
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -557,6 +359,8 @@ class RoomRepositoryImpl(
 
     override suspend fun closeAllRoomsByOwner(ownerId: String): Resource<Unit> =
         firebaseCall("Failed to close rooms") {
+            // Query stays client-side; each close routes through /close (which
+            // also clears participants' currentRoomId server-side).
             val snapshot =
                 firestore
                     .collection("rooms")
@@ -565,32 +369,8 @@ class RoomRepositoryImpl(
                     .get()
                     .await()
             for (doc in snapshot.documents) {
-                val data = doc.data ?: continue
-                val participantIds = (data["participantIds"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
-
-                val emptySeat = mapOf("userId" to null, "state" to "EMPTY", "isMuted" to false)
-                val emptySeats = (0..7).associate { it.toString() to emptySeat }
-
                 try {
-                    firestore
-                        .document("rooms/${doc.id}")
-                        .update(
-                            mapOf(
-                                "state" to "CLOSED",
-                                "closedAt" to System.currentTimeMillis(),
-                                "participantIds" to emptyList<String>(),
-                                "seats" to emptySeats,
-                            ),
-                        ).await()
-                    for (uid in participantIds) {
-                        try {
-                            firestore.document("users/$uid").update("currentRoomId", null).await()
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Room operation failed", e)
-                        }
-                    }
+                    api.post("/api/rooms/${doc.id}/close")
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -604,29 +384,8 @@ class RoomRepositoryImpl(
         userId: String,
     ): Resource<Unit> =
         firebaseCall("Failed to remove disconnected user") {
-            // Same race-safety logic as leaveRoom.
-            val roomRef = firestore.document("rooms/$roomId")
-            firestore
-                .runTransaction { transaction ->
-                    val doc = transaction.get(roomRef)
-                    val data = doc.data
-                    val updates =
-                        mutableMapOf<String, Any?>(
-                            "participantIds" to FieldValue.arrayRemove(userId),
-                        )
-                    if (data != null) {
-                        val seatsRaw = data["seats"] as? Map<*, *>
-                        seatsRaw?.forEach { (index, seatData) ->
-                            val seat = seatData as? Map<*, *>
-                            if (seat?.get("userId") == userId) {
-                                updates["seats.$index.userId"] = null
-                                updates["seats.$index.state"] = "EMPTY"
-                                updates["seats.$index.isMuted"] = false
-                            }
-                        }
-                    }
-                    transaction.update(roomRef, updates)
-                }.await()
-            firestore.document("users/$userId").update("currentRoomId", null).await()
+            // Server verifies the target is actually absent (RTDB presence) and
+            // clears their seat + currentRoomId.
+            api.post("/api/rooms/$roomId/disconnect-user", JSONObject().put("userId", userId))
         }
 }
