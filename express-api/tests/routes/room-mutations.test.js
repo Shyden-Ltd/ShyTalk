@@ -1562,6 +1562,18 @@ describe('POST /api/rooms/:roomId/first-join', () => {
     expect(res.status).toBe(404);
   });
 
+  test('409 when the room is CLOSED — no write to firstJoinTimestamps', async () => {
+    // Invariant: CLOSED rooms accept zero client writes. Pre-fix the handler
+    // had no state gate, so a post-CLOSE call would persist a participation
+    // timestamp on a dead room (stale-state leak). Other lifecycle/settings
+    // endpoints (/join, /name, /require-approval, /claim) already reject 409
+    // on CLOSED — this pin extends the same invariant to /first-join.
+    mockTxnGet.mockResolvedValue(snap(mkRoom({ state: 'CLOSED' })));
+    const res = await request(createApp(99)).post('/api/rooms/room-1/first-join').send({});
+    expect(res.status).toBe(409);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+
   test('200 records a numeric first-join timestamp when absent', async () => {
     mockTxnGet.mockResolvedValue(snap(mkRoom()));
     const res = await request(createApp(99)).post('/api/rooms/room-1/first-join').send({});
