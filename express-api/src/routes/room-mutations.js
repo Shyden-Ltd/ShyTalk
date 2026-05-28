@@ -595,9 +595,12 @@ router.post('/rooms/:roomId/disconnect-user', async (req, res) => {
 
 // POST /rooms/:roomId/first-join — caller records THEIR OWN first-join time.
 // Self-scoped + set-once: writes firstJoinTimestamps[caller] only if absent, so
-// re-entry never overwrites the original timestamp.
+// re-entry never overwrites the original timestamp. Rejects 409 on CLOSED rooms
+// — the participation-timestamp record is conceptually a lifecycle-write and
+// must follow the same "no writes after CLOSE" invariant as /join, /name, etc.
 router.post('/rooms/:roomId/first-join', async (req, res) =>
   executeRoomMutation(req, res, 'Record first join', ({ room, t, roomRef, callerId }) => {
+    if (room.state === 'CLOSED') return { status: 409, body: { error: 'Room is closed' } };
     const already = Object.prototype.hasOwnProperty.call(room.firstJoinTimestamps || {}, callerId);
     if (already) return { status: 200, body: { success: true }, noop: true };
     t.update(roomRef, { [`firstJoinTimestamps.${callerId}`]: Date.now() });
