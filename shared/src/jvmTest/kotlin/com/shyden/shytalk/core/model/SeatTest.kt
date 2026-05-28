@@ -109,7 +109,7 @@ class SeatTest {
         assertEquals(original, restored)
     }
 
-    // ── isOccupiedBy ───────────────────────────────────────────��────
+    // ── isOccupiedBy ─────────────────────────────────────────────────
 
     @Test
     fun `isOccupiedBy returns true for matching user in OCCUPIED state`() {
