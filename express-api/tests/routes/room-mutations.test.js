@@ -213,6 +213,44 @@ describe('POST /api/rooms/:roomId/seats/:seatIndex/claim', () => {
 });
 
 describe('POST /api/rooms/:roomId/seats/:seatIndex/accept-invite', () => {
+  test('404 when the room does not exist', async () => {
+    mockTxnGet.mockResolvedValue(snap(null));
+    const res = await request(createApp(20))
+      .post('/api/rooms/room-1/seats/3/accept-invite')
+      .send({});
+    expect(res.status).toBe(404);
+  });
+
+  test('404 (hidden) on cohort mismatch', async () => {
+    mockCohort = 'minor';
+    mockTxnGet.mockResolvedValue(snap(mkRoom({ cohort: 'adult', pendingInvites: { 20: '1' } })));
+    const res = await request(createApp(20))
+      .post('/api/rooms/room-1/seats/3/accept-invite')
+      .send({});
+    // Cross-cohort caller never observes whether the invite exists.
+    expect(res.status).toBe(404);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+
+  test('409 when the room is CLOSED — gate fires before invite/seat checks', async () => {
+    // The impl orders the CLOSED gate FIRST so an attacker post-CLOSE can't
+    // probe whether their invite or target seat still exists.
+    mockTxnGet.mockResolvedValue(
+      snap(
+        mkRoom({
+          state: 'CLOSED',
+          pendingInvites: { 20: '1' },
+          seats: { 3: { userId: null, state: 'EMPTY', isMuted: false } },
+        }),
+      ),
+    );
+    const res = await request(createApp(20))
+      .post('/api/rooms/room-1/seats/3/accept-invite')
+      .send({});
+    expect(res.status).toBe(409);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+
   test('403 when the caller has no pending invite', async () => {
     mockTxnGet.mockResolvedValue(snap(mkRoom({ pendingInvites: {} })));
     const res = await request(createApp(20))
@@ -253,6 +291,31 @@ describe('POST /api/rooms/:roomId/seats/:seatIndex/accept-invite', () => {
     expect(res.body.code).toBe('SEAT_TAKEN');
   });
 
+  test('409 ALREADY_SEATED when the caller already occupies another seat', async () => {
+    // The /accept-invite impl mirrors /claim's per-user uniqueness guard: a
+    // user cannot occupy two seats simultaneously. Pre-fix the impl gated
+    // this case but no test pinned it; an accidental refactor that dropped
+    // the userSeatIndex check would not have failed any test.
+    mockTxnGet.mockResolvedValue(
+      snap(
+        mkRoom({
+          pendingInvites: { 20: '1' },
+          // caller (uid 20) is already in seat 5
+          seats: {
+            3: { userId: null, state: 'EMPTY', isMuted: false },
+            5: { userId: '20', state: 'OCCUPIED', isMuted: false },
+          },
+        }),
+      ),
+    );
+    const res = await request(createApp(20))
+      .post('/api/rooms/room-1/seats/3/accept-invite')
+      .send({});
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('ALREADY_SEATED');
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+
   test('200 seats the invited user, consumes the invite, adds participant', async () => {
     mockTxnGet.mockResolvedValue(
       snap(
@@ -276,6 +339,14 @@ describe('POST /api/rooms/:roomId/seats/:seatIndex/accept-invite', () => {
         participantIds: { __arrayUnion: ['20'] },
       }),
     );
+  });
+
+  test('500 when the transaction throws', async () => {
+    mockTxnGet.mockRejectedValue(new Error('boom'));
+    const res = await request(createApp(20))
+      .post('/api/rooms/room-1/seats/3/accept-invite')
+      .send({});
+    expect(res.status).toBe(500);
   });
 });
 
