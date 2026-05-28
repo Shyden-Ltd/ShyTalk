@@ -179,6 +179,21 @@ function canSetOwnerAway(room, callerId, ownerPresent) {
   return asIds(room.participantIds).includes(String(callerId));
 }
 
+/**
+ * May `callerId` remove the DISCONNECTED user `targetId` (presence-timeout
+ * eviction by the client presence monitor)? The target must NOT be the owner
+ * (owner disconnect → owner-away, never removal), must be verifiably ABSENT
+ * (`targetPresent === false`, read from RTDB by the caller before the txn), and
+ * the caller must be a participant. Mirrors ActiveRoomManager's presence-monitor
+ * non-owner removal branch; the presence precondition is what stops this being
+ * abused as an "evict any participant" primitive.
+ */
+function canRemoveDisconnected(room, callerId, targetId, targetPresent) {
+  if (String(targetId) === String(room.ownerId)) return false;
+  if (targetPresent) return false;
+  return asIds(room.participantIds).includes(String(callerId));
+}
+
 module.exports = {
   OWNER_SEAT_INDEX,
   MAX_SEATS,
@@ -193,4 +208,5 @@ module.exports = {
   canMoveSeat,
   canCloseRoom,
   canSetOwnerAway,
+  canRemoveDisconnected,
 };

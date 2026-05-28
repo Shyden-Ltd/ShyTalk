@@ -4,10 +4,15 @@ const request = require('supertest');
 // ── Firebase Admin mock (db.runTransaction + FieldValue sentinels) ──
 const mockTxnGet = jest.fn();
 const mockTxnUpdate = jest.fn();
-const mockDocGet = jest.fn(); // non-transactional roomRef.get() — owner-away pre-read
-const mockRoomRef = { path: 'rooms/room-1', get: (...a) => mockDocGet(...a) };
+const mockDocGet = jest.fn(); // non-transactional roomRef.get() — owner-away/disconnect pre-read
+const mockDocSet = jest.fn().mockResolvedValue(); // db.doc(...).set() — disconnect-user currentRoomId clear
+const mockRoomRef = {
+  path: 'rooms/room-1',
+  get: (...a) => mockDocGet(...a),
+  set: (...a) => mockDocSet(...a),
+};
 const mockRtdbSet = jest.fn().mockResolvedValue();
-const mockRtdbGet = jest.fn(); // RTDB owner-presence read (setOwnerAway non-owner path)
+const mockRtdbGet = jest.fn(); // RTDB presence read (owner-away / disconnect-user)
 const mockBatchSet = jest.fn();
 const mockBatchCommit = jest.fn().mockResolvedValue();
 
@@ -88,8 +93,9 @@ beforeEach(() => {
   mockCohort = 'adult';
   mockRtdbSet.mockResolvedValue();
   mockBatchCommit.mockResolvedValue();
-  mockRtdbGet.mockResolvedValue({ exists: () => true }); // owner present by default
-  mockDocGet.mockResolvedValue({ exists: false }); // owner-away pre-read; set per test
+  mockRtdbGet.mockResolvedValue({ exists: () => true }); // target present by default
+  mockDocGet.mockResolvedValue({ exists: false }); // pre-read; set per test
+  mockDocSet.mockResolvedValue();
 });
 
 describe('POST /api/rooms/:roomId/seats/:seatIndex/claim', () => {
@@ -1328,5 +1334,196 @@ describe('Chunk C review-hardening coverage', () => {
     const res = await request(createApp(10)).post('/api/rooms/room-1/close').send({});
     expect(res.status).toBe(403);
     expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Chunk D — participant lifecycle: leave-room, disconnect-eviction, first-join.
+// Completes the server-authoritative surface so EVERY client room-doc write has
+// an endpoint (prerequisite for the rules lockdown).
+// ─────────────────────────────────────────────────────────────────────────
+
+describe('POST /api/rooms/:roomId/leave', () => {
+  test('404 when the room does not exist', async () => {
+    mockTxnGet.mockResolvedValue(snap(null));
+    const res = await request(createApp(99)).post('/api/rooms/room-1/leave').send({});
+    expect(res.status).toBe(404);
+  });
+
+  test('404 (hidden) on cohort mismatch', async () => {
+    mockCohort = 'minor';
+    mockTxnGet.mockResolvedValue(snap(mkRoom({ cohort: 'adult' })));
+    const res = await request(createApp(99)).post('/api/rooms/room-1/leave').send({});
+    expect(res.status).toBe(404);
+  });
+
+  test('200 removes the caller from participants and clears their seat', async () => {
+    mockTxnGet.mockResolvedValue(
+      snap(mkRoom({ seats: { 3: { userId: '10', state: 'OCCUPIED', isMuted: false } } })),
+    );
+    const res = await request(createApp(10)).post('/api/rooms/room-1/leave').send({});
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).toHaveBeenCalledWith(
+      mockRoomRef,
+      expect.objectContaining({
+        participantIds: { __arrayRemove: ['10'] },
+        'seats.3.userId': null,
+        'seats.3.state': 'EMPTY',
+        'seats.3.isMuted': false,
+      }),
+    );
+    expect(mockRtdbSet).toHaveBeenCalled();
+  });
+
+  test('200 removes from participants with no seat fields when the caller is unseated', async () => {
+    mockTxnGet.mockResolvedValue(snap(mkRoom())); // caller 99 is a participant but not seated
+    const res = await request(createApp(99)).post('/api/rooms/room-1/leave').send({});
+    expect(res.status).toBe(200);
+    const [, payload] = mockTxnUpdate.mock.calls[0];
+    expect(payload).toEqual({ participantIds: { __arrayRemove: ['99'] } });
+  });
+
+  test('500 when the transaction throws', async () => {
+    mockTxnGet.mockRejectedValue(new Error('boom'));
+    const res = await request(createApp(10)).post('/api/rooms/room-1/leave').send({});
+    expect(res.status).toBe(500);
+  });
+});
+
+describe('POST /api/rooms/:roomId/disconnect-user', () => {
+  test('400 when userId is missing', async () => {
+    const res = await request(createApp(10)).post('/api/rooms/room-1/disconnect-user').send({});
+    expect(res.status).toBe(400);
+  });
+
+  test('404 when the room does not exist (pre-read)', async () => {
+    mockDocGet.mockResolvedValue(snap(null));
+    const res = await request(createApp(10))
+      .post('/api/rooms/room-1/disconnect-user')
+      .send({ userId: '99' });
+    expect(res.status).toBe(404);
+  });
+
+  test('404 (hidden) on cohort mismatch (pre-read)', async () => {
+    mockCohort = 'minor';
+    mockDocGet.mockResolvedValue(snap(mkRoom({ cohort: 'adult' })));
+    const res = await request(createApp(10))
+      .post('/api/rooms/room-1/disconnect-user')
+      .send({ userId: '99' });
+    expect(res.status).toBe(404);
+  });
+
+  test('403 when the target is the owner (owner disconnect uses owner-away, not removal)', async () => {
+    const room = mkRoom();
+    mockDocGet.mockResolvedValue(snap(room));
+    mockTxnGet.mockResolvedValue(snap(room));
+    mockRtdbGet.mockResolvedValue({ exists: () => false });
+    const res = await request(createApp(10))
+      .post('/api/rooms/room-1/disconnect-user')
+      .send({ userId: '1' });
+    expect(res.status).toBe(403);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+
+  test('403 when the target is still present', async () => {
+    const room = mkRoom({ seats: { 3: { userId: '99', state: 'OCCUPIED', isMuted: false } } });
+    mockDocGet.mockResolvedValue(snap(room));
+    mockTxnGet.mockResolvedValue(snap(room));
+    mockRtdbGet.mockResolvedValue({ exists: () => true }); // present → cannot evict
+    const res = await request(createApp(10))
+      .post('/api/rooms/room-1/disconnect-user')
+      .send({ userId: '99' });
+    expect(res.status).toBe(403);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+
+  test('403 when the caller is not a participant', async () => {
+    const room = mkRoom({ participantIds: ['1', '99'] }); // caller 10 not a participant
+    mockDocGet.mockResolvedValue(snap(room));
+    mockTxnGet.mockResolvedValue(snap(room));
+    mockRtdbGet.mockResolvedValue({ exists: () => false });
+    const res = await request(createApp(10))
+      .post('/api/rooms/room-1/disconnect-user')
+      .send({ userId: '99' });
+    expect(res.status).toBe(403);
+  });
+
+  test('403 fail-safe to present when the presence read throws', async () => {
+    const room = mkRoom({ seats: { 3: { userId: '99', state: 'OCCUPIED', isMuted: false } } });
+    mockDocGet.mockResolvedValue(snap(room));
+    mockTxnGet.mockResolvedValue(snap(room));
+    mockRtdbGet.mockRejectedValue(new Error('rtdb down'));
+    const res = await request(createApp(10))
+      .post('/api/rooms/room-1/disconnect-user')
+      .send({ userId: '99' });
+    expect(res.status).toBe(403);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+
+  test('200 removes an absent non-owner, clears their seat + currentRoomId', async () => {
+    const room = mkRoom({ seats: { 3: { userId: '99', state: 'OCCUPIED', isMuted: false } } });
+    mockDocGet.mockResolvedValue(snap(room));
+    mockTxnGet.mockResolvedValue(snap(room));
+    mockRtdbGet.mockResolvedValue({ exists: () => false }); // absent → evictable
+    const res = await request(createApp(10))
+      .post('/api/rooms/room-1/disconnect-user')
+      .send({ userId: '99' });
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).toHaveBeenCalledWith(
+      mockRoomRef,
+      expect.objectContaining({
+        participantIds: { __arrayRemove: ['99'] },
+        'seats.3.userId': null,
+        'seats.3.state': 'EMPTY',
+        'seats.3.isMuted': false,
+      }),
+    );
+    expect(mockDocSet).toHaveBeenCalledWith({ currentRoomId: null }, { merge: true });
+  });
+
+  test('500 when the transaction throws', async () => {
+    mockDocGet.mockResolvedValue(snap(mkRoom()));
+    mockRtdbGet.mockResolvedValue({ exists: () => false });
+    mockTxnGet.mockRejectedValue(new Error('boom'));
+    const res = await request(createApp(10))
+      .post('/api/rooms/room-1/disconnect-user')
+      .send({ userId: '99' });
+    expect(res.status).toBe(500);
+  });
+});
+
+describe('POST /api/rooms/:roomId/first-join', () => {
+  test('404 when the room does not exist', async () => {
+    mockTxnGet.mockResolvedValue(snap(null));
+    const res = await request(createApp(99)).post('/api/rooms/room-1/first-join').send({});
+    expect(res.status).toBe(404);
+  });
+
+  test('404 (hidden) on cohort mismatch', async () => {
+    mockCohort = 'minor';
+    mockTxnGet.mockResolvedValue(snap(mkRoom({ cohort: 'adult' })));
+    const res = await request(createApp(99)).post('/api/rooms/room-1/first-join').send({});
+    expect(res.status).toBe(404);
+  });
+
+  test('200 records a numeric first-join timestamp when absent', async () => {
+    mockTxnGet.mockResolvedValue(snap(mkRoom()));
+    const res = await request(createApp(99)).post('/api/rooms/room-1/first-join').send({});
+    expect(res.status).toBe(200);
+    const [, payload] = mockTxnUpdate.mock.calls[0];
+    expect(typeof payload['firstJoinTimestamps.99']).toBe('number');
+  });
+
+  test('200 idempotent set-once: no write when a timestamp already exists', async () => {
+    mockTxnGet.mockResolvedValue(snap(mkRoom({ firstJoinTimestamps: { 99: 12345 } })));
+    const res = await request(createApp(99)).post('/api/rooms/room-1/first-join').send({});
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+
+  test('500 when the transaction throws', async () => {
+    mockTxnGet.mockRejectedValue(new Error('boom'));
+    const res = await request(createApp(99)).post('/api/rooms/room-1/first-join').send({});
+    expect(res.status).toBe(500);
   });
 });

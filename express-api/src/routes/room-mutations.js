@@ -14,8 +14,9 @@
  * forbid direct client room-doc writes.
  *
  * Phase 1 — the full server-authoritative room-mutation surface: seat lifecycle
- * (claim / accept-invite / leave / move), moderation (kick / remove / mute /
- * add+remove host), join (with ban enforcement), invite-decline, room settings
+ * (claim / accept-invite / leave-seat / move), participant lifecycle (join with
+ * ban enforcement / leave-room / disconnect-eviction / first-join), moderation
+ * (kick / remove / mute / add+remove host), invite-decline, room settings
  * (rename / require-approval) and room lifecycle (owner-away / owner-returned /
  * close). firestore.rules is tightened in a later phase to forbid direct client
  * room-doc writes.
@@ -33,6 +34,7 @@ const {
   canMoveSeat,
   canCloseRoom,
   canSetOwnerAway,
+  canRemoveDisconnected,
   resolveRole,
   MAX_SEATS,
   OWNER_SEAT_INDEX,
@@ -54,19 +56,19 @@ async function broadcastRoomUpdated(roomId) {
 }
 
 /**
- * Owner-presence check for the non-owner setOwnerAway safety-net path. Reads
- * RTDB presence at rooms/<roomId>/presence/<ownerId>. FAIL-SAFE to "present"
- * on any read error so a presence outage can never let a non-owner forge an
- * owner-away transition while the owner is actually connected.
+ * RTDB presence check for the presence-gated endpoints (owner-away safety net,
+ * disconnect-user eviction). Reads rooms/<roomId>/presence/<userId>. FAIL-SAFE
+ * to "present" on any read error so a presence outage can never let a caller
+ * forge an owner-away transition or evict a still-connected user.
  */
-async function isOwnerPresent(roomId, ownerId) {
+async function isUserPresent(roomId, userId) {
   try {
-    const snap = await rtdb.ref(`rooms/${roomId}/presence/${ownerId}`).get();
+    const snap = await rtdb.ref(`rooms/${roomId}/presence/${userId}`).get();
     return snap.exists();
   } catch (err) {
-    log.error('room-mutations', 'Owner presence read failed', {
+    log.error('room-mutations', 'Presence read failed', {
       roomId,
-      ownerId,
+      userId,
       error: err.message,
     });
     return true;
@@ -440,7 +442,7 @@ router.post('/rooms/:roomId/owner-away', async (req, res) => {
     // owner-returned. This mirrors the client presence monitor and is strictly
     // safer than the prior client-only write. (Fully closing it needs a
     // Firestore-visible presence token — tracked for the rules-lockdown phase.)
-    const ownerPresent = callerIsOwner ? false : await isOwnerPresent(roomId, preRoom.ownerId);
+    const ownerPresent = callerIsOwner ? false : await isUserPresent(roomId, preRoom.ownerId);
 
     const result = await db.runTransaction(async (t) => {
       const snap = await t.get(roomRef);
@@ -604,6 +606,115 @@ router.post('/rooms/:roomId/decline-invite', async (req, res) => {
     return res.status(result.status).json(result.body);
   } catch (err) {
     log.error('room-mutations', 'Decline invite failed', { roomId, error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /rooms/:roomId/leave — caller removes THEMSELVES from the room
+// (participant list + their own seat, if seated). currentRoomId stays a client
+// self-write. Idempotent: a no-op arrayRemove if the caller isn't a member.
+router.post('/rooms/:roomId/leave', async (req, res) => {
+  const { roomId } = req.params;
+  const callerId = String(req.auth.uniqueId);
+  try {
+    const result = await inRoomTransaction(req, roomId, (room, t, roomRef) => {
+      const update = { participantIds: FieldValue.arrayRemove(callerId) };
+      const seatIdx = userSeatIndex(room, callerId);
+      if (seatIdx !== -1) {
+        update[`seats.${seatIdx}.userId`] = null;
+        update[`seats.${seatIdx}.state`] = 'EMPTY';
+        update[`seats.${seatIdx}.isMuted`] = false;
+      }
+      t.update(roomRef, update);
+      return { status: 200, body: { success: true } };
+    });
+    if (result.status === 200) await broadcastRoomUpdated(roomId);
+    return res.status(result.status).json(result.body);
+  } catch (err) {
+    log.error('room-mutations', 'Leave room failed', { roomId, error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /rooms/:roomId/disconnect-user — remove a DISCONNECTED non-owner
+// (presence-timeout eviction triggered by a participant's presence monitor).
+// The target's absence is verified against RTDB presence BEFORE the txn
+// (fail-safe to present). Also clears the removed user's currentRoomId — a
+// foreign user-doc write that only the server may perform once rules lock down.
+router.post('/rooms/:roomId/disconnect-user', async (req, res) => {
+  const { roomId } = req.params;
+  const targetId = String(req.body?.userId ?? '') || null;
+  if (!targetId) return res.status(400).json({ error: 'userId required' });
+  const callerId = String(req.auth.uniqueId);
+  try {
+    const roomRef = db.doc(`rooms/${roomId}`);
+    const preSnap = await roomRef.get();
+    if (!preSnap.exists) return res.status(404).json({ error: 'Room not found' });
+    const preRoom = preSnap.data();
+    if (cohortFromClaim(req) !== (preRoom.cohort ?? 'minor')) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    const targetPresent = await isUserPresent(roomId, targetId);
+
+    const result = await db.runTransaction(async (t) => {
+      const snap = await t.get(roomRef);
+      if (!snap.exists) return { status: 404, body: { error: 'Room not found' } };
+      const room = snap.data();
+      if (cohortFromClaim(req) !== (room.cohort ?? 'minor')) {
+        return { status: 404, body: { error: 'Not found' } };
+      }
+      if (!canRemoveDisconnected(room, callerId, targetId, targetPresent)) {
+        return { status: 403, body: { error: 'Not allowed to remove this user' } };
+      }
+      const update = { participantIds: FieldValue.arrayRemove(targetId) };
+      const seatIdx = userSeatIndex(room, targetId);
+      if (seatIdx !== -1) {
+        update[`seats.${seatIdx}.userId`] = null;
+        update[`seats.${seatIdx}.state`] = 'EMPTY';
+        update[`seats.${seatIdx}.isMuted`] = false;
+      }
+      t.update(roomRef, update);
+      return { status: 200, body: { success: true } };
+    });
+    if (result.status === 200) {
+      try {
+        await db.doc(`users/${targetId}`).set({ currentRoomId: null }, { merge: true });
+      } catch (err) {
+        log.error('room-mutations', 'disconnect-user currentRoomId clear failed', {
+          roomId,
+          targetId,
+          error: err.message,
+        });
+      }
+      await broadcastRoomUpdated(roomId);
+    }
+    return res.status(result.status).json(result.body);
+  } catch (err) {
+    log.error('room-mutations', 'Disconnect user failed', { roomId, error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /rooms/:roomId/first-join — caller records THEIR OWN first-join time.
+// Self-scoped + set-once: writes firstJoinTimestamps[caller] only if absent, so
+// re-entry never overwrites the original timestamp.
+router.post('/rooms/:roomId/first-join', async (req, res) => {
+  const { roomId } = req.params;
+  const callerId = String(req.auth.uniqueId);
+  try {
+    const result = await inRoomTransaction(req, roomId, (room, t, roomRef) => {
+      const already = Object.prototype.hasOwnProperty.call(
+        room.firstJoinTimestamps || {},
+        callerId,
+      );
+      if (already) return { status: 200, body: { success: true } };
+      t.update(roomRef, { [`firstJoinTimestamps.${callerId}`]: Date.now() });
+      return { status: 200, body: { success: true }, mutated: true };
+    });
+    if (result.status === 200 && result.mutated) await broadcastRoomUpdated(roomId);
+    return res.status(result.status).json(result.body);
+  } catch (err) {
+    log.error('room-mutations', 'Record first join failed', { roomId, error: err.message });
     return res.status(500).json({ error: 'Internal server error' });
   }
 });
