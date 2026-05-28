@@ -34,6 +34,17 @@ kotlin {
         compilerOptions {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
         }
+
+        // Run commonTest on the android target's host (local JVM) as well —
+        // clears the KMP "commonTest source directory exists, but android host
+        // tests are not enabled" notice AND adds real coverage of the androidMain
+        // actuals (e.g. Logger.android.kt), which jvm() never exercises.
+        // isReturnDefaultValues stubs android.jar calls (android.util.Log) the
+        // same way app/build.gradle.kts does, so the suite runs without
+        // Robolectric.
+        withHostTest {
+            isReturnDefaultValues = true
+        }
     }
 
     listOf(
