@@ -1281,7 +1281,14 @@ test.describe("Integration — cohort gate: rooms cohort immutability", () => {
     );
   });
 
-  test("owner CAN update unrelated fields without touching cohort", async () => {
+  test("P3 LOCKDOWN: owner CANNOT update room doc directly — must use /rooms/:roomId/name endpoint", async () => {
+    // Pre-P3 (before PR #859): the OR-branch of `allow update` let the owner
+    // update arbitrary non-cohort fields directly (e.g. `name`). Post-P3,
+    // `allow update: if false` denies ALL client writes — the /name endpoint
+    // (and 18 other endpoints in room-mutations.js) now owns every legitimate
+    // room-doc mutation. Inverted from assertSucceeds → assertFails to
+    // document the new policy + serve as a regression guard against anyone
+    // accidentally re-opening `allow update`.
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore() as unknown as Firestore;
       await setDoc(doc(db, "rooms", "room-flip-3"), {
@@ -1297,12 +1304,18 @@ test.describe("Integration — cohort gate: rooms cohort immutability", () => {
       cohort: "adult",
     });
     const db = owner.firestore() as unknown as Firestore;
-    await assertSucceeds(
+    await assertFails(
       updateDoc(doc(db, "rooms", "room-flip-3"), { name: "New Name" }),
     );
   });
 
-  test("joining user CAN add self to participantIds without touching cohort", async () => {
+  test("P3 LOCKDOWN: joining user CANNOT add self to participantIds via direct update — must use /rooms/:roomId/join endpoint", async () => {
+    // Pre-P3 (before PR #859): the joiner-branch of `allow update` let a
+    // same-cohort, non-banned caller add themselves to participantIds with
+    // affectedKeys ⊆ {participantIds, firstJoinTimestamps}. Post-P3,
+    // `allow update: if false` denies that path; the /join endpoint now
+    // owns the ban-check + cohort gate + uniqueId-smuggling guard server-side.
+    // Inverted from assertSucceeds → assertFails to document the new policy.
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore() as unknown as Firestore;
       await setDoc(doc(db, "rooms", "room-flip-4"), {
@@ -1318,7 +1331,7 @@ test.describe("Integration — cohort gate: rooms cohort immutability", () => {
       cohort: "adult",
     });
     const db = joiner.firestore() as unknown as Firestore;
-    await assertSucceeds(
+    await assertFails(
       updateDoc(doc(db, "rooms", "room-flip-4"), {
         participantIds: ["200000214", "200000215"],
       }),
@@ -1380,7 +1393,13 @@ test.describe("Integration — rooms join gate (cross-cohort + third-party-id-sm
     );
   });
 
-  test("same-cohort caller CAN add self to participantIds via update", async () => {
+  test("P3 LOCKDOWN: same-cohort caller CANNOT add self to participantIds via direct update — must use /rooms/:roomId/join endpoint", async () => {
+    // Pre-P3 (before PR #859): the cross-cohort guard's positive twin — a
+    // same-cohort caller could update participantIds directly. Post-P3, ALL
+    // direct room-doc updates are denied. The cross-cohort negative case
+    // (line 1360) still passes — denied by `allow update: if false` rather
+    // than by the cohort gate, but denied is denied. The /join endpoint
+    // now enforces the same-cohort + uniqueId-smuggling rules server-side.
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore() as unknown as Firestore;
       await setDoc(doc(db, "rooms", "room-join-2"), {
@@ -1396,7 +1415,7 @@ test.describe("Integration — rooms join gate (cross-cohort + third-party-id-sm
       cohort: "adult",
     });
     const db = adult.firestore() as unknown as Firestore;
-    await assertSucceeds(
+    await assertFails(
       updateDoc(doc(db, "rooms", "room-join-2"), {
         participantIds: ["200000302", "200000303"],
       }),
