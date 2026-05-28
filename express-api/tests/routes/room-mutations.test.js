@@ -300,6 +300,30 @@ describe('POST /api/rooms/:roomId/seats/:seatIndex/leave', () => {
     expect(res.status).toBe(403);
     expect(mockTxnUpdate).not.toHaveBeenCalled();
   });
+
+  test('200 CLOSED-room cleanup: caller can still vacate their own seat after close', async () => {
+    // CLEANUP-ON-CLOSED invariant: self-targeted vacate endpoints stay
+    // available on CLOSED rooms so a client recovering from a crash/disconnect
+    // can drop its stale seat occupancy. Distinct from state-extending writes
+    // (/join, /name, /first-join, /claim) which 409 on CLOSED. Documenting
+    // INTENTIONAL design — changing /seats/:seatIndex/leave to reject CLOSED
+    // would break crash-recovery flows where the room transitioned to CLOSED
+    // between the client's last state read and its self-vacate retry.
+    mockTxnGet.mockResolvedValue(
+      snap(
+        mkRoom({
+          state: 'CLOSED',
+          seats: { 3: { userId: '10', state: 'OCCUPIED', isMuted: false } },
+        }),
+      ),
+    );
+    const res = await request(createApp(10)).post('/api/rooms/room-1/seats/3/leave').send({});
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).toHaveBeenCalledWith(
+      mockRoomRef,
+      expect.objectContaining({ 'seats.3.userId': null, 'seats.3.state': 'EMPTY' }),
+    );
+  });
 });
 
 describe('POST /api/rooms/:roomId/kick', () => {
@@ -502,6 +526,21 @@ describe('POST /api/rooms/:roomId/hosts (add) + DELETE .../hosts/:userId (remove
 
   test('200 owner demotes a host', async () => {
     mockTxnGet.mockResolvedValue(snap(mkRoom()));
+    const res = await request(createApp(1)).delete('/api/rooms/room-1/hosts/10').send({});
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).toHaveBeenCalledWith(
+      mockRoomRef,
+      expect.objectContaining({ hostIds: { __arrayRemove: ['10'] } }),
+    );
+  });
+
+  test('200 CLOSED-room cleanup: owner can still demote a host after close', async () => {
+    // CLEANUP-ON-CLOSED invariant: host removal is a role-clearing cleanup
+    // (mirror of /seats/:i/leave for seat occupancy). Documents intentional
+    // design — the inverse `/hosts POST` (promotion) is a state-extending
+    // write and is queued for a separate operator-gated PR to add a CLOSED
+    // gate.
+    mockTxnGet.mockResolvedValue(snap(mkRoom({ state: 'CLOSED' })));
     const res = await request(createApp(1)).delete('/api/rooms/room-1/hosts/10').send({});
     expect(res.status).toBe(200);
     expect(mockTxnUpdate).toHaveBeenCalledWith(
@@ -1180,6 +1219,21 @@ describe('POST /api/rooms/:roomId/decline-invite', () => {
     expect(mockTxnUpdate).not.toHaveBeenCalled();
   });
 
+  test('200 CLOSED-room cleanup: caller can still decline their pending invite after close', async () => {
+    // CLEANUP-ON-CLOSED invariant: declining is a self-targeted cleanup of
+    // the caller's own pendingInvites entry. The /close endpoint does NOT
+    // clear pendingInvites server-side, so a client that received an invite
+    // before the room closed can still cleanly decline post-close. Documents
+    // intentional design — pairs with /seats/:i/leave and /hosts DELETE
+    // pins.
+    mockTxnGet.mockResolvedValue(snap(mkRoom({ state: 'CLOSED', pendingInvites: { 50: '10' } })));
+    const res = await request(createApp(50)).post('/api/rooms/room-1/decline-invite').send({});
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).toHaveBeenCalledWith(mockRoomRef, {
+      'pendingInvites.50': { __delete: true },
+    });
+  });
+
   test('500 when the transaction throws', async () => {
     mockTxnGet.mockRejectedValue(new Error('boom'));
     const res = await request(createApp(50)).post('/api/rooms/room-1/decline-invite').send({});
@@ -1393,6 +1447,32 @@ describe('POST /api/rooms/:roomId/leave', () => {
     expect(res.status).toBe(200);
     expect(mockTxnUpdate).not.toHaveBeenCalled();
     expect(mockRtdbSet).not.toHaveBeenCalled();
+  });
+
+  test('200 CLOSED-room cleanup: caller can still leave after close', async () => {
+    // CLEANUP-ON-CLOSED invariant: room-leave is a self-targeted cleanup
+    // (caller removing themselves from participantIds + own seat). Mirrors
+    // /seats/:i/leave + /decline-invite + /hosts DELETE pins — the universal
+    // post-CLOSE allowance is "drop your own state, never extend the room's".
+    // Documents intentional design.
+    mockTxnGet.mockResolvedValue(
+      snap(
+        mkRoom({
+          state: 'CLOSED',
+          seats: { 3: { userId: '10', state: 'OCCUPIED', isMuted: false } },
+        }),
+      ),
+    );
+    const res = await request(createApp(10)).post('/api/rooms/room-1/leave').send({});
+    expect(res.status).toBe(200);
+    expect(mockTxnUpdate).toHaveBeenCalledWith(
+      mockRoomRef,
+      expect.objectContaining({
+        participantIds: { __arrayRemove: ['10'] },
+        'seats.3.userId': null,
+        'seats.3.state': 'EMPTY',
+      }),
+    );
   });
 
   test('500 when the transaction throws', async () => {
