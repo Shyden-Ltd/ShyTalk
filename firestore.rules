@@ -205,48 +205,36 @@ service cloud.firestore {
             || request.resource.data.get('cohort', '') == 'minor')
         && string(callerUniqueId()) == request.resource.data.ownerId;
 
-      // Update: owner, current participant, or new user joining (adding themselves to participantIds/firstJoinTimestamps only)
-      // ownerId and participantIds store String uniqueIds; callerUniqueId() is a Number (custom claim).
-      // Cast to string for comparison to avoid silent type-mismatch failures.
+      // POST-LOCKDOWN (PR #858 server-authz cutover, this PR): client-side
+      // room-doc UPDATEs are denied. ALL room-doc mutations now route through
+      // the Admin-SDK Express endpoints in
+      // `express-api/src/routes/room-mutations.js`, which enforce the ChatRoom
+      // role/state gates server-side and apply seat changes transactionally
+      // (the Admin SDK bypasses these rules).
       //
-      // UK OSA #17 PR 7 — `cohort` is immutable post-create for non-
-      // admin callers. Even the owner cannot rewrite the cohort tag;
-      // if a legitimate cohort change is needed (admin DOB-modify),
-      // the migration script + admin-SDK path handle the rewrite.
-      // Allowing client-side cohort mutation would let a minor owner
-      // flip their room to 'adult' after creation, defeating the
-      // gate. Admin bypass is via the firestore Admin SDK directly,
-      // not via these rules.
+      // What still goes through this `match /rooms/{roomId}` block:
+      //   - read  (same-cohort gate above) — unchanged
+      //   - create (validated cohort + owner==caller) — unchanged
+      //   - delete (owner-only, below)        — unchanged; rarely used,
+      //     closeRoom writes `state: 'CLOSED'` rather than deleting
       //
-      // The joiner branch additionally gates on `cohortMatchesCaller()`
-      // — without this, a cross-cohort caller could add themselves to
-      // participantIds via the affectedKeys allow-list WITHOUT ever
-      // reading the room (the rules engine reads `resource.data`
-      // server-side for diff computation, bypassing the read gate).
-      // The other two branches (owner, existing participant) are
-      // implicitly cohort-safe: a participant was already cohort-
-      // checked at their own join time; an owner is by construction
-      // the room creator who set the cohort tag.
-      // SECURITY: the joiner branch must ONLY allow adding the caller
-      // themselves — without the `removeAll(...).size() == 1` plus
-      // membership check, an attacker could write
-      // `participantIds: [...existing, callerId, victimId]` and drag a
-      // third-party uniqueId into the room. Downstream read gates
-      // would then expose the victim's id to other participants via
-      // the room doc's `participantIds` field. The strict +1-element
-      // shape closes that hole.
-      allow update: if request.auth != null
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['cohort']))
-        && (string(callerUniqueId()) == resource.data.ownerId
-            || string(callerUniqueId()) in resource.data.participantIds
-            || (request.resource.data.diff(resource.data).affectedKeys()
-                  .hasOnly(['participantIds', 'firstJoinTimestamps'])
-                && string(callerUniqueId()) in request.resource.data.participantIds
-                && request.resource.data.participantIds
-                     .removeAll(resource.data.participantIds).size() == 1
-                && string(callerUniqueId()) in
-                     request.resource.data.participantIds.removeAll(resource.data.participantIds)
-                && cohortMatchesCaller()));
+      // What MOVED to server endpoints (formerly granted by the old, complex
+      // update rule with its joiner / participant / owner branches):
+      //   POST   /api/rooms/:id/seats/:i/{claim,accept-invite,leave,remove,move}
+      //   PATCH  /api/rooms/:id/seats/:i/mute
+      //   POST   /api/rooms/:id/{kick,hosts,owner-away,owner-returned,close,
+      //                          join,decline-invite,leave,disconnect-user,
+      //                          first-join}
+      //   PATCH  /api/rooms/:id/{name,require-approval}
+      //   DELETE /api/rooms/:id/hosts/:userId
+      //
+      // `currentRoomId` remains a SELF-write on the user-doc (see the
+      // `users/{uniqueId}` update rule above — `currentRoomId` is not in the
+      // server-only deny-list) so joinRoom / leaveRoom / acceptInvite can keep
+      // setting/clearing it client-side after their corresponding endpoint
+      // call. Subcollections (messages, seat-requests, etc.) keep their
+      // existing rules — only the room DOC's update verb is locked down here.
+      allow update: if false;
       // Delete: only owner
       allow delete: if request.auth != null
         && string(callerUniqueId()) == resource.data.ownerId;
