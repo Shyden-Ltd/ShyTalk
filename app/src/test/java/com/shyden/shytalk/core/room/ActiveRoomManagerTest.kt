@@ -4,6 +4,7 @@ import android.content.Context
 import com.shyden.shytalk.core.model.RoomRole
 import com.shyden.shytalk.core.model.RoomState
 import com.shyden.shytalk.core.util.Constants
+import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.remote.VoiceConnectionState
 import com.shyden.shytalk.data.remote.VoiceService
@@ -805,6 +806,44 @@ class ActiveRoomManagerTest {
             testScheduler.advanceTimeBy(Constants.PRESENCE_TIMEOUT_MS + 100)
 
             coVerify { roomRepository.removeDisconnectedUser("room-1", "user-2") }
+        }
+
+    @Test
+    fun `presence monitor - logs but does not crash when removeDisconnectedUser returns Error`() =
+        runTest {
+            // PR G — pre-fix this was fire-and-forget: a 409 (CLOSED room) from
+            // the presence monitor would silently no-op every grace-window
+            // tick with no diagnostic. Now the Resource.Error branch fires
+            // logW. The test pins: (a) the repo call still fires (server sees
+            // the attempted eviction + can log it), (b) no exception escapes
+            // the coroutine scope, (c) the grace timer is still cleared via
+            // `graceTimers.remove(userId)` so a SECOND presence-monitor cycle
+            // does not re-launch the same grace timer (regression guard for a
+            // future refactor that early-returns on Error before the timer cleanup).
+            coEvery {
+                roomRepository.removeDisconnectedUser("room-1", "user-2")
+            } returns Resource.Error("Room is closed")
+
+            manager.trackRoom("room-1")
+            val room =
+                TestData.createTestRoom(
+                    ownerId = currentUserId,
+                    participantIds = setOf(currentUserId, "user-2"),
+                )
+            manager.updateTrackedRoom(room)
+
+            presenceFlow.value = setOf(currentUserId)
+            testScheduler.advanceTimeBy(Constants.PRESENCE_TIMEOUT_MS + 100)
+
+            // (a) repo call fired despite the error
+            coVerify { roomRepository.removeDisconnectedUser("room-1", "user-2") }
+
+            // (c) second tick must NOT re-launch the grace timer — if the
+            // graceTimers cleanup were skipped on error, the second cycle
+            // would launch a fresh removeDisconnectedUser call. We pin that
+            // exactly ONE call fires across two consecutive presence cycles.
+            testScheduler.advanceTimeBy(Constants.PRESENCE_TIMEOUT_MS + 100)
+            coVerify(exactly = 1) { roomRepository.removeDisconnectedUser("room-1", "user-2") }
         }
 
     @Test

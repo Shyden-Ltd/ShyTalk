@@ -542,6 +542,36 @@ class RoomViewModelTest {
             coVerify { roomRepository.toggleMute("room-1", 3, true) }
         }
 
+    @Test
+    fun `forceMuteUser - logs but does not crash when toggleMute returns Error`() =
+        roomTest {
+            // PR G — pre-fix this was fire-and-forget: a 409 (CLOSED) or 5xx
+            // silently no-op'd. Now the Resource.Error branch fires logW. The
+            // test pins that (a) the repository was still called (server-side
+            // logs see the attempt), (b) no exception bubbles up to the
+            // coroutine scope, (c) no follow-up state mutation occurs (log-
+            // only contract — UI surfacing is queued for a separate PR).
+            viewModel = createViewModel()
+            val seats = TestData.createSeatsWithOwner(currentUserId).toMutableMap()
+            seats["3"] = TestData.createTestSeat(userId = "attendee-1", isMuted = false)
+            coEvery {
+                roomRepository.toggleMute("room-1", 3, true)
+            } returns Resource.Error("Room is closed")
+            emitRoomAsOwner(
+                TestData.createTestRoom(
+                    ownerId = currentUserId,
+                    participantIds = setOf(currentUserId, "attendee-1"),
+                    seats = seats,
+                ),
+            )
+            advanceUntilIdle()
+
+            viewModel.forceMuteUser(3)
+            advanceUntilIdle()
+
+            coVerify { roomRepository.toggleMute("room-1", 3, true) }
+        }
+
     // ===== moveSeat Tests =====
 
     @Test
@@ -2357,6 +2387,27 @@ class RoomViewModelTest {
     fun `addHost - owner can add a host`() =
         roomTest {
             viewModel = createViewModel()
+            emitRoomAsOwner()
+            advanceUntilIdle()
+
+            viewModel.addHost("user-2")
+            advanceUntilIdle()
+
+            coVerify { roomRepository.addHost("room-1", "user-2") }
+        }
+
+    @Test
+    fun `addHost - logs but does not crash when repository returns Error`() =
+        roomTest {
+            // PR G — pre-fix this was fire-and-forget: a 409 (CLOSED room) or
+            // any 5xx silently no-op'd. Now Resource.Error fires logW. Pin the
+            // contract: repo still called (server logs see the attempt), no
+            // crash, no state mutation occurs (log-only — UI surfacing queued
+            // for a separate PR).
+            viewModel = createViewModel()
+            coEvery {
+                roomRepository.addHost("room-1", "user-2")
+            } returns Resource.Error("Room is closed")
             emitRoomAsOwner()
             advanceUntilIdle()
 
