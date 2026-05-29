@@ -10014,6 +10014,132 @@ describe('Room-state setup Givens (j09 phase-scoped scenario setup)', () => {
   });
 });
 
+// ─── Admin-moderation setup Givens (j04 phase-scoped scenarios) ─────
+describe('Admin-moderation setup Givens (j04 phase-scoped scenario setup)', () => {
+  const { personas: PERSONAS } = require('../../scripts/provision-test-personas');
+  const hayato = PERSONAS.find((p) => p.id === 'P-06');
+  const greta = PERSONAS.find((p) => p.id === 'P-12');
+
+  test('"<admin> has reviewed <persona>\'s age-verification submission" — idempotent submission seed + ctx tracking', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: "Greta has reviewed Hayato's age-verification submission" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.reviewedSubmissions.has('Hayato')).toBe(true);
+    // Pending submission exists (idempotent — re-running the Given doesn't duplicate).
+    const subs = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith('ageVerificationSubmissions/'),
+    );
+    expect(subs).toHaveLength(1);
+  });
+
+  test('"<persona> has been downgraded to cohort=minor by <admin>" — flips cohort + writes audit row', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${hayato.uniqueId}`]: { cohort: 'adult', shyCoins: 100, followingIds: [50000010] },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Hayato has been downgraded to cohort=minor by Greta' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${hayato.uniqueId}`].cohort).toBe('minor');
+    expect(db._docs[`users/${hayato.uniqueId}`].isAgeVerified).toBe(false);
+    // shyCoins + followingIds preserved (merge: true)
+    expect(db._docs[`users/${hayato.uniqueId}`].shyCoins).toBe(100);
+    expect(db._docs[`users/${hayato.uniqueId}`].followingIds).toEqual([50000010]);
+    // Audit row written — String-coerced targetId/adminId per production
+    // wire format.
+    const audits = Object.entries(db._docs).filter(([k]) => k.startsWith('auditLog/'));
+    expect(audits).toHaveLength(1);
+    const [, audit] = audits[0];
+    expect(audit.action).toBe('age_verification.reject_and_dob_down');
+    expect(audit.targetId).toBe(String(hayato.uniqueId));
+    expect(audit.adminId).toBe(String(greta.uniqueId));
+  });
+
+  test('"<persona> has been downgraded to cohort=minor and has the Officia age-down PM" — composes downgrade + PM', async () => {
+    const db = makeStatefulFakeDb({ [`users/${hayato.uniqueId}`]: { cohort: 'adult' } });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'Hayato has been downgraded to cohort=minor and has the Officia age-down PM in his inbox',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${hayato.uniqueId}`].cohort).toBe('minor');
+    // Conversation between Officia (uniqueId 1) and Hayato — String-coerced
+    // per the production wire format.
+    const convs = Object.entries(db._docs).filter(([k]) => k.startsWith('conversations/'));
+    expect(convs).toHaveLength(1);
+    const [, conv] = convs[0];
+    expect(conv.participantIds).toEqual([String(1), String(hayato.uniqueId)]);
+    // Message from Officia with the age_seg_age_down_admin_pm key
+    const msgs = Object.entries(db._docs).filter(([k]) => k.startsWith('messages/'));
+    expect(msgs).toHaveLength(1);
+    const [, msg] = msgs[0];
+    expect(msg.senderId).toBe(String(1));
+    expect(msg.recipientId).toBe(String(hayato.uniqueId));
+    expect(msg.key).toBe('age_seg_age_down_admin_pm');
+  });
+
+  test('"<persona> has been downgraded... with followingIds still containing <ids>" — seeds + preserves followingIds', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'Hayato has been downgraded to cohort=minor with followingIds still containing 50000010 + 50000060',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${hayato.uniqueId}`].followingIds).toEqual([50000010, 50000060]);
+    expect(db._docs[`users/${hayato.uniqueId}`].cohort).toBe('minor');
+  });
+
+  test('"<persona> has been downgraded... with his pre-downgrade shyCoins=<N>" — preserves coins after downgrade', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'Hayato has been downgraded to cohort=minor with his pre-downgrade shyCoins=100',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${hayato.uniqueId}`].shyCoins).toBe(100);
+    expect(db._docs[`users/${hayato.uniqueId}`].cohort).toBe('minor');
+  });
+
+  test('unknown persona → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Zonk has been downgraded to cohort=minor by Greta' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('ctx.db missing → actionable error, not crash', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Given', text: 'Hayato has been downgraded to cohort=minor by Greta' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+});
+
 describe('Dialog confirm action (platform-dispatch)', () => {
   test('"X on Android confirms in the dialog" → driver', async () => {
     const spy = jest.fn(async () => undefined);

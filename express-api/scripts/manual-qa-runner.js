@@ -482,6 +482,107 @@ async function ensureKickedFromRoom(ctx, roomId, personaName) {
   });
 }
 
+// ─── Admin-moderation setup primitives (consumed by j04's downgrade
+//     Givens + reusable by j10/j11/j12's admin scenarios). ──
+//
+// j04's phase-scoped scenarios establish prior phases via setup Givens
+// like "Hayato has been downgraded to cohort=minor by Greta" — the
+// runner needs to mutate Firestore (users.cohort, auditLog,
+// ageVerificationSubmissions, conversations + messages) to match what
+// the production admin route would have written.
+
+async function seedPendingAgeVerificationSubmission(ctx, personaName) {
+  // Mirrors the existing "submitted an ageVerificationSubmission" matcher
+  // at line ~2032 — same doc-id pattern + status-lowercased so a follow-on
+  // "reject_and_dob_down" assertion finds it. The `{subId}` interpolation
+  // variable is also set so feature predicates referencing
+  // `ageVerificationSubmissions/{subId}` resolve to the seeded doc.
+  const personas = loadPersonas();
+  const persona = personas.get(personaName);
+  if (!persona?.uniqueId) {
+    throw new Error(`persona "${personaName}" not in registry`);
+  }
+  const docPath = `ageVerificationSubmissions/test-${persona.uniqueId}-pending`;
+  await ctx.db.doc(docPath).set({
+    userId: String(persona.uniqueId),
+    status: 'pending',
+    submittedAt: Date.now(),
+  });
+  if (ctx.scenarioVars && typeof ctx.scenarioVars.set === 'function') {
+    ctx.scenarioVars.set('subId', `test-${persona.uniqueId}-pending`);
+  }
+  return { docPath };
+}
+
+async function applyAgeDowngrade(ctx, personaName, adminPersonaName) {
+  // Mirrors the production /api/admin/age-verification/reject_and_dob_down
+  // route's writes (per express-api/src/routes/admin-age-verification.js
+  // reject_and_dob_down handler):
+  //   1. users/<persona>.cohort = 'minor'
+  //   2. users/<persona>.isAgeVerified = false
+  //   3. auditLog/<auto> with action='age_verification.reject_and_dob_down',
+  //      targetId=<persona>.uniqueId, adminId=<admin>.uniqueId
+  // Preserves: shyCoins, followingIds (intentional — see j04 docstring).
+  const personas = loadPersonas();
+  const persona = personas.get(personaName);
+  const admin = personas.get(adminPersonaName);
+  if (!persona?.uniqueId) {
+    throw new Error(`persona "${personaName}" not in registry`);
+  }
+  if (!admin?.uniqueId) {
+    throw new Error(`admin persona "${adminPersonaName}" not in registry`);
+  }
+  // Read-modify-set so shyCoins / followingIds / etc. are preserved.
+  const userRef = ctx.db.doc(`users/${persona.uniqueId}`);
+  await userRef.set(
+    { cohort: 'minor', isAgeVerified: false, dateOfBirth: 1305158400000 },
+    { merge: true },
+  );
+  const auditDocId = `${persona.uniqueId}-downgrade-${Date.now()}`;
+  await ctx.db.doc(`auditLog/${auditDocId}`).set({
+    action: 'age_verification.reject_and_dob_down',
+    targetId: String(persona.uniqueId),
+    adminId: String(admin.uniqueId),
+    timestamp: Date.now(),
+  });
+  return { auditDocId };
+}
+
+async function seedSystemPmFromOfficia(ctx, recipientPersonaName, key) {
+  // Officia is uniqueId 1 (SHYTALK_OFFICIAL). The PM flow writes:
+  //   1. conversations/<auto> with participantIds=[1, recipient]
+  //   2. messages/<auto> referencing that conversationId + the system PM key
+  // The runner's database assertions look up the conversation by
+  // participantIds + the message by sender + key, so the auto doc-IDs
+  // don't matter for lookup correctness.
+  const personas = loadPersonas();
+  const recipient = personas.get(recipientPersonaName);
+  if (!recipient?.uniqueId) {
+    throw new Error(`persona "${recipientPersonaName}" not in registry`);
+  }
+  const convId = `officia-${recipient.uniqueId}`;
+  // String-coerced uniqueIds match production writes (per server route
+  // pattern + the existing manual-qa-runner.js String(p.uniqueId)
+  // convention at lines 750, 2041, 3683, 3689, ...).
+  await ctx.db.doc(`conversations/${convId}`).set(
+    {
+      participantIds: [String(1), String(recipient.uniqueId)],
+      type: 'SYSTEM',
+      createdAt: Date.now(),
+    },
+    { merge: true },
+  );
+  const msgId = `${recipient.uniqueId}-${key}-${Date.now()}`;
+  await ctx.db.doc(`messages/${msgId}`).set({
+    senderId: String(1),
+    recipientId: String(recipient.uniqueId),
+    conversationId: convId,
+    key,
+    createdAt: Date.now(),
+  });
+  return { convId, msgId };
+}
+
 // ── Step matchers ───────────────────────────────────────────────────
 
 /**
@@ -9136,6 +9237,138 @@ const matchers = [
       }
     },
   },
+  // ── Admin-moderation setup Givens (j04 + reusable by j10/j11/j12) ──
+  //
+  // j04's 8-phase moderation flow (Greta downgrades Hayato) needs setup
+  // matchers that mutate Firestore directly via firebase-admin. Each
+  // matcher routes through the primitives above (seedPending...,
+  // applyAgeDowngrade, seedSystemPmFromOfficia) so a future schema
+  // change to the admin-route writes can be made in one place.
+  // Note: "<persona> submitted an ageVerificationSubmission with
+  // status=\"PENDING\" and an ID image showing DOB=..." is already
+  // handled by the earlier matcher at line ~2032. No new handler here.
+  {
+    // "Greta has reviewed Hayato's age-verification submission" —
+    // No state change beyond the existing PENDING submission (review is
+    // a UI-side action, not a Firestore write). Recorded on ctx so a
+    // follow-on "Greta's reject_and_dob_down" matcher can probe it.
+    pattern: /^([A-Z][a-z]+)\s+has reviewed ([A-Z][a-z]+)'s age-verification submission$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        // Ensure the PENDING submission exists for the named persona
+        // (idempotent — re-running this Given doesn't duplicate). The
+        // review action itself is UI-side; no Firestore write needed.
+        await seedPendingAgeVerificationSubmission(ctx, m[2]);
+        ctx.reviewedSubmissions = ctx.reviewedSubmissions || new Set();
+        ctx.reviewedSubmissions.add(m[2]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Hayato has been downgraded to cohort=minor by Greta"
+    pattern: /^([A-Z][a-z]+)\s+has been downgraded to cohort=minor by ([A-Z][a-z]+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await applyAgeDowngrade(ctx, m[1], m[2]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Hayato has been downgraded to cohort=minor and has the Officia
+    //  age-down PM in his inbox" — composes downgrade + system PM.
+    pattern:
+      /^([A-Z][a-z]+)\s+has been downgraded to cohort=minor and has the Officia age-down PM in his inbox$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        // Use the Background-default admin (Greta) when the Given omits
+        // the admin name. This pattern repeats in j04 — operator can
+        // refactor to take an explicit admin arg if a future scenario
+        // needs a different admin persona.
+        await applyAgeDowngrade(ctx, m[1], 'Greta');
+        await seedSystemPmFromOfficia(ctx, m[1], 'age_seg_age_down_admin_pm');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Hayato has been downgraded to cohort=minor with followingIds
+    //  still containing 50000010 + 50000060"
+    pattern:
+      /^([A-Z][a-z]+)\s+has been downgraded to cohort=minor with followingIds still containing ([\d, +]+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const personas = loadPersonas();
+        const persona = personas.get(m[1]);
+        if (!persona?.uniqueId) {
+          return { ok: false, error: `persona "${m[1]}" not in registry` };
+        }
+        // Parse the uniqueId list (comma + `+` separators allowed).
+        const ids = m[2]
+          .split(/[\s,+]+/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map(Number)
+          .filter((n) => Number.isFinite(n));
+        await ctx.db.doc(`users/${persona.uniqueId}`).set({ followingIds: ids }, { merge: true });
+        await applyAgeDowngrade(ctx, m[1], 'Greta');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Hayato has been downgraded to cohort=minor with his pre-downgrade
+    //  shyCoins=100"
+    pattern:
+      /^([A-Z][a-z]+)\s+has been downgraded to cohort=minor with his pre-downgrade shyCoins=(\d+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const personas = loadPersonas();
+        const persona = personas.get(m[1]);
+        if (!persona?.uniqueId) {
+          return { ok: false, error: `persona "${m[1]}" not in registry` };
+        }
+        const shyCoins = parseInt(m[2], 10);
+        await ctx.db.doc(`users/${persona.uniqueId}`).set({ shyCoins }, { merge: true });
+        await applyAgeDowngrade(ctx, m[1], 'Greta');
+        // Re-assert shyCoins survived the downgrade write (the downgrade
+        // helper uses merge:true so shyCoins is preserved — pin it).
+        await ctx.db.doc(`users/${persona.uniqueId}`).set({ shyCoins }, { merge: true });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  // Note: "Hayato received the age-down system PM from Officia" (j04:106)
+  // and "Hayato is in voice room <X> ... with mic open" (j04:98) are NOT
+  // added here:
+  //   - The "received the X system PM" wording collides with the existing
+  //     ASSERTION matcher at line ~4897 (which checks the
+  //     conversations/<convId>/messages subcollection for the PM) so adding
+  //     a setup-Given with the same pattern would shadow the assertion.
+  //   - The "is in voice room ... with mic open" handler had a hostId
+  //     read-back miss in unit tests that needs deeper debugging. Both
+  //     are tracked as follow-ups; the compose form
+  //     "Hayato has been downgraded ... and has the Officia age-down PM
+  //     in his inbox" already covers the j04 PM-state setup. The voice-
+  //     room precondition is only used by j04's "ejected when downgrade
+  //     hits" scenario, which can be left as STEP_NOT_IMPLEMENTED for
+  //     now and addressed in a follow-up PR.
   {
     // Wake 80 — "the response from <path>?<query> includes <Name>".
     // j15:62 — checks ctx.lastResponse.results[] for an entry matching
