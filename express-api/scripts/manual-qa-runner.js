@@ -2921,12 +2921,15 @@ const matchers = [
     pattern:
       /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on (Web Chromium|Web Safari|Web|Android|iOS Sim)\s+refreshes the rooms list$/,
     async handler(m, ctx) {
+      const name = m[1];
       const platform = m[3];
       if (platform.startsWith('Web')) {
         if (!ctx.webDriver?.webRefreshRoomsList) {
           return { ok: false, error: 'ctx.webDriver.webRefreshRoomsList not configured' };
         }
-        await ctx.webDriver.webRefreshRoomsList();
+        // Pass persona name — web driver maintains per-persona Page state
+        // (pageFor cache), so the refresh needs to target the right tab.
+        await ctx.webDriver.webRefreshRoomsList(name);
         return { ok: true };
       }
       if (platform === 'Android') {
