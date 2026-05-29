@@ -295,6 +295,183 @@ async function clearCrossCohortFollowsForUserDoc(db, uniqueId, newCohort) {
   return cleared;
 }
 
+// ─── Room-state setup primitives (consumed by j09 setup-Given handlers,
+//     and structured to scale to the other journey-tests setup-Givens). ──
+//
+// The long-scenario refactor in PR #874 split each journey's megascenario
+// into phase-focused scenarios sharing the Background. Each later scenario
+// establishes the prior phase's outcome via a setup-style `Given` so it
+// can run in isolation. Those Givens need handlers that mutate Firestore
+// directly via firebase-admin to bootstrap the test precondition — without
+// these, every refactored scenario emits a STEP_NOT_IMPLEMENTED finding.
+//
+// Design principles:
+//
+//   1. Idempotent: re-running a Given against the same scenario state must
+//      not error (handlers are run as setup; rerunning under polling/retry
+//      is legitimate).
+//   2. Stable roomId per title: derive a slug from the title so subsequent
+//      Givens referencing the same title hit the same room doc.
+//   3. ctx-cached host→room map: when a Given says "<host>'s room" without
+//      a title (e.g. "Ines is a non-seated participant in Theo's room"),
+//      resolve the most-recently-touched room owned by that host. Falls
+//      back to creating a default room if no prior reference.
+//   4. Use the persona registry's uniqueId — same indirection as the
+//      sign-in matchers — so a future persona rename doesn't require
+//      updating Givens.
+
+function roomIdFromTitle(title) {
+  // Slug: lowercase, replace non-alphanum with `-`, collapse + trim, cap
+  // at 64 chars (Firestore doc IDs prefer short stable strings + this
+  // keeps logs grep-able). Matches Firestore's auto-ID charset constraints
+  // (ROOM_NAME_PATTERN in express-api/src/routes/livekit.js).
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 64);
+}
+
+async function ensureRoomForHost(ctx, hostName, opts = {}) {
+  const personas = loadPersonas();
+  const host = personas.get(hostName);
+  if (!host?.uniqueId) {
+    throw new Error(`persona "${hostName}" not in registry`);
+  }
+  const title = opts.title || `${hostName}'s test room`;
+  const roomId = opts.roomId || roomIdFromTitle(title);
+  const roomRef = ctx.db.doc(`rooms/${roomId}`);
+  const snap = await roomRef.get();
+  const existing = snap.exists ? snap.data() : null;
+  // Default host seat 0 occupied + unmuted + publishing. The Given may
+  // override via opts.skipHostSeat — used by scenarios that test the
+  // "host's seat is empty" edge case.
+  const defaultSeats = opts.skipHostSeat
+    ? []
+    : [{ userId: host.uniqueId, muted: false, publishAllowed: true }];
+  const doc = {
+    id: roomId,
+    title,
+    hostId: host.uniqueId,
+    state: opts.state || existing?.state || 'OPEN',
+    visibility: opts.visibility || existing?.visibility || 'public',
+    cohort: opts.cohort || existing?.cohort || host.cohort || 'adult',
+    participantIds: existing?.participantIds || [host.uniqueId],
+    seats: existing?.seats || defaultSeats,
+    createdAt: existing?.createdAt || Date.now(),
+  };
+  await roomRef.set(doc);
+  // Cache so subsequent "<host>'s room" Givens resolve to this room.
+  ctx.lastRoomId = roomId;
+  ctx.roomsByHost = ctx.roomsByHost || {};
+  ctx.roomsByHost[hostName] = roomId;
+  return { roomId, doc };
+}
+
+async function resolveRoomForHost(ctx, hostName) {
+  // If a prior Given seeded a room for this host, reuse it. Otherwise
+  // create a default room — keeps Givens like "Ines is a non-seated
+  // participant in Theo's room" working even when Theo's room wasn't
+  // explicitly set up first (the scenario implies the room exists).
+  if (ctx.roomsByHost?.[hostName]) return ctx.roomsByHost[hostName];
+  const { roomId } = await ensureRoomForHost(ctx, hostName);
+  return roomId;
+}
+
+async function ensureParticipantInRoom(ctx, roomId, personaName) {
+  // Read-modify-set (instead of update + FieldValue.arrayUnion). These
+  // helpers are test pre-seeds running single-threaded against either dev
+  // Firestore or the fake-db in unit tests; the atomicity FieldValue would
+  // give doesn't matter, and the read-modify-set form works with both real
+  // Firestore + the existing makeStatefulFakeDb (which doesn't model
+  // FieldValue sentinels). Idempotent: Set.add dedups uniqueIds.
+  const personas = loadPersonas();
+  const persona = personas.get(personaName);
+  if (!persona?.uniqueId) {
+    throw new Error(`persona "${personaName}" not in registry`);
+  }
+  const roomRef = ctx.db.doc(`rooms/${roomId}`);
+  const snap = await roomRef.get();
+  if (!snap.exists) {
+    throw new Error(`room "${roomId}" not found — seed the room before participant Given`);
+  }
+  const data = snap.data() || {};
+  const existing = Array.isArray(data.participantIds) ? data.participantIds : [];
+  const merged = Array.from(new Set([...existing, persona.uniqueId]));
+  await roomRef.set({ participantIds: merged }, { merge: true });
+  return persona.uniqueId;
+}
+
+async function ensureSeatRequest(ctx, roomId, personaName, status = 'PENDING') {
+  // Use doc(generatedId).set() instead of collection().add() — Firestore-add
+  // returns a sentinel ref the test fake-db doesn't model, and the doc-ID
+  // form gives us a stable readable ID (persona+status+timestamp) that
+  // simplifies test assertions.
+  const personas = loadPersonas();
+  const persona = personas.get(personaName);
+  if (!persona?.uniqueId) {
+    throw new Error(`persona "${personaName}" not in registry`);
+  }
+  const docId = `${persona.uniqueId}-${status.toLowerCase()}-${Date.now()}`;
+  await ctx.db.doc(`rooms/${roomId}/seatRequests/${docId}`).set({
+    userId: persona.uniqueId,
+    status,
+    createdAt: Date.now(),
+  });
+}
+
+async function ensureSeatedInRoom(ctx, roomId, personaName, opts = {}) {
+  // Idempotent seat assignment: if the persona is already seated, update
+  // their seat fields in place; otherwise allocate the next empty index.
+  const personas = loadPersonas();
+  const persona = personas.get(personaName);
+  if (!persona?.uniqueId) {
+    throw new Error(`persona "${personaName}" not in registry`);
+  }
+  const roomRef = ctx.db.doc(`rooms/${roomId}`);
+  const snap = await roomRef.get();
+  if (!snap.exists) {
+    throw new Error(`room "${roomId}" not found — seed the room before the seated Given`);
+  }
+  const data = snap.data() || {};
+  const seats = Array.isArray(data.seats) ? data.seats.map((s) => s || null) : [];
+  let seatIndex = seats.findIndex((s) => s?.userId === persona.uniqueId);
+  if (seatIndex === -1) {
+    seatIndex = seats.findIndex((s) => !s || !s.userId);
+    if (seatIndex === -1) seatIndex = seats.length;
+  }
+  seats[seatIndex] = {
+    userId: persona.uniqueId,
+    muted: opts.muted ?? true,
+    publishAllowed: opts.publishAllowed ?? false,
+  };
+  await roomRef.set({ seats }, { merge: true });
+  return seatIndex;
+}
+
+async function ensureKickedFromRoom(ctx, roomId, personaName) {
+  // Read-modify-set (same rationale as ensureParticipantInRoom).
+  const personas = loadPersonas();
+  const persona = personas.get(personaName);
+  if (!persona?.uniqueId) {
+    throw new Error(`persona "${personaName}" not in registry`);
+  }
+  const roomRef = ctx.db.doc(`rooms/${roomId}`);
+  const snap = await roomRef.get();
+  if (!snap.exists) {
+    throw new Error(`room "${roomId}" not found — seed the room before the kicked Given`);
+  }
+  const data = snap.data() || {};
+  const filteredParticipants = (data.participantIds || []).filter((id) => id !== persona.uniqueId);
+  await roomRef.set({ participantIds: filteredParticipants }, { merge: true });
+  const kickDocId = `${persona.uniqueId}-${Date.now()}`;
+  await ctx.db.doc(`rooms/${roomId}/kickedIds/${kickDocId}`).set({
+    userId: persona.uniqueId,
+    kickedAt: Date.now(),
+  });
+}
+
 // ── Step matchers ───────────────────────────────────────────────────
 
 /**
@@ -8828,6 +9005,125 @@ const matchers = [
         };
       }
       return { ok: true };
+    },
+  },
+  // ── Room-state setup Givens (j09 phase-scoped scenarios) ──
+  //
+  // The long-scenario refactor (PR #874) split j09's 47-step megascenario
+  // into 10 phase-focused subscenarios sharing the Background sign-in.
+  // Each subscenario establishes the prior phase's outcome via a
+  // setup-style `Given` so it runs in isolation. These 8 matchers seed
+  // the corresponding Firestore state via the room-state primitives
+  // defined above. Together they unblock the 8 STEP_NOT_IMPLEMENTED
+  // findings on j09 (manual-qa-cycle-1.md, 2026-05-29).
+  //
+  // Composition: each handler routes through the primitives so a future
+  // schema change (seat shape, kickedIds collection name, etc.) needs
+  // one update at the helper level, not 8.
+  {
+    pattern: /^([A-Z][a-z]+)'s public room "([^"]+)" is OPEN$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await ensureRoomForHost(ctx, m[1], { title: m[2], state: 'OPEN', visibility: 'public' });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+)'s room "([^"]+)" has ([A-Z][a-z]+) joined as a participant$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const { roomId } = await ensureRoomForHost(ctx, m[1], { title: m[2] });
+        await ensureParticipantInRoom(ctx, roomId, m[3]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) is a non-seated participant in ([A-Z][a-z]+)'s room$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const roomId = await resolveRoomForHost(ctx, m[2]);
+        await ensureParticipantInRoom(ctx, roomId, m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) has a PENDING seat request in ([A-Z][a-z]+)'s room$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const roomId = await resolveRoomForHost(ctx, m[2]);
+        await ensureParticipantInRoom(ctx, roomId, m[1]);
+        await ensureSeatRequest(ctx, roomId, m[1], 'PENDING');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) is seated in ([A-Z][a-z]+)'s room with publish permission$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const roomId = await resolveRoomForHost(ctx, m[2]);
+        await ensureParticipantInRoom(ctx, roomId, m[1]);
+        await ensureSeatedInRoom(ctx, roomId, m[1], { muted: true, publishAllowed: true });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) is seated and unmuted in ([A-Z][a-z]+)'s room$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const roomId = await resolveRoomForHost(ctx, m[2]);
+        await ensureParticipantInRoom(ctx, roomId, m[1]);
+        await ensureSeatedInRoom(ctx, roomId, m[1], { muted: false, publishAllowed: true });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+) has been kicked from ([A-Z][a-z]+)'s room$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const roomId = await resolveRoomForHost(ctx, m[2]);
+        await ensureKickedFromRoom(ctx, roomId, m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    pattern: /^([A-Z][a-z]+)'s room "([^"]+)" is OPEN with ([A-Z][a-z]+) as a participant$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const { roomId } = await ensureRoomForHost(ctx, m[1], { title: m[2], state: 'OPEN' });
+        await ensureParticipantInRoom(ctx, roomId, m[3]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
     },
   },
   {

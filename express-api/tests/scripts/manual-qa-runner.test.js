@@ -9746,6 +9746,213 @@ describe('Voice room composite state-seed (X created a <vis> <cohort>-cohort roo
   });
 });
 
+// ─── Room-state setup Givens (j09 phase-scoped scenarios) ────────────
+//
+// 8 new matchers + 5 composable primitives added to unblock j09's
+// STEP_NOT_IMPLEMENTED findings after the long-scenario refactor (PR #874).
+// These tests pin each handler's Firestore mutations against the existing
+// makeStatefulFakeDb. The handlers use read-modify-set semantics (no
+// FieldValue.arrayUnion/arrayRemove) so the fake-db's plain set() merge
+// behaviour is sufficient.
+describe('Room-state setup Givens (j09 phase-scoped scenario setup)', () => {
+  const { personas: PERSONAS } = require('../../scripts/provision-test-personas');
+  const theo = PERSONAS.find((p) => p.id === 'P-10');
+  const alice = PERSONAS.find((p) => p.id === 'P-02');
+  const ines = PERSONAS.find((p) => p.id === 'P-11');
+
+  test('"<host>\'s public room \\"<title>\\" is OPEN" seeds a room doc with state=OPEN + visibility=public', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Theo\'s public room "Theo\'s Test Room" is OPEN' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const roomDocs = Object.entries(db._docs).filter(([k]) => k.startsWith('rooms/'));
+    expect(roomDocs).toHaveLength(1);
+    const [, room] = roomDocs[0];
+    expect(room.hostId).toBe(theo.uniqueId);
+    expect(room.state).toBe('OPEN');
+    expect(room.visibility).toBe('public');
+    expect(room.title).toBe("Theo's Test Room");
+    // Host is auto-seeded into participantIds + seats[0].
+    expect(room.participantIds).toContain(theo.uniqueId);
+    expect(room.seats[0].userId).toBe(theo.uniqueId);
+    // ctx caches the room for follow-on "<host>'s room" Givens.
+    expect(ctx.roomsByHost.Theo).toBeTruthy();
+    expect(ctx.lastRoomId).toBeTruthy();
+  });
+
+  test('"<host>\'s room \\"<title>\\" has <persona> joined as a participant" creates room + adds persona', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'Theo\'s room "Theo\'s Test Room" has Alice joined as a participant',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const [, room] = Object.entries(db._docs).filter(([k]) => k.startsWith('rooms/'))[0];
+    expect(room.participantIds).toContain(theo.uniqueId);
+    expect(room.participantIds).toContain(alice.uniqueId);
+  });
+
+  test('"<persona> is a non-seated participant in <host>\'s room" — auto-resolves host\'s room', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db });
+    // No prior room — handler auto-creates Theo's room with default title.
+    const r = await executeStep(
+      { kind: 'Given', text: "Ines is a non-seated participant in Theo's room" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const [, room] = Object.entries(db._docs).filter(([k]) => k.startsWith('rooms/'))[0];
+    expect(room.participantIds).toContain(ines.uniqueId);
+    // Ines is NOT in seats (just participantIds).
+    const inesSeats = (room.seats || []).filter((s) => s?.userId === ines.uniqueId);
+    expect(inesSeats).toHaveLength(0);
+  });
+
+  test('"<persona> has a PENDING seat request in <host>\'s room" creates participant + seatRequest subdoc', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db });
+    const r = await executeStep(
+      { kind: 'Given', text: "Ines has a PENDING seat request in Theo's room" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // Participant added.
+    const [, room] = Object.entries(db._docs).filter(([k]) => k.startsWith('rooms/'))[0];
+    expect(room.participantIds).toContain(ines.uniqueId);
+    // seatRequest doc written under rooms/<id>/seatRequests/
+    const seatReqs = Object.entries(db._docs).filter(([k]) => k.includes('/seatRequests/'));
+    expect(seatReqs).toHaveLength(1);
+    expect(seatReqs[0][1].userId).toBe(ines.uniqueId);
+    expect(seatReqs[0][1].status).toBe('PENDING');
+  });
+
+  test('"<persona> is seated in <host>\'s room with publish permission" — adds participant + seats persona unmuted-publishable', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db });
+    const r = await executeStep(
+      { kind: 'Given', text: "Ines is seated in Theo's room with publish permission" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const [, room] = Object.entries(db._docs).filter(([k]) => k.startsWith('rooms/'))[0];
+    const inesSeat = (room.seats || []).find((s) => s?.userId === ines.uniqueId);
+    expect(inesSeat).toBeDefined();
+    expect(inesSeat.publishAllowed).toBe(true);
+    expect(inesSeat.muted).toBe(true); // muted-by-default until unmuted Given fires
+  });
+
+  test('"<persona> is seated and unmuted in <host>\'s room" — seats + mic open', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db });
+    const r = await executeStep(
+      { kind: 'Given', text: "Ines is seated and unmuted in Theo's room" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const [, room] = Object.entries(db._docs).filter(([k]) => k.startsWith('rooms/'))[0];
+    const inesSeat = (room.seats || []).find((s) => s?.userId === ines.uniqueId);
+    expect(inesSeat.muted).toBe(false);
+    expect(inesSeat.publishAllowed).toBe(true);
+  });
+
+  test('"<persona> has been kicked from <host>\'s room" — removes from participantIds + adds kickedIds doc', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db });
+    // First add Ines as participant to prove the removal works.
+    await executeStep(
+      { kind: 'Given', text: "Ines is a non-seated participant in Theo's room" },
+      ctx,
+    );
+    const r = await executeStep(
+      { kind: 'Given', text: "Ines has been kicked from Theo's room" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const [, room] = Object.entries(db._docs).filter(([k]) => k.startsWith('rooms/'))[0];
+    expect(room.participantIds).not.toContain(ines.uniqueId);
+    const kicks = Object.entries(db._docs).filter(([k]) => k.includes('/kickedIds/'));
+    expect(kicks).toHaveLength(1);
+    expect(kicks[0][1].userId).toBe(ines.uniqueId);
+  });
+
+  test('"<host>\'s room \\"<title>\\" is OPEN with <persona> as a participant" — combined seed', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'Theo\'s room "Theo\'s Test Room" is OPEN with Alice as a participant',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const [, room] = Object.entries(db._docs).filter(([k]) => k.startsWith('rooms/'))[0];
+    expect(room.state).toBe('OPEN');
+    expect(room.title).toBe("Theo's Test Room");
+    expect(room.participantIds).toContain(alice.uniqueId);
+  });
+
+  // ── Idempotency + chain pins ──
+
+  test('idempotent: re-running the OPEN-with-participant Given does not duplicate participants', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db });
+    const step = {
+      kind: 'Given',
+      text: 'Theo\'s room "Theo\'s Test Room" is OPEN with Alice as a participant',
+    };
+    await executeStep(step, ctx);
+    await executeStep(step, ctx);
+    const [, room] = Object.entries(db._docs).filter(([k]) => k.startsWith('rooms/'))[0];
+    const aliceCount = (room.participantIds || []).filter((id) => id === alice.uniqueId).length;
+    expect(aliceCount).toBe(1);
+  });
+
+  test('chain: prior Given populates ctx.roomsByHost so subsequent "<host>\'s room" Givens hit the same doc', async () => {
+    // This is the critical pin for j09's scenario flow: each later
+    // scenario establishes prior phase via a setup Given that needs to
+    // resolve "Theo's room" to the same room a prior Given created.
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db });
+    await executeStep(
+      { kind: 'Given', text: 'Theo\'s public room "Theo\'s Test Room" is OPEN' },
+      ctx,
+    );
+    const roomIdAfterFirst = ctx.lastRoomId;
+    await executeStep(
+      { kind: 'Given', text: "Ines is a non-seated participant in Theo's room" },
+      ctx,
+    );
+    // Both Givens hit the same room — total room docs should still be 1.
+    const roomDocs = Object.entries(db._docs).filter(([k]) => k.match(/^rooms\/[^/]+$/));
+    expect(roomDocs).toHaveLength(1);
+    expect(roomDocs[0][0]).toBe(`rooms/${roomIdAfterFirst}`);
+    expect(roomDocs[0][1].participantIds).toContain(ines.uniqueId);
+  });
+
+  test('unknown persona name → error surfaced, not crashed', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db });
+    const r = await executeStep({ kind: 'Given', text: 'Zonk\'s public room "x" is OPEN' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('ctx.db missing → actionable error, not crash', async () => {
+    const ctx = makeCtx(); // no db
+    const r = await executeStep({ kind: 'Given', text: 'Theo\'s public room "x" is OPEN' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+});
+
 describe('Dialog confirm action (platform-dispatch)', () => {
   test('"X on Android confirms in the dialog" → driver', async () => {
     const spy = jest.fn(async () => undefined);
