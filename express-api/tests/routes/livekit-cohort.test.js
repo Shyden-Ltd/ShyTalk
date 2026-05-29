@@ -57,12 +57,26 @@ jest.mock('../../src/utils/log', () => ({
 
 const mockToJwt = jest.fn().mockResolvedValue('mock-jwt-token');
 const mockAddGrant = jest.fn();
+// Capture each constructed AccessToken instance so tests can introspect
+// the property assignments the route handler makes on it (metadata, etc.)
+// — needed for the UK OSA #17 PR 7 metadata-cohort claim pin.
+const mockAccessTokenInstances = [];
 
 jest.mock('livekit-server-sdk', () => ({
-  AccessToken: jest.fn().mockImplementation(() => ({
-    addGrant: mockAddGrant,
-    toJwt: mockToJwt,
-  })),
+  AccessToken: jest.fn().mockImplementation(() => {
+    const instance = {
+      addGrant: mockAddGrant,
+      toJwt: mockToJwt,
+      // metadata starts unset; the handler should explicitly assign it.
+      // Default `null` distinguishes "handler forgot to set it" (null,
+      // visible in assertions) from "handler set it to undefined"
+      // (which would also pass a `not.toBeDefined` but for the wrong
+      // reason). Pin tests can therefore detect either failure mode.
+      metadata: null,
+    };
+    mockAccessTokenInstances.push(instance);
+    return instance;
+  }),
 }));
 
 // ─── Region routing mock ─────────────────────────────────────────
@@ -125,6 +139,10 @@ beforeEach(() => {
   mockAdd.mockResolvedValue({ id: 'evt_abc' });
   mockCollection.mockReturnValue({ add: mockAdd });
   mockToJwt.mockResolvedValue('mock-jwt-token');
+  // Reset the AccessToken-instance ledger between tests so per-test
+  // assertions on `mockAccessTokenInstances.at(-1)` see only this
+  // test's mint, not a leak from a prior test.
+  mockAccessTokenInstances.length = 0;
 });
 
 // ─── Tests ───────────────────────────────────────────────────────
@@ -363,5 +381,103 @@ describe('POST /api/livekit/token — cohort gate', () => {
 
     expect(res.body.error).toBe('Internal server error');
     expect(AccessToken).not.toHaveBeenCalled();
+  });
+
+  // ─── UK OSA #17 PR 7 — defence-in-depth metadata.cohort JWT claim ──
+  //
+  // The Express cohort gate above refuses to mint a token whose caller
+  // cohort doesn't match the room — but that's the only line of defence
+  // unless the JWT itself carries the room's cohort. Stamping the cohort
+  // into the AccessToken's `metadata` claim lets the LiveKit server
+  // refuse a stale/mis-routed token at the SFU level too. Caught by
+  // j09's "LiveKit access token contains cohort claim matching the room"
+  // scenario on 2026-05-29 (manual-qa-cycle-1.md finding):
+  //   "JWT payload field metadata.cohort was undefined, expected adult"
+  // Root cause: route constructed AccessToken with identity+ttl only,
+  // and addGrant() never sets metadata. Fix: explicit
+  // `at.metadata = JSON.stringify({ cohort: roomCohort })`.
+  describe('metadata.cohort claim (PR 7 defence-in-depth)', () => {
+    test('JWT metadata is set to JSON-encoded cohort matching an adult room', async () => {
+      withRoomDoc({ _roomId: 'test-room', cohort: 'adult' });
+      const app = createApp({ cohort: 'adult', uniqueId: 99001 });
+      await request(app).post('/api/livekit/token').send({ roomName: 'test-room' }).expect(200);
+
+      const instance = mockAccessTokenInstances.at(-1);
+      expect(instance).toBeDefined();
+      expect(instance.metadata).toBe(JSON.stringify({ cohort: 'adult' }));
+    });
+
+    test('JWT metadata is set to JSON-encoded cohort matching a minor room', async () => {
+      withRoomDoc({ _roomId: 'test-room', cohort: 'minor' });
+      const app = createApp({ cohort: 'minor', uniqueId: 99001 });
+      await request(app).post('/api/livekit/token').send({ roomName: 'test-room' }).expect(200);
+
+      const instance = mockAccessTokenInstances.at(-1);
+      expect(instance).toBeDefined();
+      expect(instance.metadata).toBe(JSON.stringify({ cohort: 'minor' }));
+    });
+
+    test('JWT metadata follows the ROOM cohort, not the caller cohort (admin bypass case)', async () => {
+      // Admins can cross cohorts. The metadata stamped on the JWT must
+      // reflect the ROOM's cohort (not the admin's own) so that any
+      // LiveKit-server-side cohort policy still treats the connection
+      // as belonging to the room's cohort.
+      withRoomDoc({ _roomId: 'test-room', cohort: 'minor' });
+      const app = createApp({ cohort: 'adult', uniqueId: 90000001, admin: true });
+      await request(app).post('/api/livekit/token').send({ roomName: 'test-room' }).expect(200);
+
+      const instance = mockAccessTokenInstances.at(-1);
+      expect(instance).toBeDefined();
+      expect(instance.metadata).toBe(JSON.stringify({ cohort: 'minor' }));
+    });
+
+    test('JWT metadata is a STRING (not an object) — LiveKit SDK serializes it verbatim', async () => {
+      // Pin the wire format: the LiveKit SDK puts whatever you assign
+      // to `at.metadata` into the JWT's `metadata` claim. The agreed
+      // shape between client + server is a JSON-serialized object;
+      // any future maintainer who refactors to `at.metadata = { cohort
+      // }` (raw object) breaks the wire and the j09 JWT parse step.
+      withRoomDoc({ _roomId: 'test-room', cohort: 'adult' });
+      const app = createApp({ cohort: 'adult', uniqueId: 99001 });
+      await request(app).post('/api/livekit/token').send({ roomName: 'test-room' }).expect(200);
+
+      const instance = mockAccessTokenInstances.at(-1);
+      expect(typeof instance.metadata).toBe('string');
+      // And it must JSON.parse back to an object that has the cohort key.
+      expect(JSON.parse(instance.metadata)).toEqual({ cohort: 'adult' });
+    });
+
+    test('metadata is set BEFORE addGrant — clients reading `metadata` in connect-time event get the cohort', async () => {
+      // Order matters for clarity (and for any future SDK that snapshots
+      // mutable state at `addGrant` time). Pinning this prevents a
+      // future maintainer from accidentally moving the metadata line
+      // below the grant + getting silently-correct behaviour today
+      // that breaks on an SDK upgrade.
+      const callOrder = [];
+      const handler = jest.fn(() => callOrder.push('addGrant'));
+      mockAddGrant.mockImplementationOnce(handler);
+
+      withRoomDoc({ _roomId: 'test-room', cohort: 'adult' });
+      const app = createApp({ cohort: 'adult', uniqueId: 99001 });
+      await request(app).post('/api/livekit/token').send({ roomName: 'test-room' }).expect(200);
+
+      const instance = mockAccessTokenInstances.at(-1);
+      // metadata is set during the synchronous route handler before
+      // addGrant; both are done by the time the response returns.
+      expect(instance.metadata).toBe(JSON.stringify({ cohort: 'adult' }));
+      expect(handler).toHaveBeenCalled();
+    });
+
+    test('metadata is NOT set on the 404 cross-cohort denial path (no leak via mock instance)', async () => {
+      // The cross-cohort denial returns 404 before AccessToken is even
+      // constructed (per the existing 404 test). Verify no AccessToken
+      // instance was created — there's nothing to leak the cohort
+      // through, and metadata can't exist where the constructor never ran.
+      withRoomDoc({ _roomId: 'test-room', cohort: 'minor' });
+      const app = createApp({ cohort: 'adult', uniqueId: 99001 });
+      await request(app).post('/api/livekit/token').send({ roomName: 'test-room' }).expect(404);
+
+      expect(mockAccessTokenInstances).toHaveLength(0);
+    });
   });
 });

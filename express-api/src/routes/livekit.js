@@ -121,6 +121,20 @@ router.post('/livekit/token', async (req, res) => {
       ttl: '24h',
     });
 
+    // UK OSA #17 PR 7 — defence-in-depth cohort claim. The Express gate
+    // above already refuses to mint a token whose caller cohort doesn't
+    // match the room. Stamping the room's cohort onto the JWT metadata
+    // lets the LiveKit server reject a stale/mis-routed token at the
+    // SFU level too — if the API gate ever regresses, the LiveKit-side
+    // policy (or a future inspection at signal-time) can still see the
+    // cohort claim and refuse the connect. Stored as a JSON-serialized
+    // string per LiveKit's metadata convention (the SDK puts the raw
+    // value into the JWT's `metadata` claim verbatim; clients/servers
+    // JSON.parse it to recover the structured shape). Pinned by j09
+    // scenario "LiveKit access token contains cohort claim matching the
+    // room" in journey-tests/j09-voice-room-host.feature.
+    at.metadata = JSON.stringify({ cohort: roomCohort });
+
     at.addGrant({
       roomJoin: true,
       room: roomName,
