@@ -1329,6 +1329,67 @@ describe('Firestore bulk-query matcher (entries-matching)', () => {
   });
 });
 
+describe('ensureRoomForHost — exposes roomId as a {roomId} interpolation variable', () => {
+  // The runner's interpolateScenarioVars at line ~13693 substitutes
+  // {name} from ctx.scenarioVars. Setup-Given handlers (e.g. "Theo's
+  // public room is OPEN") that create a room need to register the
+  // generated roomId so later Then-steps like `rooms/{roomId}/...`
+  // resolve to the actual doc path. Pinned by 2 of j09's findings
+  // ("document rooms/{roomId} does not exist") on the 2026-05-29
+  // dispatch.
+
+  test('ensureRoom Given sets ctx.scenarioVars.get("roomId") to the seeded room id', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Theo\'s public room "Theo\'s Test Room" is OPEN' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.scenarioVars.get('roomId')).toBeTruthy();
+    // The roomId is the slug derived from the title.
+    expect(ctx.scenarioVars.get('roomId')).toMatch(/theo-s-test-room/);
+  });
+
+  test('subsequent step text interpolates {roomId} to the actual room id', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    // Phase 1: seed the room.
+    await executeStep(
+      { kind: 'Given', text: 'Theo\'s public room "Theo\'s Test Room" is OPEN' },
+      ctx,
+    );
+    const seededRoomId = ctx.scenarioVars.get('roomId');
+    // Phase 2: a later Then with `{roomId}` in the path should match the
+    // doc the prior Given wrote (not look up a literal `rooms/{roomId}`
+    // that doesn't exist).
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "rooms/{roomId}" with field "title" equal to "Theo\'s Test Room"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // Sanity: the doc is at the substituted path, not the literal one.
+    expect(db._docs[`rooms/${seededRoomId}`]).toBeDefined();
+    expect(db._docs[`rooms/{roomId}`]).toBeUndefined();
+  });
+
+  test('Given without ctx.scenarioVars (legacy callers) is a no-op for interpolation, not a crash', async () => {
+    // Defensive: some callers/tests build ctx without scenarioVars.
+    // The handler must gate the scenarioVars.set behind a typeof check
+    // so it doesn't TypeError on `undefined.set` and crash the runner.
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db }); // no scenarioVars
+    const r = await executeStep(
+      { kind: 'Given', text: 'Theo\'s public room "Theo\'s Test Room" is OPEN' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+});
+
 describe('Firestore bulk-query end-to-end via runFeatureFile', () => {
   function fetchOk() {
     return jest.fn(async (url) => {

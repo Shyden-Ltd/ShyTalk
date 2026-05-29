@@ -141,4 +141,4 @@ Feature: j09 — Theo hosts a public voice room
     When Marcus on Android POSTs /api/livekit/token with roomName="ra1"
     Then the response status is 404
     Then the response body does not include a token
-    Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 60000010, targetUniqueId: "ra1"}
+    Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: "60000010", targetUniqueId: "ra1"}
