@@ -106,7 +106,7 @@ Canlı küme için `--list` çalıştırın. Genel olarak paket şunları kapsar
 Yolculuklarda kimlik doğrulama her zaman **uygulama içi geliştirici persona
 seçicisini** kullanır — asla gerçek Google/Apple oturum açma değil.
 
-> **Yolculuk spesifikasyonlarına dair not.** `.project/test-plans/manual/j01-j19`
+> **Yolculuk spesifikasyonlarına dair not.** `journey-tests/j01-j19`
 > içindeki Gherkin planları kısmen _özlemseldir_: gönderilen uygulamanın sahip
 > olmadığı bir UI'ya atıfta bulunurlar (örneğin bir e-posta/parola kayıt ekranı,
 > gizli reşit olmayan sekmeleri, bir keşif ekranı). Bu nedenle çalıştırıcı, her

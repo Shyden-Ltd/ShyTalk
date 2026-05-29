@@ -102,7 +102,7 @@ node express-api/scripts/device-journey-runner.js --help
 여정에서의 인증은 항상 **인앱 dev 페르소나 선택기**를 사용합니다 — 실제
 Google/Apple 로그인은 결코 사용하지 않습니다.
 
-> **여정 사양에 대한 참고.** `.project/test-plans/manual/j01-j19`의 Gherkin
+> **여정 사양에 대한 참고.** `journey-tests/j01-j19`의 Gherkin
 > 계획은 부분적으로 *이상적(aspirational)*입니다: 출시된 앱에 없는 UI를
 > 참조합니다 (예: email/password 가입 화면, 숨겨진 미성년자 탭, discovery 화면).
 > 따라서 실행기는 각 여정의 실제 의도를 **실제** 앱 + Firestore + API에 대해

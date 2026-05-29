@@ -4,7 +4,7 @@
 # Runs the four steps that were previously four separate `!` commands:
 #   1. Idempotently ensure FIREBASE_DEV_API_KEY is in the server's .env.
 #   2. scp the dev-runner-bootstrap.sh to the server.
-#   3. scp the .project/test-plans/manual/ journey plan to the server.
+#   3. scp the journey-tests/ journey plan to the server.
 #   4. Execute the bootstrap on the server (which provisions personas and
 #      runs the manual-qa cycle against dev).
 #
@@ -70,9 +70,9 @@ scp_cmd \
 echo "✓ scripts uploaded"
 
 # ── Phase 3 — upload journey plan ────────────────────────────────────
-echo "== Phase 3: upload .project/test-plans/manual/ =="
-ssh_cmd "mkdir -p ~/express-api/.project/test-plans/manual"
-scp_cmd -r "${REPO_ROOT}/.project/test-plans/manual/" "ubuntu@${DEV_HOST}:~/express-api/.project/test-plans/"
+echo "== Phase 3: upload journey-tests/ =="
+ssh_cmd "mkdir -p ~/express-api/journey-tests"
+scp_cmd -r "${REPO_ROOT}/journey-tests/" "ubuntu@${DEV_HOST}:~/express-api/.project/test-plans/"
 echo "✓ journey plan uploaded"
 
 # ── Phase 4 — run bootstrap on the server ───────────────────────────

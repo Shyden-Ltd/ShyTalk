@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Manual Verification Ledger",
+  "description": "Tracks human sign-off on @manual Gherkin scenarios so /manual-qa --verify-ship-ready can gate deploys.",
+  "type": "object",
+  "required": ["entries"],
+  "additionalProperties": true,
+  "properties": {
+    "$schema": { "type": "string" },
+    "comment": { "type": "string" },
+    "entries": {
+      "type": "object",
+      "description": "Map from 'feature-file::scenario-key' to verification metadata.",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "lastVerifiedAt",
+          "lastVerifiedBy",
+          "lastVerifiedCommit",
+          "featureFileHash"
+        ],
+        "properties": {
+          "lastVerifiedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 UTC timestamp of the sign-off."
+          },
+          "lastVerifiedBy": {
+            "type": "string",
+            "description": "Email or stable handle of the human tester. Free-form."
+          },
+          "lastVerifiedCommit": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{7,40}$",
+            "description": "Short or full git SHA of HEAD at sign-off time."
+          },
+          "featureFileHash": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "description": "sha256 of the .feature file's full content at sign-off. Used as the primary staleness check."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Free-form tester notes — devices used, edge cases hit, observations. Useful when the verification later turns out to be wrong."
+          },
+          "deviceContext": {
+            "type": "object",
+            "description": "Devices the tester used during verification.",
+            "properties": {
+              "android": { "type": "string", "description": "e.g. 'OnePlus CPH2653 / Android 16'" },
+              "ios": { "type": "string", "description": "e.g. 'iPhone 17 Pro Sim / iOS 26.4'" },
+              "browsers": { "type": "array", "items": { "type": "string" }, "description": "e.g. ['Chrome 130', 'Firefox 132', 'Safari 18']" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

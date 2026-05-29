@@ -105,7 +105,7 @@ A autenticação nas jornadas sempre usa o **seletor de personas dev no app** �
 autenticação real do Google/Apple.
 
 > **Nota sobre as especificações das jornadas.** Os planos em Gherkin em
-> `.project/test-plans/manual/j01-j19` são parcialmente _aspiracionais_: eles referenciam
+> `journey-tests/j01-j19` são parcialmente _aspiracionais_: eles referenciam
 > UI que o app publicado não tem (por exemplo, uma tela de cadastro com e-mail/senha, abas de
 > menor ocultas, uma tela de descoberta). O executor, portanto, mapeia a intenção real de cada jornada
 > contra o app **real** + Firestore + API, e registra tais

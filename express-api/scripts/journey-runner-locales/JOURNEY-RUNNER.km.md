@@ -105,7 +105,7 @@ node express-api/scripts/device-journey-runner.js --help
 ការចូលគណនី Google/Apple ពិតប្រាកដឡើយ។
 
 > **កំណត់សម្គាល់អំពី specs របស់ដំណើរ។** ផែនការ Gherkin ក្នុង
-> `.project/test-plans/manual/j01-j19` គឺមួយផ្នែក _ជាក្តីសង្ឃឹម (aspirational)_៖ វាយោងទៅ
+> `journey-tests/j01-j19` គឺមួយផ្នែក _ជាក្តីសង្ឃឹម (aspirational)_៖ វាយោងទៅ
 > UI ដែលកម្មវិធីដែលបានចេញផ្សាយមិនមាន (ឧ. អេក្រង់ចុះឈ្មោះតាម email/password, ផ្ទាំង (tab) អនីតិជនលាក់,
 > អេក្រង់ស្វែងរក (discovery))។ ដូច្នេះកម្មវិធីដំណើរការ map បំណងពិតប្រាកដនៃដំណើរនីមួយៗ
 > ប្រឆាំងនឹងកម្មវិធី **ពិតប្រាកដ** + Firestore + API ហើយកត់ត្រាភាពខុសគ្នាបែបនេះ

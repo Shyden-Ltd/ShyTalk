@@ -105,7 +105,7 @@ Die Authentifizierung in den Journeys verwendet immer die **In-App-Dev-Persona-A
 echte Google-/Apple-Anmeldung.
 
 > **Hinweis zu den Journey-Specs.** Die Gherkin-Pläne in
-> `.project/test-plans/manual/j01-j19` sind teilweise _aspirational_: Sie verweisen auf
+> `journey-tests/j01-j19` sind teilweise _aspirational_: Sie verweisen auf
 > UI, die die ausgelieferte App nicht hat (z. B. einen E-Mail/Passwort-Registrierungsbildschirm, versteckte
 > Minderjährigen-Tabs, einen Discovery-Bildschirm). Der Runner bildet daher die tatsächliche Absicht jeder Journey
 > gegen die **tatsächliche** App + Firestore + API ab und protokolliert solche

@@ -89,10 +89,10 @@ ok "provisioner finished"
 # Phase 4 — run manual-qa runner --------------------------------------
 step "Phase 4: manual-qa runner cycle 1 against dev"
 # Requires the journey plan dir to exist on the server. If it doesn't, the
-# operator must scp .project/test-plans/manual/ here first.
-PLAN_DIR="${PLAN_DIR:-${HOME}/express-api/.project/test-plans/manual}"
+# operator must scp journey-tests/ here first.
+PLAN_DIR="${PLAN_DIR:-${HOME}/express-api/journey-tests}"
 if [ ! -d "$PLAN_DIR" ]; then
-  fail "PLAN_DIR not found at $PLAN_DIR — scp .project/test-plans/manual/ here first"
+  fail "PLAN_DIR not found at $PLAN_DIR — scp journey-tests/ here first"
 fi
 # FIREBASE_DEV_API_KEY is the Web API key from app/src/dev/google-services.json
 # `current_key` — a public client identifier, not a secret. The runner needs

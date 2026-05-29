@@ -12,7 +12,7 @@
  * clients send `roomName` to match `req.body.roomName` in
  * `express-api/src/routes/livekit.js`.
  *
- * This file scans every .feature in `.project/test-plans/manual/` for
+ * This file scans every .feature in `journey-tests/` for
  * each endpoint pinned below, and asserts the body uses the production
  * field name. Add a pin here whenever a new endpoint becomes the subject
  * of a journey scenario.
@@ -20,7 +20,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const FEATURE_DIR = path.join(__dirname, '..', '..', '..', '.project', 'test-plans', 'manual');
+const FEATURE_DIR = path.join(__dirname, '..', '..', '..', 'journey-tests');
 
 function readAllFeatures() {
   return fs
@@ -52,7 +52,7 @@ function linesReferencing(endpointPath, features) {
 describe('feature-file ↔ endpoint body-field contracts', () => {
   const features = readAllFeatures();
 
-  test('feature corpus is non-empty (guards a future move/rename of .project/test-plans/manual/)', () => {
+  test('feature corpus is non-empty (guards a future move/rename of journey-tests/)', () => {
     expect(features.length).toBeGreaterThan(0);
   });
 

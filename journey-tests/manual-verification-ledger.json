@@ -1,0 +1,5 @@
+{
+  "$schema": "./manual-verification-ledger.schema.json",
+  "comment": "Ledger of human-verified @manual scenarios. Each entry records who verified what, when, and against which commit. The /manual-qa --verify-ship-ready check fails if any @manual scenario lacks a fresh entry. Stale rules: (a) featureFileHash mismatch, (b) any file under the scenario's @source tag changed since lastVerifiedCommit, (c) verification > 30 days old. Update via /manual-qa interactive — do NOT edit by hand.",
+  "entries": {}
+}

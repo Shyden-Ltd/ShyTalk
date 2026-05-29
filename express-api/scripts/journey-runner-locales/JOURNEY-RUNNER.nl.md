@@ -111,7 +111,7 @@ Authenticatie in reizen gebruikt altijd de **in-app dev persona-kiezer** — noo
 echte Google/Apple-aanmelding.
 
 > **Opmerking over de reisspecificaties.** De Gherkin-plannen in
-> `.project/test-plans/manual/j01-j19` zijn deels _aspirationeel_: ze verwijzen
+> `journey-tests/j01-j19` zijn deels _aspirationeel_: ze verwijzen
 > naar UI die de uitgebrachte app niet heeft (bijv. een email/password
 > aanmeldscherm, verborgen tabs voor minderjarigen, een discovery-scherm). De
 > runner mapt daarom de echte intentie van elke reis tegen de **werkelijke** app +

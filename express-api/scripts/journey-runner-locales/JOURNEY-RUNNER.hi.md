@@ -100,7 +100,7 @@ journeys में authentication हमेशा **इन-ऐप dev persona pi
 असली Google/Apple sign-in नहीं।
 
 > **journey specs पर एक नोट।**
-> `.project/test-plans/manual/j01-j19` में Gherkin plans आंशिक रूप से _aspirational_ हैं: वे
+> `journey-tests/j01-j19` में Gherkin plans आंशिक रूप से _aspirational_ हैं: वे
 > ऐसे UI का संदर्भ देते हैं जो शिप किए गए ऐप में नहीं है (उदा. एक email/password signup स्क्रीन, छिपे हुए
 > minor tabs, एक discovery स्क्रीन)। इसलिए रनर हर journey के असली
 > इरादे को **वास्तविक** ऐप + Firestore + API के विरुद्ध मैप करता है, और ऐसी

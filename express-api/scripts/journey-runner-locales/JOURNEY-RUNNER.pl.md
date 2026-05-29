@@ -114,7 +114,7 @@ Uwierzytelnianie w ścieżkach zawsze korzysta z **wbudowanego wybieraka person
 deweloperskich** — nigdy z prawdziwego logowania Google/Apple.
 
 > **Uwaga dotycząca specyfikacji ścieżek.** Plany Gherkin w
-> `.project/test-plans/manual/j01-j19` są częściowo _aspiracyjne_: odwołują się
+> `journey-tests/j01-j19` są częściowo _aspiracyjne_: odwołują się
 > do UI, którego wydana aplikacja nie ma (np. ekran rejestracji
 > email/password, ukryte zakładki dla niepełnoletnich, ekran discovery). Dlatego
 > runner mapuje rzeczywistą intencję każdej ścieżki względem **rzeczywistej**

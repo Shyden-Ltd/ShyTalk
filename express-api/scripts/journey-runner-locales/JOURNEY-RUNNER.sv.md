@@ -105,7 +105,7 @@ Autentisering i resor använder alltid den **inbyggda dev-personaväljaren** —
 riktig inloggning med Google/Apple.
 
 > **Notering om resespecifikationerna.** Gherkin-planerna i
-> `.project/test-plans/manual/j01-j19` är delvis _önsketänkande_: de refererar till
+> `journey-tests/j01-j19` är delvis _önsketänkande_: de refererar till
 > UI som den utskeppade appen inte har (t.ex. en registreringsskärm med e-post/lösenord, dolda
 > flikar för minderåriga, en upptäcktsskärm). Köraren mappar därför varje resas verkliga avsikt
 > mot den **faktiska** appen + Firestore + API och registrerar sådana

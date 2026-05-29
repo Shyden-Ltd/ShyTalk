@@ -105,7 +105,7 @@ L'authentification dans les parcours utilise toujours le **sélecteur de persona
 la véritable connexion Google/Apple.
 
 > **Note sur les spécifications des parcours.** Les plans en Gherkin dans
-> `.project/test-plans/manual/j01-j19` sont en partie _aspirationnels_ : ils font référence à
+> `journey-tests/j01-j19` sont en partie _aspirationnels_ : ils font référence à
 > une UI que l'application livrée ne possède pas (p. ex. un écran d'inscription par e-mail/mot de passe, des onglets cachés
 > pour les mineurs, un écran de découverte). L'exécuteur fait donc correspondre l'intention réelle de chaque parcours
 > à l'application **réelle** + Firestore + API, et consigne de telles

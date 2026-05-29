@@ -102,7 +102,7 @@ journey での認証は常に**アプリ内の dev persona picker** を使用し
 Google/Apple sign-in は決して使用しません。
 
 > **journey の仕様に関する注記。**
-> `.project/test-plans/manual/j01-j19` の Gherkin プランは、部分的に*理想を述べたもの*です。
+> `journey-tests/j01-j19` の Gherkin プランは、部分的に*理想を述べたもの*です。
 > リリース済みアプリには無い UI を参照しています（例: email/password のサインアップ画面、隠された
 > minor のタブ、discovery 画面）。そのためランナーは、各 journey の実際の
 > 意図を**実際の**アプリ + Firestore + API に対してマッピングし、そうした

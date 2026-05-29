@@ -105,7 +105,7 @@ L'autenticazione nei journey usa sempre il **selettore di persona dev in-app** â
 il vero sign-in Google/Apple.
 
 > **Nota sulle specifiche dei journey.** I piani Gherkin in
-> `.project/test-plans/manual/j01-j19` sono in parte _aspirazionali_: fanno riferimento a
+> `journey-tests/j01-j19` sono in parte _aspirazionali_: fanno riferimento a
 > UI che l'app rilasciata non ha (ad es. una schermata di registrazione email/password, tab
 > minor nascosti, una schermata di discovery). Il runner quindi mappa l'intento reale di
 > ogni journey rispetto all'app + Firestore + API **effettivi**, e registra tali

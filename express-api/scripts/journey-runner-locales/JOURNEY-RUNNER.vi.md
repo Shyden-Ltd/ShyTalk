@@ -111,7 +111,7 @@ Xác thực trong các hành trình luôn dùng **bộ chọn persona dành cho 
 ngay trong ứng dụng** — không bao giờ dùng đăng nhập Google/Apple thật.
 
 > **Lưu ý về các đặc tả hành trình.** Các kế hoạch Gherkin trong
-> `.project/test-plans/manual/j01-j19` một phần mang tính _kỳ vọng_: chúng tham
+> `journey-tests/j01-j19` một phần mang tính _kỳ vọng_: chúng tham
 > chiếu đến UI mà ứng dụng đã phát hành không có (ví dụ một màn hình đăng ký bằng
 > email/mật khẩu, các tab ẩn cho vị thành niên, một màn hình khám phá). Do đó
 > trình chạy ánh xạ ý định thực sự của mỗi hành trình đối chiếu với ứng dụng

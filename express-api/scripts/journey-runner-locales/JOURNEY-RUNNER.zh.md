@@ -95,7 +95,7 @@ node express-api/scripts/device-journey-runner.js --help
 
 旅程中的身份验证始终使用**应用内开发者 persona 选择器**——绝不使用真实的 Google/Apple 登录。
 
-> **关于旅程规范的说明。** `.project/test-plans/manual/j01-j19` 中的 Gherkin 计划部分是
+> **关于旅程规范的说明。** `journey-tests/j01-j19` 中的 Gherkin 计划部分是
 > _理想化的_：它们引用了已发布应用并不具备的 UI（例如电子邮件/密码注册页面、隐藏的未成年标签页、
 > 一个发现页面）。因此运行器将每个旅程的真实意图对照**实际**应用 + Firestore + API 进行映射，
 > 并将此类偏差记录为发现项，而不是因虚构内容而失败。

@@ -4,7 +4,7 @@
 /**
  * Provision the journey-test persona cast onto Firebase Auth + Firestore.
  *
- * Source of truth: .project/test-plans/manual/_personas.md.
+ * Source of truth: journey-tests/_personas.md.
  *
  * Creates or updates the stable persona accounts (P-02..P-19). Ephemeral
  * personas (P-01 Adam, P-03 Mia) are NOT provisioned — they are created

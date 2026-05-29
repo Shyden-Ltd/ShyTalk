@@ -3,7 +3,7 @@
 /**
  * /manual-qa step-binding runner — MVP.
  *
- * Parses Gherkin .feature files in `.project/test-plans/manual/` and
+ * Parses Gherkin .feature files in `journey-tests/` and
  * drives the API + Firebase Auth REST + Firestore Admin (via the
  * project's firebase-admin) layer. UI drivers (adb / simctl / Playwright
  * MCP) are NOT in this MVP — Scenarios that need them are skipped with
@@ -21,7 +21,7 @@
  * CLI usage:
  *   PERSONAS_PASSWORD=... node scripts/manual-qa-runner.js \
  *     --target dev \
- *     --plan-dir ../.project/test-plans/manual \
+ *     --plan-dir ../journey-tests \
  *     [--journey j07-discovery-follow-pm.feature]
  *
  * Exit codes:
@@ -14092,7 +14092,7 @@ async function main() {
     else if (flat[i] === '--headed') opts.headed = true;
   }
   opts.target = opts.target || 'dev';
-  opts.planDir = opts.planDir || path.resolve(__dirname, '../../.project/test-plans/manual');
+  opts.planDir = opts.planDir || path.resolve(__dirname, '../../journey-tests');
   opts.cycle = opts.cycle || 1;
   opts.driver = opts.driver || 'stub';
 

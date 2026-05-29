@@ -105,7 +105,7 @@ Autentikasi dalam journey selalu menggunakan **pemilih persona dev dalam aplikas
 sign-in Google/Apple asli.
 
 > **Catatan tentang spesifikasi journey.** Rencana Gherkin di
-> `.project/test-plans/manual/j01-j19` sebagian bersifat _aspirasional_: mereka mereferensikan
+> `journey-tests/j01-j19` sebagian bersifat _aspirasional_: mereka mereferensikan
 > UI yang tidak dimiliki aplikasi yang dirilis (mis. layar pendaftaran email/kata sandi, tab
 > minor tersembunyi, layar discovery). Oleh karena itu runner memetakan maksud nyata setiap journey
 > terhadap aplikasi + Firestore + API yang **sebenarnya**, dan mencatat

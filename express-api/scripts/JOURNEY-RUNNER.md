@@ -103,7 +103,7 @@ Authentication in journeys always uses the **in-app dev persona picker** — nev
 real Google/Apple sign-in.
 
 > **Note on the journey specs.** The Gherkin plans in
-> `.project/test-plans/manual/j01-j19` are partly _aspirational_: they reference
+> `journey-tests/j01-j19` are partly _aspirational_: they reference
 > UI the shipped app doesn't have (e.g. an email/password signup screen, hidden
 > minor tabs, a discovery screen). The runner therefore maps each journey's real
 > intent against the **actual** app + Firestore + API, and records such
