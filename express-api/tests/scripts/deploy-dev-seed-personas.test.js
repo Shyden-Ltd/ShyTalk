@@ -176,7 +176,29 @@ describe('seed-test-personas composite action — interface', () => {
     );
     expect(nodeLine).toBeDefined();
     expect(nodeLine).not.toContain('-r dotenv');
-    // Positive form: the bare `node express-api/scripts/...` invocation.
-    expect(nodeLine).toMatch(/node\s+express-api\/scripts\/provision-test-personas\.js/);
+  });
+
+  test('cd-s into express-api before running node (so require("firebase-admin") resolves)', () => {
+    // The provision script does `require('firebase-admin')` etc. — those
+    // resolve against `express-api/node_modules`, NOT the repo-root.
+    // Running the script with a `express-api/scripts/...` path from repo
+    // root fails because the repo root has no `node_modules/firebase-admin`.
+    // Caught in run 26637428443: `Cannot find module 'firebase-admin'`.
+    //
+    // Pin both: (1) a `cd express-api` precedes the node line, (2) the
+    // node line uses a bare relative path `scripts/provision-test-...`,
+    // NOT the repo-root-prefixed `express-api/scripts/provision-test-...`.
+    const lines = SEED_ACTION.split('\n');
+    const cdIdx = lines.findIndex((l) => /^\s*cd\s+express-api\s*$/.test(l));
+    const nodeIdx = lines.findIndex(
+      (l) => /^\s*node\s+/.test(l) && l.includes('provision-test-personas.js'),
+    );
+    expect(cdIdx).toBeGreaterThan(-1);
+    expect(nodeIdx).toBeGreaterThan(cdIdx);
+    expect(lines[nodeIdx]).toMatch(/^\s*node\s+scripts\/provision-test-personas\.js\s*$/);
+    // Anti-pattern guard: must NOT use repo-root-prefixed path on the
+    // node line (would fail because firebase-admin lives in
+    // express-api/node_modules, not the repo-root resolution path).
+    expect(lines[nodeIdx]).not.toContain('express-api/scripts/');
   });
 });

@@ -44,12 +44,16 @@ runs:
         trap 'rm -f /tmp/firebase-sa-seed.json' EXIT
         export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa-seed.json
         export FIREBASE_PROJECT_ID="$PROJECT"
-        # NB: NO `-r dotenv/config` preload here — the script's docstring
+        # `cd express-api` so the script's `require('firebase-admin')` etc.
+        # resolves against `express-api/node_modules`. Running with a
+        # `express-api/scripts/...` path from repo root fails because the
+        # repo root has no `node_modules/firebase-admin` (caught in run
+        # 26637428443: `Cannot find module 'firebase-admin'`).
+        #
+        # NB: NO `-r dotenv/config` preload — the script's docstring
         # usage example uses dotenv because it assumes a `.env` file on the
         # dev Express host. In CI the secrets are exported as env vars
         # directly (PERSONAS_PASSWORD, GOOGLE_APPLICATION_CREDENTIALS,
-        # FIREBASE_PROJECT_ID all set above), so dotenv adds nothing and
-        # the preload fails with `Cannot find module 'dotenv/config'`
-        # because dotenv lives in express-api/node_modules, not the repo-
-        # root node resolution path. Caught in run 26636553597.
-        node express-api/scripts/provision-test-personas.js
+        # FIREBASE_PROJECT_ID all set above), so dotenv adds nothing.
+        cd express-api
+        node scripts/provision-test-personas.js
