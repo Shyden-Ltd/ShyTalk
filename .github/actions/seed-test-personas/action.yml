@@ -47,13 +47,19 @@ runs:
         # `cd express-api` so the script's `require('firebase-admin')` etc.
         # resolves against `express-api/node_modules`. Running with a
         # `express-api/scripts/...` path from repo root fails because the
-        # repo root has no `node_modules/firebase-admin` (caught in run
-        # 26637428443: `Cannot find module 'firebase-admin'`).
-        #
+        # repo root has no `node_modules/firebase-admin`.
+        cd express-api
+        # `npm ci --omit=dev` installs production deps (firebase-admin,
+        # firebase-admin/firestore, etc.) into express-api/node_modules.
+        # The OUTER deploy-backend-dev workflow only installs deps on the
+        # REMOTE London VM (via ssh), NOT on the GitHub runner — so without
+        # this step the runner's express-api/node_modules is empty and
+        # `require('firebase-admin')` fails. Caught in runs 26637428443 +
+        # 26638445667 (both 'Cannot find module firebase-admin').
+        npm ci --omit=dev --no-audit --no-fund
         # NB: NO `-r dotenv/config` preload — the script's docstring
         # usage example uses dotenv because it assumes a `.env` file on the
         # dev Express host. In CI the secrets are exported as env vars
         # directly (PERSONAS_PASSWORD, GOOGLE_APPLICATION_CREDENTIALS,
         # FIREBASE_PROJECT_ID all set above), so dotenv adds nothing.
-        cd express-api
         node scripts/provision-test-personas.js

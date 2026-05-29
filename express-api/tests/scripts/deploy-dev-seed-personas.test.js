@@ -201,4 +201,26 @@ describe('seed-test-personas composite action — interface', () => {
     // express-api/node_modules, not the repo-root resolution path).
     expect(lines[nodeIdx]).not.toContain('express-api/scripts/');
   });
+
+  test('runs `npm ci --omit=dev` before node (installs firebase-admin on the runner)', () => {
+    // The outer deploy-backend-dev workflow only npm-installs on the REMOTE
+    // London VM via ssh — the GitHub runner's `express-api/node_modules`
+    // is empty when the seed step starts. Without an install, every
+    // `require('firebase-admin')` etc. in the provision script fails
+    // MODULE_NOT_FOUND. Caught in runs 26637428443 + 26638445667.
+    //
+    // Pin: an `npm ci` line precedes the node line, has `--omit=dev` (we
+    // only need production deps), and is inside the express-api CWD
+    // (after the `cd express-api`).
+    const lines = SEED_ACTION.split('\n');
+    const cdIdx = lines.findIndex((l) => /^\s*cd\s+express-api\s*$/.test(l));
+    const installIdx = lines.findIndex((l) => /^\s*npm ci\b/.test(l));
+    const nodeIdx = lines.findIndex(
+      (l) => /^\s*node\s+/.test(l) && l.includes('provision-test-personas.js'),
+    );
+    expect(cdIdx).toBeGreaterThan(-1);
+    expect(installIdx).toBeGreaterThan(cdIdx);
+    expect(nodeIdx).toBeGreaterThan(installIdx);
+    expect(lines[installIdx]).toContain('--omit=dev');
+  });
 });
