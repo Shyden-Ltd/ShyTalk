@@ -132,6 +132,7 @@ Feature: j09 — Theo hosts a public voice room
   @regression @cross-cohort osa17-pr7-livekit-token-cohort-claim
   Scenario: LiveKit access token contains cohort claim matching the room
     Given Theo on Android created an adult-cohort room "ra1"
+    Given Marcus [P-04] is signed in on Android
     When Alice on Web POSTs /api/livekit/token with roomName="ra1"
     Then the response status is 200
     Then the response body has field "token" of type "string"
@@ -140,4 +141,4 @@ Feature: j09 — Theo hosts a public voice room
     When Marcus on Android POSTs /api/livekit/token with roomName="ra1"
     Then the response status is 404
     Then the response body does not include a token
-    Then the database has 1 entries in "auditLog" matching {action: "blocked", sourceId: 60000010, targetId: "ra1", reason: "cohort_mismatch"}
+    Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 60000010, targetUniqueId: "ra1"}

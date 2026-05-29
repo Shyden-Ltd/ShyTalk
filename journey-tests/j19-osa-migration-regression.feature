@@ -73,4 +73,4 @@ Feature: j19 — OSA migration steady-state regression guards
     Given Officia [P-19] has uniqueId=1, isOfficial=true, isUnblockable=true
     When a query is run for the user doc "users/1"
     Then the doc has entries in "followerIds" with users from BOTH cohort="adult" AND cohort="minor"
-    Then the doc has at most 0 entries in "auditLog" matching {action: "blocked", sourceId: 1}
+    Then the doc has at most 0 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 1}

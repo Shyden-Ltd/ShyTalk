@@ -129,4 +129,4 @@ Feature: j07 — Adam discovers + messages Alice
     When Adam on Android attempts to start a conversation with Marcus via POST /api/conversations
     Then the response status is 404
     Then no conversation doc is created
-    Then the database has 1 entries in "auditLog" matching {action: "blocked", targetId: 60000010, reason: "cohort_mismatch"}
+    Then the database has 1 entries in "segregationEvents" matching {action: "blocked", targetUniqueId: 60000010}

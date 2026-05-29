@@ -87,7 +87,7 @@ Feature: j02 — Mia's restricted minor experience
     Given Mia has accepted legal as a minor
     When POST /api/users/follow with targetUniqueId=50000010 as Mia
     Then the response status is 404
-    Then the database has 1 entries in "auditLog" matching {action: "blocked", targetId: 50000010, sourceId: {newUniqueId}, reason: "cohort_mismatch"}
+    Then the database has 1 entries in "segregationEvents" matching {action: "blocked", targetUniqueId: 50000010, sourceUniqueId: {newUniqueId}}
     Then Mia's iOS Sim UI does not show Alice anywhere
 
   @blocker @ios-sim
@@ -109,7 +109,7 @@ Feature: j02 — Mia's restricted minor experience
     When POST /api/conversations with targetUniqueId=50000010 as Mia
     Then the response status is 404
     Then no conversation doc is created
-    Then the database has 1 entries in "auditLog" matching {action: "blocked", targetId: 50000010, reason: "cohort_mismatch"}
+    Then the database has 1 entries in "segregationEvents" matching {action: "blocked", targetUniqueId: 50000010}
 
   @ios-sim
   Scenario: Defence-in-depth — stale followingIds entry pointing at an adult is hidden in UI

@@ -107,7 +107,7 @@ Feature: j16 — Tariq's multi-singer event
     When Tariq on Web attempts to add Marcus to his roster via /api/events/roster/add
     Then the response status is 404
     Then Tariq's Web UI shows "User not found"
-    Then the database has 1 entries in "auditLog" matching {action: "blocked", reason: "cohort_mismatch"}
+    Then the database has 1 entries in "segregationEvents" matching {action: "blocked"}
 
   @android-physical
   Scenario: Selma declines the event invite — Tariq sees the decline

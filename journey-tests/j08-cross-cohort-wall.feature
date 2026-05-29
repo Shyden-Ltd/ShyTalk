@@ -43,7 +43,7 @@ Feature: j08 — Vexa's cross-cohort probing
   Scenario: Vexa's follow attempt via API returns 404 + audit row
     When Vexa on Web POSTs /api/users/follow with targetUniqueId=60000010
     Then the response status is 404
-    Then the database has 1 entries in "auditLog" matching {action: "blocked", sourceId: 50000040, targetId: 60000010, reason: "cohort_mismatch"}
+    Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 50000040, targetUniqueId: 60000010}
 
   @blocker @browser-chromium @cross-cohort
   Scenario: Vexa's PM conversation-creation attempt returns 404 with no conversation doc
@@ -97,7 +97,7 @@ Feature: j08 — Vexa's cross-cohort probing
     Then Vexa's Android UI shows "User not found"
     When Vexa on Android attempts to follow Marcus via the profile screen (via deep-link error path)
     Then the request returns status 404
-    Then the database has 1 entries in "auditLog" matching {action: "blocked", sourceId: 50000040, targetId: 60000010, reason: "cohort_mismatch"}
+    Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 50000040, targetUniqueId: 60000010}
 
   @blocker @cross-cohort
   Scenario: Reverse direction — Marcus (minor) probing Vexa (adult) — same wall
@@ -105,7 +105,7 @@ Feature: j08 — Vexa's cross-cohort probing
     Then Marcus's Android UI shows "No results found"
     When POST /api/users/follow with targetUniqueId=50000040 as Marcus
     Then the response status is 404
-    Then the database has 1 entries in "auditLog" matching {action: "blocked", sourceId: 60000010, targetId: 50000040, reason: "cohort_mismatch"}
+    Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 60000010, targetUniqueId: 50000040}
 
   @cross-cohort @perf-budget:200
   Scenario: Audit row write does not slow the 404 response path noticeably
@@ -125,7 +125,7 @@ Feature: j08 — Vexa's cross-cohort probing
     Then the response status is 404
     Then the database has document "users/50000040" with field "shyCoins" equal to 1000
     Then the database has document "users/60000010" with field "shyCoins" equal to 10
-    Then the database has 1 entries in "auditLog" matching {action: "blocked", sourceId: 50000040, targetId: 60000010, reason: "cohort_mismatch"}
+    Then the database has 1 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 50000040, targetUniqueId: 60000010}
     Then no entry is added to "users/50000040/transactions" since "{ts}"
     Then no entry is added to "users/60000010/transactions" since "{ts}"
 

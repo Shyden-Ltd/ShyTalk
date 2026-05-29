@@ -1441,6 +1441,15 @@ const matchers = [
   // Decodes the `token` field of the most-recent response body and asserts on
   // a dotted-path field within the payload. Used for verifying LiveKit access
   // tokens carry the correct cohort / room claims (OSA #17 Fill-2).
+  //
+  // JSON-string intermediate traversal: if a path segment lands on a string
+  // value that JSON.parses to an object, drill INTO the parsed object on the
+  // next segment. This is the canonical shape for LiveKit's `metadata` field —
+  // the SDK stores it verbatim in the JWT as a JSON-serialized string, NOT a
+  // nested object. Without this, `metadata.cohort` would resolve to undefined
+  // even when the metadata claim is correctly set on the token. Pinned by
+  // j09's "LiveKit access token contains cohort claim matching the room"
+  // scenario; surfaced on 2026-05-29 (manual-qa-cycle-1.md).
   {
     pattern: /^the decoded JWT payload has field "([^"]+)" equal to (.+)$/,
     async handler(m, ctx) {
@@ -1456,7 +1465,26 @@ const matchers = [
         };
       }
       const payload = decodeJwtPayload(token);
-      const actual = dottedPath.split('.').reduce((acc, k) => (acc ? acc[k] : undefined), payload);
+      const actual = dottedPath.split('.').reduce((acc, k) => {
+        if (acc === undefined || acc === null) return undefined;
+        // If the current accessor is a string that JSON.parses to an object,
+        // drill INTO the parsed object — supports LiveKit's `metadata` field
+        // (verbatim-JSON-string convention) and any future JSON-encoded
+        // claim payload.
+        if (typeof acc === 'string') {
+          try {
+            const parsed = JSON.parse(acc);
+            if (parsed && typeof parsed === 'object') {
+              return parsed[k];
+            }
+          } catch {
+            // Not JSON — fall through to plain property access below, which
+            // will yield undefined for an object-key on a primitive string
+            // (i.e. preserve old behaviour for non-JSON strings).
+          }
+        }
+        return acc[k];
+      }, payload);
       if (actual !== expected) {
         return {
           ok: false,

@@ -521,6 +521,53 @@ describe('executeStep', () => {
     expect(r2.ok).toBe(true);
   });
 
+  test('decoded JWT payload — auto-parses JSON-string intermediate (LiveKit metadata convention)', async () => {
+    // LiveKit's AccessToken stores `metadata` verbatim in the JWT as a
+    // JSON-serialized STRING (not a nested object). The matcher must
+    // detect that and drill INTO the parsed object on the next segment.
+    // Pinned by j09's "LiveKit access token contains cohort claim
+    // matching the room" scenario; surfaced when the live JWT carried
+    // a correct metadata claim but the runner reported it as undefined.
+    const payload = Buffer.from(
+      JSON.stringify({
+        video: { room: 'ra1' },
+        // metadata as a string — the real LiveKit wire format
+        metadata: JSON.stringify({ cohort: 'adult' }),
+      }),
+    ).toString('base64url');
+    const token = 'h.' + payload + '.s';
+    const ctx = makeCtx();
+    ctx.lastResponse = { body: { token } };
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the decoded JWT payload has field "metadata.cohort" equal to "adult"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('decoded JWT payload — non-JSON string intermediate preserves old undefined behaviour', async () => {
+    // A string-valued claim that ISN'T JSON must still drill into a
+    // single-character access (which yields undefined for `length`-style
+    // accessors and undefined for any non-numeric key). Pins that the
+    // JSON.parse fallback doesn't accidentally trigger on plain strings.
+    const payload = Buffer.from(JSON.stringify({ subject: 'plain-not-json-string' })).toString(
+      'base64url',
+    );
+    const token = 'h.' + payload + '.s';
+    const ctx = makeCtx();
+    ctx.lastResponse = { body: { token } };
+    const r = await executeStep(
+      { kind: 'Then', text: 'the decoded JWT payload has field "subject.cohort" equal to "x"' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    // Error should mention the missing-field undefined, NOT a JSON-parse crash.
+    expect(r.error).toMatch(/subject\.cohort.*undefined/i);
+  });
+
   test('decoded JWT payload — wrong claim fails with both expected + actual', async () => {
     const payload = Buffer.from(JSON.stringify({ metadata: { cohort: 'minor' } })).toString(
       'base64url',
