@@ -139,6 +139,23 @@ beforeEach(() => {
   mockAdd.mockResolvedValue({ id: 'evt_abc' });
   mockCollection.mockReturnValue({ add: mockAdd });
   mockToJwt.mockResolvedValue('mock-jwt-token');
+  // CI test-execution-order can pollute the livekit-region mock:
+  // some earlier test file may register a clobbering mockImplementation
+  // on `getRegionConfig` (e.g. for a 503-path-coverage test). When this
+  // file runs after such a test, `getRegionConfig()` returns the
+  // polluted value (often undefined or {}), triggering the 503
+  // "Voice service not available" branch and breaking every test
+  // that expects a 200. Explicitly restore the mockReturnValue here
+  // so this file's tests are deterministic regardless of execution
+  // order. Surfaced as flake on PR #875's metadata.cohort tests
+  // (CI run 26666675170 + 26665942317, 2026-05-29).
+  const livekitRegion = require('../../src/utils/livekit-region');
+  livekitRegion.getRegion.mockReturnValue('asia');
+  livekitRegion.getRegionConfig.mockReturnValue({
+    url: 'wss://livekit.test.com',
+    apiKey: 'test-key',
+    apiSecret: 'test-secret',
+  });
   // Reset the AccessToken-instance ledger between tests so per-test
   // assertions on `mockAccessTokenInstances.at(-1)` see only this
   // test's mint, not a leak from a prior test.
