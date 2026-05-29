@@ -19,13 +19,25 @@
 // jest.mock factory may only reference in-scope built-ins. We can mutate
 // the returned object after require, so the factory itself is minimal +
 // the per-test state lives on the module instance via jest.fn handles.
-jest.mock('playwright', () => {
-  return {
-    chromium: {
-      launch: jest.fn(),
-    },
-  };
-});
+//
+// `virtual: true` so the mock works even when `playwright` isn't a
+// resolvable module in the current Node modules tree. The express-api
+// test-backend CI job doesn't install Playwright (it's a heavy browser
+// dep used only by the local manual-qa-runner path), so without virtual
+// jest's factory resolution throws "Cannot find module 'playwright'"
+// before the mock can take effect. Verified locally: with `virtual: true`
+// the test runs identically whether playwright is installed or not.
+jest.mock(
+  'playwright',
+  () => {
+    return {
+      chromium: {
+        launch: jest.fn(),
+      },
+    };
+  },
+  { virtual: true },
+);
 
 const playwright = require('playwright');
 const path = require('path');
