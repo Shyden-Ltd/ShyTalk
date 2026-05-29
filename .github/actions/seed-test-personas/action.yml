@@ -24,6 +24,9 @@ inputs:
   personas-password:
     description: 'Shared password for the seeded persona accounts (≥20 chars). Generated once via openssl rand -base64 24, stored as a GitHub secret, never logged.'
     required: true
+  database-url:
+    description: 'Firestore RTDB URL for the target project (e.g. https://shytalk-dev-default-rtdb.europe-west1.firebasedatabase.app). Required because the provision script transitively imports express-api/src/utils/firebase.js, which throws "FIREBASE_DATABASE_URL env var is required" at module-load time if unset. Region-specific; cannot be derived from project ID alone.'
+    required: true
 
 runs:
   using: 'composite'
@@ -34,6 +37,7 @@ runs:
         SA_JSON: ${{ inputs.service-account-json }}
         PROJECT: ${{ inputs.firebase-project }}
         PERSONAS_PASSWORD: ${{ inputs.personas-password }}
+        DATABASE_URL: ${{ inputs.database-url }}
       run: |
         set -euo pipefail
         umask 077
@@ -44,6 +48,12 @@ runs:
         trap 'rm -f /tmp/firebase-sa-seed.json' EXIT
         export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa-seed.json
         export FIREBASE_PROJECT_ID="$PROJECT"
+        # FIREBASE_DATABASE_URL is region-specific (cannot be derived from
+        # project ID alone). The provision script transitively imports
+        # express-api/src/utils/firebase.js, which throws at module-load
+        # time if this var is unset. Caught in local dry-run after PRs
+        # #868 + #869 + #870 fixed the require/install chain.
+        export FIREBASE_DATABASE_URL="$DATABASE_URL"
         # `cd express-api` so the script's `require('firebase-admin')` etc.
         # resolves against `express-api/node_modules`. Running with a
         # `express-api/scripts/...` path from repo root fails because the

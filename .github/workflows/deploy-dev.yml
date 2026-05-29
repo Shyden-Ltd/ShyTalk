@@ -171,6 +171,11 @@ jobs:
           service-account-json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}
           firebase-project: shytalk-dev
           personas-password: ${{ secrets.PERSONAS_PASSWORD_DEV }}
+          # Region-specific (europe-west1) — sourced from
+          # app/src/dev/google-services.json (public Firebase config).
+          # Required because the provision script transitively imports
+          # firebase.js which throws if FIREBASE_DATABASE_URL is unset.
+          database-url: https://shytalk-dev-default-rtdb.europe-west1.firebasedatabase.app
 
   deploy-web-dev:
     name: Deploy Web to Dev

@@ -67,22 +67,33 @@ describe('deploy-dev.yml — seed-personas integration', () => {
     expect(stepBlock[0]).toMatch(/if:\s*inputs\.seed-personas\s*!=\s*false/);
   });
 
-  test('seed step passes the FIREBASE_SERVICE_ACCOUNT_DEV + PERSONAS_PASSWORD_DEV secrets', () => {
-    // Both secrets must come from GitHub Actions secrets (not env vars
-    // baked into the workflow) so they never appear in workflow YAML
-    // diffs or run logs. PERSONAS_PASSWORD_DEV is a NEW secret the
+  test('seed step passes the FIREBASE_SERVICE_ACCOUNT_DEV + PERSONAS_PASSWORD_DEV secrets + the dev RTDB URL', () => {
+    // Secrets come from GitHub Actions secrets (never appear in workflow
+    // YAML diffs or run logs). PERSONAS_PASSWORD_DEV is a NEW secret the
     // operator added once (value matches `~/.shytalk/dev-personas.env`).
-    const stepBlock = DEPLOY_DEV.match(
-      /uses: \.\/\.github\/actions\/seed-test-personas[\s\S]{1,500}/m,
-    );
-    expect(stepBlock).not.toBeNull();
-    expect(stepBlock[0]).toMatch(
+    // database-url is the public Firebase RTDB URL (in committed
+    // google-services.json) — required because the provision script
+    // transitively imports firebase.js which throws if FIREBASE_DATABASE_URL
+    // is unset. Region-specific (europe-west1); cannot be derived from
+    // project ID alone.
+    const seedIdx = DEPLOY_DEV.indexOf('uses: ./.github/actions/seed-test-personas');
+    expect(seedIdx).toBeGreaterThan(-1);
+    // Slice forward from the uses: line until the next step or job (top-
+    // level keys / 6-space indent). The seed step's `with:` block is the
+    // immediate target.
+    const stepBlock = DEPLOY_DEV.slice(seedIdx, seedIdx + 1000);
+    expect(stepBlock).toMatch(
       /service-account-json:\s*\$\{\{\s*secrets\.FIREBASE_SERVICE_ACCOUNT_DEV\s*\}\}/,
     );
-    expect(stepBlock[0]).toMatch(
+    expect(stepBlock).toMatch(
       /personas-password:\s*\$\{\{\s*secrets\.PERSONAS_PASSWORD_DEV\s*\}\}/,
     );
-    expect(stepBlock[0]).toMatch(/firebase-project:\s*shytalk-dev/);
+    expect(stepBlock).toMatch(/firebase-project:\s*shytalk-dev/);
+    // The URL is committed-public (lives in app/src/dev/google-services.json
+    // too), so it can appear inline in the workflow YAML.
+    expect(stepBlock).toMatch(
+      /database-url:\s*https:\/\/shytalk-dev-default-rtdb\.europe-west1\.firebasedatabase\.app/,
+    );
   });
 
   test('seed step is positioned AFTER the firebase-rules deploy + verify dev API health', () => {
@@ -100,13 +111,15 @@ describe('deploy-dev.yml — seed-personas integration', () => {
 });
 
 describe('seed-test-personas composite action — interface', () => {
-  test('declares the three required inputs (service-account-json, firebase-project, personas-password)', () => {
+  test('declares the four required inputs (service-account-json, firebase-project, personas-password, database-url)', () => {
     // Use indexOf-based slicing instead of `\s*\n\s*` regex — SonarJS flags
     // the nested whitespace quantifiers as super-linear-backtracking-prone.
-    // For each input name, find it + assert `description:` appears within
-    // the next ~50 chars (covers the typical YAML indent + comment-free
-    // block shape; bigger window would risk crossing into another input).
-    for (const name of ['service-account-json:', 'firebase-project:', 'personas-password:']) {
+    for (const name of [
+      'service-account-json:',
+      'firebase-project:',
+      'personas-password:',
+      'database-url:',
+    ]) {
       const idx = SEED_ACTION.indexOf(name);
       expect(idx).toBeGreaterThan(-1);
       const window = SEED_ACTION.slice(idx, idx + 50);
@@ -114,11 +127,21 @@ describe('seed-test-personas composite action — interface', () => {
     }
   });
 
-  test('all three inputs are required (no defaults that would silently work in CI without secrets)', () => {
-    // Required inputs make the action fail loudly if any secret is missing
-    // from the workflow that calls it — the alternative (defaults to empty
-    // string) would let firebase-admin attempt to auth with no credentials,
-    // producing a confusing log line buried in the runner output.
+  test('exports FIREBASE_DATABASE_URL from the database-url input (region-specific RTDB URL)', () => {
+    // The provision script transitively imports `express-api/src/utils/firebase.js`,
+    // which throws `FIREBASE_DATABASE_URL env var is required` at module-load
+    // time if unset. Caught in local dry-run after PR #870's npm-ci fix —
+    // the require chain works, but module-init then fails on the URL check.
+    // Action must wire the input through to the env.
+    expect(SEED_ACTION).toContain('DATABASE_URL: ${{ inputs.database-url }}');
+    expect(SEED_ACTION).toContain('export FIREBASE_DATABASE_URL="$DATABASE_URL"');
+  });
+
+  test('all four inputs are required (no defaults that would silently work in CI without secrets)', () => {
+    // Required inputs make the action fail loudly if any secret/value is
+    // missing from the workflow that calls it — the alternative (defaults
+    // to empty string) would let firebase-admin attempt to auth with no
+    // credentials, producing a confusing log line buried in runner output.
     // Slice the inputs block via string-index (not greedy regex) so SonarJS
     // doesn't flag a super-linear-backtracking risk on `[\s\S]+?`.
     const inputsIdx = SEED_ACTION.indexOf('inputs:');
@@ -126,13 +149,14 @@ describe('seed-test-personas composite action — interface', () => {
     expect(inputsIdx).toBeGreaterThan(-1);
     expect(runsIdx).toBeGreaterThan(inputsIdx);
     const inputsBlock = SEED_ACTION.slice(inputsIdx, runsIdx);
-    // For each required input, slice from the input's line to the next
-    // input/end and assert `required: true` is in that slice — avoids the
-    // lazy-quantifier regex shape entirely.
-    for (const name of ['service-account-json:', 'firebase-project:', 'personas-password:']) {
+    for (const name of [
+      'service-account-json:',
+      'firebase-project:',
+      'personas-password:',
+      'database-url:',
+    ]) {
       const start = inputsBlock.indexOf(`  ${name}`);
       expect(start).toBeGreaterThan(-1);
-      // Slice forward until the next 2-space-indented key or end of block.
       const nextKey = inputsBlock.slice(start + name.length).search(/\n {2}[a-z]/);
       const end = nextKey === -1 ? inputsBlock.length : start + name.length + nextKey;
       const slice = inputsBlock.slice(start, end);
