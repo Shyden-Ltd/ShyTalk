@@ -60,6 +60,7 @@ import com.shyden.shytalk.resources.google_sign_in_failed
 import com.shyden.shytalk.resources.ok
 import com.shyden.shytalk.resources.retry
 import com.shyden.shytalk.resources.retrying
+import com.shyden.shytalk.resources.sign_in_not_available_on_local
 import com.shyden.shytalk.resources.unable_to_connect
 import com.shyden.shytalk.resources.voice_chat_reimagined
 import kotlinx.coroutines.launch
@@ -85,6 +86,7 @@ fun SignInScreen(
     val scope = rememberCoroutineScope()
     val googleSignInFailed = stringResource(Res.string.google_sign_in_failed)
     val appleSignInFailed = stringResource(Res.string.apple_sign_in_failed)
+    val signInNotAvailableOnLocal = stringResource(Res.string.sign_in_not_available_on_local)
     val secureStorage: SecureStorage = koinInject()
 
     // Handle incoming email sign-in deep link
@@ -322,16 +324,28 @@ fun SignInScreen(
             // Both paths throw `GoogleSignInCancelledException` on user
             // dismiss so the catch block is uniform here.
             //
-            // Hidden on local-flavour builds where `googleWebClientId` is
-            // null (no real Google OAuth client wired to the demo Firebase
-            // project) — without this guard, tapping the button would call
-            // `performGoogleSignIn` with a placeholder web client ID and
-            // surface a cryptic Google framework error. Dev sign-in covers
-            // local flow.
-            if (BuildVariant.isGoogleSignInAvailable) {
+            // Operator directive 2026-05-29: button is VISIBLE on every
+            // flavor (local, dev, prod). Tapping on local — where
+            // `isOAuthSignInFunctional` is false because no real OAuth
+            // client redeems against the Firebase Auth emulator — surfaces
+            // a clean "Sign-in not available on local environment"
+            // snackbar instead of either hiding the button (confusing) or
+            // attempting `performGoogleSignIn` with a placeholder client
+            // ID and surfacing a cryptic Google framework error.
+            if (BuildVariant.isOAuthSignInVisible) {
                 GoogleSignInButton(
                     onClick = {
                         if (isBusy) return@GoogleSignInButton
+                        if (!BuildVariant.isOAuthSignInFunctional) {
+                            // Local-flavor tap — show the localized friendly
+                            // message. Don't set `signingInProvider` so the
+                            // button stays enabled for the next attempt
+                            // after the snackbar dismisses.
+                            scope.launch {
+                                snackbarHostState.showSnackbar(signInNotAvailableOnLocal)
+                            }
+                            return@GoogleSignInButton
+                        }
                         signingInProvider = "google"
                         scope.launch {
                             try {
@@ -372,48 +386,73 @@ fun SignInScreen(
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
-            } // close if (BuildVariant.isGoogleSignInAvailable)
+            } // close if (BuildVariant.isOAuthSignInVisible)
 
             // Apple Sign-In button. Cross-platform `performAppleSignInFlow`
             // wraps Firebase WebView OAuth on Android (needs the Activity)
             // and ASAuthorizationController on iOS (ignores the activity).
-            AppleSignInButton(
-                onClick = {
-                    if (isBusy) return@AppleSignInButton
-                    signingInProvider = "apple"
-                    scope.launch {
-                        try {
-                            performAppleSignInFlow(viewModel = viewModel, activity = activity)
-                        } catch (e: kotlinx.coroutines.CancellationException) {
-                            throw e
-                        } catch (_: AppleSignInCancelledException) {
-                            // User dismissed — silent, no toast.
-                        } catch (e: Exception) {
-                            // Generic catch: do NOT pass `e.message` — Apple
-                            // SDK / Firebase WebView messages are developer-
-                            // grade. See Google catch for full reasoning.
-                            logW("SignInScreen", "Apple sign-in failed", e)
-                            snackbarHostState.showSnackbar(appleSignInFailed)
-                        } finally {
-                            signingInProvider = null
+            //
+            // Operator directive 2026-05-29: button is VISIBLE on every
+            // flavor. Tapping on local surfaces a clean "Sign-in not
+            // available on local environment" snackbar instead of routing
+            // through Firebase WebView OAuth against the emulator (which
+            // doesn't redeem Apple ID tokens and would surface a cryptic
+            // SDK error). The visibility gate matches the Google button
+            // above so the two surfaces are kept in lock-step.
+            if (BuildVariant.isOAuthSignInVisible) {
+                AppleSignInButton(
+                    onClick = {
+                        if (isBusy) return@AppleSignInButton
+                        if (!BuildVariant.isOAuthSignInFunctional) {
+                            // Local-flavor tap — show the localized friendly
+                            // message. Don't set `signingInProvider` so the
+                            // button stays enabled for the next attempt.
+                            scope.launch {
+                                snackbarHostState.showSnackbar(signInNotAvailableOnLocal)
+                            }
+                            return@AppleSignInButton
                         }
-                    }
-                },
-                isLoading = signingInProvider == "apple" || (uiState.isLoading && signingInProvider == "apple"),
-                enabled = !isBusy,
-                // testTag is set inside AppleSignInButton; not duplicating here.
-            )
+                        signingInProvider = "apple"
+                        scope.launch {
+                            try {
+                                performAppleSignInFlow(viewModel = viewModel, activity = activity)
+                            } catch (e: kotlinx.coroutines.CancellationException) {
+                                throw e
+                            } catch (_: AppleSignInCancelledException) {
+                                // User dismissed — silent, no toast.
+                            } catch (e: Exception) {
+                                // Generic catch: do NOT pass `e.message` — Apple
+                                // SDK / Firebase WebView messages are developer-
+                                // grade. See Google catch for full reasoning.
+                                logW("SignInScreen", "Apple sign-in failed", e)
+                                snackbarHostState.showSnackbar(appleSignInFailed)
+                            } finally {
+                                signingInProvider = null
+                            }
+                        }
+                    },
+                    isLoading = signingInProvider == "apple" || (uiState.isLoading && signingInProvider == "apple"),
+                    enabled = !isBusy,
+                    // testTag is set inside AppleSignInButton; not duplicating here.
+                )
+            } // close if (BuildVariant.isOAuthSignInVisible)
 
             // Email Sign-In hidden — pending self-hosted mail server implementation
             // Spacer(modifier = Modifier.height(12.dp))
             // EmailSignInButton(onClick = onNavigateToEmail)
 
-            // Dev sign-in shortcut. The outer flag (BuildVariant.isDevSignInAvailable)
-            // hides the button on prod and on dev builds that don't have
-            // DEV_QA_EMAIL/PASSWORD baked in at build time. The inner
-            // re-check + empty-credential probes are defence-in-depth
-            // against a Frida-style runtime flip and a misconfigured build
-            // that somehow rendered the button.
+            // Dev sign-in shortcut. The outer flag
+            // ([BuildVariant.isDevAffordancesVisible]) hides the button
+            // on PROD regardless of any credential misconfig (operator
+            // directive 2026-05-29) and shows it on LOCAL + DEV. The
+            // inner re-check ([BuildVariant.isDevSignInAvailable] +
+            // empty-credential probes) is defence-in-depth against:
+            //   1. A Frida-style runtime flip of the environment flag
+            //      after boot.
+            //   2. A misconfigured dev build that renders the button but
+            //      has no baked credentials — the handler shows an
+            //      actionable error in that case rather than silently
+            //      no-op-ing.
             //
             // Available on:
             //   - local flavor (claude-test@shytalk.dev hardcoded; uses
@@ -421,7 +460,7 @@ fun SignInScreen(
             //   - dev flavor when built with `-PDEV_QA_EMAIL=… -PDEV_QA_PASSWORD=…`
             //     or `DEV_QA_EMAIL=… DEV_QA_PASSWORD=…` env vars (uses real
             //     dev Firebase)
-            if (BuildVariant.isDevSignInAvailable) {
+            if (BuildVariant.isDevAffordancesVisible) {
                 Spacer(modifier = Modifier.height(24.dp))
                 TextButton(
                     onClick = {
@@ -478,8 +517,15 @@ fun SignInScreen(
             // test personas (P-02..P-19) so journey scenarios that target
             // a specific persona (e.g. j04 Hayato DOB-flip, j08 Vexa cross-
             // cohort prober) can run against the right Firebase identity
-            // without a rebuild between personas. Same fail-closed gate as
-            // isDevSignInAvailable — empty baked password → button hidden.
+            // without a rebuild between personas.
+            //
+            // Outer gate ([BuildVariant.isDevAffordancesVisible]) hides
+            // the button on PROD regardless of any credential misconfig
+            // (operator directive 2026-05-29). The inner re-check below
+            // ([BuildVariant.isPersonaPickerAvailable]) covers the
+            // misconfigured-dev-build case (button visible but no baked
+            // password) — the picker dialog uses the inner credential
+            // check to render an actionable empty state.
             //
             // Available on:
             //   - local flavor (hardcoded "localdev123"; matches local/seed.js
@@ -490,7 +536,7 @@ fun SignInScreen(
             //     match the `PERSONAS_PASSWORD` env var the express-api
             //     provisioner used to create the persona accounts on dev
             //     Firebase Auth.
-            if (BuildVariant.isPersonaPickerAvailable) {
+            if (BuildVariant.isDevAffordancesVisible) {
                 Spacer(modifier = Modifier.height(12.dp))
                 TextButton(
                     onClick = { showPersonaPicker = true },

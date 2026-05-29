@@ -1419,6 +1419,7 @@
     <string name="google_sign_in_failed">구글 로그인 실패</string>
     <!-- google-translated 2026-05-04 -->
     <string name="apple_sign_in_failed">Apple 로그인 실패</string>
+    <string name="sign_in_not_available_on_local">로컬 환경에서는 로그인을 사용할 수 없습니다</string>
     <!-- google-translated 2026-05-04 -->
     <string name="sign_in_with_apple">Apple로 로그인</string>
     <!-- google-translated 2026-05-04 -->

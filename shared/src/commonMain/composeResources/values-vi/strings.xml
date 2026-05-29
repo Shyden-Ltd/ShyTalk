@@ -1419,6 +1419,7 @@
     <string name="google_sign_in_failed">Đăng nhập Google không thành công</string>
     <!-- google-translated 2026-05-04 -->
     <string name="apple_sign_in_failed">Đăng nhập Apple không thành công</string>
+    <string name="sign_in_not_available_on_local">Đăng nhập không khả dụng trong môi trường cục bộ</string>
     <!-- google-translated 2026-05-04 -->
     <string name="sign_in_with_apple">Đăng nhập bằng Apple</string>
     <!-- google-translated 2026-05-04 -->

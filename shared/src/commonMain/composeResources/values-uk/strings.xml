@@ -1418,6 +1418,7 @@
     <string name="google_sign_in_failed">Помилка входу в Google</string>
     <!-- google-translated 2026-05-04 -->
     <string name="apple_sign_in_failed">Помилка входу в систему Apple</string>
+    <string name="sign_in_not_available_on_local">Вхід недоступний у локальному середовищі</string>
     <!-- google-translated 2026-05-04 -->
     <string name="sign_in_with_apple">Увійдіть за допомогою Apple</string>
     <!-- google-translated 2026-05-04 -->

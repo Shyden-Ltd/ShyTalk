@@ -1526,6 +1526,7 @@
     <string name="google_sign_in_failed">ការចូល Google បានបរាជ័យ</string>
     <!-- google-translated 2026-05-04 -->
     <string name="apple_sign_in_failed">ការចូល Apple បានបរាជ័យ</string>
+    <string name="sign_in_not_available_on_local">ការចូលមិនមាននៅក្នុងបរិយាកាសក្នុងស្រុក</string>
 
     <!-- PIN & Security -->
     <!-- google-translated 2026-05-04 -->

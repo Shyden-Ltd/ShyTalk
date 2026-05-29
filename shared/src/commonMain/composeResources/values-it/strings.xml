@@ -1419,6 +1419,7 @@
     <string name="google_sign_in_failed">Accesso a Google non riuscito</string>
     <!-- google-translated 2026-05-04 -->
     <string name="apple_sign_in_failed">Accesso ad Apple non riuscito</string>
+    <string name="sign_in_not_available_on_local">Accesso non disponibile in ambiente locale</string>
     <!-- google-translated 2026-05-04 -->
     <string name="sign_in_with_apple">Accedi con Apple</string>
     <!-- google-translated 2026-05-04 -->

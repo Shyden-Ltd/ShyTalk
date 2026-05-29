@@ -830,6 +830,7 @@
     <string name="english_language">English</string>
     <string name="google_sign_in_failed">Google sign-in failed</string>
     <string name="apple_sign_in_failed">Apple Sign-In failed</string>
+    <string name="sign_in_not_available_on_local">Sign-in not available on local environment</string>
 
     <!-- PIN & Security -->
     <string name="enter_pin">Enter your PIN</string>

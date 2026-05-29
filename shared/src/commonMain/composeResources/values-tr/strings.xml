@@ -1419,6 +1419,7 @@
     <string name="google_sign_in_failed">Google\'da oturum açma başarısız oldu</string>
     <!-- google-translated 2026-05-04 -->
     <string name="apple_sign_in_failed">Apple\'da Oturum Açma başarısız oldu</string>
+    <string name="sign_in_not_available_on_local">Yerel ortamda oturum açma kullanılamıyor</string>
     <!-- google-translated 2026-05-04 -->
     <string name="sign_in_with_apple">Apple\'la oturum açın</string>
     <!-- google-translated 2026-05-04 -->

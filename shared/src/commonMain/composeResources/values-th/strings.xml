@@ -1417,6 +1417,7 @@
     <string name="google_sign_in_failed">การลงชื่อเข้าใช้ Google ล้มเหลว</string>
     <!-- google-translated 2026-05-04 -->
     <string name="apple_sign_in_failed">การลงชื่อเข้าใช้ Apple ล้มเหลว</string>
+    <string name="sign_in_not_available_on_local">ไม่สามารถลงชื่อเข้าใช้ในสภาพแวดล้อมท้องถิ่นได้</string>
     <!-- google-translated 2026-05-04 -->
     <string name="sign_in_with_apple">ลงชื่อเข้าใช้ด้วย Apple</string>
     <!-- google-translated 2026-05-04 -->

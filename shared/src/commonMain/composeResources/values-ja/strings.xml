@@ -1419,6 +1419,7 @@
     <string name="google_sign_in_failed">Google サインインに失敗しました</string>
     <!-- google-translated 2026-05-04 -->
     <string name="apple_sign_in_failed">Apple サインインに失敗しました</string>
+    <string name="sign_in_not_available_on_local">ローカル環境ではサインインを利用できません</string>
     <!-- google-translated 2026-05-04 -->
     <string name="sign_in_with_apple">Apple でサインインする</string>
     <!-- google-translated 2026-05-04 -->

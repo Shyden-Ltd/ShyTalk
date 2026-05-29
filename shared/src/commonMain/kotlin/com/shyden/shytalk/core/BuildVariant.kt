@@ -195,6 +195,68 @@ object BuildVariant {
         get() = holder.environment != "prod"
 
     /**
+     * Convenience: the local-emulator build (Firebase Auth emulator,
+     * Docker LiveKit, no real OAuth redemption). Distinct from
+     * [isLocalEmulator] which is the kotlin-side init-time slot —
+     * `isLocal` derives from the [environment] string set by
+     * [initBuildInfo], so it's the source of truth for "is this a
+     * build talking to the local emulator stack?".
+     */
+    val isLocal: Boolean
+        get() = holder.environment == "local"
+
+    /** Convenience: prod-flavor build. Mirrors [isLocal] semantics. */
+    val isProd: Boolean
+        get() = holder.environment == "prod"
+
+    /**
+     * Whether the Google + Apple sign-in buttons should be VISIBLE on
+     * SignInScreen. Operator directive 2026-05-29: always render the
+     * buttons on every flavor (local, dev, prod). Tapping on local
+     * surfaces a friendly "Sign-in not available on local environment"
+     * snackbar — the Firebase Auth emulator can't redeem real OAuth
+     * tokens, but the user shouldn't be confused by a missing button.
+     *
+     * Distinct from [isGoogleSignInAvailable] which is now the
+     * functional gate (used inside the click handler to decide
+     * between firing the OAuth flow and surfacing the snackbar).
+     */
+    val isOAuthSignInVisible: Boolean
+        get() = true
+
+    /**
+     * Whether tapping Google / Apple sign-in should actually attempt
+     * Firebase auth, vs surface "Sign-in not available on local
+     * environment". Returns false on local-emulator builds (no real
+     * OAuth redemption) and true on dev + prod (real Firebase Auth).
+     *
+     * Click handlers in SignInScreen read this BEFORE attempting the
+     * provider-specific flow — so a tap on local never produces a
+     * cryptic Firebase / Google SDK error, only a clean snackbar.
+     */
+    val isOAuthSignInFunctional: Boolean
+        get() = !isLocal
+
+    /**
+     * Whether the dev sign-in shortcut + persona picker buttons should
+     * be VISIBLE on SignInScreen. Operator directive 2026-05-29:
+     * visible on local + dev, NEVER on prod regardless of any
+     * credential misconfiguration. Defence-in-depth against a prod
+     * APK accidentally built with `DEV_QA_EMAIL`/`PASSWORD` env vars
+     * set (which would have rendered the button under the prior
+     * [isDevSignInAvailable] credential-presence gate).
+     *
+     * The credential-presence gates ([isDevSignInAvailable],
+     * [isPersonaPickerAvailable]) become the SECONDARY check, used
+     * inside the click handler to detect a misconfigured dev build
+     * that has the button rendered but no baked credentials — the
+     * handler shows an actionable error in that case rather than
+     * silently failing.
+     */
+    val isDevAffordancesVisible: Boolean
+        get() = holder.environment == "local" || holder.environment == "dev"
+
+    /**
      * Convenience: `true` only when a real Google OAuth web-client ID
      * is configured. Local-flavour builds talk to Firebase emulators
      * without a real OAuth client — tapping the Google Sign-In button

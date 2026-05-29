@@ -1419,6 +1419,7 @@
     <string name="google_sign_in_failed">Google साइन-इन विफल रहा</string>
     <!-- google-translated 2026-05-04 -->
     <string name="apple_sign_in_failed">Apple साइन-इन विफल</string>
+    <string name="sign_in_not_available_on_local">स्थानीय परिवेश में साइन-इन उपलब्ध नहीं है</string>
     <!-- google-translated 2026-05-04 -->
     <string name="sign_in_with_apple">Apple के साथ साइन इन करें</string>
     <!-- google-translated 2026-05-04 -->

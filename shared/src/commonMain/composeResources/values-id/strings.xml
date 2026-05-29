@@ -1419,6 +1419,7 @@
     <string name="google_sign_in_failed">Gagal masuk ke Google</string>
     <!-- google-translated 2026-05-04 -->
     <string name="apple_sign_in_failed">Masuk Apple gagal</string>
+    <string name="sign_in_not_available_on_local">Masuk tidak tersedia di lingkungan lokal</string>
     <!-- google-translated 2026-05-04 -->
     <string name="sign_in_with_apple">Masuk dengan Apple</string>
     <!-- google-translated 2026-05-04 -->

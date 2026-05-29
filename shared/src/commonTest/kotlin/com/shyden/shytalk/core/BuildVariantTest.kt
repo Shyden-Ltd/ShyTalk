@@ -666,4 +666,202 @@ class BuildVariantTest {
             "no shared password → picker button hidden",
         )
     }
+
+    // ── isLocal / isProd convenience flags ──
+    // Operator directive 2026-05-29: SignInScreen reads environment-based
+    // gates to decide button visibility (separate from credential-based
+    // functionality gates). isLocal / isProd are the source of truth for
+    // those decisions.
+
+    @Test
+    fun `isLocal is true when environment is local`() {
+        BuildVariant.initBuildInfo(environment = "local", buildVersion = "1.0")
+        assertTrue(BuildVariant.isLocal)
+    }
+
+    @Test
+    fun `isLocal is false when environment is dev`() {
+        BuildVariant.initBuildInfo(environment = "dev", buildVersion = "1.0")
+        assertFalse(BuildVariant.isLocal)
+    }
+
+    @Test
+    fun `isLocal is false when environment is prod`() {
+        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "1.0")
+        assertFalse(BuildVariant.isLocal)
+    }
+
+    @Test
+    fun `isLocal is false on the fail-safe default (uninitialised env defaults to prod)`() {
+        // The default holder has environment="prod" so isLocal must be
+        // false without any explicit initialiser. Pins the fail-safe
+        // semantic so a missed init never enables local-only behaviours
+        // (like the "Sign-in not available on local environment" toast)
+        // on a real production build.
+        assertFalse(BuildVariant.isLocal)
+    }
+
+    @Test
+    fun `isProd is true on the fail-safe default`() {
+        assertTrue(BuildVariant.isProd)
+    }
+
+    @Test
+    fun `isProd is true when environment is prod`() {
+        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "1.0")
+        assertTrue(BuildVariant.isProd)
+    }
+
+    @Test
+    fun `isProd is false when environment is dev`() {
+        BuildVariant.initBuildInfo(environment = "dev", buildVersion = "1.0")
+        assertFalse(BuildVariant.isProd)
+    }
+
+    @Test
+    fun `isProd is false when environment is local`() {
+        BuildVariant.initBuildInfo(environment = "local", buildVersion = "1.0")
+        assertFalse(BuildVariant.isProd)
+    }
+
+    @Test
+    fun `isLocal and isProd are mutually exclusive across all known envs`() {
+        // Defensive: a future env value (e.g. "staging") must not be
+        // simultaneously local AND prod. The current matrix covers the
+        // three named envs (local / dev / prod) — adding a new env to
+        // BuildVariant must update this matrix.
+        for (env in listOf("local", "dev", "prod", "")) {
+            BuildVariant.initBuildInfo(environment = env, buildVersion = "1.0")
+            assertFalse(
+                BuildVariant.isLocal && BuildVariant.isProd,
+                "isLocal && isProd must never both be true (env='$env')",
+            )
+        }
+    }
+
+    // ── isOAuthSignInVisible / isOAuthSignInFunctional ──
+    // Operator directive 2026-05-29: Google + Apple buttons are visible
+    // on EVERY flavor. Tapping on local surfaces a "Sign-in not available
+    // on local environment" snackbar instead of attempting the real OAuth
+    // flow (which would fail against the Firebase Auth emulator).
+
+    @Test
+    fun `isOAuthSignInVisible is true on all flavors (always render buttons)`() {
+        for (env in listOf("local", "dev", "prod")) {
+            BuildVariant.initBuildInfo(environment = env, buildVersion = "1.0")
+            assertTrue(
+                BuildVariant.isOAuthSignInVisible,
+                "Google + Apple buttons must render on every flavor (env='$env')",
+            )
+        }
+    }
+
+    @Test
+    fun `isOAuthSignInVisible is true on the fail-safe default (no init called)`() {
+        // Defaults to prod (renders the buttons functionally). Visibility
+        // gate is still true so a misconfigured platform initialiser
+        // never accidentally hides the buttons.
+        assertTrue(BuildVariant.isOAuthSignInVisible)
+    }
+
+    @Test
+    fun `isOAuthSignInFunctional is false when environment is local`() {
+        BuildVariant.initBuildInfo(environment = "local", buildVersion = "1.0")
+        assertFalse(
+            BuildVariant.isOAuthSignInFunctional,
+            "local Firebase Auth emulator can't redeem real OAuth tokens — tap must surface the friendly snackbar",
+        )
+    }
+
+    @Test
+    fun `isOAuthSignInFunctional is true on dev`() {
+        BuildVariant.initBuildInfo(environment = "dev", buildVersion = "1.0")
+        assertTrue(BuildVariant.isOAuthSignInFunctional)
+    }
+
+    @Test
+    fun `isOAuthSignInFunctional is true on prod`() {
+        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "1.0")
+        assertTrue(BuildVariant.isOAuthSignInFunctional)
+    }
+
+    @Test
+    fun `isOAuthSignInFunctional is true on the fail-safe default (defaults to prod)`() {
+        // Critical fail-safe: a missing initialiser must NOT silently
+        // disable OAuth on real prod. Defaults to "prod" → functional.
+        assertTrue(BuildVariant.isOAuthSignInFunctional)
+    }
+
+    // ── isDevAffordancesVisible — dev sign-in shortcut + persona picker ──
+    // Operator directive 2026-05-29: dev sign-in + persona picker visible
+    // on local + dev, NEVER on prod regardless of any credential
+    // misconfiguration. Defence-in-depth against a prod APK accidentally
+    // built with DEV_QA_EMAIL / PASSWORD env vars set.
+
+    @Test
+    fun `isDevAffordancesVisible is true on local`() {
+        BuildVariant.initBuildInfo(environment = "local", buildVersion = "1.0")
+        assertTrue(BuildVariant.isDevAffordancesVisible)
+    }
+
+    @Test
+    fun `isDevAffordancesVisible is true on dev`() {
+        BuildVariant.initBuildInfo(environment = "dev", buildVersion = "1.0")
+        assertTrue(BuildVariant.isDevAffordancesVisible)
+    }
+
+    @Test
+    fun `isDevAffordancesVisible is FALSE on prod`() {
+        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "1.0")
+        assertFalse(
+            BuildVariant.isDevAffordancesVisible,
+            "dev sign-in + persona picker must NEVER appear on prod — operator directive 2026-05-29",
+        )
+    }
+
+    @Test
+    fun `isDevAffordancesVisible is FALSE on the fail-safe default`() {
+        // Critical: a missing initialiser must NEVER expose dev affordances
+        // on prod. The default environment="prod" → visible=false.
+        assertFalse(
+            BuildVariant.isDevAffordancesVisible,
+            "fail-safe default (uninitialised env) must hide dev affordances",
+        )
+    }
+
+    @Test
+    fun `isDevAffordancesVisible is FALSE on an unknown env value`() {
+        // Defensive: an unknown env ("staging", "qa", typo, etc.) must
+        // also hide the dev affordances. Only the explicit allow-list
+        // ("local", "dev") enables them.
+        BuildVariant.initBuildInfo(environment = "staging", buildVersion = "1.0")
+        assertFalse(
+            BuildVariant.isDevAffordancesVisible,
+            "unknown env values must NOT expose dev affordances (fail-closed allow-list)",
+        )
+    }
+
+    @Test
+    fun `isDevAffordancesVisible ignores credential presence (visibility is env-only)`() {
+        // Critical: a prod build with credentials accidentally baked in
+        // (env var leak, misconfigured CI) must STILL hide the button.
+        // The visibility gate is purely env-based; credential presence
+        // is the functional gate inside the click handler.
+        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "1.0")
+        BuildVariant.initLocalEmulator(
+            value = false,
+            devEmail = "leaked@example",
+            devPassword = "leaked",
+            devPersonasPassword = "leaked",
+        )
+        // Even with all credentials baked in, prod must hide.
+        assertFalse(
+            BuildVariant.isDevAffordancesVisible,
+            "credential leak on prod must NOT render the dev affordances — env gate is supreme",
+        )
+        // The functional gates still report "available" — they're now
+        // never reached because the visibility gate hides the button.
+        assertTrue(BuildVariant.isDevSignInAvailable)
+        assertTrue(BuildVariant.isPersonaPickerAvailable)
+    }
 }

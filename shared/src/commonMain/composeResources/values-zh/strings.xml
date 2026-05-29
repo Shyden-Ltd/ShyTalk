@@ -1419,6 +1419,7 @@
     <string name="google_sign_in_failed">谷歌登录失败</string>
     <!-- google-translated 2026-05-04 -->
     <string name="apple_sign_in_failed">苹果登录失败</string>
+    <string name="sign_in_not_available_on_local">本地环境无法登录</string>
     <!-- google-translated 2026-05-04 -->
     <string name="sign_in_with_apple">使用 Apple 登录</string>
     <!-- google-translated 2026-05-04 -->
