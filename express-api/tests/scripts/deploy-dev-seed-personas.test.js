@@ -157,4 +157,26 @@ describe('seed-test-personas composite action — interface', () => {
       'export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa-seed.json',
     );
   });
+
+  test('does NOT use the dotenv preload flag on the node invocation (CI exports env directly)', () => {
+    // The script's own usage docstring shows the preload flag because it
+    // assumes a .env file on the dev Express host. In CI dotenv is not on
+    // the node resolution path (lives in express-api/node_modules, not
+    // the repo-root node_modules that the composite action invokes from),
+    // so the preload fails at runtime. Caught in run 26636553597: the
+    // first attempted dev deploy with this action failed at exactly this
+    // point. Pin the absence so it can't regress.
+    //
+    // Slice the actual `node ...` invocation line (not the whole file —
+    // the comment ABOVE the node line literally mentions the flag, so a
+    // whole-file `not.toContain` would match the comment text and pass-
+    // through the actual bug if it returned).
+    const nodeLine = SEED_ACTION.split('\n').find(
+      (l) => /^\s*node\s+/.test(l) && l.includes('provision-test-personas.js'),
+    );
+    expect(nodeLine).toBeDefined();
+    expect(nodeLine).not.toContain('-r dotenv');
+    // Positive form: the bare `node express-api/scripts/...` invocation.
+    expect(nodeLine).toMatch(/node\s+express-api\/scripts\/provision-test-personas\.js/);
+  });
 });
