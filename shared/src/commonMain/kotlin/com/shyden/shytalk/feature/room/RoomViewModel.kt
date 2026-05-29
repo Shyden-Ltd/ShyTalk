@@ -1196,7 +1196,13 @@ class RoomViewModel(
 
             // Only mute, never unmute — only the user themselves can unmute
             if (seat.isMuted) return@launch
-            roomRepository.toggleMute(roomId, seatIndex, true)
+            val result = roomRepository.toggleMute(roomId, seatIndex, true)
+            if (result is Resource.Error) {
+                // Surface 409 (CLOSED room), 403 (role mismatch race) + any
+                // network error so they reach Sentry/logcat instead of being
+                // a silent UX no-op. Pre-PR G this was fire-and-forget.
+                logE(TAG, "forceMuteUser failed: ${result.message}", result.exception)
+            }
         }
     }
 
@@ -1244,7 +1250,16 @@ class RoomViewModel(
             val targetName = targetUser?.displayName ?: "A user"
             val displayReason = reason.ifBlank { "No reason given" }
 
-            roomRepository.kickUser(roomId, targetUserId, seatIndex, kickerName, displayReason)
+            val kickResult = roomRepository.kickUser(roomId, targetUserId, seatIndex, kickerName, displayReason)
+            if (kickResult is Resource.Error) {
+                // Surface 409 (CLOSED room) + any server error so it reaches
+                // Sentry/logcat instead of being a silent UX no-op. If the kick
+                // failed, ALSO skip the system message — otherwise we'd post
+                // "$targetName was kicked" against a room where the kick was
+                // rejected, confusing every observer.
+                logE(TAG, "kickUser failed: ${kickResult.message}", kickResult.exception)
+                return@launch
+            }
             messageRepository.sendSystemMessage(roomId, "$targetName was kicked")
         }
     }
@@ -1253,7 +1268,12 @@ class RoomViewModel(
         viewModelScope.launch {
             val room = _uiState.value.room ?: return@launch
             if (_uiState.value.currentUserId != room.ownerId) return@launch
-            roomRepository.addHost(roomId, userId)
+            val result = roomRepository.addHost(roomId, userId)
+            if (result is Resource.Error) {
+                // Surface 409 (CLOSED room) + any server error so it reaches
+                // Sentry/logcat. Pre-PR G this was silent fire-and-forget.
+                logE(TAG, "addHost failed: ${result.message}", result.exception)
+            }
         }
     }
 

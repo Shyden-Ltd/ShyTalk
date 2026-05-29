@@ -503,7 +503,18 @@ class ActiveRoomManager(
                                         logD(TAG, "presenceMonitor: owner absent → setOwnerAway")
                                         roomRepository.setOwnerAway(roomId)
                                     } else {
-                                        roomRepository.removeDisconnectedUser(roomId, userId)
+                                        val removeResult = roomRepository.removeDisconnectedUser(roomId, userId)
+                                        if (removeResult is Resource.Error) {
+                                            // Surface 409 (CLOSED room) + any server error so it reaches
+                                            // Sentry/logcat. Pre-PR G this was silent fire-and-forget,
+                                            // so the presence monitor would loop on the same disconnected
+                                            // user every grace-window tick with no diagnostic.
+                                            logE(
+                                                TAG,
+                                                "removeDisconnectedUser failed for $userId: ${removeResult.message}",
+                                                removeResult.exception,
+                                            )
+                                        }
                                     }
                                     graceTimers.remove(userId)
                                     emitDisconnectedIds()

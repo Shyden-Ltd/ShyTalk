@@ -112,6 +112,10 @@ class RoomViewModelTest {
         coEvery { roomRepository.leaveSeat(any(), any()) } returns Resource.Success(Unit)
         coEvery { roomRepository.toggleMute(any(), any(), any()) } returns Resource.Success(Unit)
         coEvery { roomRepository.acceptInvite(any(), any(), any()) } returns Resource.Success(Unit)
+        // PR G — kickUser + addHost now check Resource<Unit>; default mock to Success
+        // so existing happy-path tests don't fall through the new Error early-return.
+        coEvery { roomRepository.kickUser(any(), any(), any(), any(), any()) } returns Resource.Success(Unit)
+        coEvery { roomRepository.addHost(any(), any()) } returns Resource.Success(Unit)
         coEvery { seatRequestRepository.createRequest(any(), any(), any(), any()) } returns Resource.Success(Unit)
         every { seatRequestRepository.getPendingRequests(any()) } returns pendingRequestsFlow
         every { seatRequestRepository.getRequestsByUser(any(), any()) } returns myRequestsFlow
@@ -751,6 +755,45 @@ class RoomViewModelTest {
 
             coVerify { roomRepository.kickUser("room-1", "attendee-1", null, any(), any()) }
             coVerify { messageRepository.sendSystemMessage("room-1", any()) }
+        }
+
+    @Test
+    fun `kickUser - does NOT send system message when kick returns Error`() =
+        roomTest {
+            // PR G — pre-fix this was fire-and-forget: a failed kick (e.g. 409 on
+            // a CLOSED room) silently no-op'd on the server but STILL posted
+            // '$targetName was kicked' as a system message, confusing every
+            // observer. Now the early-return on Resource.Error guards the
+            // sendSystemMessage call. This pin captures the UX-consistency fix.
+            viewModel = createViewModel()
+            val seats = TestData.createSeatsWithOwner(currentUserId).toMutableMap()
+            seats["3"] = TestData.createTestSeat(userId = "attendee-1")
+            coEvery { userRepository.getUser("attendee-1") } returns
+                Resource.Success(
+                    TestData.createTestUser(uid = "attendee-1", displayName = "Attendee"),
+                )
+            // Override the default Success mock for THIS test to simulate a 409
+            // (room closed) coming back from the server.
+            coEvery {
+                roomRepository.kickUser(any(), any(), any(), any(), any())
+            } returns Resource.Error("Room is closed")
+            emitRoomAsOwner(
+                TestData.createTestRoom(
+                    ownerId = currentUserId,
+                    participantIds = setOf(currentUserId, "attendee-1"),
+                    seats = seats,
+                ),
+            )
+            advanceUntilIdle()
+
+            viewModel.kickUser("attendee-1", 3)
+            advanceUntilIdle()
+
+            // Kick was attempted (we want the repo call to fire, server logs +
+            // sentry know about the failed attempt), but the system message
+            // MUST NOT post — otherwise observers see a fake announcement.
+            coVerify { roomRepository.kickUser("room-1", "attendee-1", 3, any(), any()) }
+            coVerify(exactly = 0) { messageRepository.sendSystemMessage("room-1", any()) }
         }
 
     @Test
