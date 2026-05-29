@@ -86,12 +86,22 @@ jobs:
             echo "::error::Unsupported target '$TARGET' — only 'dev' is allowed"
             exit 1
           fi
-          # Source the RTDB URL from the public Firebase config committed
-          # to the repo. Region-specific (europe-west1 for dev); cannot
-          # be derived from project ID alone.
-          DATABASE_URL=$(jq -r '.project_info.firebase_url' app/src/dev/google-services.json)
+          # RTDB URL is HARDCODED here, NOT sourced from a JSON file.
+          # The corresponding google-services.json files are gitignored
+          # (they contain the OAuth client IDs, treated as semi-sensitive
+          # client config) and decoded from a base64 secret only when
+          # the Android build needs them. The seed runner doesn't run
+          # the Android build, so requiring it to decode the file just
+          # to read one URL would mean declaring an extra secret on this
+          # reusable workflow and running an extra composite-action step.
+          # Region (europe-west1) + project (shytalk-dev) are stable for
+          # the lifetime of the Firebase project; if either ever changes
+          # this string + the pin test in
+          # express-api/tests/scripts/deploy-dev-seed-personas.test.js
+          # update together. Pre-refactor: same hardcode lived inline in
+          # deploy-dev.yml's seed step (PR #871).
           echo "firebase-project=shytalk-dev" >> "$GITHUB_OUTPUT"
-          echo "database-url=$DATABASE_URL" >> "$GITHUB_OUTPUT"
+          echo "database-url=https://shytalk-dev-default-rtdb.europe-west1.firebasedatabase.app" >> "$GITHUB_OUTPUT"
 
       - name: Run seed action
         uses: ./.github/actions/seed-test-personas

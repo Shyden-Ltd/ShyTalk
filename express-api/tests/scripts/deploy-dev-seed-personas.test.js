@@ -152,14 +152,68 @@ describe('seed-dev-personas.yml — reusable workflow + direct dispatch', () => 
     expect(SEED_WORKFLOW).toContain('Unsupported target');
   });
 
-  test('sources FIREBASE_DATABASE_URL from app/src/dev/google-services.json (single source of truth)', () => {
-    // The RTDB URL is region-specific (europe-west1 for dev) — sourcing
-    // it from the committed Firebase config means a future region migration
-    // updates ONE file (the google-services.json) and the seed workflow
-    // automatically picks it up. Pre-refactor, the URL was hardcoded in
-    // deploy-dev.yml.
-    expect(SEED_WORKFLOW).toContain('jq -r');
-    expect(SEED_WORKFLOW).toContain('app/src/dev/google-services.json');
+  test('hardcodes FIREBASE_DATABASE_URL to the dev project + region (no JSON lookup)', () => {
+    // The RTDB URL is hardcoded — NOT sourced from a file. The
+    // corresponding google-services.json is gitignored (it carries the
+    // OAuth client ID, treated as semi-sensitive client config) so it's
+    // not on the runner unless the Android-build composite-action step
+    // decodes it from a base64 secret first. The seed runner doesn't
+    // run the Android build; adding a decode step + secret declaration
+    // just to read one stable URL is more cost than the single-source-
+    // of-truth benefit. Region (europe-west1) + project (shytalk-dev)
+    // are stable for the project lifetime.
+    expect(SEED_WORKFLOW).toContain(
+      'https://shytalk-dev-default-rtdb.europe-west1.firebasedatabase.app',
+    );
+  });
+
+  test('shell-command bodies do NOT operationally reference any gitignored google-services.json — regression guard from the 2026-05-29 first-dispatch failure', () => {
+    // Run 26645780661 broke because an earlier draft did
+    //   jq -r '.project_info.firebase_url' app/src/dev/google-services.json
+    // — that file is gitignored, so the jq call failed at the very
+    // first dispatch (caught only because we ran the workflow_dispatch
+    // live; every static gate had passed).
+    //
+    // We strip COMMENT lines from the run blocks before asserting:
+    // commenting the file path is fine (and useful — `git grep
+    // google-services.json` should still find the discussion), but no
+    // shell command may use it. A future maintainer who tries to
+    // factor the URL out of YAML must either commit the source file
+    // or add a decode-from-secret step first.
+    const runBlocks = SEED_WORKFLOW.split(/run:\s*\|/).slice(1);
+    expect(runBlocks.length).toBeGreaterThan(0);
+    runBlocks.forEach((block) => {
+      // Find next-step boundary by searching for both `- name:` and `- uses:`
+      // separately with indexOf — avoids SonarJS's slow-regex false
+      // positive on the `(name|uses)` alternation pattern. Picking the
+      // FIRST occurrence of either marker correctly bounds the run body
+      // before the next step starts.
+      const nameIdx = block.indexOf('\n      - name:');
+      const usesIdx = block.indexOf('\n      - uses:');
+      let stepBoundary = -1;
+      if (nameIdx !== -1 && usesIdx !== -1) {
+        stepBoundary = Math.min(nameIdx, usesIdx);
+      } else if (nameIdx !== -1) {
+        stepBoundary = nameIdx;
+      } else if (usesIdx !== -1) {
+        stepBoundary = usesIdx;
+      }
+      const body = stepBoundary === -1 ? block : block.slice(0, stepBoundary);
+      const code = body
+        .split('\n')
+        .filter((line) => !line.trimStart().startsWith('#'))
+        .join('\n');
+      expect(code).not.toContain('google-services.json');
+      // String-contains checks instead of a regex to avoid SonarJS's
+      // slow-regex false positive on `['"]\.project_info` — that pattern
+      // has no super-linear backtracking risk, but the linter rejects
+      // character-class alternations inside quantified groups. Both
+      // jq + yq are common offenders; cover both.
+      expect(code).not.toContain("jq -r '.project_info");
+      expect(code).not.toContain('jq -r ".project_info');
+      expect(code).not.toContain("yq -r '.project_info");
+      expect(code).not.toContain('yq -r ".project_info');
+    });
   });
 
   test('uses the seed-test-personas composite action', () => {
