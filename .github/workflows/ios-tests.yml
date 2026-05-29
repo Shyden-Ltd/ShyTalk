@@ -97,14 +97,16 @@ jobs:
     needs: [resolve-inputs]
     if: always() && needs.resolve-inputs.result == 'success' && needs.resolve-inputs.outputs.run_ios == 'true'
     runs-on: macos-15
-    # Bumped 2026-05-22 from 30 → 60. PR #714 was the first iOS-touching
-    # PR after PR #708 enabled iOS E2E gating; its build-ios run
-    # cancelled at exactly 30:00. Cold K/N compile alone takes 24-29
-    # min on macos-15; with pod install + xcodebuild build-for-testing
-    # on top, 30 is below the floor. 60 gives ~15 min headroom over the
-    # observed worst case. Pinned by
-    # tests/scripts/ios-tests-build-cache.test.js.
-    timeout-minutes: 60
+    # Bumped 2026-05-22 from 30 → 60 (PR #714 cancelled at 30:00 exactly).
+    # Bumped 2026-05-29 from 60 → 90 (PR #865 cancelled at 60:00 exactly;
+    # iOS Build duration crept from ~50 min on PR #864 (PR F) to the full
+    # 60-min cap on PR #865). Cold K/N compile = 24-29 min on macos-15;
+    # with pod install + Xcode build-for-testing + upload-artifact + cache
+    # post-steps, the worst-case has been creeping up. 90 gives ~30 min
+    # headroom over the most-recent observed worst case, restoring the
+    # PR #714-era safety margin. Pinned by
+    # tests/scripts/ios-tests-build-cache.test.js (asserts ≥60).
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
