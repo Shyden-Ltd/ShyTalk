@@ -29,6 +29,10 @@ on:
         description: "Run sanity checks after deploy (pages load, API responds)"
         type: boolean
         default: true
+      seed-personas:
+        description: "Re-seed dev test personas (P-02..P-19). Idempotent: refreshes seeded users only — never touches manually-created users."
+        type: boolean
+        default: true
       release-notes:
         description: "Firebase App Distribution release notes (what to test)"
         type: string
@@ -152,6 +156,21 @@ jobs:
         with:
           service-account-json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}
           firebase-project: shytalk-dev
+
+      # Refresh the seeded test personas (P-02..P-19) on every dev deploy.
+      # Idempotent: writes only to the hardcoded persona uniqueIds, never
+      # touches manually-created users. Every seeded persona carries
+      # `seedSource: 'automation'` + a `[SEED]` displayName prefix so they're
+      # identifiable as automation accounts in the UI (so testers, mods,
+      # and internal dogfood users don't mistake them for real users).
+      # Opt-out via workflow_dispatch input `seed-personas=false`.
+      - name: Seed test personas (P-02..P-19)
+        if: inputs.seed-personas != false
+        uses: ./.github/actions/seed-test-personas
+        with:
+          service-account-json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}
+          firebase-project: shytalk-dev
+          personas-password: ${{ secrets.PERSONAS_PASSWORD_DEV }}
 
   deploy-web-dev:
     name: Deploy Web to Dev

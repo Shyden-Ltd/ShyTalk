@@ -1,0 +1,160 @@
+/**
+ * Pins the integration that wires `provision-test-personas.js` into
+ * `deploy-dev.yml` so every dev deploy refreshes the seeded persona cast
+ * (P-02..P-19). Operator directive 2026-05-29:
+ *
+ *   1. Seeding must happen as part of deploy-dev (not a manual side-task).
+ *   2. The script must remove ONLY seed data and replace with fresh seed
+ *      data — manually-created accounts are never touched.
+ *   3. Seed accounts must be easily identifiable so regular users aren't
+ *      confused (covered by [SEED] displayName prefix + seedSource field,
+ *      pinned in provision-test-personas.test.js).
+ *
+ * This file pins the workflow-level half of that directive: the
+ * `seed-personas` input exists with default true, the deploy-backend-dev
+ * job invokes the `seed-test-personas` composite action behind that
+ * toggle, and the action declares the inputs it needs to authenticate
+ * against shytalk-dev.
+ */
+
+jest.mock('../../src/utils/log', () => ({
+  debug: jest.fn(),
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+}));
+
+const { readFileSync } = require('fs');
+const { join } = require('path');
+
+const REPO_ROOT = join(__dirname, '..', '..', '..');
+const DEPLOY_DEV = readFileSync(join(REPO_ROOT, '.github', 'workflows', 'deploy-dev.yml'), 'utf8');
+const SEED_ACTION = readFileSync(
+  join(REPO_ROOT, '.github', 'actions', 'seed-test-personas', 'action.yml'),
+  'utf8',
+);
+
+describe('deploy-dev.yml — seed-personas integration', () => {
+  test('declares a workflow_dispatch input `seed-personas` defaulting to true', () => {
+    // Pin both the input name and the default. A `default: false` would
+    // silently disable seeding on every workflow_dispatch run that didn't
+    // explicitly opt in — exactly the failure mode the operator wants to
+    // prevent by automating the seed step in the first place.
+    expect(DEPLOY_DEV).toMatch(/^ {6}seed-personas:$/m);
+    // The block following should contain a default: true (within ~5 lines).
+    const inputBlock = DEPLOY_DEV.match(/^ {6}seed-personas:[\s\S]{1,300}?default: (true|false)/m);
+    expect(inputBlock).not.toBeNull();
+    expect(inputBlock[1]).toBe('true');
+  });
+
+  test('deploy-backend-dev job invokes the seed-test-personas composite action', () => {
+    // The step lives under `./.github/actions/seed-test-personas` (a
+    // composite action, NOT an inline shell step) so the credential-
+    // handling + trap-cleanup logic is shared with the parallel
+    // deploy-firebase-rules action.
+    expect(DEPLOY_DEV).toContain('uses: ./.github/actions/seed-test-personas');
+  });
+
+  test('seed step is gated on `inputs.seed-personas != false` (operator opt-out)', () => {
+    // Matching `!= false` (not `== true`) means the seed step ALSO runs on
+    // workflow events that don't supply the input (e.g. if some future
+    // trigger fires without inputs at all). The operator can disable on a
+    // per-run basis via `gh workflow run … -f seed-personas=false`.
+    const stepBlock = DEPLOY_DEV.match(
+      /Seed test personas[\s\S]{0,400}uses: \.\/\.github\/actions\/seed-test-personas/m,
+    );
+    expect(stepBlock).not.toBeNull();
+    expect(stepBlock[0]).toMatch(/if:\s*inputs\.seed-personas\s*!=\s*false/);
+  });
+
+  test('seed step passes the FIREBASE_SERVICE_ACCOUNT_DEV + PERSONAS_PASSWORD_DEV secrets', () => {
+    // Both secrets must come from GitHub Actions secrets (not env vars
+    // baked into the workflow) so they never appear in workflow YAML
+    // diffs or run logs. PERSONAS_PASSWORD_DEV is a NEW secret the
+    // operator added once (value matches `~/.shytalk/dev-personas.env`).
+    const stepBlock = DEPLOY_DEV.match(
+      /uses: \.\/\.github\/actions\/seed-test-personas[\s\S]{1,500}/m,
+    );
+    expect(stepBlock).not.toBeNull();
+    expect(stepBlock[0]).toMatch(
+      /service-account-json:\s*\$\{\{\s*secrets\.FIREBASE_SERVICE_ACCOUNT_DEV\s*\}\}/,
+    );
+    expect(stepBlock[0]).toMatch(
+      /personas-password:\s*\$\{\{\s*secrets\.PERSONAS_PASSWORD_DEV\s*\}\}/,
+    );
+    expect(stepBlock[0]).toMatch(/firebase-project:\s*shytalk-dev/);
+  });
+
+  test('seed step is positioned AFTER the firebase-rules deploy + verify dev API health', () => {
+    // Ordering invariant: seeding before the API is verified live would
+    // mean we could seed against a half-deployed dev. By running the seed
+    // step LAST inside deploy-backend-dev (after API health check + rules
+    // deploy), we guarantee the seed targets a healthy, fully-deployed
+    // shytalk-dev.
+    const rulesIdx = DEPLOY_DEV.indexOf('uses: ./.github/actions/deploy-firebase-rules');
+    const seedIdx = DEPLOY_DEV.indexOf('uses: ./.github/actions/seed-test-personas');
+    expect(rulesIdx).toBeGreaterThan(-1);
+    expect(seedIdx).toBeGreaterThan(-1);
+    expect(seedIdx).toBeGreaterThan(rulesIdx);
+  });
+});
+
+describe('seed-test-personas composite action — interface', () => {
+  test('declares the three required inputs (service-account-json, firebase-project, personas-password)', () => {
+    // Use indexOf-based slicing instead of `\s*\n\s*` regex — SonarJS flags
+    // the nested whitespace quantifiers as super-linear-backtracking-prone.
+    // For each input name, find it + assert `description:` appears within
+    // the next ~50 chars (covers the typical YAML indent + comment-free
+    // block shape; bigger window would risk crossing into another input).
+    for (const name of ['service-account-json:', 'firebase-project:', 'personas-password:']) {
+      const idx = SEED_ACTION.indexOf(name);
+      expect(idx).toBeGreaterThan(-1);
+      const window = SEED_ACTION.slice(idx, idx + 50);
+      expect(window).toContain('description:');
+    }
+  });
+
+  test('all three inputs are required (no defaults that would silently work in CI without secrets)', () => {
+    // Required inputs make the action fail loudly if any secret is missing
+    // from the workflow that calls it — the alternative (defaults to empty
+    // string) would let firebase-admin attempt to auth with no credentials,
+    // producing a confusing log line buried in the runner output.
+    // Slice the inputs block via string-index (not greedy regex) so SonarJS
+    // doesn't flag a super-linear-backtracking risk on `[\s\S]+?`.
+    const inputsIdx = SEED_ACTION.indexOf('inputs:');
+    const runsIdx = SEED_ACTION.indexOf('\nruns:');
+    expect(inputsIdx).toBeGreaterThan(-1);
+    expect(runsIdx).toBeGreaterThan(inputsIdx);
+    const inputsBlock = SEED_ACTION.slice(inputsIdx, runsIdx);
+    // For each required input, slice from the input's line to the next
+    // input/end and assert `required: true` is in that slice — avoids the
+    // lazy-quantifier regex shape entirely.
+    for (const name of ['service-account-json:', 'firebase-project:', 'personas-password:']) {
+      const start = inputsBlock.indexOf(`  ${name}`);
+      expect(start).toBeGreaterThan(-1);
+      // Slice forward until the next 2-space-indented key or end of block.
+      const nextKey = inputsBlock.slice(start + name.length).search(/\n {2}[a-z]/);
+      const end = nextKey === -1 ? inputsBlock.length : start + name.length + nextKey;
+      const slice = inputsBlock.slice(start, end);
+      expect(slice).toContain('required: true');
+    }
+  });
+
+  test('wipes the service-account JSON via a trap (credential never leaks across jobs)', () => {
+    // Without the trap, set -e would abort the bash script before the
+    // trailing `rm` runs, leaving /tmp/firebase-sa-seed.json on the
+    // shared runner. Mirrors the safety pattern in
+    // deploy-firebase-rules/action.yml.
+    expect(SEED_ACTION).toContain("trap 'rm -f /tmp/firebase-sa-seed.json' EXIT");
+    expect(SEED_ACTION).toContain('umask 077');
+  });
+
+  test('passes GOOGLE_APPLICATION_CREDENTIALS so firebase-admin auto-auths', () => {
+    // The provision script's `admin.initializeApp()` defaults to
+    // GOOGLE_APPLICATION_CREDENTIALS — if the action didn't export it,
+    // firebase-admin would fall back to gcloud ADC and fail in CI.
+    expect(SEED_ACTION).toContain(
+      'export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa-seed.json',
+    );
+  });
+});

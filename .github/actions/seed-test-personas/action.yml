@@ -1,0 +1,47 @@
+name: 'Seed Test Personas'
+description: |
+  Provisions / refreshes the seeded test-persona cast (P-02 ... P-19) onto a
+  Firebase project's Auth + Firestore via firebase-admin. Idempotent: re-runs
+  update the existing seeded user docs in place (replace-only-seed-data
+  contract), never touch user accounts created manually by real people, and
+  every seed persona is marked with `seedSource: 'automation'` + a `[SEED]`
+  prefix on `displayName` so humans seeing the accounts in the app know at a
+  glance that they are not regular users.
+
+  Modeled on `.github/actions/deploy-firebase-rules/action.yml` — writes the
+  service-account JSON to a 077-umask temp file, exports
+  GOOGLE_APPLICATION_CREDENTIALS, and removes the file via `trap` so the
+  credential is wiped even if the provision fails. PERSONAS_PASSWORD comes
+  from a separate workflow secret (NOT in the service-account JSON).
+
+inputs:
+  service-account-json:
+    description: 'Firebase service account JSON (secret value) for the target project'
+    required: true
+  firebase-project:
+    description: 'Firebase project ID (must contain "dev" or "local" — the script asserts this)'
+    required: true
+  personas-password:
+    description: 'Shared password for the seeded persona accounts (≥20 chars). Generated once via openssl rand -base64 24, stored as a GitHub secret, never logged.'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Seed test personas
+      shell: bash
+      env:
+        SA_JSON: ${{ inputs.service-account-json }}
+        PROJECT: ${{ inputs.firebase-project }}
+        PERSONAS_PASSWORD: ${{ inputs.personas-password }}
+      run: |
+        set -euo pipefail
+        umask 077
+        echo "$SA_JSON" > /tmp/firebase-sa-seed.json
+        # Trap so the credential file is wiped even if provision fails —
+        # without this, `set -e` would abort before the trailing `rm` and
+        # the JSON would leak to whatever runs next on the runner.
+        trap 'rm -f /tmp/firebase-sa-seed.json' EXIT
+        export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa-seed.json
+        export FIREBASE_PROJECT_ID="$PROJECT"
+        node -r dotenv/config express-api/scripts/provision-test-personas.js

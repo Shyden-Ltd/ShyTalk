@@ -361,11 +361,23 @@ function buildSocialGraphWrites(personasList) {
  */
 function buildUserDoc(p, fbUid, opts = {}) {
   const { existingCreatedAt = null, now = Date.now() } = opts;
+  // Apply the `[SEED] ` prefix to the user-visible displayName HERE, at
+  // write-time — NOT in the persona registry above. Reason: the runner
+  // (manual-qa-runner.js) resolves personas by name-prefix match against
+  // the registry ("Alice" → P-02), and a `[SEED]` prefix in the registry
+  // would break that lookup across ~70 runner tests. The visible-marker
+  // requirement is a Firestore / UI concern; the runner uses the registry
+  // for in-process lookup and doesn't need the prefix. Idempotent: if
+  // an existing displayName already has the prefix (re-runs / manual seed
+  // before this code shipped), don't double-prefix.
+  const prefixedName = p.displayName.startsWith('[SEED] ')
+    ? p.displayName
+    : `[SEED] ${p.displayName}`;
   const doc = {
     uid: String(p.uniqueId),
     firebaseUid: fbUid,
     uniqueId: p.uniqueId,
-    displayName: p.displayName,
+    displayName: prefixedName,
     email: p.email,
     dateOfBirth: dobMs(p.dob),
     cohort: p.cohort,
@@ -376,6 +388,19 @@ function buildUserDoc(p, fbUid, opts = {}) {
     gcs: p.wallet.gcs,
     ageVerified: !!p.ageVerified,
     isQa: true,
+    // Seed-identification markers — let UI / admin tooling distinguish
+    // automation-seeded personas from real users at a glance.
+    //   - `seedSource: 'automation'` is the machine-readable hook (future
+    //     UI badges, admin filters, analytics exclusion all key off this).
+    //   - The `[SEED]` prefix on `displayName` (set in the persona registry
+    //     above) is the immediate user-visible marker so any human seeing
+    //     these accounts in the app — moderators, testers, internal
+    //     dogfood users — knows at a glance these are not regular users.
+    //   - `seedRunAt` captures when the last provision ran for audit
+    //     trail — useful when investigating "why does dev have stale
+    //     personas?" — compare against the deploy-dev workflow history.
+    seedSource: 'automation',
+    seedRunAt: now,
     createdAt: existingCreatedAt || now,
     ...(p.extra || {}),
   };

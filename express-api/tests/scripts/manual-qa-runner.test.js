@@ -702,7 +702,7 @@ describe('runFeatureFile end-to-end (stubbed fetch)', () => {
         return {
           status: 200,
           text: async () =>
-            JSON.stringify({ uniqueId: 50000010, displayName: 'Alice (P-02 adult power)' }),
+            JSON.stringify({ uniqueId: 50000010, displayName: '[SEED] Alice (P-02 adult power)' }),
         };
       }
       // 4. POST follow — 400 for self
@@ -7021,8 +7021,8 @@ describe('Current screen Given (X on <plat> is on the "Y" screen)', () => {
 
 describe("Cross-persona displayName assertion (UI shows X's displayName)", () => {
   test("Web dump contains target persona's displayName — ok", async () => {
-    // Alice P-02 displayName is "Alice (P-02 adult power)" per persona registry
-    const dump = 'Discover\nAlice (P-02 adult power)\nWallet';
+    // Alice P-02 displayName is "[SEED] Alice (P-02 adult power)" per persona registry (PR: dev-seed-personas-on-deploy adds the [SEED] prefix)
+    const dump = 'Discover\n[SEED] Alice (P-02 adult power)\nWallet';
     const ctx = makeCtx({ webDriver: { webUiDump: jest.fn(async () => dump) } });
     const r = await executeStep(
       { kind: 'Then', text: "Adam's Web UI shows Alice's displayName" },
@@ -7043,12 +7043,12 @@ describe("Cross-persona displayName assertion (UI shows X's displayName)", () =>
   });
 
   test('qualified variant: "X\'s displayName \\"<expected>\\"" — checks dump contains the literal', async () => {
-    const dump = 'Discover\nAlice (P-02 adult power)\nWallet';
+    const dump = 'Discover\n[SEED] Alice (P-02 adult power)\nWallet';
     const ctx = makeCtx({ uiDriver: { androidUiDump: jest.fn(async () => dump) } });
     const r = await executeStep(
       {
         kind: 'Then',
-        text: 'Adam\'s Android UI shows Alice\'s displayName "Alice (P-02 adult power)"',
+        text: 'Adam\'s Android UI shows Alice\'s displayName "[SEED] Alice (P-02 adult power)"',
       },
       ctx,
     );

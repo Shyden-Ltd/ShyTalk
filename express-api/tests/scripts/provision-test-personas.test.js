@@ -61,6 +61,19 @@ describe('persona registry shape', () => {
     }
   });
 
+  test('persona registry displayNames are CLEAN (no [SEED] prefix — prefix is added at write-time in buildUserDoc)', () => {
+    // The visible-marker prefix is added BY buildUserDoc, not stored in
+    // the persona registry — because the manual-qa-runner resolves
+    // personas by name-prefix match against the registry ("Alice" → P-02),
+    // and a `[SEED]` in the registry would break that lookup across ~70
+    // runner tests. The visible-marker contract is pinned by the
+    // `buildUserDoc applies [SEED] prefix...` test in the buildUserDoc
+    // describe block below.
+    for (const p of personas) {
+      expect(p.displayName).not.toMatch(/^\[SEED\] /);
+    }
+  });
+
   test('no duplicate uniqueId', () => {
     const ids = personas.map((p) => p.uniqueId);
     expect(new Set(ids).size).toBe(ids.length);
@@ -231,6 +244,50 @@ describe('buildUserDoc', () => {
   test('uses `now` when no existing createdAt', () => {
     const doc = buildUserDoc(alice, 'fb-uid-alice', { now: 5555 });
     expect(doc.createdAt).toBe(5555);
+  });
+
+  test('applies [SEED] prefix to displayName at write-time (visible UI marker)', () => {
+    // Per operator directive 2026-05-29: seed personas must be VISUALLY
+    // identifiable to any human seeing them in the UI — moderators,
+    // testers, internal dogfood users — so they aren't confused with
+    // real users. The prefix is applied HERE (at write-time) rather than
+    // baked into the persona registry, so the manual-qa-runner's name-
+    // resolver can still look up "Alice" → P-02 without seeing [SEED].
+    const doc = buildUserDoc(alice, 'fb-uid-alice');
+    expect(doc.displayName).toBe('[SEED] Alice (P-02 adult power)');
+    expect(doc.displayName).toMatch(/^\[SEED\] /);
+  });
+
+  test('does NOT double-prefix when registry displayName already starts with [SEED]', () => {
+    // Idempotency guard: if a prior version of this script already wrote
+    // `[SEED] X` to the registry, OR a manual seed-run touched the doc
+    // outside this script's path, re-running must not produce
+    // `[SEED] [SEED] X`. Pin the no-double-prefix invariant.
+    const aliceAlreadyPrefixed = { ...alice, displayName: '[SEED] Alice (P-02 adult power)' };
+    const doc = buildUserDoc(aliceAlreadyPrefixed, 'fb-uid-alice');
+    expect(doc.displayName).toBe('[SEED] Alice (P-02 adult power)');
+    expect(doc.displayName).not.toMatch(/\[SEED\] \[SEED\] /);
+  });
+
+  test('writes `seedSource: "automation"` marker (machine-readable seed flag)', () => {
+    // Future UI badges, admin filters, and analytics-exclusion queries all
+    // key off seedSource — pin the literal so a rename / refactor of the
+    // field name fails the test loudly instead of silently breaking those
+    // downstream consumers.
+    const doc = buildUserDoc(alice, 'fb-uid-alice');
+    expect(doc.seedSource).toBe('automation');
+  });
+
+  test('writes a numeric `seedRunAt` audit timestamp', () => {
+    // `seedRunAt` is the only field that varies across re-runs (everything
+    // else is idempotent) — it's the audit trail when investigating "why
+    // does dev have stale personas?". Pin that it's a number, set to the
+    // passed-in `now`, not the existing createdAt.
+    const doc = buildUserDoc(alice, 'fb-uid-alice', { now: 5555, existingCreatedAt: 1234567890 });
+    expect(doc.seedRunAt).toBe(5555);
+    expect(typeof doc.seedRunAt).toBe('number');
+    // Sanity: seedRunAt is distinct from createdAt (which preserved the existing value).
+    expect(doc.createdAt).toBe(1234567890);
   });
 
   test('merges extras over base doc fields', () => {
