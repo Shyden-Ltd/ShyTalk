@@ -157,25 +157,20 @@ jobs:
           service-account-json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}
           firebase-project: shytalk-dev
 
-      # Refresh the seeded test personas (P-02..P-19) on every dev deploy.
-      # Idempotent: writes only to the hardcoded persona uniqueIds, never
-      # touches manually-created users. Every seeded persona carries
-      # `seedSource: 'automation'` + a `[SEED]` displayName prefix so they're
-      # identifiable as automation accounts in the UI (so testers, mods,
-      # and internal dogfood users don't mistake them for real users).
-      # Opt-out via workflow_dispatch input `seed-personas=false`.
-      - name: Seed test personas (P-02..P-19)
-        if: inputs.seed-personas != false
-        uses: ./.github/actions/seed-test-personas
-        with:
-          service-account-json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}
-          firebase-project: shytalk-dev
-          personas-password: ${{ secrets.PERSONAS_PASSWORD_DEV }}
-          # Region-specific (europe-west1) — sourced from
-          # app/src/dev/google-services.json (public Firebase config).
-          # Required because the provision script transitively imports
-          # firebase.js which throws if FIREBASE_DATABASE_URL is unset.
-          database-url: https://shytalk-dev-default-rtdb.europe-west1.firebasedatabase.app
+  # Refresh the seeded test personas (P-02..P-19) on every dev deploy.
+  # Factored into a SEPARATE reusable workflow (`seed-dev-personas.yml`)
+  # so it can ALSO be invoked directly via `gh workflow run
+  # seed-dev-personas.yml` to refresh persona state between journey-test
+  # runs WITHOUT a full deploy cycle (~30-60min). Per operator directive
+  # 2026-05-29.
+  #
+  # Opt-out via workflow_dispatch input `seed-personas=false`.
+  seed-dev-personas:
+    name: Seed Dev Personas
+    needs: deploy-backend-dev
+    if: needs.deploy-backend-dev.result == 'success' && inputs.seed-personas != false
+    uses: ./.github/workflows/seed-dev-personas.yml
+    secrets: inherit
 
   deploy-web-dev:
     name: Deploy Web to Dev

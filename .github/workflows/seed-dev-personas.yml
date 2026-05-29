@@ -1,0 +1,107 @@
+name: Seed Dev Personas
+
+# Reusable workflow + direct dispatch for refreshing the seeded persona cast
+# (P-02..P-19) on a Firebase project. Two invocation paths:
+#
+#   1. workflow_call — invoked from `deploy-dev.yml` after the backend
+#      deploy + rules deploy, so every dev deploy ends with personas in a
+#      known-fresh state.
+#   2. workflow_dispatch — invoked DIRECTLY by the operator (or CI on a
+#      test-rerun job) to refresh seed data WITHOUT a full deploy cycle.
+#      Use case: a journey-runner pass mutated persona state (wallet
+#      balances, follow edges, etc.); to start the next pass clean, run
+#      this workflow rather than the ~30-60min deploy-dev workflow.
+#
+# Implementation lives in `.github/actions/seed-test-personas/action.yml`
+# (a composite action). This file is the workflow-level wrapper that
+# makes the action callable from both paths.
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: 'Target environment (dev only — prod-safe by design; the provision script asserts the project ID contains "dev" or "local")'
+        type: string
+        default: dev
+        required: false
+    secrets:
+      # Declared with the EXACT repo-level secret names so `secrets: inherit`
+      # from the caller (deploy-dev.yml) forwards by name, AND actionlint
+      # static-checks the references inside this workflow against the same
+      # declared names. Using camelCase aliases here instead would force a
+      # named-mapping in every caller; the inherit path is simpler.
+      FIREBASE_SERVICE_ACCOUNT_DEV:
+        description: 'Firebase service account JSON for the dev project'
+        required: true
+      PERSONAS_PASSWORD_DEV:
+        description: 'Shared seeded-persona password'
+        required: true
+
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target environment'
+        type: choice
+        options:
+          - dev
+        default: dev
+
+# Serialize seed runs against the same target — concurrent provisioning
+# would last-write-wins each persona doc (each upsert writes the full doc,
+# so the LAST writer's seedRunAt timestamp wins but no data is lost).
+# Still safer to queue: a re-seed mid-flight while another is running
+# wastes Firebase quota for no observable benefit.
+concurrency:
+  group: seed-dev-personas-${{ inputs.target }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    name: Seed test personas (${{ inputs.target }})
+    runs-on: ubuntu-24.04
+    # Provision touches ~17 personas with create-or-update each — typical
+    # run is 30-60 sec. 10min cap leaves headroom for transient Firebase
+    # Auth quota throttling without letting a stuck run idle forever.
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - uses: ./.github/actions/setup-node
+
+      - name: Resolve target-specific values
+        id: target-values
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          # Dev is the only supported target (prod is gated by the
+          # provision script's assertSafeProject() check, which refuses
+          # to run unless the project id contains "dev" or "local"; we
+          # also restrict the workflow_dispatch input to `dev` for
+          # belt-and-suspenders).
+          if [ "$TARGET" != "dev" ]; then
+            echo "::error::Unsupported target '$TARGET' — only 'dev' is allowed"
+            exit 1
+          fi
+          # Source the RTDB URL from the public Firebase config committed
+          # to the repo. Region-specific (europe-west1 for dev); cannot
+          # be derived from project ID alone.
+          DATABASE_URL=$(jq -r '.project_info.firebase_url' app/src/dev/google-services.json)
+          echo "firebase-project=shytalk-dev" >> "$GITHUB_OUTPUT"
+          echo "database-url=$DATABASE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Run seed action
+        uses: ./.github/actions/seed-test-personas
+        with:
+          # For workflow_call, secrets are forwarded by the caller via
+          # `secrets:` block; for workflow_dispatch, they resolve from
+          # the repo-level GitHub Actions secrets (PERSONAS_PASSWORD_DEV,
+          # FIREBASE_SERVICE_ACCOUNT_DEV). Both paths land in the same
+          # `secrets.X` references at this scope.
+          service-account-json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}
+          firebase-project: ${{ steps.target-values.outputs.firebase-project }}
+          personas-password: ${{ secrets.PERSONAS_PASSWORD_DEV }}
+          database-url: ${{ steps.target-values.outputs.database-url }}
