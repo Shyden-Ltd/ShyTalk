@@ -131,6 +131,10 @@ const ANDROID_METHOD_NAMES = [
   'androidTapByTag',
   'androidSearchIn',
   'androidScanAllRenderedStrings',
+  // Network-state manipulation (j09: host disconnect → room auto-close).
+  // Pairs `svc wifi disable` + `svc data disable` to fully drop the
+  // device's connectivity, then re-enables both after a sleep.
+  'androidNetworkDropFor',
 ];
 
 function listMethods() {
@@ -2076,6 +2080,44 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       console.error(`[android-driver] androidOpenScreen(${screen}) failed: ${e.message}`);
       return false;
     }
+  };
+
+  // Network-drop simulation for j09's "Host disconnects unexpectedly —
+  // room auto-closes after grace period" scenario. Disables wifi + mobile
+  // data via `svc` (works under adb shell on unrooted devices; no root or
+  // WRITE_SECURE_SETTINGS grant needed because adb shell already has
+  // android.permission.WRITE_SECURE_SETTINGS via the shell UID).
+  //
+  // Runs through the disable → sleep → enable sequence regardless of any
+  // intermediate error so we don't leave the device offline if a step
+  // throws — equivalent to a try/finally pattern. The persona `name` is
+  // accepted for matcher-contract alignment (the runner step
+  // "<persona>'s Android network drops for N seconds" passes it) but
+  // unused — the driver acts on the singleton device under its serial.
+  driver.androidNetworkDropFor = async (name, seconds) => {
+    const durationMs = Math.max(0, Number(seconds) * 1000);
+    let dropOk = true;
+    try {
+      adb(['shell', 'svc', 'wifi', 'disable']);
+      adb(['shell', 'svc', 'data', 'disable']);
+    } catch (e) {
+      dropOk = false;
+      console.error(
+        `[android-driver] androidNetworkDropFor(${name}, ${seconds}) disable phase failed: ${e.message}`,
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, durationMs));
+    let restoreOk = true;
+    try {
+      adb(['shell', 'svc', 'wifi', 'enable']);
+      adb(['shell', 'svc', 'data', 'enable']);
+    } catch (e) {
+      restoreOk = false;
+      console.error(
+        `[android-driver] androidNetworkDropFor(${name}, ${seconds}) re-enable failed: ${e.message}`,
+      );
+    }
+    return dropOk && restoreOk;
   };
 
   driver.close = async () => {

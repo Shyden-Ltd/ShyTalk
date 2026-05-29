@@ -15932,3 +15932,160 @@ describe('android-adb-driver — androidShowsUserCardSkeletons', () => {
     expect(await driver.androidShowsUserCardSkeletons('Bao')).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidNetworkDropFor', () => {
+  // Runner step: "<Name>'s Android network drops for N seconds" (j09:
+  // "Host disconnects unexpectedly — room auto-closes after grace period").
+  // Driver disables wifi + mobile data, sleeps N seconds, re-enables both.
+  //
+  // Implementation uses `svc wifi/data disable|enable` which works on
+  // unrooted devices via adb shell's WRITE_SECURE_SETTINGS grant; no
+  // root or app-specific permission needed.
+  //
+  // adb() in the driver produces shell-quoted command strings per the
+  // mockExec contract — each arg is `'<arg>'` joined by single spaces.
+  // So `adb(['shell', 'svc', 'wifi', 'disable'])` produces
+  //   "'adb' '-s' 'emulator-5554' 'shell' 'svc' 'wifi' 'disable'".
+  // Tests assert against that exact shape.
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  const WIFI_DISABLE = "'adb' '-s' 'emulator-5554' 'shell' 'svc' 'wifi' 'disable'";
+  const DATA_DISABLE = "'adb' '-s' 'emulator-5554' 'shell' 'svc' 'data' 'disable'";
+  const WIFI_ENABLE = "'adb' '-s' 'emulator-5554' 'shell' 'svc' 'wifi' 'enable'";
+  const DATA_ENABLE = "'adb' '-s' 'emulator-5554' 'shell' 'svc' 'data' 'enable'";
+
+  test('issues svc-disable + svc-enable for both wifi + data', async () => {
+    mockExec({});
+    const driver = await createAndroidDriver();
+    const promise = driver.androidNetworkDropFor('Theo', 5);
+    await jest.advanceTimersByTimeAsync(5000);
+    expect(await promise).toBe(true);
+    const calls = execSync.mock.calls.map((c) => c[0]);
+    expect(calls).toContain(WIFI_DISABLE);
+    expect(calls).toContain(DATA_DISABLE);
+    expect(calls).toContain(WIFI_ENABLE);
+    expect(calls).toContain(DATA_ENABLE);
+  });
+
+  test('disable + re-enable order is wifi-disable → data-disable → sleep → wifi-enable → data-enable', async () => {
+    mockExec({});
+    const driver = await createAndroidDriver();
+    const promise = driver.androidNetworkDropFor('Theo', 1);
+    await jest.advanceTimersByTimeAsync(1000);
+    await promise;
+    const svcCalls = execSync.mock.calls.map((c) => c[0]).filter((c) => c.includes("'svc'"));
+    expect(svcCalls).toEqual([WIFI_DISABLE, DATA_DISABLE, WIFI_ENABLE, DATA_ENABLE]);
+  });
+
+  test('re-enable is gated by the sleep (no early restore)', async () => {
+    mockExec({});
+    const driver = await createAndroidDriver();
+    const promise = driver.androidNetworkDropFor('Theo', 30);
+    // Before the timer fires, only the 2 disable calls should have run.
+    await Promise.resolve();
+    const callsBefore = execSync.mock.calls.map((c) => c[0]).filter((c) => c.includes("'svc'"));
+    expect(callsBefore).toEqual([WIFI_DISABLE, DATA_DISABLE]);
+    // Advance the full duration and let the promise settle.
+    await jest.advanceTimersByTimeAsync(30000);
+    await promise;
+    const callsAfter = execSync.mock.calls.map((c) => c[0]).filter((c) => c.includes("'svc'"));
+    // The 2 re-enable calls are appended.
+    expect(callsAfter).toEqual([WIFI_DISABLE, DATA_DISABLE, WIFI_ENABLE, DATA_ENABLE]);
+  });
+
+  test('disable phase throws → returns false BUT re-enable still attempted (no leaving device offline)', async () => {
+    // The driver must restore connectivity even if the initial disable
+    // failed — otherwise a partial drop could persist after the test
+    // exits, leaving the device wedged. Throw only on `'disable'` calls
+    // so the re-enable path can still succeed (discriminate by cmd
+    // content, not call count — the driver's try/catch around the
+    // disable block means data-disable is skipped after wifi-disable
+    // throws).
+    mockExec({});
+    const driver = await createAndroidDriver();
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') {
+        return 'List of devices attached\nemulator-5554\tdevice\n';
+      }
+      if (cmd.includes("'svc'") && cmd.includes("'disable'")) {
+        throw new Error('disable failed');
+      }
+      return '';
+    });
+    const promise = driver.androidNetworkDropFor('Theo', 1);
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(await promise).toBe(false);
+    // Re-enable calls were still issued despite the failure.
+    const enableCalls = execSync.mock.calls.map((c) => c[0]).filter((c) => c.includes("'enable'"));
+    expect(enableCalls).toEqual([WIFI_ENABLE, DATA_ENABLE]);
+  });
+
+  test('re-enable phase throws → returns false but disable still attempted', async () => {
+    mockExec({});
+    const driver = await createAndroidDriver();
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') {
+        return 'List of devices attached\nemulator-5554\tdevice\n';
+      }
+      if (cmd.includes("'svc'") && cmd.includes("'enable'")) {
+        throw new Error('re-enable failed');
+      }
+      return '';
+    });
+    const promise = driver.androidNetworkDropFor('Theo', 1);
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(await promise).toBe(false);
+    const disableCalls = execSync.mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.includes("'disable'"));
+    expect(disableCalls).toEqual([WIFI_DISABLE, DATA_DISABLE]);
+  });
+
+  test('persona name is accepted but does not influence the adb command (singleton-device contract)', async () => {
+    // The runner passes the persona name from the regex capture, but
+    // adb operates on the singleton device under its serial — the name
+    // is purely for log lines. Pinning so a future maintainer doesn't
+    // accidentally try to route to a per-persona device.
+    mockExec({});
+    const driver = await createAndroidDriver();
+    const promise = driver.androidNetworkDropFor('Theo', 1);
+    await jest.advanceTimersByTimeAsync(1000);
+    await promise;
+    const callsForTheo = execSync.mock.calls.map((c) => c[0]).filter((c) => c.includes("'svc'"));
+    execSync.mockClear();
+    mockExec({});
+    const driver2 = await createAndroidDriver();
+    const promise2 = driver2.androidNetworkDropFor('Ines', 1);
+    await jest.advanceTimersByTimeAsync(1000);
+    await promise2;
+    const callsForInes = execSync.mock.calls.map((c) => c[0]).filter((c) => c.includes("'svc'"));
+    expect(callsForInes).toEqual(callsForTheo);
+  });
+
+  test('zero seconds → no sleep, but disable + re-enable both issued', async () => {
+    mockExec({});
+    const driver = await createAndroidDriver();
+    const promise = driver.androidNetworkDropFor('Theo', 0);
+    await jest.advanceTimersByTimeAsync(0);
+    expect(await promise).toBe(true);
+    const svcCalls = execSync.mock.calls.map((c) => c[0]).filter((c) => c.includes("'svc'"));
+    expect(svcCalls).toHaveLength(4);
+  });
+
+  test('negative seconds → clamped to 0 (no negative sleep)', async () => {
+    // Defensive: a feature file with `for -5 seconds` (typo/bug) should
+    // not hang the driver. The Max(0, ...) clamp in the impl guards.
+    mockExec({});
+    const driver = await createAndroidDriver();
+    const promise = driver.androidNetworkDropFor('Theo', -5);
+    await jest.advanceTimersByTimeAsync(0);
+    expect(await promise).toBe(true);
+  });
+});
