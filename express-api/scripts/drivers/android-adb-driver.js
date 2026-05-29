@@ -2076,9 +2076,34 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       // dump/tap calls. The 1.5s value mirrors what the existing
       // android-e2e tests use (see app/src/androidTest fixtures).
       await new Promise((r) => setTimeout(r, 1500));
-      // Stash the requested screen on the driver so a future matcher
-      // can use it as a hint when implementing real in-app navigation.
       driver._requestedScreen = screen;
+      // If the screen identifier maps to a known MainScreen bottom-nav
+      // tab, tap it so subsequent taps on `<feature>_*` testTags in
+      // that tab actually find them. Without this, j09's
+      // "Theo taps main_createRoomFab" finds nothing because the
+      // dump is of whichever startup screen MainActivity landed on
+      // (typically `home`, not `rooms`).
+      //
+      // Tab list grounded in
+      //   shared/src/commonMain/.../feature/main/MainScreen.kt
+      // — main_<lowered>Tab is the existing testTag convention.
+      // Unknown screens fall through to a no-op tap (returns true so
+      // the launch alone counts as success — matches the prior
+      // "stash on driver" semantic).
+      const tabScreens = new Set(['rooms', 'home', 'messages', 'profile']);
+      if (screen && tabScreens.has(String(screen).toLowerCase())) {
+        const tag = `main_${String(screen).toLowerCase()}Tab`;
+        // Don't fail the whole call if the tab tap misses — the launch
+        // succeeded; the tab might already be active, or the app might
+        // be on the sign-in screen (no bottom nav visible). Surface
+        // miss as a log warning, not a return-false.
+        const tapped = await driver.androidTapByTag(tag);
+        if (!tapped) {
+          console.warn(
+            `[android-driver] androidOpenScreen(${screen}): launch ok, but tab "${tag}" not found in dump (likely not signed in or already on that tab)`,
+          );
+        }
+      }
       return true;
     } catch (e) {
       console.error(`[android-driver] androidOpenScreen(${screen}) failed: ${e.message}`);

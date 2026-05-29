@@ -16265,3 +16265,119 @@ describe('android-adb-driver — androidLongPressSeat', () => {
     expect(await promise).toBe(false);
   });
 });
+
+describe('android-adb-driver — androidOpenScreen tab-navigation', () => {
+  // Improvement over the prior launch-only stub: after the activity
+  // start settles, the driver taps `main_<lowered>Tab` for the known
+  // bottom-nav set (rooms / home / messages / profile) so dump+tap
+  // matchers downstream find tags on the right screen. Unknown
+  // screen identifiers preserve the prior no-op-then-true semantic.
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('rooms screen → launches MainActivity then taps main_roomsTab', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('main_roomsTab', '[0,1900][270,2100]'),
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidOpenScreen('rooms');
+    await jest.advanceTimersByTimeAsync(1500); // initial settle
+    await jest.advanceTimersByTimeAsync(500); // tap settle
+    expect(await promise).toBe(true);
+    // The MainActivity start was issued
+    const startCall = execSync.mock.calls.map((c) => c[0]).find((c) => c.includes("'am' 'start'"));
+    expect(startCall).toBeDefined();
+    expect(startCall).toContain('MainActivity');
+    // AND a tap was issued on the rooms tab's centre [0,1900][270,2100] = (135, 2000)
+    const tapCall = execSync.mock.calls.map((c) => c[0]).find((c) => c.includes("'input' 'tap'"));
+    expect(tapCall).toBeDefined();
+    expect(tapCall).toContain("'135'");
+    expect(tapCall).toContain("'2000'");
+  });
+
+  test('home/messages/profile each tap the matching main_<name>Tab', async () => {
+    for (const screen of ['home', 'messages', 'profile']) {
+      jest.clearAllMocks();
+      const tag = `main_${screen}Tab`;
+      mockExec({
+        "'uiautomator' 'dump'": '',
+        "'cat' '/sdcard/dump.xml'": dumpWithId(tag, '[300,1900][600,2100]'),
+      });
+      const driver = await createAndroidDriver();
+      const promise = driver.androidOpenScreen(screen);
+      await jest.advanceTimersByTimeAsync(1500);
+      await jest.advanceTimersByTimeAsync(500);
+      expect(await promise).toBe(true);
+      // Centre of [300,1900][600,2100] = (450, 2000)
+      const tapCall = execSync.mock.calls.map((c) => c[0]).find((c) => c.includes("'input' 'tap'"));
+      expect(tapCall).toBeDefined();
+      expect(tapCall).toContain("'450'");
+      expect(tapCall).toContain("'2000'");
+    }
+  });
+
+  test('unknown screen → launches MainActivity, no tab tap, still returns true', async () => {
+    mockExec({});
+    const driver = await createAndroidDriver();
+    const promise = driver.androidOpenScreen('some-future-screen');
+    await jest.advanceTimersByTimeAsync(1500);
+    expect(await promise).toBe(true);
+    // MainActivity launch was issued
+    const startCall = execSync.mock.calls.map((c) => c[0]).find((c) => c.includes("'am' 'start'"));
+    expect(startCall).toBeDefined();
+    // No input tap was issued
+    const tapCall = execSync.mock.calls.map((c) => c[0]).find((c) => c.includes("'input' 'tap'"));
+    expect(tapCall).toBeUndefined();
+  });
+
+  test('tab tap miss does NOT fail the call (logs warning, still returns true)', async () => {
+    // Sign-in-required screens or already-on-the-tab cases yield no
+    // matching dump. The driver must NOT propagate the miss as a
+    // call-level failure — the launch alone is a useful success.
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="unrelated_tag" />',
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidOpenScreen('rooms');
+    await jest.advanceTimersByTimeAsync(1500);
+    await jest.advanceTimersByTimeAsync(500);
+    expect(await promise).toBe(true);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/tab "main_roomsTab" not found/i));
+    warnSpy.mockRestore();
+  });
+
+  test('_requestedScreen is still stashed on the driver (backward-compat)', async () => {
+    mockExec({});
+    const driver = await createAndroidDriver();
+    const promise = driver.androidOpenScreen('rooms');
+    await jest.advanceTimersByTimeAsync(2000);
+    await promise;
+    // Existing callers that probe _requestedScreen for the most-recent
+    // request still see the value. Preserved across the navigation change.
+    expect(driver._requestedScreen).toBe('rooms');
+  });
+
+  test('case-insensitive screen mapping (Rooms → main_roomsTab)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('main_roomsTab', '[0,1900][270,2100]'),
+    });
+    const driver = await createAndroidDriver();
+    // Feature-file authors might capitalise — accept any case.
+    const promise = driver.androidOpenScreen('Rooms');
+    await jest.advanceTimersByTimeAsync(1500);
+    await jest.advanceTimersByTimeAsync(500);
+    expect(await promise).toBe(true);
+    const tapCall = execSync.mock.calls.map((c) => c[0]).find((c) => c.includes("'input' 'tap'"));
+    expect(tapCall).toBeDefined();
+  });
+});
