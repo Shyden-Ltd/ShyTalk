@@ -366,6 +366,16 @@ async function ensureRoomForHost(ctx, hostName, opts = {}) {
   ctx.lastRoomId = roomId;
   ctx.roomsByHost = ctx.roomsByHost || {};
   ctx.roomsByHost[hostName] = roomId;
+  // Expose as a {roomId} interpolation variable so later Then-steps like
+  // `rooms/{roomId}/seats[1].userId` resolve to the actual doc path. The
+  // runner's interpolateScenarioVars (line ~13693) substitutes {name}
+  // from ctx.scenarioVars — without this set, `{roomId}` survives
+  // verbatim and matchers look up a literal `rooms/{roomId}` doc that
+  // doesn't exist. Pinned by 2 of j09's findings (manual-qa-cycle-1.md
+  // 2026-05-29 dispatch — "document rooms/{roomId} does not exist").
+  if (ctx.scenarioVars && typeof ctx.scenarioVars.set === 'function') {
+    ctx.scenarioVars.set('roomId', roomId);
+  }
   return { roomId, doc };
 }
 

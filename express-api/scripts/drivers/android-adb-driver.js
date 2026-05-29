@@ -135,6 +135,10 @@ const ANDROID_METHOD_NAMES = [
   // Pairs `svc wifi disable` + `svc data disable` to fully drop the
   // device's connectivity, then re-enables both after a sleep.
   'androidNetworkDropFor',
+  // Tap + long-press actions for j09's room-host kick/close/join flows.
+  'androidTapQuotedTarget',
+  'androidTapRoomCard',
+  'androidLongPressSeat',
 ];
 
 function listMethods() {
@@ -2078,6 +2082,96 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       return true;
     } catch (e) {
       console.error(`[android-driver] androidOpenScreen(${screen}) failed: ${e.message}`);
+      return false;
+    }
+  };
+
+  // androidTapQuotedTarget — wrapper around tag-based or owner-card tap.
+  // Runner step "<Name> on Android taps the "<X>"" passes (name, targetId,
+  // isRoomCard=false) — targetId is a testTag, delegate to androidTapByTag.
+  // Runner step "<Name> on Android taps the room "<X>" card" passes
+  // (name, targetId, isRoomCard=true) — targetId is the room owner name,
+  // delegate to androidTapRoomCard.
+  driver.androidTapQuotedTarget = async (name, targetId, isRoomCard) => {
+    try {
+      if (isRoomCard) {
+        return await driver.androidTapRoomCard(targetId);
+      }
+      return await driver.androidTapByTag(targetId);
+    } catch (e) {
+      console.error(
+        `[android-driver] androidTapQuotedTarget(${name}, ${targetId}, ${isRoomCard}) failed: ${e.message}`,
+      );
+      return false;
+    }
+  };
+
+  // androidTapRoomCard — taps a room card by its host's persona name.
+  // Looks for a UI element whose dump text or testTag includes the
+  // owner's name OR a `roomCard_<owner>` testTag. Owner=undefined means
+  // "tap the first room card visible" (Marcus same-cohort-gate scenario:
+  // `taps the room card` with no owner).
+  driver.androidTapRoomCard = async (owner) => {
+    try {
+      const dump = await driver.androidUiDump();
+      // Try testTag-based lookup first (most reliable): `roomCard_<owner>`
+      // OR `roomCard_<idx>` for owner-less variant.
+      if (owner) {
+        const tagged = await driver.androidTapByTag(`roomCard_${owner}`);
+        if (tagged) return true;
+      }
+      // Fallback: find any `roomCard_*` element with the owner's name
+      // appearing in the dump text inside its bounds, OR the first
+      // `roomCard_*` if owner is undefined.
+      const escOwner = (owner || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const tagPattern = owner
+        ? new RegExp(
+            `resource-id="(?:[^"]*:id/)?roomCard_\\w*"[^<]*?bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"[^<]*?text="[^"]*${escOwner}[^"]*"`,
+          )
+        : /resource-id="(?:[^"]*:id\/)?roomCard_\w*"[^<]*?bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/;
+      const match = tagPattern.exec(dump);
+      if (!match) return false;
+      const [, x1, y1, x2, y2] = match.map((v, i) => (i === 0 ? v : Number(v)));
+      const cx = Math.round((x1 + x2) / 2);
+      const cy = Math.round((y1 + y2) / 2);
+      return await driver.androidTap(cx, cy);
+    } catch (e) {
+      console.error(`[android-driver] androidTapRoomCard(${owner}) failed: ${e.message}`);
+      return false;
+    }
+  };
+
+  // androidLongPressSeat — long-press on the seat occupied by `target`.
+  // Implementation: `adb shell input swipe X Y X Y 1000` — swipe with
+  // identical start+end coords over 1000ms registers as a long-press
+  // gesture (standard adb idiom for long-press). Locates the seat by
+  // looking for `seat_<targetName>` testTag OR any `seat_*` element with
+  // the target name in its text content.
+  driver.androidLongPressSeat = async (target) => {
+    try {
+      const dump = await driver.androidUiDump();
+      const escTarget = target.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Try `seat_<target>` testTag first.
+      let re = new RegExp(
+        `resource-id="(?:[^"]*:id/)?seat_${escTarget}"[^<]*?bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"`,
+      );
+      let match = re.exec(dump);
+      if (!match) {
+        // Fallback: any `seat_*` element with target name in its dump text.
+        re = new RegExp(
+          `resource-id="(?:[^"]*:id/)?seat_\\w*"[^<]*?bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"[^<]*?text="[^"]*${escTarget}[^"]*"`,
+        );
+        match = re.exec(dump);
+      }
+      if (!match) return false;
+      const [, x1, y1, x2, y2] = match.map((v, i) => (i === 0 ? v : Number(v)));
+      const cx = Math.round((x1 + x2) / 2);
+      const cy = Math.round((y1 + y2) / 2);
+      // Long-press via swipe with same start+end coordinates over 1000ms.
+      adb(['shell', 'input', 'swipe', String(cx), String(cy), String(cx), String(cy), '1000']);
+      return true;
+    } catch (e) {
+      console.error(`[android-driver] androidLongPressSeat(${target}) failed: ${e.message}`);
       return false;
     }
   };

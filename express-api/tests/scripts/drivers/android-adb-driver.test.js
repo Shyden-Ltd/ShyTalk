@@ -16089,3 +16089,179 @@ describe('android-adb-driver — androidNetworkDropFor', () => {
     expect(await promise).toBe(true);
   });
 });
+
+describe('android-adb-driver — androidTapQuotedTarget', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('isRoomCard=false delegates to androidTapByTag with the targetId', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('room_endRoomButton', '[200,1500][500,1700]'),
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidTapQuotedTarget('Theo', 'room_endRoomButton', false);
+    await jest.advanceTimersByTimeAsync(500);
+    const ok = await promise;
+    expect(ok).toBe(true);
+    // Center of [200,1500][500,1700] = (350, 1600).
+    const tapCall = execSync.mock.calls.find((c) => c[0].includes("'input' 'tap'"));
+    expect(tapCall[0]).toContain("'350'");
+    expect(tapCall[0]).toContain("'1600'");
+  });
+
+  test('isRoomCard=true delegates to androidTapRoomCard with the targetId as owner', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('roomCard_Theo', '[100,400][800,700]'),
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidTapQuotedTarget('Marcus', 'Theo', true);
+    await jest.advanceTimersByTimeAsync(500);
+    const ok = await promise;
+    expect(ok).toBe(true);
+    const tapCall = execSync.mock.calls.find((c) => c[0].includes("'input' 'tap'"));
+    // Center of [100,400][800,700] = (450, 550).
+    expect(tapCall[0]).toContain("'450'");
+    expect(tapCall[0]).toContain("'550'");
+  });
+
+  test('returns false when neither delegation finds an element', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="other_unrelated" />',
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidTapQuotedTarget('Theo', 'nonexistent', false);
+    await jest.advanceTimersByTimeAsync(500);
+    expect(await promise).toBe(false);
+  });
+});
+
+describe('android-adb-driver — androidTapRoomCard', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('owner-keyed roomCard_<owner> testTag → taps that specific card', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('roomCard_Theo', '[100,400][800,700]'),
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidTapRoomCard('Theo');
+    await jest.advanceTimersByTimeAsync(500);
+    expect(await promise).toBe(true);
+    const tapCall = execSync.mock.calls.find((c) => c[0].includes("'input' 'tap'"));
+    expect(tapCall[0]).toContain("'450'");
+    expect(tapCall[0]).toContain("'550'");
+  });
+
+  test('owner=undefined → taps the first roomCard_* element in the dump', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomCard_0" bounds="[0,500][1080,700]" />',
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidTapRoomCard(undefined);
+    await jest.advanceTimersByTimeAsync(500);
+    expect(await promise).toBe(true);
+    const tapCall = execSync.mock.calls.find((c) => c[0].includes("'input' 'tap'"));
+    // Center of [0,500][1080,700] = (540, 600).
+    expect(tapCall[0]).toContain("'540'");
+    expect(tapCall[0]).toContain("'600'");
+  });
+
+  test('owner-not-found in any card → returns false', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/unrelated_element" />',
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidTapRoomCard('Theo');
+    await jest.advanceTimersByTimeAsync(500);
+    expect(await promise).toBe(false);
+  });
+
+  test('owner with regex-special chars is escaped (no regex injection)', async () => {
+    // A future persona renamed to "Adam.Foo" (with a dot) would otherwise
+    // be interpreted as the regex `.` wildcard. Pin the escape behaviour.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/roomCard_AdamXFoo" bounds="[0,0][100,100]" />',
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidTapRoomCard('Adam.Foo');
+    await jest.advanceTimersByTimeAsync(500);
+    // The escaped `.` doesn't match `X` in `AdamXFoo` — owner-specific lookup fails;
+    // fallback finds no roomCard_* with owner text in bounds either → false.
+    expect(await promise).toBe(false);
+  });
+});
+
+describe('android-adb-driver — androidLongPressSeat', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('seat_<target> testTag → issues input swipe with identical start/end coords over 1000ms', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": dumpWithId('seat_Ines', '[100,800][400,1100]'),
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidLongPressSeat('Ines');
+    await jest.advanceTimersByTimeAsync(500);
+    expect(await promise).toBe(true);
+    // Center of [100,800][400,1100] = (250, 950).
+    const swipeCall = execSync.mock.calls.find((c) => c[0].includes("'input' 'swipe'"));
+    expect(swipeCall).toBeDefined();
+    // Long-press idiom: identical start + end coords + 1000ms duration.
+    expect(swipeCall[0]).toContain("'250' '950' '250' '950' '1000'");
+  });
+
+  test('target-not-found → returns false (no swipe issued)', async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="seat_someone-else" />',
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidLongPressSeat('Ines');
+    await jest.advanceTimersByTimeAsync(500);
+    expect(await promise).toBe(false);
+    const swipeCall = execSync.mock.calls.find((c) => c[0].includes("'input' 'swipe'"));
+    expect(swipeCall).toBeUndefined();
+  });
+
+  test('target name with regex-special chars is escaped', async () => {
+    // Defensive — a future persona renamed to "Ines.O" would otherwise
+    // be interpreted as a wildcard. Pin escape.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="com.shyden.shytalk.local:id/seat_InesXO" bounds="[0,0][100,100]" />',
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidLongPressSeat('Ines.O');
+    await jest.advanceTimersByTimeAsync(500);
+    // Escaped `.` doesn't match `X` → primary lookup fails; fallback path
+    // also won't match (no text content matches Ines.O literal) → false.
+    expect(await promise).toBe(false);
+  });
+});
