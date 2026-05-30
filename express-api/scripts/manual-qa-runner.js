@@ -15451,6 +15451,9 @@ function formatUsage() {
     '  --matrix                  Dispatch every allowed cell in sequence',
     '  --fail-fast               Stop the matrix at the first failing cell',
     '  --check-drivers           Diagnostic — verify each driver bootstraps',
+    '  --list                    Enumerate matrix cells as JSON (use with --target',
+    '                              to filter to one target). Exits 0 without env vars',
+    '                              so it is safe to pipe into jq for scripting.',
     '  --report-dir <path>       Per-cell stdio capture directory (matrix mode)',
     '  --report-format <fmt>     Matrix report format: json | junit',
     '  --report-output <path>    Write the matrix report to this path',
@@ -15484,6 +15487,34 @@ function formatUsage() {
 
 function formatVersion(version) {
   return `manual-qa-runner ${version}`;
+}
+
+// --list — enumerate matrix cells without dispatching anything.
+//
+// Operator use case: `--list | jq '.targets.dev'` to script per-target
+// cell discovery, or `--list --target dev` to get just that target's
+// allowed-browsers array. JSON is the default because the primary use
+// case is pipe-to-jq; human-readable formatting can be added in a
+// follow-up via --list-format if needed.
+//
+// Lazy require matches the matrix-dispatch pattern in main() and keeps
+// the module load lean for callers that only want pure helpers.
+function formatListJson(target) {
+  const {
+    allowedBrowsersFor,
+    SUPPORTED_BROWSERS,
+    TARGET_BROWSER_ALLOWLIST,
+  } = require('./browser-allowlist');
+  if (target !== undefined) {
+    // Single-target form: just the allowed-browsers array. Unknown
+    // targets return [] (mirrors allowedBrowsersFor) so scripts can
+    // pipe safely without an error-handling branch.
+    return JSON.stringify(allowedBrowsersFor(target));
+  }
+  return JSON.stringify({
+    supported: SUPPORTED_BROWSERS,
+    targets: TARGET_BROWSER_ALLOWLIST,
+  });
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────
@@ -15525,11 +15556,13 @@ async function main() {
       opts.cellTimeoutMs = parseInt(raw, 10) * 1000;
     } else if (flat[i] === '--help' || flat[i] === '-h') opts.help = true;
     else if (flat[i] === '--version' || flat[i] === '-v') opts.version = true;
+    else if (flat[i] === '--list') opts.list = true;
   }
-  // --help / --version short-circuit BEFORE any further validation or env
-  // checks. Operators must be able to discover the flag surface without
-  // setting PERSONAS_PASSWORD or any FIREBASE_*_API_KEY. --help wins over
-  // --version when both are present (matches GNU convention).
+  // --help / --version / --list short-circuit BEFORE any further
+  // validation or env checks. Operators must be able to discover the
+  // flag and matrix surface without setting PERSONAS_PASSWORD or any
+  // FIREBASE_*_API_KEY. Precedence: --help > --version > --list
+  // (--help is the most-likely operator intent when typo-combined).
   if (opts.help) {
     console.log(formatUsage());
     process.exit(0);
@@ -15537,6 +15570,10 @@ async function main() {
   if (opts.version) {
     const pkgVersion = require('../package.json').version;
     console.log(formatVersion(pkgVersion));
+    process.exit(0);
+  }
+  if (opts.list) {
+    console.log(formatListJson(opts.target));
     process.exit(0);
   }
   // --report-format validation — only json + junit are supported (used
@@ -16028,6 +16065,7 @@ module.exports = {
   formatReport,
   formatUsage,
   formatVersion,
+  formatListJson,
   TARGETS,
 };
 
