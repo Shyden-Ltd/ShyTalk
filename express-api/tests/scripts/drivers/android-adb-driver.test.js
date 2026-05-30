@@ -16632,3 +16632,86 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
     await expect(promise).rejects.toThrow(/Firebase sign-in may have failed/);
   });
 });
+
+describe('android-adb-driver — androidConfirmDialog', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  function withDumpAndDevices(xml) {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') {
+        return 'List of devices attached\nemulator-5554\tdevice\n';
+      }
+      if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
+        return xml;
+      }
+      return '';
+    });
+  }
+
+  test('surface-specific tag (room_endRoomConfirmButton) wins when present', async () => {
+    withDumpAndDevices(
+      '<node resource-id="com.shyden.shytalk.local:id/room_endRoomConfirmButton" bounds="[100,500][400,600]" />',
+    );
+    const driver = await createAndroidDriver();
+    expect(await driver.androidConfirmDialog()).toBe(true);
+    const tapCalls = execSync.mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.includes("'input' 'tap'"));
+    expect(tapCalls).toHaveLength(1);
+  });
+
+  test('generic dialog_confirmButton fallback when no surface-specific tag', async () => {
+    withDumpAndDevices(
+      '<node resource-id="com.shyden.shytalk.local:id/dialog_confirmButton" bounds="[100,500][400,600]" />',
+    );
+    const driver = await createAndroidDriver();
+    expect(await driver.androidConfirmDialog()).toBe(true);
+    const tapCalls = execSync.mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.includes("'input' 'tap'"));
+    expect(tapCalls).toHaveLength(1);
+  });
+
+  test('returns false + stderr warning when NO candidate tag is in dump (UX gap surfaces, no silent pass)', async () => {
+    withDumpAndDevices('<node resource-id="something_else" bounds="[0,0][100,100]" />');
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const driver = await createAndroidDriver();
+    expect(await driver.androidConfirmDialog()).toBe(false);
+    expect(errSpy).toHaveBeenCalledWith(expect.stringMatching(/no confirm-button testTag found/));
+    expect(errSpy).toHaveBeenCalledWith(expect.stringMatching(/UX gap, not a driver bug/));
+    errSpy.mockRestore();
+    // NO tap was issued — the driver doesn't randomly tap the screen.
+    const tapCalls = execSync.mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.includes("'input' 'tap'"));
+    expect(tapCalls).toHaveLength(0);
+  });
+
+  test('settings-flow tag (settings_signOutConfirmButton) is also tried — covers profile-flow destructives', async () => {
+    withDumpAndDevices(
+      '<node resource-id="com.shyden.shytalk.local:id/settings_signOutConfirmButton" bounds="[100,500][400,600]" />',
+    );
+    const driver = await createAndroidDriver();
+    expect(await driver.androidConfirmDialog()).toBe(true);
+  });
+
+  test('surface-specific takes priority over generic when BOTH present (first match wins, no double-tap)', async () => {
+    withDumpAndDevices(
+      '<node resource-id="com.shyden.shytalk.local:id/room_endRoomConfirmButton" bounds="[100,500][400,600]" />' +
+        '<node resource-id="com.shyden.shytalk.local:id/dialog_confirmButton" bounds="[700,500][1000,600]" />',
+    );
+    const driver = await createAndroidDriver();
+    expect(await driver.androidConfirmDialog()).toBe(true);
+    // Exactly ONE tap — the surface-specific one. If both fired we'd see 2 taps.
+    const tapCalls = execSync.mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.includes("'input' 'tap'"));
+    expect(tapCalls).toHaveLength(1);
+  });
+});

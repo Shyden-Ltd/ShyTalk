@@ -148,6 +148,13 @@ const ANDROID_METHOD_NAMES = [
   // the device APP's UI through the picker dialog so the device is
   // on the right screen for subsequent UI-action steps.
   'androidPersonaSignIn',
+  // Generic "confirm in the dialog" tap. Used by j09's close-room flow
+  // ("When Theo on Android confirms in the dialog" — line 107) and any
+  // future scenario gating a destructive action behind an AlertDialog.
+  // Tries a stack of known confirm-button testTags before failing — the
+  // exact testTag varies by surface (room_endRoomConfirmButton vs
+  // settings_signOutConfirmButton vs dialog_confirmButton, etc.).
+  'androidConfirmDialog',
 ];
 
 function listMethods() {
@@ -2378,6 +2385,55 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       await new Promise((r) => setTimeout(r, 500));
     }
     return true;
+  };
+
+  // j09 "Theo on Android confirms in the dialog" (line 107 close-room
+  // scenario) + future destructive-action confirmations. Tries a stack
+  // of known confirm-button testTags in priority order; first match
+  // wins.
+  //
+  // Priority order:
+  //   1. surface-specific tags (room_endRoomConfirmButton, etc.) —
+  //      tested first because they're unambiguous on the matching screen
+  //   2. generic dialog tags — fallback for AlertDialogs that follow
+  //      the Material convention but don't have a surface-specific tag
+  //
+  // Returns true on tap success. Returns false (with stderr warning)
+  // when NO candidate testTag is present in the dump — this surfaces
+  // a finding rather than silently succeeding on a missing dialog,
+  // matching the QA-mindset rule against plaster-fixes. Distinct from
+  // a tap-failure crash: the caller can decide whether to fail the
+  // step or move on.
+  //
+  // Known callers: j09 close-room (line 107). When that scenario fires
+  // against the current UI, the room_endRoomConfirmButton testTag is
+  // not yet on RoomSettingsSheet (the close action is currently
+  // immediate, no AlertDialog) — see follow-up note in PR body for
+  // the UX gap. This driver method is in place for when the dialog
+  // is added.
+  driver.androidConfirmDialog = async () => {
+    const CONFIRM_TAG_CANDIDATES = [
+      // Surface-specific (j09 close-room, j15 mc-end-stream, etc.)
+      'room_endRoomConfirmButton',
+      'settings_signOutConfirmButton',
+      'settings_clearCacheConfirmButton',
+      'settings_unblockConfirmButton',
+      'settings_deleteAccountConfirmButton',
+      'settings_deletePinConfirmButton',
+      // Generic AlertDialog fallback
+      'dialog_confirmButton',
+      'alertdialog_confirmButton',
+      'confirm_button',
+    ];
+    for (const candidate of CONFIRM_TAG_CANDIDATES) {
+      if (await driver.androidTapByTag(candidate)) {
+        return true;
+      }
+    }
+    console.error(
+      `[android-driver] androidConfirmDialog: no confirm-button testTag found in UI dump (tried ${CONFIRM_TAG_CANDIDATES.length} candidates). If the current scenario expects a confirmation dialog and the surface doesn't render one, this is a UX gap, not a driver bug.`,
+    );
+    return false;
   };
 
   driver.close = async () => {
