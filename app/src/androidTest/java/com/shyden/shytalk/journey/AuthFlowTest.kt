@@ -103,6 +103,12 @@ class AuthFlowTest : KoinTest {
         // Also clear the test-only googleWebClientId so subsequent test
         // classes pick up the real (or empty) flavor value via setUp().
         BuildVariant.initLocalEmulator(false)
+        // Also reset environment to "prod" — the dev-affordance tests now
+        // call initBuildInfo to set environment="local"/"dev", and that
+        // would leak into other test classes if not cleared here. Defaults
+        // to "prod" semantics for the same defence-in-depth reason as
+        // initLocalEmulator(false) above.
+        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "?")
     }
 
     @Test
@@ -129,6 +135,14 @@ class AuthFlowTest : KoinTest {
         // (matches literal `password\s*[:=]\s*["']…["']` with 8+ chars).
         // Same pattern used elsewhere in this file's existing tests.
         val seedPwd = "localdev123"
+        // PR #882 changed the dev-sign-in gate from `isLocalEmulator`-based
+        // (with credential-presence as the proxy for "this is a dev/local
+        // flavor") to environment-based (`isDevAffordancesVisible` =
+        // environment in {"local", "dev"}). The new gate matches the
+        // operator's defence-in-depth directive: a prod APK accidentally
+        // shipped with DEV_QA_* env vars must NEVER render the dev button.
+        // Tests now have to init the environment explicitly to match.
+        BuildVariant.initBuildInfo(environment = "local", buildVersion = "test")
         BuildVariant.initLocalEmulator(
             value = true,
             devEmail = "claude-test@shytalk.dev",
@@ -150,6 +164,11 @@ class AuthFlowTest : KoinTest {
         // DEV_QA_EMAIL/PASSWORD at build time. isLocalEmulator=false
         // (the dev flavor talks to real Firebase, not the emulator),
         // but credentials are present → button renders.
+        //
+        // See the parallel "OnLocalEmulator" test above for why the
+        // initBuildInfo call is required after PR #882 — the gate moved
+        // from credential-presence to environment-based.
+        BuildVariant.initBuildInfo(environment = "dev", buildVersion = "test")
         BuildVariant.initLocalEmulator(
             value = false,
             devEmail = "dev-qa@shytalk.example",
