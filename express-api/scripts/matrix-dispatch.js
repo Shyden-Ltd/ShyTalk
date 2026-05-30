@@ -174,9 +174,85 @@ function formatMatrixResult({ cells, summary }) {
   return lines.join('\n');
 }
 
+/**
+ * Render the matrix result as JSON. Same shape as runMatrix() returns
+ * plus a top-level `format: 'matrix-v1'` discriminator + ISO timestamp,
+ * so CI dashboards can identify the schema version.
+ *
+ *   {
+ *     format: 'matrix-v1',
+ *     generatedAt: '2026-05-30T18:42:00.000Z',
+ *     summary: '...',
+ *     ok: true,
+ *     totals: { pass, fail, skip },
+ *     cells: [{ browser, outcome, durationMs, error? }],
+ *   }
+ *
+ * `nowIso` is injectable for tests (deterministic timestamps).
+ */
+function formatMatrixResultJson(result, { nowIso = () => new Date().toISOString() } = {}) {
+  const payload = {
+    format: 'matrix-v1',
+    generatedAt: nowIso(),
+    summary: result.summary,
+    ok: result.ok,
+    totals: result.totals,
+    cells: result.cells,
+  };
+  return JSON.stringify(payload, null, 2);
+}
+
+/**
+ * Render the matrix result as JUnit XML — the canonical format CI
+ * dashboards (Jenkins / GitHub Actions test reporter / GitLab /
+ * CircleCI / etc.) consume.
+ *
+ * One <testsuite> per matrix run, one <testcase> per cell. `outcome`
+ * maps to JUnit semantics:
+ *   - 'pass'  → no failure/skipped tag
+ *   - 'fail'  → <failure message="...">
+ *   - 'skip'  → <skipped message="...">
+ *
+ * Special chars in browser slugs / error messages are XML-escaped so
+ * the output is well-formed. Suite-level `tests`/`failures`/`skipped`
+ * counts pinned for reporter compatibility.
+ *
+ * `nowIso` injectable for tests.
+ */
+function formatMatrixResultJunit(result, { nowIso = () => new Date().toISOString() } = {}) {
+  const escape = (s) =>
+    String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
+  const totalMs = result.cells.reduce((acc, c) => acc + (c.durationMs || 0), 0);
+  const lines = ['<?xml version="1.0" encoding="UTF-8"?>'];
+  lines.push(
+    `<testsuite name="qa-matrix" tests="${result.cells.length}" failures="${result.totals.fail}" skipped="${result.totals.skip}" time="${(totalMs / 1000).toFixed(3)}" timestamp="${escape(nowIso())}">`,
+  );
+  for (const c of result.cells) {
+    const timeSec = ((c.durationMs || 0) / 1000).toFixed(3);
+    lines.push(`  <testcase classname="qa-matrix" name="${escape(c.browser)}" time="${timeSec}">`);
+    if (c.outcome === 'fail') {
+      lines.push(
+        `    <failure message="${escape(c.error || 'matrix cell failed')}" type="MatrixCellFailure"/>`,
+      );
+    } else if (c.outcome === 'skip') {
+      lines.push(`    <skipped message="${escape(c.error || 'matrix cell skipped')}"/>`);
+    }
+    lines.push('  </testcase>');
+  }
+  lines.push('</testsuite>');
+  return lines.join('\n');
+}
+
 module.exports = {
   INIT_ERROR_SIGNATURES,
   isInitError,
   runMatrix,
   formatMatrixResult,
+  formatMatrixResultJson,
+  formatMatrixResultJunit,
 };

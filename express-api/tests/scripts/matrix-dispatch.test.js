@@ -24,9 +24,14 @@
 
 const path = require('path');
 const REPO_ROOT = path.resolve(__dirname, '../../..');
-const { INIT_ERROR_SIGNATURES, isInitError, runMatrix, formatMatrixResult } = require(
-  path.join(REPO_ROOT, 'express-api/scripts/matrix-dispatch'),
-);
+const {
+  INIT_ERROR_SIGNATURES,
+  isInitError,
+  runMatrix,
+  formatMatrixResult,
+  formatMatrixResultJson,
+  formatMatrixResultJunit,
+} = require(path.join(REPO_ROOT, 'express-api/scripts/matrix-dispatch'));
 
 // isInitError ───────────────────────────────────────────────────────
 
@@ -352,5 +357,179 @@ describe('formatMatrixResult', () => {
     });
     // The long browser name must appear unchopped.
     expect(text).toMatch(/mobile-firefox-android/);
+  });
+});
+
+// formatMatrixResultJson ────────────────────────────────────────────
+
+describe('formatMatrixResultJson', () => {
+  function exampleResult() {
+    return {
+      cells: [
+        { browser: 'chromium', outcome: 'pass', durationMs: 842 },
+        { browser: 'mobile-safari-ios', outcome: 'skip', durationMs: 0, error: 'no iPhone' },
+        { browser: 'firefox', outcome: 'fail', durationMs: 1023, error: 'AssertionError' },
+      ],
+      totals: { pass: 1, fail: 1, skip: 1 },
+      summary: '1 pass / 1 fail / 1 skip',
+      ok: false,
+    };
+  }
+
+  test('emits format=matrix-v1 + ISO timestamp + summary/totals/cells', () => {
+    const json = formatMatrixResultJson(exampleResult(), {
+      nowIso: () => '2026-05-30T18:42:00.000Z',
+    });
+    const obj = JSON.parse(json);
+    expect(obj.format).toBe('matrix-v1');
+    expect(obj.generatedAt).toBe('2026-05-30T18:42:00.000Z');
+    expect(obj.summary).toBe('1 pass / 1 fail / 1 skip');
+    expect(obj.totals).toEqual({ pass: 1, fail: 1, skip: 1 });
+    expect(obj.ok).toBe(false);
+    expect(obj.cells).toHaveLength(3);
+  });
+
+  test('cells include error message for fail + skip outcomes', () => {
+    const obj = JSON.parse(
+      formatMatrixResultJson(exampleResult(), { nowIso: () => '2026-05-30T18:42:00.000Z' }),
+    );
+    const skipCell = obj.cells.find((c) => c.outcome === 'skip');
+    expect(skipCell.error).toBe('no iPhone');
+    const failCell = obj.cells.find((c) => c.outcome === 'fail');
+    expect(failCell.error).toBe('AssertionError');
+  });
+
+  test('output is parseable JSON + pretty-printed (multi-line)', () => {
+    const json = formatMatrixResultJson(exampleResult(), {
+      nowIso: () => '2026-05-30T18:42:00.000Z',
+    });
+    expect(json.split('\n').length).toBeGreaterThan(5); // pretty-printed
+    expect(() => JSON.parse(json)).not.toThrow();
+  });
+
+  test('nowIso defaults to a real ISO string when omitted', () => {
+    const obj = JSON.parse(formatMatrixResultJson(exampleResult()));
+    expect(obj.generatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+  });
+});
+
+// formatMatrixResultJunit ───────────────────────────────────────────
+
+describe('formatMatrixResultJunit', () => {
+  function exampleResult() {
+    return {
+      cells: [
+        { browser: 'chromium', outcome: 'pass', durationMs: 842 },
+        { browser: 'mobile-safari-ios', outcome: 'skip', durationMs: 0, error: 'no iPhone' },
+        { browser: 'firefox', outcome: 'fail', durationMs: 1023, error: 'AssertionError' },
+      ],
+      totals: { pass: 1, fail: 1, skip: 1 },
+      summary: '1 pass / 1 fail / 1 skip',
+      ok: false,
+    };
+  }
+
+  test('starts with XML declaration', () => {
+    const xml = formatMatrixResultJunit(exampleResult(), {
+      nowIso: () => '2026-05-30T18:42:00.000Z',
+    });
+    expect(xml.startsWith('<?xml version="1.0" encoding="UTF-8"?>')).toBe(true);
+  });
+
+  test('top-level <testsuite> has tests/failures/skipped counts + total time', () => {
+    const xml = formatMatrixResultJunit(exampleResult(), {
+      nowIso: () => '2026-05-30T18:42:00.000Z',
+    });
+    expect(xml).toMatch(/<testsuite name="qa-matrix"/);
+    expect(xml).toMatch(/tests="3"/);
+    expect(xml).toMatch(/failures="1"/);
+    expect(xml).toMatch(/skipped="1"/);
+    expect(xml).toMatch(/time="1\.865"/); // 842 + 0 + 1023 = 1865ms → 1.865s
+    expect(xml).toMatch(/timestamp="2026-05-30T18:42:00.000Z"/);
+  });
+
+  test('one <testcase> per cell with browser slug as name', () => {
+    const xml = formatMatrixResultJunit(exampleResult(), {
+      nowIso: () => '2026-05-30T18:42:00.000Z',
+    });
+    expect(xml).toMatch(/<testcase classname="qa-matrix" name="chromium" time="0\.842"/);
+    expect(xml).toMatch(/<testcase classname="qa-matrix" name="mobile-safari-ios" time="0\.000"/);
+    expect(xml).toMatch(/<testcase classname="qa-matrix" name="firefox" time="1\.023"/);
+  });
+
+  test('pass cells have no <failure> or <skipped> tag', () => {
+    const xml = formatMatrixResultJunit({
+      cells: [{ browser: 'chromium', outcome: 'pass', durationMs: 100 }],
+      totals: { pass: 1, fail: 0, skip: 0 },
+      summary: '1 pass / 0 fail / 0 skip',
+      ok: true,
+    });
+    expect(xml).not.toMatch(/<failure/);
+    expect(xml).not.toMatch(/<skipped/);
+  });
+
+  test('fail cells get a <failure message="..." type="MatrixCellFailure"/>', () => {
+    const xml = formatMatrixResultJunit(exampleResult(), {
+      nowIso: () => '2026-05-30T18:42:00.000Z',
+    });
+    expect(xml).toMatch(/<failure message="AssertionError" type="MatrixCellFailure"\/>/);
+  });
+
+  test('skip cells get a <skipped message="..."/>', () => {
+    const xml = formatMatrixResultJunit(exampleResult(), {
+      nowIso: () => '2026-05-30T18:42:00.000Z',
+    });
+    expect(xml).toMatch(/<skipped message="no iPhone"\/>/);
+  });
+
+  test('XML-escapes special chars in browser slugs + error messages', () => {
+    const result = {
+      cells: [
+        {
+          browser: 'name<with>chars&"\'',
+          outcome: 'fail',
+          durationMs: 10,
+          error: 'err with <special> & "chars"',
+        },
+      ],
+      totals: { pass: 0, fail: 1, skip: 0 },
+      summary: '0 pass / 1 fail / 0 skip',
+      ok: false,
+    };
+    const xml = formatMatrixResultJunit(result, { nowIso: () => '2026-05-30T18:42:00.000Z' });
+    // No raw < or > or unescaped " inside attribute values
+    expect(xml).toMatch(/name="name&lt;with&gt;chars&amp;&quot;&apos;"/);
+    expect(xml).toMatch(/message="err with &lt;special&gt; &amp; &quot;chars&quot;"/);
+  });
+
+  test('fail cell with no error message falls back to a sentinel', () => {
+    const xml = formatMatrixResultJunit({
+      cells: [{ browser: 'chromium', outcome: 'fail', durationMs: 50 }],
+      totals: { pass: 0, fail: 1, skip: 0 },
+      summary: '0 pass / 1 fail / 0 skip',
+      ok: false,
+    });
+    expect(xml).toMatch(/message="matrix cell failed"/);
+  });
+
+  test('skip cell with no error message falls back to a sentinel', () => {
+    const xml = formatMatrixResultJunit({
+      cells: [{ browser: 'chromium', outcome: 'skip', durationMs: 0 }],
+      totals: { pass: 0, fail: 0, skip: 1 },
+      summary: '0 pass / 0 fail / 1 skip',
+      ok: true,
+    });
+    expect(xml).toMatch(/message="matrix cell skipped"/);
+  });
+
+  test('empty cells array still produces valid XML (no rows)', () => {
+    const xml = formatMatrixResultJunit({
+      cells: [],
+      totals: { pass: 0, fail: 0, skip: 0 },
+      summary: '0 pass / 0 fail / 0 skip',
+      ok: true,
+    });
+    expect(xml).toMatch(/<testsuite name="qa-matrix" tests="0"/);
+    expect(xml).not.toMatch(/<testcase/);
   });
 });
