@@ -15520,7 +15520,9 @@ async function main() {
     //     direct launch via web-playwright-driver.js
     //   - mobile-chrome-android → CDP-over-adb to the real Chrome on
     //     the connected Android device via web-mobile-chrome-android-driver.js
-    // The runner's matcher surface is the same — both drivers expose the
+    //   - mobile-safari-ios → Appium safari-context session on the
+    //     connected iPhone via web-mobile-safari-ios-driver.js
+    // The runner's matcher surface is the same — every driver exposes the
     // ctx.webDriver method namespace, so scenarios don't care which one
     // is active.
     const baseURL = TARGETS[opts.target].webBase || 'http://localhost:8888';
@@ -15529,6 +15531,9 @@ async function main() {
         createMobileChromeAndroidDriver,
       } = require('./drivers/web-mobile-chrome-android-driver');
       webDriver = await createMobileChromeAndroidDriver({ baseURL });
+    } else if (opts.browser === 'mobile-safari-ios') {
+      const { createMobileSafariIosDriver } = require('./drivers/web-mobile-safari-ios-driver');
+      webDriver = await createMobileSafariIosDriver({ baseURL });
     } else {
       const { createWebDriver } = require('./drivers/web-playwright-driver');
       webDriver = await createWebDriver({

@@ -21,10 +21,20 @@ const DESKTOP_BROWSERS = ['chromium', 'firefox', 'webkit', 'edge'];
 // Browsers that route through a non-default driver factory inside the
 // runner's `--driver playwright|all` block. New mobile-browser drivers
 // register their slug here AND in the per-target allowlist below.
-const MOBILE_BROWSERS = ['mobile-chrome-android'];
+// Order intentional: Android slugs first, then iOS — keeps test
+// `.toEqual` expectations stable across PRs that add more of either.
+const MOBILE_BROWSERS = ['mobile-chrome-android', 'mobile-safari-ios'];
 
 const SUPPORTED_BROWSERS = [...DESKTOP_BROWSERS, ...MOBILE_BROWSERS];
 
+// Per-target allowlist:
+//   local — full matrix (every desktop browser + every mobile slug).
+//   dev   — operator policy 2026-05-30: chromium on Mac + mobile-chrome
+//           on Android. Mobile Safari is local-only because the
+//           dev-tier Android-Chrome cell + Mac-Chrome cell are the
+//           operator's chosen dev gate; iOS WebKit coverage lives in
+//           the local matrix.
+//   prod  — chromium only (read-only verification gate).
 const TARGET_BROWSER_ALLOWLIST = {
   local: [...DESKTOP_BROWSERS, ...MOBILE_BROWSERS],
   dev: ['chromium', 'mobile-chrome-android'],
