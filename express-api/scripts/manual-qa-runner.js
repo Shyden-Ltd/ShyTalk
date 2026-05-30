@@ -15449,11 +15449,27 @@ async function main() {
     else if (flat[i] === '--report-dir') opts.reportDir = flat[++i];
     else if (flat[i] === '--report-format') opts.reportFormat = flat[++i];
     else if (flat[i] === '--report-output') opts.reportOutput = flat[++i];
+    else if (flat[i] === '--cell-timeout') {
+      // Operator passes seconds; we store ms.
+      const raw = flat[++i];
+      opts._cellTimeoutRaw = raw;
+      opts.cellTimeoutMs = parseInt(raw, 10) * 1000;
+    }
   }
   // --report-format validation — only json + junit are supported (used
   // with --matrix to emit structured output for CI dashboards).
   if (opts.reportFormat && !['json', 'junit'].includes(opts.reportFormat)) {
     console.error(`--report-format "${opts.reportFormat}" not recognised. Supported: json, junit.`);
+    process.exit(2);
+  }
+  // --cell-timeout validation: must be a positive integer (seconds).
+  if (
+    opts.cellTimeoutMs !== undefined &&
+    (!Number.isFinite(opts.cellTimeoutMs) || opts.cellTimeoutMs <= 0)
+  ) {
+    console.error(
+      `--cell-timeout must be a positive integer (seconds). Got "${opts._cellTimeoutRaw}".`,
+    );
     process.exit(2);
   }
   opts.target = opts.target || 'dev';
@@ -15538,11 +15554,34 @@ async function main() {
         // mode (no --report-dir): subprocess stdio inherits the runner's
         // streams as before (zero log overhead).
         const captureStdio = Boolean(opts.reportDir);
-        const proc = spawnSync(process.execPath, [__filename, ...cellArgs], {
+        // spawnSync's `timeout` option kills the child with SIGTERM
+        // once exceeded; result is `proc.status === null, signal === 'SIGTERM'`.
+        // We translate that to a CELL_TIMEOUT throw so matrix-dispatch's
+        // classifier produces a 'timeout' outcome (distinct from 'fail').
+        const spawnOpts = {
           stdio: captureStdio ? ['ignore', 'pipe', 'pipe'] : 'inherit',
           env: process.env,
-        });
-        if (proc.error) throw proc.error;
+        };
+        if (opts.cellTimeoutMs) spawnOpts.timeout = opts.cellTimeoutMs;
+        const proc = spawnSync(process.execPath, [__filename, ...cellArgs], spawnOpts);
+        if (proc.error) {
+          // spawnSync sets proc.error.code = 'ETIMEDOUT' when the
+          // child was killed for exceeding the timeout. Translate to
+          // CELL_TIMEOUT so matrix-dispatch can classify it.
+          if (proc.error.code === 'ETIMEDOUT') {
+            const e = new Error(`cell timed out after ${Math.round(opts.cellTimeoutMs / 1000)}s`);
+            e.code = 'CELL_TIMEOUT';
+            throw e;
+          }
+          throw proc.error;
+        }
+        // Some Node versions surface timeout via signal+null-status
+        // instead of proc.error — handle that path too.
+        if (proc.status === null && proc.signal === 'SIGTERM' && opts.cellTimeoutMs) {
+          const e = new Error(`cell timed out after ${Math.round(opts.cellTimeoutMs / 1000)}s`);
+          e.code = 'CELL_TIMEOUT';
+          throw e;
+        }
         if (captureStdio) {
           // Tee captured stdio to the runner's terminal so the operator
           // sees the cell's output in real time too — same UX as
