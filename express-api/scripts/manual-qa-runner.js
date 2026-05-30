@@ -976,6 +976,94 @@ const matchers = [
   // The strategy is permissive consumption: anything after `is signed in`
   // that doesn't drive a distinct API call is treated as documentation.
   {
+    // j09 + every journey Background: "<persona> [P-NN] is signed in on
+    // Android physical at the <tab> tab". Declared BEFORE the catch-all
+    // (file order = match priority) so this more-specific form fires
+    // first when target=dev and the adb driver is wired.
+    //
+    // Two-layer sign-in:
+    //   1. Server-side: Firebase REST signInWithPassword → token into
+    //      ctx.sessions[name] so downstream API/Firestore-admin steps
+    //      use the correct identity. This is the same path the catch-
+    //      all does.
+    //   2. Device-side: ctx.uiDriver.androidPersonaSignIn — drives the
+    //      app through the persona picker (visible on local + dev per
+    //      PR #882), waits for main_roomsTab, then taps the requested
+    //      tab. Without this, the device's app sits on the sign-in
+    //      screen and every downstream UI step fails with "tag X not
+    //      found in UI dump".
+    //
+    // If the driver isn't wired (--driver flag omitted or adb not
+    // available), only the server-side sign-in happens — the matcher
+    // still returns ok=true so REST-only scenarios still pass, but a
+    // warning is logged to stderr so the operator notices the missing
+    // device-side context.
+    pattern:
+      /^([A-Z][a-z]+)\s*\[(P-\d{2})\]\s+is signed in on Android physical at the "([^"]+)" tab$/,
+    async handler(m, ctx) {
+      const name = m[1];
+      const personaId = m[2];
+      const tab = m[3];
+      const personas = loadPersonas();
+      const p = personas.get(personaId) || personas.get(name);
+      if (!p) return { ok: false, error: `persona "${name}" not in registry` };
+      if (!ctx.personasPassword) {
+        return { ok: false, error: 'PERSONAS_PASSWORD env not set' };
+      }
+      // Layer 1: Firebase REST sign-in. Mirrors the catch-all matcher's
+      // flow exactly (line ~975-1001) — kept inline rather than DRY-
+      // factored because the two share intent but not lifecycle: the
+      // catch-all is "permissive consumption", this one is the
+      // strict device-driven path.
+      const authBase =
+        ctx.target === 'local' && process.env.FIREBASE_AUTH_EMULATOR_HOST
+          ? `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com`
+          : 'https://identitytoolkit.googleapis.com';
+      const r = await ctx.fetch(
+        `${authBase}/v1/accounts:signInWithPassword?key=${ctx.firebaseApiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: p.email,
+            password: ctx.personasPassword,
+            returnSecureToken: true,
+          }),
+        },
+      );
+      if (r.status !== 200) {
+        return { ok: false, error: `Firebase sign-in failed for ${p.email}: ${r.status}` };
+      }
+      const body = await r.json();
+      ctx.sessions.set(name, {
+        persona: p,
+        idToken: body.idToken,
+        refreshToken: body.refreshToken,
+        localId: body.localId,
+        customClaims: decodeJwtPayload(body.idToken),
+      });
+      if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
+      ctx.personaPlatforms.set(name, 'Android physical');
+      // Layer 2: device-side persona picker drive. Optional — if the
+      // driver isn't wired (e.g. running with --driver stub), surface
+      // a warning to stderr but still return ok so REST-only assertions
+      // pass; the downstream UI-action steps will surface their own
+      // "ctx.uiDriver not configured" finding cleanly.
+      if (!ctx.uiDriver?.androidPersonaSignIn) {
+        console.error(
+          `[runner] "${name} is signed in on Android physical at ${tab} tab" — server-side sign-in done but no androidPersonaSignIn driver; device APP not driven through picker. Wire --driver adb (or --driver all) to enable.`,
+        );
+        return { ok: true };
+      }
+      try {
+        await ctx.uiDriver.androidPersonaSignIn(personaId, tab);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
     // j13 phase-scoped continuation: "<persona> is signed in on <platform>
     // with device locale <code>". Declared BEFORE the catch-all sign-in
     // matcher below so this more-specific form fires first.

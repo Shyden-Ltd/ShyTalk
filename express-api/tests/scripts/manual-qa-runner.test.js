@@ -2589,6 +2589,161 @@ describe('Persona "is signed in on <Platform> with device locale <code>" (j13 ph
   });
 });
 
+describe('Persona "is signed in on Android physical at the <tab> tab" (j09 Background — drives picker)', () => {
+  function withSignInFetch(uniqueId = 50000060) {
+    return jest.fn(async (url) => {
+      if (typeof url === 'string' && url.includes('signInWithPassword')) {
+        const idToken =
+          'h.' +
+          Buffer.from(JSON.stringify({ uniqueId, admin: false })).toString('base64url') +
+          '.s';
+        return { status: 200, json: async () => ({ idToken, refreshToken: 'r', localId: 'f' }) };
+      }
+      return { status: 500, text: async () => '{}' };
+    });
+  }
+
+  test('happy path: both server-side sign-in AND androidPersonaSignIn fire when driver wired', async () => {
+    const personaSignInSpy = jest.fn(async () => true);
+    const ctx = makeCtx({
+      fetch: withSignInFetch(50000060),
+      uiDriver: { androidPersonaSignIn: personaSignInSpy },
+    });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Theo [P-10] is signed in on Android physical at the "rooms" tab' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // Server-side: session populated.
+    expect(ctx.sessions.get('Theo')).toBeDefined();
+    expect(ctx.personaPlatforms.get('Theo')).toBe('Android physical');
+    // Device-side: driver method called with the persona id + tab.
+    expect(personaSignInSpy).toHaveBeenCalledWith('P-10', 'rooms');
+  });
+
+  test('driver not wired → server-side sign-in still succeeds, warning logged, ok=true', async () => {
+    // Capture stderr so we don't pollute test output AND can assert on
+    // the warning text. console.error is called via the runner's
+    // permissive-degradation path.
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const ctx = makeCtx({ fetch: withSignInFetch(50000060) });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Theo [P-10] is signed in on Android physical at the "rooms" tab' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // Server-side sign-in still happened
+    expect(ctx.sessions.get('Theo')).toBeDefined();
+    // Warning surfaced with actionable hint
+    expect(errSpy).toHaveBeenCalledWith(expect.stringMatching(/no androidPersonaSignIn driver/));
+    expect(errSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/Wire --driver adb \(or --driver all\) to enable/),
+    );
+    errSpy.mockRestore();
+  });
+
+  test('driver throws → matcher returns ok=false with the driver error message verbatim', async () => {
+    const personaSignInSpy = jest.fn(async () => {
+      throw new Error(
+        'androidPersonaSignIn: never reached main screen ("main_roomsTab") within 10s of picking P-10',
+      );
+    });
+    const ctx = makeCtx({
+      fetch: withSignInFetch(50000060),
+      uiDriver: { androidPersonaSignIn: personaSignInSpy },
+    });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Theo [P-10] is signed in on Android physical at the "rooms" tab' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/never reached main screen/);
+  });
+
+  test('unknown persona → actionable error, no Firebase call, no driver call', async () => {
+    const fetchSpy = withSignInFetch(50000060);
+    const personaSignInSpy = jest.fn(async () => true);
+    const ctx = makeCtx({
+      fetch: fetchSpy,
+      uiDriver: { androidPersonaSignIn: personaSignInSpy },
+    });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Zonk [P-99] is signed in on Android physical at the "rooms" tab' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(personaSignInSpy).not.toHaveBeenCalled();
+  });
+
+  test('missing PERSONAS_PASSWORD → actionable error', async () => {
+    const ctx = makeCtx({
+      fetch: withSignInFetch(50000060),
+      uiDriver: { androidPersonaSignIn: jest.fn() },
+      personasPassword: undefined,
+    });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Theo [P-10] is signed in on Android physical at the "rooms" tab' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/PERSONAS_PASSWORD env not set/);
+  });
+
+  test('Firebase 401 → actionable error, driver NOT called (server-side gate must pass first)', async () => {
+    const fetchSpy = jest.fn(async () => ({ status: 401, json: async () => ({}) }));
+    const personaSignInSpy = jest.fn(async () => true);
+    const ctx = makeCtx({
+      fetch: fetchSpy,
+      uiDriver: { androidPersonaSignIn: personaSignInSpy },
+    });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Theo [P-10] is signed in on Android physical at the "rooms" tab' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Firebase sign-in failed/);
+    expect(r.error).toMatch(/401/);
+    // Driver must NOT be called when server-side sign-in failed —
+    // signing the device in for a user that doesn't auth would mask
+    // the real failure mode.
+    expect(personaSignInSpy).not.toHaveBeenCalled();
+  });
+
+  test('non-rooms tab (e.g. profile) — driver method gets the tab name', async () => {
+    const personaSignInSpy = jest.fn(async () => true);
+    const ctx = makeCtx({
+      fetch: withSignInFetch(50000060),
+      uiDriver: { androidPersonaSignIn: personaSignInSpy },
+    });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Theo [P-10] is signed in on Android physical at the "profile" tab' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(personaSignInSpy).toHaveBeenCalledWith('P-10', 'profile');
+  });
+
+  test('does NOT fire on platforms other than "Android physical" — falls through to catch-all', async () => {
+    // The catch-all matcher (line ~947) accepts "is signed in on Web Chromium ...",
+    // "is signed in on iOS Sim ...", etc. — those must still work without
+    // hitting the more-specific Android-physical handler.
+    const personaSignInSpy = jest.fn(async () => true);
+    const ctx = makeCtx({
+      fetch: withSignInFetch(50000010),
+      uiDriver: { androidPersonaSignIn: personaSignInSpy },
+    });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice [P-02] is signed in on Web Chromium at the "rooms" tab' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // Driver NOT called — different platform, different matcher fired.
+    expect(personaSignInSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe('Sign-in `at the "X" tab` form (j09 Theo on the rooms tab)', () => {
   function withSignInFetch(uniqueId = 50000110) {
     return jest.fn(async (url) => {

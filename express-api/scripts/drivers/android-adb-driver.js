@@ -139,6 +139,15 @@ const ANDROID_METHOD_NAMES = [
   'androidTapQuotedTarget',
   'androidTapRoomCard',
   'androidLongPressSeat',
+  // j09 + every journey Background's "<persona> is signed in on
+  // Android physical at the <tab> tab" — drives the persona picker
+  // (visible on local + dev since PR #882) to sign the device's APP
+  // into the named persona, then taps the requested main-nav tab.
+  // Distinct from the Firebase REST sign-in the runner does on the
+  // server side: that gets a token into ctx.sessions; this one drives
+  // the device APP's UI through the picker dialog so the device is
+  // on the right screen for subsequent UI-action steps.
+  'androidPersonaSignIn',
 ];
 
 function listMethods() {
@@ -2237,6 +2246,106 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       );
     }
     return dropOk && restoreOk;
+  };
+
+  // Internal helper: poll androidUiDump until `tag` appears or the
+  // timeout elapses. Returns true on found, false on timeout. Used by
+  // androidPersonaSignIn for the post-tap settles where exact timing
+  // depends on Firebase network latency + Compose layout passes; a
+  // fixed setTimeout would either over-wait (slow tests) or under-wait
+  // (flake on slow runs).
+  async function waitForTag(tag, timeoutMs, pollMs = 200) {
+    const deadline = Date.now() + timeoutMs;
+    const escTag = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(`resource-id="(?:[^"]*:id/)?${escTag}"`);
+    while (Date.now() < deadline) {
+      try {
+        const dump = await driver.androidUiDump();
+        if (re.test(dump)) return true;
+      } catch {
+        // Transient dump failures are tolerated within the wait window.
+      }
+      await new Promise((r) => setTimeout(r, pollMs));
+    }
+    return false;
+  }
+
+  // j09 + every-journey Background: "<persona> is signed in on Android
+  // physical at the <tab> tab". Drives the device APP through the
+  // persona picker, which is the canonical journey-test auth path
+  // (per feedback-test-personas-not-oauth: never drive Google/Apple
+  // OAuth in journey tests). Distinct from the runner's Firebase REST
+  // sign-in which only seeds ctx.sessions server-side — this also
+  // gets the device's APP onto the main screen so subsequent UI-action
+  // steps (taps, dumps) find the tags they expect.
+  //
+  // Personas need a P-NN id (P-02..P-19); the picker dialog rows are
+  // keyed by that id. Ephemeral personas (P-01 Adam, P-03 Mia) have
+  // no persisted Firebase account so they CAN'T sign in via the
+  // picker — they'd need the prod-flow signup which is a separate
+  // matcher's responsibility.
+  //
+  // Throws with an actionable error naming the step that failed
+  // (open-picker / pick-row / wait-for-main) so the runner surfaces
+  // a precise finding rather than the generic "ui dump didn't
+  // contain X" downstream.
+  driver.androidPersonaSignIn = async (personaId, tab) => {
+    if (!/^P-\d{2}$/.test(personaId)) {
+      throw new Error(
+        `androidPersonaSignIn requires a P-NN persona id (got "${personaId}") — ephemeral personas P-01/P-03 sign up via the prod flow, not the picker`,
+      );
+    }
+    // Step 1: tap `persona_picker_open` on the sign-in screen.
+    // Available on local + dev (PR #882); on prod the button is
+    // hidden so this will return false → actionable error.
+    const opened = await driver.androidTapByTag('persona_picker_open');
+    if (!opened) {
+      throw new Error(
+        'androidPersonaSignIn: could not tap "persona_picker_open" — device may not be on the sign-in screen, or the build flavor is "prod" (the picker is hidden on prod)',
+      );
+    }
+    // Step 2: wait for the dialog to render. Pick a row testTag that
+    // exists for ALL personas (P-02..P-19) — anchor on the requested
+    // one, since the dialog renders all rows together.
+    const rowTag = `persona_row_${personaId}`;
+    const dialogReady = await waitForTag(rowTag, 5000);
+    if (!dialogReady) {
+      throw new Error(
+        `androidPersonaSignIn: picker dialog never showed "${rowTag}" within 5s — persona may not be in the dev personas registry (provision-test-personas.js)`,
+      );
+    }
+    // Step 3: tap the persona row.
+    const picked = await driver.androidTapByTag(rowTag);
+    if (!picked) {
+      throw new Error(
+        `androidPersonaSignIn: tap on "${rowTag}" failed despite dialog showing the row — UI dump may be racing the tap`,
+      );
+    }
+    // Step 4: wait for sign-in completion. Anchor on `main_roomsTab`
+    // since that's the default landing tab for all signed-in users.
+    // Firebase REST sign-in via the picker can take 3-5s in the worst
+    // case (network roundtrip + Firestore profile fetch + Compose nav).
+    const signedIn = await waitForTag('main_roomsTab', 10000);
+    if (!signedIn) {
+      throw new Error(
+        `androidPersonaSignIn: never reached main screen ("main_roomsTab") within 10s of picking ${personaId} — Firebase sign-in may have failed (check device logcat) or main nav testTag has drifted`,
+      );
+    }
+    // Step 5: if the requested tab is not "rooms" (default landing),
+    // tap the requested tab. Mirrors the main-nav convention
+    // `main_<lowered>Tab` used by tapMainNavTab.
+    const loweredTab = String(tab).toLowerCase();
+    if (loweredTab !== 'rooms') {
+      const navOk = await driver.androidTapByTag(`main_${loweredTab}Tab`);
+      if (!navOk) {
+        throw new Error(
+          `androidPersonaSignIn: signed in OK but couldn't navigate to "main_${loweredTab}Tab" — tab name may not match the main nav convention`,
+        );
+      }
+      // Settle for the tab content to render before subsequent steps.
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    return true;
   };
 
   driver.close = async () => {

@@ -16381,3 +16381,167 @@ describe('android-adb-driver — androidOpenScreen tab-navigation', () => {
     expect(tapCall).toBeDefined();
   });
 });
+
+describe('android-adb-driver — androidPersonaSignIn', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  // Helper: build the dump sequence for the happy path. Each dump in
+  // the sequence is consumed by one `androidUiDump()` call. The flow:
+  //   dump 0 — sign-in screen with persona_picker_open (consumed by
+  //            androidTapByTag('persona_picker_open'))
+  //   dump 1 — dialog open with persona_row_<id> (consumed by
+  //            waitForTag('persona_row_<id>'))
+  //   dump 2 — dialog still rendered with persona_row_<id> (consumed
+  //            by androidTapByTag('persona_row_<id>') — dialog is
+  //            visible at tap moment)
+  //   dump 3 — main screen with main_roomsTab (consumed by
+  //            waitForTag('main_roomsTab'))
+  function happyPathDumps(personaId) {
+    const personaRowNode = `<node resource-id="com.shyden.shytalk.local:id/persona_row_${personaId}" bounds="[100,700][800,800]" />`;
+    return [
+      `<node resource-id="com.shyden.shytalk.local:id/persona_picker_open" bounds="[100,500][400,600]" />`,
+      personaRowNode,
+      personaRowNode,
+      `<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" bounds="[100,1900][270,2100]" />`,
+    ];
+  }
+
+  function setupExec(dumps) {
+    // androidUiDump runs TWO adb calls per invocation:
+    //   1. `uiautomator dump --compressed /sdcard/dump.xml` (writes file)
+    //   2. `cat /sdcard/dump.xml` (reads it back)
+    // The CAT call is the one whose stdout becomes the dump XML returned
+    // to androidTapByTag / waitForTag. We advance the dump cursor on
+    // the cat call (not the uiautomator one) so each "dump cycle" gets
+    // one entry from the dumps[] array.
+    let dumpIdx = 0;
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') {
+        return 'List of devices attached\nemulator-5554\tdevice\n';
+      }
+      if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
+        const out = dumps[Math.min(dumpIdx, dumps.length - 1)];
+        dumpIdx += 1;
+        return out;
+      }
+      return '';
+    });
+  }
+
+  test('happy path: P-10 + rooms tab — taps picker, picks row, lands on main_roomsTab', async () => {
+    setupExec(happyPathDumps('P-10'));
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms');
+    // Advance through the wait-for-dialog poll (5s ceiling) + wait-for-main
+    // poll (10s ceiling). Dumps return immediately so the poll resolves on
+    // the first tick.
+    await jest.advanceTimersByTimeAsync(15000);
+    expect(await promise).toBe(true);
+    // Verify the 2 testTag taps happened (picker open + persona row).
+    // Don't constrain on exact tap coords — bounds parsing is covered
+    // elsewhere; here we just confirm the sequence ran.
+    const tapCalls = execSync.mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.includes("'input' 'tap'"));
+    expect(tapCalls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('non-rooms tab (e.g. profile) — also taps main_profileTab after sign-in', async () => {
+    setupExec([
+      ...happyPathDumps('P-10'),
+      // Extra dump for the post-sign-in profile-tab tap
+      `<node resource-id="com.shyden.shytalk.local:id/main_profileTab" bounds="[700,1900][870,2100]" />`,
+    ]);
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'profile');
+    await jest.advanceTimersByTimeAsync(16000);
+    expect(await promise).toBe(true);
+  });
+
+  test('invalid personaId (not P-NN form) → throws actionable error', async () => {
+    setupExec(['']);
+    const driver = await createAndroidDriver();
+    await expect(driver.androidPersonaSignIn('Theo', 'rooms')).rejects.toThrow(
+      /requires a P-NN persona id \(got "Theo"\)/,
+    );
+    await expect(driver.androidPersonaSignIn('P-1', 'rooms')).rejects.toThrow(
+      /requires a P-NN persona id/,
+    );
+    // Ephemeral personas explicitly named in the error
+    await expect(driver.androidPersonaSignIn('Adam', 'rooms')).rejects.toThrow(
+      /ephemeral personas P-01\/P-03 sign up via the prod flow/,
+    );
+  });
+
+  test('persona_picker_open not on screen → throws naming the missing testTag', async () => {
+    setupExec(['<node resource-id="something_else" bounds="[0,0][100,100]" />']);
+    const driver = await createAndroidDriver();
+    await expect(driver.androidPersonaSignIn('P-10', 'rooms')).rejects.toThrow(
+      /could not tap "persona_picker_open"/,
+    );
+  });
+
+  test('dialog never shows persona_row → throws after 5s with persona id', async () => {
+    // First CAT-dump has persona_picker_open (so the tap succeeds);
+    // subsequent CAT-dumps never contain persona_row_P-99 — simulates
+    // the operator asking for a persona that isn't in the dev registry.
+    let dumpCalls = 0;
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
+        dumpCalls += 1;
+        if (dumpCalls <= 1) {
+          return '<node resource-id="com.shyden.shytalk.local:id/persona_picker_open" bounds="[100,500][400,600]" />';
+        }
+        // Dialog renders P-10 row (not P-99) — waitForTag for P-99 will time out
+        return '<node resource-id="com.shyden.shytalk.local:id/persona_row_P-10" bounds="[0,0][100,100]" />';
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-99', 'rooms');
+    // Pre-attach a noop catch so when the timer-flush triggers the
+    // rejection, Node doesn't see an unhandled-promise-rejection (which
+    // jest surfaces as a test failure ahead of the expect.rejects).
+    promise.catch(() => {});
+    await jest.advanceTimersByTimeAsync(6000);
+    await expect(promise).rejects.toThrow(
+      /picker dialog never showed "persona_row_P-99" within 5s/,
+    );
+  });
+
+  test('main_roomsTab never appears within 10s → throws with Firebase-sign-in hint', async () => {
+    let dumpCalls = 0;
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
+        dumpCalls += 1;
+        if (dumpCalls === 1) {
+          return '<node resource-id="com.shyden.shytalk.local:id/persona_picker_open" bounds="[100,500][400,600]" />';
+        }
+        if (dumpCalls === 2 || dumpCalls === 3) {
+          // dialog renders P-10 row — wait succeeds (dump 2), tap succeeds (dump 3)
+          return '<node resource-id="com.shyden.shytalk.local:id/persona_row_P-10" bounds="[100,700][800,800]" />';
+        }
+        // Subsequent CAT-dumps never contain main_roomsTab — Firebase sign-in stalled
+        return '<node resource-id="something_else" bounds="[0,0][100,100]" />';
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms');
+    // See the dialog-never-shows test for why this noop catch is needed.
+    promise.catch(() => {});
+    await jest.advanceTimersByTimeAsync(11000);
+    await expect(promise).rejects.toThrow(
+      /never reached main screen \("main_roomsTab"\) within 10s/,
+    );
+    await expect(promise).rejects.toThrow(/Firebase sign-in may have failed/);
+  });
+});
