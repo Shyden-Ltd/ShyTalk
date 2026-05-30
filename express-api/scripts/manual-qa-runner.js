@@ -15539,6 +15539,20 @@ async function main() {
     } else if (opts.browser === 'mobile-safari-ios') {
       const { createMobileSafariIosDriver } = require('./drivers/web-mobile-safari-ios-driver');
       webDriver = await createMobileSafariIosDriver({ baseURL });
+    } else if (
+      opts.browser === 'mobile-chrome-ios' ||
+      opts.browser === 'mobile-firefox-ios' ||
+      opts.browser === 'mobile-edge-ios'
+    ) {
+      // Chrome/Firefox/Edge for iOS all use WebKit (App Store policy) so
+      // they share a single driver module parameterised by the browser
+      // slug. The slug suffix maps to the per-browser bundle ID inside
+      // the driver's WEBKIT_BROWSERS table.
+      const { createMobileWebkitIosDriver } = require('./drivers/web-mobile-webkit-ios-driver');
+      // Slug shape is `mobile-<browser>-ios` — strip the prefix/suffix
+      // to get the browser key the driver expects ('chrome'|'firefox'|'edge').
+      const browserKey = opts.browser.replace(/^mobile-/, '').replace(/-ios$/, '');
+      webDriver = await createMobileWebkitIosDriver({ browser: browserKey, baseURL });
     } else {
       const { createWebDriver } = require('./drivers/web-playwright-driver');
       webDriver = await createWebDriver({
