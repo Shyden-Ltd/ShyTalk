@@ -15518,34 +15518,41 @@ async function main() {
       console.error(`[runner] Android driver init failed: ${e.message}`);
     }
   }
-  if (opts.driver === 'devicectl' || opts.driver === 'simctl' || opts.driver === 'all') {
-    // Accept both 'devicectl' (canonical, physical-device target) and
-    // 'simctl' (legacy alias from the simulator era). Both route to
-    // ios-devicectl-driver per the Phase 5 migration; 'simctl' is kept
-    // as a transitional alias so existing tooling/scripts that pass
-    // --driver simctl continue to work. A future PR can remove the
-    // alias once all journey runners are migrated.
+  // iOS driver routing — see ./drivers/ios-driver-loader.js for the
+  // routing matrix. The loader picks between ios-appium-driver (real
+  // UI, needs WDA_TEAM_ID) and ios-devicectl-driver (legacy stubs)
+  // based on opts.driver + env.
+  {
+    const { loadIosUiDriver } = require('./drivers/ios-driver-loader');
     try {
-      const { createIosDriver } = require('./drivers/ios-devicectl-driver');
-      const iosDriver = await createIosDriver({});
-      if (!uiDriver) {
-        uiDriver = iosDriver;
-      } else {
-        // Merge iOS methods onto the existing uiDriver (Android-first).
-        // Each method name is platform-prefixed (`iosXxx` / `androidXxx`)
-        // so no collisions; matchers dispatch by step text platform.
-        for (const k of Object.keys(iosDriver)) {
-          if (typeof iosDriver[k] === 'function' && !uiDriver[k]) {
-            uiDriver[k] = iosDriver[k].bind(iosDriver);
+      const loaded = await loadIosUiDriver({
+        driver: opts.driver,
+        target: opts.target,
+        createAppiumDriver: (cfg) => require('./drivers/ios-appium-driver').createIosDriver(cfg),
+        createDevicectlDriver: (cfg) =>
+          require('./drivers/ios-devicectl-driver').createIosDriver(cfg),
+      });
+      if (loaded) {
+        const { iosDriver } = loaded;
+        if (!uiDriver) {
+          uiDriver = iosDriver;
+        } else {
+          // Merge iOS methods onto the existing uiDriver (Android-first).
+          // Each method name is platform-prefixed (`iosXxx` / `androidXxx`)
+          // so no collisions; matchers dispatch by step text platform.
+          for (const k of Object.keys(iosDriver)) {
+            if (typeof iosDriver[k] === 'function' && !uiDriver[k]) {
+              uiDriver[k] = iosDriver[k].bind(iosDriver);
+            }
           }
+          uiDriver._iosDriver = iosDriver;
         }
-        uiDriver._iosDriver = iosDriver;
+        const prevCleanup = driverCleanup;
+        driverCleanup = async () => {
+          await prevCleanup();
+          await iosDriver.close();
+        };
       }
-      const prevCleanup = driverCleanup;
-      driverCleanup = async () => {
-        await prevCleanup();
-        await iosDriver.close();
-      };
     } catch (e) {
       console.error(`[runner] iOS driver init failed: ${e.message}`);
     }
