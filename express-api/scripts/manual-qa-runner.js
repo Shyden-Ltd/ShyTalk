@@ -933,6 +933,71 @@ const matchers = [
   // The strategy is permissive consumption: anything after `is signed in`
   // that doesn't drive a distinct API call is treated as documentation.
   {
+    // j13 phase-scoped continuation: "<persona> is signed in on <platform>
+    // with device locale <code>". Declared BEFORE the catch-all sign-in
+    // matcher below so this more-specific form fires first.
+    //
+    // Used after the j13 Background's browser-locale variant has
+    // established the persona on the Web app; this form switches them to
+    // a mobile platform (Android emulator or iOS Sim) for a phase-scoped
+    // scenario. Tracks ctx.personaPlatforms (the catch-all matcher
+    // doesn't) so downstream driver-routing sees the new platform.
+    //
+    // No JWT mismatch / cross-platform sign-in lock — the runner uses
+    // the same Firebase identity regardless of asserted client platform.
+    // The platform switch is informational, useful for downstream driver
+    // routing (Android vs iOS Sim drivers).
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is signed in on\s+(\w+(?:\s+\w+){0,2})\s+with device locale\s+([a-z]{2}(?:-[A-Z]{2})?)$/,
+    async handler(m, ctx) {
+      const name = m[1];
+      const platform = m[3];
+      const locale = m[4];
+      const personas = loadPersonas();
+      const p = personas.get(name);
+      if (!p) return { ok: false, error: `persona "${name}" not in registry` };
+      if (!ctx.personasPassword) {
+        return { ok: false, error: 'PERSONAS_PASSWORD env not set' };
+      }
+      const authBase =
+        ctx.target === 'local' && process.env.FIREBASE_AUTH_EMULATOR_HOST
+          ? `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com`
+          : 'https://identitytoolkit.googleapis.com';
+      const r = await ctx.fetch(
+        `${authBase}/v1/accounts:signInWithPassword?key=${ctx.firebaseApiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: p.email,
+            password: ctx.personasPassword,
+            returnSecureToken: true,
+          }),
+        },
+      );
+      if (r.status !== 200) {
+        return { ok: false, error: `Firebase sign-in failed for ${p.email}: ${r.status}` };
+      }
+      const body = await r.json();
+      ctx.sessions.set(name, {
+        persona: p,
+        idToken: body.idToken,
+        refreshToken: body.refreshToken,
+        localId: body.localId,
+        customClaims: decodeJwtPayload(body.idToken),
+      });
+      if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
+      ctx.personaPlatforms.set(name, platform);
+      ctx.locale = locale;
+      // Mirror into ctx.deviceLocales so downstream driver assertions
+      // (e.g., androidDocumentDirection / iosLayoutDirection) can route
+      // by persona. Parallel to ctx.browserLocales for web personas.
+      if (!ctx.deviceLocales) ctx.deviceLocales = new Map();
+      ctx.deviceLocales.set(name, locale);
+      return { ok: true };
+    },
+  },
+  {
     // The `with <kv-clause>` group now captures a broad payload (any non-paren
     // run of chars) so the handler can seed user-doc fields. Previously this
     // sub-clause was narrow (`with cohort=\w+`) and informational-only; the

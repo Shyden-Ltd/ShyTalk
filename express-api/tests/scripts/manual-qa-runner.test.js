@@ -2487,6 +2487,108 @@ describe('Persona on-platform locale+signin compound (Given <P> is on <Platform>
   });
 });
 
+describe('Persona "is signed in on <Platform> with device locale <code>" (j13 phase-2 continuation)', () => {
+  function withSignInFetch(uniqueId = 50000070) {
+    return jest.fn(async (url) => {
+      if (typeof url === 'string' && url.includes('signInWithPassword')) {
+        const idToken =
+          'h.' +
+          Buffer.from(JSON.stringify({ uniqueId, admin: false })).toString('base64url') +
+          '.s';
+        return { status: 200, json: async () => ({ idToken, refreshToken: 'r', localId: 'f' }) };
+      }
+      return { status: 500, text: async () => '{}' };
+    });
+  }
+
+  test('"Layla is signed in on Android emulator with device locale ar" — sets platform + locale + session', async () => {
+    const ctx = makeCtx({ fetch: withSignInFetch(50000070) });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Layla is signed in on Android emulator with device locale ar' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.personaPlatforms.get('Layla')).toBe('Android emulator');
+    expect(ctx.locale).toBe('ar');
+    expect(ctx.deviceLocales.get('Layla')).toBe('ar');
+    expect(ctx.sessions.get('Layla')).toBeDefined();
+  });
+
+  test('"Kenji is signed in on iOS Sim with device locale ja" — multi-word platform parses correctly', async () => {
+    const ctx = makeCtx({ fetch: withSignInFetch(50000071) });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Kenji is signed in on iOS Sim with device locale ja' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.personaPlatforms.get('Kenji')).toBe('iOS Sim');
+    expect(ctx.locale).toBe('ja');
+    expect(ctx.deviceLocales.get('Kenji')).toBe('ja');
+  });
+
+  test('locale-region form (en-GB) parses correctly', async () => {
+    const ctx = makeCtx({ fetch: withSignInFetch(50000070) });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Layla is signed in on Android emulator with device locale en-GB' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.locale).toBe('en-GB');
+    expect(ctx.deviceLocales.get('Layla')).toBe('en-GB');
+  });
+
+  test('optional [P-NN] bracketed form also works', async () => {
+    const ctx = makeCtx({ fetch: withSignInFetch(50000070) });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'Layla [P-13] is signed in on Android emulator with device locale ar',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.personaPlatforms.get('Layla')).toBe('Android emulator');
+  });
+
+  test('unknown persona → actionable error (no Firebase call)', async () => {
+    const fetchSpy = withSignInFetch(50000070);
+    const ctx = makeCtx({ fetch: fetchSpy });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Zonk is signed in on iOS Sim with device locale ja' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+    // No Firebase sign-in attempt for unknown personas — fail fast
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  test('missing PERSONAS_PASSWORD env → actionable error (preserves operator setup hint)', async () => {
+    const ctx = makeCtx({
+      fetch: withSignInFetch(50000070),
+      personasPassword: undefined,
+    });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Layla is signed in on Android emulator with device locale ar' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/PERSONAS_PASSWORD env not set/);
+  });
+
+  test('Firebase sign-in non-200 → actionable error with status', async () => {
+    const fetchSpy = jest.fn(async () => ({ status: 401, json: async () => ({}) }));
+    const ctx = makeCtx({ fetch: fetchSpy });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Layla is signed in on Android emulator with device locale ar' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/Firebase sign-in failed/);
+    expect(r.error).toMatch(/401/);
+  });
+});
+
 describe('Sign-in `at the "X" tab` form (j09 Theo on the rooms tab)', () => {
   function withSignInFetch(uniqueId = 50000110) {
     return jest.fn(async (url) => {
