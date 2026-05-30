@@ -705,6 +705,50 @@ async function applyAgeVerificationApproval(ctx, personaName, adminPersonaName) 
   return { auditDocId };
 }
 
+async function seedAdminQueueEntries(ctx, queueId, count) {
+  // j12 admin-dashboard queue seeder. Writes N docs to the given
+  // queue collection so admin-dashboard scenarios can assert on
+  // queue-card counts (e.g. "5 pending age-verification submissions"
+  // → the queue card shows "5"). Each doc gets a deterministic
+  // `test-seed-<i>` id for idempotency — re-running overwrites the
+  // same docs, count stays N.
+  //
+  // QUEUE_REGISTRY maps the journey's queue-name to the production
+  // collection name + the canonical pending status string. Adding a
+  // new queue here is the only change needed to unlock its matcher;
+  // the matcher itself is queue-agnostic.
+  const QUEUE_REGISTRY = {
+    'age-verification': {
+      collection: 'ageVerificationSubmissions',
+      status: 'PENDING',
+    },
+    reports: {
+      collection: 'reports',
+      status: 'PENDING',
+    },
+    'suspension-appeals': {
+      collection: 'suspensionAppeals',
+      status: 'PENDING',
+    },
+  };
+  const entry = QUEUE_REGISTRY[queueId];
+  if (!entry) {
+    throw new Error(`unknown admin queue "${queueId}" — add to QUEUE_REGISTRY`);
+  }
+  for (let i = 0; i < count; i++) {
+    await ctx.db.doc(`${entry.collection}/test-seed-${i}`).set({
+      status: entry.status,
+      submittedAt: Date.now() + i,
+      // userId is a test placeholder — real flows have a backref,
+      // but for queue-count assertions the field value doesn't matter.
+      // Use a numeric range that doesn't collide with persona uniqueIds
+      // (50000010+) or ephemeral ones (90000001+).
+      userId: 10000 + i,
+    });
+  }
+  return { count, queueId };
+}
+
 async function seedSystemPmFromOfficia(ctx, recipientPersonaName, key) {
   // Officia is uniqueId 1 (SHYTALK_OFFICIAL). The PM flow writes:
   //   1. conversations/<auto> with participantIds=[1, recipient]
@@ -856,7 +900,6 @@ const matchers = [
       return { ok: true };
     },
   },
-
   // ── Persona sign-in ──
   // Accepts an optional `on <Platform>` clause (bounded {0,2} repetition to
   // handle multi-word platforms — see PR-C state-seed matcher). The runner
@@ -12252,9 +12295,14 @@ const matchers = [
   },
   {
     // Wake 95 — "the <queue> queue has N pending <noun>". j12 Background.
-    // Records queue depth on ctx.adminQueues. Downstream "Greta opens
-    // the X queue" steps could read this to validate the count is
-    // shown in the UI. MVP just persists for inspection.
+    // Records queue depth on ctx.adminQueues for downstream "Greta opens
+    // the X queue" steps that read this to validate the count is shown in
+    // the UI. Also (extended below) seeds N Firestore docs to the matching
+    // collection so scenarios that ASSERT on real queue counts (not just
+    // ctx bookkeeping) also pass — the seed primitive is best-effort: if
+    // the queueName isn't a registered seedable queue (e.g. "subscribers"
+    // for a forward-looking scenario), the ctx.adminQueues record still
+    // happens and the seed skips silently.
     pattern: /^the ([\w-]+) queue has (\d+) pending (\w+)$/,
     async handler(m, ctx) {
       const queueName = m[1];
@@ -12262,6 +12310,21 @@ const matchers = [
       const noun = m[3];
       if (!ctx.adminQueues) ctx.adminQueues = {};
       ctx.adminQueues[queueName] = { count, noun };
+      // Seed Firestore queue docs if (a) db is available AND (b) the
+      // queue is in QUEUE_REGISTRY. Silent skip otherwise — preserves
+      // backward compatibility with scenarios that only need the ctx
+      // bookkeeping (the prior MVP behaviour).
+      if (ctx.db) {
+        try {
+          await seedAdminQueueEntries(ctx, queueName, count);
+        } catch (e) {
+          // Unknown queue → silent skip (preserves backward compat);
+          // any OTHER error (db throw, etc.) bubbles up actionably.
+          if (!/unknown admin queue/.test(e.message)) {
+            return { ok: false, error: e.message };
+          }
+        }
+      }
       return { ok: true };
     },
   },

@@ -10517,6 +10517,126 @@ describe("Mia's restricted-minor setup Givens (j02 phase-scoped scenario setup)"
   });
 });
 
+// ─── j12 admin-queue setup Givens (queue-state phase-scoped scenarios) ─────
+describe('Admin-queue setup Givens (j12 phase-scoped scenarios)', () => {
+  test('"the age-verification queue has 5 pending submissions" — seeds 5 PENDING docs', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'the age-verification queue has 5 pending submissions' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const submissions = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith('ageVerificationSubmissions/'),
+    );
+    expect(submissions).toHaveLength(5);
+    // Each is PENDING
+    for (const [, doc] of submissions) {
+      expect(doc.status).toBe('PENDING');
+    }
+  });
+
+  test('"the reports queue has 3 pending reports" — seeds 3 PENDING reports', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'the reports queue has 3 pending reports' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const reports = Object.entries(db._docs).filter(([k]) => k.startsWith('reports/'));
+    expect(reports).toHaveLength(3);
+    for (const [, doc] of reports) {
+      expect(doc.status).toBe('PENDING');
+    }
+  });
+
+  test('"the suspension-appeals queue has 2 pending appeals" — seeds 2 PENDING appeals', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'the suspension-appeals queue has 2 pending appeals' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const appeals = Object.entries(db._docs).filter(([k]) => k.startsWith('suspensionAppeals/'));
+    expect(appeals).toHaveLength(2);
+    for (const [, doc] of appeals) {
+      expect(doc.status).toBe('PENDING');
+    }
+  });
+
+  test('queue-seed is idempotent (re-running gives the same count — deterministic doc-ids)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    await executeStep({ kind: 'Given', text: 'the reports queue has 3 pending reports' }, ctx);
+    await executeStep({ kind: 'Given', text: 'the reports queue has 3 pending reports' }, ctx);
+    const reports = Object.entries(db._docs).filter(([k]) => k.startsWith('reports/'));
+    // Still exactly 3 — deterministic `test-seed-<i>` ids overwrite cleanly
+    expect(reports).toHaveLength(3);
+  });
+
+  test('queue-seed accepts 0 count (empty queue setup)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'the reports queue has 0 pending reports' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const reports = Object.entries(db._docs).filter(([k]) => k.startsWith('reports/'));
+    expect(reports).toHaveLength(0);
+  });
+
+  test('unknown queue → silent skip (preserves backward-compat with bookkeeping-only scenarios)', async () => {
+    // Wake 95 is older than the QUEUE_REGISTRY seed primitive. Some
+    // scenarios use queue names that aren't registered (forward-looking
+    // names, hypothetical queues). The handler still records the
+    // ctx.adminQueues bookkeeping but skips the Firestore seed
+    // silently — preserving the prior MVP behaviour.
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'the unknown-queue queue has 5 pending things' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // ctx bookkeeping happened
+    expect(ctx.adminQueues['unknown-queue']).toEqual({ count: 5, noun: 'things' });
+    // Firestore got nothing seeded (no matching collection in registry)
+    const docs = Object.keys(db._docs);
+    expect(docs).toHaveLength(0);
+  });
+
+  test('ctx.db missing → still succeeds (bookkeeping-only, no Firestore seed)', async () => {
+    // Wake 95 predates ctx.db being required. To preserve backward
+    // compatibility, the handler should still set ctx.adminQueues even
+    // when ctx.db is missing — the seed step is best-effort.
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Given', text: 'the reports queue has 3 pending reports' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.adminQueues.reports).toEqual({ count: 3, noun: 'reports' });
+  });
+
+  test('large count (50) does not crash + writes correct number', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'the age-verification queue has 50 pending submissions' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const subs = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith('ageVerificationSubmissions/'),
+    );
+    expect(subs).toHaveLength(50);
+  });
+});
+
 describe('Dialog confirm action (platform-dispatch)', () => {
   test('"X on Android confirms in the dialog" → driver', async () => {
     const spy = jest.fn(async () => undefined);
