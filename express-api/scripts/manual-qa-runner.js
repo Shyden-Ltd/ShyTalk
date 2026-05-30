@@ -15447,6 +15447,15 @@ async function main() {
     else if (flat[i] === '--matrix') opts.matrix = true;
     else if (flat[i] === '--fail-fast') opts.failFast = true;
     else if (flat[i] === '--check-drivers') opts.checkDrivers = true;
+    else if (flat[i] === '--report-dir') opts.reportDir = flat[++i];
+    else if (flat[i] === '--report-format') opts.reportFormat = flat[++i];
+    else if (flat[i] === '--report-output') opts.reportOutput = flat[++i];
+  }
+  // --report-format validation — only json + junit are supported (used
+  // with --matrix to emit structured output for CI dashboards).
+  if (opts.reportFormat && !['json', 'junit'].includes(opts.reportFormat)) {
+    console.error(`--report-format "${opts.reportFormat}" not recognised. Supported: json, junit.`);
+    process.exit(2);
   }
   opts.target = opts.target || 'dev';
   opts.planDir = opts.planDir || path.resolve(__dirname, '../../journey-tests');
@@ -15568,12 +15577,39 @@ async function main() {
   // state. The iteration helper (./matrix-dispatch.js) aggregates
   // pass / fail / skip outcomes and prints a summary table at the end.
   if (opts.matrix) {
-    const { runMatrix, formatMatrixResult } = require('./matrix-dispatch');
+    const {
+      runMatrix,
+      formatMatrixResult,
+      formatMatrixResultJson,
+      formatMatrixResultJunit,
+    } = require('./matrix-dispatch');
     const { spawnSync } = require('child_process');
-    // Reconstruct the per-cell argv by stripping --matrix + appending
-    // --browser <slug>. If --browser was already supplied, the existing
-    // value gets shadowed (last --browser wins in the parse loop).
-    const baseArgv = process.argv.slice(2).filter((a) => a !== '--matrix');
+    // Reconstruct the per-cell argv by stripping --matrix + report flags
+    // + appending --browser <slug>. Per-cell subprocesses don't need the
+    // matrix-level flags (they'd recurse into their own report-writing).
+    // Last --browser wins in the parse loop.
+    const stripFlags = new Set(['--matrix', '--report-dir', '--report-format', '--report-output']);
+    const baseArgv = [];
+    const sourceArgv = process.argv.slice(2);
+    for (let i = 0; i < sourceArgv.length; i++) {
+      const a = sourceArgv[i];
+      if (stripFlags.has(a)) {
+        // --matrix is a boolean; the other strip flags take a value,
+        // skip it too.
+        if (a !== '--matrix') i++;
+        continue;
+      }
+      baseArgv.push(a);
+    }
+
+    // When --report-dir is set, mkdir-p the dir up front so the per-cell
+    // writes don't race on creation.
+    let cellLogs = null;
+    if (opts.reportDir) {
+      cellLogs = require('./matrix-cell-logs');
+      cellLogs.ensureReportDir(opts.reportDir);
+    }
+
     const matrixResult = await runMatrix({
       browsers: allowed,
       failFast: opts.failFast === true,
@@ -15582,15 +15618,62 @@ async function main() {
         console.log(`[matrix] ← ${cell.browser}: ${cell.outcome} (${cell.durationMs}ms)`),
       dispatchOne: async ({ browser }) => {
         const cellArgs = [...baseArgv, '--browser', browser];
+        // Capture mode: pipe stdout+stderr so we can both tee them to
+        // the operator's terminal AND write a per-cell log file. Inherit
+        // mode (no --report-dir): subprocess stdio inherits the runner's
+        // streams as before (zero log overhead).
+        const captureStdio = Boolean(opts.reportDir);
         const proc = spawnSync(process.execPath, [__filename, ...cellArgs], {
-          stdio: 'inherit',
+          stdio: captureStdio ? ['ignore', 'pipe', 'pipe'] : 'inherit',
           env: process.env,
         });
         if (proc.error) throw proc.error;
+        if (captureStdio) {
+          // Tee captured stdio to the runner's terminal so the operator
+          // sees the cell's output in real time too — same UX as
+          // 'inherit' mode.
+          const stdout = proc.stdout ? proc.stdout.toString('utf8') : '';
+          const stderr = proc.stderr ? proc.stderr.toString('utf8') : '';
+          if (stdout) process.stdout.write(stdout);
+          if (stderr) process.stderr.write(stderr);
+          // Write per-cell log file. Combined stdout+stderr so a future
+          // operator grep sees both interleaved (close to chronological).
+          cellLogs.writeCellLog({
+            dir: opts.reportDir,
+            cell: {
+              browser,
+              outcome: proc.status === 0 ? 'pass' : 'fail',
+              durationMs: 0, // not measured here; runMatrix sets it on its own cell record
+            },
+            body: stdout + (stderr ? `\n---STDERR---\n${stderr}` : ''),
+          });
+        }
         return proc.status === 0;
       },
     });
+    // Always print the human-readable text table to stdout so the
+    // operator gets immediate feedback regardless of --report-format.
     console.log('\n' + formatMatrixResult(matrixResult));
+    if (opts.reportDir) {
+      console.log(`[matrix] per-cell logs written to ${opts.reportDir}`);
+    }
+    // Optional structured-report output for CI consumption.
+    if (opts.reportFormat) {
+      const fsImpl = require('fs');
+      let formatted;
+      if (opts.reportFormat === 'json') {
+        formatted = formatMatrixResultJson(matrixResult);
+      } else {
+        // junit
+        formatted = formatMatrixResultJunit(matrixResult);
+      }
+      if (opts.reportOutput) {
+        fsImpl.writeFileSync(opts.reportOutput, formatted);
+        console.log(`[matrix] ${opts.reportFormat} report written to ${opts.reportOutput}`);
+      } else {
+        console.log(`\n${formatted}`);
+      }
+    }
     process.exit(matrixResult.ok ? 0 : 1);
   }
   const personasPassword = process.env.PERSONAS_PASSWORD;
