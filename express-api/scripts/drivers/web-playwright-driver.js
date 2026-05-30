@@ -29,10 +29,20 @@ const path = require('path');
 let _playwright;
 function loadPlaywright() {
   if (_playwright) return _playwright;
-  // Resolve `playwright` from the repo root node_modules (not express-api/).
+  // Try bare specifier first so jest's mock-resolution applies in unit
+  // tests (jest.mock('playwright', ...) only intercepts the bare form,
+  // not absolute-path requires). Falls back to the repo-root path for
+  // production / dev runs from express-api where the bare specifier
+  // can't resolve (playwright lives in the repo-root node_modules, not
+  // express-api/node_modules).
+  try {
+    _playwright = require('playwright');
+    return _playwright;
+  } catch (bareErr) {
+    if (bareErr.code !== 'MODULE_NOT_FOUND') throw bareErr;
+  }
   const repoRoot = path.resolve(__dirname, '../../..');
   const playwrightPath = path.join(repoRoot, 'node_modules', 'playwright');
-
   _playwright = require(playwrightPath);
   return _playwright;
 }
@@ -125,6 +135,10 @@ const WEB_METHOD_NAMES = [
   'webShowsTranslationOf',
   'webScanAllRenderedStrings',
   'webFallbackEnStrings',
+  // j09 — Alice on Web refreshes the rooms list. Navigates to /rooms
+  // on the persona's tab; the matcher's `within 3000ms` polling
+  // wraps the list population.
+  'webRefreshRoomsList',
   // Append-only — add new method names as new matchers land.
 ];
 
@@ -382,6 +396,29 @@ async function createWebDriver({ baseURL = 'http://localhost:8888', headless = t
       collected.push(...texts);
     }
     return collected;
+  };
+
+  // webRefreshRoomsList — refresh the rooms list on the persona's tab.
+  // Runner step "<Name> on Web refreshes the rooms list" (j09: Alice
+  // joins Theo's public room scenario). The persona-scoped Page is
+  // obtained via pageFor(name); navigates to /rooms (the canonical
+  // rooms-list route) if not already there, else does a soft reload.
+  // The soft reload is preferred over location.reload() because it
+  // preserves the Firebase Auth state — a hard reload triggers Firebase
+  // to re-initialise and may invalidate cached auth tokens.
+  driver.webRefreshRoomsList = async (name) => {
+    try {
+      const page = await pageFor(name);
+      // Soft refresh: navigate to /rooms regardless of current location.
+      // Playwright's Page.goto() defaults to waitUntil:'load' which is
+      // enough for the rooms list to render; the matcher's
+      // `within 3000ms` polling wrapper handles any async list population.
+      await page.goto(`${baseURL.replace(/\/$/, '')}/rooms`);
+      return true;
+    } catch (e) {
+      console.error(`[web-driver] webRefreshRoomsList(${name}) failed: ${e.message}`);
+      return false;
+    }
   };
 
   driver.close = async () => {
