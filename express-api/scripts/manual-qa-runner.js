@@ -15531,6 +15531,11 @@ async function main() {
         createMobileChromeAndroidDriver,
       } = require('./drivers/web-mobile-chrome-android-driver');
       webDriver = await createMobileChromeAndroidDriver({ baseURL });
+    } else if (opts.browser === 'mobile-samsung-android') {
+      const {
+        createMobileSamsungAndroidDriver,
+      } = require('./drivers/web-mobile-samsung-android-driver');
+      webDriver = await createMobileSamsungAndroidDriver({ baseURL });
     } else if (opts.browser === 'mobile-safari-ios') {
       const { createMobileSafariIosDriver } = require('./drivers/web-mobile-safari-ios-driver');
       webDriver = await createMobileSafariIosDriver({ baseURL });

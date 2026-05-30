@@ -23,7 +23,7 @@ const DESKTOP_BROWSERS = ['chromium', 'firefox', 'webkit', 'edge'];
 // register their slug here AND in the per-target allowlist below.
 // Order intentional: Android slugs first, then iOS — keeps test
 // `.toEqual` expectations stable across PRs that add more of either.
-const MOBILE_BROWSERS = ['mobile-chrome-android', 'mobile-safari-ios'];
+const MOBILE_BROWSERS = ['mobile-chrome-android', 'mobile-samsung-android', 'mobile-safari-ios'];
 
 const SUPPORTED_BROWSERS = [...DESKTOP_BROWSERS, ...MOBILE_BROWSERS];
 
