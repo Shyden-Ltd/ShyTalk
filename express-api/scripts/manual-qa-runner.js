@@ -8073,6 +8073,68 @@ const matchers = [
     },
   },
   {
+    // j11 setup-Given: "<persona> has been issued a first-strike warning".
+    // Mirrors the production /api/admin/moderation/warn handler's user-doc
+    // writes:
+    //   - hasActiveWarning = true
+    //   - warningCount = 1 (first strike — second-strike form differs)
+    //   - warningAcknowledged = false (operator-facing UI is pending ack)
+    //   - lastWarningAt = now (audit timestamp)
+    // No audit row here — that's covered by the moderation action matcher
+    // (the audit semantics belong to the admin UI flow, not the state-seed).
+    pattern: /^([A-Z][a-z]+)\s+has been issued a first-strike warning$/,
+    async handler(m, ctx) {
+      const name = m[1];
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      const personas = loadPersonas();
+      const p = personas.get(name);
+      if (!p?.uniqueId) {
+        return { ok: false, error: `persona "${name}" not in registry` };
+      }
+      await ctx.db.doc(`users/${p.uniqueId}`).set(
+        {
+          hasActiveWarning: true,
+          warningCount: 1,
+          warningAcknowledged: false,
+          lastWarningAt: Date.now(),
+        },
+        { merge: true },
+      );
+      return { ok: true };
+    },
+  },
+  {
+    // j11 setup-Given: "<persona> has acknowledged his/her/their first-strike
+    // warning". Composes the issued-warning state PLUS flips
+    // warningAcknowledged → true. This is the state Raul reaches after he
+    // taps the "I understand" button on the warning screen — distinct from
+    // the issued state where the warning still requires acknowledgement.
+    //
+    // Pronoun alternation captures all three forms ("his", "her", "their")
+    // since the corpus uses them depending on persona gender — anchored to
+    // a fixed word list, no \w+ expansion.
+    pattern: /^([A-Z][a-z]+)\s+has acknowledged (?:his|her|their) first-strike warning$/,
+    async handler(m, ctx) {
+      const name = m[1];
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      const personas = loadPersonas();
+      const p = personas.get(name);
+      if (!p?.uniqueId) {
+        return { ok: false, error: `persona "${name}" not in registry` };
+      }
+      await ctx.db.doc(`users/${p.uniqueId}`).set(
+        {
+          hasActiveWarning: true,
+          warningCount: 1,
+          warningAcknowledged: true,
+          lastWarningAt: Date.now(),
+        },
+        { merge: true },
+      );
+      return { ok: true };
+    },
+  },
+  {
     // Wake 71 — "<Name> on <Plat> opens his/her conversation with <Other>".
     // j11:93 — composite navigation: open PM thread between the speaker
     // and the named other persona. Driver resolves the conv id from the

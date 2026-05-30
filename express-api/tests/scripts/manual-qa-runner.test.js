@@ -10517,6 +10517,158 @@ describe("Mia's restricted-minor setup Givens (j02 phase-scoped scenario setup)"
   });
 });
 
+// ─── j10/j11 warning-state setup Givens (moderation phase-scoped scenarios) ─────
+describe('Warning-state setup Givens (j10 + j11 phase-scoped scenarios)', () => {
+  const { personas: PERSONAS } = require('../../scripts/provision-test-personas');
+  const raul = PERSONAS.find((p) => p.id === 'P-08');
+  const theo = PERSONAS.find((p) => p.id === 'P-10');
+
+  test('"<persona> has been issued a first-strike warning" — sets hasActiveWarning + warningCount=1 + acknowledged=false', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Raul has been issued a first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const u = db._docs[`users/${raul.uniqueId}`];
+    expect(u.hasActiveWarning).toBe(true);
+    expect(u.warningCount).toBe(1);
+    expect(u.warningAcknowledged).toBe(false);
+    expect(u.lastWarningAt).toBeGreaterThan(0);
+  });
+
+  test('"<persona> has acknowledged his first-strike warning" — composes issued + flips acknowledged=true', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Raul has acknowledged his first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const u = db._docs[`users/${raul.uniqueId}`];
+    expect(u.hasActiveWarning).toBe(true);
+    expect(u.warningCount).toBe(1);
+    expect(u.warningAcknowledged).toBe(true);
+    expect(u.lastWarningAt).toBeGreaterThan(0);
+  });
+
+  test('"<persona> has acknowledged her first-strike warning" — pronoun "her" form matches', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Nora has acknowledged her first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // Persona Nora is P-09 — fetch from registry
+    const nora = PERSONAS.find((p) => p.id === 'P-09');
+    expect(db._docs[`users/${nora.uniqueId}`].warningAcknowledged).toBe(true);
+  });
+
+  test('"<persona> has acknowledged their first-strike warning" — pronoun "their" form matches', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Raul has acknowledged their first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${raul.uniqueId}`].warningAcknowledged).toBe(true);
+  });
+
+  test('multi-field assignment matcher (existing) handles "hasActiveWarning=true, warningReason=<quoted>" cleanly (j10 refactor)', async () => {
+    // j10 line 58 was originally "Theo has hasActiveWarning=true with
+    // reason \"...\"" — that collided with the (assignment matcher,
+    // wider scope at line ~1898) which greedily captured the trailing
+    // " with reason \"...\"" as part of the field value. Refactored to
+    // the comma form so the EXISTING multi-field matcher handles it.
+    // This test pins the new j10 phrasing's behaviour.
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'Theo has hasActiveWarning=true, warningReason="Inappropriate language in voice room"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const u = db._docs[`users/${theo.uniqueId}`];
+    expect(u.hasActiveWarning).toBe(true);
+    expect(u.warningReason).toBe('Inappropriate language in voice room');
+  });
+
+  test('issued + acknowledged: merge preserves pre-existing user-doc fields (shyCoins, beans)', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${raul.uniqueId}`]: { shyCoins: 500, beans: 200 },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    await executeStep({ kind: 'Given', text: 'Raul has been issued a first-strike warning' }, ctx);
+    const u = db._docs[`users/${raul.uniqueId}`];
+    // Warning fields set
+    expect(u.hasActiveWarning).toBe(true);
+    // Pre-existing fields preserved via merge (the moderation flow doesn't
+    // touch economy state — see j11:71 "shyCoins=0 and beans=0 — irrelevant"
+    // comment in the feature file).
+    expect(u.shyCoins).toBe(500);
+    expect(u.beans).toBe(200);
+  });
+
+  test('"issued" + "acknowledged" — sequence flips acknowledged true with one final state', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    await executeStep({ kind: 'Given', text: 'Raul has been issued a first-strike warning' }, ctx);
+    const intermediate = db._docs[`users/${raul.uniqueId}`].warningAcknowledged;
+    expect(intermediate).toBe(false);
+    await executeStep(
+      { kind: 'Given', text: 'Raul has acknowledged his first-strike warning' },
+      ctx,
+    );
+    expect(db._docs[`users/${raul.uniqueId}`].warningAcknowledged).toBe(true);
+    // warningCount stays 1 (still a first strike), not incremented
+    expect(db._docs[`users/${raul.uniqueId}`].warningCount).toBe(1);
+  });
+
+  test('unknown persona → actionable error (issued)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Zonk has been issued a first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('unknown persona → actionable error (acknowledged)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Zonk has acknowledged his first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('ctx.db missing → actionable error (both warning matchers)', async () => {
+    const ctx = makeCtx();
+    const issuedR = await executeStep(
+      { kind: 'Given', text: 'Raul has been issued a first-strike warning' },
+      ctx,
+    );
+    expect(issuedR.ok).toBe(false);
+    expect(issuedR.error).toMatch(/ctx\.db not initialised/);
+    const ackR = await executeStep(
+      { kind: 'Given', text: 'Raul has acknowledged his first-strike warning' },
+      ctx,
+    );
+    expect(ackR.ok).toBe(false);
+    expect(ackR.error).toMatch(/ctx\.db not initialised/);
+  });
+});
+
 describe('Dialog confirm action (platform-dispatch)', () => {
   test('"X on Android confirms in the dialog" → driver', async () => {
     const spy = jest.fn(async () => undefined);
