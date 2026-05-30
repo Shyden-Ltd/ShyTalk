@@ -16680,7 +16680,7 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
     // scroll-loop fully exhausts before the rejection fires.
     await jest.advanceTimersByTimeAsync(20000);
     await expect(promise).rejects.toThrow(
-      /picker dialog never showed "persona_row_P-99" after 10 scroll attempts/,
+      /"persona_row_P-99" never became fully visible inside the picker list after 15 scroll attempts/,
     );
   });
 

@@ -2346,6 +2346,18 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       prod: 'com.shyden.shytalk',
     };
     const pkg = packageMap[target] || packageMap.dev;
+    // Force-stop FIRST so each call starts from a cold app state.
+    // Critical for scenario isolation: when scenario N finishes
+    // signed-in, scenario N+1's androidPersonaSignIn would otherwise
+    // launch into the main screen instead of the sign-in screen and
+    // fail to find persona_picker_open. force-stop guarantees a
+    // sign-in-screen start every time. Errors are non-fatal — the
+    // package may not be running, that's fine.
+    try {
+      adb(['shell', 'am', 'force-stop', pkg]);
+    } catch {
+      // Ignored — force-stop on a non-running package is a no-op.
+    }
     try {
       // monkey -p <pkg> -c LAUNCHER 1 fires the registered launcher
       // intent regardless of which activity is currently focused — works
@@ -2386,44 +2398,80 @@ async function createAndroidDriver({ serial: preferred } = {}) {
         `androidPersonaSignIn: picker dialog never showed "${containerTag}" within 5s — testTags may not be exposed via testTagsAsResourceId, or the dialog didn't render. Verify exposeTestTagsToPlatformDumps() is applied to the dialog content.`,
       );
     }
-    // Step 2b: scroll-to-find the requested row. The LazyColumn is
-    // bounded at 400dp and the 17 personas (P-02..P-19) don't all fit;
-    // anything past ~P-09 is below the fold. Swipe up inside the
-    // picker until the row appears in the dump OR we hit max swipes.
+    // Step 2b: scroll-to-find the requested row. Two cases to handle:
+    //   (a) Row testTag missing from the dump entirely — list hasn't
+    //       laid out the row yet, scroll to bring it into the layout
+    //       window.
+    //   (b) Row testTag PRESENT in the dump but its bounds are below
+    //       the picker_list's bottom clipping rect — uiautomator
+    //       reports laid-out bounds, NOT clipped bounds. A tap at
+    //       the row's center coordinates lands on the dialog backdrop
+    //       (outside the visible list), dismissing the dialog rather
+    //       than selecting the row. Surfaced 2026-05-30 against the
+    //       operator's OnePlus CPH2653 device where P-10's bounds
+    //       were [244,2225][1196,2393] but picker_list ended at y=2239
+    //       — only the top 14px of the row was clickable.
     //
-    // Each swipe covers ~60% of the LazyColumn's visible height (~240dp,
-    // roughly the height of 2 rows). 10 swipes is enough to scan the
-    // entire 17-persona list end-to-end.
-    let foundRow = await waitForTag(rowTag, 500, 100);
+    // Solution: loop until the row is BOTH in the dump AND fully
+    // inside the picker_list's visible rect. Swipe up if either fails.
+    function rowFullyVisible(dump) {
+      const escRow = rowTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escContainer = containerTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rowMatch = new RegExp(
+        `resource-id="(?:[^"]*:id/)?${escRow}"[^/]*?bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"`,
+      ).exec(dump);
+      const listMatch = new RegExp(
+        `resource-id="(?:[^"]*:id/)?${escContainer}"[^/]*?bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"`,
+      ).exec(dump);
+      if (!rowMatch || !listMatch) return false;
+      // y2 (row's bottom) must be <= list's y2 (list's bottom) AND
+      // y1 (row's top) must be >= list's y1 (list's top).
+      const rowY1 = Number(rowMatch[2]);
+      const rowY2 = Number(rowMatch[4]);
+      const listY1 = Number(listMatch[2]);
+      const listY2 = Number(listMatch[4]);
+      return rowY1 >= listY1 && rowY2 <= listY2;
+    }
+    let visible = false;
     let swipes = 0;
-    const MAX_SWIPES = 10;
-    while (!foundRow && swipes < MAX_SWIPES) {
-      // Swipe from y=1500 to y=900 (positive scroll within the list
-      // bounds — bounds y=839..2239 per the live dump from 2026-05-30).
-      // Duration ~500ms is a comfortable medium scroll speed.
+    const MAX_SWIPES = 15;
+    while (!visible && swipes < MAX_SWIPES) {
+      let dump = '';
+      try {
+        dump = await driver.androidUiDump();
+      } catch {
+        // Transient dump failures are tolerated within the wait window.
+      }
+      if (rowFullyVisible(dump)) {
+        visible = true;
+        break;
+      }
+      // Swipe up inside the picker to scroll the list DOWN. y range
+      // 1800→1000 stays inside the list bounds for typical phone
+      // viewports (list bottom ~2200+, top ~800+).
       try {
         adb(['shell', 'input', 'swipe', '720', '1800', '720', '1000', '500']);
       } catch (e) {
-        // Swipe failures are non-fatal — retry on next iteration.
         console.error(
           `[android-driver] persona-picker scroll swipe ${swipes} failed: ${e.message}`,
         );
       }
-      // Settle for the LazyColumn to lay out new rows.
+      // Settle for the LazyColumn to lay out the new viewport.
       await new Promise((r) => setTimeout(r, 400));
-      foundRow = await waitForTag(rowTag, 500, 100);
       swipes++;
     }
-    if (!foundRow) {
+    if (!visible) {
       throw new Error(
-        `androidPersonaSignIn: picker dialog never showed "${rowTag}" after ${MAX_SWIPES} scroll attempts — persona may not be in the dev personas registry (provision-test-personas.js)`,
+        `androidPersonaSignIn: "${rowTag}" never became fully visible inside the picker list after ${MAX_SWIPES} scroll attempts — persona may not be in the dev personas registry (provision-test-personas.js), or the list is shorter than expected.`,
       );
     }
-    // Step 3: tap the persona row.
+    // Step 3: tap the persona row. By this point the row's full
+    // height is inside the visible clipping rect, so androidTapByTag's
+    // bounds-center calculation lands inside the clickable area.
     const picked = await driver.androidTapByTag(rowTag);
     if (!picked) {
       throw new Error(
-        `androidPersonaSignIn: tap on "${rowTag}" failed despite dialog showing the row — UI dump may be racing the tap`,
+        `androidPersonaSignIn: tap on "${rowTag}" failed despite dialog showing the row fully visible — UI dump may be racing the tap`,
       );
     }
     // Step 4: wait for sign-in completion. Anchor on `main_roomsTab`
