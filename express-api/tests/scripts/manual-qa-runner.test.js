@@ -10140,6 +10140,173 @@ describe('Admin-moderation setup Givens (j04 phase-scoped scenario setup)', () =
   });
 });
 
+describe('Monetization setup Givens (j05 phase-scoped scenario setup)', () => {
+  const { personas: PERSONAS } = require('../../scripts/provision-test-personas');
+  const alice = PERSONAS.find((p) => p.id === 'P-02');
+  const selma = PERSONAS.find((p) => p.id === 'P-15');
+
+  test('"<persona> has just purchased <package> and has shyCoins=<N>" — writes PURCHASE transaction + sets coins', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${alice.uniqueId}`]: { shyCoins: 5000 },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice has just purchased coins-1000 and has shyCoins=6000' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${alice.uniqueId}`].shyCoins).toBe(6000);
+    // PURCHASE transaction row with productId + delta
+    const txns = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith(`users/${alice.uniqueId}/transactions/`),
+    );
+    expect(txns).toHaveLength(1);
+    const [, txn] = txns[0];
+    expect(txn.type).toBe('PURCHASE');
+    expect(txn.amount).toBe(1000);
+    expect(txn.productId).toBe('coins-1000');
+  });
+
+  test('"<persona> has just sent <recipient> a <gift>" — debits sender, credits recipient, writes both transactions + gift wall', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${alice.uniqueId}`]: { shyCoins: 5700 },
+      [`users/${selma.uniqueId}`]: { beans: 10000 },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Alice has just sent Selma a crown' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${alice.uniqueId}`].shyCoins).toBe(5200);
+    expect(db._docs[`users/${selma.uniqueId}`].beans).toBe(10250);
+    // Sender's GIFT_SENT transaction
+    const senderTxns = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith(`users/${alice.uniqueId}/transactions/`),
+    );
+    expect(senderTxns).toHaveLength(1);
+    const [, sentTxn] = senderTxns[0];
+    expect(sentTxn.type).toBe('GIFT_SENT');
+    expect(sentTxn.amount).toBe(-500);
+    expect(sentTxn.giftId).toBe('crown');
+    expect(sentTxn.recipientId).toBe(String(selma.uniqueId));
+    // Recipient's GIFT_RECEIVED transaction
+    const recipTxns = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith(`users/${selma.uniqueId}/transactions/`),
+    );
+    expect(recipTxns).toHaveLength(1);
+    const [, recvTxn] = recipTxns[0];
+    expect(recvTxn.type).toBe('GIFT_RECEIVED');
+    expect(recvTxn.amount).toBe(250);
+    expect(recvTxn.senderId).toBe(String(alice.uniqueId));
+    // Gift wall entry for recipient
+    const wallEntries = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith(`giftWalls/${selma.uniqueId}/gifts/`),
+    );
+    expect(wallEntries).toHaveLength(1);
+    const [, wallEntry] = wallEntries[0];
+    expect(wallEntry.giftId).toBe('crown');
+    expect(wallEntry.senderId).toBe(String(alice.uniqueId));
+  });
+
+  test('gift-send rose (cheapest) — uses correct cost/award (10 coins → 5 beans)', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${alice.uniqueId}`]: { shyCoins: 100 },
+      [`users/${selma.uniqueId}`]: { beans: 0 },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Alice has just sent Selma a rose' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${alice.uniqueId}`].shyCoins).toBe(90);
+    expect(db._docs[`users/${selma.uniqueId}`].beans).toBe(5);
+  });
+
+  test('gift-send diamond (priciest) — uses correct cost/award (1000 coins → 500 beans)', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${alice.uniqueId}`]: { shyCoins: 2000 },
+      [`users/${selma.uniqueId}`]: { beans: 0 },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice has just sent Selma a diamond' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${alice.uniqueId}`].shyCoins).toBe(1000);
+    expect(db._docs[`users/${selma.uniqueId}`].beans).toBe(500);
+  });
+
+  test('purchase with unknown packageId → coinDelta derived from finalShyCoins - prior', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${alice.uniqueId}`]: { shyCoins: 5000 },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      // No trailing number suffix → fallback to finalShyCoins - prior
+      { kind: 'Given', text: 'Alice has just purchased starter-pack and has shyCoins=5500' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${alice.uniqueId}`].shyCoins).toBe(5500);
+    const txns = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith(`users/${alice.uniqueId}/transactions/`),
+    );
+    expect(txns).toHaveLength(1);
+    const [, txn] = txns[0];
+    // Bare packageId has trailing digits in `pack` part? Let's verify the
+    // regex behaves: /-(\d+)$/ on "starter-pack" → no match, falls back.
+    // (Note: a packageId like "starter-1" WOULD match -1$. That's accepted
+    // behaviour — packageIds in the corpus all use coins-<N> form.)
+    expect(txn.productId).toBe('starter-pack');
+    expect(txn.amount).toBe(500);
+  });
+
+  test('purchase with unknown persona → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Zonk has just purchased coins-1000 and has shyCoins=6000' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('gift-send with unknown recipient → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Alice has just sent Zonk a crown' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/recipient "Zonk" not in registry/);
+  });
+
+  test('purchase: ctx.db missing → actionable error, not crash', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice has just purchased coins-1000 and has shyCoins=6000' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db.*not initialised/);
+  });
+
+  test('gift-send: ctx.db missing → actionable error, not crash', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Given', text: 'Alice has just sent Selma a crown' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db.*not initialised/);
+  });
+
+  test('"<persona> has shyCoins=<N>" (existing assignment matcher, j05 line 88) — sets coins via merge', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${alice.uniqueId}`]: { shyCoins: 9999, beans: 2000 },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Alice has shyCoins=5000' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${alice.uniqueId}`].shyCoins).toBe(5000);
+    // Sibling fields preserved via merge
+    expect(db._docs[`users/${alice.uniqueId}`].beans).toBe(2000);
+  });
+});
+
 describe('Dialog confirm action (platform-dispatch)', () => {
   test('"X on Android confirms in the dialog" → driver', async () => {
     const spy = jest.fn(async () => undefined);

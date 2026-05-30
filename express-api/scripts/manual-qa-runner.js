@@ -548,6 +548,91 @@ async function applyAgeDowngrade(ctx, personaName, adminPersonaName) {
   return { auditDocId };
 }
 
+async function applyGiftSend(ctx, senderName, recipientName, giftId) {
+  // Mirrors the production /api/economy/send-gift writes:
+  //   1. users/<sender>.shyCoins decreased by gift.coinCost
+  //   2. users/<recipient>.beans increased by gift.beanValue
+  //   3. users/<sender>/transactions/<auto> type=GIFT_SENT
+  //   4. users/<recipient>/transactions/<auto> type=GIFT_RECEIVED
+  //   5. giftWalls/<recipient>/gifts/<auto> with senderId + giftId
+  // Gift costs grounded in j05: rose=10/5, crown=500/250, diamond=1000/500.
+  const personas = loadPersonas();
+  const sender = personas.get(senderName);
+  const recipient = personas.get(recipientName);
+  if (!sender?.uniqueId) throw new Error(`sender "${senderName}" not in registry`);
+  if (!recipient?.uniqueId) throw new Error(`recipient "${recipientName}" not in registry`);
+  const giftCosts = { rose: [10, 5], crown: [500, 250], diamond: [1000, 500] };
+  const [coinCost, beanValue] = giftCosts[giftId] || [10, 5];
+  // Read-modify-set per existing convention (handles missing users
+  // gracefully — coins default to 0, but this is a Given so the test
+  // usually establishes coins first).
+  const senderRef = ctx.db.doc(`users/${sender.uniqueId}`);
+  const senderSnap = await senderRef.get();
+  const senderData = senderSnap.exists ? senderSnap.data() : {};
+  const senderCoins = Number(senderData.shyCoins) || 0;
+  await senderRef.set({ shyCoins: senderCoins - coinCost }, { merge: true });
+  const recipientRef = ctx.db.doc(`users/${recipient.uniqueId}`);
+  const recipientSnap = await recipientRef.get();
+  const recipientData = recipientSnap.exists ? recipientSnap.data() : {};
+  const recipientBeans = Number(recipientData.beans) || 0;
+  await recipientRef.set({ beans: recipientBeans + beanValue }, { merge: true });
+  const ts = Date.now();
+  await ctx.db.doc(`users/${sender.uniqueId}/transactions/gift-out-${ts}`).set({
+    type: 'GIFT_SENT',
+    amount: -coinCost,
+    giftId,
+    recipientId: String(recipient.uniqueId),
+    timestamp: ts,
+  });
+  await ctx.db.doc(`users/${recipient.uniqueId}/transactions/gift-in-${ts}`).set({
+    type: 'GIFT_RECEIVED',
+    amount: beanValue,
+    giftId,
+    senderId: String(sender.uniqueId),
+    timestamp: ts,
+  });
+  await ctx.db.doc(`giftWalls/${recipient.uniqueId}/gifts/${sender.uniqueId}-${giftId}-${ts}`).set({
+    giftId,
+    senderId: String(sender.uniqueId),
+    timestamp: ts,
+  });
+  return { coinCost, beanValue };
+}
+
+async function applyPurchase(ctx, personaName, packageId, finalShyCoins) {
+  // Mirrors the production /api/economy/purchase writes:
+  //   1. users/<persona>.shyCoins = finalShyCoins (the test fixes the
+  //      post-state explicitly, not via delta; this preserves intent
+  //      regardless of prior coin balance).
+  //   2. users/<persona>/transactions/<auto> type=PURCHASE with productId.
+  // We deliberately don't write a Stripe/IAP receipt sub-doc — receipt
+  // structure is platform-specific (Apple, Google, sandbox) and the
+  // setup-Given form abstracts over it. Downstream scenarios that need
+  // receipt-shape coverage seed it explicitly via a dedicated matcher.
+  const personas = loadPersonas();
+  const p = personas.get(personaName);
+  if (!p?.uniqueId) throw new Error(`persona "${personaName}" not in registry`);
+  // Coin delta is the trailing-digits suffix on the packageId — i.e.
+  // `coins-1000` → +1000. Falls back to (finalShyCoins - prior) if the
+  // packageId doesn't match, which preserves audit-trail accuracy when
+  // the test calls a non-standard packageId.
+  const pkgMatch = /-(\d+)$/.exec(packageId);
+  const userRef = ctx.db.doc(`users/${p.uniqueId}`);
+  const userSnap = await userRef.get();
+  const userData = userSnap.exists ? userSnap.data() : {};
+  const priorCoins = Number(userData.shyCoins) || 0;
+  const coinDelta = pkgMatch ? Number(pkgMatch[1]) : finalShyCoins - priorCoins;
+  await userRef.set({ shyCoins: finalShyCoins }, { merge: true });
+  const ts = Date.now();
+  await ctx.db.doc(`users/${p.uniqueId}/transactions/purchase-${ts}`).set({
+    type: 'PURCHASE',
+    amount: coinDelta,
+    productId: packageId,
+    timestamp: ts,
+  });
+  return { coinDelta };
+}
+
 async function seedSystemPmFromOfficia(ctx, recipientPersonaName, key) {
   // Officia is uniqueId 1 (SHYTALK_OFFICIAL). The PM flow writes:
   //   1. conversations/<auto> with participantIds=[1, recipient]
@@ -3478,6 +3563,70 @@ const matchers = [
       const awardBeans = parseInt(m[3], 10);
       await ctx.db.doc(`gifts/${id}`).set({ id, costCoins, awardBeans });
       return { ok: true };
+    },
+  },
+  {
+    // j05 purchase setup-Given (line 46): "<persona> has just purchased
+    // <packageId> and has <field>=<value>". Composes:
+    //   - applyPurchase: writes the PURCHASE transaction + sets shyCoins
+    //   - the field=value clause overrides the post-purchase balance
+    //     (the scenario author has authority on the post-state — packageId
+    //     might be experimental and not yet in the catalog)
+    // Distinct from the existing `<persona> purchased "<pkg>" with receipt`
+    // matcher (line 5271) — that flavor writes purchaseReceipts/. This
+    // one is for the compact "just purchased + post-state" form j05 uses.
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+has just purchased\s+([\w-]+)\s+and has\s+(\w+)=(\d+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
+      const name = m[1];
+      const packageId = m[3];
+      const field = m[4];
+      const value = parseInt(m[5], 10);
+      try {
+        if (field === 'shyCoins') {
+          await applyPurchase(ctx, name, packageId, value);
+          return { ok: true };
+        }
+        // Non-shyCoins post-state — fall through to a single-field merge.
+        // applyPurchase still records the transaction so the row count
+        // matches the purchase flow's audit trail.
+        await applyPurchase(ctx, name, packageId, value);
+        const personas = loadPersonas();
+        const p = personas.get(name);
+        await ctx.db.doc(`users/${p.uniqueId}`).set({ [field]: value }, { merge: true });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // j05 gift-send setup-Given (lines 69/76/81): "<persona> has just sent
+    // <recipient> a <giftId>". Composes applyGiftSend, which mirrors the
+    // production /api/economy/send-gift writes:
+    //   - sender shyCoins decremented by gift cost
+    //   - recipient beans incremented by gift award
+    //   - users/<sender>/transactions/<auto>  type=GIFT_SENT
+    //   - users/<recipient>/transactions/<auto>  type=GIFT_RECEIVED
+    //   - giftWalls/<recipient>/gifts/<auto>  with senderId + giftId
+    // Gift costs read from the giftCosts table inside applyGiftSend
+    // (rose=10/5, crown=500/250, diamond=1000/500), grounded in the
+    // j05 background catalog. Sender wallet must have the gift cost
+    // available — caller is responsible for setting shyCoins first via
+    // an earlier "has shyCoins=N" setup-Given.
+    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+has just sent\s+([A-Z][a-z]+)\s+a\s+(\w+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
+      const sender = m[1];
+      const recipient = m[3];
+      const giftId = m[4];
+      try {
+        await applyGiftSend(ctx, sender, recipient, giftId);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
     },
   },
   {
