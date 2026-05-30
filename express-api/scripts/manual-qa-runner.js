@@ -15573,6 +15573,14 @@ async function main() {
     } else if (opts.browser === 'mobile-edge-android') {
       const { createMobileEdgeAndroidDriver } = require('./drivers/web-mobile-edge-android-driver');
       webDriver = await createMobileEdgeAndroidDriver({ baseURL });
+    } else if (opts.browser === 'mobile-firefox-android') {
+      // Firefox doesn't speak CDP; this driver spawns geckodriver and
+      // uses W3C WebDriver over Marionette. See
+      // web-mobile-firefox-android-driver.js for the operator setup.
+      const {
+        createMobileFirefoxAndroidDriver,
+      } = require('./drivers/web-mobile-firefox-android-driver');
+      webDriver = await createMobileFirefoxAndroidDriver({ baseURL });
     } else if (opts.browser === 'mobile-safari-ios') {
       const { createMobileSafariIosDriver } = require('./drivers/web-mobile-safari-ios-driver');
       webDriver = await createMobileSafariIosDriver({ baseURL });
