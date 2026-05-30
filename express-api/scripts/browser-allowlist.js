@@ -21,7 +21,7 @@ const DESKTOP_BROWSERS = ['chromium', 'firefox', 'webkit', 'edge'];
 // Browsers that route through a non-default driver factory inside the
 // runner's `--driver playwright|all` block. New mobile-browser drivers
 // register their slug here AND in the per-target allowlist below.
-const MOBILE_BROWSERS = ['mobile-chrome-android'];
+const MOBILE_BROWSERS = ['mobile-chrome-android', 'mobile-samsung-android'];
 
 const SUPPORTED_BROWSERS = [...DESKTOP_BROWSERS, ...MOBILE_BROWSERS];
 

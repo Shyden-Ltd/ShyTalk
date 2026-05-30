@@ -45,35 +45,33 @@
    manual QA runner (operator-facing CLI), not application code. */
 
 const path = require('path');
-const { execFileSync: realExecFileSync } = require('child_process');
-const net = require('net');
+
+// Shared CDP-over-adb plumbing extracted to android-cdp-helpers.js so
+// the Samsung Internet + Mobile Edge drivers can reuse it without
+// copy-paste. The re-exports below preserve backwards-compat for
+// anything that imports these symbols from this driver directly.
+const {
+  KNOWN_ADB_PATHS,
+  resolveAdbPath,
+  pickFreePort,
+  bootstrapAdbForward: bootstrapAdbForwardImpl,
+} = require('./android-cdp-helpers');
 
 /**
- * Default adb binary location. The Homebrew + Android SDK both install
- * adb to /usr/local/bin or /opt/homebrew/bin; preferring the latter on
- * Apple Silicon Macs. Falls back to the bare `adb` (PATH lookup) only
- * for non-macOS test environments.
+ * Thin wrapper around the shared bootstrap that pins Chrome's
+ * `chrome_devtools_remote` socket name. Other Android browsers (Samsung
+ * Internet, Mobile Edge) call the shared helper with their own socket
+ * names.
  *
- * For sonarjs/no-os-command-from-path compliance, the resolution is
- * lazy: we walk a list of known absolute paths, return the first that
- * exists, and only fall back to the bare name if every absolute path is
- * absent — which only happens in CI mocks anyway.
+ * Kept as a separate exported symbol so existing test imports of
+ * `bootstrapAdbForward` from this module continue to work unchanged.
  */
-const KNOWN_ADB_PATHS = [
-  '/opt/homebrew/bin/adb', // Apple Silicon Homebrew
-  '/usr/local/bin/adb', // Intel Mac Homebrew + Linux
-  '/usr/bin/adb', // some Linux distros
-];
-
-function resolveAdbPath(fsImpl = require('fs')) {
-  for (const p of KNOWN_ADB_PATHS) {
-    try {
-      if (fsImpl.existsSync(p)) return p;
-    } catch (_e) {
-      /* keep walking */
-    }
-  }
-  return 'adb';
+async function bootstrapAdbForward(opts = {}) {
+  return bootstrapAdbForwardImpl({
+    socketName: 'chrome_devtools_remote',
+    browserNameHint: 'Chrome',
+    ...opts,
+  });
 }
 
 let _playwright;
@@ -89,101 +87,6 @@ function loadPlaywright() {
   const playwrightPath = path.join(repoRoot, 'node_modules', 'playwright');
   _playwright = require(playwrightPath);
   return _playwright;
-}
-
-/**
- * Pick a free TCP port in the localhost range. Used so concurrent
- * dispatches (or stale adb forward entries) don't collide on a fixed
- * 9222. Returns a Promise<number>.
- */
-function pickFreePort(netImpl = net) {
-  return new Promise((resolve, reject) => {
-    const srv = netImpl.createServer();
-    srv.unref();
-    srv.on('error', reject);
-    srv.listen(0, '127.0.0.1', () => {
-      const port = srv.address().port;
-      srv.close(() => resolve(port));
-    });
-  });
-}
-
-/**
- * Set up the adb port-forward `localhost:<port>` → device's
- * chrome_devtools_remote unix socket. Returns the chosen port + a
- * cleanup function that removes the forward.
- *
- * `adbPath` defaults to resolveAdbPath(); `execFileSync` defaults to
- * the real Node primitive but is injectable for tests.
- *
- * Throws if adb is missing or no device is attached — those are
- * actionable operator errors that should not be swallowed.
- */
-async function bootstrapAdbForward({
-  adbPath,
-  execFileSync = realExecFileSync,
-  pickPort = () => pickFreePort(),
-} = {}) {
-  const adb = adbPath || resolveAdbPath();
-  // Sanity: at least one device. Empty `adb devices` output → operator
-  // forgot to plug in / authorise USB debugging.
-  let devicesOut;
-  try {
-    devicesOut = execFileSync(adb, ['devices'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-  } catch (e) {
-    if (e.code === 'ENOENT') {
-      throw new Error(
-        `[mobile-chrome-android-driver] adb not found at "${adb}". Install Android platform-tools (Homebrew: \`brew install android-platform-tools\`).`,
-        { cause: e },
-      );
-    }
-    throw new Error(`[mobile-chrome-android-driver] adb invocation failed: ${e.message}`, {
-      cause: e,
-    });
-  }
-  // `adb devices` output shape:
-  //   List of devices attached
-  //   ABCDEF12<TAB>device
-  const lines = String(devicesOut)
-    .split('\n')
-    .filter((l) => /\t(device|unauthorized)\b/.test(l));
-  if (lines.length === 0) {
-    throw new Error(
-      '[mobile-chrome-android-driver] no Android device attached. Check `adb devices` and ensure USB debugging is authorised on the device.',
-    );
-  }
-  const unauthorised = lines.filter((l) => /\tunauthorized\b/.test(l));
-  if (unauthorised.length === lines.length) {
-    throw new Error(
-      '[mobile-chrome-android-driver] Android device is unauthorised. Tap "Allow USB debugging" on the device when prompted.',
-    );
-  }
-
-  const port = await pickPort();
-  try {
-    execFileSync(adb, ['forward', `tcp:${port}`, 'localabstract:chrome_devtools_remote'], {
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-  } catch (e) {
-    throw new Error(
-      `[mobile-chrome-android-driver] adb forward failed: ${e.message}. Make sure Chrome is open on the device + USB Web debugging is enabled in chrome://flags.`,
-      { cause: e },
-    );
-  }
-
-  const removeForward = () => {
-    try {
-      execFileSync(adb, ['forward', '--remove', `tcp:${port}`], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-    } catch (_e) {
-      /* best-effort cleanup */
-    }
-  };
-  return { port, removeForward };
 }
 
 /**
