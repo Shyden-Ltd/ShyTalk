@@ -9480,6 +9480,43 @@ const matchers = [
     },
   },
   {
+    // j02 phrasing: "Mia has just signed up as a minor". Same outcome as
+    // the j01 "minor-default cohort" form — they're synonymous, and the
+    // matcher just routes to the same seedSignedUpUser primitive. Kept as
+    // a separate pattern (rather than alternating one regex) so each
+    // journey reads naturally in its own voice — j01 emphasises that
+    // minor is the SIGNUP DEFAULT (because Adam will later be approved
+    // to adult); j02 emphasises that Mia STAYS a minor (because the
+    // restrictions are her permanent UX, not a temporary state).
+    pattern: /^([A-Z][a-z]+)\s+has just signed up as a minor$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await seedSignedUpUser(ctx, m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // j02 phrasing: "Mia has accepted legal as a minor". Composes
+    // signup-as-minor + accepted-policies. Same primitives as the j01
+    // "minor-default user" form; see paired comment above for why the
+    // two phrasings exist side-by-side.
+    pattern: /^([A-Z][a-z]+)\s+has accepted legal as a minor$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await seedSignedUpUser(ctx, m[1]);
+        await seedAcceptedPolicies(ctx, m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
     // "Adam has just been approved to cohort=adult by Greta"
     pattern: /^([A-Z][a-z]+)\s+has just been approved to cohort=adult by ([A-Z][a-z]+)$/,
     async handler(m, ctx) {
