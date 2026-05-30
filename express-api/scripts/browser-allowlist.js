@@ -26,6 +26,7 @@ const DESKTOP_BROWSERS = ['chromium', 'firefox', 'webkit', 'edge'];
 const MOBILE_BROWSERS = [
   'mobile-chrome-android',
   'mobile-samsung-android',
+  'mobile-edge-android',
   'mobile-safari-ios',
   'mobile-chrome-ios',
   'mobile-firefox-ios',
