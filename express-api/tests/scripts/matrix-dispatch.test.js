@@ -119,7 +119,7 @@ describe('runMatrix — happy paths', () => {
       browsers: ['chromium', 'firefox', 'webkit'],
       dispatchOne: async () => true,
     });
-    expect(r.totals).toEqual({ pass: 3, fail: 0, skip: 0 });
+    expect(r.totals).toEqual({ pass: 3, fail: 0, skip: 0, timeout: 0 });
     expect(r.summary).toBe('3 pass / 0 fail / 0 skip');
     expect(r.ok).toBe(true);
     expect(r.cells.every((c) => c.outcome === 'pass')).toBe(true);
@@ -137,7 +137,7 @@ describe('runMatrix — happy paths', () => {
         return true;
       },
     });
-    expect(r.totals).toEqual({ pass: 1, fail: 1, skip: 1 });
+    expect(r.totals).toEqual({ pass: 1, fail: 1, skip: 1, timeout: 0 });
     expect(r.summary).toBe('1 pass / 1 fail / 1 skip');
     expect(r.ok).toBe(false);
   });
@@ -203,6 +203,72 @@ describe('runMatrix — outcome classification', () => {
     });
     expect(r.cells[0].outcome).toBe('fail');
     expect(r.cells[0].error).toMatch(/AssertionError/);
+  });
+
+  test('error.code = CELL_TIMEOUT → outcome="timeout"', async () => {
+    const r = await runMatrix({
+      browsers: ['chromium'],
+      dispatchOne: async () => {
+        const e = new Error('cell timed out after 60s');
+        e.code = 'CELL_TIMEOUT';
+        throw e;
+      },
+    });
+    expect(r.cells[0].outcome).toBe('timeout');
+    expect(r.cells[0].error).toMatch(/timed out/);
+  });
+
+  test('timeout outcome makes ok=false (treated as a real failure)', async () => {
+    const r = await runMatrix({
+      browsers: ['chromium'],
+      dispatchOne: async () => {
+        const e = new Error('cell timed out');
+        e.code = 'CELL_TIMEOUT';
+        throw e;
+      },
+    });
+    expect(r.ok).toBe(false);
+    expect(r.totals.timeout).toBe(1);
+  });
+
+  test('summary string adds "/ N timeout" segment only when timeout > 0', async () => {
+    const noTimeouts = await runMatrix({
+      browsers: ['c'],
+      dispatchOne: async () => true,
+    });
+    expect(noTimeouts.summary).toBe('1 pass / 0 fail / 0 skip');
+
+    const withTimeout = await runMatrix({
+      browsers: ['c', 'd'],
+      dispatchOne: async ({ browser }) => {
+        if (browser === 'd') {
+          const e = new Error('cell timed out');
+          e.code = 'CELL_TIMEOUT';
+          throw e;
+        }
+        return true;
+      },
+    });
+    expect(withTimeout.summary).toBe('1 pass / 0 fail / 0 skip / 1 timeout');
+  });
+
+  test('failFast aborts on timeout (a hang is at least as actionable as a fail)', async () => {
+    const r = await runMatrix({
+      browsers: ['a', 'b', 'c'],
+      failFast: true,
+      dispatchOne: async ({ browser }) => {
+        if (browser === 'b') {
+          const e = new Error('cell timed out');
+          e.code = 'CELL_TIMEOUT';
+          throw e;
+        }
+        return true;
+      },
+    });
+    expect(r.cells[0].outcome).toBe('pass');
+    expect(r.cells[1].outcome).toBe('timeout');
+    expect(r.cells[2].outcome).toBe('skip');
+    expect(r.cells[2].error).toMatch(/aborted by failFast/);
   });
 
   test('error.code = DRIVER_INIT_FAILED forces "skip" even when message looks like a real failure', async () => {
@@ -370,7 +436,7 @@ describe('formatMatrixResultJson', () => {
         { browser: 'mobile-safari-ios', outcome: 'skip', durationMs: 0, error: 'no iPhone' },
         { browser: 'firefox', outcome: 'fail', durationMs: 1023, error: 'AssertionError' },
       ],
-      totals: { pass: 1, fail: 1, skip: 1 },
+      totals: { pass: 1, fail: 1, skip: 1, timeout: 0 },
       summary: '1 pass / 1 fail / 1 skip',
       ok: false,
     };
@@ -384,7 +450,7 @@ describe('formatMatrixResultJson', () => {
     expect(obj.format).toBe('matrix-v1');
     expect(obj.generatedAt).toBe('2026-05-30T18:42:00.000Z');
     expect(obj.summary).toBe('1 pass / 1 fail / 1 skip');
-    expect(obj.totals).toEqual({ pass: 1, fail: 1, skip: 1 });
+    expect(obj.totals).toEqual({ pass: 1, fail: 1, skip: 1, timeout: 0 });
     expect(obj.ok).toBe(false);
     expect(obj.cells).toHaveLength(3);
   });
@@ -423,7 +489,7 @@ describe('formatMatrixResultJunit', () => {
         { browser: 'mobile-safari-ios', outcome: 'skip', durationMs: 0, error: 'no iPhone' },
         { browser: 'firefox', outcome: 'fail', durationMs: 1023, error: 'AssertionError' },
       ],
-      totals: { pass: 1, fail: 1, skip: 1 },
+      totals: { pass: 1, fail: 1, skip: 1, timeout: 0 },
       summary: '1 pass / 1 fail / 1 skip',
       ok: false,
     };
@@ -460,7 +526,7 @@ describe('formatMatrixResultJunit', () => {
   test('pass cells have no <failure> or <skipped> tag', () => {
     const xml = formatMatrixResultJunit({
       cells: [{ browser: 'chromium', outcome: 'pass', durationMs: 100 }],
-      totals: { pass: 1, fail: 0, skip: 0 },
+      totals: { pass: 1, fail: 0, skip: 0, timeout: 0 },
       summary: '1 pass / 0 fail / 0 skip',
       ok: true,
     });
@@ -492,7 +558,7 @@ describe('formatMatrixResultJunit', () => {
           error: 'err with <special> & "chars"',
         },
       ],
-      totals: { pass: 0, fail: 1, skip: 0 },
+      totals: { pass: 0, fail: 1, skip: 0, timeout: 0 },
       summary: '0 pass / 1 fail / 0 skip',
       ok: false,
     };
@@ -505,7 +571,7 @@ describe('formatMatrixResultJunit', () => {
   test('fail cell with no error message falls back to a sentinel', () => {
     const xml = formatMatrixResultJunit({
       cells: [{ browser: 'chromium', outcome: 'fail', durationMs: 50 }],
-      totals: { pass: 0, fail: 1, skip: 0 },
+      totals: { pass: 0, fail: 1, skip: 0, timeout: 0 },
       summary: '0 pass / 1 fail / 0 skip',
       ok: false,
     });
@@ -515,7 +581,7 @@ describe('formatMatrixResultJunit', () => {
   test('skip cell with no error message falls back to a sentinel', () => {
     const xml = formatMatrixResultJunit({
       cells: [{ browser: 'chromium', outcome: 'skip', durationMs: 0 }],
-      totals: { pass: 0, fail: 0, skip: 1 },
+      totals: { pass: 0, fail: 0, skip: 1, timeout: 0 },
       summary: '0 pass / 0 fail / 1 skip',
       ok: true,
     });
@@ -525,11 +591,65 @@ describe('formatMatrixResultJunit', () => {
   test('empty cells array still produces valid XML (no rows)', () => {
     const xml = formatMatrixResultJunit({
       cells: [],
-      totals: { pass: 0, fail: 0, skip: 0 },
+      totals: { pass: 0, fail: 0, skip: 0, timeout: 0 },
       summary: '0 pass / 0 fail / 0 skip',
       ok: true,
     });
     expect(xml).toMatch(/<testsuite name="qa-matrix" tests="0"/);
     expect(xml).not.toMatch(/<testcase/);
+  });
+
+  test('timeout cell gets <failure type="MatrixCellTimeout"/>', () => {
+    const xml = formatMatrixResultJunit({
+      cells: [
+        {
+          browser: 'mobile-chrome-android',
+          outcome: 'timeout',
+          durationMs: 60000,
+          error: 'cell timed out after 60s',
+        },
+      ],
+      totals: { pass: 0, fail: 0, skip: 0, timeout: 1 },
+      summary: '0 pass / 0 fail / 0 skip / 1 timeout',
+      ok: false,
+    });
+    expect(xml).toMatch(/<failure message="cell timed out after 60s" type="MatrixCellTimeout"\/>/);
+    // Timeouts also bump the suite-level `failures` count (1 here).
+    expect(xml).toMatch(/failures="1"/);
+  });
+
+  test('timeout cell with no error message falls back to a sentinel', () => {
+    const xml = formatMatrixResultJunit({
+      cells: [{ browser: 'mobile-chrome-android', outcome: 'timeout', durationMs: 60000 }],
+      totals: { pass: 0, fail: 0, skip: 0, timeout: 1 },
+      summary: '0 pass / 0 fail / 0 skip / 1 timeout',
+      ok: false,
+    });
+    expect(xml).toMatch(/message="matrix cell timed out"/);
+  });
+
+  test('suite-level failures count combines fails + timeouts', () => {
+    const xml = formatMatrixResultJunit({
+      cells: [
+        { browser: 'a', outcome: 'fail', durationMs: 100, error: 'x' },
+        { browser: 'b', outcome: 'timeout', durationMs: 60000, error: 'y' },
+        { browser: 'c', outcome: 'pass', durationMs: 200 },
+      ],
+      totals: { pass: 1, fail: 1, skip: 0, timeout: 1 },
+      summary: '1 pass / 1 fail / 0 skip / 1 timeout',
+      ok: false,
+    });
+    // 1 fail + 1 timeout = 2 failures at the suite level
+    expect(xml).toMatch(/failures="2"/);
+  });
+
+  test('legacy result without totals.timeout still renders (backward compat)', () => {
+    const xml = formatMatrixResultJunit({
+      cells: [{ browser: 'a', outcome: 'pass', durationMs: 100 }],
+      totals: { pass: 1, fail: 0, skip: 0, timeout: 0 }, // explicit zero for forward compat
+      summary: '1 pass / 0 fail / 0 skip',
+      ok: true,
+    });
+    expect(xml).toMatch(/failures="0"/);
   });
 });

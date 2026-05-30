@@ -115,7 +115,14 @@ async function runMatrix({
       const result = await dispatchOne({ browser });
       outcome = result ? 'pass' : 'fail';
     } catch (e) {
-      if (isInitError(e)) {
+      // 'CELL_TIMEOUT' is set by the runner's spawnSync wrapper when
+      // the per-cell process exceeded --cell-timeout. Surfaces as its
+      // own outcome (NOT 'fail') so the operator can distinguish hangs
+      // from assertion failures in the summary.
+      if (e && e.code === 'CELL_TIMEOUT') {
+        outcome = 'timeout';
+        error = e.message;
+      } else if (isInitError(e)) {
         outcome = 'skip';
         error = e.message;
       } else {
@@ -128,7 +135,10 @@ async function runMatrix({
     if (error) cell.error = error;
     cells.push(cell);
     if (typeof onCellEnd === 'function') onCellEnd(cell);
-    if (failFast && outcome === 'fail') stopped = true;
+    // failFast aborts on real failures (timeouts included — a hang
+    // can also mask other cells from running in time, so fail-fast on
+    // timeout is the safer default).
+    if (failFast && (outcome === 'fail' || outcome === 'timeout')) stopped = true;
   }
 
   const totals = cells.reduce(
@@ -136,11 +146,19 @@ async function runMatrix({
       acc[c.outcome] = (acc[c.outcome] || 0) + 1;
       return acc;
     },
-    { pass: 0, fail: 0, skip: 0 },
+    { pass: 0, fail: 0, skip: 0, timeout: 0 },
   );
 
-  const summary = `${totals.pass} pass / ${totals.fail} fail / ${totals.skip} skip`;
-  return { cells, totals, summary, ok: totals.fail === 0 };
+  // Summary string: 3-segment shape when no timeouts (preserves the
+  // pre-timeout-feature format for existing CI consumers); 4-segment
+  // when any timeout occurred so the operator sees it at a glance.
+  const summary =
+    totals.timeout > 0
+      ? `${totals.pass} pass / ${totals.fail} fail / ${totals.skip} skip / ${totals.timeout} timeout`
+      : `${totals.pass} pass / ${totals.fail} fail / ${totals.skip} skip`;
+  // ok is false when there's any non-skip failure type — fail OR
+  // timeout. A pure-skip run (no devices connected) still returns ok.
+  return { cells, totals, summary, ok: totals.fail === 0 && totals.timeout === 0 };
 }
 
 /**
@@ -230,7 +248,10 @@ function formatMatrixResultJunit(result, { nowIso = () => new Date().toISOString
   const totalMs = result.cells.reduce((acc, c) => acc + (c.durationMs || 0), 0);
   const lines = ['<?xml version="1.0" encoding="UTF-8"?>'];
   lines.push(
-    `<testsuite name="qa-matrix" tests="${result.cells.length}" failures="${result.totals.fail}" skipped="${result.totals.skip}" time="${(totalMs / 1000).toFixed(3)}" timestamp="${escape(nowIso())}">`,
+    // Timeouts count as failures for the JUnit suite-level total (they
+    // render as <failure type="MatrixCellTimeout"/> per-testcase) — so
+    // CI dashboards' overall pass/fail signal treats them as red.
+    `<testsuite name="qa-matrix" tests="${result.cells.length}" failures="${result.totals.fail + (result.totals.timeout || 0)}" skipped="${result.totals.skip}" time="${(totalMs / 1000).toFixed(3)}" timestamp="${escape(nowIso())}">`,
   );
   for (const c of result.cells) {
     const timeSec = ((c.durationMs || 0) / 1000).toFixed(3);
@@ -238,6 +259,14 @@ function formatMatrixResultJunit(result, { nowIso = () => new Date().toISOString
     if (c.outcome === 'fail') {
       lines.push(
         `    <failure message="${escape(c.error || 'matrix cell failed')}" type="MatrixCellFailure"/>`,
+      );
+    } else if (c.outcome === 'timeout') {
+      // Timeouts map to <failure> (not <skipped>) in JUnit semantics —
+      // they're a deterministic failure, not a "we didn't run it". The
+      // `type` attribute distinguishes them from assertion failures so
+      // dashboards can colour-code or group separately.
+      lines.push(
+        `    <failure message="${escape(c.error || 'matrix cell timed out')}" type="MatrixCellTimeout"/>`,
       );
     } else if (c.outcome === 'skip') {
       lines.push(`    <skipped message="${escape(c.error || 'matrix cell skipped')}"/>`);
