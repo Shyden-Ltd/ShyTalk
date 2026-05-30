@@ -15418,6 +15418,74 @@ function formatReport(allFindings, allScenarioReports, target, cycleNumber) {
   return lines.join('\n') + '\n';
 }
 
+// ── --help / --version helpers ─────────────────────────────────────
+//
+// Pure formatters — kept here (not inside main) so tests can import and
+// assert content without spawning the CLI. The actual side-effects
+// (console.log + process.exit) happen in main() below.
+//
+// Drift-catch: the help-version test enumerates every long flag
+// recognised by the parser below and asserts each appears in
+// formatUsage(); a new flag added without doc text breaks the suite.
+
+function formatUsage() {
+  return [
+    'manual-qa-runner — drives the manual-QA Gherkin journey corpus across the 12-cell matrix.',
+    '',
+    'Usage:',
+    '  PERSONAS_PASSWORD=... FIREBASE_<TARGET>_API_KEY=... \\',
+    '    node express-api/scripts/manual-qa-runner.js [flags]',
+    '',
+    'Flags:',
+    '  --target <env>            Target environment: local | dev | prod',
+    '  --plan-dir <path>         Directory of .feature files (default: manual-qa/)',
+    '  --journey <name>          Run only the named journey (e.g. j01_signin_persona)',
+    '  --cycle <n>               Cycle id for run grouping',
+    '  --driver <kind>           Driver: stub | playwright | all',
+    '  --browser <slug>          Specific cell: chromium | firefox | webkit | edge |',
+    '                              mobile-chrome-android | mobile-firefox-android |',
+    '                              mobile-edge-android | mobile-samsung-android |',
+    '                              mobile-safari-ios | mobile-chrome-ios |',
+    '                              mobile-firefox-ios | mobile-edge-ios',
+    '  --headed                  Run the browser in headed (visible) mode',
+    '  --matrix                  Dispatch every allowed cell in sequence',
+    '  --fail-fast               Stop the matrix at the first failing cell',
+    '  --check-drivers           Diagnostic — verify each driver bootstraps',
+    '  --report-dir <path>       Per-cell stdio capture directory (matrix mode)',
+    '  --report-format <fmt>     Matrix report format: json | junit',
+    '  --report-output <path>    Write the matrix report to this path',
+    '  --cell-timeout <seconds>  Per-cell timeout (matrix mode); exceeded cells',
+    '                              report outcome="timeout"',
+    '  --help, -h                Print this help and exit',
+    '  --version, -v             Print the runner version and exit',
+    '',
+    'Examples:',
+    '  PERSONAS_PASSWORD=*** FIREBASE_DEV_API_KEY=*** \\',
+    '    node express-api/scripts/manual-qa-runner.js --target dev --driver playwright \\',
+    '    --browser chromium --journey j01_signin_persona',
+    '',
+    '  # 12-cell matrix run with JSON report',
+    '  PERSONAS_PASSWORD=*** FIREBASE_DEV_API_KEY=*** \\',
+    '    node express-api/scripts/manual-qa-runner.js --target dev --driver all --matrix \\',
+    '    --report-format json --report-output qa-report.json',
+    '',
+    '  # Driver bootstrap diagnostic (no env vars required for --check-drivers itself,',
+    '  # but individual drivers may still need their toolchain)',
+    '  node express-api/scripts/manual-qa-runner.js --check-drivers',
+    '',
+    'Env vars:',
+    '  PERSONAS_PASSWORD          Required for journey runs (test-persona auth)',
+    '  FIREBASE_LOCAL_API_KEY     Required when --target local',
+    '  FIREBASE_DEV_API_KEY       Required when --target dev',
+    '  FIREBASE_PROD_API_KEY      Required when --target prod',
+    '',
+  ].join('\n');
+}
+
+function formatVersion(version) {
+  return `manual-qa-runner ${version}`;
+}
+
 // ── CLI ─────────────────────────────────────────────────────────────
 
 async function main() {
@@ -15455,7 +15523,21 @@ async function main() {
       const raw = flat[++i];
       opts._cellTimeoutRaw = raw;
       opts.cellTimeoutMs = parseInt(raw, 10) * 1000;
-    }
+    } else if (flat[i] === '--help' || flat[i] === '-h') opts.help = true;
+    else if (flat[i] === '--version' || flat[i] === '-v') opts.version = true;
+  }
+  // --help / --version short-circuit BEFORE any further validation or env
+  // checks. Operators must be able to discover the flag surface without
+  // setting PERSONAS_PASSWORD or any FIREBASE_*_API_KEY. --help wins over
+  // --version when both are present (matches GNU convention).
+  if (opts.help) {
+    console.log(formatUsage());
+    process.exit(0);
+  }
+  if (opts.version) {
+    const pkgVersion = require('../package.json').version;
+    console.log(formatVersion(pkgVersion));
+    process.exit(0);
   }
   // --report-format validation — only json + junit are supported (used
   // with --matrix to emit structured output for CI dashboards).
@@ -15944,6 +16026,8 @@ module.exports = {
   parseJsonishPredicate,
   probeOsaInvariants,
   formatReport,
+  formatUsage,
+  formatVersion,
   TARGETS,
 };
 
