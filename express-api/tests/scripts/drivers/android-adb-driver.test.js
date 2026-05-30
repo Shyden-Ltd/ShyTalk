@@ -16482,19 +16482,26 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
   // the sequence is consumed by one `androidUiDump()` call. The flow:
   //   dump 0 — sign-in screen with persona_picker_open (consumed by
   //            androidTapByTag('persona_picker_open'))
-  //   dump 1 — dialog open with persona_row_<id> (consumed by
-  //            waitForTag('persona_row_<id>'))
-  //   dump 2 — dialog still rendered with persona_row_<id> (consumed
-  //            by androidTapByTag('persona_row_<id>') — dialog is
-  //            visible at tap moment)
-  //   dump 3 — main screen with main_roomsTab (consumed by
+  //   dump 1 — dialog open with persona_picker_list container
+  //            (consumed by waitForTag('persona_picker_list'))
+  //   dump 2 — dialog with the requested persona_row_<id> in the
+  //            initial viewport (consumed by the first poll inside
+  //            the scroll loop — no swipe needed because the row is
+  //            already visible)
+  //   dump 3 — dialog still rendered with persona_row_<id> for the
+  //            tap (consumed by androidTapByTag('persona_row_<id>'))
+  //   dump 4 — main screen with main_roomsTab (consumed by
   //            waitForTag('main_roomsTab'))
   function happyPathDumps(personaId) {
-    const personaRowNode = `<node resource-id="com.shyden.shytalk.local:id/persona_row_${personaId}" bounds="[100,700][800,800]" />`;
+    const containerNode = `<node resource-id="com.shyden.shytalk.local:id/persona_picker_list" bounds="[200,800][1200,2200]" />`;
+    const dialogWithRow =
+      containerNode +
+      `<node resource-id="com.shyden.shytalk.local:id/persona_row_${personaId}" bounds="[100,900][800,1000]" />`;
     return [
       `<node resource-id="com.shyden.shytalk.local:id/persona_picker_open" bounds="[100,500][400,600]" />`,
-      personaRowNode,
-      personaRowNode,
+      containerNode,
+      dialogWithRow,
+      dialogWithRow,
       `<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" bounds="[100,1900][270,2100]" />`,
     ];
   }
@@ -16642,10 +16649,12 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
     await expect(promise).rejects.toThrow(/build flavor is "prod"/);
   });
 
-  test('dialog never shows persona_row → throws after 5s with persona id', async () => {
+  test('dialog never shows persona_row even after 10 scrolls → throws naming the persona', async () => {
     // First CAT-dump has persona_picker_open (so the tap succeeds);
-    // subsequent CAT-dumps never contain persona_row_P-99 — simulates
-    // the operator asking for a persona that isn't in the dev registry.
+    // second has persona_picker_list (the container — dialog is open);
+    // subsequent dumps have the container + a P-10 row but NEVER
+    // P-99 — simulates the operator asking for a persona that isn't
+    // in the dev registry. Scroll attempts won't help.
     let dumpCalls = 0;
     execSync.mockImplementation((cmd) => {
       if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
@@ -16654,21 +16663,73 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
         if (dumpCalls <= 1) {
           return '<node resource-id="com.shyden.shytalk.local:id/persona_picker_open" bounds="[100,500][400,600]" />';
         }
-        // Dialog renders P-10 row (not P-99) — waitForTag for P-99 will time out
-        return '<node resource-id="com.shyden.shytalk.local:id/persona_row_P-10" bounds="[0,0][100,100]" />';
+        // Container is present so the dialog-ready check passes; row
+        // is for P-10 only, never P-99.
+        return (
+          '<node resource-id="com.shyden.shytalk.local:id/persona_picker_list" bounds="[200,800][1200,2200]" />' +
+          '<node resource-id="com.shyden.shytalk.local:id/persona_row_P-10" bounds="[100,900][800,1000]" />'
+        );
       }
       return '';
     });
     const driver = await createAndroidDriver();
     const promise = driver.androidPersonaSignIn('P-99', 'rooms');
-    // Pre-attach a noop catch so when the timer-flush triggers the
-    // rejection, Node doesn't see an unhandled-promise-rejection (which
-    // jest surfaces as a test failure ahead of the expect.rejects).
     promise.catch(() => {});
-    await jest.advanceTimersByTimeAsync(9000);
+    // Allow time for: 3s app-launch + dialog-ready wait + 10 scroll
+    // attempts × (~400ms settle + dump). Generous budget so the
+    // scroll-loop fully exhausts before the rejection fires.
+    await jest.advanceTimersByTimeAsync(20000);
     await expect(promise).rejects.toThrow(
-      /picker dialog never showed "persona_row_P-99" within 5s/,
+      /"persona_row_P-99" never became fully visible inside the picker list after 15 scroll attempts/,
     );
+  });
+
+  test('row not in initial viewport, BUT scroll reveals it → succeeds (at least 1 swipe issued)', async () => {
+    // Sequence:
+    //   dump 1: picker_open (initial sign-in screen — consumed by Step 1 tap)
+    //   dump 2: container-ready check (waitForTag(persona_picker_list))
+    //   dumps 3-7: container WITHOUT the requested row — the 500ms
+    //              waitForTag inside the scroll loop polls 5 times,
+    //              all missing the row → triggers a swipe.
+    //   dump 8+: container WITH the requested row — the next poll
+    //              after the swipe finds it. Tap proceeds. After tap,
+    //              wait-for-main fires and finds main_roomsTab.
+    const containerOnly =
+      '<node resource-id="com.shyden.shytalk.local:id/persona_picker_list" bounds="[200,800][1200,2200]" />';
+    const containerWithRow =
+      containerOnly +
+      '<node resource-id="com.shyden.shytalk.local:id/persona_row_P-10" bounds="[100,1500][800,1600]" />';
+    const mainScreen =
+      '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" bounds="[100,1900][270,2100]" />';
+    let dumpCalls = 0;
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
+        dumpCalls += 1;
+        if (dumpCalls === 1) {
+          return '<node resource-id="com.shyden.shytalk.local:id/persona_picker_open" bounds="[100,500][400,600]" />';
+        }
+        // Container-ready (dump 2) + first 5 row-wait polls
+        // (dumps 3-7) all show container only → row never found in
+        // initial viewport → swipe fires.
+        if (dumpCalls <= 7) return containerOnly;
+        // From dump 8 onwards the row IS visible (after the swipe).
+        // Tap consumes another dump for bounds parsing. After the
+        // tap, wait-for-main polls.
+        if (dumpCalls <= 13) return containerWithRow;
+        return mainScreen;
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms');
+    await jest.advanceTimersByTimeAsync(25000);
+    expect(await promise).toBe(true);
+    // Verify at least one swipe was issued — proves the scroll loop ran.
+    const swipeCalls = execSync.mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.includes("'input' 'swipe'"));
+    expect(swipeCalls.length).toBeGreaterThanOrEqual(1);
   });
 
   test('main_roomsTab never appears within 10s → throws with Firebase-sign-in hint', async () => {
@@ -16680,9 +16741,14 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
         if (dumpCalls === 1) {
           return '<node resource-id="com.shyden.shytalk.local:id/persona_picker_open" bounds="[100,500][400,600]" />';
         }
-        if (dumpCalls === 2 || dumpCalls === 3) {
-          // dialog renders P-10 row — wait succeeds (dump 2), tap succeeds (dump 3)
-          return '<node resource-id="com.shyden.shytalk.local:id/persona_row_P-10" bounds="[100,700][800,800]" />';
+        if (dumpCalls === 2 || dumpCalls === 3 || dumpCalls === 4) {
+          // dump 2: container-ready check; 3: row visible (no scroll
+          // needed); 4: tap dump — all rendered with the picker open
+          // + P-10 row visible.
+          return (
+            '<node resource-id="com.shyden.shytalk.local:id/persona_picker_list" bounds="[200,800][1200,2200]" />' +
+            '<node resource-id="com.shyden.shytalk.local:id/persona_row_P-10" bounds="[100,900][800,1000]" />'
+          );
         }
         // Subsequent CAT-dumps never contain main_roomsTab — Firebase sign-in stalled
         return '<node resource-id="something_else" bounds="[0,0][100,100]" />';
