@@ -66,22 +66,30 @@ jobs:
           echo "{\"passed\":${PASSED},\"failed\":${FAILED},\"total\":${TOTAL},\"date\":\"${DATE}\",\"runUrl\":\"${RUN_URL}\",\"suite\":\"express\",\"env\":\"${REPORT_ENV}\"}" > express-api/coverage/metadata.json
 
       - name: Deploy Express report to GitHub Pages
-        # Skip for dependabot PRs. Two layers of motivation:
+        # Skip for PR runs (the default 'pr' report_env) and for
+        # dependabot PRs. Three layers of motivation:
         #   1) Read-only GITHUB_TOKEN: on dependabot-authored runs
         #      GitHub enforces a read-only token (2021 supply-chain
         #      tightening), so peaceiris/actions-gh-pages can't push.
-        #   2) gh-pages race condition: when N dependabot PRs all
-        #      re-run CI in the same minute (e.g. after a batch
-        #      `merge main into` to pick up workflow fixes), each
-        #      peaceiris invocation does `git clone gh-pages --depth=1`,
-        #      commits its report, then `git push` — and N-1 of those
-        #      pushes are rejected as non-fast-forward because the
-        #      first push got there first. peaceiris doesn't retry.
-        # We guard on `github.head_ref` (PR's source branch) instead
-        # of `github.actor` so the skip applies even when the run is
-        # triggered by a non-dependabot user adding a merge commit to
-        # the PR (which makes github.actor that user, not dependabot).
-        if: always() && !startsWith(github.head_ref, 'dependabot/')
+        #   2) gh-pages race condition: when N PRs run CI in the same
+        #      minute (e.g. matrix-completeness batch + dependabot bumps),
+        #      each peaceiris invocation does `git clone gh-pages
+        #      --depth=1`, commits its report, then `git push` — and
+        #      N-1 of those pushes are rejected as non-fast-forward
+        #      because the first push got there first. peaceiris
+        #      doesn't retry. Verified with PR #901's two consecutive
+        #      failures despite the test step itself passing.
+        #   3) PR-branch reports are nice-to-have, not canonical —
+        #      only the dev/prod main-branch reports are linked from
+        #      docs and consumed downstream. Skipping the racey pr
+        #      deploy preserves the deploys that matter.
+        # The condition skips when the resolved report_env is 'pr'
+        # (i.e. neither dev nor prod was supplied), preserving the
+        # main-branch deploy path. We guard on `github.head_ref` (PR's
+        # source branch) instead of `github.actor` so the dependabot
+        # skip applies even when the run is triggered by a non-dependabot
+        # user adding a merge commit to the PR.
+        if: always() && (inputs.report_env == 'dev' || inputs.report_env == 'prod') && !startsWith(github.head_ref, 'dependabot/')
         uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
