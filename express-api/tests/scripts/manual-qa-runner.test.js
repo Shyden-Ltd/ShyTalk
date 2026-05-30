@@ -10140,6 +10140,114 @@ describe('Admin-moderation setup Givens (j04 phase-scoped scenario setup)', () =
   });
 });
 
+// ─── Adam's first-day setup Givens (j01 phase-scoped scenarios) ─────
+describe("Adam's first-day setup Givens (j01 phase-scoped scenario setup)", () => {
+  // Adam is an EPHEMERAL persona (P-01 in EPHEMERAL_PERSONAS,
+  // uniqueId 90000001). loadPersonas() merges ephemerals so the
+  // matcher resolves persona via `personas.get('Adam')`.
+  const ADAM_UNIQUE_ID = 90000001;
+  const greta = require('../../scripts/provision-test-personas').personas.find(
+    (p) => p.id === 'P-12',
+  );
+
+  test('"<persona> has just signed up with a minor-default cohort" — seeds users/<uniqueId> with cohort=minor + isAgeVerified=false', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has just signed up with a minor-default cohort' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const user = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(user).toBeDefined();
+    expect(user.cohort).toBe('minor');
+    expect(user.isAgeVerified).toBe(false);
+    expect(user.uniqueId).toBe(ADAM_UNIQUE_ID);
+    // {newUniqueId} interpolation variable is set for downstream
+    // assertions referencing users/{newUniqueId}.
+    expect(ctx.scenarioVars.get('newUniqueId')).toBe(String(ADAM_UNIQUE_ID));
+  });
+
+  test('"<persona> has accepted legal as a minor-default user" — composes signup + accepted-policies', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has accepted legal as a minor-default user' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // User-doc seeded with minor default
+    const user = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(user.cohort).toBe('minor');
+    // usersAcceptedPolicies entry written with current versions
+    const policies = db._docs[`usersAcceptedPolicies/${ADAM_UNIQUE_ID}`];
+    expect(policies).toBeDefined();
+    expect(policies.privacyVersion).toBeGreaterThan(0);
+    expect(policies.termsVersion).toBeGreaterThan(0);
+  });
+
+  test('"<persona> has just been approved to cohort=adult by <admin>" — flips cohort + writes audit row', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has just been approved to cohort=adult by Greta' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // User flipped
+    const user = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(user.cohort).toBe('adult');
+    expect(user.isAgeVerified).toBe(true);
+    // Audit row written with String-coerced ids per production convention
+    const audits = Object.entries(db._docs).filter(([k]) => k.startsWith('auditLog/'));
+    expect(audits).toHaveLength(1);
+    const [, audit] = audits[0];
+    expect(audit.action).toBe('age_verification.approve');
+    expect(audit.targetId).toBe(String(ADAM_UNIQUE_ID));
+    expect(audit.adminId).toBe(String(greta.uniqueId));
+  });
+
+  test('"<persona> is verified adult with adult features unlocked" — full final state, NO audit (used as compose precondition)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam is verified adult with adult features unlocked' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const user = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(user.cohort).toBe('adult');
+    expect(user.isAgeVerified).toBe(true);
+    // Policies accepted
+    expect(db._docs[`usersAcceptedPolicies/${ADAM_UNIQUE_ID}`]).toBeDefined();
+    // No audit row — this Given is the COMPOSE form (precondition for
+    // a later scenario that doesn't care about the audit).
+    const audits = Object.entries(db._docs).filter(([k]) => k.startsWith('auditLog/'));
+    expect(audits).toHaveLength(0);
+  });
+
+  test('unknown persona → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Zonk has just signed up with a minor-default cohort' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('ctx.db missing → actionable error, not crash', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has just signed up with a minor-default cohort' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+});
+
 describe('Dialog confirm action (platform-dispatch)', () => {
   test('"X on Android confirms in the dialog" → driver', async () => {
     const spy = jest.fn(async () => undefined);

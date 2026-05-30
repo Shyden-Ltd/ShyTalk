@@ -548,6 +548,78 @@ async function applyAgeDowngrade(ctx, personaName, adminPersonaName) {
   return { auditDocId };
 }
 
+async function seedSignedUpUser(ctx, personaName, opts = {}) {
+  // Mirrors a minor-default signup write: users/<uniqueId> with
+  // cohort='minor', isAgeVerified=false, displayName from registry.
+  // Caller can override cohort via opts.cohort (e.g. for j01's
+  // already-flipped-to-adult state).
+  const personas = loadPersonas();
+  const persona = personas.get(personaName);
+  if (!persona?.uniqueId) {
+    throw new Error(`persona "${personaName}" not in registry`);
+  }
+  const fields = {
+    uniqueId: persona.uniqueId,
+    cohort: opts.cohort || 'minor',
+    isAgeVerified: opts.isAgeVerified ?? false,
+    displayName: persona.displayName,
+    email: persona.email,
+    createdAt: Date.now(),
+    ...(opts.extraFields || {}),
+  };
+  await ctx.db.doc(`users/${persona.uniqueId}`).set(fields, { merge: true });
+  // Expose {newUniqueId} interpolation variable (j01 uses this in
+  // assertions like `database has document "users/{newUniqueId}"`).
+  if (ctx.scenarioVars && typeof ctx.scenarioVars.set === 'function') {
+    ctx.scenarioVars.set('newUniqueId', String(persona.uniqueId));
+  }
+  return { fields };
+}
+
+async function seedAcceptedPolicies(ctx, personaName, opts = {}) {
+  // Writes usersAcceptedPolicies/<uniqueId> with the current accepted
+  // privacy + terms versions. j01 uses this as the "Adam has accepted
+  // legal" precondition.
+  const personas = loadPersonas();
+  const persona = personas.get(personaName);
+  if (!persona?.uniqueId) {
+    throw new Error(`persona "${personaName}" not in registry`);
+  }
+  await ctx.db.doc(`usersAcceptedPolicies/${persona.uniqueId}`).set({
+    privacyVersion: opts.privacyVersion || 4,
+    termsVersion: opts.termsVersion || 4,
+    acceptedAt: Date.now(),
+  });
+  return { uniqueId: persona.uniqueId };
+}
+
+async function applyAgeVerificationApproval(ctx, personaName, adminPersonaName) {
+  // Mirrors the production /api/admin/age-verification/approve handler:
+  //   1. users/<persona>.cohort = 'adult' + isAgeVerified = true
+  //   2. auditLog/<auto> with action='age_verification.approve',
+  //      targetId=String(uniqueId), adminId=String(adminUniqueId)
+  const personas = loadPersonas();
+  const persona = personas.get(personaName);
+  const admin = personas.get(adminPersonaName);
+  if (!persona?.uniqueId) {
+    throw new Error(`persona "${personaName}" not in registry`);
+  }
+  if (!admin?.uniqueId) {
+    throw new Error(`admin persona "${adminPersonaName}" not in registry`);
+  }
+  await ctx.db
+    .doc(`users/${persona.uniqueId}`)
+    .set({ cohort: 'adult', isAgeVerified: true }, { merge: true });
+  const auditDocId = `${persona.uniqueId}-approve-${Date.now()}`;
+  await ctx.db.doc(`auditLog/${auditDocId}`).set({
+    action: 'age_verification.approve',
+    targetId: String(persona.uniqueId),
+    adminId: String(admin.uniqueId),
+    timestamp: Date.now(),
+  });
+  return { auditDocId };
+}
+
 async function seedSystemPmFromOfficia(ctx, recipientPersonaName, key) {
   // Officia is uniqueId 1 (SHYTALK_OFFICIAL). The PM flow writes:
   //   1. conversations/<auto> with participantIds=[1, recipient]
@@ -9369,6 +9441,83 @@ const matchers = [
   //     room precondition is only used by j04's "ejected when downgrade
   //     hits" scenario, which can be left as STEP_NOT_IMPLEMENTED for
   //     now and addressed in a follow-up PR.
+  // ── Adam's first-day setup Givens (j01 phase-scoped scenarios) ──
+  //
+  // j01's 10 phase-scoped scenarios establish prior phases via setup
+  // Givens that walk Adam through: signup (minor default) → legal accept
+  // → age-verification submission → admin approve → adult verified
+  // → daily reward → first gift. Adam is an EPHEMERAL persona
+  // (P-01 in EPHEMERAL_PERSONAS, uniqueId 90000001).
+  {
+    // "Adam has just signed up with a minor-default cohort"
+    pattern: /^([A-Z][a-z]+)\s+has just signed up with a minor-default cohort$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await seedSignedUpUser(ctx, m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Adam has accepted legal as a minor-default user" — composes
+    // signup state + accepted-policies row.
+    pattern: /^([A-Z][a-z]+)\s+has accepted legal as a minor-default user$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await seedSignedUpUser(ctx, m[1]);
+        await seedAcceptedPolicies(ctx, m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Adam has just been approved to cohort=adult by Greta"
+    pattern: /^([A-Z][a-z]+)\s+has just been approved to cohort=adult by ([A-Z][a-z]+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        // Ensure user-doc exists (idempotent — has user doc with cohort=minor
+        // first, then the admin approve flips it to adult).
+        await seedSignedUpUser(ctx, m[1]);
+        await applyAgeVerificationApproval(ctx, m[1], m[2]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Adam is verified adult with adult features unlocked"
+    pattern: /^([A-Z][a-z]+)\s+is verified adult with adult features unlocked$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        // Final-state seed: cohort=adult, isAgeVerified=true, policies
+        // accepted. No audit entry — the test scenarios that care about
+        // the audit row use the "has just been approved" Given which
+        // does include it.
+        await seedSignedUpUser(ctx, m[1], { cohort: 'adult', isAgeVerified: true });
+        await seedAcceptedPolicies(ctx, m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  // Note: "<persona> has shyCoins >= 10 after daily reward + a +100
+  // admin top-up" (j01:111) is NOT added here — it collides with the
+  // existing assertion matcher at line ~4620 (`<persona> has <field>
+  // <op> <number>`). j01 line 111 should be rewritten as a compose:
+  //   Given Adam is verified adult with adult features unlocked
+  //   Given Adam has user doc with shyCoins=200
+  // using the existing line ~2066 "has user doc with X=Y" matcher.
+  // Pending j01 feature-file update.
   {
     // Wake 80 — "the response from <path>?<query> includes <Name>".
     // j15:62 — checks ctx.lastResponse.results[] for an entry matching
