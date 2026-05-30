@@ -705,6 +705,64 @@ async function applyAgeVerificationApproval(ctx, personaName, adminPersonaName) 
   return { auditDocId };
 }
 
+async function applyFollow(ctx, followerName, followeeName) {
+  // Mirrors the production /api/users/follow writes:
+  //   1. users/<follower>.followingIds = unique-add(followee uniqueId)
+  //   2. users/<followee>.followerIds  = unique-add(follower uniqueId)
+  // No FieldValue.arrayUnion — read-modify-set preserves fake-db
+  // compatibility (jest stateful fake doesn't expand FieldValue sentinels).
+  // Idempotent: re-running the same follow is a no-op (set dedup).
+  // segregationEvents NOT written — that's only on cross-cohort BLOCK,
+  // which the existing routes/users-follow.js gates behind a cohort check.
+  // The Given form represents a SUCCESSFUL follow, so no audit row.
+  const personas = loadPersonas();
+  const follower = personas.get(followerName);
+  const followee = personas.get(followeeName);
+  if (!follower?.uniqueId) {
+    throw new Error(`follower "${followerName}" not in registry`);
+  }
+  if (!followee?.uniqueId) {
+    throw new Error(`followee "${followeeName}" not in registry`);
+  }
+  const followerRef = ctx.db.doc(`users/${follower.uniqueId}`);
+  const followerSnap = await followerRef.get();
+  const followerData = followerSnap.exists ? followerSnap.data() : {};
+  const followingIds = Array.from(
+    new Set([...(followerData.followingIds || []), followee.uniqueId]),
+  );
+  await followerRef.set({ followingIds }, { merge: true });
+  const followeeRef = ctx.db.doc(`users/${followee.uniqueId}`);
+  const followeeSnap = await followeeRef.get();
+  const followeeData = followeeSnap.exists ? followeeSnap.data() : {};
+  const followerIds = Array.from(new Set([...(followeeData.followerIds || []), follower.uniqueId]));
+  await followeeRef.set({ followerIds }, { merge: true });
+  return { followerUniqueId: follower.uniqueId, followeeUniqueId: followee.uniqueId };
+}
+
+async function seedDirectConversation(ctx, p1Name, p2Name) {
+  // Mirrors a successful /api/conversations create:
+  //   - conversations/<participantIds sorted-pair>: { type: 'DIRECT',
+  //     participantIds: [a, b] (sorted, String-coerced per wire format),
+  //     createdAt: now }
+  // Deterministic doc-id (sorted pair) makes the seed idempotent and lets
+  // downstream assertions look it up by participant lookup without needing
+  // a query for an auto-generated id. participantIds are stringified
+  // because the production routes (Express) call String(req.auth.uniqueId).
+  const personas = loadPersonas();
+  const p1 = personas.get(p1Name);
+  const p2 = personas.get(p2Name);
+  if (!p1?.uniqueId) throw new Error(`persona "${p1Name}" not in registry`);
+  if (!p2?.uniqueId) throw new Error(`persona "${p2Name}" not in registry`);
+  const ids = [String(p1.uniqueId), String(p2.uniqueId)].sort();
+  const convId = `direct-${ids[0]}-${ids[1]}`;
+  await ctx.db.doc(`conversations/${convId}`).set({
+    type: 'DIRECT',
+    participantIds: ids,
+    createdAt: Date.now(),
+  });
+  return { conversationId: convId };
+}
+
 async function seedSystemPmFromOfficia(ctx, recipientPersonaName, key) {
   // Officia is uniqueId 1 (SHYTALK_OFFICIAL). The PM flow writes:
   //   1. conversations/<auto> with participantIds=[1, recipient]
@@ -5618,6 +5676,56 @@ const matchers = [
       ctx.personaPlatforms.set(name, platform);
       ctx.personaPaths.set(name, urlPath);
       return { ok: true };
+    },
+  },
+  {
+    // j07 follow-state setup-Given: "<persona> is following <other>".
+    // Composes applyFollow, which mirrors the production /api/users/follow
+    // writes: follower's followingIds += followee's uniqueId, and the
+    // mirror followerIds += follower's uniqueId. Idempotent — re-running
+    // dedups (Set-backed merge).
+    //
+    // This is the POSITIVE complement to the existing "neither user is
+    // following the other" assertion below — together they let j07's
+    // phase-scoped scenarios establish either pre-condition cleanly.
+    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is following\s+([A-Z][a-z]+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      const followerName = m[1];
+      const followeeName = m[3];
+      try {
+        await applyFollow(ctx, followerName, followeeName);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // j07 conversation setup-Given: "<persona> has an open DIRECT
+    // conversation thread with <other>". Composes seedDirectConversation,
+    // which writes a conversations/<deterministic-id> doc with type='DIRECT'
+    // and sorted, String-coerced participantIds. Downstream PM-send /
+    // PM-read assertions look up the thread by participant pair, so the
+    // doc-id determinism keeps tests stable.
+    //
+    // Note this is a UNIDIRECTIONAL phrasing ("Adam has an open thread
+    // WITH Alice") but DIRECT conversations are inherently symmetric —
+    // either persona is a valid subject. The matcher captures the
+    // subject as a sender hint for downstream assertions, but doesn't
+    // mark the thread as "owned" by them.
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+has an open DIRECT conversation thread with\s+([A-Z][a-z]+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      const p1Name = m[1];
+      const p2Name = m[3];
+      try {
+        await seedDirectConversation(ctx, p1Name, p2Name);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
     },
   },
   {

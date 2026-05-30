@@ -10415,6 +10415,148 @@ describe("Adam's first-day setup Givens (j01 phase-scoped scenario setup)", () =
   });
 });
 
+// ─── j07 follow + conversation setup Givens (phase-scoped scenarios) ─────
+describe('j07 follow + conversation setup Givens (Adam discovery → PM)', () => {
+  const { personas: PERSONAS } = require('../../scripts/provision-test-personas');
+  const alice = PERSONAS.find((p) => p.id === 'P-02');
+  const ADAM_UNIQUE_ID = 90000001; // ephemeral P-01
+
+  test('"<persona> is following <other>" — adds follower→followee + mirror in followerIds', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Adam is following Alice' }, ctx);
+    expect(r.ok).toBe(true);
+    // Follower's followingIds contains followee's uniqueId
+    const adam = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(adam).toBeDefined();
+    expect(adam.followingIds).toContain(alice.uniqueId);
+    // Mirror: followee's followerIds contains follower's uniqueId
+    const aliceDoc = db._docs[`users/${alice.uniqueId}`];
+    expect(aliceDoc).toBeDefined();
+    expect(aliceDoc.followerIds).toContain(ADAM_UNIQUE_ID);
+  });
+
+  test('"<persona> is following <other>" — idempotent (re-running dedups, no duplicate ids)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    await executeStep({ kind: 'Given', text: 'Adam is following Alice' }, ctx);
+    await executeStep({ kind: 'Given', text: 'Adam is following Alice' }, ctx);
+    const adam = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(adam.followingIds.filter((id) => id === alice.uniqueId)).toHaveLength(1);
+    const aliceDoc = db._docs[`users/${alice.uniqueId}`];
+    expect(aliceDoc.followerIds.filter((id) => id === ADAM_UNIQUE_ID)).toHaveLength(1);
+  });
+
+  test('"<persona> is following <other>" — preserves pre-existing followingIds entries', async () => {
+    // Pre-seed Adam with a follow on Marcus (P-04, uniqueId 60000010).
+    const MARCUS_UNIQUE_ID = 60000010;
+    const db = makeStatefulFakeDb({
+      [`users/${ADAM_UNIQUE_ID}`]: { followingIds: [MARCUS_UNIQUE_ID] },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Adam is following Alice' }, ctx);
+    expect(r.ok).toBe(true);
+    const adam = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(adam.followingIds).toContain(MARCUS_UNIQUE_ID);
+    expect(adam.followingIds).toContain(alice.uniqueId);
+  });
+
+  test('"<persona> is following <other>" — unknown follower → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Zonk is following Alice' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/follower "Zonk" not in registry/);
+  });
+
+  test('"<persona> is following <other>" — unknown followee → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Adam is following Zonk' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/followee "Zonk" not in registry/);
+  });
+
+  test('"<persona> is following <other>" — ctx.db missing → actionable error', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Given', text: 'Adam is following Alice' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+
+  test('"<persona> has an open DIRECT conversation thread with <other>" — writes conversations/<sorted-pair>', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Alice' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // Conversation id is deterministic — sorted-pair of String-coerced uniqueIds
+    const ids = [String(ADAM_UNIQUE_ID), String(alice.uniqueId)].sort();
+    const convId = `direct-${ids[0]}-${ids[1]}`;
+    const conv = db._docs[`conversations/${convId}`];
+    expect(conv).toBeDefined();
+    expect(conv.type).toBe('DIRECT');
+    expect(conv.participantIds).toEqual(ids);
+    expect(conv.createdAt).toBeGreaterThan(0);
+  });
+
+  test('"<persona> has an open DIRECT conversation thread with <other>" — idempotent (re-running overwrites same doc-id, no duplicate)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Alice' },
+      ctx,
+    );
+    await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Alice' },
+      ctx,
+    );
+    const convs = Object.entries(db._docs).filter(([k]) => k.startsWith('conversations/'));
+    expect(convs).toHaveLength(1);
+  });
+
+  test('"<persona> has an open DIRECT conversation thread with <other>" — order-invariant doc-id (Alice → Adam = Adam → Alice)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r1 = await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Alice' },
+      ctx,
+    );
+    expect(r1.ok).toBe(true);
+    const r2 = await executeStep(
+      { kind: 'Given', text: 'Alice has an open DIRECT conversation thread with Adam' },
+      ctx,
+    );
+    expect(r2.ok).toBe(true);
+    // Still 1 conversation — sorted-pair doc-id is bidirectional
+    const convs = Object.entries(db._docs).filter(([k]) => k.startsWith('conversations/'));
+    expect(convs).toHaveLength(1);
+  });
+
+  test('"<persona> has an open DIRECT conversation thread with <other>" — unknown persona → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Zonk' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('"<persona> has an open DIRECT conversation thread with <other>" — ctx.db missing → actionable error', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Alice' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+});
+
 describe('Dialog confirm action (platform-dispatch)', () => {
   test('"X on Android confirms in the dialog" → driver', async () => {
     const spy = jest.fn(async () => undefined);
