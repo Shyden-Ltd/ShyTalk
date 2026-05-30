@@ -144,7 +144,24 @@ jobs:
 
       - name: Install Metal toolchain
         run: |
-          if ls /tmp/metal-toolchain-export/*.exportedBundle >/dev/null 2>&1; then
+          # actions/runner-images update May 2026: the macos-15 image now
+          # ships with Metal Toolchain pre-installed in
+          # /System/Library/AssetsV2/com_apple_MobileAsset_MetalToolchain/.
+          # When that's the case, BOTH -importComponent (cache-hit path)
+          # AND -downloadComponent (cache-miss path) fail loudly with
+          # "Asset is already installed for Metal Toolchain <build>"
+          # exit 70. Pre-check via -showComponent: if the toolchain is
+          # already there, skip both install branches entirely.
+          #
+          # `-showComponent` returns 0 with the toolchain version on
+          # stdout when installed; non-zero otherwise. The version
+          # string also gates the cache write — only export the bundle
+          # if we actually downloaded it, so a runner-image bump that
+          # adds the toolchain doesn't poison the cache with an empty
+          # export directory on next miss.
+          if xcodebuild -showComponent MetalToolchain 2>/dev/null | grep -q "Metal Toolchain"; then
+            echo "✓ Metal toolchain already installed by runner image — skipping"
+          elif ls /tmp/metal-toolchain-export/*.exportedBundle >/dev/null 2>&1; then
             echo "↻ Importing Metal toolchain from cache"
             xcodebuild -importComponent MetalToolchain -importPath /tmp/metal-toolchain-export/*.exportedBundle
           else
