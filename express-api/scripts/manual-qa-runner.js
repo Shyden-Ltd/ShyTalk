@@ -15446,6 +15446,14 @@ async function main() {
     else if (flat[i] === '--headed') opts.headed = true;
     else if (flat[i] === '--matrix') opts.matrix = true;
     else if (flat[i] === '--fail-fast') opts.failFast = true;
+    else if (flat[i] === '--report-format') opts.reportFormat = flat[++i];
+    else if (flat[i] === '--report-output') opts.reportOutput = flat[++i];
+  }
+  // --report-format validation — only json + junit are supported (used
+  // with --matrix to emit structured output for CI dashboards).
+  if (opts.reportFormat && !['json', 'junit'].includes(opts.reportFormat)) {
+    console.error(`--report-format "${opts.reportFormat}" not recognised. Supported: json, junit.`);
+    process.exit(2);
   }
   opts.target = opts.target || 'dev';
   opts.planDir = opts.planDir || path.resolve(__dirname, '../../journey-tests');
@@ -15483,12 +15491,30 @@ async function main() {
   // state. The iteration helper (./matrix-dispatch.js) aggregates
   // pass / fail / skip outcomes and prints a summary table at the end.
   if (opts.matrix) {
-    const { runMatrix, formatMatrixResult } = require('./matrix-dispatch');
+    const {
+      runMatrix,
+      formatMatrixResult,
+      formatMatrixResultJson,
+      formatMatrixResultJunit,
+    } = require('./matrix-dispatch');
     const { spawnSync } = require('child_process');
-    // Reconstruct the per-cell argv by stripping --matrix + appending
-    // --browser <slug>. If --browser was already supplied, the existing
-    // value gets shadowed (last --browser wins in the parse loop).
-    const baseArgv = process.argv.slice(2).filter((a) => a !== '--matrix');
+    // Reconstruct the per-cell argv by stripping --matrix + report flags
+    // + appending --browser <slug>. Per-cell subprocesses don't need the
+    // matrix-level flags (they'd recurse). Last --browser wins in the
+    // parse loop.
+    const stripFlags = new Set(['--matrix', '--report-format', '--report-output']);
+    const baseArgv = [];
+    const sourceArgv = process.argv.slice(2);
+    for (let i = 0; i < sourceArgv.length; i++) {
+      const a = sourceArgv[i];
+      if (stripFlags.has(a)) {
+        // --matrix is a boolean; --report-format / --report-output
+        // take a value, skip it too.
+        if (a !== '--matrix') i++;
+        continue;
+      }
+      baseArgv.push(a);
+    }
     const matrixResult = await runMatrix({
       browsers: allowed,
       failFast: opts.failFast === true,
@@ -15505,7 +15531,26 @@ async function main() {
         return proc.status === 0;
       },
     });
+    // Always print the human-readable text table to stdout so the
+    // operator gets immediate feedback regardless of --report-format.
     console.log('\n' + formatMatrixResult(matrixResult));
+    // Optional structured-report output for CI consumption.
+    if (opts.reportFormat) {
+      const fsImpl = require('fs');
+      let formatted;
+      if (opts.reportFormat === 'json') {
+        formatted = formatMatrixResultJson(matrixResult);
+      } else {
+        // junit
+        formatted = formatMatrixResultJunit(matrixResult);
+      }
+      if (opts.reportOutput) {
+        fsImpl.writeFileSync(opts.reportOutput, formatted);
+        console.log(`[matrix] ${opts.reportFormat} report written to ${opts.reportOutput}`);
+      } else {
+        console.log(`\n${formatted}`);
+      }
+    }
     process.exit(matrixResult.ok ? 0 : 1);
   }
   const personasPassword = process.env.PERSONAS_PASSWORD;
