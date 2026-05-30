@@ -25,6 +25,7 @@ security find-identity -v -p codesigning | grep "Apple Development"
 ```
 
 Output shape:
+
 ```
   1) ABC1234567 "Apple Development: yourname@example.com (TEAM_ID_HERE)"
 ```
