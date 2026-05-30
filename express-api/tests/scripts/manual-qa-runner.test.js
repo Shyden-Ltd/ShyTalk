@@ -10415,6 +10415,148 @@ describe("Adam's first-day setup Givens (j01 phase-scoped scenario setup)", () =
   });
 });
 
+// ─── j07 follow + conversation setup Givens (phase-scoped scenarios) ─────
+describe('j07 follow + conversation setup Givens (Adam discovery → PM)', () => {
+  const { personas: PERSONAS } = require('../../scripts/provision-test-personas');
+  const alice = PERSONAS.find((p) => p.id === 'P-02');
+  const ADAM_UNIQUE_ID = 90000001; // ephemeral P-01
+
+  test('"<persona> is following <other>" — adds follower→followee + mirror in followerIds', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Adam is following Alice' }, ctx);
+    expect(r.ok).toBe(true);
+    // Follower's followingIds contains followee's uniqueId
+    const adam = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(adam).toBeDefined();
+    expect(adam.followingIds).toContain(alice.uniqueId);
+    // Mirror: followee's followerIds contains follower's uniqueId
+    const aliceDoc = db._docs[`users/${alice.uniqueId}`];
+    expect(aliceDoc).toBeDefined();
+    expect(aliceDoc.followerIds).toContain(ADAM_UNIQUE_ID);
+  });
+
+  test('"<persona> is following <other>" — idempotent (re-running dedups, no duplicate ids)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    await executeStep({ kind: 'Given', text: 'Adam is following Alice' }, ctx);
+    await executeStep({ kind: 'Given', text: 'Adam is following Alice' }, ctx);
+    const adam = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(adam.followingIds.filter((id) => id === alice.uniqueId)).toHaveLength(1);
+    const aliceDoc = db._docs[`users/${alice.uniqueId}`];
+    expect(aliceDoc.followerIds.filter((id) => id === ADAM_UNIQUE_ID)).toHaveLength(1);
+  });
+
+  test('"<persona> is following <other>" — preserves pre-existing followingIds entries', async () => {
+    // Pre-seed Adam with a follow on Marcus (P-04, uniqueId 60000010).
+    const MARCUS_UNIQUE_ID = 60000010;
+    const db = makeStatefulFakeDb({
+      [`users/${ADAM_UNIQUE_ID}`]: { followingIds: [MARCUS_UNIQUE_ID] },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Adam is following Alice' }, ctx);
+    expect(r.ok).toBe(true);
+    const adam = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(adam.followingIds).toContain(MARCUS_UNIQUE_ID);
+    expect(adam.followingIds).toContain(alice.uniqueId);
+  });
+
+  test('"<persona> is following <other>" — unknown follower → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Zonk is following Alice' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/follower "Zonk" not in registry/);
+  });
+
+  test('"<persona> is following <other>" — unknown followee → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Adam is following Zonk' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/followee "Zonk" not in registry/);
+  });
+
+  test('"<persona> is following <other>" — ctx.db missing → actionable error', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Given', text: 'Adam is following Alice' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+
+  test('"<persona> has an open DIRECT conversation thread with <other>" — writes conversations/<sorted-pair>', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Alice' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // Conversation id is deterministic — sorted-pair of String-coerced uniqueIds
+    const ids = [String(ADAM_UNIQUE_ID), String(alice.uniqueId)].sort();
+    const convId = `direct-${ids[0]}-${ids[1]}`;
+    const conv = db._docs[`conversations/${convId}`];
+    expect(conv).toBeDefined();
+    expect(conv.type).toBe('DIRECT');
+    expect(conv.participantIds).toEqual(ids);
+    expect(conv.createdAt).toBeGreaterThan(0);
+  });
+
+  test('"<persona> has an open DIRECT conversation thread with <other>" — idempotent (re-running overwrites same doc-id, no duplicate)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Alice' },
+      ctx,
+    );
+    await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Alice' },
+      ctx,
+    );
+    const convs = Object.entries(db._docs).filter(([k]) => k.startsWith('conversations/'));
+    expect(convs).toHaveLength(1);
+  });
+
+  test('"<persona> has an open DIRECT conversation thread with <other>" — order-invariant doc-id (Alice → Adam = Adam → Alice)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r1 = await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Alice' },
+      ctx,
+    );
+    expect(r1.ok).toBe(true);
+    const r2 = await executeStep(
+      { kind: 'Given', text: 'Alice has an open DIRECT conversation thread with Adam' },
+      ctx,
+    );
+    expect(r2.ok).toBe(true);
+    // Still 1 conversation — sorted-pair doc-id is bidirectional
+    const convs = Object.entries(db._docs).filter(([k]) => k.startsWith('conversations/'));
+    expect(convs).toHaveLength(1);
+  });
+
+  test('"<persona> has an open DIRECT conversation thread with <other>" — unknown persona → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Zonk' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('"<persona> has an open DIRECT conversation thread with <other>" — ctx.db missing → actionable error', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Alice' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+});
+
 // ─── Mia's restricted-minor setup Givens (j02 phase-scoped scenarios) ─────
 describe("Mia's restricted-minor setup Givens (j02 phase-scoped scenario setup)", () => {
   // Mia is an EPHEMERAL persona (P-03 in EPHEMERAL_PERSONAS, uniqueId
@@ -10634,6 +10776,158 @@ describe('Admin-queue setup Givens (j12 phase-scoped scenarios)', () => {
       k.startsWith('ageVerificationSubmissions/'),
     );
     expect(subs).toHaveLength(50);
+  });
+});
+
+// ─── j10/j11 warning-state setup Givens (moderation phase-scoped scenarios) ─────
+describe('Warning-state setup Givens (j10 + j11 phase-scoped scenarios)', () => {
+  const { personas: PERSONAS } = require('../../scripts/provision-test-personas');
+  const raul = PERSONAS.find((p) => p.id === 'P-08');
+  const theo = PERSONAS.find((p) => p.id === 'P-10');
+
+  test('"<persona> has been issued a first-strike warning" — sets hasActiveWarning + warningCount=1 + acknowledged=false', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Raul has been issued a first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const u = db._docs[`users/${raul.uniqueId}`];
+    expect(u.hasActiveWarning).toBe(true);
+    expect(u.warningCount).toBe(1);
+    expect(u.warningAcknowledged).toBe(false);
+    expect(u.lastWarningAt).toBeGreaterThan(0);
+  });
+
+  test('"<persona> has acknowledged his first-strike warning" — composes issued + flips acknowledged=true', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Raul has acknowledged his first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const u = db._docs[`users/${raul.uniqueId}`];
+    expect(u.hasActiveWarning).toBe(true);
+    expect(u.warningCount).toBe(1);
+    expect(u.warningAcknowledged).toBe(true);
+    expect(u.lastWarningAt).toBeGreaterThan(0);
+  });
+
+  test('"<persona> has acknowledged her first-strike warning" — pronoun "her" form matches', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Nora has acknowledged her first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // Persona Nora is P-09 — fetch from registry
+    const nora = PERSONAS.find((p) => p.id === 'P-09');
+    expect(db._docs[`users/${nora.uniqueId}`].warningAcknowledged).toBe(true);
+  });
+
+  test('"<persona> has acknowledged their first-strike warning" — pronoun "their" form matches', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Raul has acknowledged their first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${raul.uniqueId}`].warningAcknowledged).toBe(true);
+  });
+
+  test('multi-field assignment matcher (existing) handles "hasActiveWarning=true, warningReason=<quoted>" cleanly (j10 refactor)', async () => {
+    // j10 line 58 was originally "Theo has hasActiveWarning=true with
+    // reason \"...\"" — that collided with the (assignment matcher,
+    // wider scope at line ~1898) which greedily captured the trailing
+    // " with reason \"...\"" as part of the field value. Refactored to
+    // the comma form so the EXISTING multi-field matcher handles it.
+    // This test pins the new j10 phrasing's behaviour.
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'Theo has hasActiveWarning=true, warningReason="Inappropriate language in voice room"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const u = db._docs[`users/${theo.uniqueId}`];
+    expect(u.hasActiveWarning).toBe(true);
+    expect(u.warningReason).toBe('Inappropriate language in voice room');
+  });
+
+  test('issued + acknowledged: merge preserves pre-existing user-doc fields (shyCoins, beans)', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${raul.uniqueId}`]: { shyCoins: 500, beans: 200 },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    await executeStep({ kind: 'Given', text: 'Raul has been issued a first-strike warning' }, ctx);
+    const u = db._docs[`users/${raul.uniqueId}`];
+    // Warning fields set
+    expect(u.hasActiveWarning).toBe(true);
+    // Pre-existing fields preserved via merge (the moderation flow doesn't
+    // touch economy state — see j11:71 "shyCoins=0 and beans=0 — irrelevant"
+    // comment in the feature file).
+    expect(u.shyCoins).toBe(500);
+    expect(u.beans).toBe(200);
+  });
+
+  test('"issued" + "acknowledged" — sequence flips acknowledged true with one final state', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    await executeStep({ kind: 'Given', text: 'Raul has been issued a first-strike warning' }, ctx);
+    const intermediate = db._docs[`users/${raul.uniqueId}`].warningAcknowledged;
+    expect(intermediate).toBe(false);
+    await executeStep(
+      { kind: 'Given', text: 'Raul has acknowledged his first-strike warning' },
+      ctx,
+    );
+    expect(db._docs[`users/${raul.uniqueId}`].warningAcknowledged).toBe(true);
+    // warningCount stays 1 (still a first strike), not incremented
+    expect(db._docs[`users/${raul.uniqueId}`].warningCount).toBe(1);
+  });
+
+  test('unknown persona → actionable error (issued)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Zonk has been issued a first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('unknown persona → actionable error (acknowledged)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Zonk has acknowledged his first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('ctx.db missing → actionable error (both warning matchers)', async () => {
+    const ctx = makeCtx();
+    const issuedR = await executeStep(
+      { kind: 'Given', text: 'Raul has been issued a first-strike warning' },
+      ctx,
+    );
+    expect(issuedR.ok).toBe(false);
+    expect(issuedR.error).toMatch(/ctx\.db not initialised/);
+    const ackR = await executeStep(
+      { kind: 'Given', text: 'Raul has acknowledged his first-strike warning' },
+      ctx,
+    );
+    expect(ackR.ok).toBe(false);
+    expect(ackR.error).toMatch(/ctx\.db not initialised/);
   });
 });
 

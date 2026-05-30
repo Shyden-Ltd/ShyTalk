@@ -749,6 +749,64 @@ async function seedAdminQueueEntries(ctx, queueId, count) {
   return { count, queueId };
 }
 
+async function applyFollow(ctx, followerName, followeeName) {
+  // Mirrors the production /api/users/follow writes:
+  //   1. users/<follower>.followingIds = unique-add(followee uniqueId)
+  //   2. users/<followee>.followerIds  = unique-add(follower uniqueId)
+  // No FieldValue.arrayUnion — read-modify-set preserves fake-db
+  // compatibility (jest stateful fake doesn't expand FieldValue sentinels).
+  // Idempotent: re-running the same follow is a no-op (set dedup).
+  // segregationEvents NOT written — that's only on cross-cohort BLOCK,
+  // which the existing routes/users-follow.js gates behind a cohort check.
+  // The Given form represents a SUCCESSFUL follow, so no audit row.
+  const personas = loadPersonas();
+  const follower = personas.get(followerName);
+  const followee = personas.get(followeeName);
+  if (!follower?.uniqueId) {
+    throw new Error(`follower "${followerName}" not in registry`);
+  }
+  if (!followee?.uniqueId) {
+    throw new Error(`followee "${followeeName}" not in registry`);
+  }
+  const followerRef = ctx.db.doc(`users/${follower.uniqueId}`);
+  const followerSnap = await followerRef.get();
+  const followerData = followerSnap.exists ? followerSnap.data() : {};
+  const followingIds = Array.from(
+    new Set([...(followerData.followingIds || []), followee.uniqueId]),
+  );
+  await followerRef.set({ followingIds }, { merge: true });
+  const followeeRef = ctx.db.doc(`users/${followee.uniqueId}`);
+  const followeeSnap = await followeeRef.get();
+  const followeeData = followeeSnap.exists ? followeeSnap.data() : {};
+  const followerIds = Array.from(new Set([...(followeeData.followerIds || []), follower.uniqueId]));
+  await followeeRef.set({ followerIds }, { merge: true });
+  return { followerUniqueId: follower.uniqueId, followeeUniqueId: followee.uniqueId };
+}
+
+async function seedDirectConversation(ctx, p1Name, p2Name) {
+  // Mirrors a successful /api/conversations create:
+  //   - conversations/<participantIds sorted-pair>: { type: 'DIRECT',
+  //     participantIds: [a, b] (sorted, String-coerced per wire format),
+  //     createdAt: now }
+  // Deterministic doc-id (sorted pair) makes the seed idempotent and lets
+  // downstream assertions look it up by participant lookup without needing
+  // a query for an auto-generated id. participantIds are stringified
+  // because the production routes (Express) call String(req.auth.uniqueId).
+  const personas = loadPersonas();
+  const p1 = personas.get(p1Name);
+  const p2 = personas.get(p2Name);
+  if (!p1?.uniqueId) throw new Error(`persona "${p1Name}" not in registry`);
+  if (!p2?.uniqueId) throw new Error(`persona "${p2Name}" not in registry`);
+  const ids = [String(p1.uniqueId), String(p2.uniqueId)].sort();
+  const convId = `direct-${ids[0]}-${ids[1]}`;
+  await ctx.db.doc(`conversations/${convId}`).set({
+    type: 'DIRECT',
+    participantIds: ids,
+    createdAt: Date.now(),
+  });
+  return { conversationId: convId };
+}
+
 async function seedSystemPmFromOfficia(ctx, recipientPersonaName, key) {
   // Officia is uniqueId 1 (SHYTALK_OFFICIAL). The PM flow writes:
   //   1. conversations/<auto> with participantIds=[1, recipient]
@@ -5664,6 +5722,56 @@ const matchers = [
     },
   },
   {
+    // j07 follow-state setup-Given: "<persona> is following <other>".
+    // Composes applyFollow, which mirrors the production /api/users/follow
+    // writes: follower's followingIds += followee's uniqueId, and the
+    // mirror followerIds += follower's uniqueId. Idempotent — re-running
+    // dedups (Set-backed merge).
+    //
+    // This is the POSITIVE complement to the existing "neither user is
+    // following the other" assertion below — together they let j07's
+    // phase-scoped scenarios establish either pre-condition cleanly.
+    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is following\s+([A-Z][a-z]+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      const followerName = m[1];
+      const followeeName = m[3];
+      try {
+        await applyFollow(ctx, followerName, followeeName);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // j07 conversation setup-Given: "<persona> has an open DIRECT
+    // conversation thread with <other>". Composes seedDirectConversation,
+    // which writes a conversations/<deterministic-id> doc with type='DIRECT'
+    // and sorted, String-coerced participantIds. Downstream PM-send /
+    // PM-read assertions look up the thread by participant pair, so the
+    // doc-id determinism keeps tests stable.
+    //
+    // Note this is a UNIDIRECTIONAL phrasing ("Adam has an open thread
+    // WITH Alice") but DIRECT conversations are inherently symmetric —
+    // either persona is a valid subject. The matcher captures the
+    // subject as a sender hint for downstream assertions, but doesn't
+    // mark the thread as "owned" by them.
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+has an open DIRECT conversation thread with\s+([A-Z][a-z]+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      const p1Name = m[1];
+      const p2Name = m[3];
+      try {
+        await seedDirectConversation(ctx, p1Name, p2Name);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
     // "neither user is following the other" bare relation assertion
     // (j07 pre-condition). Reads the two most-recently-mentioned
     // personas from ctx.personaPlatforms (populated by sign-in
@@ -8112,6 +8220,68 @@ const matchers = [
       await ctx.db
         .doc(`users/${p.uniqueId}`)
         .set({ hasActiveWarning: true, suspendedUntil: 0 }, { merge: true });
+      return { ok: true };
+    },
+  },
+  {
+    // j11 setup-Given: "<persona> has been issued a first-strike warning".
+    // Mirrors the production /api/admin/moderation/warn handler's user-doc
+    // writes:
+    //   - hasActiveWarning = true
+    //   - warningCount = 1 (first strike — second-strike form differs)
+    //   - warningAcknowledged = false (operator-facing UI is pending ack)
+    //   - lastWarningAt = now (audit timestamp)
+    // No audit row here — that's covered by the moderation action matcher
+    // (the audit semantics belong to the admin UI flow, not the state-seed).
+    pattern: /^([A-Z][a-z]+)\s+has been issued a first-strike warning$/,
+    async handler(m, ctx) {
+      const name = m[1];
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      const personas = loadPersonas();
+      const p = personas.get(name);
+      if (!p?.uniqueId) {
+        return { ok: false, error: `persona "${name}" not in registry` };
+      }
+      await ctx.db.doc(`users/${p.uniqueId}`).set(
+        {
+          hasActiveWarning: true,
+          warningCount: 1,
+          warningAcknowledged: false,
+          lastWarningAt: Date.now(),
+        },
+        { merge: true },
+      );
+      return { ok: true };
+    },
+  },
+  {
+    // j11 setup-Given: "<persona> has acknowledged his/her/their first-strike
+    // warning". Composes the issued-warning state PLUS flips
+    // warningAcknowledged → true. This is the state Raul reaches after he
+    // taps the "I understand" button on the warning screen — distinct from
+    // the issued state where the warning still requires acknowledgement.
+    //
+    // Pronoun alternation captures all three forms ("his", "her", "their")
+    // since the corpus uses them depending on persona gender — anchored to
+    // a fixed word list, no \w+ expansion.
+    pattern: /^([A-Z][a-z]+)\s+has acknowledged (?:his|her|their) first-strike warning$/,
+    async handler(m, ctx) {
+      const name = m[1];
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      const personas = loadPersonas();
+      const p = personas.get(name);
+      if (!p?.uniqueId) {
+        return { ok: false, error: `persona "${name}" not in registry` };
+      }
+      await ctx.db.doc(`users/${p.uniqueId}`).set(
+        {
+          hasActiveWarning: true,
+          warningCount: 1,
+          warningAcknowledged: true,
+          lastWarningAt: Date.now(),
+        },
+        { merge: true },
+      );
       return { ok: true };
     },
   },

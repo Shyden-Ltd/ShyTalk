@@ -55,7 +55,7 @@ Feature: j10 — Admin warning lands during an active voice room
 
   @blocker @android-physical
   Scenario: Theo's Android UI navigates to the warning screen with reason + duck + acknowledge
-    Given Theo has hasActiveWarning=true with reason "Inappropriate language in voice room"
+    Given Theo has hasActiveWarning=true, warningReason="Inappropriate language in voice room"
     Then within 5000ms Theo's Android UI navigates to the warning screen
     Then Theo's Android UI shows the warning reason "Inappropriate language in voice room"
     Then Theo's Android UI shows the police duck image
