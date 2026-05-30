@@ -1116,7 +1116,9 @@ const matchers = [
         return { ok: true };
       }
       try {
-        await ctx.uiDriver.androidPersonaSignIn(personaId, tab);
+        // Pass ctx.target as the 3rd arg so the driver picks the right
+        // applicationIdSuffix (local → .local, dev → .dev, prod → bare).
+        await ctx.uiDriver.androidPersonaSignIn(personaId, tab, ctx.target);
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e.message };

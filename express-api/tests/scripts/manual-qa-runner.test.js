@@ -2608,6 +2608,7 @@ describe('Persona "is signed in on Android physical at the <tab> tab" (j09 Backg
     const ctx = makeCtx({
       fetch: withSignInFetch(50000060),
       uiDriver: { androidPersonaSignIn: personaSignInSpy },
+      target: 'dev',
     });
     const r = await executeStep(
       { kind: 'Given', text: 'Theo [P-10] is signed in on Android physical at the "rooms" tab' },
@@ -2617,8 +2618,10 @@ describe('Persona "is signed in on Android physical at the <tab> tab" (j09 Backg
     // Server-side: session populated.
     expect(ctx.sessions.get('Theo')).toBeDefined();
     expect(ctx.personaPlatforms.get('Theo')).toBe('Android physical');
-    // Device-side: driver method called with the persona id + tab.
-    expect(personaSignInSpy).toHaveBeenCalledWith('P-10', 'rooms');
+    // Device-side: driver method called with the persona id + tab + target
+    // (target is needed for the app-launch step to pick the right
+    // applicationIdSuffix — local/dev/prod).
+    expect(personaSignInSpy).toHaveBeenCalledWith('P-10', 'rooms', 'dev');
   });
 
   test('driver not wired → server-side sign-in still succeeds, warning logged, ok=true', async () => {
@@ -2711,18 +2714,19 @@ describe('Persona "is signed in on Android physical at the <tab> tab" (j09 Backg
     expect(personaSignInSpy).not.toHaveBeenCalled();
   });
 
-  test('non-rooms tab (e.g. profile) — driver method gets the tab name', async () => {
+  test('non-rooms tab (e.g. profile) — driver method gets the tab name + target', async () => {
     const personaSignInSpy = jest.fn(async () => true);
     const ctx = makeCtx({
       fetch: withSignInFetch(50000060),
       uiDriver: { androidPersonaSignIn: personaSignInSpy },
+      target: 'local',
     });
     const r = await executeStep(
       { kind: 'Given', text: 'Theo [P-10] is signed in on Android physical at the "profile" tab' },
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(personaSignInSpy).toHaveBeenCalledWith('P-10', 'profile');
+    expect(personaSignInSpy).toHaveBeenCalledWith('P-10', 'profile', 'local');
   });
 
   test('does NOT fire on platforms other than "Android physical" — falls through to catch-all', async () => {

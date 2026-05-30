@@ -16521,22 +16521,83 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
     });
   }
 
-  test('happy path: P-10 + rooms tab — taps picker, picks row, lands on main_roomsTab', async () => {
+  test('happy path: P-10 + rooms tab — launches app, taps picker, picks row, lands on main_roomsTab', async () => {
     setupExec(happyPathDumps('P-10'));
     const driver = await createAndroidDriver();
+    // Default target='dev' when not passed — matches the matcher's
+    // ctx.target plumbing for the j09 case.
     const promise = driver.androidPersonaSignIn('P-10', 'rooms');
-    // Advance through the wait-for-dialog poll (5s ceiling) + wait-for-main
-    // poll (10s ceiling). Dumps return immediately so the poll resolves on
-    // the first tick.
-    await jest.advanceTimersByTimeAsync(15000);
+    // Advance through the 3s launch wait + wait-for-dialog poll (5s)
+    // + wait-for-main poll (10s). Dumps return immediately so the
+    // polls resolve on the first tick.
+    await jest.advanceTimersByTimeAsync(18000);
     expect(await promise).toBe(true);
+    // Verify the launch command fired with the dev package.
+    const monkeyCalls = execSync.mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.includes("'monkey'") && c.includes("'com.shyden.shytalk.dev'"));
+    expect(monkeyCalls).toHaveLength(1);
     // Verify the 2 testTag taps happened (picker open + persona row).
-    // Don't constrain on exact tap coords — bounds parsing is covered
-    // elsewhere; here we just confirm the sequence ran.
     const tapCalls = execSync.mock.calls
       .map((c) => c[0])
       .filter((c) => c.includes("'input' 'tap'"));
     expect(tapCalls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('target="local" → launches com.shyden.shytalk.local', async () => {
+    setupExec(happyPathDumps('P-10'));
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms', 'local');
+    await jest.advanceTimersByTimeAsync(18000);
+    expect(await promise).toBe(true);
+    const monkeyCalls = execSync.mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.includes("'monkey'") && c.includes("'com.shyden.shytalk.local'"));
+    expect(monkeyCalls).toHaveLength(1);
+  });
+
+  test('target="prod" → launches bare com.shyden.shytalk (no suffix)', async () => {
+    setupExec(happyPathDumps('P-10'));
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms', 'prod');
+    await jest.advanceTimersByTimeAsync(18000);
+    expect(await promise).toBe(true);
+    const monkeyCalls = execSync.mock.calls.map((c) => c[0]).filter((c) => c.includes("'monkey'"));
+    expect(monkeyCalls).toHaveLength(1);
+    // Verify the prod package (no suffix) — match on the SPACE after the
+    // package name's closing quote so 'com.shyden.shytalk.local' doesn't
+    // false-match the 'com.shyden.shytalk' prefix.
+    expect(monkeyCalls[0]).toContain("'com.shyden.shytalk' '-c'");
+  });
+
+  test('unknown target → falls back to dev package (defensive default)', async () => {
+    setupExec(happyPathDumps('P-10'));
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms', 'staging');
+    await jest.advanceTimersByTimeAsync(18000);
+    expect(await promise).toBe(true);
+    const monkeyCalls = execSync.mock.calls
+      .map((c) => c[0])
+      .filter((c) => c.includes("'monkey'") && c.includes("'com.shyden.shytalk.dev'"));
+    expect(monkeyCalls).toHaveLength(1);
+  });
+
+  test('app launch throws → actionable error mentioning the target + package + adb error', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'monkey'")) {
+        throw new Error('package not installed: com.shyden.shytalk.dev');
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms', 'dev');
+    promise.catch(() => {});
+    await jest.advanceTimersByTimeAsync(1000);
+    await expect(promise).rejects.toThrow(
+      /launch of "com\.shyden\.shytalk\.dev" failed — is the dev build installed/,
+    );
+    await expect(promise).rejects.toThrow(/package not installed/);
   });
 
   test('non-rooms tab (e.g. profile) — also taps main_profileTab after sign-in', async () => {
@@ -16547,7 +16608,7 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
     ]);
     const driver = await createAndroidDriver();
     const promise = driver.androidPersonaSignIn('P-10', 'profile');
-    await jest.advanceTimersByTimeAsync(16000);
+    await jest.advanceTimersByTimeAsync(19000);
     expect(await promise).toBe(true);
   });
 
@@ -16566,12 +16627,19 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
     );
   });
 
-  test('persona_picker_open not on screen → throws naming the missing testTag', async () => {
+  test('persona_picker_open not on screen → throws naming the missing testTag (and the three likely causes)', async () => {
     setupExec(['<node resource-id="something_else" bounds="[0,0][100,100]" />']);
     const driver = await createAndroidDriver();
-    await expect(driver.androidPersonaSignIn('P-10', 'rooms')).rejects.toThrow(
-      /could not tap "persona_picker_open"/,
-    );
+    const promise = driver.androidPersonaSignIn('P-10', 'rooms');
+    promise.catch(() => {});
+    // Advance past the 3s app-launch wait so the picker check fires.
+    await jest.advanceTimersByTimeAsync(4000);
+    await expect(promise).rejects.toThrow(/could not tap "persona_picker_open"/);
+    // Error mentions all three likely causes so the operator can
+    // triage without re-reading the driver source.
+    await expect(promise).rejects.toThrow(/ALREADY signed in/);
+    await expect(promise).rejects.toThrow(/predates PR #882/);
+    await expect(promise).rejects.toThrow(/build flavor is "prod"/);
   });
 
   test('dialog never shows persona_row → throws after 5s with persona id', async () => {
@@ -16597,7 +16665,7 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
     // rejection, Node doesn't see an unhandled-promise-rejection (which
     // jest surfaces as a test failure ahead of the expect.rejects).
     promise.catch(() => {});
-    await jest.advanceTimersByTimeAsync(6000);
+    await jest.advanceTimersByTimeAsync(9000);
     await expect(promise).rejects.toThrow(
       /picker dialog never showed "persona_row_P-99" within 5s/,
     );
@@ -16625,7 +16693,7 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
     const promise = driver.androidPersonaSignIn('P-10', 'rooms');
     // See the dialog-never-shows test for why this noop catch is needed.
     promise.catch(() => {});
-    await jest.advanceTimersByTimeAsync(11000);
+    await jest.advanceTimersByTimeAsync(14000);
     await expect(promise).rejects.toThrow(
       /never reached main screen \("main_roomsTab"\) within 10s/,
     );

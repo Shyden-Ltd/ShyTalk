@@ -2328,19 +2328,48 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // (open-picker / pick-row / wait-for-main) so the runner surfaces
   // a precise finding rather than the generic "ui dump didn't
   // contain X" downstream.
-  driver.androidPersonaSignIn = async (personaId, tab) => {
+  driver.androidPersonaSignIn = async (personaId, tab, target = 'dev') => {
     if (!/^P-\d{2}$/.test(personaId)) {
       throw new Error(
         `androidPersonaSignIn requires a P-NN persona id (got "${personaId}") — ephemeral personas P-01/P-03 sign up via the prod flow, not the picker`,
       );
     }
+    // Step 0: launch the ShyTalk app on the device. The first j09
+    // re-dispatch on 2026-05-30 surfaced "could not tap persona_picker_open"
+    // because the device was sitting on com.android.settings — the test
+    // never opened ShyTalk. Per-target package: local → .local,
+    // dev → .dev, prod → bare (no suffix). Mirrors the
+    // applicationIdSuffix config at app/build.gradle.kts lines 43/132.
+    const packageMap = {
+      local: 'com.shyden.shytalk.local',
+      dev: 'com.shyden.shytalk.dev',
+      prod: 'com.shyden.shytalk',
+    };
+    const pkg = packageMap[target] || packageMap.dev;
+    try {
+      // monkey -p <pkg> -c LAUNCHER 1 fires the registered launcher
+      // intent regardless of which activity is currently focused — works
+      // whether ShyTalk was closed, backgrounded, or another app is
+      // foregrounded. The "1" is the event count.
+      adb(['shell', 'monkey', '-p', pkg, '-c', 'android.intent.category.LAUNCHER', '1']);
+    } catch (e) {
+      throw new Error(
+        `androidPersonaSignIn: launch of "${pkg}" failed — is the ${target} build installed? adb error: ${e.message}`,
+        { cause: e },
+      );
+    }
+    // Settle for the launcher → ShyTalk transition. ~3s is enough for
+    // a warm start (app process already running). Cold starts may
+    // need longer; if the dump doesn't have persona_picker_open after
+    // 3s, the test below will catch it with the canonical error.
+    await new Promise((r) => setTimeout(r, 3000));
     // Step 1: tap `persona_picker_open` on the sign-in screen.
     // Available on local + dev (PR #882); on prod the button is
     // hidden so this will return false → actionable error.
     const opened = await driver.androidTapByTag('persona_picker_open');
     if (!opened) {
       throw new Error(
-        'androidPersonaSignIn: could not tap "persona_picker_open" — device may not be on the sign-in screen, or the build flavor is "prod" (the picker is hidden on prod)',
+        `androidPersonaSignIn: could not tap "persona_picker_open" — ShyTalk ${target} launched but the picker testTag isn't visible. Possible causes: (a) the user is ALREADY signed in (sign out via Profile → Settings first), (b) the deployed dev APK predates PR #882 (deploy main to dev and re-install), or (c) the build flavor is "prod" where the picker is hidden by design.`,
       );
     }
     // Step 2: wait for the dialog to render. Pick a row testTag that
