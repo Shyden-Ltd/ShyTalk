@@ -10557,6 +10557,108 @@ describe('j07 follow + conversation setup Givens (Adam discovery → PM)', () =>
   });
 });
 
+// ─── Mia's restricted-minor setup Givens (j02 phase-scoped scenarios) ─────
+describe("Mia's restricted-minor setup Givens (j02 phase-scoped scenario setup)", () => {
+  // Mia is an EPHEMERAL persona (P-03 in EPHEMERAL_PERSONAS, uniqueId
+  // 90000003). loadPersonas() merges ephemerals so the matcher resolves
+  // persona via `personas.get('Mia')`. Distinct from Adam (P-01) — Mia
+  // exists to exercise the minor-cohort restrictions specifically.
+  const MIA_UNIQUE_ID = 90000003;
+
+  test('"<persona> has just signed up as a minor" — seeds users/<uniqueId> with cohort=minor + isAgeVerified=false', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Mia has just signed up as a minor' }, ctx);
+    expect(r.ok).toBe(true);
+    const user = db._docs[`users/${MIA_UNIQUE_ID}`];
+    expect(user).toBeDefined();
+    expect(user.cohort).toBe('minor');
+    expect(user.isAgeVerified).toBe(false);
+    expect(user.uniqueId).toBe(MIA_UNIQUE_ID);
+    // {newUniqueId} interpolation variable seeded for downstream
+    // assertions referencing users/{newUniqueId}.
+    expect(ctx.scenarioVars.get('newUniqueId')).toBe(String(MIA_UNIQUE_ID));
+  });
+
+  test('"<persona> has accepted legal as a minor" — composes signup-as-minor + accepted-policies', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Mia has accepted legal as a minor' }, ctx);
+    expect(r.ok).toBe(true);
+    // User-doc seeded with minor cohort (NOT flipped to adult — distinct
+    // from the j01 case where Adam later flips to adult).
+    const user = db._docs[`users/${MIA_UNIQUE_ID}`];
+    expect(user.cohort).toBe('minor');
+    expect(user.isAgeVerified).toBe(false);
+    // usersAcceptedPolicies entry written with current versions.
+    const policies = db._docs[`usersAcceptedPolicies/${MIA_UNIQUE_ID}`];
+    expect(policies).toBeDefined();
+    expect(policies.privacyVersion).toBeGreaterThan(0);
+    expect(policies.termsVersion).toBeGreaterThan(0);
+  });
+
+  test('"<persona> has just signed up as a minor" — unknown persona → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Zonk has just signed up as a minor' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('"<persona> has accepted legal as a minor" — unknown persona → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Zonk has accepted legal as a minor' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('"<persona> has just signed up as a minor" — ctx.db missing → actionable error', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Given', text: 'Mia has just signed up as a minor' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+
+  test('"<persona> has accepted legal as a minor" — ctx.db missing → actionable error', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Given', text: 'Mia has accepted legal as a minor' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+
+  test('"Mia has accepted legal as a minor" — re-running is idempotent (no duplicate policies row)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r1 = await executeStep({ kind: 'Given', text: 'Mia has accepted legal as a minor' }, ctx);
+    expect(r1.ok).toBe(true);
+    const r2 = await executeStep({ kind: 'Given', text: 'Mia has accepted legal as a minor' }, ctx);
+    expect(r2.ok).toBe(true);
+    // Only ONE usersAcceptedPolicies entry — re-running merges the same
+    // doc, doesn't create a duplicate.
+    const policies = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith('usersAcceptedPolicies/'),
+    );
+    expect(policies).toHaveLength(1);
+  });
+
+  test('Mia matcher does NOT collide with Adam matcher (j01) — different cohort phrasing routes correctly', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    // Adam's j01 phrasing should NOT match Mia's j02 phrasing matcher
+    // (it must hit the j01 pattern, not the j02 pattern, even though
+    // both end up calling seedSignedUpUser).
+    const ADAM_UNIQUE_ID = 90000001;
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has just signed up with a minor-default cohort' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${ADAM_UNIQUE_ID}`]).toBeDefined();
+    expect(db._docs[`users/${MIA_UNIQUE_ID}`]).toBeUndefined();
+  });
+});
+
 describe('Dialog confirm action (platform-dispatch)', () => {
   test('"X on Android confirms in the dialog" → driver', async () => {
     const spy = jest.fn(async () => undefined);
