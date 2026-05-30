@@ -160,7 +160,16 @@ async function createMobileSamsungAndroidDriver({
   return driver;
 }
 
+// Canonical method surface — pinned by driver-contract.test.js.
+const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump'];
+
+function listMethods() {
+  return [...WEB_MOBILE_METHOD_NAMES].sort();
+}
+
 module.exports = {
   SAMSUNG_CDP_SOCKET,
   createMobileSamsungAndroidDriver,
+  WEB_MOBILE_METHOD_NAMES,
+  listMethods,
 };

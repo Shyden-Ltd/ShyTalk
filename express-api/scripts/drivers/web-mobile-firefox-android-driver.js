@@ -311,12 +311,21 @@ async function createMobileFirefoxAndroidDriver({
   return driver;
 }
 
+// Canonical method surface — pinned by driver-contract.test.js.
+const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump'];
+
+function listMethods() {
+  return [...WEB_MOBILE_METHOD_NAMES].sort();
+}
+
 module.exports = {
   KNOWN_GECKODRIVER_PATHS,
   FIREFOX_ANDROID_PACKAGE,
   FIREFOX_ANDROID_ACTIVITY,
   resolveGeckodriverPath,
   pickFreePort,
+  WEB_MOBILE_METHOD_NAMES,
+  listMethods,
   waitForGeckodriverReady,
   createMobileFirefoxAndroidDriver,
 };

@@ -219,7 +219,16 @@ async function createMobileSafariIosDriver({
   return driver;
 }
 
+// Canonical method surface — pinned by driver-contract.test.js.
+const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump'];
+
+function listMethods() {
+  return [...WEB_MOBILE_METHOD_NAMES].sort();
+}
+
 module.exports = {
   DEFAULT_APPIUM_BASE_URL,
   createMobileSafariIosDriver,
+  WEB_MOBILE_METHOD_NAMES,
+  listMethods,
 };

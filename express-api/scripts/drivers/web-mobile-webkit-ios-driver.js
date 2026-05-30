@@ -276,10 +276,19 @@ async function createMobileWebkitIosDriver({
   return driver;
 }
 
+// Canonical method surface — pinned by driver-contract.test.js.
+const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump'];
+
+function listMethods() {
+  return [...WEB_MOBILE_METHOD_NAMES].sort();
+}
+
 module.exports = {
   DEFAULT_APPIUM_BASE_URL,
   WEBKIT_BROWSERS,
   isSupportedBrowser,
   supportedBrowsersList,
   createMobileWebkitIosDriver,
+  WEB_MOBILE_METHOD_NAMES,
+  listMethods,
 };

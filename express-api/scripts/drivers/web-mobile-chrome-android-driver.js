@@ -213,10 +213,21 @@ async function createMobileChromeAndroidDriver({
   return driver;
 }
 
+// Canonical method surface — the runner-vocabulary methods this driver
+// implements (close() is intentionally excluded; it's lifecycle, not a
+// runner step-binding). Pinned by tests/scripts/drivers/driver-contract.test.js.
+const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump'];
+
+function listMethods() {
+  return [...WEB_MOBILE_METHOD_NAMES].sort();
+}
+
 module.exports = {
   KNOWN_ADB_PATHS,
   resolveAdbPath,
   pickFreePort,
   bootstrapAdbForward,
   createMobileChromeAndroidDriver,
+  WEB_MOBILE_METHOD_NAMES,
+  listMethods,
 };
