@@ -31,7 +31,16 @@ jest.mock(
   'playwright',
   () => {
     return {
+      // Mock all four BrowserTypes the driver dispatches on. Local-matrix
+      // policy requires chromium / firefox / webkit / edge — edge reuses
+      // chromium with the `channel: 'msedge'` launch option.
       chromium: {
+        launch: jest.fn(),
+      },
+      firefox: {
+        launch: jest.fn(),
+      },
+      webkit: {
         launch: jest.fn(),
       },
     };
@@ -69,11 +78,16 @@ function makeMockPage(overrides = {}) {
  * supplied per-persona Page (in the order createWebDriver() asks).
  * `pagesByPersona` is a map { Alice: pageA, Tariq: pageT, ... } — keys
  * order matches the order of pageFor() invocations.
+ *
+ * Applies the same mock factory to every BrowserType (chromium,
+ * firefox, webkit) so cross-browser tests don't have to re-prime.
+ * Edge reuses the chromium mock (edge launch goes through
+ * pw.chromium.launch with channel: 'msedge').
  */
 function prepareMockPages(pagesByPersona) {
   const orderedPages = Object.values(pagesByPersona);
   let pageIdx = 0;
-  playwright.chromium.launch.mockImplementation(async () => ({
+  const browserMock = jest.fn(async () => ({
     newContext: jest.fn(async () => ({
       newPage: jest.fn(async () => {
         const p = orderedPages[pageIdx] ?? makeMockPage();
@@ -84,6 +98,9 @@ function prepareMockPages(pagesByPersona) {
     })),
     close: jest.fn(),
   }));
+  playwright.chromium.launch.mockImplementation(browserMock);
+  playwright.firefox.launch.mockImplementation(browserMock);
+  playwright.webkit.launch.mockImplementation(browserMock);
 }
 
 beforeEach(() => {
@@ -96,6 +113,88 @@ describe('web-playwright-driver — createWebDriver', () => {
     const driver = await createWebDriver({ baseURL: 'http://localhost:8888' });
     expect(typeof driver.webRefreshRoomsList).toBe('function');
     expect(typeof driver.close).toBe('function');
+  });
+
+  test('default browser is chromium (back-compat with existing dispatches)', async () => {
+    prepareMockPages({});
+    const driver = await createWebDriver({ baseURL: 'http://localhost:8888' });
+    expect(driver._browserName).toBe('chromium');
+    expect(playwright.chromium.launch).toHaveBeenCalledTimes(1);
+    expect(playwright.firefox.launch).not.toHaveBeenCalled();
+    expect(playwright.webkit.launch).not.toHaveBeenCalled();
+  });
+
+  test('browser="firefox" launches Playwright Firefox', async () => {
+    prepareMockPages({});
+    const driver = await createWebDriver({
+      baseURL: 'http://localhost:8888',
+      browser: 'firefox',
+    });
+    expect(driver._browserName).toBe('firefox');
+    expect(playwright.firefox.launch).toHaveBeenCalledTimes(1);
+    expect(playwright.chromium.launch).not.toHaveBeenCalled();
+    expect(playwright.webkit.launch).not.toHaveBeenCalled();
+  });
+
+  test('browser="webkit" launches Playwright WebKit (Safari engine on Mac)', async () => {
+    prepareMockPages({});
+    const driver = await createWebDriver({
+      baseURL: 'http://localhost:8888',
+      browser: 'webkit',
+    });
+    expect(driver._browserName).toBe('webkit');
+    expect(playwright.webkit.launch).toHaveBeenCalledTimes(1);
+    expect(playwright.chromium.launch).not.toHaveBeenCalled();
+    expect(playwright.firefox.launch).not.toHaveBeenCalled();
+  });
+
+  test('browser="edge" launches Chromium with channel="msedge"', async () => {
+    prepareMockPages({});
+    const driver = await createWebDriver({
+      baseURL: 'http://localhost:8888',
+      browser: 'edge',
+    });
+    expect(driver._browserName).toBe('edge');
+    // Edge uses the Chromium engine with the msedge channel — Playwright
+    // doesn't have a separate edge BrowserType.
+    expect(playwright.chromium.launch).toHaveBeenCalledTimes(1);
+    const callOpts = playwright.chromium.launch.mock.calls[0][0];
+    expect(callOpts.channel).toBe('msedge');
+  });
+
+  test('browser="ie" → throws actionable error naming the supported set', async () => {
+    prepareMockPages({});
+    await expect(
+      createWebDriver({ baseURL: 'http://localhost:8888', browser: 'ie' }),
+    ).rejects.toThrow(/Unknown browser "ie"/);
+    await expect(
+      createWebDriver({ baseURL: 'http://localhost:8888', browser: 'ie' }),
+    ).rejects.toThrow(/chromium, firefox, webkit, edge/);
+  });
+
+  test('browser="mobile-chrome" → throws with hint that mobile browsers ship via separate drivers', async () => {
+    prepareMockPages({});
+    await expect(
+      createWebDriver({ baseURL: 'http://localhost:8888', browser: 'mobile-chrome' }),
+    ).rejects.toThrow(/mobile-chrome-cdp-driver/);
+  });
+
+  test('SUPPORTED_BROWSERS export matches the launcher registry', () => {
+    const { SUPPORTED_BROWSERS } = require(
+      path.join(REPO_ROOT, 'express-api/scripts/drivers/web-playwright-driver'),
+    );
+    expect(SUPPORTED_BROWSERS).toEqual(['chromium', 'firefox', 'webkit', 'edge']);
+  });
+
+  test('headless: false propagates to the browser launch', async () => {
+    prepareMockPages({});
+    await createWebDriver({
+      baseURL: 'http://localhost:8888',
+      browser: 'firefox',
+      headless: false,
+    });
+    const callOpts = playwright.firefox.launch.mock.calls[0][0];
+    expect(callOpts.headless).toBe(false);
   });
 });
 

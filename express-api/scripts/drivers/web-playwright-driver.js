@@ -162,9 +162,32 @@ function listMethods() {
  * created lazily inside `pageFor(name)` so multi-actor scenarios
  * (j16 event host with paired session) get isolated cookies/storage.
  */
-async function createWebDriver({ baseURL = 'http://localhost:8888', headless = true } = {}) {
-  const { chromium } = loadPlaywright();
-  const browser = await chromium.launch({ headless });
+// Per-browser launcher registry. Each entry returns the launched
+// Playwright Browser. Local-matrix test policy requires support for
+// Chromium / WebKit (Safari engine) / Firefox / Edge. Edge uses the
+// Chromium engine with the `msedge` channel — Playwright doesn't have a
+// separate edge BrowserType.
+const BROWSER_LAUNCHERS = {
+  chromium: (pw, opts) => pw.chromium.launch(opts),
+  firefox: (pw, opts) => pw.firefox.launch(opts),
+  webkit: (pw, opts) => pw.webkit.launch(opts),
+  edge: (pw, opts) => pw.chromium.launch({ ...opts, channel: 'msedge' }),
+};
+
+const SUPPORTED_BROWSERS = Object.keys(BROWSER_LAUNCHERS);
+
+async function createWebDriver({
+  baseURL = 'http://localhost:8888',
+  headless = true,
+  browser: browserName = 'chromium',
+} = {}) {
+  if (!BROWSER_LAUNCHERS[browserName]) {
+    throw new Error(
+      `Unknown browser "${browserName}" — supported: ${SUPPORTED_BROWSERS.join(', ')}. Mobile-browser variants (Mobile Chrome / Mobile Safari / Samsung Internet / Mobile Firefox / Mobile Edge / Chrome iOS / Firefox iOS / Edge iOS) ship via separate drivers (mobile-chrome-cdp-driver.js, appium-ios-webview-driver.js, etc.) — not this one.`,
+    );
+  }
+  const pw = loadPlaywright();
+  const browser = await BROWSER_LAUNCHERS[browserName](pw, { headless });
   const pages = new Map(); // persona name → Page
 
   async function pageFor(name) {
@@ -175,7 +198,7 @@ async function createWebDriver({ baseURL = 'http://localhost:8888', headless = t
     return page;
   }
 
-  const driver = { _browser: browser, _pages: pages, pageFor };
+  const driver = { _browser: browser, _browserName: browserName, _pages: pages, pageFor };
 
   // Wire every known method as a stub returning false + logging.
   for (const methodName of listMethods()) {
@@ -431,4 +454,9 @@ async function createWebDriver({ baseURL = 'http://localhost:8888', headless = t
   return driver;
 }
 
-module.exports = { createWebDriver, listMethods, WEB_METHOD_NAMES };
+module.exports = {
+  createWebDriver,
+  listMethods,
+  WEB_METHOD_NAMES,
+  SUPPORTED_BROWSERS,
+};

@@ -15442,12 +15442,33 @@ async function main() {
     else if (flat[i] === '--journey') opts.journey = flat[++i];
     else if (flat[i] === '--cycle') opts.cycle = parseInt(flat[++i], 10);
     else if (flat[i] === '--driver') opts.driver = flat[++i];
+    else if (flat[i] === '--browser') opts.browser = flat[++i];
     else if (flat[i] === '--headed') opts.headed = true;
   }
   opts.target = opts.target || 'dev';
   opts.planDir = opts.planDir || path.resolve(__dirname, '../../journey-tests');
   opts.cycle = opts.cycle || 1;
   opts.driver = opts.driver || 'stub';
+  // --browser selects the Playwright BrowserType for the web driver.
+  // Local matrix covers chromium / firefox / webkit / edge; the runner's
+  // dispatch loop iterates these on --target local (separate PR wires
+  // the loop). Default is chromium for backward-compat with the
+  // single-browser dispatches that pre-date the matrix work.
+  opts.browser = opts.browser || 'chromium';
+  // Per-target browser allowlist: dev runs Chrome only; local runs the
+  // full matrix; prod is read-only and pins to chromium.
+  const TARGET_BROWSER_ALLOWLIST = {
+    local: ['chromium', 'firefox', 'webkit', 'edge'],
+    dev: ['chromium'],
+    prod: ['chromium'],
+  };
+  const allowed = TARGET_BROWSER_ALLOWLIST[opts.target] || [];
+  if (!allowed.includes(opts.browser)) {
+    console.error(
+      `--browser "${opts.browser}" is not allowed for --target "${opts.target}" — allowed: ${allowed.join(', ')}. The local matrix (full browser coverage) only applies to --target local; dev + prod stay Chromium-only by policy.`,
+    );
+    process.exit(2);
+  }
 
   if (!TARGETS[opts.target]) {
     console.error(`Unknown target: ${opts.target}. Valid: ${Object.keys(TARGETS).join(', ')}`);
@@ -15498,6 +15519,7 @@ async function main() {
     webDriver = await createWebDriver({
       baseURL: TARGETS[opts.target].webBase || 'http://localhost:8888',
       headless: !opts.headed,
+      browser: opts.browser,
     });
     const prevCleanup = driverCleanup;
     driverCleanup = async () => {
