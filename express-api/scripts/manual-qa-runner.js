@@ -15457,12 +15457,12 @@ async function main() {
   opts.browser = opts.browser || 'chromium';
   // Per-target browser allowlist: dev runs Chrome only; local runs the
   // full matrix; prod is read-only and pins to chromium.
-  const TARGET_BROWSER_ALLOWLIST = {
-    local: ['chromium', 'firefox', 'webkit', 'edge'],
-    dev: ['chromium'],
-    prod: ['chromium'],
-  };
-  const allowed = TARGET_BROWSER_ALLOWLIST[opts.target] || [];
+  // Per-target browser allowlist lives in ./browser-allowlist.js so unit
+  // tests can pin the matrix without subprocessing the runner. See that
+  // module for the policy rationale (local = full matrix, dev =
+  // chrome-on-Mac + chrome-on-Android, prod = chromium-only).
+  const { allowedBrowsersFor } = require('./browser-allowlist');
+  const allowed = allowedBrowsersFor(opts.target);
   if (!allowed.includes(opts.browser)) {
     console.error(
       `--browser "${opts.browser}" is not allowed for --target "${opts.target}" — allowed: ${allowed.join(', ')}. The local matrix (full browser coverage) only applies to --target local; dev + prod stay Chromium-only by policy.`,
@@ -15515,12 +15515,28 @@ async function main() {
   const testerDriver = null;
   let driverCleanup = async () => {};
   if (opts.driver === 'playwright' || opts.driver === 'all') {
-    const { createWebDriver } = require('./drivers/web-playwright-driver');
-    webDriver = await createWebDriver({
-      baseURL: TARGETS[opts.target].webBase || 'http://localhost:8888',
-      headless: !opts.headed,
-      browser: opts.browser,
-    });
+    // Driver factory routing inside the playwright/all bucket:
+    //   - desktop browsers (chromium/firefox/webkit/edge) → Playwright
+    //     direct launch via web-playwright-driver.js
+    //   - mobile-chrome-android → CDP-over-adb to the real Chrome on
+    //     the connected Android device via web-mobile-chrome-android-driver.js
+    // The runner's matcher surface is the same — both drivers expose the
+    // ctx.webDriver method namespace, so scenarios don't care which one
+    // is active.
+    const baseURL = TARGETS[opts.target].webBase || 'http://localhost:8888';
+    if (opts.browser === 'mobile-chrome-android') {
+      const {
+        createMobileChromeAndroidDriver,
+      } = require('./drivers/web-mobile-chrome-android-driver');
+      webDriver = await createMobileChromeAndroidDriver({ baseURL });
+    } else {
+      const { createWebDriver } = require('./drivers/web-playwright-driver');
+      webDriver = await createWebDriver({
+        baseURL,
+        headless: !opts.headed,
+        browser: opts.browser,
+      });
+    }
     const prevCleanup = driverCleanup;
     driverCleanup = async () => {
       await prevCleanup();
