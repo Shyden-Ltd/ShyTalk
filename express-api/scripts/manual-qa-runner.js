@@ -15534,6 +15534,9 @@ async function main() {
         createMobileSamsungAndroidDriver,
       } = require('./drivers/web-mobile-samsung-android-driver');
       webDriver = await createMobileSamsungAndroidDriver({ baseURL });
+    } else if (opts.browser === 'mobile-edge-android') {
+      const { createMobileEdgeAndroidDriver } = require('./drivers/web-mobile-edge-android-driver');
+      webDriver = await createMobileEdgeAndroidDriver({ baseURL });
     } else {
       const { createWebDriver } = require('./drivers/web-playwright-driver');
       webDriver = await createWebDriver({
