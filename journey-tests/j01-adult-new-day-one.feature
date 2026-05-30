@@ -108,7 +108,8 @@ Feature: j01 — Adam's first day
 
   @blocker @android-emulator
   Scenario: Adam sends his first gift to Alice — coins debit, beans credit, both transactions + gift wall entry
-    Given Adam has shyCoins >= 10 after daily reward + a +100 admin top-up
+    Given Adam is verified adult with adult features unlocked
+    Given Adam has user doc with shyCoins=200
     When Adam on Android opens the "wallet" screen
     When Adam on Android taps "wallet_sendGiftButton"
     When Adam on Android selects gift "rose" and recipient "Alice"

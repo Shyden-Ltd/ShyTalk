@@ -54,7 +54,7 @@ Feature: j05 — Alice's monetization day
 
   @blocker @browser-chromium
   Scenario: Alice sends a crown to Selma — atomic coins-to-beans transfer with both transactions
-    Given Alice has shyCoins=5700 after gacha pulls
+    Given Alice has shyCoins=5700
     When Alice on Web opens "/wallet#send-gift"
     When Alice on Web selects recipient "Selma" and gift "crown"
     When Alice on Web taps "sendGift_confirmButton"
@@ -95,6 +95,6 @@ Feature: j05 — Alice's monetization day
   @android-physical
   Scenario: Alice on a 2nd device sees coins update in real-time
     Given Alice is signed in on Web Chromium AND on Android physical with the same Firebase user
-    Given Alice has shyCoins=5000 on both
+    Given Alice has shyCoins=5000
     When Alice on Web purchases "coins-1000" with sandbox receipt
     Then within 3000ms Alice's Android UI shows "6,000" next to the ShyCoins icon (real-time Firestore listener)

@@ -1329,6 +1329,67 @@ describe('Firestore bulk-query matcher (entries-matching)', () => {
   });
 });
 
+describe('ensureRoomForHost — exposes roomId as a {roomId} interpolation variable', () => {
+  // The runner's interpolateScenarioVars at line ~13693 substitutes
+  // {name} from ctx.scenarioVars. Setup-Given handlers (e.g. "Theo's
+  // public room is OPEN") that create a room need to register the
+  // generated roomId so later Then-steps like `rooms/{roomId}/...`
+  // resolve to the actual doc path. Pinned by 2 of j09's findings
+  // ("document rooms/{roomId} does not exist") on the 2026-05-29
+  // dispatch.
+
+  test('ensureRoom Given sets ctx.scenarioVars.get("roomId") to the seeded room id', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Theo\'s public room "Theo\'s Test Room" is OPEN' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.scenarioVars.get('roomId')).toBeTruthy();
+    // The roomId is the slug derived from the title.
+    expect(ctx.scenarioVars.get('roomId')).toMatch(/theo-s-test-room/);
+  });
+
+  test('subsequent step text interpolates {roomId} to the actual room id', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    // Phase 1: seed the room.
+    await executeStep(
+      { kind: 'Given', text: 'Theo\'s public room "Theo\'s Test Room" is OPEN' },
+      ctx,
+    );
+    const seededRoomId = ctx.scenarioVars.get('roomId');
+    // Phase 2: a later Then with `{roomId}` in the path should match the
+    // doc the prior Given wrote (not look up a literal `rooms/{roomId}`
+    // that doesn't exist).
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the database has document "rooms/{roomId}" with field "title" equal to "Theo\'s Test Room"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // Sanity: the doc is at the substituted path, not the literal one.
+    expect(db._docs[`rooms/${seededRoomId}`]).toBeDefined();
+    expect(db._docs[`rooms/{roomId}`]).toBeUndefined();
+  });
+
+  test('Given without ctx.scenarioVars (legacy callers) is a no-op for interpolation, not a crash', async () => {
+    // Defensive: some callers/tests build ctx without scenarioVars.
+    // The handler must gate the scenarioVars.set behind a typeof check
+    // so it doesn't TypeError on `undefined.set` and crash the runner.
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db }); // no scenarioVars
+    const r = await executeStep(
+      { kind: 'Given', text: 'Theo\'s public room "Theo\'s Test Room" is OPEN' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+});
+
 describe('Firestore bulk-query end-to-end via runFeatureFile', () => {
   function fetchOk() {
     return jest.fn(async (url) => {
@@ -9950,6 +10011,923 @@ describe('Room-state setup Givens (j09 phase-scoped scenario setup)', () => {
     const r = await executeStep({ kind: 'Given', text: 'Theo\'s public room "x" is OPEN' }, ctx);
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+});
+
+// ─── Admin-moderation setup Givens (j04 phase-scoped scenarios) ─────
+describe('Admin-moderation setup Givens (j04 phase-scoped scenario setup)', () => {
+  const { personas: PERSONAS } = require('../../scripts/provision-test-personas');
+  const hayato = PERSONAS.find((p) => p.id === 'P-06');
+  const greta = PERSONAS.find((p) => p.id === 'P-12');
+
+  test('"<admin> has reviewed <persona>\'s age-verification submission" — idempotent submission seed + ctx tracking', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: "Greta has reviewed Hayato's age-verification submission" },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.reviewedSubmissions.has('Hayato')).toBe(true);
+    // Pending submission exists (idempotent — re-running the Given doesn't duplicate).
+    const subs = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith('ageVerificationSubmissions/'),
+    );
+    expect(subs).toHaveLength(1);
+  });
+
+  test('"<persona> has been downgraded to cohort=minor by <admin>" — flips cohort + writes audit row', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${hayato.uniqueId}`]: { cohort: 'adult', shyCoins: 100, followingIds: [50000010] },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Hayato has been downgraded to cohort=minor by Greta' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${hayato.uniqueId}`].cohort).toBe('minor');
+    expect(db._docs[`users/${hayato.uniqueId}`].isAgeVerified).toBe(false);
+    // shyCoins + followingIds preserved (merge: true)
+    expect(db._docs[`users/${hayato.uniqueId}`].shyCoins).toBe(100);
+    expect(db._docs[`users/${hayato.uniqueId}`].followingIds).toEqual([50000010]);
+    // Audit row written — String-coerced targetId/adminId per production
+    // wire format.
+    const audits = Object.entries(db._docs).filter(([k]) => k.startsWith('auditLog/'));
+    expect(audits).toHaveLength(1);
+    const [, audit] = audits[0];
+    expect(audit.action).toBe('age_verification.reject_and_dob_down');
+    expect(audit.targetId).toBe(String(hayato.uniqueId));
+    expect(audit.adminId).toBe(String(greta.uniqueId));
+  });
+
+  test('"<persona> has been downgraded to cohort=minor and has the Officia age-down PM" — composes downgrade + PM', async () => {
+    const db = makeStatefulFakeDb({ [`users/${hayato.uniqueId}`]: { cohort: 'adult' } });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'Hayato has been downgraded to cohort=minor and has the Officia age-down PM in his inbox',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${hayato.uniqueId}`].cohort).toBe('minor');
+    // Conversation between Officia (uniqueId 1) and Hayato — String-coerced
+    // per the production wire format.
+    const convs = Object.entries(db._docs).filter(([k]) => k.startsWith('conversations/'));
+    expect(convs).toHaveLength(1);
+    const [, conv] = convs[0];
+    expect(conv.participantIds).toEqual([String(1), String(hayato.uniqueId)]);
+    // Message from Officia with the age_seg_age_down_admin_pm key
+    const msgs = Object.entries(db._docs).filter(([k]) => k.startsWith('messages/'));
+    expect(msgs).toHaveLength(1);
+    const [, msg] = msgs[0];
+    expect(msg.senderId).toBe(String(1));
+    expect(msg.recipientId).toBe(String(hayato.uniqueId));
+    expect(msg.key).toBe('age_seg_age_down_admin_pm');
+  });
+
+  test('"<persona> has been downgraded... with followingIds still containing <ids>" — seeds + preserves followingIds', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'Hayato has been downgraded to cohort=minor with followingIds still containing 50000010 + 50000060',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${hayato.uniqueId}`].followingIds).toEqual([50000010, 50000060]);
+    expect(db._docs[`users/${hayato.uniqueId}`].cohort).toBe('minor');
+  });
+
+  test('"<persona> has been downgraded... with his pre-downgrade shyCoins=<N>" — preserves coins after downgrade', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'Hayato has been downgraded to cohort=minor with his pre-downgrade shyCoins=100',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${hayato.uniqueId}`].shyCoins).toBe(100);
+    expect(db._docs[`users/${hayato.uniqueId}`].cohort).toBe('minor');
+  });
+
+  test('unknown persona → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Zonk has been downgraded to cohort=minor by Greta' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('ctx.db missing → actionable error, not crash', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Given', text: 'Hayato has been downgraded to cohort=minor by Greta' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+});
+
+describe('Monetization setup Givens (j05 phase-scoped scenario setup)', () => {
+  const { personas: PERSONAS } = require('../../scripts/provision-test-personas');
+  const alice = PERSONAS.find((p) => p.id === 'P-02');
+  const selma = PERSONAS.find((p) => p.id === 'P-15');
+
+  test('"<persona> has just purchased <package> and has shyCoins=<N>" — writes PURCHASE transaction + sets coins', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${alice.uniqueId}`]: { shyCoins: 5000 },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice has just purchased coins-1000 and has shyCoins=6000' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${alice.uniqueId}`].shyCoins).toBe(6000);
+    // PURCHASE transaction row with productId + delta
+    const txns = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith(`users/${alice.uniqueId}/transactions/`),
+    );
+    expect(txns).toHaveLength(1);
+    const [, txn] = txns[0];
+    expect(txn.type).toBe('PURCHASE');
+    expect(txn.amount).toBe(1000);
+    expect(txn.productId).toBe('coins-1000');
+  });
+
+  test('"<persona> has just sent <recipient> a <gift>" — debits sender, credits recipient, writes both transactions + gift wall', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${alice.uniqueId}`]: { shyCoins: 5700 },
+      [`users/${selma.uniqueId}`]: { beans: 10000 },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Alice has just sent Selma a crown' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${alice.uniqueId}`].shyCoins).toBe(5200);
+    expect(db._docs[`users/${selma.uniqueId}`].beans).toBe(10250);
+    // Sender's GIFT_SENT transaction
+    const senderTxns = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith(`users/${alice.uniqueId}/transactions/`),
+    );
+    expect(senderTxns).toHaveLength(1);
+    const [, sentTxn] = senderTxns[0];
+    expect(sentTxn.type).toBe('GIFT_SENT');
+    expect(sentTxn.amount).toBe(-500);
+    expect(sentTxn.giftId).toBe('crown');
+    expect(sentTxn.recipientId).toBe(String(selma.uniqueId));
+    // Recipient's GIFT_RECEIVED transaction
+    const recipTxns = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith(`users/${selma.uniqueId}/transactions/`),
+    );
+    expect(recipTxns).toHaveLength(1);
+    const [, recvTxn] = recipTxns[0];
+    expect(recvTxn.type).toBe('GIFT_RECEIVED');
+    expect(recvTxn.amount).toBe(250);
+    expect(recvTxn.senderId).toBe(String(alice.uniqueId));
+    // Gift wall entry for recipient
+    const wallEntries = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith(`giftWalls/${selma.uniqueId}/gifts/`),
+    );
+    expect(wallEntries).toHaveLength(1);
+    const [, wallEntry] = wallEntries[0];
+    expect(wallEntry.giftId).toBe('crown');
+    expect(wallEntry.senderId).toBe(String(alice.uniqueId));
+  });
+
+  test('gift-send rose (cheapest) — uses correct cost/award (10 coins → 5 beans)', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${alice.uniqueId}`]: { shyCoins: 100 },
+      [`users/${selma.uniqueId}`]: { beans: 0 },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Alice has just sent Selma a rose' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${alice.uniqueId}`].shyCoins).toBe(90);
+    expect(db._docs[`users/${selma.uniqueId}`].beans).toBe(5);
+  });
+
+  test('gift-send diamond (priciest) — uses correct cost/award (1000 coins → 500 beans)', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${alice.uniqueId}`]: { shyCoins: 2000 },
+      [`users/${selma.uniqueId}`]: { beans: 0 },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice has just sent Selma a diamond' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${alice.uniqueId}`].shyCoins).toBe(1000);
+    expect(db._docs[`users/${selma.uniqueId}`].beans).toBe(500);
+  });
+
+  test('purchase with unknown packageId → coinDelta derived from finalShyCoins - prior', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${alice.uniqueId}`]: { shyCoins: 5000 },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      // No trailing number suffix → fallback to finalShyCoins - prior
+      { kind: 'Given', text: 'Alice has just purchased starter-pack and has shyCoins=5500' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${alice.uniqueId}`].shyCoins).toBe(5500);
+    const txns = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith(`users/${alice.uniqueId}/transactions/`),
+    );
+    expect(txns).toHaveLength(1);
+    const [, txn] = txns[0];
+    // Bare packageId has trailing digits in `pack` part? Let's verify the
+    // regex behaves: /-(\d+)$/ on "starter-pack" → no match, falls back.
+    // (Note: a packageId like "starter-1" WOULD match -1$. That's accepted
+    // behaviour — packageIds in the corpus all use coins-<N> form.)
+    expect(txn.productId).toBe('starter-pack');
+    expect(txn.amount).toBe(500);
+  });
+
+  test('purchase with unknown persona → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Zonk has just purchased coins-1000 and has shyCoins=6000' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('gift-send with unknown recipient → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Alice has just sent Zonk a crown' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/recipient "Zonk" not in registry/);
+  });
+
+  test('purchase: ctx.db missing → actionable error, not crash', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice has just purchased coins-1000 and has shyCoins=6000' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db.*not initialised/);
+  });
+
+  test('gift-send: ctx.db missing → actionable error, not crash', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Given', text: 'Alice has just sent Selma a crown' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db.*not initialised/);
+  });
+
+  test('"<persona> has shyCoins=<N>" (existing assignment matcher, j05 line 88) — sets coins via merge', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${alice.uniqueId}`]: { shyCoins: 9999, beans: 2000 },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Alice has shyCoins=5000' }, ctx);
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${alice.uniqueId}`].shyCoins).toBe(5000);
+    // Sibling fields preserved via merge
+    expect(db._docs[`users/${alice.uniqueId}`].beans).toBe(2000);
+  });
+});
+
+// ─── Adam's first-day setup Givens (j01 phase-scoped scenarios) ─────
+describe("Adam's first-day setup Givens (j01 phase-scoped scenario setup)", () => {
+  // Adam is an EPHEMERAL persona (P-01 in EPHEMERAL_PERSONAS,
+  // uniqueId 90000001). loadPersonas() merges ephemerals so the
+  // matcher resolves persona via `personas.get('Adam')`.
+  const ADAM_UNIQUE_ID = 90000001;
+  const greta = require('../../scripts/provision-test-personas').personas.find(
+    (p) => p.id === 'P-12',
+  );
+
+  test('"<persona> has just signed up with a minor-default cohort" — seeds users/<uniqueId> with cohort=minor + isAgeVerified=false', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has just signed up with a minor-default cohort' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const user = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(user).toBeDefined();
+    expect(user.cohort).toBe('minor');
+    expect(user.isAgeVerified).toBe(false);
+    expect(user.uniqueId).toBe(ADAM_UNIQUE_ID);
+    // {newUniqueId} interpolation variable is set for downstream
+    // assertions referencing users/{newUniqueId}.
+    expect(ctx.scenarioVars.get('newUniqueId')).toBe(String(ADAM_UNIQUE_ID));
+  });
+
+  test('"<persona> has accepted legal as a minor-default user" — composes signup + accepted-policies', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has accepted legal as a minor-default user' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // User-doc seeded with minor default
+    const user = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(user.cohort).toBe('minor');
+    // usersAcceptedPolicies entry written with current versions
+    const policies = db._docs[`usersAcceptedPolicies/${ADAM_UNIQUE_ID}`];
+    expect(policies).toBeDefined();
+    expect(policies.privacyVersion).toBeGreaterThan(0);
+    expect(policies.termsVersion).toBeGreaterThan(0);
+  });
+
+  test('"<persona> has just been approved to cohort=adult by <admin>" — flips cohort + writes audit row', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has just been approved to cohort=adult by Greta' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // User flipped
+    const user = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(user.cohort).toBe('adult');
+    expect(user.isAgeVerified).toBe(true);
+    // Audit row written with String-coerced ids per production convention
+    const audits = Object.entries(db._docs).filter(([k]) => k.startsWith('auditLog/'));
+    expect(audits).toHaveLength(1);
+    const [, audit] = audits[0];
+    expect(audit.action).toBe('age_verification.approve');
+    expect(audit.targetId).toBe(String(ADAM_UNIQUE_ID));
+    expect(audit.adminId).toBe(String(greta.uniqueId));
+  });
+
+  test('"<persona> is verified adult with adult features unlocked" — full final state, NO audit (used as compose precondition)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam is verified adult with adult features unlocked' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const user = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(user.cohort).toBe('adult');
+    expect(user.isAgeVerified).toBe(true);
+    // Policies accepted
+    expect(db._docs[`usersAcceptedPolicies/${ADAM_UNIQUE_ID}`]).toBeDefined();
+    // No audit row — this Given is the COMPOSE form (precondition for
+    // a later scenario that doesn't care about the audit).
+    const audits = Object.entries(db._docs).filter(([k]) => k.startsWith('auditLog/'));
+    expect(audits).toHaveLength(0);
+  });
+
+  test('unknown persona → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Zonk has just signed up with a minor-default cohort' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('ctx.db missing → actionable error, not crash', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has just signed up with a minor-default cohort' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+});
+
+// ─── j07 follow + conversation setup Givens (phase-scoped scenarios) ─────
+describe('j07 follow + conversation setup Givens (Adam discovery → PM)', () => {
+  const { personas: PERSONAS } = require('../../scripts/provision-test-personas');
+  const alice = PERSONAS.find((p) => p.id === 'P-02');
+  const ADAM_UNIQUE_ID = 90000001; // ephemeral P-01
+
+  test('"<persona> is following <other>" — adds follower→followee + mirror in followerIds', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Adam is following Alice' }, ctx);
+    expect(r.ok).toBe(true);
+    // Follower's followingIds contains followee's uniqueId
+    const adam = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(adam).toBeDefined();
+    expect(adam.followingIds).toContain(alice.uniqueId);
+    // Mirror: followee's followerIds contains follower's uniqueId
+    const aliceDoc = db._docs[`users/${alice.uniqueId}`];
+    expect(aliceDoc).toBeDefined();
+    expect(aliceDoc.followerIds).toContain(ADAM_UNIQUE_ID);
+  });
+
+  test('"<persona> is following <other>" — idempotent (re-running dedups, no duplicate ids)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    await executeStep({ kind: 'Given', text: 'Adam is following Alice' }, ctx);
+    await executeStep({ kind: 'Given', text: 'Adam is following Alice' }, ctx);
+    const adam = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(adam.followingIds.filter((id) => id === alice.uniqueId)).toHaveLength(1);
+    const aliceDoc = db._docs[`users/${alice.uniqueId}`];
+    expect(aliceDoc.followerIds.filter((id) => id === ADAM_UNIQUE_ID)).toHaveLength(1);
+  });
+
+  test('"<persona> is following <other>" — preserves pre-existing followingIds entries', async () => {
+    // Pre-seed Adam with a follow on Marcus (P-04, uniqueId 60000010).
+    const MARCUS_UNIQUE_ID = 60000010;
+    const db = makeStatefulFakeDb({
+      [`users/${ADAM_UNIQUE_ID}`]: { followingIds: [MARCUS_UNIQUE_ID] },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Adam is following Alice' }, ctx);
+    expect(r.ok).toBe(true);
+    const adam = db._docs[`users/${ADAM_UNIQUE_ID}`];
+    expect(adam.followingIds).toContain(MARCUS_UNIQUE_ID);
+    expect(adam.followingIds).toContain(alice.uniqueId);
+  });
+
+  test('"<persona> is following <other>" — unknown follower → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Zonk is following Alice' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/follower "Zonk" not in registry/);
+  });
+
+  test('"<persona> is following <other>" — unknown followee → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Adam is following Zonk' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/followee "Zonk" not in registry/);
+  });
+
+  test('"<persona> is following <other>" — ctx.db missing → actionable error', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Given', text: 'Adam is following Alice' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+
+  test('"<persona> has an open DIRECT conversation thread with <other>" — writes conversations/<sorted-pair>', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Alice' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // Conversation id is deterministic — sorted-pair of String-coerced uniqueIds
+    const ids = [String(ADAM_UNIQUE_ID), String(alice.uniqueId)].sort();
+    const convId = `direct-${ids[0]}-${ids[1]}`;
+    const conv = db._docs[`conversations/${convId}`];
+    expect(conv).toBeDefined();
+    expect(conv.type).toBe('DIRECT');
+    expect(conv.participantIds).toEqual(ids);
+    expect(conv.createdAt).toBeGreaterThan(0);
+  });
+
+  test('"<persona> has an open DIRECT conversation thread with <other>" — idempotent (re-running overwrites same doc-id, no duplicate)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Alice' },
+      ctx,
+    );
+    await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Alice' },
+      ctx,
+    );
+    const convs = Object.entries(db._docs).filter(([k]) => k.startsWith('conversations/'));
+    expect(convs).toHaveLength(1);
+  });
+
+  test('"<persona> has an open DIRECT conversation thread with <other>" — order-invariant doc-id (Alice → Adam = Adam → Alice)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r1 = await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Alice' },
+      ctx,
+    );
+    expect(r1.ok).toBe(true);
+    const r2 = await executeStep(
+      { kind: 'Given', text: 'Alice has an open DIRECT conversation thread with Adam' },
+      ctx,
+    );
+    expect(r2.ok).toBe(true);
+    // Still 1 conversation — sorted-pair doc-id is bidirectional
+    const convs = Object.entries(db._docs).filter(([k]) => k.startsWith('conversations/'));
+    expect(convs).toHaveLength(1);
+  });
+
+  test('"<persona> has an open DIRECT conversation thread with <other>" — unknown persona → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Zonk' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('"<persona> has an open DIRECT conversation thread with <other>" — ctx.db missing → actionable error', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has an open DIRECT conversation thread with Alice' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+});
+
+// ─── Mia's restricted-minor setup Givens (j02 phase-scoped scenarios) ─────
+describe("Mia's restricted-minor setup Givens (j02 phase-scoped scenario setup)", () => {
+  // Mia is an EPHEMERAL persona (P-03 in EPHEMERAL_PERSONAS, uniqueId
+  // 90000003). loadPersonas() merges ephemerals so the matcher resolves
+  // persona via `personas.get('Mia')`. Distinct from Adam (P-01) — Mia
+  // exists to exercise the minor-cohort restrictions specifically.
+  const MIA_UNIQUE_ID = 90000003;
+
+  test('"<persona> has just signed up as a minor" — seeds users/<uniqueId> with cohort=minor + isAgeVerified=false', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Mia has just signed up as a minor' }, ctx);
+    expect(r.ok).toBe(true);
+    const user = db._docs[`users/${MIA_UNIQUE_ID}`];
+    expect(user).toBeDefined();
+    expect(user.cohort).toBe('minor');
+    expect(user.isAgeVerified).toBe(false);
+    expect(user.uniqueId).toBe(MIA_UNIQUE_ID);
+    // {newUniqueId} interpolation variable seeded for downstream
+    // assertions referencing users/{newUniqueId}.
+    expect(ctx.scenarioVars.get('newUniqueId')).toBe(String(MIA_UNIQUE_ID));
+  });
+
+  test('"<persona> has accepted legal as a minor" — composes signup-as-minor + accepted-policies', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Mia has accepted legal as a minor' }, ctx);
+    expect(r.ok).toBe(true);
+    // User-doc seeded with minor cohort (NOT flipped to adult — distinct
+    // from the j01 case where Adam later flips to adult).
+    const user = db._docs[`users/${MIA_UNIQUE_ID}`];
+    expect(user.cohort).toBe('minor');
+    expect(user.isAgeVerified).toBe(false);
+    // usersAcceptedPolicies entry written with current versions.
+    const policies = db._docs[`usersAcceptedPolicies/${MIA_UNIQUE_ID}`];
+    expect(policies).toBeDefined();
+    expect(policies.privacyVersion).toBeGreaterThan(0);
+    expect(policies.termsVersion).toBeGreaterThan(0);
+  });
+
+  test('"<persona> has just signed up as a minor" — unknown persona → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Zonk has just signed up as a minor' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('"<persona> has accepted legal as a minor" — unknown persona → actionable error', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep({ kind: 'Given', text: 'Zonk has accepted legal as a minor' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('"<persona> has just signed up as a minor" — ctx.db missing → actionable error', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Given', text: 'Mia has just signed up as a minor' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+
+  test('"<persona> has accepted legal as a minor" — ctx.db missing → actionable error', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep({ kind: 'Given', text: 'Mia has accepted legal as a minor' }, ctx);
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db not initialised/);
+  });
+
+  test('"Mia has accepted legal as a minor" — re-running is idempotent (no duplicate policies row)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r1 = await executeStep({ kind: 'Given', text: 'Mia has accepted legal as a minor' }, ctx);
+    expect(r1.ok).toBe(true);
+    const r2 = await executeStep({ kind: 'Given', text: 'Mia has accepted legal as a minor' }, ctx);
+    expect(r2.ok).toBe(true);
+    // Only ONE usersAcceptedPolicies entry — re-running merges the same
+    // doc, doesn't create a duplicate.
+    const policies = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith('usersAcceptedPolicies/'),
+    );
+    expect(policies).toHaveLength(1);
+  });
+
+  test('Mia matcher does NOT collide with Adam matcher (j01) — different cohort phrasing routes correctly', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    // Adam's j01 phrasing should NOT match Mia's j02 phrasing matcher
+    // (it must hit the j01 pattern, not the j02 pattern, even though
+    // both end up calling seedSignedUpUser).
+    const ADAM_UNIQUE_ID = 90000001;
+    const r = await executeStep(
+      { kind: 'Given', text: 'Adam has just signed up with a minor-default cohort' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${ADAM_UNIQUE_ID}`]).toBeDefined();
+    expect(db._docs[`users/${MIA_UNIQUE_ID}`]).toBeUndefined();
+  });
+});
+
+// ─── j12 admin-queue setup Givens (queue-state phase-scoped scenarios) ─────
+describe('Admin-queue setup Givens (j12 phase-scoped scenarios)', () => {
+  test('"the age-verification queue has 5 pending submissions" — seeds 5 PENDING docs', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'the age-verification queue has 5 pending submissions' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const submissions = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith('ageVerificationSubmissions/'),
+    );
+    expect(submissions).toHaveLength(5);
+    // Each is PENDING
+    for (const [, doc] of submissions) {
+      expect(doc.status).toBe('PENDING');
+    }
+  });
+
+  test('"the reports queue has 3 pending reports" — seeds 3 PENDING reports', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'the reports queue has 3 pending reports' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const reports = Object.entries(db._docs).filter(([k]) => k.startsWith('reports/'));
+    expect(reports).toHaveLength(3);
+    for (const [, doc] of reports) {
+      expect(doc.status).toBe('PENDING');
+    }
+  });
+
+  test('"the suspension-appeals queue has 2 pending appeals" — seeds 2 PENDING appeals', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'the suspension-appeals queue has 2 pending appeals' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const appeals = Object.entries(db._docs).filter(([k]) => k.startsWith('suspensionAppeals/'));
+    expect(appeals).toHaveLength(2);
+    for (const [, doc] of appeals) {
+      expect(doc.status).toBe('PENDING');
+    }
+  });
+
+  test('queue-seed is idempotent (re-running gives the same count — deterministic doc-ids)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    await executeStep({ kind: 'Given', text: 'the reports queue has 3 pending reports' }, ctx);
+    await executeStep({ kind: 'Given', text: 'the reports queue has 3 pending reports' }, ctx);
+    const reports = Object.entries(db._docs).filter(([k]) => k.startsWith('reports/'));
+    // Still exactly 3 — deterministic `test-seed-<i>` ids overwrite cleanly
+    expect(reports).toHaveLength(3);
+  });
+
+  test('queue-seed accepts 0 count (empty queue setup)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'the reports queue has 0 pending reports' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const reports = Object.entries(db._docs).filter(([k]) => k.startsWith('reports/'));
+    expect(reports).toHaveLength(0);
+  });
+
+  test('unknown queue → silent skip (preserves backward-compat with bookkeeping-only scenarios)', async () => {
+    // Wake 95 is older than the QUEUE_REGISTRY seed primitive. Some
+    // scenarios use queue names that aren't registered (forward-looking
+    // names, hypothetical queues). The handler still records the
+    // ctx.adminQueues bookkeeping but skips the Firestore seed
+    // silently — preserving the prior MVP behaviour.
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'the unknown-queue queue has 5 pending things' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // ctx bookkeeping happened
+    expect(ctx.adminQueues['unknown-queue']).toEqual({ count: 5, noun: 'things' });
+    // Firestore got nothing seeded (no matching collection in registry)
+    const docs = Object.keys(db._docs);
+    expect(docs).toHaveLength(0);
+  });
+
+  test('ctx.db missing → still succeeds (bookkeeping-only, no Firestore seed)', async () => {
+    // Wake 95 predates ctx.db being required. To preserve backward
+    // compatibility, the handler should still set ctx.adminQueues even
+    // when ctx.db is missing — the seed step is best-effort.
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Given', text: 'the reports queue has 3 pending reports' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.adminQueues.reports).toEqual({ count: 3, noun: 'reports' });
+  });
+
+  test('large count (50) does not crash + writes correct number', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'the age-verification queue has 50 pending submissions' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const subs = Object.entries(db._docs).filter(([k]) =>
+      k.startsWith('ageVerificationSubmissions/'),
+    );
+    expect(subs).toHaveLength(50);
+  });
+});
+
+// ─── j10/j11 warning-state setup Givens (moderation phase-scoped scenarios) ─────
+describe('Warning-state setup Givens (j10 + j11 phase-scoped scenarios)', () => {
+  const { personas: PERSONAS } = require('../../scripts/provision-test-personas');
+  const raul = PERSONAS.find((p) => p.id === 'P-08');
+  const theo = PERSONAS.find((p) => p.id === 'P-10');
+
+  test('"<persona> has been issued a first-strike warning" — sets hasActiveWarning + warningCount=1 + acknowledged=false', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Raul has been issued a first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const u = db._docs[`users/${raul.uniqueId}`];
+    expect(u.hasActiveWarning).toBe(true);
+    expect(u.warningCount).toBe(1);
+    expect(u.warningAcknowledged).toBe(false);
+    expect(u.lastWarningAt).toBeGreaterThan(0);
+  });
+
+  test('"<persona> has acknowledged his first-strike warning" — composes issued + flips acknowledged=true', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Raul has acknowledged his first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const u = db._docs[`users/${raul.uniqueId}`];
+    expect(u.hasActiveWarning).toBe(true);
+    expect(u.warningCount).toBe(1);
+    expect(u.warningAcknowledged).toBe(true);
+    expect(u.lastWarningAt).toBeGreaterThan(0);
+  });
+
+  test('"<persona> has acknowledged her first-strike warning" — pronoun "her" form matches', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Nora has acknowledged her first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // Persona Nora is P-09 — fetch from registry
+    const nora = PERSONAS.find((p) => p.id === 'P-09');
+    expect(db._docs[`users/${nora.uniqueId}`].warningAcknowledged).toBe(true);
+  });
+
+  test('"<persona> has acknowledged their first-strike warning" — pronoun "their" form matches', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Raul has acknowledged their first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._docs[`users/${raul.uniqueId}`].warningAcknowledged).toBe(true);
+  });
+
+  test('multi-field assignment matcher (existing) handles "hasActiveWarning=true, warningReason=<quoted>" cleanly (j10 refactor)', async () => {
+    // j10 line 58 was originally "Theo has hasActiveWarning=true with
+    // reason \"...\"" — that collided with the (assignment matcher,
+    // wider scope at line ~1898) which greedily captured the trailing
+    // " with reason \"...\"" as part of the field value. Refactored to
+    // the comma form so the EXISTING multi-field matcher handles it.
+    // This test pins the new j10 phrasing's behaviour.
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      {
+        kind: 'Given',
+        text: 'Theo has hasActiveWarning=true, warningReason="Inappropriate language in voice room"',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const u = db._docs[`users/${theo.uniqueId}`];
+    expect(u.hasActiveWarning).toBe(true);
+    expect(u.warningReason).toBe('Inappropriate language in voice room');
+  });
+
+  test('issued + acknowledged: merge preserves pre-existing user-doc fields (shyCoins, beans)', async () => {
+    const db = makeStatefulFakeDb({
+      [`users/${raul.uniqueId}`]: { shyCoins: 500, beans: 200 },
+    });
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    await executeStep({ kind: 'Given', text: 'Raul has been issued a first-strike warning' }, ctx);
+    const u = db._docs[`users/${raul.uniqueId}`];
+    // Warning fields set
+    expect(u.hasActiveWarning).toBe(true);
+    // Pre-existing fields preserved via merge (the moderation flow doesn't
+    // touch economy state — see j11:71 "shyCoins=0 and beans=0 — irrelevant"
+    // comment in the feature file).
+    expect(u.shyCoins).toBe(500);
+    expect(u.beans).toBe(200);
+  });
+
+  test('"issued" + "acknowledged" — sequence flips acknowledged true with one final state', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    await executeStep({ kind: 'Given', text: 'Raul has been issued a first-strike warning' }, ctx);
+    const intermediate = db._docs[`users/${raul.uniqueId}`].warningAcknowledged;
+    expect(intermediate).toBe(false);
+    await executeStep(
+      { kind: 'Given', text: 'Raul has acknowledged his first-strike warning' },
+      ctx,
+    );
+    expect(db._docs[`users/${raul.uniqueId}`].warningAcknowledged).toBe(true);
+    // warningCount stays 1 (still a first strike), not incremented
+    expect(db._docs[`users/${raul.uniqueId}`].warningCount).toBe(1);
+  });
+
+  test('unknown persona → actionable error (issued)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Zonk has been issued a first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('unknown persona → actionable error (acknowledged)', async () => {
+    const db = makeStatefulFakeDb({});
+    const ctx = makeCtx({ db, scenarioVars: new Map() });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Zonk has acknowledged his first-strike warning' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/persona "Zonk" not in registry/);
+  });
+
+  test('ctx.db missing → actionable error (both warning matchers)', async () => {
+    const ctx = makeCtx();
+    const issuedR = await executeStep(
+      { kind: 'Given', text: 'Raul has been issued a first-strike warning' },
+      ctx,
+    );
+    expect(issuedR.ok).toBe(false);
+    expect(issuedR.error).toMatch(/ctx\.db not initialised/);
+    const ackR = await executeStep(
+      { kind: 'Given', text: 'Raul has acknowledged his first-strike warning' },
+      ctx,
+    );
+    expect(ackR.ok).toBe(false);
+    expect(ackR.error).toMatch(/ctx\.db not initialised/);
   });
 });
 

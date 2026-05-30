@@ -29,10 +29,20 @@ const path = require('path');
 let _playwright;
 function loadPlaywright() {
   if (_playwright) return _playwright;
-  // Resolve `playwright` from the repo root node_modules (not express-api/).
+  // Try bare specifier first so jest's mock-resolution applies in unit
+  // tests (jest.mock('playwright', ...) only intercepts the bare form,
+  // not absolute-path requires). Falls back to the repo-root path for
+  // production / dev runs from express-api where the bare specifier
+  // can't resolve (playwright lives in the repo-root node_modules, not
+  // express-api/node_modules).
+  try {
+    _playwright = require('playwright');
+    return _playwright;
+  } catch (bareErr) {
+    if (bareErr.code !== 'MODULE_NOT_FOUND') throw bareErr;
+  }
   const repoRoot = path.resolve(__dirname, '../../..');
   const playwrightPath = path.join(repoRoot, 'node_modules', 'playwright');
-
   _playwright = require(playwrightPath);
   return _playwright;
 }

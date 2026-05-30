@@ -366,6 +366,16 @@ async function ensureRoomForHost(ctx, hostName, opts = {}) {
   ctx.lastRoomId = roomId;
   ctx.roomsByHost = ctx.roomsByHost || {};
   ctx.roomsByHost[hostName] = roomId;
+  // Expose as a {roomId} interpolation variable so later Then-steps like
+  // `rooms/{roomId}/seats[1].userId` resolve to the actual doc path. The
+  // runner's interpolateScenarioVars (line ~13693) substitutes {name}
+  // from ctx.scenarioVars — without this set, `{roomId}` survives
+  // verbatim and matchers look up a literal `rooms/{roomId}` doc that
+  // doesn't exist. Pinned by 2 of j09's findings (manual-qa-cycle-1.md
+  // 2026-05-29 dispatch — "document rooms/{roomId} does not exist").
+  if (ctx.scenarioVars && typeof ctx.scenarioVars.set === 'function') {
+    ctx.scenarioVars.set('roomId', roomId);
+  }
   return { roomId, doc };
 }
 
@@ -470,6 +480,366 @@ async function ensureKickedFromRoom(ctx, roomId, personaName) {
     userId: persona.uniqueId,
     kickedAt: Date.now(),
   });
+}
+
+// ─── Admin-moderation setup primitives (consumed by j04's downgrade
+//     Givens + reusable by j10/j11/j12's admin scenarios). ──
+//
+// j04's phase-scoped scenarios establish prior phases via setup Givens
+// like "Hayato has been downgraded to cohort=minor by Greta" — the
+// runner needs to mutate Firestore (users.cohort, auditLog,
+// ageVerificationSubmissions, conversations + messages) to match what
+// the production admin route would have written.
+
+async function seedPendingAgeVerificationSubmission(ctx, personaName) {
+  // Mirrors the existing "submitted an ageVerificationSubmission" matcher
+  // at line ~2032 — same doc-id pattern + status-lowercased so a follow-on
+  // "reject_and_dob_down" assertion finds it. The `{subId}` interpolation
+  // variable is also set so feature predicates referencing
+  // `ageVerificationSubmissions/{subId}` resolve to the seeded doc.
+  const personas = loadPersonas();
+  const persona = personas.get(personaName);
+  if (!persona?.uniqueId) {
+    throw new Error(`persona "${personaName}" not in registry`);
+  }
+  const docPath = `ageVerificationSubmissions/test-${persona.uniqueId}-pending`;
+  await ctx.db.doc(docPath).set({
+    userId: String(persona.uniqueId),
+    status: 'pending',
+    submittedAt: Date.now(),
+  });
+  if (ctx.scenarioVars && typeof ctx.scenarioVars.set === 'function') {
+    ctx.scenarioVars.set('subId', `test-${persona.uniqueId}-pending`);
+  }
+  return { docPath };
+}
+
+async function applyAgeDowngrade(ctx, personaName, adminPersonaName) {
+  // Mirrors the production /api/admin/age-verification/reject_and_dob_down
+  // route's writes (per express-api/src/routes/admin-age-verification.js
+  // reject_and_dob_down handler):
+  //   1. users/<persona>.cohort = 'minor'
+  //   2. users/<persona>.isAgeVerified = false
+  //   3. auditLog/<auto> with action='age_verification.reject_and_dob_down',
+  //      targetId=<persona>.uniqueId, adminId=<admin>.uniqueId
+  // Preserves: shyCoins, followingIds (intentional — see j04 docstring).
+  const personas = loadPersonas();
+  const persona = personas.get(personaName);
+  const admin = personas.get(adminPersonaName);
+  if (!persona?.uniqueId) {
+    throw new Error(`persona "${personaName}" not in registry`);
+  }
+  if (!admin?.uniqueId) {
+    throw new Error(`admin persona "${adminPersonaName}" not in registry`);
+  }
+  // Read-modify-set so shyCoins / followingIds / etc. are preserved.
+  const userRef = ctx.db.doc(`users/${persona.uniqueId}`);
+  await userRef.set(
+    { cohort: 'minor', isAgeVerified: false, dateOfBirth: 1305158400000 },
+    { merge: true },
+  );
+  const auditDocId = `${persona.uniqueId}-downgrade-${Date.now()}`;
+  await ctx.db.doc(`auditLog/${auditDocId}`).set({
+    action: 'age_verification.reject_and_dob_down',
+    targetId: String(persona.uniqueId),
+    adminId: String(admin.uniqueId),
+    timestamp: Date.now(),
+  });
+  return { auditDocId };
+}
+
+async function applyGiftSend(ctx, senderName, recipientName, giftId) {
+  // Mirrors the production /api/economy/send-gift writes:
+  //   1. users/<sender>.shyCoins decreased by gift.coinCost
+  //   2. users/<recipient>.beans increased by gift.beanValue
+  //   3. users/<sender>/transactions/<auto> type=GIFT_SENT
+  //   4. users/<recipient>/transactions/<auto> type=GIFT_RECEIVED
+  //   5. giftWalls/<recipient>/gifts/<auto> with senderId + giftId
+  // Gift costs grounded in j05: rose=10/5, crown=500/250, diamond=1000/500.
+  const personas = loadPersonas();
+  const sender = personas.get(senderName);
+  const recipient = personas.get(recipientName);
+  if (!sender?.uniqueId) throw new Error(`sender "${senderName}" not in registry`);
+  if (!recipient?.uniqueId) throw new Error(`recipient "${recipientName}" not in registry`);
+  const giftCosts = { rose: [10, 5], crown: [500, 250], diamond: [1000, 500] };
+  const [coinCost, beanValue] = giftCosts[giftId] || [10, 5];
+  // Read-modify-set per existing convention (handles missing users
+  // gracefully — coins default to 0, but this is a Given so the test
+  // usually establishes coins first).
+  const senderRef = ctx.db.doc(`users/${sender.uniqueId}`);
+  const senderSnap = await senderRef.get();
+  const senderData = senderSnap.exists ? senderSnap.data() : {};
+  const senderCoins = Number(senderData.shyCoins) || 0;
+  await senderRef.set({ shyCoins: senderCoins - coinCost }, { merge: true });
+  const recipientRef = ctx.db.doc(`users/${recipient.uniqueId}`);
+  const recipientSnap = await recipientRef.get();
+  const recipientData = recipientSnap.exists ? recipientSnap.data() : {};
+  const recipientBeans = Number(recipientData.beans) || 0;
+  await recipientRef.set({ beans: recipientBeans + beanValue }, { merge: true });
+  const ts = Date.now();
+  await ctx.db.doc(`users/${sender.uniqueId}/transactions/gift-out-${ts}`).set({
+    type: 'GIFT_SENT',
+    amount: -coinCost,
+    giftId,
+    recipientId: String(recipient.uniqueId),
+    timestamp: ts,
+  });
+  await ctx.db.doc(`users/${recipient.uniqueId}/transactions/gift-in-${ts}`).set({
+    type: 'GIFT_RECEIVED',
+    amount: beanValue,
+    giftId,
+    senderId: String(sender.uniqueId),
+    timestamp: ts,
+  });
+  await ctx.db.doc(`giftWalls/${recipient.uniqueId}/gifts/${sender.uniqueId}-${giftId}-${ts}`).set({
+    giftId,
+    senderId: String(sender.uniqueId),
+    timestamp: ts,
+  });
+  return { coinCost, beanValue };
+}
+
+async function applyPurchase(ctx, personaName, packageId, finalShyCoins) {
+  // Mirrors the production /api/economy/purchase writes:
+  //   1. users/<persona>.shyCoins = finalShyCoins (the test fixes the
+  //      post-state explicitly, not via delta; this preserves intent
+  //      regardless of prior coin balance).
+  //   2. users/<persona>/transactions/<auto> type=PURCHASE with productId.
+  // We deliberately don't write a Stripe/IAP receipt sub-doc — receipt
+  // structure is platform-specific (Apple, Google, sandbox) and the
+  // setup-Given form abstracts over it. Downstream scenarios that need
+  // receipt-shape coverage seed it explicitly via a dedicated matcher.
+  const personas = loadPersonas();
+  const p = personas.get(personaName);
+  if (!p?.uniqueId) throw new Error(`persona "${personaName}" not in registry`);
+  // Coin delta is the trailing-digits suffix on the packageId — i.e.
+  // `coins-1000` → +1000. Falls back to (finalShyCoins - prior) if the
+  // packageId doesn't match, which preserves audit-trail accuracy when
+  // the test calls a non-standard packageId.
+  const pkgMatch = /-(\d+)$/.exec(packageId);
+  const userRef = ctx.db.doc(`users/${p.uniqueId}`);
+  const userSnap = await userRef.get();
+  const userData = userSnap.exists ? userSnap.data() : {};
+  const priorCoins = Number(userData.shyCoins) || 0;
+  const coinDelta = pkgMatch ? Number(pkgMatch[1]) : finalShyCoins - priorCoins;
+  await userRef.set({ shyCoins: finalShyCoins }, { merge: true });
+  const ts = Date.now();
+  await ctx.db.doc(`users/${p.uniqueId}/transactions/purchase-${ts}`).set({
+    type: 'PURCHASE',
+    amount: coinDelta,
+    productId: packageId,
+    timestamp: ts,
+  });
+  return { coinDelta };
+}
+
+async function seedSignedUpUser(ctx, personaName, opts = {}) {
+  // Mirrors a minor-default signup write: users/<uniqueId> with
+  // cohort='minor', isAgeVerified=false, displayName from registry.
+  // Caller can override cohort via opts.cohort (e.g. for j01's
+  // already-flipped-to-adult state).
+  const personas = loadPersonas();
+  const persona = personas.get(personaName);
+  if (!persona?.uniqueId) {
+    throw new Error(`persona "${personaName}" not in registry`);
+  }
+  const fields = {
+    uniqueId: persona.uniqueId,
+    cohort: opts.cohort || 'minor',
+    isAgeVerified: opts.isAgeVerified ?? false,
+    displayName: persona.displayName,
+    email: persona.email,
+    createdAt: Date.now(),
+    ...(opts.extraFields || {}),
+  };
+  await ctx.db.doc(`users/${persona.uniqueId}`).set(fields, { merge: true });
+  // Expose {newUniqueId} interpolation variable (j01 uses this in
+  // assertions like `database has document "users/{newUniqueId}"`).
+  if (ctx.scenarioVars && typeof ctx.scenarioVars.set === 'function') {
+    ctx.scenarioVars.set('newUniqueId', String(persona.uniqueId));
+  }
+  return { fields };
+}
+
+async function seedAcceptedPolicies(ctx, personaName, opts = {}) {
+  // Writes usersAcceptedPolicies/<uniqueId> with the current accepted
+  // privacy + terms versions. j01 uses this as the "Adam has accepted
+  // legal" precondition.
+  const personas = loadPersonas();
+  const persona = personas.get(personaName);
+  if (!persona?.uniqueId) {
+    throw new Error(`persona "${personaName}" not in registry`);
+  }
+  await ctx.db.doc(`usersAcceptedPolicies/${persona.uniqueId}`).set({
+    privacyVersion: opts.privacyVersion || 4,
+    termsVersion: opts.termsVersion || 4,
+    acceptedAt: Date.now(),
+  });
+  return { uniqueId: persona.uniqueId };
+}
+
+async function applyAgeVerificationApproval(ctx, personaName, adminPersonaName) {
+  // Mirrors the production /api/admin/age-verification/approve handler:
+  //   1. users/<persona>.cohort = 'adult' + isAgeVerified = true
+  //   2. auditLog/<auto> with action='age_verification.approve',
+  //      targetId=String(uniqueId), adminId=String(adminUniqueId)
+  const personas = loadPersonas();
+  const persona = personas.get(personaName);
+  const admin = personas.get(adminPersonaName);
+  if (!persona?.uniqueId) {
+    throw new Error(`persona "${personaName}" not in registry`);
+  }
+  if (!admin?.uniqueId) {
+    throw new Error(`admin persona "${adminPersonaName}" not in registry`);
+  }
+  await ctx.db
+    .doc(`users/${persona.uniqueId}`)
+    .set({ cohort: 'adult', isAgeVerified: true }, { merge: true });
+  const auditDocId = `${persona.uniqueId}-approve-${Date.now()}`;
+  await ctx.db.doc(`auditLog/${auditDocId}`).set({
+    action: 'age_verification.approve',
+    targetId: String(persona.uniqueId),
+    adminId: String(admin.uniqueId),
+    timestamp: Date.now(),
+  });
+  return { auditDocId };
+}
+
+async function seedAdminQueueEntries(ctx, queueId, count) {
+  // j12 admin-dashboard queue seeder. Writes N docs to the given
+  // queue collection so admin-dashboard scenarios can assert on
+  // queue-card counts (e.g. "5 pending age-verification submissions"
+  // → the queue card shows "5"). Each doc gets a deterministic
+  // `test-seed-<i>` id for idempotency — re-running overwrites the
+  // same docs, count stays N.
+  //
+  // QUEUE_REGISTRY maps the journey's queue-name to the production
+  // collection name + the canonical pending status string. Adding a
+  // new queue here is the only change needed to unlock its matcher;
+  // the matcher itself is queue-agnostic.
+  const QUEUE_REGISTRY = {
+    'age-verification': {
+      collection: 'ageVerificationSubmissions',
+      status: 'PENDING',
+    },
+    reports: {
+      collection: 'reports',
+      status: 'PENDING',
+    },
+    'suspension-appeals': {
+      collection: 'suspensionAppeals',
+      status: 'PENDING',
+    },
+  };
+  const entry = QUEUE_REGISTRY[queueId];
+  if (!entry) {
+    throw new Error(`unknown admin queue "${queueId}" — add to QUEUE_REGISTRY`);
+  }
+  for (let i = 0; i < count; i++) {
+    await ctx.db.doc(`${entry.collection}/test-seed-${i}`).set({
+      status: entry.status,
+      submittedAt: Date.now() + i,
+      // userId is a test placeholder — real flows have a backref,
+      // but for queue-count assertions the field value doesn't matter.
+      // Use a numeric range that doesn't collide with persona uniqueIds
+      // (50000010+) or ephemeral ones (90000001+).
+      userId: 10000 + i,
+    });
+  }
+  return { count, queueId };
+}
+
+async function applyFollow(ctx, followerName, followeeName) {
+  // Mirrors the production /api/users/follow writes:
+  //   1. users/<follower>.followingIds = unique-add(followee uniqueId)
+  //   2. users/<followee>.followerIds  = unique-add(follower uniqueId)
+  // No FieldValue.arrayUnion — read-modify-set preserves fake-db
+  // compatibility (jest stateful fake doesn't expand FieldValue sentinels).
+  // Idempotent: re-running the same follow is a no-op (set dedup).
+  // segregationEvents NOT written — that's only on cross-cohort BLOCK,
+  // which the existing routes/users-follow.js gates behind a cohort check.
+  // The Given form represents a SUCCESSFUL follow, so no audit row.
+  const personas = loadPersonas();
+  const follower = personas.get(followerName);
+  const followee = personas.get(followeeName);
+  if (!follower?.uniqueId) {
+    throw new Error(`follower "${followerName}" not in registry`);
+  }
+  if (!followee?.uniqueId) {
+    throw new Error(`followee "${followeeName}" not in registry`);
+  }
+  const followerRef = ctx.db.doc(`users/${follower.uniqueId}`);
+  const followerSnap = await followerRef.get();
+  const followerData = followerSnap.exists ? followerSnap.data() : {};
+  const followingIds = Array.from(
+    new Set([...(followerData.followingIds || []), followee.uniqueId]),
+  );
+  await followerRef.set({ followingIds }, { merge: true });
+  const followeeRef = ctx.db.doc(`users/${followee.uniqueId}`);
+  const followeeSnap = await followeeRef.get();
+  const followeeData = followeeSnap.exists ? followeeSnap.data() : {};
+  const followerIds = Array.from(new Set([...(followeeData.followerIds || []), follower.uniqueId]));
+  await followeeRef.set({ followerIds }, { merge: true });
+  return { followerUniqueId: follower.uniqueId, followeeUniqueId: followee.uniqueId };
+}
+
+async function seedDirectConversation(ctx, p1Name, p2Name) {
+  // Mirrors a successful /api/conversations create:
+  //   - conversations/<participantIds sorted-pair>: { type: 'DIRECT',
+  //     participantIds: [a, b] (sorted, String-coerced per wire format),
+  //     createdAt: now }
+  // Deterministic doc-id (sorted pair) makes the seed idempotent and lets
+  // downstream assertions look it up by participant lookup without needing
+  // a query for an auto-generated id. participantIds are stringified
+  // because the production routes (Express) call String(req.auth.uniqueId).
+  const personas = loadPersonas();
+  const p1 = personas.get(p1Name);
+  const p2 = personas.get(p2Name);
+  if (!p1?.uniqueId) throw new Error(`persona "${p1Name}" not in registry`);
+  if (!p2?.uniqueId) throw new Error(`persona "${p2Name}" not in registry`);
+  const ids = [String(p1.uniqueId), String(p2.uniqueId)].sort();
+  const convId = `direct-${ids[0]}-${ids[1]}`;
+  await ctx.db.doc(`conversations/${convId}`).set({
+    type: 'DIRECT',
+    participantIds: ids,
+    createdAt: Date.now(),
+  });
+  return { conversationId: convId };
+}
+
+async function seedSystemPmFromOfficia(ctx, recipientPersonaName, key) {
+  // Officia is uniqueId 1 (SHYTALK_OFFICIAL). The PM flow writes:
+  //   1. conversations/<auto> with participantIds=[1, recipient]
+  //   2. messages/<auto> referencing that conversationId + the system PM key
+  // The runner's database assertions look up the conversation by
+  // participantIds + the message by sender + key, so the auto doc-IDs
+  // don't matter for lookup correctness.
+  const personas = loadPersonas();
+  const recipient = personas.get(recipientPersonaName);
+  if (!recipient?.uniqueId) {
+    throw new Error(`persona "${recipientPersonaName}" not in registry`);
+  }
+  const convId = `officia-${recipient.uniqueId}`;
+  // String-coerced uniqueIds match production writes (per server route
+  // pattern + the existing manual-qa-runner.js String(p.uniqueId)
+  // convention at lines 750, 2041, 3683, 3689, ...).
+  await ctx.db.doc(`conversations/${convId}`).set(
+    {
+      participantIds: [String(1), String(recipient.uniqueId)],
+      type: 'SYSTEM',
+      createdAt: Date.now(),
+    },
+    { merge: true },
+  );
+  const msgId = `${recipient.uniqueId}-${key}-${Date.now()}`;
+  await ctx.db.doc(`messages/${msgId}`).set({
+    senderId: String(1),
+    recipientId: String(recipient.uniqueId),
+    conversationId: convId,
+    key,
+    createdAt: Date.now(),
+  });
+  return { convId, msgId };
 }
 
 // ── Step matchers ───────────────────────────────────────────────────
@@ -588,7 +958,6 @@ const matchers = [
       return { ok: true };
     },
   },
-
   // ── Persona sign-in ──
   // Accepts an optional `on <Platform>` clause (bounded {0,2} repetition to
   // handle multi-word platforms — see PR-C state-seed matcher). The runner
@@ -3373,6 +3742,70 @@ const matchers = [
     },
   },
   {
+    // j05 purchase setup-Given (line 46): "<persona> has just purchased
+    // <packageId> and has <field>=<value>". Composes:
+    //   - applyPurchase: writes the PURCHASE transaction + sets shyCoins
+    //   - the field=value clause overrides the post-purchase balance
+    //     (the scenario author has authority on the post-state — packageId
+    //     might be experimental and not yet in the catalog)
+    // Distinct from the existing `<persona> purchased "<pkg>" with receipt`
+    // matcher (line 5271) — that flavor writes purchaseReceipts/. This
+    // one is for the compact "just purchased + post-state" form j05 uses.
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+has just purchased\s+([\w-]+)\s+and has\s+(\w+)=(\d+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
+      const name = m[1];
+      const packageId = m[3];
+      const field = m[4];
+      const value = parseInt(m[5], 10);
+      try {
+        if (field === 'shyCoins') {
+          await applyPurchase(ctx, name, packageId, value);
+          return { ok: true };
+        }
+        // Non-shyCoins post-state — fall through to a single-field merge.
+        // applyPurchase still records the transaction so the row count
+        // matches the purchase flow's audit trail.
+        await applyPurchase(ctx, name, packageId, value);
+        const personas = loadPersonas();
+        const p = personas.get(name);
+        await ctx.db.doc(`users/${p.uniqueId}`).set({ [field]: value }, { merge: true });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // j05 gift-send setup-Given (lines 69/76/81): "<persona> has just sent
+    // <recipient> a <giftId>". Composes applyGiftSend, which mirrors the
+    // production /api/economy/send-gift writes:
+    //   - sender shyCoins decremented by gift cost
+    //   - recipient beans incremented by gift award
+    //   - users/<sender>/transactions/<auto>  type=GIFT_SENT
+    //   - users/<recipient>/transactions/<auto>  type=GIFT_RECEIVED
+    //   - giftWalls/<recipient>/gifts/<auto>  with senderId + giftId
+    // Gift costs read from the giftCosts table inside applyGiftSend
+    // (rose=10/5, crown=500/250, diamond=1000/500), grounded in the
+    // j05 background catalog. Sender wallet must have the gift cost
+    // available — caller is responsible for setting shyCoins first via
+    // an earlier "has shyCoins=N" setup-Given.
+    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+has just sent\s+([A-Z][a-z]+)\s+a\s+(\w+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db (firebase-admin Firestore) not initialised' };
+      const sender = m[1];
+      const recipient = m[3];
+      const giftId = m[4];
+      try {
+        await applyGiftSend(ctx, sender, recipient, giftId);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
     // Web Admin: issue warning to a user. Delegates to driver method
     // `webAdminIssueWarning(targetName)` — the driver locates the target
     // row in the admin user-table, opens the warn dialog, fills any
@@ -5286,6 +5719,56 @@ const matchers = [
       ctx.personaPlatforms.set(name, platform);
       ctx.personaPaths.set(name, urlPath);
       return { ok: true };
+    },
+  },
+  {
+    // j07 follow-state setup-Given: "<persona> is following <other>".
+    // Composes applyFollow, which mirrors the production /api/users/follow
+    // writes: follower's followingIds += followee's uniqueId, and the
+    // mirror followerIds += follower's uniqueId. Idempotent — re-running
+    // dedups (Set-backed merge).
+    //
+    // This is the POSITIVE complement to the existing "neither user is
+    // following the other" assertion below — together they let j07's
+    // phase-scoped scenarios establish either pre-condition cleanly.
+    pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+is following\s+([A-Z][a-z]+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      const followerName = m[1];
+      const followeeName = m[3];
+      try {
+        await applyFollow(ctx, followerName, followeeName);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // j07 conversation setup-Given: "<persona> has an open DIRECT
+    // conversation thread with <other>". Composes seedDirectConversation,
+    // which writes a conversations/<deterministic-id> doc with type='DIRECT'
+    // and sorted, String-coerced participantIds. Downstream PM-send /
+    // PM-read assertions look up the thread by participant pair, so the
+    // doc-id determinism keeps tests stable.
+    //
+    // Note this is a UNIDIRECTIONAL phrasing ("Adam has an open thread
+    // WITH Alice") but DIRECT conversations are inherently symmetric —
+    // either persona is a valid subject. The matcher captures the
+    // subject as a sender hint for downstream assertions, but doesn't
+    // mark the thread as "owned" by them.
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+has an open DIRECT conversation thread with\s+([A-Z][a-z]+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      const p1Name = m[1];
+      const p2Name = m[3];
+      try {
+        await seedDirectConversation(ctx, p1Name, p2Name);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
     },
   },
   {
@@ -7741,6 +8224,68 @@ const matchers = [
     },
   },
   {
+    // j11 setup-Given: "<persona> has been issued a first-strike warning".
+    // Mirrors the production /api/admin/moderation/warn handler's user-doc
+    // writes:
+    //   - hasActiveWarning = true
+    //   - warningCount = 1 (first strike — second-strike form differs)
+    //   - warningAcknowledged = false (operator-facing UI is pending ack)
+    //   - lastWarningAt = now (audit timestamp)
+    // No audit row here — that's covered by the moderation action matcher
+    // (the audit semantics belong to the admin UI flow, not the state-seed).
+    pattern: /^([A-Z][a-z]+)\s+has been issued a first-strike warning$/,
+    async handler(m, ctx) {
+      const name = m[1];
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      const personas = loadPersonas();
+      const p = personas.get(name);
+      if (!p?.uniqueId) {
+        return { ok: false, error: `persona "${name}" not in registry` };
+      }
+      await ctx.db.doc(`users/${p.uniqueId}`).set(
+        {
+          hasActiveWarning: true,
+          warningCount: 1,
+          warningAcknowledged: false,
+          lastWarningAt: Date.now(),
+        },
+        { merge: true },
+      );
+      return { ok: true };
+    },
+  },
+  {
+    // j11 setup-Given: "<persona> has acknowledged his/her/their first-strike
+    // warning". Composes the issued-warning state PLUS flips
+    // warningAcknowledged → true. This is the state Raul reaches after he
+    // taps the "I understand" button on the warning screen — distinct from
+    // the issued state where the warning still requires acknowledgement.
+    //
+    // Pronoun alternation captures all three forms ("his", "her", "their")
+    // since the corpus uses them depending on persona gender — anchored to
+    // a fixed word list, no \w+ expansion.
+    pattern: /^([A-Z][a-z]+)\s+has acknowledged (?:his|her|their) first-strike warning$/,
+    async handler(m, ctx) {
+      const name = m[1];
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      const personas = loadPersonas();
+      const p = personas.get(name);
+      if (!p?.uniqueId) {
+        return { ok: false, error: `persona "${name}" not in registry` };
+      }
+      await ctx.db.doc(`users/${p.uniqueId}`).set(
+        {
+          hasActiveWarning: true,
+          warningCount: 1,
+          warningAcknowledged: true,
+          lastWarningAt: Date.now(),
+        },
+        { merge: true },
+      );
+      return { ok: true };
+    },
+  },
+  {
     // Wake 71 — "<Name> on <Plat> opens his/her conversation with <Other>".
     // j11:93 — composite navigation: open PM thread between the speaker
     // and the named other persona. Driver resolves the conv id from the
@@ -9129,6 +9674,252 @@ const matchers = [
       }
     },
   },
+  // ── Admin-moderation setup Givens (j04 + reusable by j10/j11/j12) ──
+  //
+  // j04's 8-phase moderation flow (Greta downgrades Hayato) needs setup
+  // matchers that mutate Firestore directly via firebase-admin. Each
+  // matcher routes through the primitives above (seedPending...,
+  // applyAgeDowngrade, seedSystemPmFromOfficia) so a future schema
+  // change to the admin-route writes can be made in one place.
+  // Note: "<persona> submitted an ageVerificationSubmission with
+  // status=\"PENDING\" and an ID image showing DOB=..." is already
+  // handled by the earlier matcher at line ~2032. No new handler here.
+  {
+    // "Greta has reviewed Hayato's age-verification submission" —
+    // No state change beyond the existing PENDING submission (review is
+    // a UI-side action, not a Firestore write). Recorded on ctx so a
+    // follow-on "Greta's reject_and_dob_down" matcher can probe it.
+    pattern: /^([A-Z][a-z]+)\s+has reviewed ([A-Z][a-z]+)'s age-verification submission$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        // Ensure the PENDING submission exists for the named persona
+        // (idempotent — re-running this Given doesn't duplicate). The
+        // review action itself is UI-side; no Firestore write needed.
+        await seedPendingAgeVerificationSubmission(ctx, m[2]);
+        ctx.reviewedSubmissions = ctx.reviewedSubmissions || new Set();
+        ctx.reviewedSubmissions.add(m[2]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Hayato has been downgraded to cohort=minor by Greta"
+    pattern: /^([A-Z][a-z]+)\s+has been downgraded to cohort=minor by ([A-Z][a-z]+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await applyAgeDowngrade(ctx, m[1], m[2]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Hayato has been downgraded to cohort=minor and has the Officia
+    //  age-down PM in his inbox" — composes downgrade + system PM.
+    pattern:
+      /^([A-Z][a-z]+)\s+has been downgraded to cohort=minor and has the Officia age-down PM in his inbox$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        // Use the Background-default admin (Greta) when the Given omits
+        // the admin name. This pattern repeats in j04 — operator can
+        // refactor to take an explicit admin arg if a future scenario
+        // needs a different admin persona.
+        await applyAgeDowngrade(ctx, m[1], 'Greta');
+        await seedSystemPmFromOfficia(ctx, m[1], 'age_seg_age_down_admin_pm');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Hayato has been downgraded to cohort=minor with followingIds
+    //  still containing 50000010 + 50000060"
+    pattern:
+      /^([A-Z][a-z]+)\s+has been downgraded to cohort=minor with followingIds still containing ([\d, +]+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const personas = loadPersonas();
+        const persona = personas.get(m[1]);
+        if (!persona?.uniqueId) {
+          return { ok: false, error: `persona "${m[1]}" not in registry` };
+        }
+        // Parse the uniqueId list (comma + `+` separators allowed).
+        const ids = m[2]
+          .split(/[\s,+]+/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map(Number)
+          .filter((n) => Number.isFinite(n));
+        await ctx.db.doc(`users/${persona.uniqueId}`).set({ followingIds: ids }, { merge: true });
+        await applyAgeDowngrade(ctx, m[1], 'Greta');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Hayato has been downgraded to cohort=minor with his pre-downgrade
+    //  shyCoins=100"
+    pattern:
+      /^([A-Z][a-z]+)\s+has been downgraded to cohort=minor with his pre-downgrade shyCoins=(\d+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        const personas = loadPersonas();
+        const persona = personas.get(m[1]);
+        if (!persona?.uniqueId) {
+          return { ok: false, error: `persona "${m[1]}" not in registry` };
+        }
+        const shyCoins = parseInt(m[2], 10);
+        await ctx.db.doc(`users/${persona.uniqueId}`).set({ shyCoins }, { merge: true });
+        await applyAgeDowngrade(ctx, m[1], 'Greta');
+        // Re-assert shyCoins survived the downgrade write (the downgrade
+        // helper uses merge:true so shyCoins is preserved — pin it).
+        await ctx.db.doc(`users/${persona.uniqueId}`).set({ shyCoins }, { merge: true });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  // Note: "Hayato received the age-down system PM from Officia" (j04:106)
+  // and "Hayato is in voice room <X> ... with mic open" (j04:98) are NOT
+  // added here:
+  //   - The "received the X system PM" wording collides with the existing
+  //     ASSERTION matcher at line ~4897 (which checks the
+  //     conversations/<convId>/messages subcollection for the PM) so adding
+  //     a setup-Given with the same pattern would shadow the assertion.
+  //   - The "is in voice room ... with mic open" handler had a hostId
+  //     read-back miss in unit tests that needs deeper debugging. Both
+  //     are tracked as follow-ups; the compose form
+  //     "Hayato has been downgraded ... and has the Officia age-down PM
+  //     in his inbox" already covers the j04 PM-state setup. The voice-
+  //     room precondition is only used by j04's "ejected when downgrade
+  //     hits" scenario, which can be left as STEP_NOT_IMPLEMENTED for
+  //     now and addressed in a follow-up PR.
+  // ── Adam's first-day setup Givens (j01 phase-scoped scenarios) ──
+  //
+  // j01's 10 phase-scoped scenarios establish prior phases via setup
+  // Givens that walk Adam through: signup (minor default) → legal accept
+  // → age-verification submission → admin approve → adult verified
+  // → daily reward → first gift. Adam is an EPHEMERAL persona
+  // (P-01 in EPHEMERAL_PERSONAS, uniqueId 90000001).
+  {
+    // "Adam has just signed up with a minor-default cohort"
+    pattern: /^([A-Z][a-z]+)\s+has just signed up with a minor-default cohort$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await seedSignedUpUser(ctx, m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Adam has accepted legal as a minor-default user" — composes
+    // signup state + accepted-policies row.
+    pattern: /^([A-Z][a-z]+)\s+has accepted legal as a minor-default user$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await seedSignedUpUser(ctx, m[1]);
+        await seedAcceptedPolicies(ctx, m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // j02 phrasing: "Mia has just signed up as a minor". Same outcome as
+    // the j01 "minor-default cohort" form — they're synonymous, and the
+    // matcher just routes to the same seedSignedUpUser primitive. Kept as
+    // a separate pattern (rather than alternating one regex) so each
+    // journey reads naturally in its own voice — j01 emphasises that
+    // minor is the SIGNUP DEFAULT (because Adam will later be approved
+    // to adult); j02 emphasises that Mia STAYS a minor (because the
+    // restrictions are her permanent UX, not a temporary state).
+    pattern: /^([A-Z][a-z]+)\s+has just signed up as a minor$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await seedSignedUpUser(ctx, m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // j02 phrasing: "Mia has accepted legal as a minor". Composes
+    // signup-as-minor + accepted-policies. Same primitives as the j01
+    // "minor-default user" form; see paired comment above for why the
+    // two phrasings exist side-by-side.
+    pattern: /^([A-Z][a-z]+)\s+has accepted legal as a minor$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        await seedSignedUpUser(ctx, m[1]);
+        await seedAcceptedPolicies(ctx, m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Adam has just been approved to cohort=adult by Greta"
+    pattern: /^([A-Z][a-z]+)\s+has just been approved to cohort=adult by ([A-Z][a-z]+)$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        // Ensure user-doc exists (idempotent — has user doc with cohort=minor
+        // first, then the admin approve flips it to adult).
+        await seedSignedUpUser(ctx, m[1]);
+        await applyAgeVerificationApproval(ctx, m[1], m[2]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Adam is verified adult with adult features unlocked"
+    pattern: /^([A-Z][a-z]+)\s+is verified adult with adult features unlocked$/,
+    async handler(m, ctx) {
+      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
+      try {
+        // Final-state seed: cohort=adult, isAgeVerified=true, policies
+        // accepted. No audit entry — the test scenarios that care about
+        // the audit row use the "has just been approved" Given which
+        // does include it.
+        await seedSignedUpUser(ctx, m[1], { cohort: 'adult', isAgeVerified: true });
+        await seedAcceptedPolicies(ctx, m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  // Note: "<persona> has shyCoins >= 10 after daily reward + a +100
+  // admin top-up" (j01:111) is NOT added here — it collides with the
+  // existing assertion matcher at line ~4620 (`<persona> has <field>
+  // <op> <number>`). j01 line 111 should be rewritten as a compose:
+  //   Given Adam is verified adult with adult features unlocked
+  //   Given Adam has user doc with shyCoins=200
+  // using the existing line ~2066 "has user doc with X=Y" matcher.
+  // Pending j01 feature-file update.
   {
     // Wake 80 — "the response from <path>?<query> includes <Name>".
     // j15:62 — checks ctx.lastResponse.results[] for an entry matching
@@ -11674,9 +12465,14 @@ const matchers = [
   },
   {
     // Wake 95 — "the <queue> queue has N pending <noun>". j12 Background.
-    // Records queue depth on ctx.adminQueues. Downstream "Greta opens
-    // the X queue" steps could read this to validate the count is
-    // shown in the UI. MVP just persists for inspection.
+    // Records queue depth on ctx.adminQueues for downstream "Greta opens
+    // the X queue" steps that read this to validate the count is shown in
+    // the UI. Also (extended below) seeds N Firestore docs to the matching
+    // collection so scenarios that ASSERT on real queue counts (not just
+    // ctx bookkeeping) also pass — the seed primitive is best-effort: if
+    // the queueName isn't a registered seedable queue (e.g. "subscribers"
+    // for a forward-looking scenario), the ctx.adminQueues record still
+    // happens and the seed skips silently.
     pattern: /^the ([\w-]+) queue has (\d+) pending (\w+)$/,
     async handler(m, ctx) {
       const queueName = m[1];
@@ -11684,6 +12480,21 @@ const matchers = [
       const noun = m[3];
       if (!ctx.adminQueues) ctx.adminQueues = {};
       ctx.adminQueues[queueName] = { count, noun };
+      // Seed Firestore queue docs if (a) db is available AND (b) the
+      // queue is in QUEUE_REGISTRY. Silent skip otherwise — preserves
+      // backward compatibility with scenarios that only need the ctx
+      // bookkeeping (the prior MVP behaviour).
+      if (ctx.db) {
+        try {
+          await seedAdminQueueEntries(ctx, queueName, count);
+        } catch (e) {
+          // Unknown queue → silent skip (preserves backward compat);
+          // any OTHER error (db throw, etc.) bubbles up actionably.
+          if (!/unknown admin queue/.test(e.message)) {
+            return { ok: false, error: e.message };
+          }
+        }
+      }
       return { ok: true };
     },
   },
