@@ -15444,6 +15444,8 @@ async function main() {
     else if (flat[i] === '--driver') opts.driver = flat[++i];
     else if (flat[i] === '--browser') opts.browser = flat[++i];
     else if (flat[i] === '--headed') opts.headed = true;
+    else if (flat[i] === '--matrix') opts.matrix = true;
+    else if (flat[i] === '--fail-fast') opts.failFast = true;
   }
   opts.target = opts.target || 'dev';
   opts.planDir = opts.planDir || path.resolve(__dirname, '../../journey-tests');
@@ -15473,6 +15475,38 @@ async function main() {
   if (!TARGETS[opts.target]) {
     console.error(`Unknown target: ${opts.target}. Valid: ${Object.keys(TARGETS).join(', ')}`);
     process.exit(2);
+  }
+
+  // --matrix dispatches the same scenario across every browser in the
+  // target's allowlist. Each cell is a fresh runner subprocess so a
+  // driver init failure in one cell can't corrupt the next cell's
+  // state. The iteration helper (./matrix-dispatch.js) aggregates
+  // pass / fail / skip outcomes and prints a summary table at the end.
+  if (opts.matrix) {
+    const { runMatrix, formatMatrixResult } = require('./matrix-dispatch');
+    const { spawnSync } = require('child_process');
+    // Reconstruct the per-cell argv by stripping --matrix + appending
+    // --browser <slug>. If --browser was already supplied, the existing
+    // value gets shadowed (last --browser wins in the parse loop).
+    const baseArgv = process.argv.slice(2).filter((a) => a !== '--matrix');
+    const matrixResult = await runMatrix({
+      browsers: allowed,
+      failFast: opts.failFast === true,
+      onCellStart: ({ browser }) => console.log(`[matrix] → dispatching ${browser}`),
+      onCellEnd: (cell) =>
+        console.log(`[matrix] ← ${cell.browser}: ${cell.outcome} (${cell.durationMs}ms)`),
+      dispatchOne: async ({ browser }) => {
+        const cellArgs = [...baseArgv, '--browser', browser];
+        const proc = spawnSync(process.execPath, [__filename, ...cellArgs], {
+          stdio: 'inherit',
+          env: process.env,
+        });
+        if (proc.error) throw proc.error;
+        return proc.status === 0;
+      },
+    });
+    console.log('\n' + formatMatrixResult(matrixResult));
+    process.exit(matrixResult.ok ? 0 : 1);
   }
   const personasPassword = process.env.PERSONAS_PASSWORD;
   if (!personasPassword) {
