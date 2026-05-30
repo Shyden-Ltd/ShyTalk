@@ -1,0 +1,86 @@
+name: QA Runner Driver Checks
+
+# Reusable workflow — invoked from pr-checks.yml when a PR touches
+# express-api/scripts/drivers/**. Provides a fast signal that the
+# runner's driver factories still load + bootstrap without surprising
+# regressions, BEFORE the full backend test suite finishes.
+#
+# Closes gap E4 from the QA-runner framework tracker: "No pr-checks
+# job that runs --check-drivers on PRs touching drivers/."
+#
+# Per [[feedback-no-self-hosted-runners]] uses ubuntu-latest only.
+# Per [[feedback-ci-cache-downloads-version-aware]] Playwright browser
+# binaries are cached on the resolved Playwright version (busts when
+# the dependency bumps).
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: SHA to check out (PR head sha; main for nightly).
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  driver-checks:
+    name: --check-drivers + contract test (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: express-api/package-lock.json
+
+      - name: Install express-api deps
+        run: npm ci
+        working-directory: express-api
+
+      - name: Resolve Playwright version (for cache key)
+        id: pw
+        run: |
+          # Read the installed Playwright version so the cache key changes
+          # when Playwright bumps — per [[feedback-ci-cache-downloads-version-aware]].
+          # node -p prints the field; trim any whitespace defensively.
+          PW_VERSION=$(node -p "require('playwright/package.json').version" | tr -d '[:space:]')
+          echo "version=$PW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Playwright version resolved: $PW_VERSION"
+        working-directory: express-api
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      - name: Install Playwright browsers (chromium + firefox + webkit)
+        # `--with-deps` pulls apt packages on Ubuntu so headless WebKit
+        # actually launches; without it WebKit silently fails to start
+        # because libgtk/libgstreamer aren't present on the base image.
+        run: npx playwright install --with-deps chromium firefox webkit
+        working-directory: express-api
+
+      - name: Driver contract test
+        # Bounded subset of the full express-api suite — fastest signal
+        # that any driver-shape regression surfaces before the full
+        # backend suite finishes.
+        run: npm test -- --testPathPattern tests/scripts/drivers/ --silent
+        working-directory: express-api
+
+      - name: --check-drivers diagnostic (local target)
+        # Desktop browsers should report 'ok' on ubuntu (Playwright
+        # provides chromium/firefox/webkit; edge unavailable). Mobile
+        # cells report 'skip' on ubuntu (no adb device, no iOS simulator).
+        # Exit code is 0 iff no cell reports 'fail' — 'skip' is acceptable.
+        run: node scripts/manual-qa-runner.js --check-drivers --target local
+        working-directory: express-api

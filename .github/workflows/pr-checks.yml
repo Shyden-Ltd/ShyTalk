@@ -29,6 +29,7 @@ jobs:
       backend_changed: ${{ steps.changes.outputs.backend_changed }}
       web_changed: ${{ steps.changes.outputs.web_changed }}
       integration_changed: ${{ steps.changes.outputs.integration_changed }}
+      qa_runner_drivers_changed: ${{ steps.changes.outputs.qa_runner_drivers_changed }}
       workflow_only: ${{ steps.changes.outputs.workflow_only }}
       skip_android_e2e: ${{ steps.changes.outputs.skip_android_e2e }}
       skip_ios_e2e: ${{ steps.changes.outputs.skip_ios_e2e }}
@@ -53,7 +54,7 @@ jobs:
           # retained for lint/sonarcloud/integration-tests which
           # cover both platforms; only the heavy build/E2E jobs
           # gate on the granular ANDROID_APP / IOS_APP flags.
-          ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false OTHER=false
+          ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false QA_RUNNER_DRIVERS=false OTHER=false
           while IFS= read -r file; do
             [ -z "$file" ] && continue
             case "$file" in
@@ -92,6 +93,13 @@ jobs:
               # integration job without dragging in the heavier
               # backend-changed gate (Sonar, full backend suite).
               tests/integration/*|playwright.integration.config.ts) INTEGRATION=true ;;
+              # Driver-specific PR signal — matched BEFORE the generic
+              # express-api/* branch so a driver-only change can light up
+              # the fast qa-runner-driver-checks job in parallel with
+              # the heavier test-backend job. BACKEND is set too so the
+              # existing backend test suite still runs (regression safety
+              # — driver code is a subset of the backend).
+              express-api/scripts/drivers/*|express-api/tests/scripts/drivers/*) QA_RUNNER_DRIVERS=true; BACKEND=true ;;
               express-api/*|firestore.rules|database.rules.json) BACKEND=true ;;
               .github/*|.claude/*|.project/*|*.md|.gitignore|.gitattributes) ;;
               *) OTHER=true ;;
@@ -120,10 +128,10 @@ jobs:
           if printf '%s' "$PR_BODY" | grep -qE '^[[:space:]]*\[skip-ios-e2e\][[:space:]]*$'; then
             SKIP_IOS_E2E=true
           fi
-          for v in app_changed=$APP android_app_changed=$ANDROID_APP ios_app_changed=$IOS_APP backend_changed=$BACKEND web_changed=$WEB integration_changed=$INTEGRATION workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E; do
+          for v in app_changed=$APP android_app_changed=$ANDROID_APP ios_app_changed=$IOS_APP backend_changed=$BACKEND web_changed=$WEB integration_changed=$INTEGRATION qa_runner_drivers_changed=$QA_RUNNER_DRIVERS workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E; do
             echo "$v" >> "$GITHUB_OUTPUT"
           done
-          echo "Detection results: app=$APP android_app=$ANDROID_APP ios_app=$IOS_APP backend=$BACKEND web=$WEB integration=$INTEGRATION workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E"
+          echo "Detection results: app=$APP android_app=$ANDROID_APP ios_app=$IOS_APP backend=$BACKEND web=$WEB integration=$INTEGRATION qa_runner_drivers=$QA_RUNNER_DRIVERS workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E"
 
   lint:
     needs: [detect-changes]
@@ -371,9 +379,22 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
 
+  qa-runner-driver-checks:
+    # Fast signal for PRs touching express-api/scripts/drivers/** — runs
+    # the driver-contract test + --check-drivers in parallel with the
+    # heavier test-backend job. Closes gap E4 from the QA-runner framework
+    # tracker. Skipped on non-driver PRs; required when triggered.
+    needs: [detect-changes]
+    if: |
+      always() &&
+      needs.detect-changes.outputs.qa_runner_drivers_changed == 'true'
+    uses: ./.github/workflows/qa-runner-driver-checks.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+
   gate:
     name: PR Gate
-    needs: [detect-changes, lint, build-and-test, sonarcloud, test-backend, android-e2e, playwright-web, integration-tests, ios-e2e]
+    needs: [detect-changes, lint, build-and-test, sonarcloud, test-backend, android-e2e, playwright-web, integration-tests, ios-e2e, qa-runner-driver-checks]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -395,7 +416,8 @@ jobs:
             "${{ needs.android-e2e.result }}" \
             "${{ needs.playwright-web.result }}" \
             "${{ needs.integration-tests.result }}" \
-            "${{ needs.ios-e2e.result }}"; do
+            "${{ needs.ios-e2e.result }}" \
+            "${{ needs.qa-runner-driver-checks.result }}"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "Required check failed: $result"
               exit 1
