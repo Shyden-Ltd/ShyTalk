@@ -15446,6 +15446,7 @@ async function main() {
     else if (flat[i] === '--headed') opts.headed = true;
     else if (flat[i] === '--matrix') opts.matrix = true;
     else if (flat[i] === '--fail-fast') opts.failFast = true;
+    else if (flat[i] === '--check-drivers') opts.checkDrivers = true;
   }
   opts.target = opts.target || 'dev';
   opts.planDir = opts.planDir || path.resolve(__dirname, '../../journey-tests');
@@ -15475,6 +15476,90 @@ async function main() {
   if (!TARGETS[opts.target]) {
     console.error(`Unknown target: ${opts.target}. Valid: ${Object.keys(TARGETS).join(', ')}`);
     process.exit(2);
+  }
+
+  // --check-drivers verifies every device + browser app + env-var is
+  // in place by trying to bootstrap each driver in the target's
+  // allowlist + closing it immediately. Faster than --matrix (no
+  // journey scenario runs) — typical 12-cell health-check is ~10s.
+  // Skips for bootstrap failures (no device / missing env / app not
+  // installed) so the operator gets a per-cell readiness report.
+  if (opts.checkDrivers) {
+    const { runHealthCheck, formatHealthCheckResult } = require('./driver-health-check');
+    const baseURL = TARGETS[opts.target].webBase || 'http://localhost:8888';
+    // Each factory is a thin wrapper around the matching createXxxDriver
+    // — same browser → driver mapping as the runner's main dispatch.
+    const factories = {
+      chromium: ({ baseURL: u }) =>
+        require('./drivers/web-playwright-driver').createWebDriver({
+          baseURL: u,
+          headless: !opts.headed,
+          browser: 'chromium',
+        }),
+      firefox: ({ baseURL: u }) =>
+        require('./drivers/web-playwright-driver').createWebDriver({
+          baseURL: u,
+          headless: !opts.headed,
+          browser: 'firefox',
+        }),
+      webkit: ({ baseURL: u }) =>
+        require('./drivers/web-playwright-driver').createWebDriver({
+          baseURL: u,
+          headless: !opts.headed,
+          browser: 'webkit',
+        }),
+      edge: ({ baseURL: u }) =>
+        require('./drivers/web-playwright-driver').createWebDriver({
+          baseURL: u,
+          headless: !opts.headed,
+          browser: 'edge',
+        }),
+      'mobile-chrome-android': ({ baseURL: u }) =>
+        require('./drivers/web-mobile-chrome-android-driver').createMobileChromeAndroidDriver({
+          baseURL: u,
+        }),
+      'mobile-samsung-android': ({ baseURL: u }) =>
+        require('./drivers/web-mobile-samsung-android-driver').createMobileSamsungAndroidDriver({
+          baseURL: u,
+        }),
+      'mobile-edge-android': ({ baseURL: u }) =>
+        require('./drivers/web-mobile-edge-android-driver').createMobileEdgeAndroidDriver({
+          baseURL: u,
+        }),
+      'mobile-firefox-android': ({ baseURL: u }) =>
+        require('./drivers/web-mobile-firefox-android-driver').createMobileFirefoxAndroidDriver({
+          baseURL: u,
+        }),
+      'mobile-safari-ios': ({ baseURL: u }) =>
+        require('./drivers/web-mobile-safari-ios-driver').createMobileSafariIosDriver({
+          baseURL: u,
+        }),
+      'mobile-chrome-ios': ({ baseURL: u }) =>
+        require('./drivers/web-mobile-webkit-ios-driver').createMobileWebkitIosDriver({
+          browser: 'chrome',
+          baseURL: u,
+        }),
+      'mobile-firefox-ios': ({ baseURL: u }) =>
+        require('./drivers/web-mobile-webkit-ios-driver').createMobileWebkitIosDriver({
+          browser: 'firefox',
+          baseURL: u,
+        }),
+      'mobile-edge-ios': ({ baseURL: u }) =>
+        require('./drivers/web-mobile-webkit-ios-driver').createMobileWebkitIosDriver({
+          browser: 'edge',
+          baseURL: u,
+        }),
+    };
+    const healthResult = await runHealthCheck({
+      browsers: allowed,
+      factories,
+      baseURL,
+      onCellStart: ({ browser }) => console.log(`[check-drivers] → ${browser}`),
+      onCellEnd: (cell) =>
+        console.log(`[check-drivers] ← ${cell.browser}: ${cell.outcome} (${cell.durationMs}ms)`),
+    });
+    console.log('\n' + formatHealthCheckResult(healthResult));
+    process.exit(healthResult.ok ? 0 : 1);
   }
 
   // --matrix dispatches the same scenario across every browser in the
