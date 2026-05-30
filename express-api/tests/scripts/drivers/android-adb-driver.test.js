@@ -16088,6 +16088,93 @@ describe('android-adb-driver — androidNetworkDropFor', () => {
     await jest.advanceTimersByTimeAsync(0);
     expect(await promise).toBe(true);
   });
+
+  // Wireless-adb guard. Surfaced 2026-05-30 against the operator's
+  // wireless device `adb-3b402284-56nfBT._adb-tls-connect._tcp` — the
+  // network-drop scenario was disabling WiFi via `svc wifi disable`,
+  // which cut the adb tunnel itself (wireless adb runs over WiFi) and
+  // turned every subsequent step into "device offline". The driver
+  // now refuses to disable WiFi when the serial fingerprints as
+  // wireless, throwing an actionable error so the operator can
+  // either re-dispatch via USB or tag the scenario @needs-usb-adb.
+  describe('wireless-adb guard', () => {
+    test('mDNS-discovered wireless serial → throws actionable error, no svc calls', async () => {
+      mockExec({
+        'adb devices':
+          'List of devices attached\nadb-3b402284-56nfBT._adb-tls-connect._tcp\tdevice\n',
+      });
+      const driver = await createAndroidDriver();
+      await expect(driver.androidNetworkDropFor('Theo', 30)).rejects.toThrow(
+        /androidNetworkDropFor requires USB adb/,
+      );
+      // Verify NO svc disable/enable calls were issued — the throw must
+      // happen before any device-state mutation.
+      const svcCalls = execSync.mock.calls.map((c) => c[0]).filter((c) => c.includes("'svc'"));
+      expect(svcCalls).toEqual([]);
+    });
+
+    test('manual-TCP wireless serial (IP:PORT) → throws actionable error', async () => {
+      mockExec({
+        'adb devices': 'List of devices attached\n192.168.1.123:5555\tdevice\n',
+      });
+      const driver = await createAndroidDriver();
+      await expect(driver.androidNetworkDropFor('Theo', 30)).rejects.toThrow(
+        /androidNetworkDropFor requires USB adb/,
+      );
+      // Error message names the actual wireless serial so the operator
+      // can verify which device they're connected to.
+      await expect(driver.androidNetworkDropFor('Theo', 30)).rejects.toThrow(
+        /192\.168\.1\.123:5555/,
+      );
+    });
+
+    test('USB serial (no wireless fingerprint) → proceeds normally', async () => {
+      mockExec({
+        'adb devices': 'List of devices attached\nR5CT304ABC1Z\tdevice\n',
+      });
+      const driver = await createAndroidDriver();
+      const promise = driver.androidNetworkDropFor('Theo', 1);
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(await promise).toBe(true);
+    });
+
+    test('emulator serial → also proceeds normally (emulator is not wireless adb)', async () => {
+      // The emulator-NNNN serial fingerprint is NOT wireless — it's a
+      // local QEMU connection over a host-side socket, not WiFi-tunnelled.
+      // The default test fixture serial is emulator-5554; pin that it
+      // doesn't trigger the guard.
+      mockExec({});
+      const driver = await createAndroidDriver();
+      const promise = driver.androidNetworkDropFor('Theo', 1);
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(await promise).toBe(true);
+    });
+
+    test('_isWirelessAdb classifier (exposed for tests + reuse) — fingerprint coverage', async () => {
+      // Pin the classifier matrix so future "kills-the-tunnel" driver
+      // helpers (airplane-mode toggle, modem reset, etc.) can reuse it.
+      mockExec({
+        'adb devices':
+          'List of devices attached\nadb-3b402284-56nfBT._adb-tls-connect._tcp\tdevice\n',
+      });
+      const wirelessDriver = await createAndroidDriver();
+      expect(wirelessDriver._isWirelessAdb()).toBe(true);
+
+      jest.clearAllMocks();
+      mockExec({
+        'adb devices': 'List of devices attached\nR5CT304ABC1Z\tdevice\n',
+      });
+      const usbDriver = await createAndroidDriver();
+      expect(usbDriver._isWirelessAdb()).toBe(false);
+
+      jest.clearAllMocks();
+      mockExec({
+        'adb devices': 'List of devices attached\nemulator-5554\tdevice\n',
+      });
+      const emuDriver = await createAndroidDriver();
+      expect(emuDriver._isWirelessAdb()).toBe(false);
+    });
+  });
 });
 
 describe('android-adb-driver — androidTapQuotedTarget', () => {

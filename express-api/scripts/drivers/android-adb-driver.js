@@ -2213,7 +2213,35 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // accepted for matcher-contract alignment (the runner step
   // "<persona>'s Android network drops for N seconds" passes it) but
   // unused — the driver acts on the singleton device under its serial.
+  // Wireless adb (TCP over WiFi) makes the WiFi/data disable approach
+  // self-destructive: dropping WiFi cuts the adb tunnel itself, so the
+  // device goes "offline" and every subsequent UI step on the same
+  // dispatch fails — surfaced 2026-05-30 against the operator's
+  // wireless-adb device `adb-3b402284-56nfBT._adb-tls-connect._tcp`.
+  //
+  // Wireless serial fingerprints:
+  //   - mDNS-discovered: contains `_adb-tls-connect` or starts with `adb-`
+  //   - manual TCP:      `IP:PORT` (digits, dots, colon)
+  // USB serials are hex/alphanumeric without `:` or the mDNS suffix.
+  function isWirelessAdb(s) {
+    if (!s) return false;
+    if (s.includes('_adb-tls-connect')) return true;
+    if (/^adb-/.test(s)) return true;
+    if (/^\d{1,3}(?:\.\d{1,3}){3}:\d+$/.test(s)) return true;
+    return false;
+  }
   driver.androidNetworkDropFor = async (name, seconds) => {
+    // Refuse to disable WiFi over a wireless-adb connection — it would
+    // sever the adb tunnel mid-scenario and break every downstream step.
+    // The matcher surfaces this as a finding so the scenario stays
+    // visible (rather than silently passing) — the operator can re-run
+    // over USB adb if the network-drop scenario is in scope, or skip
+    // it via the @needs-usb-adb tag on the scenario.
+    if (isWirelessAdb(serial)) {
+      throw new Error(
+        `androidNetworkDropFor requires USB adb (current serial "${serial}" is wireless — disabling WiFi would kill the adb tunnel itself). Connect via USB and re-dispatch, or tag the scenario @needs-usb-adb to skip it on wireless runs.`,
+      );
+    }
     const durationMs = Math.max(0, Number(seconds) * 1000);
     let dropOk = true;
     try {
@@ -2238,6 +2266,10 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     }
     return dropOk && restoreOk;
   };
+  // Export the wireless-adb detector for unit tests + potential reuse
+  // by other "kills-the-tunnel" driver methods (e.g. a future airplane-
+  // mode helper).
+  driver._isWirelessAdb = () => isWirelessAdb(serial);
 
   driver.close = async () => {
     /* adb sessions are stateless; nothing to release */
