@@ -2372,14 +2372,51 @@ async function createAndroidDriver({ serial: preferred } = {}) {
         `androidPersonaSignIn: could not tap "persona_picker_open" — ShyTalk ${target} launched but the picker testTag isn't visible. Possible causes: (a) the user is ALREADY signed in (sign out via Profile → Settings first), (b) the deployed dev APK predates PR #882 (deploy main to dev and re-install), or (c) the build flavor is "prod" where the picker is hidden by design.`,
       );
     }
-    // Step 2: wait for the dialog to render. Pick a row testTag that
-    // exists for ALL personas (P-02..P-19) — anchor on the requested
-    // one, since the dialog renders all rows together.
+    // Step 2: wait for the dialog to render. Anchor on the persona-picker
+    // LazyColumn container (`persona_picker_list`) which is ALWAYS at the
+    // top of the dialog regardless of scroll position — using the
+    // requested row would fail for personas below the fold (the picker
+    // is capped at 400dp and lists 17 personas, so anything past ~P-09
+    // requires scrolling).
+    const containerTag = 'persona_picker_list';
     const rowTag = `persona_row_${personaId}`;
-    const dialogReady = await waitForTag(rowTag, 5000);
+    const dialogReady = await waitForTag(containerTag, 5000);
     if (!dialogReady) {
       throw new Error(
-        `androidPersonaSignIn: picker dialog never showed "${rowTag}" within 5s — persona may not be in the dev personas registry (provision-test-personas.js)`,
+        `androidPersonaSignIn: picker dialog never showed "${containerTag}" within 5s — testTags may not be exposed via testTagsAsResourceId, or the dialog didn't render. Verify exposeTestTagsToPlatformDumps() is applied to the dialog content.`,
+      );
+    }
+    // Step 2b: scroll-to-find the requested row. The LazyColumn is
+    // bounded at 400dp and the 17 personas (P-02..P-19) don't all fit;
+    // anything past ~P-09 is below the fold. Swipe up inside the
+    // picker until the row appears in the dump OR we hit max swipes.
+    //
+    // Each swipe covers ~60% of the LazyColumn's visible height (~240dp,
+    // roughly the height of 2 rows). 10 swipes is enough to scan the
+    // entire 17-persona list end-to-end.
+    let foundRow = await waitForTag(rowTag, 500, 100);
+    let swipes = 0;
+    const MAX_SWIPES = 10;
+    while (!foundRow && swipes < MAX_SWIPES) {
+      // Swipe from y=1500 to y=900 (positive scroll within the list
+      // bounds — bounds y=839..2239 per the live dump from 2026-05-30).
+      // Duration ~500ms is a comfortable medium scroll speed.
+      try {
+        adb(['shell', 'input', 'swipe', '720', '1800', '720', '1000', '500']);
+      } catch (e) {
+        // Swipe failures are non-fatal — retry on next iteration.
+        console.error(
+          `[android-driver] persona-picker scroll swipe ${swipes} failed: ${e.message}`,
+        );
+      }
+      // Settle for the LazyColumn to lay out new rows.
+      await new Promise((r) => setTimeout(r, 400));
+      foundRow = await waitForTag(rowTag, 500, 100);
+      swipes++;
+    }
+    if (!foundRow) {
+      throw new Error(
+        `androidPersonaSignIn: picker dialog never showed "${rowTag}" after ${MAX_SWIPES} scroll attempts — persona may not be in the dev personas registry (provision-test-personas.js)`,
       );
     }
     // Step 3: tap the persona row.

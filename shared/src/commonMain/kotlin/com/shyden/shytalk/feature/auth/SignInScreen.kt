@@ -568,11 +568,20 @@ fun SignInScreen(
                     text = {
                         // Bounded height so the dialog scrolls rather than
                         // pushing the buttons off-screen on a short device.
+                        // `exposeTestTagsToPlatformDumps()` is required so the
+                        // per-row testTags ("persona_row_P-NN") propagate to
+                        // uiautomator's resource-id — Material3 AlertDialog
+                        // renders in a separate Popup Compose window which
+                        // doesn't inherit MainActivity's semantics modifier.
+                        // Without this, the j09 runner driver can't locate
+                        // any row in the picker (2026-05-30 finding).
                         LazyColumn(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    .heightIn(max = 400.dp),
+                                    .heightIn(max = 400.dp)
+                                    .exposeTestTagsToPlatformDumps()
+                                    .testTag("persona_picker_list"),
                         ) {
                             items(devPersonas, key = { it.id }) { persona ->
                                 PersonaPickerRow(
