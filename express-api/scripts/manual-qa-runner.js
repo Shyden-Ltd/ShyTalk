@@ -705,6 +705,40 @@ async function applyAgeVerificationApproval(ctx, personaName, adminPersonaName) 
   return { auditDocId };
 }
 
+async function clearSegregationEventsForPair(ctx, sourceUniqueId, targetUniqueId) {
+  // j09 + every cross-cohort journey: the segregationEvents collection
+  // accumulates across dispatches because the production audit-dedup
+  // window (5 min in sameCohort.js + segregation-audit.js) expires
+  // between runs — so each dispatch's cross-cohort block writes a
+  // FRESH row. Across 4 historical j09 dispatches against dev, the
+  // collection had 4 rows for the same {action,source,target} triple,
+  // which broke the scenario's `expected 1` assertion.
+  //
+  // Per QA-mindset: the production code is correct (5-min dedup is a
+  // DoS guard, not test isolation). The runner is responsible for
+  // pre-cleanup so each scenario's exact-count assertions hold.
+  //
+  // Deletes ALL docs matching {action: 'blocked', sourceUniqueId,
+  // targetUniqueId}. Uses string coercion to match the production wire
+  // format (String(req.auth.uniqueId) in routes/livekit.js,
+  // String(targetUniqueId) in middleware/sameCohort.js).
+  if (!ctx.db) throw new Error('ctx.db (firebase-admin Firestore) not initialised');
+  const src = String(sourceUniqueId);
+  const tgt = String(targetUniqueId);
+  const snap = await ctx.db
+    .collection('segregationEvents')
+    .where('action', '==', 'blocked')
+    .where('sourceUniqueId', '==', src)
+    .where('targetUniqueId', '==', tgt)
+    .get();
+  let deleted = 0;
+  for (const doc of snap.docs) {
+    await doc.ref.delete();
+    deleted++;
+  }
+  return { deleted };
+}
+
 async function seedAdminQueueEntries(ctx, queueId, count) {
   // j12 admin-dashboard queue seeder. Writes N docs to the given
   // queue collection so admin-dashboard scenarios can assert on
@@ -894,6 +928,32 @@ const matchers = [
       const r = await ctx.fetch(`${ctx.apiBase}/api/health`);
       if (r.status !== 200) return { ok: false, error: `health check returned ${r.status}` };
       return { ok: true };
+    },
+  },
+  {
+    // j09 + every cross-cohort journey: test isolation Given that
+    // clears prior segregationEvents matching {action: 'blocked',
+    // sourceUniqueId, targetUniqueId} before the scenario fires its
+    // cross-cohort attempt. Without this, the dispatch accumulates
+    // events across runs (production's 5-min dedup window expires
+    // between dispatches) and exact-count assertions like "1 entries
+    // matching {...}" break with N=2,3,4...
+    //
+    // Accepts numeric or string uniqueIds — coerced to string to
+    // match the production wire format
+    // (String(req.auth.uniqueId) at routes/livekit.js + middleware/
+    // sameCohort.js). Target can be a uniqueId OR a room id (e.g.,
+    // "ra1") — the predicate doesn't constrain shape, only equality.
+    pattern: /^no prior segregationEvents exist between\s+"?(\d+)"?\s+and\s+"([^"]+)"$/,
+    async handler(m, ctx) {
+      const sourceUniqueId = m[1];
+      const targetUniqueId = m[2];
+      try {
+        await clearSegregationEventsForPair(ctx, sourceUniqueId, targetUniqueId);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
     },
   },
   // OSA migration-state precondition (j19) — PROBE-BASED.

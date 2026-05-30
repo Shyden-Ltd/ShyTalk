@@ -11033,6 +11033,186 @@ describe('Warning-state setup Givens (j10 + j11 phase-scoped scenarios)', () => 
   });
 });
 
+// ─── segregationEvents test-isolation cleanup (j09 + cross-cohort journeys) ─────
+describe('Given "no prior segregationEvents exist between <source> and <target>"', () => {
+  // Custom fake-db supporting chained .where(...).where(...).get() with
+  // an array of doc-refs that each expose .delete(). The general
+  // makeStatefulFakeDb doesn't support where-chaining, so this is a
+  // local helper.
+  function makeSegEventsFakeDb(initialEvents) {
+    // Each event has { id, action, sourceUniqueId, targetUniqueId, ... }
+    let events = [...initialEvents];
+    function buildQuery(filters) {
+      return {
+        where: (field, op, value) => buildQuery([...filters, { field, op, value }]),
+        get: async () => {
+          const matching = events
+            .filter((evt) =>
+              filters.every(({ field, op, value }) => op === '==' && evt[field] === value),
+            )
+            .map((evt) => ({
+              id: evt.id,
+              data: () => evt,
+              ref: {
+                delete: async () => {
+                  events = events.filter((e) => e.id !== evt.id);
+                },
+              },
+            }));
+          return { docs: matching };
+        },
+      };
+    }
+    return {
+      collection: (name) => {
+        if (name !== 'segregationEvents') {
+          throw new Error(`fake-db only supports segregationEvents (got "${name}")`);
+        }
+        return buildQuery([]);
+      },
+      // Test inspection helpers
+      _events: () => events,
+    };
+  }
+
+  test('deletes all matching {action:"blocked", source, target} events; preserves non-matching', async () => {
+    const db = makeSegEventsFakeDb([
+      {
+        id: 'stale-1',
+        action: 'blocked',
+        sourceUniqueId: '60000010',
+        targetUniqueId: 'ra1',
+        timestamp: 1,
+      },
+      {
+        id: 'stale-2',
+        action: 'blocked',
+        sourceUniqueId: '60000010',
+        targetUniqueId: 'ra1',
+        timestamp: 2,
+      },
+      // Non-matching: different action
+      {
+        id: 'other-action',
+        action: 'allowed',
+        sourceUniqueId: '60000010',
+        targetUniqueId: 'ra1',
+        timestamp: 3,
+      },
+      // Non-matching: different target
+      {
+        id: 'other-target',
+        action: 'blocked',
+        sourceUniqueId: '60000010',
+        targetUniqueId: 'rb1',
+        timestamp: 4,
+      },
+      // Non-matching: different source
+      {
+        id: 'other-source',
+        action: 'blocked',
+        sourceUniqueId: '90000099',
+        targetUniqueId: 'ra1',
+        timestamp: 5,
+      },
+    ]);
+    const ctx = makeCtx({ db });
+    const r = await executeStep(
+      { kind: 'Given', text: 'no prior segregationEvents exist between "60000010" and "ra1"' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    const remaining = db
+      ._events()
+      .map((e) => e.id)
+      .sort();
+    expect(remaining).toEqual(['other-action', 'other-source', 'other-target']);
+  });
+
+  test('empty collection → ok=true (no-op, idempotent)', async () => {
+    const db = makeSegEventsFakeDb([]);
+    const ctx = makeCtx({ db });
+    const r = await executeStep(
+      { kind: 'Given', text: 'no prior segregationEvents exist between "60000010" and "ra1"' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(db._events()).toHaveLength(0);
+  });
+
+  test('re-running is idempotent (second call still ok=true)', async () => {
+    const db = makeSegEventsFakeDb([
+      {
+        id: 'stale-1',
+        action: 'blocked',
+        sourceUniqueId: '60000010',
+        targetUniqueId: 'ra1',
+        timestamp: 1,
+      },
+    ]);
+    const ctx = makeCtx({ db });
+    const r1 = await executeStep(
+      { kind: 'Given', text: 'no prior segregationEvents exist between "60000010" and "ra1"' },
+      ctx,
+    );
+    expect(r1.ok).toBe(true);
+    const r2 = await executeStep(
+      { kind: 'Given', text: 'no prior segregationEvents exist between "60000010" and "ra1"' },
+      ctx,
+    );
+    expect(r2.ok).toBe(true);
+    expect(db._events()).toHaveLength(0);
+  });
+
+  test('numeric uniqueId without quotes is accepted (source must be \\d+)', async () => {
+    // Pin the regex shape — source is `\d+` (with optional surrounding
+    // quotes) so a feature file written without quotes still parses.
+    const db = makeSegEventsFakeDb([]);
+    const ctx = makeCtx({ db });
+    const r = await executeStep(
+      { kind: 'Given', text: 'no prior segregationEvents exist between 60000010 and "ra1"' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('ctx.db missing → actionable error', async () => {
+    const ctx = makeCtx();
+    const r = await executeStep(
+      { kind: 'Given', text: 'no prior segregationEvents exist between "60000010" and "ra1"' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/ctx\.db.*not initialised/);
+  });
+
+  test('values are String-coerced before the query (matches production wire format)', async () => {
+    // Production routes write String(req.auth.uniqueId) — so the runner
+    // must query for the string form too, not the number. This test pins
+    // that the matcher's query uses the string '60000010', not the
+    // number 60000010.
+    const db = makeSegEventsFakeDb([
+      {
+        id: 'stringly-typed',
+        action: 'blocked',
+        sourceUniqueId: '60000010', // STRING per production convention
+        targetUniqueId: 'ra1',
+        timestamp: 1,
+      },
+    ]);
+    const ctx = makeCtx({ db });
+    const r = await executeStep(
+      { kind: 'Given', text: 'no prior segregationEvents exist between "60000010" and "ra1"' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    // The string-keyed event was deleted — proves the query coerced
+    // properly. If the matcher had queried for the NUMBER 60000010, the
+    // string-keyed doc would have survived.
+    expect(db._events()).toHaveLength(0);
+  });
+});
+
 describe('Dialog confirm action (platform-dispatch)', () => {
   test('"X on Android confirms in the dialog" → driver', async () => {
     const spy = jest.fn(async () => undefined);

@@ -133,6 +133,7 @@ Feature: j09 — Theo hosts a public voice room
   Scenario: LiveKit access token contains cohort claim matching the room
     Given Theo on Android created an adult-cohort room "ra1"
     Given Marcus [P-04] is signed in on Android
+    Given no prior segregationEvents exist between "60000010" and "ra1"
     When Alice on Web POSTs /api/livekit/token with roomName="ra1"
     Then the response status is 200
     Then the response body has field "token" of type "string"
