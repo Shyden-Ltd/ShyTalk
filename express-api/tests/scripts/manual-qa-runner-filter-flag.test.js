@@ -193,22 +193,36 @@ describe('--filter — argument validation (CLI)', () => {
     expect(r.stderr).toMatch(/--filter/);
   });
 
-  test('--dry-run --filter "" exits 2 (not a Node stack trace)', () => {
-    // Regression test for reviewer-flagged bug: formatDryRunJson called
-    // applyFilter without try/catch, so empty --filter under --dry-run
-    // crashed with an uncaught throw. Must exit cleanly with code 2.
-    const r = runCli(['--dry-run', '--target', 'local', '--filter', '']);
-    expect(r.status).toBe(2);
-    expect(r.stderr).toMatch(/--filter/);
-    // Should NOT see a Node stack trace ("at Object.<anonymous>" etc.).
-    expect(r.stderr).not.toMatch(/at Object\./);
+  test('--filter alone (single-cell, no --matrix/--check-drivers/--smoke) does NOT validate --filter', () => {
+    // Pinned design: --filter is a multi-cell subsetter. In single-cell
+    // mode (no --matrix/--check-drivers/--smoke), the cell is already
+    // explicit so --filter has no effect — silent-ignore by design.
+    // Verify by passing an EMPTY --filter (which WOULD error out in any
+    // multi-cell mode) and asserting the failure is NOT a --filter
+    // validation error. The runner will MISSING_ENV-fail downstream
+    // (no PERSONAS_PASSWORD) — that's expected, just not a --filter
+    // failure. This pin would catch any regression that accidentally
+    // applies --filter validation in single-cell mode.
+    const r = runCli(['--target', 'local', '--filter', '']);
+    expect(r.stderr).not.toMatch(/--filter: --filter requires/);
   });
+});
 
-  test('--dry-run --filter "   " (whitespace-only) exits 2', () => {
-    const r = runCli(['--dry-run', '--target', 'local', '--filter', '   ']);
-    expect(r.status).toBe(2);
-    expect(r.stderr).toMatch(/--filter/);
-  });
+test('--dry-run --filter "" exits 2 (not a Node stack trace)', () => {
+  // Regression test for reviewer-flagged bug: formatDryRunJson called
+  // applyFilter without try/catch, so empty --filter under --dry-run
+  // crashed with an uncaught throw. Must exit cleanly with code 2.
+  const r = runCli(['--dry-run', '--target', 'local', '--filter', '']);
+  expect(r.status).toBe(2);
+  expect(r.stderr).toMatch(/--filter/);
+  // Should NOT see a Node stack trace ("at Object.<anonymous>" etc.).
+  expect(r.stderr).not.toMatch(/at Object\./);
+});
+
+test('--dry-run --filter "   " (whitespace-only) exits 2', () => {
+  const r = runCli(['--dry-run', '--target', 'local', '--filter', '   ']);
+  expect(r.status).toBe(2);
+  expect(r.stderr).toMatch(/--filter/);
 });
 
 // ── filter composition with --dry-run ────────────────────────────

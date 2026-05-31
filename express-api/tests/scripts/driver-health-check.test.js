@@ -373,7 +373,10 @@ describe('runHealthCheck — smokeMethod', () => {
     expect(r.cells[0].outcome).toBe('ok');
   });
 
-  test('smokeMethod throws → outcome fail with actionable smoke prefix', async () => {
+  test('smokeMethod throws → outcome fail with actionable smoke prefix + result.ok=false', async () => {
+    // Pins the runner exit-code contract: smoke-fail → ok=false →
+    // runner exits 1. The runner-side `process.exit(result.ok ? 0 : 1)`
+    // is trivial mapping; pinning result.ok here pins the chain.
     const driver = makeFakeDriver();
     driver.webUiDump = jest.fn(async () => {
       throw new Error('page navigation timed out');
@@ -386,6 +389,7 @@ describe('runHealthCheck — smokeMethod', () => {
     expect(r.cells[0].outcome).toBe('fail');
     expect(r.cells[0].error).toMatch(/smoke method "webUiDump" failed/);
     expect(r.cells[0].error).toMatch(/page navigation timed out/);
+    expect(r.ok).toBe(false);
   });
 
   test('smokeMethod missing on driver → outcome fail with "not implemented"', async () => {
@@ -402,11 +406,31 @@ describe('runHealthCheck — smokeMethod', () => {
     expect(r.cells[0].error).toMatch(/smoke method "webUiDump" not implemented/);
   });
 
-  test('bootstrap fails (init error) → smoke NOT called, outcome stays skip', async () => {
+  test('bootstrap fails (non-init error) + smokeMethod set → outcome fail, smoke NOT called', async () => {
     const webUiDump = jest.fn();
     const factory = jest.fn(async () => {
-      const e = new Error('no device connected');
-      throw e;
+      throw new Error('runtime error during init');
+    });
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: factory },
+      smokeMethod: 'webUiDump',
+    });
+    expect(webUiDump).not.toHaveBeenCalled();
+    expect(r.cells[0].outcome).toBe('fail');
+  });
+
+  test('bootstrap fails (init error, no device) + smokeMethod set → outcome skip, smoke NOT called', async () => {
+    // The skip-then-no-smoke path: bootstrap throws with an init-error
+    // signature that isInitError() classifies as skip-worthy. Smoke
+    // must NOT be called (no driver to call it on), and outcome must
+    // be 'skip' (operator action: connect a device — not "driver
+    // broken"). Pin both invariants here.
+    const webUiDump = jest.fn();
+    const factory = jest.fn(async () => {
+      // "no Android device attached" matches the isInitError pattern
+      // for init-time device-absent failures (see matrix-dispatch.js).
+      throw new Error('no Android device attached');
     });
     const r = await runHealthCheck({
       browsers: ['mobile-chrome-android'],
@@ -414,10 +438,8 @@ describe('runHealthCheck — smokeMethod', () => {
       smokeMethod: 'webUiDump',
     });
     expect(webUiDump).not.toHaveBeenCalled();
-    // Bootstrap-fail without init-error signature → fail (not skip)
-    // because the error message doesn't match isInitError. Use a real
-    // init-error-shaped message instead.
-    expect(r.cells[0].outcome).toBe('fail');
+    expect(r.cells[0].outcome).toBe('skip');
+    expect(r.cells[0].error).toMatch(/no Android device attached/);
   });
 
   test('close error after successful smoke does NOT downgrade outcome', async () => {

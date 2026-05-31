@@ -97,13 +97,51 @@ describe('buildDriverFactories — exported helper', () => {
     }
   });
 
-  test('headed=true is wired through to playwright factories (not invoked)', () => {
-    // We don't INVOKE factories (would spin up real Playwright), but
-    // we can verify the closure captured `headed` by checking the
-    // factory body's printed form via .toString(). Cheap, no I/O.
-    const factories = buildDriverFactories({ headed: true });
-    const body = factories.chromium.toString();
-    expect(body).toMatch(/headless: !headed/);
+  test('headed=true → headless:false reaches createWebDriver (behavior, not source-text)', async () => {
+    // Behavior-pinning replacement for the earlier .toString() check:
+    // mock the playwright driver module and verify the factory passes
+    // headless:!headed to createWebDriver. Source-text inspection
+    // would break under any transformation; behavior testing won't.
+    jest.resetModules();
+    const createWebDriver = jest.fn(async () => ({ close: jest.fn() }));
+    jest.doMock(path.join(REPO_ROOT, 'express-api/scripts/drivers/web-playwright-driver'), () => ({
+      createWebDriver,
+    }));
+    const { buildDriverFactories: bdf } = require(RUNNER_PATH);
+    const factories = bdf({ headed: true });
+    await factories.chromium({ baseURL: 'https://x.test' });
+    expect(createWebDriver).toHaveBeenCalledWith(
+      expect.objectContaining({ headless: false, browser: 'chromium', baseURL: 'https://x.test' }),
+    );
+    jest.unmock(path.join(REPO_ROOT, 'express-api/scripts/drivers/web-playwright-driver'));
+    jest.resetModules();
+  });
+
+  test('headed=false → headless:true reaches createWebDriver', async () => {
+    // Companion to the headed=true test — pins the negation path.
+    jest.resetModules();
+    const createWebDriver = jest.fn(async () => ({ close: jest.fn() }));
+    jest.doMock(path.join(REPO_ROOT, 'express-api/scripts/drivers/web-playwright-driver'), () => ({
+      createWebDriver,
+    }));
+    const { buildDriverFactories: bdf } = require(RUNNER_PATH);
+    const factories = bdf({ headed: false });
+    await factories.chromium({ baseURL: 'https://x.test' });
+    expect(createWebDriver).toHaveBeenCalledWith(expect.objectContaining({ headless: true }));
+    jest.unmock(path.join(REPO_ROOT, 'express-api/scripts/drivers/web-playwright-driver'));
+    jest.resetModules();
+  });
+
+  test('factory count matches browser-allowlist SUPPORTED_BROWSERS', () => {
+    // Drift-catch: if a new cell is added to browser-allowlist but the
+    // factory map isn't updated, --check-drivers/--smoke would fail
+    // mid-dispatch with "no factory registered for browser slug X".
+    // Pin the contract here so the test fails immediately.
+    const { SUPPORTED_BROWSERS } = require(
+      path.join(REPO_ROOT, 'express-api/scripts/browser-allowlist'),
+    );
+    const factories = buildDriverFactories({ headed: false });
+    expect(Object.keys(factories).sort()).toEqual([...SUPPORTED_BROWSERS].sort());
   });
 
   test('lazy require — does not load driver modules at construction time', () => {
