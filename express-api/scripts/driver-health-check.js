@@ -87,16 +87,32 @@ async function runHealthCheck({
     const t0 = nowMs();
     let outcome;
     let error;
+    // Phase metrics — declared at cell scope so they survive the
+    // factory/else branching and reach the cell-building block below.
+    let cellBootstrapMs;
+    let cellSmokeMs;
+    let cellCloseMs;
     const factory = factories[browser];
     if (typeof factory !== 'function') {
       outcome = 'fail';
       error = `no factory registered for browser slug "${browser}"`;
     } else {
       let driver;
+      // Phase timing (gap C5): bootstrap / smoke / close ms each recorded
+      // when their phase executes. Operator can identify which phase
+      // dominates the cell's total wall time. Phases that don't run
+      // leave their field undefined (NOT 0 — a 0 would falsely imply
+      // the phase ran instantly).
+      let bootstrapMs;
+      let smokeMs;
+      let closeMs;
+      const tBoot = nowMs();
       try {
         driver = await factory({ baseURL });
+        bootstrapMs = Math.max(0, nowMs() - tBoot);
         outcome = 'ok';
       } catch (e) {
+        bootstrapMs = Math.max(0, nowMs() - tBoot);
         if (isInitError(e)) {
           outcome = 'skip';
           error = e.message;
@@ -110,13 +126,16 @@ async function runHealthCheck({
       // its own method is broken at runtime — separate from init
       // failures (which are 'skip'-classified above).
       if (outcome === 'ok' && smokeMethod && driver) {
+        const tSmoke = nowMs();
         if (typeof driver[smokeMethod] !== 'function') {
           outcome = 'fail';
           error = `smoke method "${smokeMethod}" not implemented on driver`;
         } else {
           try {
             await driver[smokeMethod]();
+            smokeMs = Math.max(0, nowMs() - tSmoke);
           } catch (e) {
+            smokeMs = Math.max(0, nowMs() - tSmoke);
             outcome = 'fail';
             error = `smoke method "${smokeMethod}" failed: ${e.message}`;
           }
@@ -125,16 +144,27 @@ async function runHealthCheck({
       // Best-effort close — never let a close error change the
       // health-check outcome (the bootstrap succeeded, that's the point).
       if (driver && typeof driver.close === 'function') {
+        const tClose = nowMs();
         try {
           await driver.close();
+          closeMs = Math.max(0, nowMs() - tClose);
         } catch (_e) {
+          closeMs = Math.max(0, nowMs() - tClose);
           /* swallow close errors */
         }
       }
+      // Hoist phase metrics to cell scope so the cell-builder below
+      // can pick them up after the factory/else branching closes.
+      cellBootstrapMs = bootstrapMs;
+      cellSmokeMs = smokeMs;
+      cellCloseMs = closeMs;
     }
     const durationMs = Math.max(0, nowMs() - t0);
     const cell = { browser, outcome, durationMs };
     if (error) cell.error = error;
+    if (cellBootstrapMs !== undefined) cell.bootstrapMs = cellBootstrapMs;
+    if (cellSmokeMs !== undefined) cell.smokeMs = cellSmokeMs;
+    if (cellCloseMs !== undefined) cell.closeMs = cellCloseMs;
     cells.push(cell);
     if (typeof onCellEnd === 'function') onCellEnd(cell);
   }

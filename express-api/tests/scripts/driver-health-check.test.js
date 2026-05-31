@@ -261,6 +261,10 @@ describe('runHealthCheck — baseURL + callbacks', () => {
 
 describe('runHealthCheck — timing', () => {
   test('durationMs from injected nowMs delta', async () => {
+    // Phase timing (gap C5) added 5 additional nowMs() calls per cell:
+    //   t0 + tBoot + bootstrapEnd + tClose + closeEnd + final = 6 calls.
+    // With +200 per call, each cell spans 6*200 = 1200ms wall time;
+    // durationMs = (6-1)*200 = 1000ms (final - t0).
     let n = 1000;
     const r = await runHealthCheck({
       browsers: ['chromium', 'firefox'],
@@ -274,13 +278,16 @@ describe('runHealthCheck — timing', () => {
         return v;
       },
     });
-    expect(r.cells[0].durationMs).toBe(200);
-    expect(r.cells[1].durationMs).toBe(200);
+    expect(r.cells[0].durationMs).toBe(1000);
+    expect(r.cells[1].durationMs).toBe(1000);
   });
 
   test('durationMs clamped to >= 0 (no negative even if clock skews)', async () => {
+    // 6 ticks per cell (phase timing): t0, tBoot, bootEnd, tClose,
+    // closeEnd, final. Use deliberately-bad clock to force a negative
+    // delta on final-t0 and assert clamp.
     let n = 0;
-    const ticks = [1000, 500, 800, 1100];
+    const ticks = [1000, 500, 800, 1100, 900, 700]; // final < t0
     const r = await runHealthCheck({
       browsers: ['chromium'],
       factories: { chromium: makeFactoryReturning(makeFakeDriver()) },
@@ -476,5 +483,130 @@ describe('runHealthCheck — smokeMethod', () => {
     expect(r.cells[0].outcome).toBe('ok');
     expect(r.cells[1].outcome).toBe('fail');
     expect(r.totals).toEqual({ ok: 1, fail: 1, skip: 0 });
+  });
+});
+
+// runHealthCheck — per-cell phase timing breakdown ──────────────────
+
+describe('runHealthCheck — phase timing breakdown (gap C5)', () => {
+  test('bootstrapMs is set when factory succeeds', async () => {
+    const driver = makeFakeDriver();
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+    });
+    expect(typeof r.cells[0].bootstrapMs).toBe('number');
+    expect(r.cells[0].bootstrapMs).toBeGreaterThanOrEqual(0);
+  });
+
+  test('bootstrapMs is set even when factory throws (measured before classify)', async () => {
+    // Operator wants to know "how long did the failing bootstrap take?"
+    // — useful for distinguishing "fails immediately" from "fails after
+    // long timeout" (e.g., a flaky CDP connection). Pin the metric is
+    // present on failure paths too.
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryThrowing(new Error('boom')) },
+    });
+    expect(r.cells[0].outcome).toBe('fail');
+    expect(typeof r.cells[0].bootstrapMs).toBe('number');
+    expect(r.cells[0].bootstrapMs).toBeGreaterThanOrEqual(0);
+  });
+
+  test('smokeMs is set when smoke method called successfully', async () => {
+    const driver = makeFakeDriver();
+    driver.webUiDump = jest.fn(async () => 'dump');
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+      smokeMethod: 'webUiDump',
+    });
+    expect(typeof r.cells[0].smokeMs).toBe('number');
+    expect(r.cells[0].smokeMs).toBeGreaterThanOrEqual(0);
+  });
+
+  test('smokeMs is set even when smoke method throws', async () => {
+    const driver = makeFakeDriver();
+    driver.webUiDump = jest.fn(async () => {
+      throw new Error('navigation timed out');
+    });
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+      smokeMethod: 'webUiDump',
+    });
+    expect(r.cells[0].outcome).toBe('fail');
+    expect(typeof r.cells[0].smokeMs).toBe('number');
+  });
+
+  test('smokeMs is undefined when smokeMethod not requested', async () => {
+    // Backward compat: --check-drivers paths don't set smokeMethod;
+    // smokeMs field must be omitted entirely (not set to 0).
+    const driver = makeFakeDriver();
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+    });
+    expect(r.cells[0].smokeMs).toBeUndefined();
+  });
+
+  test('smokeMs is undefined when bootstrap failed (smoke not called)', async () => {
+    // Phase-omission invariant: if a phase didn't execute, its timing
+    // field is undefined — not 0 (which would falsely imply the phase
+    // ran in zero time).
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryThrowing(new Error('boom')) },
+      smokeMethod: 'webUiDump',
+    });
+    expect(r.cells[0].smokeMs).toBeUndefined();
+  });
+
+  test('closeMs is set when close called', async () => {
+    const driver = makeFakeDriver();
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+    });
+    expect(typeof r.cells[0].closeMs).toBe('number');
+  });
+
+  test('closeMs is set even when close throws (swallowed)', async () => {
+    const driver = makeFakeDriver({
+      closeImpl: jest.fn(async () => {
+        throw new Error('close error');
+      }),
+    });
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+    });
+    // close error is swallowed; outcome stays ok; closeMs still recorded
+    expect(r.cells[0].outcome).toBe('ok');
+    expect(typeof r.cells[0].closeMs).toBe('number');
+  });
+
+  test('closeMs is undefined when bootstrap failed (no driver to close)', async () => {
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryThrowing(new Error('boom')) },
+    });
+    expect(r.cells[0].closeMs).toBeUndefined();
+  });
+
+  test('phase sum approximately equals durationMs (within ms rounding)', async () => {
+    // Sanity invariant: bootstrapMs + smokeMs + closeMs ≈ durationMs.
+    // Tolerance: 5ms for rounding + any small overhead between
+    // nowMs() calls outside the phase timers.
+    const driver = makeFakeDriver();
+    driver.webUiDump = jest.fn(async () => 'ok');
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+      smokeMethod: 'webUiDump',
+    });
+    const cell = r.cells[0];
+    const phaseSum = (cell.bootstrapMs || 0) + (cell.smokeMs || 0) + (cell.closeMs || 0);
+    expect(Math.abs(cell.durationMs - phaseSum)).toBeLessThanOrEqual(5);
   });
 });
