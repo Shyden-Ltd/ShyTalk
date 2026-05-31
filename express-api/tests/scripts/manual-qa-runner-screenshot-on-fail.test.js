@@ -101,8 +101,12 @@ describe('runFeatureFile screenshot-on-failure hook (C3)', () => {
     );
     expect(wrongStatus.status).toBe('fail');
     expect(wrongStatus.screenshots).toEqual(['/tmp/qa-report/screenshot-chromium-Alice.png']);
-    // The hook receives reportDir verbatim so the helper can mkdir + write.
-    expect(takeScreenshot).toHaveBeenCalledWith('/tmp/qa-report');
+    // The hook passes a per-failure subdir `<reportDir>/scenario-<N>/`
+    // so multiple failures in the same feature don't overwrite each
+    // other's PNGs (reviewer I1 fix).
+    expect(takeScreenshot).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/tmp\/qa-report\/scenario-\d+$/),
+    );
     // Called once per failing scenario (sample-failures has 3, so ≥1).
     expect(takeScreenshot).toHaveBeenCalled();
   });
@@ -236,6 +240,61 @@ describe('runFeatureFile screenshot-on-failure hook (C3)', () => {
     expect(takeScreenshot.mock.calls.length).toBe(failingReports.length);
     for (const r of failingReports) {
       expect(r.screenshots).toEqual(['shot.png']);
+    }
+  });
+
+  test('multi-failure: each scenario gets a UNIQUE outputDir (collision-proof per reviewer I1)', async () => {
+    // Reviewer-flagged: prior helper-level filename pattern
+    // `screenshot-<slug>-<persona>.png` had no scenario qualifier, so
+    // a second failing scenario with the same persona would overwrite
+    // the first. Fix: runner passes `<reportDir>/scenario-<N>/` as the
+    // outputDir, where N is the failure ordinal. Helper writes inside
+    // that subdir → no collision possible.
+    const takeScreenshot = jest.fn(async (outputDir) => [`${outputDir}/shot.png`]);
+    const ctx = makeCtx({
+      reportDir: '/tmp/qa-report',
+      webDriver: { takeScreenshot },
+    });
+    await runFeatureFile(FAILURES_FIXTURE, ctx);
+    const uniqueDirs = new Set(takeScreenshot.mock.calls.map((c) => c[0]));
+    // If two failures shared an outputDir, set size would be < calls length.
+    expect(uniqueDirs.size).toBe(takeScreenshot.mock.calls.length);
+    // Each call gets a `scenario-N` suffix.
+    for (const [dir] of takeScreenshot.mock.calls) {
+      expect(dir).toMatch(/\/tmp\/qa-report\/scenario-\d+$/);
+    }
+  });
+
+  test('empty-string screenshot paths are filtered out (reviewer P3)', async () => {
+    // Defense-in-depth: if a future helper bug returned `['']`, the
+    // runner's `length > 0` guard would attach `screenshots: ['']` —
+    // a garbage path for any downstream artifact consumer. The
+    // `.filter(Boolean)` in the runner strips falsy entries first.
+    const takeScreenshot = jest.fn(async () => ['', '/real/path.png', '']);
+    const ctx = makeCtx({
+      reportDir: '/tmp/qa-report',
+      webDriver: { takeScreenshot },
+    });
+    const { scenarioReports } = await runFeatureFile(FAILURES_FIXTURE, ctx);
+    const failingReports = scenarioReports.filter((s) => s.status === 'fail');
+    for (const r of failingReports) {
+      expect(r.screenshots).toEqual(['/real/path.png']);
+    }
+  });
+
+  test('helper returns only empty strings → screenshots field NOT attached', async () => {
+    // Edge of P3: if every entry is falsy, the post-filter array is
+    // empty → length-check skips the .screenshots assignment entirely.
+    // No screenshots field is more honest than `screenshots: []`.
+    const takeScreenshot = jest.fn(async () => ['', '']);
+    const ctx = makeCtx({
+      reportDir: '/tmp/qa-report',
+      webDriver: { takeScreenshot },
+    });
+    const { scenarioReports } = await runFeatureFile(FAILURES_FIXTURE, ctx);
+    const failingReports = scenarioReports.filter((s) => s.status === 'fail');
+    for (const r of failingReports) {
+      expect(r.screenshots).toBeUndefined();
     }
   });
 });

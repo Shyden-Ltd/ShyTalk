@@ -609,3 +609,67 @@ describe('close', () => {
     await expect(driver.close()).resolves.toBeUndefined();
   });
 });
+
+// takeScreenshot — behavioral delegation (gap C3, reviewer I2) ────────
+//
+// firefox-android uses Geckodriver's W3C WebDriver HTTP API — same
+// `/session/<sid>/screenshot` endpoint as Appium — so we delegate to
+// `takeScreenshotViaAppium` (helper is transport-correct for any W3C
+// driver despite the name). This test pins the wiring with the
+// correct Geckodriver port + slug.
+
+describe('createMobileFirefoxAndroidDriver — takeScreenshot delegation', () => {
+  const helper = require(
+    path.join(REPO_ROOT, 'express-api/scripts/drivers/driver-screenshot-helper'),
+  );
+
+  test('routes to takeScreenshotViaAppium with Geckodriver URL + session + slug', async () => {
+    const spy = jest
+      .spyOn(helper, 'takeScreenshotViaAppium')
+      .mockResolvedValue(['/mock/firefox.png']);
+    try {
+      const spawnImpl = makeSpawnMock();
+      const fetchImpl = makeFetchMock(defaultHandlers({ sessionId: 'sess-ff-789' }));
+      const driver = await createMobileFirefoxAndroidDriver({
+        geckodriverPath: '/opt/homebrew/bin/geckodriver',
+        spawnImpl,
+        fetchImpl,
+        pickPort: async () => 4444,
+        waitForReady: async () => true,
+      });
+      // Establish session via webRefreshRoomsList → navigateTo → ensureSession.
+      await driver.webRefreshRoomsList('Alice');
+
+      const result = await driver.takeScreenshot('/tmp/firefox-report');
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      const [args] = spy.mock.calls[0];
+      // Geckodriver listens on 127.0.0.1:<chosenPort>; we forced 4444 above.
+      expect(args.appiumBaseUrl).toBe('http://127.0.0.1:4444');
+      expect(args.sessionId).toBe('sess-ff-789');
+      expect(args.fetchImpl).toBe(fetchImpl);
+      expect(args.outputDir).toBe('/tmp/firefox-report');
+      expect(args.slug).toBe('mobile-firefox-android');
+      expect(result).toEqual(['/mock/firefox.png']);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('sessionId reflects current _sessionId (null before any session call)', async () => {
+    const spy = jest.spyOn(helper, 'takeScreenshotViaAppium').mockResolvedValue([]);
+    try {
+      const driver = await createMobileFirefoxAndroidDriver({
+        geckodriverPath: '/opt/homebrew/bin/geckodriver',
+        spawnImpl: makeSpawnMock(),
+        fetchImpl: makeFetchMock([]),
+        pickPort: async () => 4444,
+        waitForReady: async () => true,
+      });
+      await driver.takeScreenshot('/tmp/out');
+      expect(spy.mock.calls[0][0].sessionId).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

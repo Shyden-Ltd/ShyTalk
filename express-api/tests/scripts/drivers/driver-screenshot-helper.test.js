@@ -18,7 +18,12 @@ const path = require('path');
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const HELPER_PATH = path.join(REPO_ROOT, 'scripts/drivers/driver-screenshot-helper.js');
 
-const { takeScreenshotForPages, takeScreenshotViaAppium } = require(HELPER_PATH);
+const {
+  takeScreenshotForPages,
+  takeScreenshotViaAppium,
+  safeFilenamePart,
+  ensureDirSafe,
+} = require(HELPER_PATH);
 
 // Non-http scheme placeholder for tests — Appium's real base URL is
 // http://localhost:4723 but linting flags clear-text protocols, and our
@@ -128,6 +133,45 @@ describe('takeScreenshotForPages — Playwright pages map', () => {
       expect(screenshot).toHaveBeenCalledWith(
         expect.objectContaining({ fullPage: true, path: expect.any(String) }),
       );
+    } finally {
+      cleanup(outDir);
+    }
+  });
+
+  test('returns [] when fs.mkdirSync throws (EACCES / EROFS / disk-full) — never throws (C1)', async () => {
+    // Reviewer-flagged: mkdirSync was OUTSIDE the try/catch. JSDoc
+    // promises best-effort semantics — function must NEVER throw.
+    const originalMkdir = fs.mkdirSync;
+    fs.mkdirSync = jest.fn(() => {
+      throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+    });
+    try {
+      const r = await takeScreenshotForPages(
+        new Map([['Alice', { screenshot: jest.fn() }]]),
+        '/some/forbidden/dir',
+        'chromium',
+      );
+      expect(r).toEqual([]);
+    } finally {
+      fs.mkdirSync = originalMkdir;
+    }
+  });
+
+  test('sanitizes persona keys with path-traversal segments (P2)', async () => {
+    // Defense-in-depth: persona key comes from driver-controlled
+    // pages-Map. Path.join would resolve `..` segments and escape
+    // outputDir. The helper strips to a conservative charset before
+    // joining.
+    const outDir = tmpDir('persona-sanitize');
+    const screenshot = jest.fn(async ({ path: p }) => fs.writeFileSync(p, 'ok'));
+    const pages = new Map([['../../etc/shadow', { screenshot }]]);
+    try {
+      const r = await takeScreenshotForPages(pages, outDir, 'chromium');
+      expect(r).toHaveLength(1);
+      // ../../etc/shadow → ___..etc.shadow → all non-[a-zA-Z0-9_-] become _
+      expect(r[0]).toBe(path.join(outDir, 'screenshot-chromium-______etc_shadow.png'));
+      // Verify the file is INSIDE outDir, not escaped
+      expect(r[0].startsWith(outDir)).toBe(true);
     } finally {
       cleanup(outDir);
     }
@@ -285,6 +329,126 @@ describe('takeScreenshotViaAppium — Appium HTTP screenshot endpoint', () => {
       expect(fetchImpl).toHaveBeenCalledWith(`${MOCK_APPIUM_BASE}/session/abc-123/screenshot`);
     } finally {
       cleanup(outDir);
+    }
+  });
+
+  test('returns [] when r.json() throws — malformed response body (I3)', async () => {
+    // Distinct from the fetchImpl-throw case: the HTTP layer succeeds
+    // but the body is non-JSON (HTML error page, truncated stream,
+    // protocol mismatch). Helper must swallow + return [].
+    const outDir = tmpDir('appium-json-throw');
+    const fetchImpl = jest.fn(async () => ({
+      ok: true,
+      json: async () => {
+        throw new SyntaxError('Unexpected token < in JSON at position 0');
+      },
+    }));
+    try {
+      const r = await takeScreenshotViaAppium({
+        appiumBaseUrl: MOCK_APPIUM_BASE,
+        sessionId: 'sid',
+        fetchImpl,
+        outputDir: outDir,
+        slug: 'mobile-safari-ios',
+      });
+      expect(r).toEqual([]);
+    } finally {
+      cleanup(outDir);
+    }
+  });
+
+  test('returns [] when body.value is a non-string truthy value (I4)', async () => {
+    // Buffer.from(42, 'base64') throws TypeError. The outer try/catch
+    // catches it in production, but the explicit typeof guard short-
+    // circuits without paying for the Buffer.from attempt and gives
+    // a cleaner contract.
+    const outDir = tmpDir('appium-non-string');
+    const fetchImpl = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ value: 42 }),
+    }));
+    try {
+      const r = await takeScreenshotViaAppium({
+        appiumBaseUrl: MOCK_APPIUM_BASE,
+        sessionId: 'sid',
+        fetchImpl,
+        outputDir: outDir,
+        slug: 'mobile-safari-ios',
+      });
+      expect(r).toEqual([]);
+    } finally {
+      cleanup(outDir);
+    }
+  });
+
+  test('returns [] when fs.mkdirSync throws — never throws (C1)', async () => {
+    // Reviewer-flagged: parity with the Playwright-side mkdirSync
+    // guard. Best-effort contract must hold for the Appium path too.
+    const originalMkdir = fs.mkdirSync;
+    fs.mkdirSync = jest.fn(() => {
+      throw Object.assign(new Error('EROFS: read-only file system'), { code: 'EROFS' });
+    });
+    try {
+      const r = await takeScreenshotViaAppium({
+        appiumBaseUrl: MOCK_APPIUM_BASE,
+        sessionId: 'sid',
+        fetchImpl: jest.fn(),
+        outputDir: '/readonly/dir',
+        slug: 'mobile-safari-ios',
+      });
+      expect(r).toEqual([]);
+    } finally {
+      fs.mkdirSync = originalMkdir;
+    }
+  });
+});
+
+// ── safeFilenamePart + ensureDirSafe (internals exposed for testing) ──
+
+describe('safeFilenamePart — persona-key sanitizer', () => {
+  test('strips path-traversal segments', () => {
+    expect(safeFilenamePart('../../etc/shadow')).toBe('______etc_shadow');
+  });
+
+  test('strips backslashes (Windows path-traversal)', () => {
+    expect(safeFilenamePart('..\\..\\Windows\\System32')).toBe('______Windows_System32');
+  });
+
+  test('preserves alphanumerics + underscore + hyphen', () => {
+    expect(safeFilenamePart('Alice-1_admin')).toBe('Alice-1_admin');
+  });
+
+  test('coerces non-string inputs via String()', () => {
+    expect(safeFilenamePart(42)).toBe('42');
+    expect(safeFilenamePart(null)).toBe('null');
+    expect(safeFilenamePart(undefined)).toBe('undefined');
+  });
+
+  test('strips embedded null bytes (defense against C-string truncation in downstream tools)', () => {
+    expect(safeFilenamePart('Alice\0evil')).toBe('Alice_evil');
+  });
+});
+
+describe('ensureDirSafe — never-throws mkdir wrapper', () => {
+  test('returns true on success', () => {
+    const dir = tmpDir('ensure-ok');
+    try {
+      expect(ensureDirSafe(dir)).toBe(true);
+      expect(fs.existsSync(dir)).toBe(true);
+    } finally {
+      cleanup(dir);
+    }
+  });
+
+  test('returns false on mkdir failure (never throws)', () => {
+    const originalMkdir = fs.mkdirSync;
+    fs.mkdirSync = jest.fn(() => {
+      throw new Error('EACCES');
+    });
+    try {
+      expect(ensureDirSafe('/whatever')).toBe(false);
+    } finally {
+      fs.mkdirSync = originalMkdir;
     }
   });
 });

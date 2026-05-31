@@ -258,3 +258,64 @@ describe('web-playwright-driver — webRefreshRoomsList', () => {
     expect(ok).toBe(false);
   });
 });
+
+// takeScreenshot — behavioral delegation (gap C3, reviewer I2) ────────
+//
+// Distinct from the static source-text pin in
+// driver-screenshot-delegation.test.js — this test exercises the actual
+// runtime wiring by spying on the helper module and asserting the
+// driver's inline `require('./driver-screenshot-helper')` call
+// delegates with the closure-captured `pages` Map (not a fresh empty
+// Map or a stale reference).
+
+describe('web-playwright-driver — takeScreenshot delegation', () => {
+  const helperPath = path.join(REPO_ROOT, 'express-api/scripts/drivers/driver-screenshot-helper');
+  const helper = require(helperPath);
+
+  test('routes to takeScreenshotForPages with the populated pages Map + slug + outputDir', async () => {
+    const spy = jest
+      .spyOn(helper, 'takeScreenshotForPages')
+      .mockResolvedValue(['/mock/png-1.png', '/mock/png-2.png']);
+    try {
+      prepareMockPages({ Alice: makeMockPage(), Bob: makeMockPage() });
+      const driver = await createWebDriver({ baseURL: 'http://localhost:8888' });
+      // Populate the pages Map by exercising pageFor() through the
+      // driver's public API. Drives the closure's `pages` variable.
+      await driver.webRefreshRoomsList('Alice');
+      await driver.webRefreshRoomsList('Bob');
+
+      const result = await driver.takeScreenshot('/tmp/report-dir');
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      const [pagesArg, outputDirArg, slugArg] = spy.mock.calls[0];
+      expect(outputDirArg).toBe('/tmp/report-dir');
+      expect(slugArg).toBe('chromium');
+      // CRITICAL: pagesArg must be the SAME Map instance that
+      // pageFor() populated. A regression that passes a fresh Map
+      // would silently produce 0 screenshots — this assertion catches it.
+      expect(pagesArg instanceof Map).toBe(true);
+      expect(pagesArg.size).toBe(2);
+      expect(pagesArg.has('Alice')).toBe(true);
+      expect(pagesArg.has('Bob')).toBe(true);
+      expect(result).toEqual(['/mock/png-1.png', '/mock/png-2.png']);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('slug reflects the configured browser (firefox path)', async () => {
+    const spy = jest.spyOn(helper, 'takeScreenshotForPages').mockResolvedValue([]);
+    try {
+      prepareMockPages({ Alice: makeMockPage() });
+      const driver = await createWebDriver({
+        baseURL: 'http://localhost:8888',
+        browser: 'firefox',
+      });
+      await driver.webRefreshRoomsList('Alice');
+      await driver.takeScreenshot('/tmp/out');
+      expect(spy.mock.calls[0][2]).toBe('firefox');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

@@ -401,3 +401,58 @@ describe('close', () => {
     expect(fetchImpl.calls.filter((c) => c.opts.method === 'DELETE')).toHaveLength(1);
   });
 });
+
+// takeScreenshot — behavioral delegation (gap C3, reviewer I2) ────────
+
+describe('createMobileSafariIosDriver — takeScreenshot delegation', () => {
+  const helperPath = path.join(REPO_ROOT, 'express-api/scripts/drivers/driver-screenshot-helper');
+  const helper = require(helperPath);
+
+  test('routes to takeScreenshotViaAppium with Appium URL + session + slug', async () => {
+    const spy = jest
+      .spyOn(helper, 'takeScreenshotViaAppium')
+      .mockResolvedValue(['/mock/safari.png']);
+    try {
+      const fetchImpl = makeFetchMock(defaultHandlers({ sessionId: 'sess-xyz' }));
+      const driver = await createMobileSafariIosDriver({
+        wdaTeamId: 'TEAM123',
+        selectUdidImpl: () => 'UDID',
+        fetchImpl,
+      });
+      // Establish session via a normal driver call so _sessionId is set.
+      await driver.webRefreshRoomsList('Alice');
+
+      const result = await driver.takeScreenshot('/tmp/report');
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      const [args] = spy.mock.calls[0];
+      expect(args.appiumBaseUrl).toBe(DEFAULT_APPIUM_BASE_URL);
+      expect(args.sessionId).toBe('sess-xyz');
+      expect(args.fetchImpl).toBe(fetchImpl);
+      expect(args.outputDir).toBe('/tmp/report');
+      expect(args.slug).toBe('mobile-safari-ios');
+      expect(result).toEqual(['/mock/safari.png']);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('sessionId is null when called before session-establishment', async () => {
+    // Drift-catch: if a future refactor pre-establishes the session
+    // eagerly in the factory, this test fails — which is fine, the
+    // sessionId field will be set; but the assertion then needs an
+    // update. Today, _sessionId starts null until first method call.
+    const spy = jest.spyOn(helper, 'takeScreenshotViaAppium').mockResolvedValue([]);
+    try {
+      const driver = await createMobileSafariIosDriver({
+        wdaTeamId: 'TEAM123',
+        selectUdidImpl: () => 'UDID',
+        fetchImpl: makeFetchMock([]),
+      });
+      await driver.takeScreenshot('/tmp/out');
+      expect(spy.mock.calls[0][0].sessionId).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

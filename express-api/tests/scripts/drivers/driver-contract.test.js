@@ -54,7 +54,7 @@ function discoverDrivers() {
 // ── Discovery sanity ───────────────────────────────────────────────
 
 describe('Driver discovery', () => {
-  test('finds at least the 11 expected drivers (13 files − 2 helpers)', () => {
+  test('finds >= 11 drivers; exact count pinned by EXPECTED_COUNTS (14 files − 3 helpers)', () => {
     expect(discoverDrivers().length).toBeGreaterThanOrEqual(11);
   });
 

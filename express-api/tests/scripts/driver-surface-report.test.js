@@ -19,14 +19,15 @@ const { discoverDrivers, buildReport, formatTable, formatJson, formatUsage } = r
 // ── Pure helpers ───────────────────────────────────────────────────
 
 describe('discoverDrivers', () => {
-  test('returns at least the 11 expected drivers (13 files − 2 helpers)', () => {
+  test('returns >= 11 drivers; exact count pinned by EXPECTED_COUNTS (14 files − 3 helpers)', () => {
     expect(discoverDrivers().length).toBeGreaterThanOrEqual(11);
   });
 
-  test('excludes helper modules (android-cdp-helpers, ios-driver-loader)', () => {
+  test('excludes helper modules (android-cdp-helpers, ios-driver-loader, driver-screenshot-helper)', () => {
     const names = discoverDrivers().map((d) => d.name);
     expect(names).not.toContain('android-cdp-helpers');
     expect(names).not.toContain('ios-driver-loader');
+    expect(names).not.toContain('driver-screenshot-helper');
   });
 
   test('result entries have name + full (absolute path)', () => {
