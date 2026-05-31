@@ -1,0 +1,152 @@
+name: Manual QA Matrix
+
+# Operator-invoked QA matrix dispatch via workflow_dispatch. Runs the
+# manual-qa-runner with the operator-selected target + filters + shard
+# and uploads the matrix report as an artifact.
+#
+# Closes gap E1 from
+# .project/test-plans/exhaustive/2026-05-30-qa-runner-framework-gaps.md:
+# "NO manual-qa-matrix.yml workflow exists; the 12-cell matrix has
+# zero CI integration. Operator's only path was local laptop runs."
+#
+# Per [[feedback-no-self-hosted-runners]] uses ubuntu-latest only.
+# Per [[feedback-ci-cache-downloads-version-aware]] Playwright browser
+# binaries are cached on the resolved Playwright version (busts when
+# the dependency bumps).
+# Per [[feedback-avoid-crons-prefer-event-driven]] no cron schedule —
+# operator triggers manually via the GitHub Actions UI (workflow_dispatch).
+#
+# Inputs are passed to the runner via env vars (not interpolated into
+# the run script) so shell-metacharacter injection is impossible.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target environment'
+        type: choice
+        required: true
+        default: dev
+        options:
+          - local
+          - dev
+          - prod
+      filter:
+        description: 'Substring pattern (comma-separated) to subset cells (e.g. "android" or "chromium,firefox"). Leave blank for full target allowlist.'
+        type: string
+        required: false
+      shard:
+        description: 'CI parallelism shard X/Y (1-indexed). Leave blank for full matrix.'
+        type: string
+        required: false
+      retry:
+        description: 'Per-cell in-run retry count on fail/timeout. Default 0.'
+        type: string
+        required: false
+        default: '0'
+      report-format:
+        description: 'Matrix report format'
+        type: choice
+        required: true
+        default: json
+        options:
+          - json
+          - junit
+
+permissions:
+  contents: read
+
+jobs:
+  matrix-dispatch:
+    name: 'Manual QA matrix (${{ inputs.target }}, shard ${{ inputs.shard || ''all'' }})'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: express-api/package-lock.json
+
+      - name: Install express-api deps
+        run: npm ci
+        working-directory: express-api
+
+      - name: Resolve Playwright version (for cache key)
+        id: pw
+        run: |
+          # Per [[feedback-ci-cache-downloads-version-aware]] — cache key
+          # tracks the installed Playwright version so a dependency
+          # bump busts the cache automatically.
+          PW_VERSION=$(node -p "require('playwright/package.json').version" | tr -d '[:space:]')
+          echo "version=$PW_VERSION" >> "$GITHUB_OUTPUT"
+        working-directory: express-api
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+
+      - name: Install Playwright browsers
+        # `--with-deps` pulls apt packages on Ubuntu so headless WebKit
+        # actually launches. Mobile browsers are device-emulated via the
+        # base playwright BrowserType, no separate binary needed.
+        run: npx playwright install --with-deps chromium firefox webkit
+        working-directory: express-api
+
+      - name: Run manual-qa matrix
+        env:
+          # Inputs as env vars (not ${{ }} interpolated into the run
+          # script) so shell metacharacters in operator-supplied values
+          # are impossible — actionlint best practice.
+          IN_TARGET: ${{ inputs.target }}
+          IN_FILTER: ${{ inputs.filter }}
+          IN_SHARD: ${{ inputs.shard }}
+          IN_RETRY: ${{ inputs.retry }}
+          IN_REPORT_FORMAT: ${{ inputs['report-format'] }}
+          # Secrets per existing convention (PR #867+/#868+/#869+
+          # seed-test-personas action set these names).
+          PERSONAS_PASSWORD: ${{ secrets.DEV_QA_PERSONAS_PASSWORD }}
+          FIREBASE_DEV_API_KEY: ${{ secrets.DEV_FIREBASE_API_KEY }}
+          FIREBASE_PROD_API_KEY: ${{ secrets.PROD_FIREBASE_API_KEY }}
+          # Local target is not meaningful in CI (no Firebase Emulators
+          # spun up), but pass a fake so the runner's MISSING_ENV check
+          # for FIREBASE_LOCAL_API_KEY doesn't error out on target=local
+          # — operator can still dispatch with --target local to verify
+          # the runner CLI surface (it'll fail mid-dispatch on connect
+          # to localhost:8888, which is the expected outcome).
+          FIREBASE_LOCAL_API_KEY: 'ci-local-target-not-supported'
+        run: |
+          set -euo pipefail
+          ARGS=(--matrix --target "$IN_TARGET" --driver all)
+          if [ -n "$IN_FILTER" ]; then
+            ARGS+=(--filter "$IN_FILTER")
+          fi
+          if [ -n "$IN_SHARD" ]; then
+            ARGS+=(--shard "$IN_SHARD")
+          fi
+          if [ -n "$IN_RETRY" ] && [ "$IN_RETRY" != "0" ]; then
+            ARGS+=(--retry "$IN_RETRY")
+          fi
+          ARGS+=(--report-format "$IN_REPORT_FORMAT")
+          ARGS+=(--report-output "qa-matrix-report.$IN_REPORT_FORMAT")
+          echo "Running: node scripts/manual-qa-runner.js ${ARGS[*]}"
+          node scripts/manual-qa-runner.js "${ARGS[@]}"
+        working-directory: express-api
+
+      - name: Upload matrix report
+        # `if: always()` — upload even on failure for post-mortem
+        # diagnosis. The report itself records per-cell pass/fail/skip/
+        # timeout so the operator can see exactly which cells broke.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-matrix-report-${{ inputs.target }}-${{ github.run_id }}
+          path: express-api/qa-matrix-report.*
+          if-no-files-found: warn
+          retention-days: 30
