@@ -90,6 +90,14 @@ async function runMatrix({
   // effect to bailAfter=1, but kept as a distinct flag for backward
   // compatibility and operator readability.
   bailAfter = 0,
+  // retry — per-cell in-run retry on fail/timeout. 0 = no retry
+  // (backward compat). N > 0 = up to N retries (so N+1 total attempts
+  // per cell). Skip outcomes are NEVER retried (skip = "no device
+  // connected", retrying won't help). failFast / bailAfter count
+  // FINAL failures only — interim failures that recover via retry
+  // do NOT trigger the gate. Cross-run retry-failed (--retry-failed
+  // <report.json>) is independent and operates on a PRIOR run.
+  retry = 0,
   onCellStart,
   onCellEnd,
   nowMs = () => Date.now(),
@@ -124,28 +132,54 @@ async function runMatrix({
     const t0 = nowMs();
     let outcome;
     let error;
-    try {
-      const result = await dispatchOne({ browser });
-      outcome = result ? 'pass' : 'fail';
-    } catch (e) {
-      // 'CELL_TIMEOUT' is set by the runner's spawnSync wrapper when
-      // the per-cell process exceeded --cell-timeout. Surfaces as its
-      // own outcome (NOT 'fail') so the operator can distinguish hangs
-      // from assertion failures in the summary.
-      if (e && e.code === 'CELL_TIMEOUT') {
-        outcome = 'timeout';
-        error = e.message;
-      } else if (isInitError(e)) {
-        outcome = 'skip';
-        error = e.message;
-      } else {
-        outcome = 'fail';
-        error = e.message;
+    let attempts = 0;
+    const maxAttempts = retry + 1;
+    // Per-cell retry loop: try once + up to `retry` more times on
+    // fail/timeout. Pass or skip break out immediately (skip = no
+    // device, not a flake). Error is re-assigned each attempt so the
+    // final cell.error reflects the last attempt's message.
+    while (attempts < maxAttempts) {
+      attempts++;
+      // outcome + error are reassigned by try/catch below in every
+      // code path, so no defensive reset needed (ESLint no-useless-
+      // assignment would flag it). The previous iteration's values are
+      // immediately overwritten; the final iteration's values are what
+      // gets recorded in `cell` after the loop.
+      error = undefined;
+      try {
+        const result = await dispatchOne({ browser });
+        outcome = result ? 'pass' : 'fail';
+      } catch (e) {
+        // 'CELL_TIMEOUT' is set by the runner's spawnSync wrapper when
+        // the per-cell process exceeded --cell-timeout. Surfaces as its
+        // own outcome (NOT 'fail') so the operator can distinguish hangs
+        // from assertion failures in the summary.
+        if (e && e.code === 'CELL_TIMEOUT') {
+          outcome = 'timeout';
+          error = e.message;
+        } else if (isInitError(e)) {
+          outcome = 'skip';
+          error = e.message;
+        } else {
+          outcome = 'fail';
+          error = e.message;
+        }
       }
+      // Pass or skip → done, no retry needed.
+      if (outcome === 'pass' || outcome === 'skip') break;
     }
     const durationMs = Math.max(0, nowMs() - t0);
     const cell = { browser, outcome, durationMs };
-    if (error) cell.error = error;
+    // Error preserved only on non-pass outcomes — a passing retry
+    // clears any prior-attempt errors so the report doesn't false-alarm.
+    if (error && outcome !== 'pass') cell.error = error;
+    // attempts/retries recorded only when > 1 — preserves backward
+    // compatibility with the field-shape pre-retry (existing tests don't
+    // expect attempts/retries to exist on single-attempt cells).
+    if (attempts > 1) {
+      cell.attempts = attempts;
+      cell.retries = attempts - 1;
+    }
     cells.push(cell);
     if (typeof onCellEnd === 'function') onCellEnd(cell);
     // Increment failure count first — both failFast and bailAfter

@@ -15453,6 +15453,12 @@ function formatUsage() {
     '  --bail <n>                Stop the matrix after <n> failures (timeouts',
     '                              count as failures, skips do not). 0 = no bail.',
     '                              --bail 1 is equivalent in effect to --fail-fast.',
+    '  --retry <n>               In-run per-cell retry on fail/timeout (default 0).',
+    '                              Up to n retries → n+1 total attempts. Pass or',
+    '                              skip break out immediately. fail-fast / --bail',
+    '                              count FINAL failures only (recovered cells do',
+    '                              not increment the gate). Distinct from',
+    '                              --retry-failed (cross-run replay).',
     '  --check-drivers           Diagnostic — verify each driver bootstraps',
     '  --smoke                   Like --check-drivers but ALSO invokes one real',
     '                              driver method (webUiDump) per cell to verify',
@@ -15687,7 +15693,10 @@ async function main() {
     else if (flat[i] === '--matrix') opts.matrix = true;
     else if (flat[i] === '--fail-fast') opts.failFast = true;
     else if (flat[i] === '--bail') opts.bailAfter = parseInt(flat[++i], 10);
-    else if (flat[i] === '--check-drivers') opts.checkDrivers = true;
+    else if (flat[i] === '--retry') {
+      opts._retryRaw = flat[++i];
+      opts.retry = parseInt(opts._retryRaw, 10);
+    } else if (flat[i] === '--check-drivers') opts.checkDrivers = true;
     else if (flat[i] === '--smoke') opts.smoke = true;
     else if (flat[i] === '--report-dir') opts.reportDir = flat[++i];
     else if (flat[i] === '--report-format') opts.reportFormat = flat[++i];
@@ -15768,6 +15777,13 @@ async function main() {
   // floored to 0.
   if (opts.bailAfter !== undefined && (!Number.isFinite(opts.bailAfter) || opts.bailAfter < 0)) {
     console.error(`--bail must be a non-negative integer. Got "${opts.bailAfter}".`);
+    process.exit(2);
+  }
+  // --retry validation: 0 (off) or positive integer. Negative / NaN /
+  // floats rejected so operators get a clean error instead of a silent
+  // retry=0 fallback that hides typos.
+  if (opts.retry !== undefined && (!Number.isInteger(opts.retry) || opts.retry < 0)) {
+    console.error(`--retry must be a non-negative integer. Got "${opts._retryRaw}".`);
     process.exit(2);
   }
   opts.target = opts.target || 'dev';
@@ -15906,6 +15922,7 @@ async function main() {
       '--report-output',
       '--retry-failed',
       '--filter',
+      '--retry',
     ]);
     const baseArgv = [];
     const sourceArgv = process.argv.slice(2);
@@ -15932,6 +15949,7 @@ async function main() {
       browsers: allowed,
       failFast: opts.failFast === true,
       bailAfter: opts.bailAfter > 0 ? opts.bailAfter : 0,
+      retry: opts.retry > 0 ? opts.retry : 0,
       onCellStart: ({ browser }) => console.log(`[matrix] → dispatching ${browser}`),
       onCellEnd: (cell) =>
         console.log(`[matrix] ← ${cell.browser}: ${cell.outcome} (${cell.durationMs}ms)`),

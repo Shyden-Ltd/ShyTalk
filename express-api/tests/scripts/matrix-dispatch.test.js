@@ -425,6 +425,225 @@ describe('runMatrix — bailAfter', () => {
   });
 });
 
+// runMatrix — retry N ────────────────────────────────────────────────
+
+describe('runMatrix — retry', () => {
+  test('retry undefined / 0 → backward-compat (single attempt, no retries field)', async () => {
+    const r = await runMatrix({
+      browsers: ['a'],
+      dispatchOne: async () => false,
+    });
+    expect(r.cells[0].outcome).toBe('fail');
+    expect(r.cells[0].attempts).toBeUndefined();
+    expect(r.cells[0].retries).toBeUndefined();
+  });
+
+  test('retry=N + cell passes first → no retry, attempts/retries omitted', async () => {
+    const dispatch = jest.fn(async () => true);
+    const r = await runMatrix({
+      browsers: ['a'],
+      dispatchOne: dispatch,
+      retry: 3,
+    });
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(r.cells[0].outcome).toBe('pass');
+    expect(r.cells[0].attempts).toBeUndefined();
+    expect(r.cells[0].retries).toBeUndefined();
+  });
+
+  test('retry=1 + fail-then-pass → outcome pass, attempts=2, retries=1, error cleared', async () => {
+    let call = 0;
+    const dispatch = jest.fn(async () => {
+      call++;
+      if (call === 1) throw new Error('first attempt boom');
+      return true;
+    });
+    const r = await runMatrix({
+      browsers: ['a'],
+      dispatchOne: dispatch,
+      retry: 1,
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(r.cells[0].outcome).toBe('pass');
+    expect(r.cells[0].attempts).toBe(2);
+    expect(r.cells[0].retries).toBe(1);
+    // Pass outcome → error from prior attempts is cleared (no false alarm).
+    expect(r.cells[0].error).toBeUndefined();
+  });
+
+  test('retry=2 + 2 fails then pass → attempts=3, retries=2, outcome pass', async () => {
+    let call = 0;
+    const dispatch = jest.fn(async () => {
+      call++;
+      return call >= 3;
+    });
+    const r = await runMatrix({
+      browsers: ['a'],
+      dispatchOne: dispatch,
+      retry: 2,
+    });
+    expect(dispatch).toHaveBeenCalledTimes(3);
+    expect(r.cells[0].outcome).toBe('pass');
+    expect(r.cells[0].attempts).toBe(3);
+    expect(r.cells[0].retries).toBe(2);
+  });
+
+  test('retry=1 + all attempts fail → outcome fail, attempts=2, retries=1, error from last attempt', async () => {
+    let call = 0;
+    const dispatch = jest.fn(async () => {
+      call++;
+      throw new Error(`attempt ${call} boom`);
+    });
+    const r = await runMatrix({
+      browsers: ['a'],
+      dispatchOne: dispatch,
+      retry: 1,
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(r.cells[0].outcome).toBe('fail');
+    expect(r.cells[0].attempts).toBe(2);
+    expect(r.cells[0].retries).toBe(1);
+    expect(r.cells[0].error).toMatch(/attempt 2 boom/);
+  });
+
+  test('retry=2 + all 3 attempts fail → outcome fail, attempts=3, retries=2', async () => {
+    const dispatch = jest.fn(async () => false);
+    const r = await runMatrix({
+      browsers: ['a'],
+      dispatchOne: dispatch,
+      retry: 2,
+    });
+    expect(dispatch).toHaveBeenCalledTimes(3);
+    expect(r.cells[0].outcome).toBe('fail');
+    expect(r.cells[0].attempts).toBe(3);
+    expect(r.cells[0].retries).toBe(2);
+  });
+
+  test('retry=1 + timeout then pass → outcome pass with attempts/retries (timeouts are retry-eligible)', async () => {
+    let call = 0;
+    const dispatch = jest.fn(async () => {
+      call++;
+      if (call === 1) {
+        const e = new Error('cell timed out after 60000ms');
+        e.code = 'CELL_TIMEOUT';
+        throw e;
+      }
+      return true;
+    });
+    const r = await runMatrix({
+      browsers: ['a'],
+      dispatchOne: dispatch,
+      retry: 1,
+    });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(r.cells[0].outcome).toBe('pass');
+    expect(r.cells[0].attempts).toBe(2);
+  });
+
+  test('retry=N + skip (init-error) → no retry (device-absent is not flake)', async () => {
+    // Skip = "no device connected" — retrying won't help. Pin this so a
+    // future "retry everything" refactor can't accidentally include skips.
+    const dispatch = jest.fn(async () => {
+      throw new Error('no Android device attached');
+    });
+    const r = await runMatrix({
+      browsers: ['mobile-chrome-android'],
+      dispatchOne: dispatch,
+      retry: 2,
+    });
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(r.cells[0].outcome).toBe('skip');
+    expect(r.cells[0].attempts).toBeUndefined();
+  });
+
+  test('retry composes with failFast — fail-fast triggers on FINAL failure, not interim', async () => {
+    // First cell: fails then passes (retry recovers it). Second cell:
+    // fails consistently. fail-fast must NOT abort on the first cell's
+    // interim failure (since the retry recovers it), only on the second
+    // cell's final failure.
+    let call = 0;
+    const dispatch = jest.fn(async ({ browser }) => {
+      call++;
+      if (browser === 'a' && call === 1) throw new Error('a-first-attempt');
+      if (browser === 'a') return true;
+      throw new Error('b-always-fails');
+    });
+    const r = await runMatrix({
+      browsers: ['a', 'b', 'c'],
+      dispatchOne: dispatch,
+      retry: 1,
+      failFast: true,
+    });
+    expect(r.cells[0].outcome).toBe('pass'); // a recovered
+    expect(r.cells[1].outcome).toBe('fail'); // b failed final
+    expect(r.cells[2].outcome).toBe('skip'); // c aborted by fail-fast
+    expect(r.cells[2].error).toMatch(/aborted by failFast/);
+  });
+
+  test('retry composes with bailAfter — bail counts FINAL failures only', async () => {
+    // Same setup as failFast test but with bailAfter=1. The recovered
+    // 'a' cell does NOT increment failureCount; only 'b's final failure
+    // triggers the bail.
+    let call = 0;
+    const dispatch = jest.fn(async ({ browser }) => {
+      call++;
+      if (browser === 'a' && call === 1) throw new Error('a-first-attempt');
+      if (browser === 'a') return true;
+      throw new Error('b-always-fails');
+    });
+    const r = await runMatrix({
+      browsers: ['a', 'b', 'c'],
+      dispatchOne: dispatch,
+      retry: 1,
+      bailAfter: 1,
+    });
+    expect(r.cells[0].outcome).toBe('pass');
+    expect(r.cells[1].outcome).toBe('fail');
+    expect(r.cells[2].outcome).toBe('skip');
+    expect(r.cells[2].error).toMatch(/aborted by --bail 1/);
+  });
+
+  test('onCellEnd fires ONCE per cell (final outcome), not per attempt', async () => {
+    // Important: per-attempt logging would be too verbose. Operators
+    // see one log line per cell, with the final outcome + attempts count.
+    const ends = [];
+    let call = 0;
+    await runMatrix({
+      browsers: ['a'],
+      dispatchOne: async () => {
+        call++;
+        return call >= 2;
+      },
+      retry: 1,
+      onCellEnd: (cell) => ends.push(cell),
+    });
+    expect(ends).toHaveLength(1);
+    expect(ends[0].outcome).toBe('pass');
+    expect(ends[0].attempts).toBe(2);
+  });
+
+  test('durationMs spans ALL attempts (start-of-cell to after-final-attempt)', async () => {
+    // Operator views durationMs as "total time spent on this cell".
+    // nowMs is called at cell start + after the retry loop completes,
+    // so the duration covers all attempts in between regardless of count.
+    let nowCall = 0;
+    const clock = [1000, 4000]; // start, end-after-2-attempts
+    let call = 0;
+    const r = await runMatrix({
+      browsers: ['a'],
+      dispatchOne: async () => {
+        call++;
+        return call >= 2;
+      },
+      retry: 1,
+      nowMs: () => clock[nowCall++],
+    });
+    // 4000 - 1000 = 3000ms — covers both the failed first attempt
+    // AND the passing retry, end-to-end.
+    expect(r.cells[0].durationMs).toBe(3000);
+  });
+});
+
 // runMatrix — callbacks + timing ─────────────────────────────────────
 
 describe('runMatrix — callbacks + timing', () => {
