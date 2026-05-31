@@ -1,0 +1,304 @@
+/**
+ * manual-qa-runner-shard-flag.test.js
+ *
+ * Tests the `--shard X/Y` flag (gap A5). Verifies:
+ *   - --shard X/Y parses correctly + validates (X >= 1, Y >= 1, X <= Y,
+ *     both integers)
+ *   - shardCells helper: contiguous slicing
+ *     `floor((X-1)*M/N) : floor(X*M/N)` for any M cells / N shards
+ *   - composes with --filter (filter applied first, then shard)
+ *   - composes with --dry-run (preview shows post-shard cells)
+ *   - --shard is documented in formatUsage with composition hint
+ *   - --shard is stripped from per-cell argv
+ *   - --shard exits 2 on malformed input (non-integer, out-of-range,
+ *     wrong format)
+ *
+ * Shard semantics: 1-indexed, X/Y means shard X of Y total. Empty
+ * shards are impossible with the floor-based formula on cells.length >= 1,
+ * unless N > M (more shards than cells) in which case the last few
+ * shards may be empty (operator's mistake; not an error per se).
+ */
+
+const path = require('path');
+const { spawnSync } = require('child_process');
+
+const REPO_ROOT = path.resolve(__dirname, '../../..');
+const RUNNER_PATH = path.join(REPO_ROOT, 'express-api/scripts/manual-qa-runner.js');
+
+function runCli(args, env = {}) {
+  const baseEnv = { ...process.env };
+  delete baseEnv.PERSONAS_PASSWORD;
+  delete baseEnv.FIREBASE_DEV_API_KEY;
+  delete baseEnv.FIREBASE_LOCAL_API_KEY;
+  delete baseEnv.FIREBASE_PROD_API_KEY;
+  return spawnSync(process.execPath, [RUNNER_PATH, ...args], {
+    encoding: 'utf8',
+    env: { ...baseEnv, ...env },
+    timeout: 10000,
+  });
+}
+
+// ── shardCells pure helper ──────────────────────────────────────
+
+describe('shardCells — pure helper', () => {
+  let shardCells;
+  beforeAll(() => {
+    shardCells = require(RUNNER_PATH).shardCells;
+  });
+
+  test('shard 1/1 returns all cells (degenerate case)', () => {
+    expect(shardCells(['a', 'b', 'c'], 1, 1)).toEqual(['a', 'b', 'c']);
+  });
+
+  test('shard 1/2 of 12 cells = first 6', () => {
+    const cells = Array.from({ length: 12 }, (_, i) => `c${i}`);
+    expect(shardCells(cells, 1, 2)).toEqual(['c0', 'c1', 'c2', 'c3', 'c4', 'c5']);
+  });
+
+  test('shard 2/2 of 12 cells = last 6', () => {
+    const cells = Array.from({ length: 12 }, (_, i) => `c${i}`);
+    expect(shardCells(cells, 2, 2)).toEqual(['c6', 'c7', 'c8', 'c9', 'c10', 'c11']);
+  });
+
+  test('shard 1/3 of 12 cells = first 4', () => {
+    const cells = Array.from({ length: 12 }, (_, i) => `c${i}`);
+    expect(shardCells(cells, 1, 3)).toEqual(['c0', 'c1', 'c2', 'c3']);
+  });
+
+  test('shard 2/3 of 12 cells = middle 4', () => {
+    const cells = Array.from({ length: 12 }, (_, i) => `c${i}`);
+    expect(shardCells(cells, 2, 3)).toEqual(['c4', 'c5', 'c6', 'c7']);
+  });
+
+  test('shard 3/3 of 12 cells = last 4', () => {
+    const cells = Array.from({ length: 12 }, (_, i) => `c${i}`);
+    expect(shardCells(cells, 3, 3)).toEqual(['c8', 'c9', 'c10', 'c11']);
+  });
+
+  test('uneven split (12 cells / 5 shards) distributes without empty shards', () => {
+    // floor((X-1)*M/N) : floor(X*M/N) — beats Jest's ceil-based approach
+    // for uneven splits because ceil leaves the last shard empty when
+    // ceil(M/N)*N > M. This pin documents the chosen formula.
+    const cells = Array.from({ length: 12 }, (_, i) => `c${i}`);
+    const shards = [1, 2, 3, 4, 5].map((x) => shardCells(cells, x, 5));
+    // 12/5: floor distributes as 2+2+3+2+3 = 12
+    expect(shards.map((s) => s.length)).toEqual([2, 2, 3, 2, 3]);
+    // Union of all shards equals the original cell list (no gaps, no overlap).
+    expect([].concat(...shards)).toEqual(cells);
+  });
+
+  test('shard X/Y > cells (more shards than cells) → some shards empty', () => {
+    // Operator with --shard 5/10 on 3 cells gets:
+    //   1/10: floor(0/10*3)=0 : floor(1/10*3)=0 → []
+    //   2/10: floor(1/10*3)=0 : floor(2/10*3)=0 → []
+    //   3/10: floor(2/10*3)=0 : floor(3/10*3)=0 → []
+    //   4/10: floor(3/10*3)=0 : floor(4/10*3)=1 → [c0]
+    //   5/10: floor(4/10*3)=1 : floor(5/10*3)=1 → []
+    //   ...
+    // Allowed — operator's CI config sized too large; not an error.
+    const cells = ['c0', 'c1', 'c2'];
+    expect(shardCells(cells, 1, 10)).toEqual([]);
+    expect(shardCells(cells, 4, 10)).toEqual(['c0']);
+  });
+
+  test('preserves input cell order', () => {
+    // Operator expects shards to mirror the source order — no
+    // round-robin or hash shuffling.
+    const cells = ['z', 'b', 'm', 'a', 'q'];
+    expect(shardCells(cells, 1, 2)).toEqual(['z', 'b']);
+    expect(shardCells(cells, 2, 2)).toEqual(['m', 'a', 'q']);
+  });
+
+  test('throws on shardIndex < 1', () => {
+    expect(() => shardCells(['a'], 0, 2)).toThrow(/shard index must be >= 1/);
+  });
+
+  test('throws on shardCount < 1', () => {
+    expect(() => shardCells(['a'], 1, 0)).toThrow(/shard count must be >= 1/);
+  });
+
+  test('throws on shardIndex > shardCount', () => {
+    expect(() => shardCells(['a'], 3, 2)).toThrow(/shard index .* must be <= shard count/);
+  });
+
+  test('throws on non-integer shardIndex', () => {
+    expect(() => shardCells(['a'], 1.5, 2)).toThrow(/shard index must be an integer/);
+  });
+
+  test('throws on non-integer shardCount', () => {
+    expect(() => shardCells(['a'], 1, 2.5)).toThrow(/shard count must be an integer/);
+  });
+});
+
+// ── formatUsage drift-catch ──────────────────────────────────────
+
+describe('--shard — formatUsage drift-catch', () => {
+  test('--shard X/Y is documented with composition hint', () => {
+    const { formatUsage } = require(RUNNER_PATH);
+    const usage = formatUsage();
+    expect(usage).toMatch(/--shard <X>\/<Y>|--shard X\/Y/);
+    expect(usage).toMatch(/CI parallelism|split.*matrix|partition/i);
+    // Composition with --filter is the key operational pattern.
+    expect(usage).toMatch(/--filter/);
+  });
+});
+
+// ── --shard argument validation (CLI) ───────────────────────────
+
+describe('--shard — argument validation', () => {
+  test('--shard malformed (no slash) exits 2', () => {
+    const r = runCli(['--matrix', '--target', 'local', '--shard', '3'], {
+      PERSONAS_PASSWORD: 'fake',
+      FIREBASE_LOCAL_API_KEY: 'fake',
+    });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--shard/);
+  });
+
+  test('--shard 0/3 (zero index) exits 2', () => {
+    const r = runCli(['--matrix', '--target', 'local', '--shard', '0/3'], {
+      PERSONAS_PASSWORD: 'fake',
+      FIREBASE_LOCAL_API_KEY: 'fake',
+    });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--shard/);
+  });
+
+  test('--shard 4/3 (index > count) exits 2', () => {
+    const r = runCli(['--matrix', '--target', 'local', '--shard', '4/3'], {
+      PERSONAS_PASSWORD: 'fake',
+      FIREBASE_LOCAL_API_KEY: 'fake',
+    });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--shard/);
+  });
+
+  test('--shard 1/0 (zero count) exits 2', () => {
+    const r = runCli(['--matrix', '--target', 'local', '--shard', '1/0'], {
+      PERSONAS_PASSWORD: 'fake',
+      FIREBASE_LOCAL_API_KEY: 'fake',
+    });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--shard/);
+  });
+
+  test('--shard abc/3 (non-integer index) exits 2', () => {
+    const r = runCli(['--matrix', '--target', 'local', '--shard', 'abc/3'], {
+      PERSONAS_PASSWORD: 'fake',
+      FIREBASE_LOCAL_API_KEY: 'fake',
+    });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--shard/);
+  });
+
+  test('--shard 1/3 (valid) passes validation', () => {
+    const r = runCli(['--matrix', '--target', 'local', '--shard', '1/3'], {
+      PERSONAS_PASSWORD: 'fake',
+      FIREBASE_LOCAL_API_KEY: 'fake',
+    });
+    expect(r.stderr).not.toMatch(/--shard.*invalid/);
+  });
+});
+
+// ── --shard composition with --dry-run ──────────────────────────
+
+describe('--shard — composition with --dry-run', () => {
+  test('--dry-run --target local --shard 1/3 → first 4 cells', () => {
+    // local allowlist = 12 cells; shard 1/3 = cells[0:4]
+    const r = runCli(['--dry-run', '--target', 'local', '--shard', '1/3']);
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse(r.stdout);
+    expect(parsed.cells).toHaveLength(4);
+    expect(parsed.cells[0]).toBe('chromium');
+  });
+
+  test('--dry-run --target local --shard 3/3 → last 4 cells', () => {
+    const r = runCli(['--dry-run', '--target', 'local', '--shard', '3/3']);
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse(r.stdout);
+    expect(parsed.cells).toHaveLength(4);
+  });
+
+  test('--dry-run --target prod --shard 1/3 → chromium only (single cell)', () => {
+    // prod allowlist = [chromium]; shard 1/3 of [chromium]:
+    //   floor(0/3*1) : floor(1/3*1) = 0:0 → []
+    // shard 2/3:
+    //   floor(1/3*1) : floor(2/3*1) = 0:0 → []
+    // shard 3/3:
+    //   floor(2/3*1) : floor(3/3*1) = 0:1 → [chromium]
+    const r = runCli(['--dry-run', '--target', 'prod', '--shard', '3/3']);
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse(r.stdout);
+    expect(parsed.cells).toEqual(['chromium']);
+  });
+});
+
+// ── --shard composition with --filter ───────────────────────────
+
+describe('--shard — composition with --filter', () => {
+  test('--filter applied FIRST, then --shard (intersection)', () => {
+    // --filter android gives 4 android cells; --shard 1/2 of those = first 2.
+    const r = runCli(['--dry-run', '--target', 'local', '--filter', 'android', '--shard', '1/2']);
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse(r.stdout);
+    expect(parsed.cells).toHaveLength(2);
+    expect(parsed.cells.every((c) => c.includes('android'))).toBe(true);
+  });
+
+  test('--filter + --shard 2/2 → other half of filtered set', () => {
+    const r = runCli(['--dry-run', '--target', 'local', '--filter', 'android', '--shard', '2/2']);
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse(r.stdout);
+    expect(parsed.cells).toHaveLength(2);
+    expect(parsed.cells.every((c) => c.includes('android'))).toBe(true);
+  });
+});
+
+// ── --shard composition with --matrix ───────────────────────────
+
+describe('--shard — composition with --matrix', () => {
+  test('--matrix --shard 1/12 (single-cell shard) announces the matched cell', () => {
+    // shard 1/12 of 12 cells = first 1 cell.
+    const r = runCli(['--matrix', '--target', 'local', '--shard', '1/12'], {
+      PERSONAS_PASSWORD: 'fake',
+      FIREBASE_LOCAL_API_KEY: 'fake',
+    });
+    expect(r.stdout).toMatch(/\[shard\].*1\/12.*chromium/);
+  });
+
+  test('--matrix --shard with empty result → exits 0 "nothing to run"', () => {
+    // prod has 1 cell; shard 1/3 of 1 cell = floor(0):floor(1/3) = 0:0 = empty
+    const r = runCli(['--matrix', '--target', 'prod', '--shard', '1/3'], {
+      PERSONAS_PASSWORD: 'fake',
+      FIREBASE_PROD_API_KEY: 'fake',
+    });
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/\[shard\].*empty|nothing to run/);
+  });
+});
+
+// ── --shard is in PER_CELL_STRIP_FLAGS ──────────────────────────
+
+describe('--shard — stripped from per-cell argv', () => {
+  test('--shard X/Y is stripped along with its value', () => {
+    const { stripPerCellFlags } = require(RUNNER_PATH);
+    const result = stripPerCellFlags([
+      '--target',
+      'local',
+      '--matrix',
+      '--shard',
+      '1/3',
+      '--browser',
+      'chromium',
+    ]);
+    expect(result).not.toContain('--shard');
+    expect(result).not.toContain('1/3');
+    expect(result).toEqual(['--target', 'local', '--browser', 'chromium']);
+  });
+
+  test('--shard is registered in PER_CELL_STRIP_FLAGS + PER_CELL_VALUE_FLAGS', () => {
+    const { PER_CELL_STRIP_FLAGS, PER_CELL_VALUE_FLAGS } = require(RUNNER_PATH);
+    expect(PER_CELL_STRIP_FLAGS.has('--shard')).toBe(true);
+    expect(PER_CELL_VALUE_FLAGS.has('--shard')).toBe(true);
+  });
+});

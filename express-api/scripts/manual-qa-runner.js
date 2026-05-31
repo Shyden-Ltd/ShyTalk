@@ -15459,6 +15459,12 @@ function formatUsage() {
     '                              count FINAL failures only (recovered cells do',
     '                              not increment the gate). Distinct from',
     '                              --retry-failed (cross-run replay).',
+    '  --shard <X>/<Y>           Split the matrix across Y shards, run shard X',
+    '                              (1-indexed). For CI parallelism — each worker',
+    '                              runs --shard k/N for k=1..N. Contiguous slice',
+    '                              of the (filtered) cell list. Composes with',
+    '                              --filter (filter applied first, then shard).',
+    '                              Empty shard (Y > cells) exits 0 cleanly.',
     '  --check-drivers           Diagnostic — verify each driver bootstraps',
     '  --smoke                   Like --check-drivers but ALSO invokes one real',
     '                              driver method (webUiDump) per cell to verify',
@@ -15565,6 +15571,7 @@ const PER_CELL_STRIP_FLAGS = new Set([
   '--retry-failed',
   '--filter',
   '--retry',
+  '--shard',
 ]);
 // Subset of PER_CELL_STRIP_FLAGS that consume the NEXT token as a
 // value. Every flag in PER_CELL_STRIP_FLAGS that is NOT in this set
@@ -15576,6 +15583,7 @@ const PER_CELL_VALUE_FLAGS = new Set([
   '--retry-failed',
   '--filter',
   '--retry',
+  '--shard',
 ]);
 function stripPerCellFlags(sourceArgv) {
   const baseArgv = [];
@@ -15659,6 +15667,38 @@ function buildDriverFactories({ headed }) {
   };
 }
 
+// --shard <X>/<Y> — split cells across Y shards, return shard X (1-indexed).
+//
+// Contiguous slicing via `floor((X-1)*M/N) : floor(X*M/N)`. Chosen over
+// Jest's `ceil(M/N)` approach because the floor-based formula
+// distributes evenly even on uneven splits (no empty trailing shards
+// when M is not a multiple of N). For M=12, N=5 the formula yields
+// 2+2+3+2+3 = 12 cells; Jest's ceil gives 3+3+3+3+0 = 12 (last shard
+// wasted). Operator running --shard 5/5 expects work, not a no-op.
+//
+// Validation lives in the CLI parser — applyShard trusts its inputs
+// and throws on contract violations (X < 1, Y < 1, X > Y, non-integers).
+function shardCells(cells, shardIndex, shardCount) {
+  if (!Number.isInteger(shardIndex)) {
+    throw new Error('--shard index must be an integer');
+  }
+  if (!Number.isInteger(shardCount)) {
+    throw new Error('--shard count must be an integer');
+  }
+  if (shardIndex < 1) {
+    throw new Error('--shard index must be >= 1 (1-indexed)');
+  }
+  if (shardCount < 1) {
+    throw new Error('--shard count must be >= 1');
+  }
+  if (shardIndex > shardCount) {
+    throw new Error(`--shard index ${shardIndex} must be <= shard count ${shardCount}`);
+  }
+  const start = Math.floor(((shardIndex - 1) * cells.length) / shardCount);
+  const end = Math.floor((shardIndex * cells.length) / shardCount);
+  return cells.slice(start, end);
+}
+
 // --filter <pattern> — substring + comma-list cell subsetter.
 //
 // Operator use case: --matrix --filter android runs the 4 *android cells;
@@ -15702,6 +15742,11 @@ function formatDryRunJson(opts = {}) {
   // the runner's existing dispatch behavior.
   let cells = opts.browser ? [opts.browser] : allowedBrowsersFor(target);
   if (opts.filter !== undefined) cells = applyFilter(cells, opts.filter);
+  // --shard applied AFTER --filter so the shard slices the filtered set
+  // (e.g. --filter android --shard 1/2 = first half of the android cells).
+  if (opts.shardIndex !== undefined && opts.shardCount !== undefined) {
+    cells = shardCells(cells, opts.shardIndex, opts.shardCount);
+  }
   return JSON.stringify({ target, cells });
 }
 
@@ -15754,6 +15799,17 @@ async function main() {
     else if (flat[i] === '--check-env') opts.checkEnv = true;
     else if (flat[i] === '--retry-failed') opts.retryFailed = flat[++i];
     else if (flat[i] === '--filter') opts.filter = flat[++i];
+    else if (flat[i] === '--shard') {
+      // --shard <X>/<Y> — split cells across Y shards, take shard X.
+      // Parsed here as a single token; validation happens below so the
+      // error message can name the raw input verbatim.
+      opts._shardRaw = flat[++i];
+      const m = opts._shardRaw && /^(\d+)\/(\d+)$/.exec(opts._shardRaw);
+      if (m) {
+        opts.shardIndex = parseInt(m[1], 10);
+        opts.shardCount = parseInt(m[2], 10);
+      }
+    }
   }
   // --help / --version / --list short-circuit BEFORE any further
   // validation or env checks. Operators must be able to discover the
@@ -15827,6 +15883,21 @@ async function main() {
     console.error(`--retry must be a non-negative integer. Got "${opts._retryRaw}".`);
     process.exit(2);
   }
+  // --shard validation: format <X>/<Y>, both positive integers, X <= Y.
+  // Malformed input was caught at parse time (no shardIndex/shardCount
+  // set on opts); raw value remains for the error message.
+  if (opts._shardRaw !== undefined) {
+    if (opts.shardIndex === undefined || opts.shardCount === undefined) {
+      console.error(`--shard must be in <X>/<Y> form (e.g. --shard 2/3). Got "${opts._shardRaw}".`);
+      process.exit(2);
+    }
+    if (opts.shardIndex < 1 || opts.shardCount < 1 || opts.shardIndex > opts.shardCount) {
+      console.error(
+        `--shard <X>/<Y> requires 1 <= X <= Y. Got "${opts._shardRaw}" (X=${opts.shardIndex}, Y=${opts.shardCount}).`,
+      );
+      process.exit(2);
+    }
+  }
   opts.target = opts.target || 'dev';
   opts.planDir = opts.planDir || path.resolve(__dirname, '../../journey-tests');
   opts.cycle = opts.cycle || 1;
@@ -15885,6 +15956,27 @@ async function main() {
       console.error(`--filter: ${e.message}`);
       process.exit(2);
     }
+  }
+  // --shard applied AFTER --filter so the shard slices the filtered set.
+  // Single-cell mode (no multi-cell flag) ignores --shard since the cell
+  // is already explicit. Empty shard exits 0 — operator's CI config sized
+  // larger than the cell set is not an error, just a no-op for that worker.
+  if (
+    opts.shardIndex !== undefined &&
+    opts.shardCount !== undefined &&
+    (opts.checkDrivers || opts.smoke || opts.matrix)
+  ) {
+    const before = allowed.length;
+    allowed = shardCells(allowed, opts.shardIndex, opts.shardCount);
+    if (allowed.length === 0) {
+      console.log(
+        `[shard] ${opts.shardIndex}/${opts.shardCount} of ${before} cell(s) is empty — nothing to run`,
+      );
+      process.exit(0);
+    }
+    console.log(
+      `[shard] ${opts.shardIndex}/${opts.shardCount}: ${allowed.length} cell(s) of ${before}: ${allowed.join(', ')}`,
+    );
   }
   if (opts.checkDrivers || opts.smoke) {
     const { runHealthCheck, formatHealthCheckResult } = require('./driver-health-check');
@@ -16291,6 +16383,7 @@ module.exports = {
   formatListJson,
   formatDryRunJson,
   applyFilter,
+  shardCells,
   buildDriverFactories,
   stripPerCellFlags,
   PER_CELL_STRIP_FLAGS,
