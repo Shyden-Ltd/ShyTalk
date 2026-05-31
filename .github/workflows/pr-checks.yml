@@ -58,6 +58,13 @@ jobs:
           while IFS= read -r file; do
             [ -z "$file" ] && continue
             case "$file" in
+              # Auto-bumped on every commit by .husky/pre-commit (regenerates
+              # the lastUpdated date from .project/plans/...-roadmap.md). The
+              # file is data-only and does not affect web app behavior, so it
+              # MUST NOT trigger the playwright-web pipeline — otherwise every
+              # commit pays ~40min Playwright cost for a no-op change. Exclude
+              # explicitly before the generic public/* fallthrough.
+              public/roadmap-data.json) ;;
               public/*.md) WEB=true ;;
               public/*) WEB=true ;;
               # Tests under tests/web/ exercise the public/ surface via
