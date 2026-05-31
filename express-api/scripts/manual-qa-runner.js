@@ -15454,6 +15454,10 @@ function formatUsage() {
     '  --list                    Enumerate matrix cells as JSON (use with --target',
     '                              to filter to one target). Exits 0 without env vars',
     '                              so it is safe to pipe into jq for scripting.',
+    '  --dry-run                 Preview the dispatch effect given current opts',
+    '                              (--target, --browser). Output: { target, cells }.',
+    '                              Exits 0 without env vars; complements --list',
+    '                              by showing the EFFECT, not the static policy.',
     '  --report-dir <path>       Per-cell stdio capture directory (matrix mode)',
     '  --report-format <fmt>     Matrix report format: json | junit',
     '  --report-output <path>    Write the matrix report to this path',
@@ -15517,6 +15521,27 @@ function formatListJson(target) {
   });
 }
 
+// --dry-run — preview the dispatch effect given current opts.
+//
+// Distinct from --list (which shows the static allowlist POLICY):
+// --dry-run shows the actual cells that would run RIGHT NOW with this
+// exact command line, after --browser overrides and target resolution.
+// Useful for verifying a complex invocation before paying for a real
+// matrix dispatch.
+//
+// Output: { target: '<resolved>', cells: [...] }.
+// Defaults: target=local (matches the runner's existing default
+// behavior). --browser overrides the allowlist to that single cell.
+function formatDryRunJson(opts = {}) {
+  const { allowedBrowsersFor } = require('./browser-allowlist');
+  const target = opts.target !== undefined ? opts.target : 'local';
+  // --browser is an explicit override: operator named the cell directly,
+  // regardless of what the target's allowlist contains. This mirrors
+  // the runner's existing dispatch behavior.
+  const cells = opts.browser ? [opts.browser] : allowedBrowsersFor(target);
+  return JSON.stringify({ target, cells });
+}
+
 // ── CLI ─────────────────────────────────────────────────────────────
 
 async function main() {
@@ -15557,6 +15582,7 @@ async function main() {
     } else if (flat[i] === '--help' || flat[i] === '-h') opts.help = true;
     else if (flat[i] === '--version' || flat[i] === '-v') opts.version = true;
     else if (flat[i] === '--list') opts.list = true;
+    else if (flat[i] === '--dry-run') opts.dryRun = true;
   }
   // --help / --version / --list short-circuit BEFORE any further
   // validation or env checks. Operators must be able to discover the
@@ -15574,6 +15600,10 @@ async function main() {
   }
   if (opts.list) {
     console.log(formatListJson(opts.target));
+    process.exit(0);
+  }
+  if (opts.dryRun) {
+    console.log(formatDryRunJson(opts));
     process.exit(0);
   }
   // --report-format validation — only json + junit are supported (used
@@ -16066,6 +16096,7 @@ module.exports = {
   formatUsage,
   formatVersion,
   formatListJson,
+  formatDryRunJson,
   TARGETS,
 };
 
