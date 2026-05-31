@@ -147,14 +147,28 @@ describe('applyFilter — pure helper', () => {
       'mobile-chrome-ios',
     ]);
   });
+
+  test('coerces non-string cell values via String() (defense-in-depth)', () => {
+    // Internal callers should always pass string slugs, but the helper
+    // tolerates number/object input by coercing via String(). Pins the
+    // coercion path so a future "optimization" doesn't drop it.
+    expect(applyFilter([123, 456, 'chromium'], 'chrom')).toEqual(['chromium']);
+  });
 });
 
 // ── formatUsage drift-catch ──────────────────────────────────────
 
 describe('--filter — formatUsage drift-catch', () => {
-  test('--filter is documented in formatUsage', () => {
+  test('--filter is documented in formatUsage with description + example', () => {
+    // Strong drift-catch: would fail if someone shipped a bare "--filter"
+    // header without explanation, or removed the example line. Catches
+    // doc-rot regressions that the weak /--filter/ assertion would miss.
     const { formatUsage } = require(RUNNER_PATH);
-    expect(formatUsage()).toMatch(/--filter/);
+    const usage = formatUsage();
+    expect(usage).toMatch(/--filter <pattern>/);
+    expect(usage).toMatch(/Substring match/i);
+    expect(usage).toMatch(/case-insensitive/i);
+    expect(usage).toMatch(/--filter android/);
   });
 });
 
@@ -175,6 +189,23 @@ describe('--filter — argument validation (CLI)', () => {
       PERSONAS_PASSWORD: 'fake',
       FIREBASE_LOCAL_API_KEY: 'fake',
     });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--filter/);
+  });
+
+  test('--dry-run --filter "" exits 2 (not a Node stack trace)', () => {
+    // Regression test for reviewer-flagged bug: formatDryRunJson called
+    // applyFilter without try/catch, so empty --filter under --dry-run
+    // crashed with an uncaught throw. Must exit cleanly with code 2.
+    const r = runCli(['--dry-run', '--target', 'local', '--filter', '']);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--filter/);
+    // Should NOT see a Node stack trace ("at Object.<anonymous>" etc.).
+    expect(r.stderr).not.toMatch(/at Object\./);
+  });
+
+  test('--dry-run --filter "   " (whitespace-only) exits 2', () => {
+    const r = runCli(['--dry-run', '--target', 'local', '--filter', '   ']);
     expect(r.status).toBe(2);
     expect(r.stderr).toMatch(/--filter/);
   });

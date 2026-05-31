@@ -15646,8 +15646,17 @@ async function main() {
     process.exit(0);
   }
   if (opts.dryRun) {
-    console.log(formatDryRunJson(opts));
-    process.exit(0);
+    // try/catch mirrors the matrix-block --filter handler so empty /
+    // whitespace-only --filter values exit 2 with a clean error rather
+    // than a Node stack trace. Without this wrap, applyFilter's throw
+    // would propagate uncaught through formatDryRunJson.
+    try {
+      console.log(formatDryRunJson(opts));
+      process.exit(0);
+    } catch (e) {
+      console.error(`--filter: ${e.message}`);
+      process.exit(2);
+    }
   }
   if (opts.checkEnv) {
     // Pre-flight env audit — verify PERSONAS_PASSWORD, FIREBASE_<TARGET>_API_KEY,
