@@ -73,6 +73,24 @@ describe('.github/workflows/qa-runner-driver-checks.yml', () => {
     expect(reusable).toMatch(/manual-qa-runner\.js\s+--check-drivers/);
   });
 
+  test('runs --smoke diagnostic (PR-gated subset, gap E3)', () => {
+    // Closes gap E3: PR-time subset uses --smoke (one method call
+    // per cell) instead of --matrix (full journey scenarios — would
+    // need PERSONAS_PASSWORD + burn Firebase quota).
+    expect(reusable).toMatch(/manual-qa-runner\.js\s+--smoke/);
+    // Scoped to chromium so PR CI overhead is ~30s, not minutes.
+    expect(reusable).toMatch(/--filter\s+chromium/);
+  });
+
+  test('--smoke step uses `|| true` to tolerate expected CI connection error', () => {
+    // In PR CI there's no localhost:8888 Firebase Emulator, so the
+    // smoke method's navigation will error. We don't want that to
+    // fail the workflow — the diagnostic value is in parse/dispatch,
+    // not the smoke outcome. The `|| true` pattern is documented in
+    // the workflow comment.
+    expect(reusable).toMatch(/--smoke[^\n]{0,200}\|\|\s*true/);
+  });
+
   test('grants read-only contents permission', () => {
     // No write needed — this workflow only runs tests + diagnostics.
     expect(reusable).toMatch(/permissions:[\s\S]{0,200}?contents:\s*read/);

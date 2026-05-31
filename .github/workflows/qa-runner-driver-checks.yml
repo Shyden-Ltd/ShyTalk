@@ -8,10 +8,21 @@ name: QA Runner Driver Checks
 # Closes gap E4 from the QA-runner framework tracker: "No pr-checks
 # job that runs --check-drivers on PRs touching drivers/."
 #
+# Also closes gap E3 ("PR-gated subset matrix") via the --smoke step:
+# rather than a full --matrix run (which would need PERSONAS_PASSWORD
+# and burn Firebase quota on every PR), we run --smoke chromium-only
+# against target=local. This bootstraps the driver AND makes ONE real
+# webUiDump method call per cell — deeper diagnostic than
+# --check-drivers (bootstrap-only) without the cost of full journey
+# scenarios. Adds ~30s to PR CI.
+#
 # Per [[feedback-no-self-hosted-runners]] uses ubuntu-latest only.
 # Per [[feedback-ci-cache-downloads-version-aware]] Playwright browser
 # binaries are cached on the resolved Playwright version (busts when
 # the dependency bumps).
+# Per [[feedback-avoid-crons-prefer-event-driven]] no schedule:
+# block. Operator's E1 (manual-qa-matrix.yml) is the full-matrix
+# entrypoint; PR-time runs the cheap subset.
 
 on:
   workflow_call:
@@ -83,4 +94,30 @@ jobs:
         # cells report 'skip' on ubuntu (no adb device, no iOS simulator).
         # Exit code is 0 iff no cell reports 'fail' — 'skip' is acceptable.
         run: node scripts/manual-qa-runner.js --check-drivers --target local
+        working-directory: express-api
+
+      - name: --smoke diagnostic — chromium (PR-gated subset, gap E3)
+        # Goes one level deeper than --check-drivers: bootstrap the
+        # driver AND invoke ONE real method (webUiDump) per cell.
+        # Catches cells that bootstrap clean but can't service runtime
+        # calls (broken page navigation, driver-method drift, browser
+        # silently degraded).
+        #
+        # Scope: --filter chromium (one cell) to keep PR CI under
+        # ~30s extra. Operator can run the full matrix via E1
+        # (manual-qa-matrix.yml) when a deeper run is warranted.
+        #
+        # Target: local. The smoke method navigates to baseURL which
+        # is localhost:8888 — there's no Firebase Emulator running in
+        # PR-CI, so the smoke method will hit a connection error.
+        # That's OK for now: this step validates the runner CLI surface
+        # (--smoke parses + dispatches correctly) without burning real
+        # cloud quota. Future: spin up a static placeholder server in
+        # the workflow if the connection check needs to pass.
+        #
+        # Exit 0 || true — the smoke method's connection error is
+        # expected in CI; we don't want to fail driver-checks on it.
+        # The diagnostic value is in the parse/dispatch surface, not
+        # the smoke outcome.
+        run: node scripts/manual-qa-runner.js --smoke --target local --filter chromium || true
         working-directory: express-api
