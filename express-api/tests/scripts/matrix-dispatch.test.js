@@ -438,7 +438,7 @@ describe('runMatrix — retry', () => {
     expect(r.cells[0].retries).toBeUndefined();
   });
 
-  test('retry=N + cell passes first → no retry, attempts/retries omitted', async () => {
+  test('retry=N + cell passes first → no retry, attempts/retries omitted, durationMs set', async () => {
     const dispatch = jest.fn(async () => true);
     const r = await runMatrix({
       browsers: ['a'],
@@ -449,6 +449,9 @@ describe('runMatrix — retry', () => {
     expect(r.cells[0].outcome).toBe('pass');
     expect(r.cells[0].attempts).toBeUndefined();
     expect(r.cells[0].retries).toBeUndefined();
+    // durationMs is still a documented cell field — pin it for this
+    // path so a future refactor that conditionally sets it gets caught.
+    expect(r.cells[0].durationMs).toBeGreaterThanOrEqual(0);
   });
 
   test('retry=1 + fail-then-pass → outcome pass, attempts=2, retries=1, error cleared', async () => {
@@ -560,11 +563,14 @@ describe('runMatrix — retry', () => {
     // First cell: fails then passes (retry recovers it). Second cell:
     // fails consistently. fail-fast must NOT abort on the first cell's
     // interim failure (since the retry recovers it), only on the second
-    // cell's final failure.
-    let call = 0;
+    // cell's final failure. Per-browser counter so the test is robust
+    // to dispatch-order refactors.
+    const callsPerBrowser = {};
     const dispatch = jest.fn(async ({ browser }) => {
-      call++;
-      if (browser === 'a' && call === 1) throw new Error('a-first-attempt');
+      callsPerBrowser[browser] = (callsPerBrowser[browser] || 0) + 1;
+      if (browser === 'a' && callsPerBrowser[browser] === 1) {
+        throw new Error('a-first-attempt');
+      }
       if (browser === 'a') return true;
       throw new Error('b-always-fails');
     });
@@ -583,11 +589,14 @@ describe('runMatrix — retry', () => {
   test('retry composes with bailAfter — bail counts FINAL failures only', async () => {
     // Same setup as failFast test but with bailAfter=1. The recovered
     // 'a' cell does NOT increment failureCount; only 'b's final failure
-    // triggers the bail.
-    let call = 0;
+    // triggers the bail. Per-browser counter so the test is robust to
+    // dispatch-order refactors.
+    const callsPerBrowser = {};
     const dispatch = jest.fn(async ({ browser }) => {
-      call++;
-      if (browser === 'a' && call === 1) throw new Error('a-first-attempt');
+      callsPerBrowser[browser] = (callsPerBrowser[browser] || 0) + 1;
+      if (browser === 'a' && callsPerBrowser[browser] === 1) {
+        throw new Error('a-first-attempt');
+      }
       if (browser === 'a') return true;
       throw new Error('b-always-fails');
     });
@@ -601,6 +610,27 @@ describe('runMatrix — retry', () => {
     expect(r.cells[1].outcome).toBe('fail');
     expect(r.cells[2].outcome).toBe('skip');
     expect(r.cells[2].error).toMatch(/aborted by --bail 1/);
+  });
+
+  test('retry=N + all attempts timeout → outcome timeout, attempts=N+1, retries=N', async () => {
+    // Timeout-exhausted path: every attempt times out. Outcome stays
+    // 'timeout' (not 'fail') because the last attempt's classification
+    // wins. attempts/retries reflect all the timed-out attempts.
+    const dispatch = jest.fn(async () => {
+      const e = new Error('cell timed out after 60000ms');
+      e.code = 'CELL_TIMEOUT';
+      throw e;
+    });
+    const r = await runMatrix({
+      browsers: ['a'],
+      dispatchOne: dispatch,
+      retry: 2,
+    });
+    expect(dispatch).toHaveBeenCalledTimes(3);
+    expect(r.cells[0].outcome).toBe('timeout');
+    expect(r.cells[0].attempts).toBe(3);
+    expect(r.cells[0].retries).toBe(2);
+    expect(r.cells[0].error).toMatch(/cell timed out/);
   });
 
   test('onCellEnd fires ONCE per cell (final outcome), not per attempt', async () => {

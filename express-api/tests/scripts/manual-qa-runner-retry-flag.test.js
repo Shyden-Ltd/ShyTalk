@@ -89,6 +89,33 @@ describe('--retry — argument validation', () => {
     });
     expect(r.stderr).not.toMatch(/--retry must be/);
   });
+
+  test('--retry with no following token exits 2 (parseInt(undefined) = NaN)', () => {
+    // Edge: argv terminates after `--retry`. parseInt(undefined, 10)
+    // returns NaN; validation must catch it cleanly. Pinned so any
+    // future "default to 0 on missing value" refactor surfaces the
+    // semantic change.
+    const r = runCli(['--matrix', '--target', 'local', '--retry'], {
+      PERSONAS_PASSWORD: 'fake',
+      FIREBASE_LOCAL_API_KEY: 'fake',
+    });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--retry must be a non-negative integer/);
+  });
+
+  test('--retry 1.5 (float) is silently truncated to 1 by parseInt (documented behavior)', () => {
+    // parseInt('1.5', 10) === 1. Validation passes (1 is a non-negative
+    // integer). This matches --bail's behavior (also parseInt-based) and
+    // is consistent across numeric flags. Operators typing 1.5 see the
+    // matrix run with retry=1, not an error. Pin this so anyone
+    // tightening it intentionally has to update the test.
+    const r = runCli(['--matrix', '--target', 'local', '--retry', '1.5'], {
+      PERSONAS_PASSWORD: 'fake',
+      FIREBASE_LOCAL_API_KEY: 'fake',
+    });
+    // NOT a --retry validation error (1.5 → 1 is accepted).
+    expect(r.stderr).not.toMatch(/--retry must be/);
+  });
 });
 
 // ── --retry vs --retry-failed disambiguation ───────────────────────
@@ -115,5 +142,119 @@ describe('--retry — distinct from --retry-failed', () => {
     // was parsed correctly (no "--retry must be" error).
     expect(r.stderr).not.toMatch(/--retry must be/);
     expect(r.stderr).toMatch(/--retry-failed/);
+  });
+});
+
+// ── stripPerCellFlags — per-cell argv discipline ────────────────────
+
+describe('stripPerCellFlags — exported helper', () => {
+  let stripPerCellFlags;
+  let PER_CELL_STRIP_FLAGS;
+  let PER_CELL_VALUE_FLAGS;
+  beforeAll(() => {
+    const exports = require(RUNNER_PATH);
+    stripPerCellFlags = exports.stripPerCellFlags;
+    PER_CELL_STRIP_FLAGS = exports.PER_CELL_STRIP_FLAGS;
+    PER_CELL_VALUE_FLAGS = exports.PER_CELL_VALUE_FLAGS;
+  });
+
+  test('--retry N is stripped along with its value', () => {
+    // Both the flag token AND its numeric value must be absent from the
+    // per-cell argv. Otherwise per-cell subprocesses would recurse
+    // into their own retry handling (which they don't have because
+    // they're single-cell paths).
+    const result = stripPerCellFlags([
+      '--target',
+      'local',
+      '--matrix',
+      '--retry',
+      '2',
+      '--browser',
+      'chromium',
+    ]);
+    expect(result).not.toContain('--retry');
+    expect(result).not.toContain('2');
+    expect(result).toEqual(['--target', 'local', '--browser', 'chromium']);
+  });
+
+  test('--matrix is stripped as boolean (no value consumed)', () => {
+    // Regression pin: --matrix must NOT eat the next token.
+    const result = stripPerCellFlags(['--matrix', '--target', 'local']);
+    expect(result).toEqual(['--target', 'local']);
+  });
+
+  test('--filter is stripped with its value (PR #930 invariant)', () => {
+    const result = stripPerCellFlags(['--matrix', '--filter', 'android', '--target', 'local']);
+    expect(result).not.toContain('--filter');
+    expect(result).not.toContain('android');
+    expect(result).toEqual(['--target', 'local']);
+  });
+
+  test('--retry-failed is stripped with its value (PR #928 invariant)', () => {
+    const result = stripPerCellFlags([
+      '--matrix',
+      '--retry-failed',
+      '/tmp/report.json',
+      '--target',
+      'local',
+    ]);
+    expect(result).not.toContain('--retry-failed');
+    expect(result).not.toContain('/tmp/report.json');
+  });
+
+  test('--report-format + --report-output + --report-dir all stripped with values', () => {
+    const result = stripPerCellFlags([
+      '--matrix',
+      '--report-format',
+      'json',
+      '--report-output',
+      '/tmp/x.json',
+      '--report-dir',
+      '/tmp/logs',
+      '--target',
+      'local',
+    ]);
+    expect(result).toEqual(['--target', 'local']);
+  });
+
+  test('non-strip flags pass through unchanged', () => {
+    const result = stripPerCellFlags([
+      '--target',
+      'local',
+      '--driver',
+      'all',
+      '--journey',
+      'j01_signin',
+      '--browser',
+      'chromium',
+    ]);
+    // No matrix/strip flags → entire argv passes through.
+    expect(result).toEqual([
+      '--target',
+      'local',
+      '--driver',
+      'all',
+      '--journey',
+      'j01_signin',
+      '--browser',
+      'chromium',
+    ]);
+  });
+
+  test('PER_CELL_VALUE_FLAGS is a strict subset of PER_CELL_STRIP_FLAGS', () => {
+    // Invariant: any value-bearing flag must also be in the strip set.
+    // Pin so adding a new flag to one set without the other surfaces
+    // immediately rather than silently breaking argv shape.
+    for (const f of PER_CELL_VALUE_FLAGS) {
+      expect(PER_CELL_STRIP_FLAGS.has(f)).toBe(true);
+    }
+  });
+
+  test('PER_CELL_STRIP_FLAGS contains --retry (PR #933 invariant)', () => {
+    // Drift-catch for this PR specifically: --retry MUST be in the
+    // strip set. If a future "simplify" refactor removes it, the
+    // per-cell argv would recurse into --retry handling.
+    expect(PER_CELL_STRIP_FLAGS.has('--retry')).toBe(true);
+    expect(PER_CELL_VALUE_FLAGS.has('--retry')).toBe(true);
   });
 });

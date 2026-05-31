@@ -15549,6 +15549,47 @@ function formatListJson(target) {
   });
 }
 
+// stripPerCellFlags — remove matrix-level flags from argv so per-cell
+// subprocesses don't recurse into their own matrix dispatch or
+// report-writing. Boolean flags (--matrix) consume no token; value-
+// bearing flags consume the following token too.
+//
+// Extracted from main() so the strip behavior is unit-testable
+// without spawning subprocesses. The Set of strip flags lives here
+// alongside the helper as a single source of truth.
+const PER_CELL_STRIP_FLAGS = new Set([
+  '--matrix',
+  '--report-dir',
+  '--report-format',
+  '--report-output',
+  '--retry-failed',
+  '--filter',
+  '--retry',
+]);
+// Subset of PER_CELL_STRIP_FLAGS that consume the NEXT token as a
+// value. Every flag in PER_CELL_STRIP_FLAGS that is NOT in this set
+// is treated as boolean (no value token).
+const PER_CELL_VALUE_FLAGS = new Set([
+  '--report-dir',
+  '--report-format',
+  '--report-output',
+  '--retry-failed',
+  '--filter',
+  '--retry',
+]);
+function stripPerCellFlags(sourceArgv) {
+  const baseArgv = [];
+  for (let i = 0; i < sourceArgv.length; i++) {
+    const a = sourceArgv[i];
+    if (PER_CELL_STRIP_FLAGS.has(a)) {
+      if (PER_CELL_VALUE_FLAGS.has(a)) i++;
+      continue;
+    }
+    baseArgv.push(a);
+  }
+  return baseArgv;
+}
+
 // buildDriverFactories — single source of truth for the cell-slug → factory
 // mapping. Used by both --check-drivers (bootstrap-only) and --smoke
 // (bootstrap + webUiDump). Extracted so adding a new cell touches one
@@ -15915,27 +15956,7 @@ async function main() {
     // not try to read the report file (they're just running a single
     // browser).
     // Last --browser wins in the parse loop.
-    const stripFlags = new Set([
-      '--matrix',
-      '--report-dir',
-      '--report-format',
-      '--report-output',
-      '--retry-failed',
-      '--filter',
-      '--retry',
-    ]);
-    const baseArgv = [];
-    const sourceArgv = process.argv.slice(2);
-    for (let i = 0; i < sourceArgv.length; i++) {
-      const a = sourceArgv[i];
-      if (stripFlags.has(a)) {
-        // --matrix is a boolean; the other strip flags take a value,
-        // skip it too.
-        if (a !== '--matrix') i++;
-        continue;
-      }
-      baseArgv.push(a);
-    }
+    const baseArgv = stripPerCellFlags(process.argv.slice(2));
 
     // When --report-dir is set, mkdir-p the dir up front so the per-cell
     // writes don't race on creation.
@@ -16271,6 +16292,9 @@ module.exports = {
   formatDryRunJson,
   applyFilter,
   buildDriverFactories,
+  stripPerCellFlags,
+  PER_CELL_STRIP_FLAGS,
+  PER_CELL_VALUE_FLAGS,
   TARGETS,
 };
 
