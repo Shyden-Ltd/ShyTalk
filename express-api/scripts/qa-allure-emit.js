@@ -51,13 +51,19 @@ const OUTCOME_TO_STATUS = {
   skip: 'skipped',
 };
 
-function uuidFor(browser, runStartMs) {
+function uuidFor(browser, runStartMs, cellIndex = 0) {
   // Deterministic UUID per cell-run — stable across multiple
   // emit-tool invocations on the same matrix report, but distinct
   // across runs (so Allure can build historic trend lines).
+  //
+  // cellIndex disambiguates duplicate browser slugs in the same
+  // report. Without it, two cells for the same browser with
+  // zero/NaN-duration predecessors would share startMs → collide.
+  // writeAllureResults would silently overwrite the first file.
+  // Reviewer-flagged 2026-05-31 (C1 collision).
   const hash = crypto
     .createHash('sha256')
-    .update(`qa-matrix:${browser}:${runStartMs}`)
+    .update(`qa-matrix:${browser}:${runStartMs}:${cellIndex}`)
     .digest('hex');
   return [
     hash.slice(0, 8),
@@ -73,12 +79,13 @@ function uuidFor(browser, runStartMs) {
  *
  * @param {object} cell - { browser, outcome, durationMs, error?, ... }
  * @param {number} cellStartMs - epoch ms for this cell's start
+ * @param {number} cellIndex - position in the cells array (for uuid disambiguation)
  * @returns {object} Allure test-result JSON
  */
-function cellToAllure(cell, cellStartMs) {
+function cellToAllure(cell, cellStartMs, cellIndex = 0) {
   const status = OUTCOME_TO_STATUS[cell.outcome] || 'broken';
   const durationMs = Number.isFinite(cell.durationMs) ? cell.durationMs : 0;
-  const uuid = uuidFor(cell.browser, cellStartMs);
+  const uuid = uuidFor(cell.browser, cellStartMs, cellIndex);
   const result = {
     uuid,
     historyId: uuid,
@@ -111,8 +118,9 @@ function buildAllureResults(report, { runStartMs = Date.now() } = {}) {
   }
   const results = [];
   let cursor = runStartMs;
-  for (const cell of report.cells) {
-    results.push(cellToAllure(cell, cursor));
+  for (let i = 0; i < report.cells.length; i++) {
+    const cell = report.cells[i];
+    results.push(cellToAllure(cell, cursor, i));
     cursor += Number.isFinite(cell.durationMs) ? cell.durationMs : 0;
   }
   return results;

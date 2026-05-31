@@ -112,6 +112,15 @@ describe('cellToAllure — pure helper', () => {
     );
     expect(r.statusDetails).toBeUndefined();
   });
+
+  test('skip without cell.error → no statusDetails (Allure renders cleanly)', () => {
+    // Reviewer-flagged: skip cells without error field shouldn't
+    // ship empty statusDetails — Allure renders the test differently
+    // when statusDetails is present vs absent.
+    const r = cellToAllure({ browser: 'a', outcome: 'skip', durationMs: 0 }, 0);
+    expect(r.status).toBe('skipped');
+    expect(r.statusDetails).toBeUndefined();
+  });
 });
 
 // ── uuidFor ─────────────────────────────────────────────────────
@@ -132,6 +141,41 @@ describe('uuidFor — deterministic per (browser, runStartMs)', () => {
   test('uuid follows 8-4-4-4-12 hex format', () => {
     const id = uuidFor('chromium', 1000000);
     expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  });
+
+  test('cellIndex disambiguates same browser+startMs (collision fix C1)', () => {
+    // Reviewer-flagged: without cellIndex, two cells for the same
+    // browser with zero/NaN-duration predecessors would share startMs
+    // → identical UUID → writeAllureResults overwrites. Index in
+    // the hash prevents collision.
+    expect(uuidFor('chromium', 1000000, 0)).not.toBe(uuidFor('chromium', 1000000, 1));
+  });
+});
+
+// ── UUID collision regression (C1 production fix) ──────────────
+
+describe('buildAllureResults — UUID collision prevention (C1)', () => {
+  test('two cells for same browser with zero-duration predecessors get distinct UUIDs', () => {
+    const report = {
+      cells: [
+        { browser: 'chromium', outcome: 'pass', durationMs: 0 },
+        { browser: 'chromium', outcome: 'fail', durationMs: 0, error: 'second run' },
+      ],
+    };
+    const results = buildAllureResults(report, { runStartMs: 1000 });
+    expect(results).toHaveLength(2);
+    expect(results[0].uuid).not.toBe(results[1].uuid);
+  });
+
+  test('two cells for same browser with NaN-duration predecessors also get distinct UUIDs', () => {
+    const report = {
+      cells: [
+        { browser: 'chromium', outcome: 'pass', durationMs: NaN },
+        { browser: 'chromium', outcome: 'pass', durationMs: NaN },
+      ],
+    };
+    const results = buildAllureResults(report, { runStartMs: 1000 });
+    expect(results[0].uuid).not.toBe(results[1].uuid);
   });
 });
 
@@ -227,6 +271,72 @@ describe('readReport', () => {
       fs.unlinkSync(tmp);
     }
   });
+
+  test('throws SyntaxError on malformed (non-JSON) file content', () => {
+    // Reviewer-flagged (C2): readReport's JSON.parse path had no
+    // direct test. Pin: SyntaxError propagates (caller wraps with
+    // process.exit(1) in main).
+    const tmp = path.join(os.tmpdir(), `qa-allure-bad-json-${process.pid}-${Date.now()}.json`);
+    fs.writeFileSync(tmp, 'not json at all {{{');
+    try {
+      expect(() => readReport(tmp)).toThrow(SyntaxError);
+    } finally {
+      fs.unlinkSync(tmp);
+    }
+  });
+});
+
+// ── writeAllureResults — direct unit tests (I3) ────────────────
+
+describe('writeAllureResults — direct unit tests', () => {
+  const { writeAllureResults } = require(SCRIPT_PATH);
+
+  test('returns the count of files written', () => {
+    const outDir = path.join(os.tmpdir(), `qa-allure-unit-${process.pid}-${Date.now()}`);
+    try {
+      const results = buildAllureResults({
+        cells: [
+          { browser: 'a', outcome: 'pass', durationMs: 100 },
+          { browser: 'b', outcome: 'pass', durationMs: 100 },
+        ],
+      });
+      const count = writeAllureResults(results, outDir);
+      expect(count).toBe(2);
+    } finally {
+      if (fs.existsSync(outDir)) fs.rmSync(outDir, { recursive: true });
+    }
+  });
+
+  test('creates output directory if it does not exist (recursive mkdir)', () => {
+    const outDir = path.join(
+      os.tmpdir(),
+      `qa-allure-mkdir-${process.pid}-${Date.now()}/nested/dir`,
+    );
+    try {
+      writeAllureResults([{ uuid: 'test-uuid', name: 'x' }], outDir);
+      expect(fs.existsSync(outDir)).toBe(true);
+    } finally {
+      if (fs.existsSync(outDir)) fs.rmSync(outDir, { recursive: true });
+    }
+  });
+
+  test('written files parse as valid JSON with expected uuid key', () => {
+    const outDir = path.join(os.tmpdir(), `qa-allure-roundtrip-${process.pid}-${Date.now()}`);
+    try {
+      const results = buildAllureResults({
+        cells: [{ browser: 'chromium', outcome: 'pass', durationMs: 1000 }],
+      });
+      writeAllureResults(results, outDir);
+      const files = fs.readdirSync(outDir).filter((f) => f.endsWith('-result.json'));
+      expect(files).toHaveLength(1);
+      const content = JSON.parse(fs.readFileSync(path.join(outDir, files[0]), 'utf8'));
+      expect(content.uuid).toBe(results[0].uuid);
+      expect(content.name).toBe('chromium');
+      expect(content.status).toBe('passed');
+    } finally {
+      if (fs.existsSync(outDir)) fs.rmSync(outDir, { recursive: true });
+    }
+  });
 });
 
 // ── CLI integration ─────────────────────────────────────────────
@@ -307,6 +417,60 @@ describe('CLI integration', () => {
       expect(r.stderr).toMatch(/not a matrix report/);
     } finally {
       fs.unlinkSync(tmp);
+      if (fs.existsSync(outDir)) fs.rmSync(outDir, { recursive: true });
+    }
+  });
+
+  test('malformed JSON file → exits 1 with actionable stderr (C2)', () => {
+    // Reviewer-flagged: SyntaxError path was uncovered. Operator
+    // passing a non-JSON file (e.g. junit XML by mistake) should
+    // get a clear error, not a raw V8 parser message.
+    const tmp = path.join(os.tmpdir(), `qa-allure-malformed-${process.pid}-${Date.now()}.json`);
+    fs.writeFileSync(tmp, 'definitely not JSON {{{');
+    const outDir = path.join(os.tmpdir(), `qa-allure-out-mal-${process.pid}-${Date.now()}`);
+    try {
+      const r = runCli([tmp, '-o', outDir]);
+      expect(r.status).toBe(1);
+      // stderr should contain "qa-allure-emit failed:" prefix from main's catch
+      expect(r.stderr).toMatch(/qa-allure-emit failed/);
+    } finally {
+      fs.unlinkSync(tmp);
+      if (fs.existsSync(outDir)) fs.rmSync(outDir, { recursive: true });
+    }
+  });
+
+  test('-h short form exits 0 with usage (I1)', () => {
+    const r = runCli(['-h']);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/Usage:/);
+  });
+
+  test('--output long form is accepted (I1)', () => {
+    const report = writeReportFile({
+      cells: [{ browser: 'a', outcome: 'pass', durationMs: 100 }],
+    });
+    const outDir = path.join(os.tmpdir(), `qa-allure-longform-${process.pid}-${Date.now()}`);
+    try {
+      const r = runCli([report, '--output', outDir]);
+      expect(r.status).toBe(0);
+      expect(fs.readdirSync(outDir).filter((f) => f.endsWith('-result.json'))).toHaveLength(1);
+    } finally {
+      fs.unlinkSync(report);
+      if (fs.existsSync(outDir)) fs.rmSync(outDir, { recursive: true });
+    }
+  });
+
+  test('two positional args → exits 2 (I2)', () => {
+    const reportA = writeReportFile({ cells: [] });
+    const reportB = writeReportFile({ cells: [] });
+    const outDir = path.join(os.tmpdir(), `qa-allure-2pos-${process.pid}-${Date.now()}`);
+    try {
+      const r = runCli([reportA, reportB, '-o', outDir]);
+      expect(r.status).toBe(2);
+      expect(r.stderr).toMatch(/exactly one positional/);
+    } finally {
+      fs.unlinkSync(reportA);
+      fs.unlinkSync(reportB);
       if (fs.existsSync(outDir)) fs.rmSync(outDir, { recursive: true });
     }
   });
