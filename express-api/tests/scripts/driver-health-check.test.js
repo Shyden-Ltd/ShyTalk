@@ -666,6 +666,97 @@ describe('runHealthCheck — phase timing breakdown (gap C5)', () => {
     expect(r.cells[0].peakRssBytes).toBeGreaterThan(0);
   });
 
+  test('peakRssBytes captures smoke-phase peak even when close frees memory', async () => {
+    // Smoke-phase sampling: the smoke method may allocate buffers
+    // (screenshot, DOM dump) that close() frees. Without an after-
+    // smoke sample, that peak would be invisible. Tick sequence:
+    //   cell-start: 100M
+    //   after-bootstrap: 110M
+    //   after-smoke: 250M  ← THE PEAK (would be invisible without I1 fix)
+    //   after-close (final): 80M  (driver freed buffers)
+    let i = 0;
+    const samples = [
+      { rss: 100_000_000 },
+      { rss: 110_000_000 },
+      { rss: 250_000_000 },
+      { rss: 80_000_000 },
+    ];
+    const driver = makeFakeDriver();
+    driver.webUiDump = jest.fn(async () => 'big-dump');
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+      smokeMethod: 'webUiDump',
+      processStats: () => samples[i++],
+    });
+    expect(r.cells[0].peakRssBytes).toBe(250_000_000);
+  });
+
+  test('peakRssBytes undefined when processStats consistently throws', async () => {
+    // Best-effort sampling: try/catch silently swallows processStats
+    // errors. If EVERY sample throws, peakRssBytes stays undefined.
+    // Documented contract — pin so future "improvement" that tries
+    // to fall back to a sentinel value (e.g. 0) surfaces here.
+    const driver = makeFakeDriver();
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+      processStats: () => {
+        throw new Error('memoryUsage failed');
+      },
+    });
+    expect(r.cells[0].outcome).toBe('ok');
+    expect(r.cells[0].peakRssBytes).toBeUndefined();
+  });
+
+  test('peakRssBytes undefined when processStats returns null', async () => {
+    // Guard `if (stats && typeof stats.rss === 'number')` skips
+    // null returns. Pin: this is intentional silent-skip behavior.
+    const driver = makeFakeDriver();
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+      processStats: () => null,
+    });
+    expect(r.cells[0].peakRssBytes).toBeUndefined();
+  });
+
+  test('peakRssBytes undefined when processStats returns object without rss', async () => {
+    // Same guard, no `rss` field. Some Node profiling tools return
+    // partial memory objects; pin the defensive behaviour.
+    const driver = makeFakeDriver();
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+      processStats: () => ({ heapUsed: 50_000_000 }), // no rss
+    });
+    expect(r.cells[0].peakRssBytes).toBeUndefined();
+  });
+
+  test('peakRssBytes undefined when processStats returns rss as non-number', async () => {
+    // typeof check on rss specifically. NaN, null, string all skip.
+    const driver = makeFakeDriver();
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+      processStats: () => ({ rss: 'not-a-number' }),
+    });
+    expect(r.cells[0].peakRssBytes).toBeUndefined();
+  });
+
+  test('peakRssBytes = 0 when processStats consistently returns { rss: 0 }', async () => {
+    // Lazy-init path: `cellPeakRssBytes === undefined` branch sets it
+    // to 0 on the first sample; subsequent 0-returns don't lower it.
+    // 0 is a valid number — must not be confused with "didn't sample".
+    const driver = makeFakeDriver();
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+      processStats: () => ({ rss: 0 }),
+    });
+    expect(r.cells[0].peakRssBytes).toBe(0);
+  });
+
   test('peakRssBytes per-cell — independent samples for each cell', async () => {
     // Verify per-cell scoping: cell A's peak is independent of cell B's.
     // Inject samples such that cell A's peak is lower than cell B's

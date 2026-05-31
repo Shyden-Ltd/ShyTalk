@@ -167,8 +167,17 @@ async function runHealthCheck({
           try {
             await driver[smokeMethod]();
             smokeMs = Math.max(0, nowMs() - tSmoke);
+            // Sample RSS after smoke success — driver may have allocated
+            // significant memory during the method call (e.g. screenshot
+            // buffers, DOM dumps). Without this sample, a memory spike
+            // during smoke that's freed during close would be invisible
+            // (the post-close sample wouldn't see it).
+            samplePeakRss();
           } catch (e) {
             smokeMs = Math.max(0, nowMs() - tSmoke);
+            // Sample after smoke fail too — failure path may have left
+            // dangling allocations that the operator wants to detect.
+            samplePeakRss();
             outcome = 'fail';
             error = `smoke method "${smokeMethod}" failed: ${e.message}`;
           }
