@@ -4,13 +4,17 @@
 # Platforms: Android physical (per [feedback-android-real-device-preferred]),
 #            iPhone physical via xcrun devicectl, Web Chromium via Playwright MCP
 #
-# Operator directive 2026-05-29 — sign-in screen buttons:
+# Operator directive 2026-05-29 (updated 2026-06-01) — sign-in screen buttons:
 #   - Apple + Google buttons MUST be visible on every flavor (local, dev, prod)
 #   - On local: tapping either surfaces "Sign-in not available on local
 #     environment" snackbar (firebase emulator can't redeem real OAuth)
 #   - On dev + prod: tapping either kicks off the real OAuth flow
-#   - Dev sign-in shortcut + persona picker buttons MUST appear on local + dev,
-#     NEVER on prod regardless of any credential misconfiguration
+#   - Persona picker button MUST appear on local + dev, NEVER on prod
+#     regardless of any credential misconfiguration
+#   - (The single-account "Dev sign-in" shortcut was removed 2026-06-01 —
+#     it never worked end-to-end. Negative prod assertions for the
+#     `dev_sign_in` testTag are retained below as drift catches in case
+#     a future PR accidentally re-introduces it.)
 #
 # Tested across the three flavors via per-scenario Background that installs the
 # right flavor APK. The runner has flavor-specific install helpers
@@ -53,12 +57,6 @@ Feature: j20 — Sign-in screen environment matrix
     Then no Firebase Auth session is created for Adam
 
   @blocker @android-physical @local-flavor
-  Scenario: Local-flavor renders dev sign-in shortcut button
-    Given Adam [P-01] has the local-flavor APK installed on Android
-    When Adam on Android opens the app for the first time
-    Then within 5000ms Adam's Android UI shows the element with tag "dev_sign_in"
-
-  @blocker @android-physical @local-flavor
   Scenario: Local-flavor renders persona picker button
     Given Adam [P-01] has the local-flavor APK installed on Android
     When Adam on Android opens the app for the first time
@@ -89,12 +87,6 @@ Feature: j20 — Sign-in screen environment matrix
     When Adam on iPhone taps "apple_sign_in_button"
     Then within 5000ms Adam's iPhone UI shows the iOS Apple ID confirmation sheet
     # @manual continuation — tester confirms; runner cannot drive iOS system sheets
-
-  @blocker @android-physical @dev-flavor
-  Scenario: Dev-flavor renders dev sign-in shortcut button (operator opt-in via DEV_QA_EMAIL)
-    Given Adam [P-01] has the dev-flavor APK installed on Android with DEV_QA_EMAIL + DEV_QA_PASSWORD env vars baked in
-    When Adam on Android opens the app for the first time
-    Then within 5000ms Adam's Android UI shows the element with tag "dev_sign_in"
 
   @blocker @android-physical @dev-flavor
   Scenario: Dev-flavor renders persona picker button (operator opt-in via DEV_QA_PERSONAS_PASSWORD)
@@ -142,11 +134,11 @@ Feature: j20 — Sign-in screen environment matrix
   @blocker @android-physical @prod-flavor @regression
   Scenario: Prod-flavor with credential env vars accidentally baked in — dev affordances still hidden
     # Defence-in-depth pin: even if a misconfigured CI build of the prod
-    # APK somehow has DEV_QA_EMAIL / PASSWORD / PERSONAS_PASSWORD baked
-    # in, the environment-based visibility gate must hide the buttons.
-    # Tested by build-time injecting the env vars then asserting the
-    # buttons are still absent.
-    Given Adam [P-01] has the prod-flavor APK installed with all DEV_QA_* env vars accidentally set
+    # APK somehow has DEV_QA_PERSONAS_PASSWORD baked in, the environment-
+    # based visibility gate must hide the picker. Tested by build-time
+    # injecting the env var then asserting the picker is still absent.
+    # (The dev_sign_in negative is also retained as a drift catch.)
+    Given Adam [P-01] has the prod-flavor APK installed with DEV_QA_PERSONAS_PASSWORD accidentally set
     When Adam on Android opens the app for the first time
     Then within 5000ms Adam's Android UI does not show the element with tag "dev_sign_in"
     Then Adam's Android UI does not show the element with tag "persona_picker_open"

@@ -11,8 +11,7 @@ The phrases are deliberately abstract — `"the user signs in as X"` resolves to
 | Phrase | Binding | Notes |
 |---|---|---|
 | `Given the user is signed out` | platform.signOut() | Idempotent. |
-| `Given the user is signed in as "{email}"` | platform.signIn(email, pwFromLedger) | Uses dev sign-in path (see `BuildVariant.isDevSignInAvailable`). Password comes from `~/.shytalk/dev-qa-credentials` or env. |
-| `Given the user is signed in as a fresh dev QA account` | platform.signInAsClaudeQA() | Convenience for the seeded claude-qa@shytalk.dev account. |
+| `Given the user is signed in as "{email}"` | platform.signIn(email, pwFromLedger) | Uses the persona-picker path (see `BuildVariant.isPersonaPickerAvailable`). Password is the shared persona password from `~/.shytalk/dev-personas.env` (`PERSONAS_PASSWORD`). The single-account dev-sign-in shortcut was removed 2026-06-01 — all dev sign-in now flows through the picker. |
 | `When the user signs out` | platform.signOut() | Verifies the local session is cleared in addition to the action. |
 | `When the user signs in with email "{email}" and password "{pw}"` | platform.signInWithEmail() | Direct path, NOT through OAuth. @manual scenarios use the OAuth variant. |
 

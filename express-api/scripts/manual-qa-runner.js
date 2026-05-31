@@ -2724,16 +2724,19 @@ const matchers = [
     // Per-target tag aliasing: scenarios authored against the prod
     // signup flow (`signin_signUpLink` → email → password → DOB) can't
     // run end-to-end on the local build because local has no real
-    // signup UI — only dev-sign-in. The alias map below resolves
+    // signup UI — only the persona picker. The alias map below resolves
     // prod-flow tags to local-build equivalents when target=local, so
     // the scenarios stay source-of-truth and the runner translates.
+    // (Pre-2026-06-01 the local entry point was the `dev_sign_in`
+    // button, which has since been removed; aliases now point straight
+    // at `persona_picker_open`.)
     pattern: /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+on Android\s+taps "([^"]+)"$/,
     async handler(m, ctx) {
       const rawTag = m[3];
       const ANDROID_LOCAL_TAG_ALIASES = {
-        // Prod-flow signup → local dev-sign-in entry point. After
-        // tapping, the user lands on the persona picker.
-        signin_signUpLink: 'dev_sign_in',
+        // Prod-flow signup link → local persona picker entry point.
+        // After tapping, the user lands on the picker dialog.
+        signin_signUpLink: 'persona_picker_open',
         // Persona-creation button in the prod signup flow lands on
         // the same intermediate state as the local persona picker
         // open button. The next-step matcher (persona pick) closes
