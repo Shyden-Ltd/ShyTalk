@@ -15450,6 +15450,9 @@ function formatUsage() {
     '  --headed                  Run the browser in headed (visible) mode',
     '  --matrix                  Dispatch every allowed cell in sequence',
     '  --fail-fast               Stop the matrix at the first failing cell',
+    '  --bail <n>                Stop the matrix after <n> failures (timeouts',
+    '                              count as failures, skips do not). 0 = no bail.',
+    '                              --bail 1 is equivalent in effect to --fail-fast.',
     '  --check-drivers           Diagnostic — verify each driver bootstraps',
     '  --list                    Enumerate matrix cells as JSON (use with --target',
     '                              to filter to one target). Exits 0 without env vars',
@@ -15570,6 +15573,7 @@ async function main() {
     else if (flat[i] === '--headed') opts.headed = true;
     else if (flat[i] === '--matrix') opts.matrix = true;
     else if (flat[i] === '--fail-fast') opts.failFast = true;
+    else if (flat[i] === '--bail') opts.bailAfter = parseInt(flat[++i], 10);
     else if (flat[i] === '--check-drivers') opts.checkDrivers = true;
     else if (flat[i] === '--report-dir') opts.reportDir = flat[++i];
     else if (flat[i] === '--report-format') opts.reportFormat = flat[++i];
@@ -15620,6 +15624,13 @@ async function main() {
     console.error(
       `--cell-timeout must be a positive integer (seconds). Got "${opts._cellTimeoutRaw}".`,
     );
+    process.exit(2);
+  }
+  // --bail validation: 0 (off) or positive integer. Negative values
+  // are operator error and should fail loudly rather than be silently
+  // floored to 0.
+  if (opts.bailAfter !== undefined && (!Number.isFinite(opts.bailAfter) || opts.bailAfter < 0)) {
+    console.error(`--bail must be a non-negative integer. Got "${opts.bailAfter}".`);
     process.exit(2);
   }
   opts.target = opts.target || 'dev';
@@ -15778,6 +15789,7 @@ async function main() {
     const matrixResult = await runMatrix({
       browsers: allowed,
       failFast: opts.failFast === true,
+      bailAfter: opts.bailAfter > 0 ? opts.bailAfter : 0,
       onCellStart: ({ browser }) => console.log(`[matrix] → dispatching ${browser}`),
       onCellEnd: (cell) =>
         console.log(`[matrix] ← ${cell.browser}: ${cell.outcome} (${cell.durationMs}ms)`),

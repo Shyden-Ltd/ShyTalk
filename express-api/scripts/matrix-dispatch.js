@@ -83,6 +83,13 @@ async function runMatrix({
   browsers,
   dispatchOne,
   failFast = false,
+  // bailAfter — stop the matrix after N failures (or timeouts —
+  // counted the same way failFast counts them). 0 = no bail (run all).
+  // Strictly additive to failFast: both gates checked; whichever
+  // triggers first stops the matrix. failFast=true is equivalent in
+  // effect to bailAfter=1, but kept as a distinct flag for backward
+  // compatibility and operator readability.
+  bailAfter = 0,
   onCellStart,
   onCellEnd,
   nowMs = () => Date.now(),
@@ -101,10 +108,16 @@ async function runMatrix({
 
   const cells = [];
   let stopped = false;
+  let failureCount = 0;
+  // First-fire wins: preserves the original "matrix aborted by failFast"
+  // sentinel when failFast triggers, and surfaces the bail count
+  // explicitly when --bail triggers. Operators reading per-cell
+  // skip-error logs see which gate stopped the run.
+  let abortReason = '';
 
   for (const browser of browsers) {
     if (stopped) {
-      cells.push({ browser, outcome: 'skip', error: 'matrix aborted by failFast', durationMs: 0 });
+      cells.push({ browser, outcome: 'skip', error: abortReason, durationMs: 0 });
       continue;
     }
     if (typeof onCellStart === 'function') onCellStart({ browser });
@@ -135,10 +148,25 @@ async function runMatrix({
     if (error) cell.error = error;
     cells.push(cell);
     if (typeof onCellEnd === 'function') onCellEnd(cell);
+    // Increment failure count first — both failFast and bailAfter
+    // gates use the same definition (real failure or hang, not skip).
+    if (outcome === 'fail' || outcome === 'timeout') failureCount++;
     // failFast aborts on real failures (timeouts included — a hang
     // can also mask other cells from running in time, so fail-fast on
     // timeout is the safer default).
-    if (failFast && (outcome === 'fail' || outcome === 'timeout')) stopped = true;
+    if (failFast && (outcome === 'fail' || outcome === 'timeout')) {
+      stopped = true;
+      if (!abortReason) abortReason = 'matrix aborted by failFast';
+    }
+    // bailAfter aborts after the configured failure count is hit.
+    // bailAfter=1 is equivalent in effect to failFast=true; both can
+    // be set together with no conflict.
+    if (bailAfter > 0 && failureCount >= bailAfter) {
+      stopped = true;
+      if (!abortReason) {
+        abortReason = `matrix aborted by --bail ${bailAfter} after ${failureCount} failure(s)`;
+      }
+    }
   }
 
   const totals = cells.reduce(

@@ -331,6 +331,100 @@ describe('runMatrix — failFast', () => {
   });
 });
 
+// runMatrix — bailAfter ─────────────────────────────────────────────
+
+describe('runMatrix — bailAfter', () => {
+  test('bailAfter=0 (default) means no bail — all cells run regardless of fails', async () => {
+    const r = await runMatrix({
+      browsers: ['a', 'b', 'c', 'd', 'e'],
+      bailAfter: 0,
+      dispatchOne: async () => false, // every cell fails
+    });
+    expect(r.cells.map((c) => c.outcome)).toEqual(['fail', 'fail', 'fail', 'fail', 'fail']);
+  });
+
+  test('bailAfter=1 is equivalent in effect to failFast=true', async () => {
+    const r = await runMatrix({
+      browsers: ['a', 'b', 'c'],
+      bailAfter: 1,
+      dispatchOne: async ({ browser }) => browser !== 'a', // a fails, rest pass
+    });
+    expect(r.cells[0].outcome).toBe('fail');
+    expect(r.cells[1].outcome).toBe('skip');
+    expect(r.cells[2].outcome).toBe('skip');
+    expect(r.cells[1].error).toMatch(/matrix aborted by --bail 1/);
+  });
+
+  test('bailAfter=3 stops at the 3rd failure (counts itself; 4th cell is skip)', async () => {
+    const r = await runMatrix({
+      browsers: ['a', 'b', 'c', 'd', 'e'],
+      bailAfter: 3,
+      dispatchOne: async () => false, // every cell fails
+    });
+    expect(r.cells.map((c) => c.outcome)).toEqual(['fail', 'fail', 'fail', 'skip', 'skip']);
+    expect(r.cells[3].error).toMatch(/matrix aborted by --bail 3 after 3 failure\(s\)/);
+  });
+
+  test('bailAfter counts timeouts as failures (matches failFast semantics)', async () => {
+    const r = await runMatrix({
+      browsers: ['a', 'b', 'c'],
+      bailAfter: 2,
+      dispatchOne: async ({ browser }) => {
+        if (browser === 'a' || browser === 'b') {
+          const e = new Error('took too long');
+          e.code = 'CELL_TIMEOUT';
+          throw e;
+        }
+        return true;
+      },
+    });
+    expect(r.cells[0].outcome).toBe('timeout');
+    expect(r.cells[1].outcome).toBe('timeout');
+    expect(r.cells[2].outcome).toBe('skip'); // bail triggered after 2 timeouts
+  });
+
+  test('bailAfter does NOT count "skip" outcomes (device-not-connected ≠ failure)', async () => {
+    const r = await runMatrix({
+      browsers: ['a', 'b', 'c', 'd', 'e'],
+      bailAfter: 2,
+      dispatchOne: async ({ browser }) => {
+        // a, b, c all skip; d fails; e fails — bail after 2 fails
+        if (browser === 'a' || browser === 'b' || browser === 'c') {
+          throw new Error('no Android device attached');
+        }
+        return false;
+      },
+    });
+    expect(r.cells.map((c) => c.outcome)).toEqual(['skip', 'skip', 'skip', 'fail', 'fail']);
+    // No 6th cell to be aborted — fine. All 5 ran because skips didn't count.
+  });
+
+  test('bailAfter + failFast=true together: whichever fires first wins', async () => {
+    // bailAfter=5 but failFast=true should still stop at the first fail.
+    const r = await runMatrix({
+      browsers: ['a', 'b', 'c'],
+      bailAfter: 5,
+      failFast: true,
+      dispatchOne: async () => false,
+    });
+    expect(r.cells[0].outcome).toBe('fail');
+    expect(r.cells[1].outcome).toBe('skip');
+    expect(r.cells[2].outcome).toBe('skip');
+    // failFast fired first — its sentinel should be the abort reason.
+    expect(r.cells[1].error).toMatch(/matrix aborted by failFast/);
+  });
+
+  test('totals reflect the truncated run (skips include the bail-aborted cells)', async () => {
+    const r = await runMatrix({
+      browsers: ['a', 'b', 'c', 'd'],
+      bailAfter: 2,
+      dispatchOne: async () => false,
+    });
+    expect(r.totals).toEqual({ pass: 0, fail: 2, skip: 2, timeout: 0 });
+    expect(r.ok).toBe(false); // any fail = not ok
+  });
+});
+
 // runMatrix — callbacks + timing ─────────────────────────────────────
 
 describe('runMatrix — callbacks + timing', () => {
