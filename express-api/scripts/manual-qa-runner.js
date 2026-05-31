@@ -15457,6 +15457,8 @@ function formatUsage() {
     '  --check-env               Diagnostic — verify env credentials + toolchain',
     '                              (PERSONAS_PASSWORD, FIREBASE_<TARGET>_API_KEY,',
     '                              node, npm). Exits 0 iff every check passes.',
+    '  --retry-failed <file>     Re-run only the cells that failed/timed out in',
+    '                              the referenced matrix-report JSON. Matrix-only.',
     '  --list                    Enumerate matrix cells as JSON (use with --target',
     '                              to filter to one target). Exits 0 without env vars',
     '                              so it is safe to pipe into jq for scripting.',
@@ -15591,6 +15593,7 @@ async function main() {
     else if (flat[i] === '--list') opts.list = true;
     else if (flat[i] === '--dry-run') opts.dryRun = true;
     else if (flat[i] === '--check-env') opts.checkEnv = true;
+    else if (flat[i] === '--retry-failed') opts.retryFailed = flat[++i];
   }
   // --help / --version / --list short-circuit BEFORE any further
   // validation or env checks. Operators must be able to discover the
@@ -15665,7 +15668,9 @@ async function main() {
   // module for the policy rationale (local = full matrix, dev =
   // chrome-on-Mac + chrome-on-Android, prod = chromium-only).
   const { allowedBrowsersFor } = require('./browser-allowlist');
-  const allowed = allowedBrowsersFor(opts.target);
+  // `let` (not const) because --retry-failed below may filter this
+  // down to only the cells that failed in a previous report.
+  let allowed = allowedBrowsersFor(opts.target);
   if (!allowed.includes(opts.browser)) {
     console.error(
       `--browser "${opts.browser}" is not allowed for --target "${opts.target}" — allowed: ${allowed.join(', ')}. The local matrix (full browser coverage) only applies to --target local; dev + prod stay Chromium-only by policy.`,
@@ -15775,11 +15780,52 @@ async function main() {
       formatMatrixResultJunit,
     } = require('./matrix-dispatch');
     const { spawnSync } = require('child_process');
+
+    // --retry-failed: filter `allowed` down to only the cells that
+    // failed/timed out in a previous matrix report. Lets the operator
+    // re-run just the broken cells after a fix without manually
+    // constructing per-cell command lines. Reads the prev report from
+    // the path given to --retry-failed. Matrix-only — the single-cell
+    // path doesn't use it (no allowlist to filter).
+    if (opts.retryFailed) {
+      try {
+        const prev = JSON.parse(fs.readFileSync(opts.retryFailed, 'utf8'));
+        if (!prev || !Array.isArray(prev.cells)) {
+          throw new Error(`${opts.retryFailed}: not a matrix report (missing cells array)`);
+        }
+        const failedSlugs = new Set(
+          prev.cells
+            .filter((c) => c.outcome === 'fail' || c.outcome === 'timeout')
+            .map((c) => c.browser),
+        );
+        allowed = allowed.filter((slug) => failedSlugs.has(slug));
+        if (allowed.length === 0) {
+          console.log(`[retry-failed] no failed cells in ${opts.retryFailed} — nothing to retry`);
+          process.exit(0);
+        }
+        console.log(
+          `[retry-failed] retrying ${allowed.length} cell(s) from ${opts.retryFailed}: ${allowed.join(', ')}`,
+        );
+      } catch (e) {
+        console.error(`--retry-failed: ${e.message}`);
+        process.exit(2);
+      }
+    }
+
     // Reconstruct the per-cell argv by stripping --matrix + report flags
     // + appending --browser <slug>. Per-cell subprocesses don't need the
     // matrix-level flags (they'd recurse into their own report-writing).
+    // --retry-failed is also matrix-level — per-cell subprocesses must
+    // not try to read the report file (they're just running a single
+    // browser).
     // Last --browser wins in the parse loop.
-    const stripFlags = new Set(['--matrix', '--report-dir', '--report-format', '--report-output']);
+    const stripFlags = new Set([
+      '--matrix',
+      '--report-dir',
+      '--report-format',
+      '--report-output',
+      '--retry-failed',
+    ]);
     const baseArgv = [];
     const sourceArgv = process.argv.slice(2);
     for (let i = 0; i < sourceArgv.length; i++) {
