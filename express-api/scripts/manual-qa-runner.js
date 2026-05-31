@@ -15459,6 +15459,12 @@ function formatUsage() {
     '                              node, npm). Exits 0 iff every check passes.',
     '  --retry-failed <file>     Re-run only the cells that failed/timed out in',
     '                              the referenced matrix-report JSON. Matrix-only.',
+    '  --filter <pattern>        Subset the matrix to cells whose slug matches.',
+    '                              Substring match, case-insensitive. Multiple',
+    '                              patterns comma-separated (OR). Composes with',
+    '                              --target allowlist + --retry-failed (filter',
+    '                              applied first). Example: --filter android',
+    '                              or --filter chromium,firefox.',
     '  --list                    Enumerate matrix cells as JSON (use with --target',
     '                              to filter to one target). Exits 0 without env vars',
     '                              so it is safe to pipe into jq for scripting.',
@@ -15529,13 +15535,37 @@ function formatListJson(target) {
   });
 }
 
+// --filter <pattern> — substring + comma-list cell subsetter.
+//
+// Operator use case: --matrix --filter android runs the 4 *android cells;
+// --filter chromium,firefox runs both desktop browsers. Substring match
+// against slug, case-insensitive for operator ergonomics (slugs are
+// policy-lowercase but Chromium-with-cap-C is muscle memory). Comma
+// separates OR-combined patterns. Throws on empty/whitespace-only so
+// the parser can exit 2 with a clean error rather than silently match
+// everything.
+function applyFilter(cells, filter) {
+  if (filter === undefined || filter === null) return cells;
+  const patterns = String(filter)
+    .split(',')
+    .map((p) => p.trim().toLowerCase())
+    .filter((p) => p.length > 0);
+  if (patterns.length === 0) {
+    throw new Error('--filter requires at least one non-empty pattern');
+  }
+  return cells.filter((slug) => {
+    const lower = String(slug).toLowerCase();
+    return patterns.some((p) => lower.includes(p));
+  });
+}
+
 // --dry-run — preview the dispatch effect given current opts.
 //
 // Distinct from --list (which shows the static allowlist POLICY):
 // --dry-run shows the actual cells that would run RIGHT NOW with this
-// exact command line, after --browser overrides and target resolution.
-// Useful for verifying a complex invocation before paying for a real
-// matrix dispatch.
+// exact command line, after --browser overrides, target resolution, and
+// --filter subsetting. Useful for verifying a complex invocation before
+// paying for a real matrix dispatch.
 //
 // Output: { target: '<resolved>', cells: [...] }.
 // Defaults: target=local (matches the runner's existing default
@@ -15546,7 +15576,8 @@ function formatDryRunJson(opts = {}) {
   // --browser is an explicit override: operator named the cell directly,
   // regardless of what the target's allowlist contains. This mirrors
   // the runner's existing dispatch behavior.
-  const cells = opts.browser ? [opts.browser] : allowedBrowsersFor(target);
+  let cells = opts.browser ? [opts.browser] : allowedBrowsersFor(target);
+  if (opts.filter !== undefined) cells = applyFilter(cells, opts.filter);
   return JSON.stringify({ target, cells });
 }
 
@@ -15594,6 +15625,7 @@ async function main() {
     else if (flat[i] === '--dry-run') opts.dryRun = true;
     else if (flat[i] === '--check-env') opts.checkEnv = true;
     else if (flat[i] === '--retry-failed') opts.retryFailed = flat[++i];
+    else if (flat[i] === '--filter') opts.filter = flat[++i];
   }
   // --help / --version / --list short-circuit BEFORE any further
   // validation or env checks. Operators must be able to discover the
@@ -15781,6 +15813,27 @@ async function main() {
     } = require('./matrix-dispatch');
     const { spawnSync } = require('child_process');
 
+    // --filter <pattern>: subset `allowed` by slug substring (comma-list
+    // OR-combined, case-insensitive). Applied BEFORE --retry-failed so
+    // the retry subset intersects the filter correctly (e.g. --filter
+    // android --retry-failed <chromium-fail-report> = nothing to retry,
+    // not "retry chromium because it's in the report").
+    if (opts.filter !== undefined) {
+      try {
+        allowed = applyFilter(allowed, opts.filter);
+        if (allowed.length === 0) {
+          console.log(`[filter] no cells match "${opts.filter}" — nothing to run`);
+          process.exit(0);
+        }
+        console.log(
+          `[filter] ${allowed.length} cell(s) matched "${opts.filter}": ${allowed.join(', ')}`,
+        );
+      } catch (e) {
+        console.error(`--filter: ${e.message}`);
+        process.exit(2);
+      }
+    }
+
     // --retry-failed: filter `allowed` down to only the cells that
     // failed/timed out in a previous matrix report. Lets the operator
     // re-run just the broken cells after a fix without manually
@@ -15825,6 +15878,7 @@ async function main() {
       '--report-format',
       '--report-output',
       '--retry-failed',
+      '--filter',
     ]);
     const baseArgv = [];
     const sourceArgv = process.argv.slice(2);
@@ -16170,6 +16224,7 @@ module.exports = {
   formatVersion,
   formatListJson,
   formatDryRunJson,
+  applyFilter,
   TARGETS,
 };
 
