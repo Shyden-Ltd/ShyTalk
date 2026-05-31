@@ -623,3 +623,80 @@ describe('close', () => {
     expect(sessionPosts).toHaveLength(2); // re-bootstrapped
   });
 });
+
+// takeScreenshot — behavioral delegation (gap C3, reviewer I-NEW-1) ──
+
+describe('createMobileWebkitIosDriver — takeScreenshot delegation', () => {
+  const helper = require(
+    path.join(REPO_ROOT, 'express-api/scripts/drivers/driver-screenshot-helper'),
+  );
+
+  test('routes to takeScreenshotViaAppium with Appium URL + slug=mobile-chrome-ios', async () => {
+    const spy = jest
+      .spyOn(helper, 'takeScreenshotViaAppium')
+      .mockResolvedValue(['/mock/webkit-chrome.png']);
+    try {
+      const fetchImpl = makeFetchMock(defaultHandlers({ sessionId: 'sess-webkit-chrome' }));
+      const driver = await createMobileWebkitIosDriver({
+        browser: 'chrome',
+        wdaTeamId: 'TEAM123',
+        selectUdidImpl: () => 'UDID',
+        fetchImpl,
+      });
+      // Establish session via webRefreshRoomsList → context switch + nav.
+      await driver.webRefreshRoomsList('Alice');
+
+      const result = await driver.takeScreenshot('/tmp/webkit-out');
+
+      expect(spy).toHaveBeenCalledTimes(1);
+      const [args] = spy.mock.calls[0];
+      expect(args.appiumBaseUrl).toBe(DEFAULT_APPIUM_BASE_URL);
+      expect(args.sessionId).toBe('sess-webkit-chrome');
+      expect(args.fetchImpl).toBe(fetchImpl);
+      expect(args.outputDir).toBe('/tmp/webkit-out');
+      // Slug interpolates the browser param — drift-catch for the
+      // dynamic template literal at the production wiring.
+      expect(args.slug).toBe('mobile-chrome-ios');
+      expect(result).toEqual(['/mock/webkit-chrome.png']);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('slug = mobile-firefox-ios when browser=firefox (different code path)', async () => {
+    // Distinct from the chrome variant: pins the slug interpolation
+    // against an alternate browser value. If a future refactor
+    // hardcodes the slug, this test fails.
+    const spy = jest.spyOn(helper, 'takeScreenshotViaAppium').mockResolvedValue([]);
+    try {
+      const fetchImpl = makeFetchMock(defaultHandlers({ sessionId: 'sess-webkit-ff' }));
+      const driver = await createMobileWebkitIosDriver({
+        browser: 'firefox',
+        wdaTeamId: 'TEAM123',
+        selectUdidImpl: () => 'UDID',
+        fetchImpl,
+      });
+      await driver.webRefreshRoomsList('Alice');
+      await driver.takeScreenshot('/tmp/ff-ios-out');
+      expect(spy.mock.calls[0][0].slug).toBe('mobile-firefox-ios');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('sessionId is null when called before any session-establishing call', async () => {
+    const spy = jest.spyOn(helper, 'takeScreenshotViaAppium').mockResolvedValue([]);
+    try {
+      const driver = await createMobileWebkitIosDriver({
+        browser: 'chrome',
+        wdaTeamId: 'TEAM123',
+        selectUdidImpl: () => 'UDID',
+        fetchImpl: makeFetchMock([]),
+      });
+      await driver.takeScreenshot('/tmp/out');
+      expect(spy.mock.calls[0][0].sessionId).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});

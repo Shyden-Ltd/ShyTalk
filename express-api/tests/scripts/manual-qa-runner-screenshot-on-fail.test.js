@@ -263,6 +263,16 @@ describe('runFeatureFile screenshot-on-failure hook (C3)', () => {
     for (const [dir] of takeScreenshot.mock.calls) {
       expect(dir).toMatch(/\/tmp\/qa-report\/scenario-\d+$/);
     }
+    // Reviewer I-NEW-2 — pin EXACT indices: failures form a contiguous
+    // zero-based sequence so screenshot dir N correlates with findings[N].
+    // Catches off-by-one regressions if a future refactor reorders the
+    // findings.push vs screenshot block (the index is computed from
+    // findings.length - 1).
+    const actualDirs = takeScreenshot.mock.calls.map((c) => c[0]).sort();
+    const expectedDirs = takeScreenshot.mock.calls
+      .map((_, idx) => `/tmp/qa-report/scenario-${idx}`)
+      .sort();
+    expect(actualDirs).toEqual(expectedDirs);
   });
 
   test('empty-string screenshot paths are filtered out (reviewer P3)', async () => {
