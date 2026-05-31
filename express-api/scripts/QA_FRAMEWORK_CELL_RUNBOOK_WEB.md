@@ -15,13 +15,13 @@ external browser installation required.
 
 ## Shared prerequisites (apply to all 4 cells)
 
-| Requirement                    | Install command                                    | Verification                                    |
-| ------------------------------ | -------------------------------------------------- | ----------------------------------------------- |
-| Node 24+                       | `brew install node@24` (macOS) or `nvm install 24` | `node --version` → 24.x                         |
-| Express deps installed         | `cd express-api && npm ci`                         | `ls express-api/node_modules/playwright` exists |
-| Playwright browsers downloaded | `npx playwright install` (run once)                | `~/.cache/ms-playwright/` populated             |
-| PERSONAS_PASSWORD env var      | `source ~/.shytalk/dev-personas.env`               | `echo $PERSONAS_PASSWORD` non-empty             |
-| FIREBASE\_<TARGET>\_API_KEY    | `export FIREBASE_DEV_API_KEY=...`                  | `echo $FIREBASE_DEV_API_KEY` non-empty          |
+| Requirement                    | Install command                                    | Verification                                 |
+| ------------------------------ | -------------------------------------------------- | -------------------------------------------- |
+| Node 24+                       | `brew install node@24` (macOS) or `nvm install 24` | `node --version` → 24.x                      |
+| Express deps installed         | `cd express-api && npm ci`                         | `[ -d express-api/node_modules/playwright ]` |
+| Playwright browsers downloaded | `npx playwright install` (run once)                | `~/.cache/ms-playwright/` populated          |
+| PERSONAS_PASSWORD env var      | `source ~/.shytalk/dev-personas.env`               | `echo $PERSONAS_PASSWORD` non-empty          |
+| FIREBASE\_<TARGET>\_API_KEY    | `export FIREBASE_DEV_API_KEY=...`                  | `echo $FIREBASE_DEV_API_KEY` non-empty       |
 
 Run `node express-api/scripts/manual-qa-runner.js --check-env` to
 verify all of the above in one shot.
@@ -77,7 +77,7 @@ npx playwright install firefox
 
 ```bash
 node express-api/scripts/manual-qa-runner.js \
-  --check-drivers --target local --browser firefox
+  --check-drivers --target local --filter firefox
 ```
 
 ### Common failures
@@ -111,7 +111,7 @@ npx playwright install --with-deps webkit
 
 ```bash
 node express-api/scripts/manual-qa-runner.js \
-  --check-drivers --target local --browser webkit
+  --check-drivers --target local --filter webkit
 ```
 
 ### Common failures
@@ -141,16 +141,16 @@ SYSTEM Edge install, not a bundled one.
 
 ```bash
 node express-api/scripts/manual-qa-runner.js \
-  --check-drivers --target local --browser edge
+  --check-drivers --target local --filter edge
 ```
 
 ### Common failures
 
-| Symptom                                         | Root cause                                                    | Fix                                                  |
-| ----------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------- |
-| `Executable doesn't exist at /Applications/...` | Edge not installed                                            | Install via brew (macOS) or apt (Linux)              |
-| Edge version mismatch                           | Edge auto-updated to a version newer than Playwright supports | Pin Edge via `brew install microsoft-edge@<version>` |
-| Codec / DRM failures                            | Playwright's Edge launches without DRM modules                | Acceptable for QA matrix; not a real-user issue      |
+| Symptom                                         | Root cause                                                    | Fix                                                                                       |
+| ----------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `Executable doesn't exist at /Applications/...` | Edge not installed                                            | Install via brew (macOS) or apt (Linux)                                                   |
+| Edge version mismatch                           | Edge auto-updated to a version newer than Playwright supports | `brew pin microsoft-edge` to freeze; or download specific version from microsoft.com/edge |
+| Codec / DRM failures                            | Playwright's Edge launches without DRM modules                | Acceptable for QA matrix; not a real-user issue                                           |
 
 ---
 

@@ -49,7 +49,7 @@ adb forward tcp:9222 localabstract:chrome_devtools_remote
 
 # Run the smoke check
 node express-api/scripts/manual-qa-runner.js \
-  --check-drivers --target local --browser mobile-chrome-android
+  --check-drivers --target local --filter mobile-chrome-android
 # Expected: outcome=ok
 ```
 
@@ -70,29 +70,35 @@ Samsung Internet browser (Samsung Galaxy devices).
 
 ### Setup
 
-Samsung Internet is pre-installed on Samsung devices. For other
-Android devices, install from Play Store:
+Samsung Internet is pre-installed on Samsung Galaxy devices. For
+other Android devices, install from the Play Store.
 
-```bash
-adb install com.sec.android.app.sbrowser-*.apk
-# OR via Play Store on the device
-```
+**Mandatory setup step (often missed):** In Samsung Internet itself,
+enable "USB Debugging of WebViews":
+
+1. Open Samsung Internet on the device
+2. Menu → Settings → Useful features → Web Browser Developer Settings
+3. Toggle "USB Debugging of WebViews" ON
+
+Without this toggle, CDP returns 0 contexts even with the correct
+abstract socket forward. This is the #1 cause of "0 contexts" errors
+in this cell.
 
 ### Verification
 
 ```bash
-adb forward tcp:9223 localabstract:samsung_internet_devtools_remote
+adb forward tcp:9223 localabstract:com.sec.android.app.sbrowser_devtools_remote
 node express-api/scripts/manual-qa-runner.js \
-  --check-drivers --target local --browser mobile-samsung-android
+  --check-drivers --target local --filter mobile-samsung-android
 ```
 
 ### Common failures
 
-| Symptom                          | Root cause                                             | Fix                                                                      |
-| -------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------ |
-| `connectOverCDP failed`          | Samsung Internet's DevTools port differs from Chrome's | Verify abstract socket name; may need `samsung_internet_devtools_remote` |
-| Samsung Internet not installed   | Non-Samsung device                                     | Run only on Samsung Galaxy devices; skip cell otherwise                  |
-| Auto-updates break compatibility | Samsung Internet updated to incompatible CDP version   | Pin Samsung Internet version; or skip cell when issue surfaces           |
+| Symptom                          | Root cause                                             | Fix                                                                                  |
+| -------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `connectOverCDP failed`          | Samsung Internet's DevTools port differs from Chrome's | Verify abstract socket name; may need `com.sec.android.app.sbrowser_devtools_remote` |
+| Samsung Internet not installed   | Non-Samsung device                                     | Run only on Samsung Galaxy devices; skip cell otherwise                              |
+| Auto-updates break compatibility | Samsung Internet updated to incompatible CDP version   | Pin Samsung Internet version; or skip cell when issue surfaces                       |
 
 ---
 
@@ -115,7 +121,7 @@ adb shell pm list packages com.microsoft.emmx
 ```bash
 adb forward tcp:9224 localabstract:com.microsoft.emmx_devtools_remote
 node express-api/scripts/manual-qa-runner.js \
-  --check-drivers --target local --browser mobile-edge-android
+  --check-drivers --target local --filter mobile-edge-android
 ```
 
 ### Common failures
@@ -131,15 +137,22 @@ Firefox for Android (Gecko engine — different code path from CDP).
 
 ### Setup
 
-Install Firefox from Play Store:
+**Important:** Stable Firefox from the Play Store
+(`org.mozilla.firefox`) does NOT expose `about:config` to end users
+and does NOT have Marionette enabled. The Marionette setup below
+applies only to **Firefox Nightly** (`org.mozilla.fenix`) or
+**Firefox Beta** (`org.mozilla.firefox_beta`).
+
+Install Firefox Nightly from Play Store:
 
 ```bash
-adb shell pm list packages org.mozilla.firefox
+adb shell pm list packages org.mozilla.fenix
+# Or Beta: org.mozilla.firefox_beta
 ```
 
-Enable Marionette (Firefox's automation protocol):
+Enable Marionette (Nightly/Beta only):
 
-1. Open Firefox on device
+1. Open Firefox Nightly on device
 2. about:config → `marionette.enabled` → true
 3. Restart Firefox
 
@@ -149,7 +162,7 @@ Enable Marionette (Firefox's automation protocol):
 # Marionette uses port 2828 by default
 adb forward tcp:2828 tcp:2828
 node express-api/scripts/manual-qa-runner.js \
-  --check-drivers --target local --browser mobile-firefox-android
+  --check-drivers --target local --filter mobile-firefox-android
 ```
 
 ### Common failures
