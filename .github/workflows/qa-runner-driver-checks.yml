@@ -85,7 +85,10 @@ jobs:
         # Bounded subset of the full express-api suite — fastest signal
         # that any driver-shape regression surfaces before the full
         # backend suite finishes.
-        run: npm test -- --testPathPattern tests/scripts/drivers/ --silent
+        # Jest 30+ renamed --testPathPattern to --testPathPatterns. The
+        # singular form is deprecated and exits 1. PR #941 surfaced this
+        # when the playwright devDep bump hoisted Jest's version.
+        run: npm test -- --testPathPatterns tests/scripts/drivers/ --silent
         working-directory: express-api
 
       - name: --check-drivers diagnostic (local target)

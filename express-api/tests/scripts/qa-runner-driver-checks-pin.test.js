@@ -66,7 +66,10 @@ describe('.github/workflows/qa-runner-driver-checks.yml', () => {
   });
 
   test('runs the driver-contract test suite', () => {
-    expect(reusable).toMatch(/--testPathPattern\s+tests\/scripts\/drivers\//);
+    // Jest 30+ renamed --testPathPattern to --testPathPatterns
+    // (plural). Match either form so the pin is robust across Jest
+    // version bumps.
+    expect(reusable).toMatch(/--testPathPatterns?\s{1,5}tests\/scripts\/drivers\//);
   });
 
   test('runs --check-drivers diagnostic', () => {
