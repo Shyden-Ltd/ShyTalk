@@ -206,6 +206,19 @@ async function createMobileSafariIosDriver({
     }
   };
 
+  // takeScreenshot — gap C3. Uses Appium's screenshot endpoint
+  // (POST /session/<sid>/screenshot returns base64 PNG). One file per
+  // session (Appium doesn't model multi-persona pages on iOS the way
+  // Playwright does on desktop).
+  driver.takeScreenshot = async (outputDir) =>
+    require('./driver-screenshot-helper').takeScreenshotViaAppium({
+      appiumBaseUrl,
+      sessionId: _sessionId,
+      fetchImpl,
+      outputDir,
+      slug: 'mobile-safari-ios',
+    });
+
   driver.close = async () => {
     if (!_sessionId) return;
     try {
@@ -220,7 +233,7 @@ async function createMobileSafariIosDriver({
 }
 
 // Canonical method surface — pinned by driver-contract.test.js.
-const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump'];
+const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump', 'takeScreenshot'];
 
 function listMethods() {
   return [...new Set(WEB_MOBILE_METHOD_NAMES)].sort();

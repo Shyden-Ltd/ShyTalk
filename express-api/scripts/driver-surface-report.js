@@ -28,7 +28,11 @@ const fs = require('fs');
 const path = require('path');
 
 const DRIVERS_DIR = path.join(__dirname, 'drivers');
-const HELPER_FILES = new Set(['android-cdp-helpers.js', 'ios-driver-loader.js']);
+const HELPER_FILES = new Set([
+  'android-cdp-helpers.js',
+  'ios-driver-loader.js',
+  'driver-screenshot-helper.js',
+]);
 
 function discoverDrivers() {
   return fs

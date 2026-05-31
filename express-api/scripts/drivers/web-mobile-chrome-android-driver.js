@@ -194,6 +194,14 @@ async function createMobileChromeAndroidDriver({
     }
   };
 
+  // takeScreenshot — gap C3. Delegates to shared helper.
+  driver.takeScreenshot = async (outputDir) =>
+    require('./driver-screenshot-helper').takeScreenshotForPages(
+      pages,
+      outputDir,
+      'mobile-chrome-android',
+    );
+
   driver.close = async () => {
     for (const p of pages.values()) {
       try {
@@ -216,7 +224,7 @@ async function createMobileChromeAndroidDriver({
 // Canonical method surface — the runner-vocabulary methods this driver
 // implements (close() is intentionally excluded; it's lifecycle, not a
 // runner step-binding). Pinned by tests/scripts/drivers/driver-contract.test.js.
-const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump'];
+const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump', 'takeScreenshot'];
 
 function listMethods() {
   return [...new Set(WEB_MOBILE_METHOD_NAMES)].sort();

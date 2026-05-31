@@ -30,20 +30,21 @@ const path = require('path');
 
 const DRIVERS_DIR = path.resolve(__dirname, '../../../scripts/drivers');
 
-// EXPECTED method counts per driver. Updated 2026-05-31.
+// EXPECTED method counts per driver. Updated 2026-05-31 (PR #944 added
+// takeScreenshot to all 7 web drivers — gap C3).
 // Drift in EITHER direction surfaces a red test for deliberate review.
 const EXPECTED_COUNTS = {
-  'web-playwright-driver': 77,
+  'web-playwright-driver': 78,
   'android-adb-driver': 72,
   'ios-devicectl-driver': 66,
   'ios-simctl-driver': 66,
   'ios-appium-driver': 11,
-  'web-mobile-chrome-android-driver': 2,
-  'web-mobile-samsung-android-driver': 2,
-  'web-mobile-edge-android-driver': 2,
-  'web-mobile-firefox-android-driver': 2,
-  'web-mobile-safari-ios-driver': 2,
-  'web-mobile-webkit-ios-driver': 2,
+  'web-mobile-chrome-android-driver': 3,
+  'web-mobile-samsung-android-driver': 3,
+  'web-mobile-edge-android-driver': 3,
+  'web-mobile-firefox-android-driver': 3,
+  'web-mobile-safari-ios-driver': 3,
+  'web-mobile-webkit-ios-driver': 3,
 };
 
 /**

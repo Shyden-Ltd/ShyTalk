@@ -290,6 +290,19 @@ async function createMobileFirefoxAndroidDriver({
     }
   };
 
+  // takeScreenshot — gap C3. Geckodriver exposes the W3C
+  // /session/<sid>/screenshot endpoint (same shape as Appium), so we
+  // reuse takeScreenshotViaAppium (despite the name, the helper works
+  // for any W3C WebDriver HTTP impl that returns {value: <base64>}).
+  driver.takeScreenshot = async (outputDir) =>
+    require('./driver-screenshot-helper').takeScreenshotViaAppium({
+      appiumBaseUrl: `http://127.0.0.1:${port}`,
+      sessionId: _sessionId,
+      fetchImpl,
+      outputDir,
+      slug: 'mobile-firefox-android',
+    });
+
   driver.close = async () => {
     if (_sessionId) {
       try {
@@ -312,7 +325,7 @@ async function createMobileFirefoxAndroidDriver({
 }
 
 // Canonical method surface — pinned by driver-contract.test.js.
-const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump'];
+const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump', 'takeScreenshot'];
 
 function listMethods() {
   return [...new Set(WEB_MOBILE_METHOD_NAMES)].sort();

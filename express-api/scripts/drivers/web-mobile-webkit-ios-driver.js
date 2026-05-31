@@ -262,6 +262,18 @@ async function createMobileWebkitIosDriver({
     }
   };
 
+  // takeScreenshot — gap C3. Uses Appium's screenshot endpoint.
+  // Browser name is part of the slug (mobile-<browser>-ios) so each
+  // browser-app variant gets a distinct artifact filename.
+  driver.takeScreenshot = async (outputDir) =>
+    require('./driver-screenshot-helper').takeScreenshotViaAppium({
+      appiumBaseUrl,
+      sessionId: _sessionId,
+      fetchImpl,
+      outputDir,
+      slug: `mobile-${browser}-ios`,
+    });
+
   driver.close = async () => {
     if (!_sessionId) return;
     try {
@@ -277,7 +289,7 @@ async function createMobileWebkitIosDriver({
 }
 
 // Canonical method surface — pinned by driver-contract.test.js.
-const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump'];
+const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump', 'takeScreenshot'];
 
 function listMethods() {
   return [...new Set(WEB_MOBILE_METHOD_NAMES)].sort();

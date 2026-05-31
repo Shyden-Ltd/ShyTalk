@@ -139,6 +139,7 @@ const WEB_METHOD_NAMES = [
   // on the persona's tab; the matcher's `within 3000ms` polling
   // wraps the list population.
   'webRefreshRoomsList',
+  'takeScreenshot',
   // Append-only — add new method names as new matchers land.
 ];
 
@@ -443,6 +444,12 @@ async function createWebDriver({
       return false;
     }
   };
+
+  // takeScreenshot — capture all persona pages to `outputDir` (gap C3).
+  // Delegates to the shared helper so the 7 web drivers (this one + 6
+  // web-mobile wrappers) implement the screenshot contract identically.
+  driver.takeScreenshot = async (outputDir) =>
+    require('./driver-screenshot-helper').takeScreenshotForPages(pages, outputDir, browserName);
 
   driver.close = async () => {
     for (const p of pages.values()) {

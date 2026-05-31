@@ -141,6 +141,14 @@ async function createMobileSamsungAndroidDriver({
     }
   };
 
+  // takeScreenshot — gap C3. Delegates to shared helper.
+  driver.takeScreenshot = async (outputDir) =>
+    require('./driver-screenshot-helper').takeScreenshotForPages(
+      pages,
+      outputDir,
+      'mobile-samsung-android',
+    );
+
   driver.close = async () => {
     for (const p of pages.values()) {
       try {
@@ -161,7 +169,7 @@ async function createMobileSamsungAndroidDriver({
 }
 
 // Canonical method surface — pinned by driver-contract.test.js.
-const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump'];
+const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump', 'takeScreenshot'];
 
 function listMethods() {
   return [...new Set(WEB_MOBILE_METHOD_NAMES)].sort();

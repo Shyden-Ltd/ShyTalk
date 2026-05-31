@@ -20,7 +20,8 @@
  *      the other isn't.
  *
  * Excluded files: helper modules without a driver shape
- * (`android-cdp-helpers.js`, `ios-driver-loader.js`).
+ * (`android-cdp-helpers.js`, `ios-driver-loader.js`,
+ * `driver-screenshot-helper.js`).
  *
  * `describe.each` per discovered driver — adding a new driver requires
  * zero test edits; the new file is auto-tested.
@@ -35,7 +36,11 @@ const DRIVERS_DIR = path.resolve(__dirname, '../../../scripts/drivers');
 // not driver implementations). Exclusion list is intentional: every
 // addition here represents a conscious decision about what is/isn't a
 // driver.
-const HELPER_FILES = new Set(['android-cdp-helpers.js', 'ios-driver-loader.js']);
+const HELPER_FILES = new Set([
+  'android-cdp-helpers.js',
+  'ios-driver-loader.js',
+  'driver-screenshot-helper.js',
+]);
 
 function discoverDrivers() {
   return fs
