@@ -83,7 +83,11 @@ describe('runHealthCheck — per-cell outcomes', () => {
     expect(closeImpl).toHaveBeenCalledTimes(1);
   });
 
-  test('factory throwing init-error → outcome="skip" with message captured', async () => {
+  test('factory throwing init-error → outcome="skip" with message captured + bootstrapMs recorded', async () => {
+    // bootstrapMs is recorded even on skip-classified throws — the
+    // factory ran (and threw), so its duration is meaningful. The
+    // operator distinguishes "skipped immediately" from "skipped
+    // after a slow timeout" via this field.
     const factory = makeFactoryThrowing(new Error('no Android device attached'));
     const r = await runHealthCheck({
       browsers: ['mobile-chrome-android'],
@@ -91,6 +95,7 @@ describe('runHealthCheck — per-cell outcomes', () => {
     });
     expect(r.cells[0].outcome).toBe('skip');
     expect(r.cells[0].error).toMatch(/no Android device/);
+    expect(typeof r.cells[0].bootstrapMs).toBe('number');
   });
 
   test('factory throwing non-init Error → outcome="fail"', async () => {
@@ -114,13 +119,20 @@ describe('runHealthCheck — per-cell outcomes', () => {
     expect(r.cells[0].outcome).toBe('skip');
   });
 
-  test('missing factory for slug → outcome="fail" with actionable message', async () => {
+  test('missing factory for slug → outcome="fail" + all phase fields undefined', async () => {
+    // No factory means no phase ran — bootstrap/smoke/close fields
+    // must ALL be undefined (not 0 — a 0 would falsely imply the
+    // phase ran instantly). Symmetric to other "phase didn't run"
+    // pins above.
     const r = await runHealthCheck({
       browsers: ['mobile-unknown'],
       factories: {},
     });
     expect(r.cells[0].outcome).toBe('fail');
     expect(r.cells[0].error).toMatch(/no factory registered/);
+    expect(r.cells[0].bootstrapMs).toBeUndefined();
+    expect(r.cells[0].smokeMs).toBeUndefined();
+    expect(r.cells[0].closeMs).toBeUndefined();
   });
 
   test('factory returning null → close skipped (no crash)', async () => {
@@ -146,7 +158,9 @@ describe('runHealthCheck — per-cell outcomes', () => {
     expect(r.cells[0].outcome).toBe('ok');
   });
 
-  test('driver without a close method is tolerated', async () => {
+  test('driver without a close method is tolerated + closeMs undefined', async () => {
+    // No close method → close phase doesn't run → closeMs is
+    // undefined (not 0). Symmetric to other "phase didn't run" pins.
     const factory = jest.fn(async () => ({
       /* no close */
     }));
@@ -155,6 +169,7 @@ describe('runHealthCheck — per-cell outcomes', () => {
       factories: { chromium: factory },
     });
     expect(r.cells[0].outcome).toBe('ok');
+    expect(r.cells[0].closeMs).toBeUndefined();
   });
 });
 
@@ -261,8 +276,11 @@ describe('runHealthCheck — baseURL + callbacks', () => {
 
 describe('runHealthCheck — timing', () => {
   test('durationMs from injected nowMs delta', async () => {
-    // Phase timing (gap C5) added 5 additional nowMs() calls per cell:
-    //   t0 + tBoot + bootstrapEnd + tClose + closeEnd + final = 6 calls.
+    // Phase timing (gap C5) added 4 additional nowMs() calls per cell
+    // (no smoke):
+    //   Before: t0 + final = 2 calls.
+    //   After:  t0 + tBoot + bootstrapEnd + tClose + closeEnd + final
+    //           = 6 calls.
     // With +200 per call, each cell spans 6*200 = 1200ms wall time;
     // durationMs = (6-1)*200 = 1000ms (final - t0).
     let n = 1000;
@@ -399,10 +417,12 @@ describe('runHealthCheck — smokeMethod', () => {
     expect(r.ok).toBe(false);
   });
 
-  test('smokeMethod missing on driver → outcome fail with "not implemented"', async () => {
+  test('smokeMethod missing on driver → outcome fail with "not implemented" + smokeMs undefined', async () => {
     // Native drivers (android-adb, ios-*) don't implement webUiDump.
     // If operator runs --smoke against such a cell, we must fail
-    // clearly rather than silently pass.
+    // clearly rather than silently pass. Phase-field pin: smokeMs
+    // is UNDEFINED (not 0) on the not-implemented path — the smoke
+    // method was never called, so its timing is absent, not zero.
     const driver = makeFakeDriver(); // no webUiDump
     const r = await runHealthCheck({
       browsers: ['some-native-cell'],
@@ -411,6 +431,7 @@ describe('runHealthCheck — smokeMethod', () => {
     });
     expect(r.cells[0].outcome).toBe('fail');
     expect(r.cells[0].error).toMatch(/smoke method "webUiDump" not implemented/);
+    expect(r.cells[0].smokeMs).toBeUndefined();
   });
 
   test('bootstrap fails (non-init error) + smokeMethod set → outcome fail, smoke NOT called', async () => {
@@ -594,19 +615,36 @@ describe('runHealthCheck — phase timing breakdown (gap C5)', () => {
     expect(r.cells[0].closeMs).toBeUndefined();
   });
 
-  test('phase sum approximately equals durationMs (within ms rounding)', async () => {
-    // Sanity invariant: bootstrapMs + smokeMs + closeMs ≈ durationMs.
-    // Tolerance: 5ms for rounding + any small overhead between
-    // nowMs() calls outside the phase timers.
+  test('phase sum exactly equals durationMs with injected deterministic nowMs', async () => {
+    // Structural invariant via injected clock — zero tolerance, no
+    // flakiness from real-clock jitter. Tick sequence (smoke-method
+    // path = 8 calls per cell):
+    //   t0=1000, tBoot=1100 → bootstrapMs=200 (calc at 1300),
+    //   tSmoke=1400 → smokeMs=300 (calc at 1700),
+    //   tClose=1800 → closeMs=100 (calc at 1900),
+    //   durationMs=1900-1000=900.
+    // Expected: bootstrap(200) + smoke(300) + close(100) = 600,
+    //   durationMs(900) - phaseSum(600) = 300 (inter-phase gaps).
+    // The invariant is `durationMs >= phaseSum` (phase sum can't
+    // exceed wall time), not equality, because inter-phase gaps are
+    // legitimate. Pin the inequality structurally.
+    let i = 0;
+    const ticks = [1000, 1100, 1300, 1400, 1700, 1800, 1900, 1900];
     const driver = makeFakeDriver();
     driver.webUiDump = jest.fn(async () => 'ok');
     const r = await runHealthCheck({
       browsers: ['chromium'],
       factories: { chromium: makeFactoryReturning(driver) },
       smokeMethod: 'webUiDump',
+      nowMs: () => ticks[i++],
     });
     const cell = r.cells[0];
     const phaseSum = (cell.bootstrapMs || 0) + (cell.smokeMs || 0) + (cell.closeMs || 0);
-    expect(Math.abs(cell.durationMs - phaseSum)).toBeLessThanOrEqual(5);
+    expect(cell.durationMs).toBeGreaterThanOrEqual(phaseSum);
+    // Exact values from the tick sequence above:
+    expect(cell.bootstrapMs).toBe(200);
+    expect(cell.smokeMs).toBe(300);
+    expect(cell.closeMs).toBe(100);
+    expect(cell.durationMs).toBe(900);
   });
 });

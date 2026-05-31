@@ -126,11 +126,15 @@ async function runHealthCheck({
       // its own method is broken at runtime — separate from init
       // failures (which are 'skip'-classified above).
       if (outcome === 'ok' && smokeMethod && driver) {
-        const tSmoke = nowMs();
         if (typeof driver[smokeMethod] !== 'function') {
           outcome = 'fail';
           error = `smoke method "${smokeMethod}" not implemented on driver`;
         } else {
+          // tSmoke captured INSIDE the else branch so the not-
+          // implemented path doesn't consume a nowMs() tick that
+          // never feeds a phase-timing field. Keeps tick-count
+          // analysis predictable for tests that inject nowMs.
+          const tSmoke = nowMs();
           try {
             await driver[smokeMethod]();
             smokeMs = Math.max(0, nowMs() - tSmoke);
