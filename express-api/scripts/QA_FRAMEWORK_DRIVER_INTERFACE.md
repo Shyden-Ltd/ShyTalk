@@ -11,19 +11,19 @@ current per-driver surface for regression detection.
 The current surface (run `node express-api/scripts/driver-surface-report.js`
 for the live numbers):
 
-| Driver | Methods | Category |
-|--------|---------|----------|
-| `web-playwright-driver` | 77 | **Web full-surface** — every journey-step method (auth, room, gift, admin, etc.) |
-| `android-adb-driver` | 72 | **Native Android full-surface** — adb-driven UI dump + tap + journey steps |
-| `ios-devicectl-driver` | 66 | **Native iOS (devicectl)** — XCUITest harness for iOS 17+ devices |
-| `ios-simctl-driver` | 66 | **Native iOS (simctl)** — XCUITest harness for iOS Simulator |
-| `ios-appium-driver` | 11 | **iOS bridge** — minimal Appium WebDriver wrapper |
-| `web-mobile-chrome-android-driver` | 2 | **Web-mobile wrapper** — Playwright CDP → Android Chrome |
-| `web-mobile-samsung-android-driver` | 2 | Web-mobile wrapper |
-| `web-mobile-edge-android-driver` | 2 | Web-mobile wrapper |
-| `web-mobile-firefox-android-driver` | 2 | Web-mobile wrapper |
-| `web-mobile-safari-ios-driver` | 2 | Web-mobile wrapper |
-| `web-mobile-webkit-ios-driver` | 2 | Web-mobile wrapper |
+| Driver                              | Methods | Category                                                                         |
+| ----------------------------------- | ------- | -------------------------------------------------------------------------------- |
+| `web-playwright-driver`             | 77      | **Web full-surface** — every journey-step method (auth, room, gift, admin, etc.) |
+| `android-adb-driver`                | 72      | **Native Android full-surface** — adb-driven UI dump + tap + journey steps       |
+| `ios-devicectl-driver`              | 66      | **Native iOS (devicectl)** — XCUITest harness for iOS 17+ devices                |
+| `ios-simctl-driver`                 | 66      | **Native iOS (simctl)** — XCUITest harness for iOS Simulator                     |
+| `ios-appium-driver`                 | 11      | **iOS bridge** — minimal Appium WebDriver wrapper                                |
+| `web-mobile-chrome-android-driver`  | 2       | **Web-mobile wrapper** — Playwright CDP → Android Chrome                         |
+| `web-mobile-samsung-android-driver` | 2       | Web-mobile wrapper                                                               |
+| `web-mobile-edge-android-driver`    | 2       | Web-mobile wrapper                                                               |
+| `web-mobile-firefox-android-driver` | 2       | Web-mobile wrapper                                                               |
+| `web-mobile-safari-ios-driver`      | 2       | Web-mobile wrapper                                                               |
+| `web-mobile-webkit-ios-driver`      | 2       | Web-mobile wrapper                                                               |
 
 **The divergence is intentional**, not a bug:
 
@@ -35,7 +35,7 @@ for the live numbers):
   API and expose just enough surface to bootstrap + handle session
   lifecycle. Journey steps fall through to platform-specific bridges
   in the runner.
-- **Web-mobile wrappers** (web-mobile-*-driver) are thin façades over
+- **Web-mobile wrappers** (web-mobile-\*-driver) are thin façades over
   web-playwright-driver. They contribute `webRefreshRoomsList` and
   `webUiDump` and inherit everything else from playwright via the
   base driver. The 2 methods are the wrapper-specific deltas.
@@ -49,37 +49,37 @@ reimplement 75 methods that just delegate.
 Every driver MUST implement these 2 methods (enforced by
 `tests/scripts/drivers/driver-contract.test.js`):
 
-| Method | Purpose | Pinned by |
-|--------|---------|-----------|
-| `close()` | Tear down driver resources (browser, adb forwards, Appium session, etc.) | `driver-contract.test.js` |
+| Method          | Purpose                                                                                               | Pinned by                 |
+| --------------- | ----------------------------------------------------------------------------------------------------- | ------------------------- |
+| `close()`       | Tear down driver resources (browser, adb forwards, Appium session, etc.)                              | `driver-contract.test.js` |
 | `listMethods()` | Enumerate the driver's method names; backs the `--check-drivers` + `driver-surface-report.js` tooling | `driver-contract.test.js` |
 
 Beyond the core, each **category** has a recommended method set:
 
-### Web drivers (web-playwright, web-mobile-*)
+### Web drivers (web-playwright, web-mobile-\*)
 
-| Method | Purpose | Surface |
-|--------|---------|---------|
-| `webUiDump(name)` | Return per-tab DOM dump for inspection / smoke testing | Required by `--smoke` |
-| `webRefreshRoomsList(name)` | Navigate to `/rooms` and reload | Required by web journeys |
-| `webTap(tag)` / `webFillIn(...)` / `webOpenScreen(...)` | Domain interactions | web-playwright only; web-mobile inherits via delegation |
+| Method                                                  | Purpose                                                | Surface                                                 |
+| ------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------- |
+| `webUiDump(name)`                                       | Return per-tab DOM dump for inspection / smoke testing | Required by `--smoke`                                   |
+| `webRefreshRoomsList(name)`                             | Navigate to `/rooms` and reload                        | Required by web journeys                                |
+| `webTap(tag)` / `webFillIn(...)` / `webOpenScreen(...)` | Domain interactions                                    | web-playwright only; web-mobile inherits via delegation |
 
 ### Native Android drivers (android-adb)
 
-| Method | Purpose |
-|--------|---------|
-| `androidUiDump()` | Capture window hierarchy via `adb shell uiautomator dump` |
-| `androidTap(tag)` / `androidTapByTag(tag)` | Tap by stable test-tag |
-| `androidOpenScreen(name)` | Navigate via deep-link intent |
-| Plus ~65 journey-step methods | Domain interactions |
+| Method                                     | Purpose                                                   |
+| ------------------------------------------ | --------------------------------------------------------- |
+| `androidUiDump()`                          | Capture window hierarchy via `adb shell uiautomator dump` |
+| `androidTap(tag)` / `androidTapByTag(tag)` | Tap by stable test-tag                                    |
+| `androidOpenScreen(name)`                  | Navigate via deep-link intent                             |
+| Plus ~65 journey-step methods              | Domain interactions                                       |
 
 ### Native iOS drivers (ios-devicectl, ios-simctl, ios-appium)
 
-| Method | Purpose |
-|--------|---------|
-| `iosUiDump()` / `iosWindowDump()` | Capture window hierarchy via XCUITest or Appium |
-| `iosTap(...)` / `iosTapByTag(...)` | Tap by stable test-tag |
-| Plus journey-step methods | Domain interactions |
+| Method                             | Purpose                                         |
+| ---------------------------------- | ----------------------------------------------- |
+| `iosUiDump()` / `iosWindowDump()`  | Capture window hierarchy via XCUITest or Appium |
+| `iosTap(...)` / `iosTapByTag(...)` | Tap by stable test-tag                          |
+| Plus journey-step methods          | Domain interactions                             |
 
 ## Aspirational uniformity (future work)
 

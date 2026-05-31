@@ -73,15 +73,16 @@ describe('.github/workflows/qa-runner-driver-checks.yml', () => {
     expect(reusable).toMatch(/manual-qa-runner\.js\s+--check-drivers/);
   });
 
-  test('runs --smoke diagnostic with anchored flag + chromium,firefox filter (gap E3)', () => {
+  test('runs --smoke diagnostic with chromium-only filter (gap E3)', () => {
     // Anchored regex (--smoke followed by space or end-of-token) so
     // a future typo like --smok or --smokes wouldn't pass the pin.
-    // Reviewer-flagged 2026-05-31 — unknown-flag silent-drop risk.
     expect(reusable).toMatch(/--smoke(?:\s|\b)/);
-    // Scope: both desktop browsers Playwright provides on ubuntu —
-    // chromium AND firefox. Covers the divergent web-playwright code
-    // paths without bloating PR CI.
-    expect(reusable).toMatch(/--filter\s+chromium,firefox/);
+    // Scope: --filter chromium (1 cell only). Earlier "chromium,firefox"
+    // experiment failed in CI — --filter substring-matches "firefox"
+    // against mobile-firefox-android + mobile-firefox-ios (3 cells
+    // that fail without devices). Until the runner supports exact-
+    // match filtering, chromium is the only safe desktop slug.
+    expect(reusable).toMatch(/--filter\s{1,5}chromium\s{0,5}(?:\\?\s{0,5}\n|$|"|2>)/);
   });
 
   test('--smoke step has `if: always()` for independent diagnostic', () => {

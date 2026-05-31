@@ -96,17 +96,21 @@ jobs:
         run: node scripts/manual-qa-runner.js --check-drivers --target local
         working-directory: express-api
 
-      - name: --smoke diagnostic — chromium+firefox (PR-gated subset, gap E3)
+      - name: --smoke diagnostic — chromium (PR-gated subset, gap E3)
         # Goes one level deeper than --check-drivers: bootstrap the
         # driver AND invoke ONE real method (webUiDump) per cell.
         # Catches cells that bootstrap clean but can't service runtime
         # calls (broken page navigation, driver-method drift, browser
         # silently degraded).
         #
-        # Scope: --filter chromium,firefox (the 2 desktop cells Playwright
-        # provides on ubuntu — webkit is also available but slower to
-        # boot). Both browsers cover the divergent web-playwright code
-        # paths. Operator runs full 12-cell matrix via E1
+        # Scope: --filter chromium (1 cell, ~30s extra). Earlier
+        # "chromium,firefox" experiment failed in CI because --filter
+        # uses substring matching (PR #930), so "firefox" also matches
+        # mobile-firefox-android + mobile-firefox-ios → 3 extra cells
+        # that fail on CI without devices. The runner doesn't currently
+        # support exact-match filtering; chromium is the only desktop
+        # slug that's also a non-substring of any other cell.
+        # Operator runs full 12-cell matrix via E1
         # (manual-qa-matrix.yml) when a deeper run is warranted.
         #
         # if: always() — independent diagnostic. Runs even if
@@ -124,7 +128,7 @@ jobs:
         if: always()
         run: |
           set +e
-          OUT=$(node scripts/manual-qa-runner.js --smoke --target local --filter chromium,firefox 2>&1)
+          OUT=$(node scripts/manual-qa-runner.js --smoke --target local --filter chromium 2>&1)
           EXIT=$?
           echo "$OUT"
           if [ "$EXIT" -eq 0 ]; then
