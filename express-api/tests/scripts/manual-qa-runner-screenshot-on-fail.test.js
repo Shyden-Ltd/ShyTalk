@@ -268,11 +268,17 @@ describe('runFeatureFile screenshot-on-failure hook (C3)', () => {
     // Catches off-by-one regressions if a future refactor reorders the
     // findings.push vs screenshot block (the index is computed from
     // findings.length - 1).
-    const actualDirs = takeScreenshot.mock.calls.map((c) => c[0]).sort();
-    const expectedDirs = takeScreenshot.mock.calls
-      .map((_, idx) => `/tmp/qa-report/scenario-${idx}`)
-      .sort();
-    expect(actualDirs).toEqual(expectedDirs);
+    //
+    // Reviewer round-3 I-1 — pin per-CALL order, not just the set.
+    // sample-failures.feature scenarios run in Gherkin order; failure
+    // ordinal MUST match call ordinal so scenarioReports[i].screenshots
+    // points to the right scenario's artifacts. A future refactor that
+    // sorts failures (e.g. by severity) before screenshots would pass a
+    // set-equality assertion but break the correlation. The per-call
+    // pin catches that class of regression.
+    for (let i = 0; i < takeScreenshot.mock.calls.length; i++) {
+      expect(takeScreenshot.mock.calls[i][0]).toBe(`/tmp/qa-report/scenario-${i}`);
+    }
   });
 
   test('empty-string screenshot paths are filtered out (reviewer P3)', async () => {
