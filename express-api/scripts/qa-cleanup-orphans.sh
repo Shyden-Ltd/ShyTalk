@@ -81,7 +81,7 @@ if command -v adb >/dev/null 2>&1; then
     say "  ✓ adb daemon healthy"
   fi
 else
-  vlog "adb not installed — skipping"
+  say "  ✓ adb not installed — skipping"
 fi
 
 # --- 3. Orphan adb-forward ports --------------------------------------
@@ -99,6 +99,12 @@ if command -v adb >/dev/null 2>&1; then
   else
     say "  ✓ no orphan forwards"
   fi
+else
+  # Operator-friendly: emit a status line even when the toolchain is
+  # absent (CI on ubuntu has no adb). Without this, the operator
+  # would have no signal that the adb-forward check was skipped vs run.
+  # Also pinned by qa-cleanup-orphans-pin.test.js (CI ubuntu has no adb).
+  say "checking adb forward ports… (adb not installed — skipping)"
 fi
 
 # --- 4. Orphan manual-qa-runner subprocesses --------------------------
