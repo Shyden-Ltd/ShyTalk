@@ -16,8 +16,6 @@ package com.shyden.shytalk.core
  */
 data class BuildVariantConfig(
     val isLocalEmulator: Boolean = false,
-    val localDevPassword: String? = null,
-    val localDevEmail: String? = null,
     val localDevPersonasPassword: String? = null,
     val googleWebClientId: String? = null,
     val iosDeviceId: String? = null,
@@ -40,17 +38,18 @@ data class BuildVariantConfig(
  * must go through the `init*()` functions, each of which `copy()`s the
  * current holder and replaces the reference in a single volatile
  * write. That closes the multi-write race window where a reader could
- * observe `isLocalEmulator == true` while `localDevPassword` was still
- * null mid-init (the failure mode B6.13 addresses).
+ * observe `isLocalEmulator == true` while one of the credential slots
+ * was still null mid-init (the failure mode B6.13 addresses).
  *
- * `localDevPassword` is injected from outside the binary on the local flavor
- * only — Android reads from `BuildConfig.LOCAL_DEV_PASSWORD` (empty string on
- * dev/prod via `buildConfigField`), iOS reads from `iOSApp.swift`'s `#if DEBUG`
- * block. On non-local builds it is `null`, so `SignInScreen`'s dev path
- * fails closed before the Firebase call. Keeping the literal out of every
- * non-DEBUG iOS Release binary and every non-local Android APK closes the
- * "reverse-engineer the production binary to learn the seed credential" leak
- * that the previous inline `"localdev123"` strings exposed.
+ * `localDevPersonasPassword` is injected from outside the binary on
+ * local + dev flavors only — Android reads from
+ * `BuildConfig.DEV_QA_PERSONAS_PASSWORD` (empty string on prod via
+ * `buildConfigField`), iOS reads from `iOSApp.swift`'s `#if DEBUG`
+ * block. On prod it is `null`, so `SignInScreen`'s persona-picker path
+ * fails closed before the Firebase call. Keeping the literal out of
+ * every non-DEBUG iOS Release binary and every prod Android APK closes
+ * the "reverse-engineer the production binary to learn the seed
+ * credential" leak that an inline string would expose.
  */
 object BuildVariant {
     @kotlin.concurrent.Volatile
@@ -72,43 +71,14 @@ object BuildVariant {
     // single atomically-swapped reference.
 
     val isLocalEmulator: Boolean get() = holder.isLocalEmulator
-    val localDevPassword: String? get() = holder.localDevPassword
-    val localDevEmail: String? get() = holder.localDevEmail
     val localDevPersonasPassword: String? get() = holder.localDevPersonasPassword
     val googleWebClientId: String? get() = holder.googleWebClientId
 
     /**
-     * Whether the "Dev Sign-In" shortcut on SignInScreen should be
-     * available on this build. Derives from credential presence rather
-     * than a separate flag so the gate fails closed: a build without
-     * baked credentials never renders the button (no UI affordance to
-     * tap → silent no-op even on a Frida runtime flip).
-     *
-     * Matrix:
-     *   - local flavor: credentials hardcoded → true
-     *   - dev flavor: credentials read from `DEV_QA_EMAIL`/`DEV_QA_PASSWORD`
-     *     env vars / gradle props at build time. Default empty → false.
-     *     Operator opts in by passing them to `gradlew assembleDevDebug`.
-     *   - prod flavor: credentials always empty → false (defence-in-depth
-     *     vs. a misconfigured build that somehow set BYPASS_DEVICE_CHECKS
-     *     in a prod APK).
-     *
-     * Distinct from [isLocalEmulator] which gates LiveKit URL fallback +
-     * Firebase emulator wiring. A dev-flavor build is NOT a local emulator
-     * — it talks to real dev Firebase + a deployed LiveKit instance — so
-     * widening `isLocalEmulator` would silently rewire those paths.
-     */
-    val isDevSignInAvailable: Boolean
-        get() =
-            !holder.localDevEmail.isNullOrEmpty() &&
-                !holder.localDevPassword.isNullOrEmpty()
-
-    /**
      * Whether the "Sign in as test persona" picker on SignInScreen
      * should be available on this build. Derives from `localDevPersonasPassword`
-     * presence — same fail-closed rule as [isDevSignInAvailable]: no
-     * baked credential → no UI affordance → the picker can't drive a
-     * sign-in even if surfaced.
+     * presence — fail-closed rule: no baked credential → no UI
+     * affordance → the picker can't drive a sign-in even if surfaced.
      *
      * Matrix:
      *   - local flavor: hardcoded → true (same `localdev123` works for all
@@ -121,11 +91,9 @@ object BuildVariant {
      *   - prod flavor: always empty → always false (prod APK never bakes
      *     a shared test password).
      *
-     * Distinct from [isDevSignInAvailable] (single-account shortcut)
-     * because the picker uses email-per-persona + shared-password,
-     * whereas the shortcut uses a single hardcoded account. Both can
-     * be enabled on the same build; SignInScreen renders one button
-     * for each available path.
+     * The credential-presence gate is SECONDARY — the primary visibility
+     * gate is [isDevAffordancesVisible], which forbids the picker on prod
+     * even if a misconfigured build somehow set the password.
      */
     val isPersonaPickerAvailable: Boolean
         get() = !holder.localDevPersonasPassword.isNullOrEmpty()
@@ -238,20 +206,24 @@ object BuildVariant {
         get() = !isLocal
 
     /**
-     * Whether the dev sign-in shortcut + persona picker buttons should
-     * be VISIBLE on SignInScreen. Operator directive 2026-05-29:
-     * visible on local + dev, NEVER on prod regardless of any
-     * credential misconfiguration. Defence-in-depth against a prod
-     * APK accidentally built with `DEV_QA_EMAIL`/`PASSWORD` env vars
-     * set (which would have rendered the button under the prior
-     * [isDevSignInAvailable] credential-presence gate).
+     * Whether the persona picker button should be VISIBLE on
+     * SignInScreen. Operator directive: visible on local + dev,
+     * NEVER on prod regardless of any credential misconfiguration.
+     * Defence-in-depth against a prod APK accidentally built with
+     * `DEV_QA_PERSONAS_PASSWORD` set (which would have rendered the
+     * button under a credential-presence gate alone).
      *
-     * The credential-presence gates ([isDevSignInAvailable],
-     * [isPersonaPickerAvailable]) become the SECONDARY check, used
-     * inside the click handler to detect a misconfigured dev build
-     * that has the button rendered but no baked credentials — the
-     * handler shows an actionable error in that case rather than
-     * silently failing.
+     * The credential-presence gate [isPersonaPickerAvailable] is the
+     * SECONDARY check used inside the click handler to detect a
+     * misconfigured dev build that has the button rendered but no
+     * baked persona password — the handler logs and refuses to
+     * proceed rather than silently failing.
+     *
+     * Historical: this property was previously named
+     * `isDevAffordancesVisible` and also gated a single-account
+     * "Dev Sign-In" shortcut. That broken affordance was removed
+     * 2026-06-01; the persona picker is the canonical dev/local
+     * auth path going forward (see [feedback-test-personas-not-OAuth]).
      */
     val isDevAffordancesVisible: Boolean
         get() = holder.environment == "local" || holder.environment == "dev"
@@ -295,12 +267,12 @@ object BuildVariant {
      * iOS's `KoinHelper.doInitKoin`) can invoke it; the named function makes
      * the "set once at boot" contract explicit at every call site.
      *
-     * `devPassword` and `devEmail` should be `null` on every non-local build.
-     * Android passes the corresponding `BuildConfig.LOCAL_DEV_*` field (empty
-     * string when the field is built out via the `dev` / `prod`
-     * `buildConfigField` to `""`); iOS passes `nil` from the `#else` branch
-     * of `#if DEBUG`. The setter coerces empty strings to `null` so callers
-     * can read with a uniform `isNullOrEmpty()` guard.
+     * `devPersonasPassword` is the shared password for the 17 seeded test
+     * personas. Should be `null` on prod builds; non-null on local (hardcoded
+     * `"localdev123"`) and on dev when the operator passes
+     * `DEV_QA_PERSONAS_PASSWORD` at build time. The setter coerces empty
+     * strings to `null` so callers can read with a uniform `isNullOrEmpty()`
+     * guard.
      *
      * `googleWebClientId` is needed only by Android's CredentialManager flow
      * for Google Sign-In; iOS reads its OAuth client ID from
@@ -309,16 +281,12 @@ object BuildVariant {
      */
     fun initLocalEmulator(
         value: Boolean,
-        devPassword: String? = null,
-        devEmail: String? = null,
         devPersonasPassword: String? = null,
         googleWebClientId: String? = null,
     ) {
         holder =
             holder.copy(
                 isLocalEmulator = value,
-                localDevPassword = devPassword?.takeIf { it.isNotEmpty() },
-                localDevEmail = devEmail?.takeIf { it.isNotEmpty() },
                 localDevPersonasPassword = devPersonasPassword?.takeIf { it.isNotEmpty() },
                 googleWebClientId = googleWebClientId?.takeIf { it.isNotEmpty() },
             )

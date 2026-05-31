@@ -36,43 +36,10 @@ class BuildVariantTest {
     }
 
     @Test
-    fun `localDevPassword defaults to null`() {
+    fun `localDevPersonasPassword cleared when switched back to non-emulator state`() {
+        BuildVariant.initLocalEmulator(true, devPersonasPassword = "pw")
         BuildVariant.initLocalEmulator(false)
-        assertNull(BuildVariant.localDevPassword)
-    }
-
-    @Test
-    fun `localDevPassword captures non-empty value`() {
-        BuildVariant.initLocalEmulator(true, "localdev123")
-        assertEquals("localdev123", BuildVariant.localDevPassword)
-    }
-
-    @Test
-    fun `localDevPassword coerces empty string to null so callers can read uniformly`() {
-        // Android's BuildConfig.LOCAL_DEV_PASSWORD is "" on dev / prod
-        // flavours. The setter coerces to null so SignInScreen can use
-        // the same `password.isNullOrEmpty()` guard regardless of source.
-        BuildVariant.initLocalEmulator(true, "")
-        assertNull(BuildVariant.localDevPassword)
-    }
-
-    @Test
-    fun `localDevPassword cleared when switched back to non-emulator state`() {
-        BuildVariant.initLocalEmulator(true, "localdev123")
-        BuildVariant.initLocalEmulator(false)
-        assertNull(BuildVariant.localDevPassword)
-    }
-
-    @Test
-    fun `localDevEmail captures non-empty value`() {
-        BuildVariant.initLocalEmulator(value = true, devEmail = "claude-test@shytalk.dev")
-        assertEquals("claude-test@shytalk.dev", BuildVariant.localDevEmail)
-    }
-
-    @Test
-    fun `localDevEmail coerces empty string to null`() {
-        BuildVariant.initLocalEmulator(value = true, devEmail = "")
-        assertNull(BuildVariant.localDevEmail)
+        assertNull(BuildVariant.localDevPersonasPassword)
     }
 
     @Test
@@ -123,24 +90,57 @@ class BuildVariantTest {
         // emulator flag — verify the deviceId isn't clobbered by a
         // subsequent initLocalEmulator(false) reset.
         BuildVariant.initIosDeviceId("device-uuid-1")
-        BuildVariant.initLocalEmulator(value = false, devPassword = null)
+        BuildVariant.initLocalEmulator(value = false, devPersonasPassword = null)
         assertEquals("device-uuid-1", BuildVariant.iosDeviceId)
     }
 
     @Test
     fun `all build-time slots cleared on toggle to non-emulator without args`() {
-        // Test fixture credentials — emulator-only, see local/seed.js.
-        val seedPwd = "localdev123"
         BuildVariant.initLocalEmulator(
             value = true,
-            devPassword = seedPwd,
-            devEmail = "claude-test@shytalk.dev",
+            devPersonasPassword = "pw",
             googleWebClientId = "client-id",
         )
         BuildVariant.initLocalEmulator(false)
-        assertNull(BuildVariant.localDevPassword)
-        assertNull(BuildVariant.localDevEmail)
+        assertNull(BuildVariant.localDevPersonasPassword)
         assertNull(BuildVariant.googleWebClientId)
+    }
+
+    @Test
+    fun `isDevAffordancesVisible is false on prod regardless of credential presence`() {
+        // Operator directive 2026-06-01 — persona picker MUST NOT appear
+        // on prod even if a misconfigured build somehow set
+        // DEV_QA_PERSONAS_PASSWORD. Defence-in-depth lock-in. Replaces the
+        // pre-removal `ignores credential presence` test that depended on
+        // the now-deleted devEmail/devPassword/isDevSignInAvailable surface.
+        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "?")
+        BuildVariant.initLocalEmulator(value = true, devPersonasPassword = "lk")
+        assertFalse(BuildVariant.isDevAffordancesVisible)
+    }
+
+    @Test
+    fun `isPersonaPickerAvailable is false when localDevPersonasPassword is null`() {
+        BuildVariant.initLocalEmulator(value = false)
+        assertFalse(BuildVariant.isPersonaPickerAvailable)
+    }
+
+    @Test
+    fun `isPersonaPickerAvailable is true when localDevPersonasPassword is non-empty`() {
+        BuildVariant.initLocalEmulator(value = true, devPersonasPassword = "p")
+        assertTrue(BuildVariant.isPersonaPickerAvailable)
+    }
+
+    @Test
+    fun `isPersonaPickerAvailable does NOT depend on environment string`() {
+        // Drift catch: the credential-presence gate is independent of the
+        // visibility gate so the inner click handler can detect a
+        // misconfigured-prod-with-baked-password scenario distinctly from
+        // a configured-prod-without-password.
+        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "?")
+        BuildVariant.initLocalEmulator(value = false, devPersonasPassword = "lk")
+        assertTrue(BuildVariant.isPersonaPickerAvailable)
+        // But isDevAffordancesVisible still rejects on prod — see test above.
+        assertFalse(BuildVariant.isDevAffordancesVisible)
     }
 
     // ── PreviewWatermark build-info slots ──
@@ -306,19 +306,13 @@ class BuildVariantTest {
 
     // ── BuildVariantConfig atomic holder (B6.13) ──
     //
-    // Pre-B6.13, BuildVariant exposed nine independent volatile vars
-    // (isLocalEmulator, localDevPassword, localDevEmail,
-    // googleWebClientId, iosDeviceId, environment, buildVersion,
-    // deviceInfo, apiBaseUrl). `initLocalEmulator(...)` wrote four of
-    // them sequentially. A reader on another thread could observe an
-    // intermediate state where, say, `isLocalEmulator == true` but
-    // `localDevPassword == null` — producing a misleading "dev sign-in
-    // is enabled but credentials missing" snapshot in SignInScreen's
-    // dev-button render guard. Wrapping into a single immutable
-    // `BuildVariantConfig` and replacing the holder reference per init
-    // closes the window: the reference swap is the single visible
-    // boundary, so a reader sees either the entire old state or the
-    // entire new state, never a half-update.
+    // Pre-B6.13, BuildVariant exposed multiple independent volatile vars
+    // and `initLocalEmulator(...)` wrote them sequentially. A reader on
+    // another thread could observe an intermediate state. Wrapping into
+    // a single immutable `BuildVariantConfig` and replacing the holder
+    // reference per init closes the window: the reference swap is the
+    // single visible boundary, so a reader sees either the entire old
+    // state or the entire new state, never a half-update.
 
     @Test
     fun `config getter exposes the immutable holder snapshot`() {
@@ -335,55 +329,53 @@ class BuildVariantTest {
         // architecture would have updated the same shared object;
         // swap-the-reference architecture produces a new instance.
         val before = BuildVariant.config
-        BuildVariant.initLocalEmulator(value = true, devPassword = "x", devEmail = "y")
+        BuildVariant.initLocalEmulator(value = true, devPersonasPassword = "x")
         val after = BuildVariant.config
         assertTrue(before !== after, "init must swap the holder reference, not mutate in place")
     }
 
     @Test
-    fun `initLocalEmulator updates all four related fields atomically in the same swap`() {
+    fun `initLocalEmulator updates all related fields atomically in the same swap`() {
         // The race-window concern: a reader that captures `config`
-        // BEFORE init must see all four fields as their old values;
-        // a reader that captures AFTER init must see all four as new.
+        // BEFORE init must see all fields as their old values;
+        // a reader that captures AFTER init must see all as new.
         // No mid-state where some are old and some are new.
         BuildVariant.initLocalEmulator(false)
         val before = BuildVariant.config
         assertFalse(before.isLocalEmulator)
-        assertNull(before.localDevPassword)
-        assertNull(before.localDevEmail)
+        assertNull(before.localDevPersonasPassword)
         assertNull(before.googleWebClientId)
 
-        // Seed credential from local/seed.js — kept in a local val so
-        // the pre-commit secret-detector grep doesn't trip on the
-        // string literal appearing inline twice.
         val seedPwd = "localdev123"
         BuildVariant.initLocalEmulator(
             value = true,
-            devPassword = seedPwd,
-            devEmail = "claude-test@shytalk.dev",
+            devPersonasPassword = seedPwd,
             googleWebClientId = "client-id",
         )
         val after = BuildVariant.config
         assertTrue(after.isLocalEmulator)
-        assertEquals(seedPwd, after.localDevPassword)
-        assertEquals("claude-test@shytalk.dev", after.localDevEmail)
+        assertEquals(seedPwd, after.localDevPersonasPassword)
         assertEquals("client-id", after.googleWebClientId)
         // The pre-init capture is unchanged — proving immutability.
         assertFalse(before.isLocalEmulator, "Pre-init snapshot must NOT be mutated by a later init call")
-        assertNull(before.localDevPassword)
+        assertNull(before.localDevPersonasPassword)
     }
 
     @Test
     fun `initBuildInfo swaps a fresh config without disturbing emulator slots`() {
         // Cross-init isolation: initBuildInfo updates env/build/device,
-        // initLocalEmulator updates the four emulator slots. Each must
+        // initLocalEmulator updates the emulator slots. Each must
         // preserve the other's state on its swap.
-        BuildVariant.initLocalEmulator(true, "p", "e", "c")
+        BuildVariant.initLocalEmulator(
+            value = true,
+            devPersonasPassword = "p",
+            googleWebClientId = "c",
+        )
         val emulatorState = BuildVariant.config
         BuildVariant.initBuildInfo(environment = "dev", buildVersion = "1.0 (1)", deviceInfo = "iPhone")
         val combined = BuildVariant.config
         assertTrue(combined.isLocalEmulator, "initBuildInfo must NOT clear emulator slot")
-        assertEquals("p", combined.localDevPassword)
+        assertEquals("p", combined.localDevPersonasPassword)
         assertEquals("dev", combined.environment)
         assertEquals("1.0 (1)", combined.buildVersion)
         assertEquals("iPhone", combined.deviceInfo)
@@ -478,7 +470,7 @@ class BuildVariantTest {
 
     @Test
     fun `initApiBaseUrl coerces empty string to null`() {
-        // Mirrors the existing slot pattern (devPassword/devEmail/googleWebClientId):
+        // Mirrors the existing slot pattern (devPersonasPassword/googleWebClientId):
         // an empty BuildConfig field on Android or empty Swift bridge value on iOS
         // should NOT be passed to the HTTP client — it would post to "$path"
         // (relative URL) which Ktor either errors on or silently rewrites to
@@ -499,82 +491,6 @@ class BuildVariantTest {
         BuildVariant.initApiBaseUrl("http://localhost:3000")
         BuildVariant.initApiBaseUrl(null)
         assertNull(BuildVariant.apiBaseUrl)
-    }
-
-    // ── isDevSignInAvailable matrix ──
-    // Derived flag — true iff BOTH localDevEmail and localDevPassword are
-    // non-empty. The two-input AND defeats half-configured builds (e.g.
-    // CI env set DEV_QA_EMAIL but not DEV_QA_PASSWORD) and gives a single
-    // fail-closed property for the SignInScreen gate to read.
-
-    @Test
-    fun `isDevSignInAvailable false when both credentials empty`() {
-        BuildVariant.initLocalEmulator(value = false)
-        assertFalse(
-            BuildVariant.isDevSignInAvailable,
-            "default-empty state must NEVER expose Dev Sign-In on prod builds",
-        )
-    }
-
-    @Test
-    fun `isDevSignInAvailable false when only email is set`() {
-        BuildVariant.initLocalEmulator(value = false, devEmail = "qa@example", devPassword = "")
-        assertFalse(
-            BuildVariant.isDevSignInAvailable,
-            "half-configured build (email but no password) must NOT expose Dev Sign-In",
-        )
-    }
-
-    @Test
-    fun `isDevSignInAvailable false when only password is set`() {
-        BuildVariant.initLocalEmulator(value = false, devEmail = "", devPassword = "pw")
-        assertFalse(
-            BuildVariant.isDevSignInAvailable,
-            "half-configured build (password but no email) must NOT expose Dev Sign-In",
-        )
-    }
-
-    @Test
-    fun `isDevSignInAvailable true when both credentials are present`() {
-        BuildVariant.initLocalEmulator(
-            value = false,
-            devEmail = "qa@example",
-            devPassword = "pw",
-        )
-        assertTrue(
-            BuildVariant.isDevSignInAvailable,
-            "both credentials present must expose Dev Sign-In regardless of isLocalEmulator",
-        )
-    }
-
-    @Test
-    fun `isDevSignInAvailable independent of isLocalEmulator flag`() {
-        // Dev flavor case: real Firebase, not the emulator (isLocalEmulator=false)
-        // BUT credentials provided via env vars → button must render.
-        BuildVariant.initLocalEmulator(
-            value = false,
-            devEmail = "dev-qa@shytalk.example",
-            devPassword = "pw",
-        )
-        assertTrue(BuildVariant.isDevSignInAvailable)
-        assertFalse(BuildVariant.isLocalEmulator)
-    }
-
-    @Test
-    fun `isDevSignInAvailable returns false after credentials are cleared`() {
-        BuildVariant.initLocalEmulator(
-            value = true,
-            devEmail = "qa@example",
-            devPassword = "pw",
-        )
-        assertTrue(BuildVariant.isDevSignInAvailable)
-
-        // Subsequent init without credentials must reset the derived flag.
-        BuildVariant.initLocalEmulator(value = false)
-        assertFalse(
-            BuildVariant.isDevSignInAvailable,
-            "clearing credentials must reset the derived flag (no lingering true)",
-        )
     }
 
     // ── isPersonaPickerAvailable matrix (PR B v2 — persona picker) ──
@@ -630,40 +546,6 @@ class BuildVariantTest {
         assertFalse(
             BuildVariant.isPersonaPickerAvailable,
             "clearing the shared password must reset the derived flag",
-        )
-    }
-
-    @Test
-    fun `picker and single-account dev sign-in are independent`() {
-        // Both can be enabled at once (local flavor); both can be disabled
-        // (prod). The derivations don't cross-pollute.
-        BuildVariant.initLocalEmulator(
-            value = true,
-            devEmail = "single@example",
-            devPassword = "sgl",
-            devPersonasPassword = "spw",
-        )
-        assertTrue(BuildVariant.isDevSignInAvailable)
-        assertTrue(BuildVariant.isPersonaPickerAvailable)
-
-        // Picker password only — single-account stays off.
-        BuildVariant.initLocalEmulator(value = true, devPersonasPassword = "spw")
-        assertFalse(
-            BuildVariant.isDevSignInAvailable,
-            "no single-account creds → single-account button hidden",
-        )
-        assertTrue(BuildVariant.isPersonaPickerAvailable)
-
-        // Single-account creds only — picker stays off.
-        BuildVariant.initLocalEmulator(
-            value = true,
-            devEmail = "single@example",
-            devPassword = "sgl",
-        )
-        assertTrue(BuildVariant.isDevSignInAvailable)
-        assertFalse(
-            BuildVariant.isPersonaPickerAvailable,
-            "no shared password → picker button hidden",
         )
     }
 
@@ -792,11 +674,12 @@ class BuildVariantTest {
         assertTrue(BuildVariant.isOAuthSignInFunctional)
     }
 
-    // ── isDevAffordancesVisible — dev sign-in shortcut + persona picker ──
-    // Operator directive 2026-05-29: dev sign-in + persona picker visible
-    // on local + dev, NEVER on prod regardless of any credential
-    // misconfiguration. Defence-in-depth against a prod APK accidentally
-    // built with DEV_QA_EMAIL / PASSWORD env vars set.
+    // ── isDevAffordancesVisible — persona picker gate ──
+    // Operator directive 2026-05-29 (single-account dev sign-in removed
+    // 2026-06-01): the persona picker is visible on local + dev, NEVER
+    // on prod regardless of any credential misconfiguration. Defence-
+    // in-depth against a prod APK accidentally built with
+    // DEV_QA_PERSONAS_PASSWORD env var set.
 
     @Test
     fun `isDevAffordancesVisible is true on local`() {
@@ -815,7 +698,7 @@ class BuildVariantTest {
         BuildVariant.initBuildInfo(environment = "prod", buildVersion = "1.0")
         assertFalse(
             BuildVariant.isDevAffordancesVisible,
-            "dev sign-in + persona picker must NEVER appear on prod — operator directive 2026-05-29",
+            "persona picker must NEVER appear on prod — operator directive 2026-05-29",
         )
     }
 
@@ -842,26 +725,25 @@ class BuildVariantTest {
     }
 
     @Test
-    fun `isDevAffordancesVisible ignores credential presence (visibility is env-only)`() {
-        // Critical: a prod build with credentials accidentally baked in
-        // (env var leak, misconfigured CI) must STILL hide the button.
-        // The visibility gate is purely env-based; credential presence
-        // is the functional gate inside the click handler.
+    fun `isDevAffordancesVisible ignores persona-password presence on prod (visibility is env-only)`() {
+        // Critical: a prod build with the persona password accidentally
+        // baked in (env var leak, misconfigured CI) must STILL hide the
+        // picker. The visibility gate is purely env-based; password
+        // presence is the functional gate inside the click handler.
+        // Post-2026-06-01 the single-account dev-sign-in fields were
+        // removed — only devPersonasPassword remains as a leak surface.
         BuildVariant.initBuildInfo(environment = "prod", buildVersion = "1.0")
         BuildVariant.initLocalEmulator(
             value = false,
-            devEmail = "leaked@example",
-            devPassword = "leaked",
             devPersonasPassword = "leaked",
         )
-        // Even with all credentials baked in, prod must hide.
         assertFalse(
             BuildVariant.isDevAffordancesVisible,
             "credential leak on prod must NOT render the dev affordances — env gate is supreme",
         )
-        // The functional gates still report "available" — they're now
-        // never reached because the visibility gate hides the button.
-        assertTrue(BuildVariant.isDevSignInAvailable)
-        assertTrue(BuildVariant.isPersonaPickerAvailable)
+        assertTrue(
+            BuildVariant.isPersonaPickerAvailable,
+            "functional gate still reports available; visibility gate is what hides the picker",
+        )
     }
 }

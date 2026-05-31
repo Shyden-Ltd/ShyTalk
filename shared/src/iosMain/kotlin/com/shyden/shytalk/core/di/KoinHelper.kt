@@ -26,17 +26,14 @@ import org.koin.mp.KoinPlatformTools
  * `BuildConfig.WEB_CLIENT_ID` slot is left `null` for iOS.
  *
  * @param useEmulators If true, connects Firebase to local emulators (localhost).
- * @param devSignInPassword Plaintext password for the dev-only one-tap sign-in
- *   button on `SignInScreen`. MUST be `nil` outside `#if DEBUG`. The runtime
- *   gate also requires `useEmulators=true` to even render the button.
- * @param devSignInEmail Email paired with `devSignInPassword`. Same `#if DEBUG`
- *   strip rule applies. Both must be non-null/non-empty for the dev-sign-in
- *   path's empty-credentials guard to allow the call to proceed.
+ * @param devPersonasPassword Shared password for the 17 seeded test personas.
+ *   Should be `nil` on prod builds. The 2026-06-01 dev-sign-in removal
+ *   collapsed the legacy single-account `devSignInPassword`/`Email` slots —
+ *   only the persona-shared password remains.
  */
 fun doInitKoin(
     useEmulators: Boolean = false,
-    devSignInPassword: String? = null,
-    devSignInEmail: String? = null,
+    devPersonasPassword: String? = null,
     deviceId: String? = null,
     environment: String = "prod",
     buildVersion: String = "?",
@@ -46,8 +43,7 @@ fun doInitKoin(
 ) {
     BuildVariant.initLocalEmulator(
         value = useEmulators,
-        devPassword = devSignInPassword,
-        devEmail = devSignInEmail,
+        devPersonasPassword = devPersonasPassword,
         // GoogleSignIn iOS SDK 9.x can take a `serverClientID` alongside
         // the iOS clientID — without it, the issued token's audience is
         // the iOS OAuth client only, and Firebase Auth's

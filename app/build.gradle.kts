@@ -67,32 +67,11 @@ android {
             buildConfigField("String", "RTDB_URL", "\"https://shytalk-dev-default-rtdb.europe-west1.firebasedatabase.app\"")
             buildConfigField("String", "EMAIL_LINK_DOMAIN", "\"dev.shytalk.shyden.co.uk\"")
             buildConfigField("String", "LOCAL_HOST", "\"\"")
-            // Dev sign-in shortcut — sourced from env vars + gradle props,
-            // empty by default so a CI-built APK without the env exposes no
-            // credential. An operator building locally for QA exports:
-            //   DEV_QA_EMAIL=…  DEV_QA_PASSWORD=…  ./gradlew assembleDevDebug
-            // (or `-PDEV_QA_EMAIL=… -PDEV_QA_PASSWORD=…` on the gradle CLI).
-            // SignInScreen renders the Dev Sign-In button on dev flavor when
-            // these are non-empty (per BuildVariant.isDevSignInAvailable).
-            // The credentials must correspond to an existing dev Firebase
-            // Auth account — see scripts/seed-dev-fixtures.mjs / dev smoke
-            // account documentation for provisioning.
-            buildConfigField(
-                "String",
-                "LOCAL_DEV_EMAIL",
-                "\"${(project.findProperty("DEV_QA_EMAIL") as? String) ?: System.getenv("DEV_QA_EMAIL") ?: ""}\"",
-            )
-            buildConfigField(
-                "String",
-                "LOCAL_DEV_PASSWORD",
-                "\"${(project.findProperty("DEV_QA_PASSWORD") as? String) ?: System.getenv("DEV_QA_PASSWORD") ?: ""}\"",
-            )
             // Shared password for the 17 test personas (P-02..P-19) baked
-            // into dev/local builds for the in-screen persona picker. Same
-            // sourcing semantics as LOCAL_DEV_PASSWORD above but a separate
-            // value because the picker uses email-per-persona + shared
-            // password whereas the single-account shortcut uses one
-            // email/password pair. Operator-opt-in:
+            // into dev/local builds for the in-screen persona picker.
+            // Sourced from env var / gradle prop, empty by default so a
+            // CI-built dev APK without the env exposes no credential.
+            // Operator-opt-in:
             //   DEV_QA_PERSONAS_PASSWORD=<openssl rand -base64 24> \
             //   ./gradlew assembleDevDebug
             // Empty → picker UI never renders (fail-closed). The personas'
@@ -121,8 +100,6 @@ android {
             buildConfigField("String", "RTDB_URL", "\"https://shytalk-7ba69-default-rtdb.asia-southeast1.firebasedatabase.app\"")
             buildConfigField("String", "EMAIL_LINK_DOMAIN", "\"shytalk.shyden.co.uk\"")
             buildConfigField("String", "LOCAL_HOST", "\"\"")
-            buildConfigField("String", "LOCAL_DEV_EMAIL", "\"\"")
-            buildConfigField("String", "LOCAL_DEV_PASSWORD", "\"\"")
             // Prod never bakes the persona-picker password — production
             // builds must not expose any test-account shortcut.
             buildConfigField("String", "DEV_QA_PERSONAS_PASSWORD", "\"\"")
@@ -156,12 +133,6 @@ android {
             // tests + manual QA need to run on the Android emulator against
             // local Firebase emulators).
             buildConfigField("Boolean", "BYPASS_EMULATOR_GATE", "true")
-            // Dev sign-in shortcut — only present on local-emulator builds.
-            // Empty on dev / prod so reverse-engineering the production APK
-            // can't extract a usable seed credential. Mirrors `local/seed.js`
-            // (the source of truth for the credential).
-            buildConfigField("String", "LOCAL_DEV_EMAIL", "\"claude-test@shytalk.dev\"")
-            buildConfigField("String", "LOCAL_DEV_PASSWORD", "\"localdev123\"")
             // Local flavor talks to Firebase emulators which seed the 17
             // test personas via local/seed.js with a fixed dev password.
             // Hardcoded here so the persona picker works out-of-the-box
