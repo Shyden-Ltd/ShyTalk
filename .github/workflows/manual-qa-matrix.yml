@@ -63,7 +63,12 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        # Matches the qa-runner-driver-checks.yml convention within this
+        # family — plain @v4 tag (not SHA-pinned). Consistency in the
+        # qa-runner workflow family beats partial SHA-pinning that
+        # locks down only checkout while setup-node/cache/upload-artifact
+        # stay on floating tags (per reviewer C3).
+        uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -123,6 +128,31 @@ jobs:
           FIREBASE_LOCAL_API_KEY: 'ci-local-target-not-supported'
         run: |
           set -euo pipefail
+          # Early-exit guards — fail FAST with actionable messages
+          # instead of wasting ~25min on a doomed dispatch.
+
+          # target=local is choice-allowed for parity with the runner's
+          # CLI surface but has no working CI execution path (no Firebase
+          # Emulators + no localhost:8888 server). Surface this up front.
+          if [ "$IN_TARGET" = "local" ]; then
+            echo "::error::target=local is not supported in CI (no Firebase Emulators / no localhost stack). Re-dispatch with target=dev or target=prod."
+            exit 2
+          fi
+
+          # shard format guard — runner would also catch this, but
+          # surfacing it BEFORE npm ci + playwright install saves
+          # ~3 minutes on a doomed run.
+          if [ -n "$IN_SHARD" ] && ! echo "$IN_SHARD" | grep -qE '^[1-9][0-9]*/[1-9][0-9]*$'; then
+            echo "::error::shard must be in X/Y form with positive integers (e.g. 1/4). Got: '$IN_SHARD'"
+            exit 2
+          fi
+
+          # retry integer guard — same pre-flight surface treatment.
+          if [ -n "$IN_RETRY" ] && ! echo "$IN_RETRY" | grep -qE '^[0-9]+$'; then
+            echo "::error::retry must be a non-negative integer. Got: '$IN_RETRY'"
+            exit 2
+          fi
+
           ARGS=(--matrix --target "$IN_TARGET" --driver all)
           if [ -n "$IN_FILTER" ]; then
             ARGS+=(--filter "$IN_FILTER")
@@ -135,7 +165,10 @@ jobs:
           fi
           ARGS+=(--report-format "$IN_REPORT_FORMAT")
           ARGS+=(--report-output "qa-matrix-report.$IN_REPORT_FORMAT")
-          echo "Running: node scripts/manual-qa-runner.js ${ARGS[*]}"
+          # NOTE: do NOT echo the full ARGS array — keeps the diagnostic
+          # log small AND avoids a future maintainer accidentally leaking
+          # a secret-bearing flag into the log via ${ARGS[*]} expansion.
+          # GitHub Actions natively echoes the run command on each step.
           node scripts/manual-qa-runner.js "${ARGS[@]}"
         working-directory: express-api
 

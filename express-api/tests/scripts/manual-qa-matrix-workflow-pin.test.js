@@ -47,15 +47,23 @@ describe('manual-qa-matrix.yml — structural pin', () => {
 
   // ── Inputs ───────────────────────────────────────────────────
 
-  test('input "target" declared as choice with local/dev/prod options', () => {
+  test('input "target" declared as choice with EXACTLY local/dev/prod options', () => {
     // target is the most important input — must be a constrained
     // choice (not free-form string) so operator can't typo "deb"
-    // and get a confusing downstream error.
+    // and get a confusing downstream error. Tightened from a too-broad
+    // alternation to an exact-set assertion: extract the target block
+    // and verify its options are EXACTLY {local, dev, prod} (no extras,
+    // no missing).
     expect(yamlText).toMatch(/target:\s{0,20}\n\s{1,20}description:.*\n\s{1,20}type:\s*choice/);
-    expect(yamlText).toMatch(/options:\s*\n(\s{1,20}- (local|dev|prod)\s{0,20}\n)+/);
-    expect(yamlText).toMatch(/- local/);
-    expect(yamlText).toMatch(/- dev/);
-    expect(yamlText).toMatch(/- prod/);
+    const targetBlock = yamlText.match(
+      /target:[\s\S]{0,500}?options:\s{0,20}\n((?:\s{1,20}-[^\n]+\n){1,10})/,
+    );
+    expect(targetBlock).not.toBeNull();
+    const options = targetBlock[1]
+      .split('\n')
+      .map((l) => l.trim().replace(/^-\s*/, ''))
+      .filter((l) => l.length > 0);
+    expect(options.sort()).toEqual(['dev', 'local', 'prod']);
   });
 
   test('input "filter" declared (optional string)', () => {
@@ -70,11 +78,52 @@ describe('manual-qa-matrix.yml — structural pin', () => {
     expect(yamlText).toMatch(/retry:\s{0,20}\n\s{1,20}description:.*\n\s{1,20}type:\s*string/);
   });
 
-  test('input "report-format" declared as choice with json/junit options', () => {
+  test('input "report-format" declared as choice with EXACTLY json/junit options', () => {
+    // Same exact-set rigor as the target test — catches future drift
+    // like adding "html" without updating the runner's --report-format
+    // validation.
     expect(yamlText).toMatch(/report-format:/);
-    // json + junit options both required
-    expect(yamlText).toMatch(/- json/);
-    expect(yamlText).toMatch(/- junit/);
+    const block = yamlText.match(
+      /report-format:[\s\S]{0,500}?options:\s{0,20}\n((?:\s{1,20}-[^\n]+\n){1,10})/,
+    );
+    expect(block).not.toBeNull();
+    const options = block[1]
+      .split('\n')
+      .map((l) => l.trim().replace(/^-\s*/, ''))
+      .filter((l) => l.length > 0);
+    expect(options.sort()).toEqual(['json', 'junit']);
+  });
+
+  // ── Job name template ───────────────────────────────────────
+
+  test('job name template includes target + shard annotations', () => {
+    // Operator scanning the Actions list at a glance distinguishes
+    // dispatches by target + shard. Drop either annotation and the
+    // list becomes opaque (every run looks like "Matrix Dispatch").
+    expect(yamlText).toMatch(/name:.*\$\{\{\s*inputs\.target\s*\}\}/);
+    expect(yamlText).toMatch(/name:.*\$\{\{\s*inputs\.shard\s*\|\|/);
+  });
+
+  // ── Pre-flight guards ───────────────────────────────────────
+
+  test('target=local pre-flight guard exits with actionable error', () => {
+    // I1 fix: surface CI-unsupported target=local at step start
+    // instead of after ~25min of doomed dispatch.
+    expect(yamlText).toMatch(/IN_TARGET[^\n]{0,80}local/);
+    expect(yamlText).toMatch(/::error::target=local is not supported in CI/);
+  });
+
+  test('shard format guard surfaces malformed values early', () => {
+    // I2 fix: shard regex check before --shard arg construction.
+    // Bash regex pattern is `^[1-9][0-9]*/[1-9][0-9]*$` (positive
+    // integers, no leading zeros).
+    expect(yamlText).toMatch(/shard must be in X\/Y form/);
+    expect(yamlText).toMatch(/grep -qE '\^\[1-9\]/);
+  });
+
+  test('retry integer guard surfaces non-numeric values early', () => {
+    // I3 fix: retry must be non-negative integer.
+    expect(yamlText).toMatch(/retry must be a non-negative integer/);
   });
 
   // ── Job + runner ─────────────────────────────────────────────
@@ -160,7 +209,7 @@ describe('manual-qa-matrix.yml — structural pin', () => {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmed = line.trimEnd();
-      if (/^\s+run:\s*\|/.test(line)) {
+      if (/^\s{1,40}run:\s*\|/.test(line)) {
         inRunBlock = true;
         runBlockIndent = line.match(/^( *)/)[1].length;
         continue;
@@ -175,9 +224,53 @@ describe('manual-qa-matrix.yml — structural pin', () => {
           }
         }
         // Critical assertion: no ${{ inputs.X }} inside run block.
-        expect(line).not.toMatch(/\$\{\{\s*inputs\./);
+        expect(line).not.toMatch(/\$\{\{\s{0,20}inputs\./);
       }
     }
+  });
+
+  test('injection detector catches a known-bad fixture (inverse test)', () => {
+    // Without this inverse test, a bug in the detector's parser
+    // (wrong indent arithmetic, off-by-one in run-block boundary,
+    // etc.) could silently stop catching real injections while the
+    // forward test stays green. Construct a synthetic YAML with the
+    // exact bad pattern and verify the detector flags it.
+    const badYaml = [
+      'jobs:',
+      '  bad:',
+      '    runs-on: ubuntu-latest',
+      '    steps:',
+      '      - name: Bad step',
+      '        run: |',
+      "          echo 'this is dangerous: ${{ inputs.attacker_input }}'",
+      '          true',
+    ].join('\n');
+    const lines = badYaml.split('\n');
+    let inRunBlock = false;
+    let runBlockIndent = 0;
+    let detected = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trimEnd();
+      if (/^\s{1,40}run:\s*\|/.test(line)) {
+        inRunBlock = true;
+        runBlockIndent = line.match(/^( *)/)[1].length;
+        continue;
+      }
+      if (inRunBlock) {
+        if (trimmed.length > 0) {
+          const lineIndent = line.match(/^( *)/)[1].length;
+          if (lineIndent <= runBlockIndent) {
+            inRunBlock = false;
+            continue;
+          }
+        }
+        if (/\$\{\{\s{0,20}inputs\./.test(line)) {
+          detected = true;
+        }
+      }
+    }
+    expect(detected).toBe(true);
   });
 
   // ── Secrets convention ──────────────────────────────────────
