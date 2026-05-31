@@ -198,6 +198,42 @@ describe('--shard — argument validation', () => {
     });
     expect(r.stderr).not.toMatch(/--shard.*invalid/);
   });
+
+  test('--shard with NO following value (bare last arg) exits 2', () => {
+    // Regression test for reviewer-flagged C1: parser sets
+    // opts._shardRaw = undefined when --shard is the last token. Old
+    // `!== undefined` guard would skip validation. Fixed by using
+    // `'_shardRaw' in opts` (property exists even when value is
+    // undefined). Pin: bare --shard must exit 2 with actionable error.
+    const r = runCli(['--matrix', '--target', 'local', '--shard'], {
+      PERSONAS_PASSWORD: 'fake',
+      FIREBASE_LOCAL_API_KEY: 'fake',
+    });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--shard requires a value/);
+  });
+
+  test('--dry-run --shard 4/3 (invalid range in dry-run) exits 2 with --shard prefix', () => {
+    // Regression test for reviewer-flagged I1: --dry-run path consumed
+    // shardIndex/shardCount via formatDryRunJson before validation ran.
+    // Malformed --shard surfaced with the wrong "--filter:" prefix from
+    // the dry-run try/catch. Fix: moved --shard validation BEFORE
+    // the --dry-run short-circuit. Error message now uses correct
+    // --shard prefix.
+    const r = runCli(['--dry-run', '--target', 'local', '--shard', '4/3']);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--shard/);
+    expect(r.stderr).not.toMatch(/--filter/);
+  });
+
+  test('--list --shard malformed exits 2 (--list also uses --shard validation order)', () => {
+    // Sibling test: --list is another short-circuit path. --shard
+    // validation must fire before --list too, so malformed --shard
+    // gets a clean error rather than --list output with bad opts.
+    const r = runCli(['--list', '--target', 'local', '--shard', '4/3']);
+    expect(r.status).toBe(2);
+    expect(r.stderr).toMatch(/--shard/);
+  });
 });
 
 // ── --shard composition with --dry-run ──────────────────────────
@@ -257,13 +293,26 @@ describe('--shard — composition with --filter', () => {
 // ── --shard composition with --matrix ───────────────────────────
 
 describe('--shard — composition with --matrix', () => {
-  test('--matrix --shard 1/12 (single-cell shard) announces the matched cell', () => {
-    // shard 1/12 of 12 cells = first 1 cell.
+  test('--matrix --shard 1/12 (single-cell shard) announces the shard log', () => {
+    // shard 1/12 of 12 cells = first 1 cell. Assert the [shard] log
+    // prefix + the shard ratio. Avoid coupling to allowlist order or
+    // the count-of-N wording (those would break for non-semantic
+    // reasons under reordering or format tweaks).
     const r = runCli(['--matrix', '--target', 'local', '--shard', '1/12'], {
       PERSONAS_PASSWORD: 'fake',
       FIREBASE_LOCAL_API_KEY: 'fake',
     });
-    expect(r.stdout).toMatch(/\[shard\].*1\/12.*chromium/);
+    expect(r.stdout).toMatch(/\[shard\] 1\/12/);
+  });
+
+  test('--dry-run --shard 1/12 confirms the cell name independently', () => {
+    // Companion to the [shard] log test: --dry-run gives a JSON view
+    // of the post-shard cells. Asserting on the JSON decouples the
+    // cell-name check from the log-line wording.
+    const r = runCli(['--dry-run', '--target', 'local', '--shard', '1/12']);
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse(r.stdout);
+    expect(parsed.cells).toEqual(['chromium']);
   });
 
   test('--matrix --shard with empty result → exits 0 "nothing to run"', () => {
@@ -274,6 +323,31 @@ describe('--shard — composition with --matrix', () => {
     });
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/\[shard\].*empty|nothing to run/);
+  });
+
+  test('--dry-run --target prod --shard 1/3 → cells: [] (silent-empty JSON contract)', () => {
+    // Pin: --dry-run path does NOT log "[shard] empty"; it just emits
+    // cells:[]. Operators parsing --dry-run JSON for CI should check
+    // cells.length, not stdout. Documented contract — pin so a future
+    // "improvement" that adds a warning key doesn't break parsing.
+    const r = runCli(['--dry-run', '--target', 'prod', '--shard', '1/3']);
+    expect(r.status).toBe(0);
+    const parsed = JSON.parse(r.stdout);
+    expect(parsed.cells).toEqual([]);
+    expect(parsed.target).toBe('prod');
+  });
+
+  test('single-cell mode + --shard silently ignored (documented design)', () => {
+    // Per design (mirrors --filter): --shard is a multi-cell subsetter.
+    // Without --matrix/--check-drivers/--smoke, the cell is already
+    // explicit, so --shard has no effect. Verify by checking the
+    // failure (downstream MISSING_ENV) is NOT a --shard error AND
+    // no [shard] log line appears in stdout.
+    const r = runCli(['--target', 'local', '--shard', '1/3']);
+    // Downstream MISSING_ENV will fire (no PERSONAS_PASSWORD); we
+    // care that --shard was silently ignored, not the env error.
+    expect(r.stderr).not.toMatch(/--shard requires|--shard <X>/);
+    expect(r.stdout).not.toMatch(/\[shard\]/);
   });
 });
 
@@ -300,5 +374,17 @@ describe('--shard — stripped from per-cell argv', () => {
     const { PER_CELL_STRIP_FLAGS, PER_CELL_VALUE_FLAGS } = require(RUNNER_PATH);
     expect(PER_CELL_STRIP_FLAGS.has('--shard')).toBe(true);
     expect(PER_CELL_VALUE_FLAGS.has('--shard')).toBe(true);
+  });
+
+  test('stripPerCellFlags handles bare --shard (no following value) without error', () => {
+    // Edge: bare --shard at end of argv. stripPerCellFlags does
+    // `i++` to skip the value, but if there is no value, the next-
+    // iteration index check (`i < length`) prevents off-end read.
+    // Verify: the bare --shard is dropped, no exception.
+    const { stripPerCellFlags } = require(RUNNER_PATH);
+    expect(() => stripPerCellFlags(['--target', 'local', '--shard'])).not.toThrow();
+    const result = stripPerCellFlags(['--target', 'local', '--shard']);
+    // The --shard token is dropped; --target local remains.
+    expect(result).toEqual(['--target', 'local']);
   });
 });

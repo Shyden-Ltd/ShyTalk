@@ -15816,6 +15816,29 @@ async function main() {
   // flag and matrix surface without setting PERSONAS_PASSWORD or any
   // FIREBASE_*_API_KEY. Precedence: --help > --version > --list
   // (--help is the most-likely operator intent when typo-combined).
+  //
+  // --shard validation runs BEFORE the --dry-run / --list short-circuits
+  // because --dry-run consumes opts.shardIndex/shardCount via
+  // formatDryRunJson — without validation here, a malformed --shard
+  // would surface inside formatDryRunJson with the wrong error prefix
+  // (originally --filter:). Validation FIRST surfaces a clean --shard:
+  // error with the operator's raw input.
+  if ('_shardRaw' in opts) {
+    if (opts._shardRaw === undefined) {
+      console.error('--shard requires a value in <X>/<Y> form (e.g. --shard 2/3). Got no value.');
+      process.exit(2);
+    }
+    if (opts.shardIndex === undefined || opts.shardCount === undefined) {
+      console.error(`--shard must be in <X>/<Y> form (e.g. --shard 2/3). Got "${opts._shardRaw}".`);
+      process.exit(2);
+    }
+    if (opts.shardIndex < 1 || opts.shardCount < 1 || opts.shardIndex > opts.shardCount) {
+      console.error(
+        `--shard <X>/<Y> requires 1 <= X <= Y. Got "${opts._shardRaw}" (X=${opts.shardIndex}, Y=${opts.shardCount}).`,
+      );
+      process.exit(2);
+    }
+  }
   if (opts.help) {
     console.log(formatUsage());
     process.exit(0);
@@ -15883,21 +15906,8 @@ async function main() {
     console.error(`--retry must be a non-negative integer. Got "${opts._retryRaw}".`);
     process.exit(2);
   }
-  // --shard validation: format <X>/<Y>, both positive integers, X <= Y.
-  // Malformed input was caught at parse time (no shardIndex/shardCount
-  // set on opts); raw value remains for the error message.
-  if (opts._shardRaw !== undefined) {
-    if (opts.shardIndex === undefined || opts.shardCount === undefined) {
-      console.error(`--shard must be in <X>/<Y> form (e.g. --shard 2/3). Got "${opts._shardRaw}".`);
-      process.exit(2);
-    }
-    if (opts.shardIndex < 1 || opts.shardCount < 1 || opts.shardIndex > opts.shardCount) {
-      console.error(
-        `--shard <X>/<Y> requires 1 <= X <= Y. Got "${opts._shardRaw}" (X=${opts.shardIndex}, Y=${opts.shardCount}).`,
-      );
-      process.exit(2);
-    }
-  }
+  // --shard validation moved above the early-exit short-circuits — see
+  // comment near the help-handler for the rationale.
   opts.target = opts.target || 'dev';
   opts.planDir = opts.planDir || path.resolve(__dirname, '../../journey-tests');
   opts.cycle = opts.cycle || 1;
