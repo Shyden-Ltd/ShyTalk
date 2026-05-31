@@ -70,6 +70,13 @@ async function runHealthCheck({
   onCellStart,
   onCellEnd,
   nowMs = () => Date.now(),
+  // processStats — injected for tests (default: process.memoryUsage()).
+  // Returns an object with at least a `rss` field in bytes. Used to
+  // sample per-cell peak RSS (gap C4). Operator sees which cells push
+  // process memory the highest, useful for catching driver leaks.
+  // Sampling is best-effort and parent-process-scoped: matrix-dispatch
+  // subprocesses are NOT captured (would require IPC).
+  processStats = () => process.memoryUsage(),
 } = {}) {
   if (!Array.isArray(browsers)) {
     throw new Error('runHealthCheck: `browsers` must be an array of browser slugs');
@@ -92,6 +99,23 @@ async function runHealthCheck({
     let cellBootstrapMs;
     let cellSmokeMs;
     let cellCloseMs;
+    // Peak RSS sampled at cell start and each phase boundary. Records
+    // the highest RSS observed during this cell's execution. Stays
+    // undefined when the cell doesn't reach the factory branch (e.g.
+    // no factory registered for slug).
+    let cellPeakRssBytes;
+    const samplePeakRss = () => {
+      try {
+        const stats = processStats();
+        if (stats && typeof stats.rss === 'number') {
+          if (cellPeakRssBytes === undefined || stats.rss > cellPeakRssBytes) {
+            cellPeakRssBytes = stats.rss;
+          }
+        }
+      } catch (_e) {
+        /* swallow — RSS sampling is best-effort, never fails the cell */
+      }
+    };
     const factory = factories[browser];
     if (typeof factory !== 'function') {
       outcome = 'fail';
@@ -106,13 +130,18 @@ async function runHealthCheck({
       let bootstrapMs;
       let smokeMs;
       let closeMs;
+      // Cell-start RSS sample — establishes the baseline before any
+      // phase runs. Each phase boundary updates the peak.
+      samplePeakRss();
       const tBoot = nowMs();
       try {
         driver = await factory({ baseURL });
         bootstrapMs = Math.max(0, nowMs() - tBoot);
+        samplePeakRss();
         outcome = 'ok';
       } catch (e) {
         bootstrapMs = Math.max(0, nowMs() - tBoot);
+        samplePeakRss();
         if (isInitError(e)) {
           outcome = 'skip';
           error = e.message;
@@ -157,6 +186,8 @@ async function runHealthCheck({
           /* swallow close errors */
         }
       }
+      // Final RSS sample — captures any close-phase memory growth.
+      samplePeakRss();
       // Hoist phase metrics to cell scope so the cell-builder below
       // can pick them up after the factory/else branching closes.
       cellBootstrapMs = bootstrapMs;
@@ -169,6 +200,7 @@ async function runHealthCheck({
     if (cellBootstrapMs !== undefined) cell.bootstrapMs = cellBootstrapMs;
     if (cellSmokeMs !== undefined) cell.smokeMs = cellSmokeMs;
     if (cellCloseMs !== undefined) cell.closeMs = cellCloseMs;
+    if (cellPeakRssBytes !== undefined) cell.peakRssBytes = cellPeakRssBytes;
     cells.push(cell);
     if (typeof onCellEnd === 'function') onCellEnd(cell);
   }
