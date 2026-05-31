@@ -15454,6 +15454,9 @@ function formatUsage() {
     '                              count as failures, skips do not). 0 = no bail.',
     '                              --bail 1 is equivalent in effect to --fail-fast.',
     '  --check-drivers           Diagnostic — verify each driver bootstraps',
+    '  --check-env               Diagnostic — verify env credentials + toolchain',
+    '                              (PERSONAS_PASSWORD, FIREBASE_<TARGET>_API_KEY,',
+    '                              node, npm). Exits 0 iff every check passes.',
     '  --list                    Enumerate matrix cells as JSON (use with --target',
     '                              to filter to one target). Exits 0 without env vars',
     '                              so it is safe to pipe into jq for scripting.',
@@ -15587,6 +15590,7 @@ async function main() {
     else if (flat[i] === '--version' || flat[i] === '-v') opts.version = true;
     else if (flat[i] === '--list') opts.list = true;
     else if (flat[i] === '--dry-run') opts.dryRun = true;
+    else if (flat[i] === '--check-env') opts.checkEnv = true;
   }
   // --help / --version / --list short-circuit BEFORE any further
   // validation or env checks. Operators must be able to discover the
@@ -15609,6 +15613,17 @@ async function main() {
   if (opts.dryRun) {
     console.log(formatDryRunJson(opts));
     process.exit(0);
+  }
+  if (opts.checkEnv) {
+    // Pre-flight env audit — verify PERSONAS_PASSWORD, FIREBASE_<TARGET>_API_KEY,
+    // and toolchain (node + npm). Surfaces ALL problems up-front instead of the
+    // existing "MISSING_ENV" failures fired one-at-a-time after several
+    // minutes of matrix-dispatch setup. Pure diagnostic — exits 0 iff every
+    // check passes, 1 if any fails. Doesn't run the matrix.
+    const { runEnvCheck, formatEnvHealthResult } = require('./env-health-check');
+    const result = await runEnvCheck({ target: opts.target || 'dev' });
+    console.log(formatEnvHealthResult(result));
+    process.exit(result.ok ? 0 : 1);
   }
   // --report-format validation — only json + junit are supported (used
   // with --matrix to emit structured output for CI dashboards).
