@@ -35,35 +35,41 @@ const REPO_ROOT = path.resolve(__dirname, '../../..');
 const PR_CHECKS_PATH = path.join(REPO_ROOT, '.github/workflows/pr-checks.yml');
 
 /**
- * Extract a step's `run:` block by step `name:` match (canonical
- * helper duplicated from pr-checks-app-changed-split.test.js — kept
- * inline to keep the test file self-contained).
+ * Extract a step's `run:` block by exact `      - name: <stepName>`
+ * match at the canonical 6-space step indent. Mirror of the helper
+ * in pr-checks-app-changed-split.test.js — duplicated rather than
+ * shared so each pr-checks-* test file is self-contained, but kept
+ * BYTE-IDENTICAL so a refactor to a shared module is one mechanical
+ * replacement away.
  */
 function extractStep(yamlText, stepName) {
   const lines = yamlText.split('\n');
-  const headerIdx = lines.findIndex((l) => l.includes(`name: ${stepName}`));
-  if (headerIdx < 0) {
-    throw new Error(`Could not find step "${stepName}" in workflow file`);
+  const stepHeader = `      - name: ${stepName}`;
+  const matches = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trimEnd() === stepHeader) matches.push(i);
   }
-  // Find the indent of the `name:` line (e.g. 6 spaces for a step).
-  const headerIndent = lines[headerIdx].match(/^( *)/)[1].length;
-  // Block ends when we encounter another line at the same indent
-  // starting with `- name:` (next step header) OR a less-indented
-  // line that is non-blank.
-  let endIdx = headerIdx + 1;
+  if (matches.length === 0) {
+    throw new Error(
+      `Could not find step "${stepName}" in workflow file. ` +
+        'Step was renamed, removed, or indentation changed (helper ' +
+        'requires 6-space step indent) — update this test to match.',
+    );
+  }
+  if (matches.length > 1) {
+    throw new Error(
+      `Ambiguous step name "${stepName}": found at lines ${matches.map((i) => i + 1).join(', ')}.`,
+    );
+  }
+  const startIdx = matches[0];
+  let endIdx = startIdx + 1;
   while (endIdx < lines.length) {
-    const line = lines[endIdx];
-    const trimmed = line.trimEnd();
-    if (trimmed.length === 0) {
-      endIdx++;
-      continue;
-    }
-    const indent = line.match(/^( *)/)[1].length;
-    if (indent < headerIndent) break;
-    if (indent === headerIndent && trimmed.includes('- name:')) break;
+    const trimmed = lines[endIdx].trimEnd();
+    if (trimmed.startsWith('      - name:')) break;
+    if (trimmed.length > 0 && !trimmed.startsWith(' ')) break;
     endIdx++;
   }
-  return lines.slice(headerIdx, endIdx).join('\n');
+  return lines.slice(startIdx, endIdx).join('\n');
 }
 
 /**
@@ -137,9 +143,31 @@ describe('pr-checks.yml — public/roadmap-data.json exclusion', () => {
     expect(r.WEB).toBe('true');
   });
 
-  test('public/js/some-script.js still triggers WEB', () => {
-    // Nested paths under public/ also trigger WEB via the catch-all.
+  test('public/js/some-script.js still triggers WEB (bash * matches across /)', () => {
+    // Nested paths under public/ trigger WEB via the catch-all. Note:
+    // bash `case` glob `*` IS greedy and matches `/` (verified
+    // empirically with `bash -c 'case "public/js/x.js" in public/*) ...'`).
+    // This differs from filesystem glob behaviour — documented here
+    // because a code-reviewer assumed otherwise on 2026-05-31 and the
+    // assumption was empirically wrong. Pin the actual semantics.
     const r = classifyFiles(yamlText, ['public/js/seasonal-theme.js']);
+    expect(r.WEB).toBe('true');
+  });
+
+  test('public/roadmap-data.json.bak (similar name) still triggers WEB (exact-match boundary)', () => {
+    // Boundary pin: the exclusion is an EXACT literal match, not a
+    // glob. A future maintainer who widens it to `public/roadmap-data*`
+    // would accidentally exclude backup/temp files too. This test
+    // surfaces that drift immediately by asserting the literal-only
+    // semantic.
+    const r = classifyFiles(yamlText, ['public/roadmap-data.json.bak']);
+    expect(r.WEB).toBe('true');
+  });
+
+  test('public/roadmap-data.json2 (digit suffix) still triggers WEB', () => {
+    // Companion to .bak test: any character after the literal path
+    // is NOT excluded.
+    const r = classifyFiles(yamlText, ['public/roadmap-data.json2']);
     expect(r.WEB).toBe('true');
   });
 
