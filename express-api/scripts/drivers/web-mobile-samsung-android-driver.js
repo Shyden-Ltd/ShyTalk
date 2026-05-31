@@ -164,7 +164,7 @@ async function createMobileSamsungAndroidDriver({
 const WEB_MOBILE_METHOD_NAMES = ['webRefreshRoomsList', 'webUiDump'];
 
 function listMethods() {
-  return [...WEB_MOBILE_METHOD_NAMES].sort();
+  return [...new Set(WEB_MOBILE_METHOD_NAMES)].sort();
 }
 
 module.exports = {

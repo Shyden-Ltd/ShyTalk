@@ -17,9 +17,12 @@
  *   - iOS bridge: ios-appium-driver
  *   - Web-mobile wrappers: web-mobile-*-driver (6 drivers × 2 methods)
  *
- * If you ADD a new method to a driver: bump the EXPECTED_COUNT below.
- * If you REMOVE a method: bump down + verify nothing in the runner
- * depends on it.
+ * Maintenance:
+ *   - ADD a new method to a driver: bump the EXPECTED_COUNT below.
+ *   - REMOVE a method: bump down + verify nothing in the runner depends.
+ *   - ADD a new driver file: add an entry to EXPECTED_COUNTS (the
+ *     "all driver files are present" test surfaces this with a diff).
+ *   - REMOVE a driver file: drop the EXPECTED_COUNTS entry.
  */
 
 const fs = require('fs');
@@ -57,8 +60,11 @@ function countMethodsByConstant(driverFile) {
   //   const FOO_METHOD_NAMES = [ ... ]
   //   exports.FOO_METHOD_NAMES = [ ... ]
   // Allows whitespace between `const`/`exports.` and the identifier.
+  // Prefix bound {0,200} is well beyond any realistic identifier so
+  // a future weirdly-long prefix surfaces as a count mismatch, not
+  // a confusing "regex didn't match" throw.
   const arrayMatch = text.match(
-    /(?:const\s{1,5}|exports\.)\w{0,80}METHOD_NAMES\s{0,10}=\s{0,10}\[([\s\S]{0,20000}?)\]/,
+    /(?:const\s{1,5}|exports\.)\w{0,200}METHOD_NAMES\s{0,10}=\s{0,10}\[([\s\S]{0,20000}?)\]/,
   );
   if (!arrayMatch) {
     throw new Error(
@@ -68,8 +74,10 @@ function countMethodsByConstant(driverFile) {
   const body = arrayMatch[1];
   // Count quoted string entries — single or double quotes, comma-separated.
   // Bounded {1,200} to avoid super-linear backtracking. Dedupe to
-  // match the driver's listMethods() semantic (which uses
-  // [...new Set(...)] — so duplicates in the array don't double-count).
+  // match the driver's listMethods() semantic. All drivers (after
+  // this PR fixed the web-mobile-* asymmetry) use
+  // [...new Set(NAMES)].sort() — so duplicates in the array don't
+  // double-count. The helper mirrors that contract.
   const entries = body.match(/['"][\w-]{1,200}['"]/g) || [];
   return new Set(entries).size;
 }
@@ -96,6 +104,52 @@ describe('driver-interface-pin — per-driver method count snapshot (B2)', () =>
       expect(actualCount).toBe(expected);
     });
   }
+});
+
+// ── helper unit tests (EC1, EC2) ────────────────────────────────
+
+describe('countMethodsByConstant — error paths', () => {
+  const os = require('os');
+
+  test('throws actionable error when *_METHOD_NAMES array is missing (EC1)', () => {
+    // Future regex tightening that breaks against a real driver file
+    // would manifest as this throw rather than a count mismatch.
+    // Pin the throw + its actionable message so debugging is fast.
+    const tmp = path.join(os.tmpdir(), `no-method-names-${process.pid}-${Date.now()}-driver.js`);
+    fs.writeFileSync(
+      tmp,
+      `// driver file with no METHOD_NAMES declaration
+       module.exports = { createX: async () => ({ close: async () => {} }) };
+      `,
+    );
+    try {
+      expect(() => countMethodsByConstant(tmp)).toThrow(/No \*_METHOD_NAMES array found/);
+      expect(() => countMethodsByConstant(tmp)).toThrow(
+        /driver-contract\.test\.js should also fail/,
+      );
+    } finally {
+      fs.unlinkSync(tmp);
+    }
+  });
+
+  test('deduplicates repeated entries (matches new Set semantic, EC2)', () => {
+    // The web-playwright array deliberately contains
+    // `webPairedSessionShowsSameTotals` twice. listMethods() uses
+    // `[...new Set(NAMES)].sort()` to dedup; the helper must mirror
+    // that or the snapshot count would be off by one.
+    const tmp = path.join(os.tmpdir(), `dup-method-names-${process.pid}-${Date.now()}-driver.js`);
+    fs.writeFileSync(
+      tmp,
+      `const FOO_METHOD_NAMES = ['alpha', 'beta', 'alpha', 'gamma']; // 'alpha' twice → dedup count = 3
+       module.exports = { FOO_METHOD_NAMES };
+      `,
+    );
+    try {
+      expect(countMethodsByConstant(tmp)).toBe(3);
+    } finally {
+      fs.unlinkSync(tmp);
+    }
+  });
 });
 
 describe('driver-interface-pin — categorical invariants', () => {
