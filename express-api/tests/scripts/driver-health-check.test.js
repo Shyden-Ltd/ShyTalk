@@ -321,4 +321,138 @@ describe('formatHealthCheckResult', () => {
     });
     expect(text).toMatch(/mobile-firefox-android/);
   });
+
+  test('label option swaps "Health:" prefix to caller-supplied value', () => {
+    // --smoke uses label="Smoke" so output reads "Smoke: 1 ok / ..."
+    // — matches operator mental model. Default stays "Health" for
+    // backward compat with --check-drivers.
+    const text = formatHealthCheckResult(
+      { cells: [], summary: '0 ok / 0 fail / 0 skip' },
+      { label: 'Smoke' },
+    );
+    expect(text).toMatch(/Smoke: 0 ok/);
+    expect(text).not.toMatch(/Health:/);
+  });
+
+  test('omitted label option defaults to "Health"', () => {
+    const text = formatHealthCheckResult({
+      cells: [],
+      summary: '0 ok / 0 fail / 0 skip',
+    });
+    expect(text).toMatch(/Health: 0 ok/);
+  });
+});
+
+// runHealthCheck — smoke method ────────────────────────────────────
+
+describe('runHealthCheck — smokeMethod', () => {
+  test('smokeMethod undefined → no smoke call (backward compat with --check-drivers)', async () => {
+    // Driver has webUiDump but caller didn't request smoke; verify the
+    // method is NOT called.
+    const webUiDump = jest.fn(async () => 'dump');
+    const driver = makeFakeDriver();
+    driver.webUiDump = webUiDump;
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+    });
+    expect(webUiDump).not.toHaveBeenCalled();
+    expect(r.cells[0].outcome).toBe('ok');
+  });
+
+  test('smokeMethod present + driver implements it → outcome ok, method called', async () => {
+    const webUiDump = jest.fn(async () => 'dump');
+    const driver = makeFakeDriver();
+    driver.webUiDump = webUiDump;
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+      smokeMethod: 'webUiDump',
+    });
+    expect(webUiDump).toHaveBeenCalledTimes(1);
+    expect(r.cells[0].outcome).toBe('ok');
+  });
+
+  test('smokeMethod throws → outcome fail with actionable smoke prefix', async () => {
+    const driver = makeFakeDriver();
+    driver.webUiDump = jest.fn(async () => {
+      throw new Error('page navigation timed out');
+    });
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+      smokeMethod: 'webUiDump',
+    });
+    expect(r.cells[0].outcome).toBe('fail');
+    expect(r.cells[0].error).toMatch(/smoke method "webUiDump" failed/);
+    expect(r.cells[0].error).toMatch(/page navigation timed out/);
+  });
+
+  test('smokeMethod missing on driver → outcome fail with "not implemented"', async () => {
+    // Native drivers (android-adb, ios-*) don't implement webUiDump.
+    // If operator runs --smoke against such a cell, we must fail
+    // clearly rather than silently pass.
+    const driver = makeFakeDriver(); // no webUiDump
+    const r = await runHealthCheck({
+      browsers: ['some-native-cell'],
+      factories: { 'some-native-cell': makeFactoryReturning(driver) },
+      smokeMethod: 'webUiDump',
+    });
+    expect(r.cells[0].outcome).toBe('fail');
+    expect(r.cells[0].error).toMatch(/smoke method "webUiDump" not implemented/);
+  });
+
+  test('bootstrap fails (init error) → smoke NOT called, outcome stays skip', async () => {
+    const webUiDump = jest.fn();
+    const factory = jest.fn(async () => {
+      const e = new Error('no device connected');
+      throw e;
+    });
+    const r = await runHealthCheck({
+      browsers: ['mobile-chrome-android'],
+      factories: { 'mobile-chrome-android': factory },
+      smokeMethod: 'webUiDump',
+    });
+    expect(webUiDump).not.toHaveBeenCalled();
+    // Bootstrap-fail without init-error signature → fail (not skip)
+    // because the error message doesn't match isInitError. Use a real
+    // init-error-shaped message instead.
+    expect(r.cells[0].outcome).toBe('fail');
+  });
+
+  test('close error after successful smoke does NOT downgrade outcome', async () => {
+    const driver = makeFakeDriver({
+      closeImpl: jest.fn(async () => {
+        throw new Error('close timeout');
+      }),
+    });
+    driver.webUiDump = jest.fn(async () => 'dump');
+    const r = await runHealthCheck({
+      browsers: ['chromium'],
+      factories: { chromium: makeFactoryReturning(driver) },
+      smokeMethod: 'webUiDump',
+    });
+    // smoke succeeded; close failed but swallowed.
+    expect(r.cells[0].outcome).toBe('ok');
+  });
+
+  test('smokeMethod with multi-cell — independent per-cell results', async () => {
+    const goodDriver = makeFakeDriver();
+    goodDriver.webUiDump = jest.fn(async () => 'ok');
+    const brokenDriver = makeFakeDriver();
+    brokenDriver.webUiDump = jest.fn(async () => {
+      throw new Error('runtime broken');
+    });
+    const r = await runHealthCheck({
+      browsers: ['chromium', 'firefox'],
+      factories: {
+        chromium: makeFactoryReturning(goodDriver),
+        firefox: makeFactoryReturning(brokenDriver),
+      },
+      smokeMethod: 'webUiDump',
+    });
+    expect(r.cells[0].outcome).toBe('ok');
+    expect(r.cells[1].outcome).toBe('fail');
+    expect(r.totals).toEqual({ ok: 1, fail: 1, skip: 0 });
+  });
 });

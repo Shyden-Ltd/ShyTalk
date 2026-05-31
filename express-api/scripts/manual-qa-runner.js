@@ -15454,6 +15454,14 @@ function formatUsage() {
     '                              count as failures, skips do not). 0 = no bail.',
     '                              --bail 1 is equivalent in effect to --fail-fast.',
     '  --check-drivers           Diagnostic — verify each driver bootstraps',
+    '  --smoke                   Like --check-drivers but ALSO invokes one real',
+    '                              driver method (webUiDump) per cell to verify',
+    '                              the driver can service runtime calls, not just',
+    '                              bootstrap. Compose with --filter for single-cell',
+    '                              smoke: --smoke --filter chromium. Cells where',
+    '                              the driver bootstraps but webUiDump throws are',
+    '                              marked fail; cells without webUiDump (native',
+    '                              drivers) are marked fail too.',
     '  --check-env               Diagnostic — verify env credentials + toolchain',
     '                              (PERSONAS_PASSWORD, FIREBASE_<TARGET>_API_KEY,',
     '                              node, npm). Exits 0 iff every check passes.',
@@ -15535,6 +15543,75 @@ function formatListJson(target) {
   });
 }
 
+// buildDriverFactories — single source of truth for the cell-slug → factory
+// mapping. Used by both --check-drivers (bootstrap-only) and --smoke
+// (bootstrap + webUiDump). Extracted so adding a new cell touches one
+// place. Lazy-requires each driver module so callers paying for only
+// some cells don't load every driver into memory.
+function buildDriverFactories({ headed }) {
+  return {
+    chromium: ({ baseURL: u }) =>
+      require('./drivers/web-playwright-driver').createWebDriver({
+        baseURL: u,
+        headless: !headed,
+        browser: 'chromium',
+      }),
+    firefox: ({ baseURL: u }) =>
+      require('./drivers/web-playwright-driver').createWebDriver({
+        baseURL: u,
+        headless: !headed,
+        browser: 'firefox',
+      }),
+    webkit: ({ baseURL: u }) =>
+      require('./drivers/web-playwright-driver').createWebDriver({
+        baseURL: u,
+        headless: !headed,
+        browser: 'webkit',
+      }),
+    edge: ({ baseURL: u }) =>
+      require('./drivers/web-playwright-driver').createWebDriver({
+        baseURL: u,
+        headless: !headed,
+        browser: 'edge',
+      }),
+    'mobile-chrome-android': ({ baseURL: u }) =>
+      require('./drivers/web-mobile-chrome-android-driver').createMobileChromeAndroidDriver({
+        baseURL: u,
+      }),
+    'mobile-samsung-android': ({ baseURL: u }) =>
+      require('./drivers/web-mobile-samsung-android-driver').createMobileSamsungAndroidDriver({
+        baseURL: u,
+      }),
+    'mobile-edge-android': ({ baseURL: u }) =>
+      require('./drivers/web-mobile-edge-android-driver').createMobileEdgeAndroidDriver({
+        baseURL: u,
+      }),
+    'mobile-firefox-android': ({ baseURL: u }) =>
+      require('./drivers/web-mobile-firefox-android-driver').createMobileFirefoxAndroidDriver({
+        baseURL: u,
+      }),
+    'mobile-safari-ios': ({ baseURL: u }) =>
+      require('./drivers/web-mobile-safari-ios-driver').createMobileSafariIosDriver({
+        baseURL: u,
+      }),
+    'mobile-chrome-ios': ({ baseURL: u }) =>
+      require('./drivers/web-mobile-webkit-ios-driver').createMobileWebkitIosDriver({
+        browser: 'chrome',
+        baseURL: u,
+      }),
+    'mobile-firefox-ios': ({ baseURL: u }) =>
+      require('./drivers/web-mobile-webkit-ios-driver').createMobileWebkitIosDriver({
+        browser: 'firefox',
+        baseURL: u,
+      }),
+    'mobile-edge-ios': ({ baseURL: u }) =>
+      require('./drivers/web-mobile-webkit-ios-driver').createMobileWebkitIosDriver({
+        browser: 'edge',
+        baseURL: u,
+      }),
+  };
+}
+
 // --filter <pattern> — substring + comma-list cell subsetter.
 //
 // Operator use case: --matrix --filter android runs the 4 *android cells;
@@ -15611,6 +15688,7 @@ async function main() {
     else if (flat[i] === '--fail-fast') opts.failFast = true;
     else if (flat[i] === '--bail') opts.bailAfter = parseInt(flat[++i], 10);
     else if (flat[i] === '--check-drivers') opts.checkDrivers = true;
+    else if (flat[i] === '--smoke') opts.smoke = true;
     else if (flat[i] === '--report-dir') opts.reportDir = flat[++i];
     else if (flat[i] === '--report-format') opts.reportFormat = flat[++i];
     else if (flat[i] === '--report-output') opts.reportOutput = flat[++i];
@@ -15730,82 +15808,43 @@ async function main() {
   // journey scenario runs) — typical 12-cell health-check is ~10s.
   // Skips for bootstrap failures (no device / missing env / app not
   // installed) so the operator gets a per-cell readiness report.
-  if (opts.checkDrivers) {
+  // Apply --filter to the allowlist before any multi-cell dispatch.
+  // Single source of truth: same filter logic feeds --check-drivers,
+  // --smoke, and --matrix. (--matrix has additional --retry-failed
+  // logic later that intersects further on top of the filtered set.)
+  // Single-cell mode (--browser without any multi-cell flag) ignores
+  // --filter since the cell is already explicit.
+  if (opts.filter !== undefined && (opts.checkDrivers || opts.smoke || opts.matrix)) {
+    try {
+      allowed = applyFilter(allowed, opts.filter);
+      if (allowed.length === 0) {
+        console.log(`[filter] no cells match "${opts.filter}" — nothing to run`);
+        process.exit(0);
+      }
+      console.log(
+        `[filter] ${allowed.length} cell(s) matched "${opts.filter}": ${allowed.join(', ')}`,
+      );
+    } catch (e) {
+      console.error(`--filter: ${e.message}`);
+      process.exit(2);
+    }
+  }
+  if (opts.checkDrivers || opts.smoke) {
     const { runHealthCheck, formatHealthCheckResult } = require('./driver-health-check');
     const baseURL = TARGETS[opts.target].webBase || 'http://localhost:8888';
-    // Each factory is a thin wrapper around the matching createXxxDriver
-    // — same browser → driver mapping as the runner's main dispatch.
-    const factories = {
-      chromium: ({ baseURL: u }) =>
-        require('./drivers/web-playwright-driver').createWebDriver({
-          baseURL: u,
-          headless: !opts.headed,
-          browser: 'chromium',
-        }),
-      firefox: ({ baseURL: u }) =>
-        require('./drivers/web-playwright-driver').createWebDriver({
-          baseURL: u,
-          headless: !opts.headed,
-          browser: 'firefox',
-        }),
-      webkit: ({ baseURL: u }) =>
-        require('./drivers/web-playwright-driver').createWebDriver({
-          baseURL: u,
-          headless: !opts.headed,
-          browser: 'webkit',
-        }),
-      edge: ({ baseURL: u }) =>
-        require('./drivers/web-playwright-driver').createWebDriver({
-          baseURL: u,
-          headless: !opts.headed,
-          browser: 'edge',
-        }),
-      'mobile-chrome-android': ({ baseURL: u }) =>
-        require('./drivers/web-mobile-chrome-android-driver').createMobileChromeAndroidDriver({
-          baseURL: u,
-        }),
-      'mobile-samsung-android': ({ baseURL: u }) =>
-        require('./drivers/web-mobile-samsung-android-driver').createMobileSamsungAndroidDriver({
-          baseURL: u,
-        }),
-      'mobile-edge-android': ({ baseURL: u }) =>
-        require('./drivers/web-mobile-edge-android-driver').createMobileEdgeAndroidDriver({
-          baseURL: u,
-        }),
-      'mobile-firefox-android': ({ baseURL: u }) =>
-        require('./drivers/web-mobile-firefox-android-driver').createMobileFirefoxAndroidDriver({
-          baseURL: u,
-        }),
-      'mobile-safari-ios': ({ baseURL: u }) =>
-        require('./drivers/web-mobile-safari-ios-driver').createMobileSafariIosDriver({
-          baseURL: u,
-        }),
-      'mobile-chrome-ios': ({ baseURL: u }) =>
-        require('./drivers/web-mobile-webkit-ios-driver').createMobileWebkitIosDriver({
-          browser: 'chrome',
-          baseURL: u,
-        }),
-      'mobile-firefox-ios': ({ baseURL: u }) =>
-        require('./drivers/web-mobile-webkit-ios-driver').createMobileWebkitIosDriver({
-          browser: 'firefox',
-          baseURL: u,
-        }),
-      'mobile-edge-ios': ({ baseURL: u }) =>
-        require('./drivers/web-mobile-webkit-ios-driver').createMobileWebkitIosDriver({
-          browser: 'edge',
-          baseURL: u,
-        }),
-    };
-    const healthResult = await runHealthCheck({
+    const factories = buildDriverFactories({ headed: opts.headed });
+    const tag = opts.smoke ? 'smoke' : 'check-drivers';
+    const result = await runHealthCheck({
       browsers: allowed,
       factories,
       baseURL,
-      onCellStart: ({ browser }) => console.log(`[check-drivers] → ${browser}`),
+      smokeMethod: opts.smoke ? 'webUiDump' : undefined,
+      onCellStart: ({ browser }) => console.log(`[${tag}] → ${browser}`),
       onCellEnd: (cell) =>
-        console.log(`[check-drivers] ← ${cell.browser}: ${cell.outcome} (${cell.durationMs}ms)`),
+        console.log(`[${tag}] ← ${cell.browser}: ${cell.outcome} (${cell.durationMs}ms)`),
     });
-    console.log('\n' + formatHealthCheckResult(healthResult));
-    process.exit(healthResult.ok ? 0 : 1);
+    console.log('\n' + formatHealthCheckResult(result, { label: opts.smoke ? 'Smoke' : 'Health' }));
+    process.exit(result.ok ? 0 : 1);
   }
 
   // --matrix dispatches the same scenario across every browser in the
@@ -15821,27 +15860,6 @@ async function main() {
       formatMatrixResultJunit,
     } = require('./matrix-dispatch');
     const { spawnSync } = require('child_process');
-
-    // --filter <pattern>: subset `allowed` by slug substring (comma-list
-    // OR-combined, case-insensitive). Applied BEFORE --retry-failed so
-    // the retry subset intersects the filter correctly (e.g. --filter
-    // android --retry-failed <chromium-fail-report> = nothing to retry,
-    // not "retry chromium because it's in the report").
-    if (opts.filter !== undefined) {
-      try {
-        allowed = applyFilter(allowed, opts.filter);
-        if (allowed.length === 0) {
-          console.log(`[filter] no cells match "${opts.filter}" — nothing to run`);
-          process.exit(0);
-        }
-        console.log(
-          `[filter] ${allowed.length} cell(s) matched "${opts.filter}": ${allowed.join(', ')}`,
-        );
-      } catch (e) {
-        console.error(`--filter: ${e.message}`);
-        process.exit(2);
-      }
-    }
 
     // --retry-failed: filter `allowed` down to only the cells that
     // failed/timed out in a previous matrix report. Lets the operator
@@ -16234,6 +16252,7 @@ module.exports = {
   formatListJson,
   formatDryRunJson,
   applyFilter,
+  buildDriverFactories,
   TARGETS,
 };
 
