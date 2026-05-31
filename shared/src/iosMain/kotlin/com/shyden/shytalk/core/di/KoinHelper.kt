@@ -13,12 +13,13 @@ import org.koin.mp.KoinPlatformTools
 /**
  * Initializes Firebase and Koin for the iOS app.
  *
- * Called from Swift inside the `#if DEBUG` block — the Swift side reads the
- * emulator seed literals (email + password) from `let` locals in iOSApp.swift
- * and forwards them. The Release branch passes `nil` for both so the literals
- * do NOT end up in the production iOS binary — Xcode strips `#if DEBUG` text
- * at compile time. This closes the "reverse-engineer the IPA to learn the
- * seed credential" leak. Source of truth for both values is `local/seed.js`.
+ * Called from Swift. The persona-shared password literal lives inside the
+ * `#if DEBUG` block in iOSApp.swift and is forwarded as
+ * `devPersonasPassword`; the Release branch passes `nil` so the literal
+ * does NOT end up in the production iOS binary — Xcode strips `#if DEBUG`
+ * text at compile time. This closes the "reverse-engineer the IPA to
+ * learn the seed credential" leak. Source of truth for the value is
+ * `local/seed.js`.
  *
  * `googleWebClientId` is intentionally not a parameter here: iOS reads its
  * Google OAuth client ID from `FirebaseApp.app().options.clientID` (set via
@@ -27,9 +28,9 @@ import org.koin.mp.KoinPlatformTools
  *
  * @param useEmulators If true, connects Firebase to local emulators (localhost).
  * @param devPersonasPassword Shared password for the 17 seeded test personas.
- *   Should be `nil` on prod builds. The 2026-06-01 dev-sign-in removal
- *   collapsed the legacy single-account `devSignInPassword`/`Email` slots —
- *   only the persona-shared password remains.
+ *   Should be `nil` on prod builds. (The 2026-06-01 dev-sign-in removal
+ *   collapsed the legacy single-account `devSignInPassword` / `devSignInEmail`
+ *   slots — only this persona-shared password remains.)
  */
 fun doInitKoin(
     useEmulators: Boolean = false,
