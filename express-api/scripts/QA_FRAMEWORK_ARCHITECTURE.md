@@ -257,3 +257,74 @@ automatically if you miss one):
 When adding a new feature, mirror the layer: pure-helper tests next
 to `manual-qa-runner.test.js`; flag-specific behavior in a focused
 file; driver-specific tests under `drivers/`.
+
+---
+
+## Deliberate skips / deferrals (framework design decisions)
+
+These decisions were made during the 2026-05-30 → 2026-05-31 framework
+closure phase and are recorded here for future contributors who might
+otherwise wonder "why isn't there a nightly matrix run?" or "where's
+per-cell screenshot capture?"
+
+### Nightly matrix cron — SKIPPED
+
+A "nightly matrix dispatch on `main`" was considered for trend tracking
+but **deliberately skipped**:
+
+1. **Cron-cost policy** — `feedback-avoid-crons-prefer-event-driven`
+   reflects the operator's $0-hosting constraint. GitHub Actions
+   minutes are finite; daily cron runs of the full 12-cell matrix
+   (~30min each) would consume ~15h/month on a "just in case" basis.
+
+2. **On-demand replacement** — [`manual-qa-matrix.yml`](../../.github/workflows/manual-qa-matrix.yml)
+   provides operator-invoked `workflow_dispatch` with target/filter/
+   shard inputs. Operator decides when trend data is needed (e.g.,
+   pre-release cut) rather than burning daily CI minutes on a fixed
+   schedule.
+
+3. **PR-time signal** — [`qa-runner-driver-checks.yml`](../../.github/workflows/qa-runner-driver-checks.yml)
+   includes a `--smoke chromium` step (~30s) that catches driver
+   regressions at PR time without nightly polling.
+
+4. **If trend tracking becomes a hard need later**, the cleanest path
+   is event-driven: a `workflow_call`-able reusable workflow invoked
+   by `release.yml` immediately after a release tag lands.
+   Pre-release trend data is what most teams use "nightly" for;
+   tying it to releases removes the cron + matches the operator's
+   $0 hosting constraint.
+
+### Per-cell screenshot capture on failure — DEFERRED
+
+A "per-cell screenshot capture on failure" feature was considered but
+deferred to a future iteration:
+
+1. **Multi-layer scope** — requires (a) `takeScreenshot(path)` method
+   added to each web driver, (b) journey-runner integration to call
+   it before driver-close, (c) matrix-dispatch coordination to upload
+   screenshots as artifacts (current `--report-dir` only captures
+   stdio). Three distinct surfaces vs the typical 1-surface gap.
+
+2. **Pre-requisite for value** — screenshots are most useful when
+   there's a real failure context to capture. Until the journey-test
+   corpus exercises real failure modes (the work that was blocked on
+   this framework closure), screenshots would be diagnostic noise.
+
+3. **Easier to spec after journey work** — designing the screenshot
+   API now risks getting the JSON shape / naming / retention policy
+   wrong. Better to spec it once real failure patterns emerge.
+
+Re-open when journey-test work has real cell failures that need
+post-mortem diagnostic detail.
+
+### Subprocess phase timing / RSS sampling — DEFERRED for matrix-dispatch
+
+[`driver-health-check.js`](./driver-health-check.js) records per-phase
+timing (`bootstrapMs`/`smokeMs`/`closeMs`) and peak RSS for in-process
+runs (`--check-drivers`, `--smoke`). [`matrix-dispatch.js`](./matrix-dispatch.js)
+runs each cell as a SUBPROCESS — the parent process can't see the
+subprocess's internal phase boundaries without IPC. Per-cell phase
+timing + RSS in matrix runs are therefore deferred until an IPC
+protocol design is needed. Until then, operators get total `durationMs`
+per matrix cell (already available) + per-phase breakdown for the
+diagnostic flows.
