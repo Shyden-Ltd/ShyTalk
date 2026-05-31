@@ -73,22 +73,36 @@ describe('.github/workflows/qa-runner-driver-checks.yml', () => {
     expect(reusable).toMatch(/manual-qa-runner\.js\s+--check-drivers/);
   });
 
-  test('runs --smoke diagnostic (PR-gated subset, gap E3)', () => {
-    // Closes gap E3: PR-time subset uses --smoke (one method call
-    // per cell) instead of --matrix (full journey scenarios — would
-    // need PERSONAS_PASSWORD + burn Firebase quota).
-    expect(reusable).toMatch(/manual-qa-runner\.js\s+--smoke/);
-    // Scoped to chromium so PR CI overhead is ~30s, not minutes.
-    expect(reusable).toMatch(/--filter\s+chromium/);
+  test('runs --smoke diagnostic with anchored flag + chromium,firefox filter (gap E3)', () => {
+    // Anchored regex (--smoke followed by space or end-of-token) so
+    // a future typo like --smok or --smokes wouldn't pass the pin.
+    // Reviewer-flagged 2026-05-31 — unknown-flag silent-drop risk.
+    expect(reusable).toMatch(/--smoke(?:\s|\b)/);
+    // Scope: both desktop browsers Playwright provides on ubuntu —
+    // chromium AND firefox. Covers the divergent web-playwright code
+    // paths without bloating PR CI.
+    expect(reusable).toMatch(/--filter\s+chromium,firefox/);
   });
 
-  test('--smoke step uses `|| true` to tolerate expected CI connection error', () => {
-    // In PR CI there's no localhost:8888 Firebase Emulator, so the
-    // smoke method's navigation will error. We don't want that to
-    // fail the workflow — the diagnostic value is in parse/dispatch,
-    // not the smoke outcome. The `|| true` pattern is documented in
-    // the workflow comment.
-    expect(reusable).toMatch(/--smoke[^\n]{0,200}\|\|\s*true/);
+  test('--smoke step has `if: always()` for independent diagnostic', () => {
+    // Reviewer-flagged: without if: always(), GitHub Actions skips
+    // the --smoke step if --check-drivers above fails. Operator
+    // wants the smoke signal regardless — distinguishes
+    // bootstrap-only from method-level failures.
+    expect(reusable).toMatch(/--smoke[\s\S]{0,500}?if:\s*always\(\)/);
+  });
+
+  test('--smoke step selective-swallows ONLY localhost ECONNREFUSED (gap C1)', () => {
+    // Reviewer-flagged 2026-05-31 — naive `|| true` would silently
+    // mask CLI parser regressions, missing factories, renamed
+    // methods (all exit 1). Tightened to grep for the connection
+    // error specifically; any other exit-1 propagates.
+    expect(reusable).toMatch(/ECONNREFUSED/);
+    expect(reusable).toMatch(/net::ERR_CONNECTION_REFUSED/);
+    // Anti-pattern check: no bare `|| true` on the runner invocation.
+    expect(reusable).not.toMatch(/manual-qa-runner\.js[^\n]{0,200}\|\|\s*true/);
+    // Must surface non-connection errors with a clear ::error:: message.
+    expect(reusable).toMatch(/::error::--smoke failed with a NON-CONNECTION error/);
   });
 
   test('grants read-only contents permission', () => {

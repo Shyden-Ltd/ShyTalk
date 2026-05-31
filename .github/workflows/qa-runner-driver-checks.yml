@@ -96,28 +96,51 @@ jobs:
         run: node scripts/manual-qa-runner.js --check-drivers --target local
         working-directory: express-api
 
-      - name: --smoke diagnostic — chromium (PR-gated subset, gap E3)
+      - name: --smoke diagnostic — chromium+firefox (PR-gated subset, gap E3)
         # Goes one level deeper than --check-drivers: bootstrap the
         # driver AND invoke ONE real method (webUiDump) per cell.
         # Catches cells that bootstrap clean but can't service runtime
         # calls (broken page navigation, driver-method drift, browser
         # silently degraded).
         #
-        # Scope: --filter chromium (one cell) to keep PR CI under
-        # ~30s extra. Operator can run the full matrix via E1
+        # Scope: --filter chromium,firefox (the 2 desktop cells Playwright
+        # provides on ubuntu — webkit is also available but slower to
+        # boot). Both browsers cover the divergent web-playwright code
+        # paths. Operator runs full 12-cell matrix via E1
         # (manual-qa-matrix.yml) when a deeper run is warranted.
         #
-        # Target: local. The smoke method navigates to baseURL which
-        # is localhost:8888 — there's no Firebase Emulator running in
-        # PR-CI, so the smoke method will hit a connection error.
-        # That's OK for now: this step validates the runner CLI surface
-        # (--smoke parses + dispatches correctly) without burning real
-        # cloud quota. Future: spin up a static placeholder server in
-        # the workflow if the connection check needs to pass.
+        # if: always() — independent diagnostic. Runs even if
+        # --check-drivers above fails (the operator wants the smoke
+        # signal regardless, e.g. to see whether the failure is
+        # bootstrap-only or method-level too).
         #
-        # Exit 0 || true — the smoke method's connection error is
-        # expected in CI; we don't want to fail driver-checks on it.
-        # The diagnostic value is in the parse/dispatch surface, not
-        # the smoke outcome.
-        run: node scripts/manual-qa-runner.js --smoke --target local --filter chromium || true
+        # Selective failure swallowing — only the EXPECTED localhost-
+        # ECONNREFUSED is tolerated (no Firebase Emulator in PR CI).
+        # ANY OTHER failure (e.g. --smoke parser regression, factory
+        # missing, smoke method renamed) propagates as a step failure.
+        # Without this, `|| true` would mask real bugs (reviewer-flagged
+        # 2026-05-31: factory-not-registered + method-not-implemented
+        # paths also exit 1; `|| true` would silently swallow them).
+        if: always()
+        run: |
+          set +e
+          OUT=$(node scripts/manual-qa-runner.js --smoke --target local --filter chromium,firefox 2>&1)
+          EXIT=$?
+          echo "$OUT"
+          if [ "$EXIT" -eq 0 ]; then
+            echo "[smoke-pr-gate] passed — no localhost connection error and all cells OK"
+            exit 0
+          fi
+          # Acceptable error: localhost connection refused (no Firebase
+          # Emulator running in PR CI). Playwright + Node emit several
+          # variations of this; match the canonical strings.
+          if echo "$OUT" | grep -qE 'ECONNREFUSED|net::ERR_CONNECTION_REFUSED|connect ECONNREFUSED'; then
+            echo "[smoke-pr-gate] expected localhost ECONNREFUSED — swallowing step failure (no Firebase Emulator in PR CI)"
+            exit 0
+          fi
+          # Any other failure is a real bug (parser regression, factory
+          # not registered, smoke method renamed/removed, etc.). Surface
+          # it as a step failure so CI catches the regression.
+          echo "::error::--smoke failed with a NON-CONNECTION error — likely a CLI parse regression, missing factory, or renamed method. See log above."
+          exit "$EXIT"
         working-directory: express-api
