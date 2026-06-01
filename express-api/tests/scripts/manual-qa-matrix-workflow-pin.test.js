@@ -144,11 +144,20 @@ describe('manual-qa-matrix.yml — structural pin', () => {
     expect(yamlText).toMatch(/uses:\s*actions\/checkout/);
   });
 
-  test('setup-node@v4 with cache: npm + cache-dependency-path', () => {
+  test('setup-node@v4+ with cache: npm + cache-dependency-path', () => {
     // Pin the npm cache invariant — without cache-dependency-path,
     // setup-node defaults to repo-root package.json which doesn't
     // exist; cache would silently no-op and slow every PR.
-    expect(yamlText).toMatch(/uses:\s*actions\/setup-node@v4/);
+    //
+    // Loosened 2026-06-01 from `@v4` to `@v[4-9]` after the workflow
+    // was bumped to setup-node@v6 (current major) but this test stayed
+    // pinned to v4, breaking every push via the pre-push Jest hook
+    // (no PR could land regardless of its diff). Major bumps of
+    // setup-node have so far been backwards-compatible on the
+    // cache + cache-dependency-path inputs; allow v4-v9 so future
+    // maintenance bumps don't break the gate again. Pin a specific
+    // version separately if a real incompatibility appears.
+    expect(yamlText).toMatch(/uses:\s*actions\/setup-node@v[4-9]/);
     expect(yamlText).toMatch(/cache:\s*npm/);
     expect(yamlText).toMatch(/cache-dependency-path:\s*express-api\/package-lock\.json/);
   });
