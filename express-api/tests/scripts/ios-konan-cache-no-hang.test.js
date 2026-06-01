@@ -132,3 +132,78 @@ describe('ios-tests.yml — ~/.konan cache: restore + save split with bounded sa
     expect(block).toMatch(/if:[^\n]*cache-hit/);
   });
 });
+
+// The same restore+save split MUST apply to deploy-dev.yml and
+// deploy-prod.yml — both contain iOS jobs that cache ~/.konan with
+// the identical multi-GB payload + same actions/cache version. Per
+// PR #951's reviewer note (pre-existing-systemic): a hung POST save
+// here would block a DEPLOY (worse than blocking a PR Gate). This
+// suite asserts the split was applied in all 3 workflows.
+const DEPLOY_DEV_YML = path.join(REPO_ROOT, '.github/workflows/deploy-dev.yml');
+const DEPLOY_PROD_YML = path.join(REPO_ROOT, '.github/workflows/deploy-prod.yml');
+
+describe.each([
+  ['deploy-dev.yml', DEPLOY_DEV_YML, 1],
+  ['deploy-prod.yml', DEPLOY_PROD_YML, 2],
+])('%s — ~/.konan cache split applied', (label, yamlPath, expectedSaveCount) => {
+  let yamlText;
+
+  beforeAll(() => {
+    yamlText = fs.readFileSync(yamlPath, 'utf8');
+  });
+
+  test(`${label} does NOT use combined actions/cache for ~/.konan`, () => {
+    const combinedSteps = [...yamlText.matchAll(/uses: actions\/cache@\S+/g)];
+    for (const m of combinedSteps) {
+      const stepWindow = yamlText.substring(m.index, m.index + 300);
+      expect(stepWindow).not.toMatch(/path:\s*~\/\.konan/);
+    }
+  });
+
+  test(`${label} has actions/cache/restore step(s) for ~/.konan with id for save-guard`, () => {
+    const restoreOccurrences = [
+      ...yamlText.matchAll(
+        /id:\s+\S+[\s\S]{0,300}?uses: actions\/cache\/restore@\S+[\s\S]{0,300}?path: ~\/\.konan/g,
+      ),
+    ];
+    expect(restoreOccurrences.length).toBe(expectedSaveCount);
+  });
+
+  test(`${label} has ${expectedSaveCount} actions/cache/save step(s) for ~/.konan`, () => {
+    const saveOccurrences = [...yamlText.matchAll(/uses: actions\/cache\/save@\S+/g)];
+    expect(saveOccurrences.length).toBe(expectedSaveCount);
+  });
+
+  test(`${label} every save step has timeout-minutes + continue-on-error + cache-hit if-guard`, () => {
+    // For each `uses: actions/cache/save@<X>`, walk back to the step
+    // header (`      - `) and forward to next sibling (~30 lines)
+    // to extract the step body. Assert all 3 safety attrs present.
+    const lines = yamlText.split('\n');
+    const saveStepLineNumbers = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (/uses: actions\/cache\/save@\S+/.test(lines[i])) saveStepLineNumbers.push(i);
+    }
+    expect(saveStepLineNumbers.length).toBe(expectedSaveCount);
+    for (const lineNo of saveStepLineNumbers) {
+      let headerIdx = -1;
+      for (let j = lineNo; j >= Math.max(0, lineNo - 15); j--) {
+        if (/^ {6}- /.test(lines[j])) {
+          headerIdx = j;
+          break;
+        }
+      }
+      expect(headerIdx).toBeGreaterThanOrEqual(0);
+      let endIdx = Math.min(lines.length, lineNo + 15);
+      for (let j = lineNo + 1; j < Math.min(lines.length, lineNo + 15); j++) {
+        if (/^ {6}- /.test(lines[j]) || /^ {2}\S/.test(lines[j])) {
+          endIdx = j;
+          break;
+        }
+      }
+      const block = lines.slice(headerIdx, endIdx).join('\n');
+      expect(block).toMatch(/timeout-minutes:\s+\d+/);
+      expect(block).toMatch(/continue-on-error:\s+true/);
+      expect(block).toMatch(/if:[^\n]*cache-hit/);
+    }
+  });
+});

@@ -111,7 +111,34 @@ jobs:
     name: "Android E2E (API ${{ matrix.api-level }}, ${{ matrix.form-factor }})"
     needs: [resolve-inputs]
     if: always() && needs.resolve-inputs.result == 'success' && needs.resolve-inputs.outputs.run_android == 'true'
-    runs-on: ubuntu-latest
+    # PINNED 2026-06-01 to ubuntu-22.04 from ubuntu-latest (currently
+    # resolves to ubuntu-24.04). Four consecutive Android-emulator boot
+    # failures on PRs #950, #953 traced to ubuntu-24.04 image release
+    # 20260525.161 — emulator process launches but `adb wait-for-device`
+    # never sees `sys.boot_completed` go true, even with the
+    # `emulator-boot-timeout: 1800` (30 min) raise applied (validated
+    # by log: timeout fired at 1874s, the full window). PR #952's heap +
+    # boot-timeout headroom addresses the budget axis but NOT this
+    # runner-image axis.
+    #
+    # Upstream tracker: ReactiveCircus/android-emulator-runner#400
+    # ("Error on Ubuntu-24.04" — action does not yet document 24.04 as
+    # supported). The action's own CI exercises ubuntu-22.04 explicitly
+    # at the older API rows; the 24.04 / ubuntu-latest coverage is at
+    # API 24, 34, 34-ext10, 35 — exercising mostly different AVD
+    # profiles than ShyTalk's pixel_6 matrix axis. 22.04 is therefore
+    # the empirically-stable target for THIS repo (API 28 / 30 / 33 /
+    # 35 on pixel profiles) per the 4 boot failures we hit on 24.04,
+    # not a blanket statement about every consumer of the action.
+    #
+    # Sister jobs `resolve-inputs` + `e2e-summary` do NOT run the emulator
+    # and remain on ubuntu-latest (asserted by sibling tests in
+    # android-e2e-emulator-boot-headroom.test.js).
+    #
+    # Revisit when the action ships a release that documents 24.04 as
+    # supported, OR when actions/runner-images publishes a 24.04 fix
+    # for the KVM / emulator boot path.
+    runs-on: ubuntu-22.04
     # Bumped 2026-06-01 from 60 → 90 alongside the emulator-boot-timeout
     # raise to 1800s. Boot/test split: worst-case 30 min boot + the
     # `connectedLocalDebugAndroidTest` suite (currently ~25 min on the

@@ -110,3 +110,77 @@ describe('e2e-tests.yml — Android emulator boot headroom', () => {
     expect(emulatorStepBlock).toMatch(/emulator-options:[^\n]*-no-boot-anim/);
   });
 });
+
+// Helper extracts a top-level YAML job's value for a given key. The
+// boundary detector terminates at the next top-level job header
+// (2-space indent + non-whitespace), making the lookup unambiguous
+// across this repo's actionlint-enforced indentation style.
+function extractJobBlock(yamlText, jobHeader) {
+  const headerIdx = yamlText.indexOf(jobHeader);
+  if (headerIdx < 0) return null;
+  const after = yamlText.substring(headerIdx).split('\n');
+  let endIdx = after.length;
+  for (let i = 1; i < after.length; i++) {
+    if (/^ {2}\S/.test(after[i])) {
+      endIdx = i;
+      break;
+    }
+  }
+  return after.slice(0, endIdx).join('\n');
+}
+
+function assertJobRunsOn(yamlText, jobHeader, expectedRunner) {
+  const jobBlock = extractJobBlock(yamlText, jobHeader);
+  expect(jobBlock).not.toBeNull();
+  if (jobBlock === null) return;
+  const runsOnMatch = jobBlock.match(/^[ \t]{1,8}runs-on:[ \t]{1,4}(\S+)/m);
+  expect(runsOnMatch).not.toBeNull();
+  if (runsOnMatch === null) return;
+  expect(runsOnMatch[1]).toBe(expectedRunner);
+}
+
+const DEPLOY_PROD_YML = path.join(REPO_ROOT, '.github/workflows/deploy-prod.yml');
+
+describe('Android emulator jobs pinned to ubuntu-22.04', () => {
+  let e2eYaml;
+  let deployYaml;
+
+  beforeAll(() => {
+    e2eYaml = fs.readFileSync(E2E_TESTS_YML, 'utf8');
+    deployYaml = fs.readFileSync(DEPLOY_PROD_YML, 'utf8');
+  });
+
+  // PINNED 2026-06-01 — four consecutive Android-emulator boot failures
+  // on PRs #950 / #953 traced to ubuntu-24.04 image release 20260525.161
+  // (emulator launches but adb never sees sys.boot_completed, even with
+  // emulator-boot-timeout: 1800 — 30 min — applied). ubuntu-22.04 is
+  // the empirically-stable target for reactivecircus/android-emulator-
+  // runner@v2.37.0 on ShyTalk's API 28 / 30 / 33 / 35 + pixel-profile
+  // matrix axis (upstream tracker: ReactiveCircus/android-emulator-
+  // runner#400). A future "modernize CI" PR that resets these jobs to
+  // ubuntu-latest would silently re-introduce the 4-failures-in-a-row
+  // regression on the next Android-touching PR — at PR time for
+  // e2e-tests.yml::test-android, and at PROD-RELEASE time for
+  // deploy-prod.yml::smoke-test-android (the latter is worse: a single
+  // failed prod release vs an N-retry PR re-run).
+
+  test('e2e-tests.yml::test-android runs on ubuntu-22.04 (NOT ubuntu-latest)', () => {
+    assertJobRunsOn(e2eYaml, '  test-android:', 'ubuntu-22.04');
+  });
+
+  test('deploy-prod.yml::smoke-test-android runs on ubuntu-22.04 (NOT ubuntu-latest)', () => {
+    assertJobRunsOn(deployYaml, '  smoke-test-android:', 'ubuntu-22.04');
+  });
+
+  // Symmetric guard per round-1 review M5: also pin the NEGATIVE — sister
+  // jobs that don't run the emulator MUST stay on ubuntu-latest. A future
+  // copy-paste accidentally pinning them too would tie lightweight jobs
+  // to a deprecating image without operator intent.
+  test('e2e-tests.yml::resolve-inputs stays on ubuntu-latest (lightweight)', () => {
+    assertJobRunsOn(e2eYaml, '  resolve-inputs:', 'ubuntu-latest');
+  });
+
+  test('e2e-tests.yml::e2e-summary stays on ubuntu-latest (lightweight)', () => {
+    assertJobRunsOn(e2eYaml, '  e2e-summary:', 'ubuntu-latest');
+  });
+});

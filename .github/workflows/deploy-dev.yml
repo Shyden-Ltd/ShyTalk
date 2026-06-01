@@ -486,8 +486,18 @@ jobs:
       # libs.versions.toml so a kotlin-version bump correctly invalidates.
       # restore-keys allows partial-match restore on minor differences
       # so we usually get a warm konan even when the exact key misses.
-      - name: Cache Kotlin/Native (~/.konan)
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      #
+      # Split into restore (here) + save (at the END of the job, after
+      # the heavy build steps) instead of the combined `actions/cache`
+      # step. Mirrors the fix landed in ios-tests.yml via PR #951 (and
+      # pinned by ios-konan-cache-no-hang.test.js): the combined step's
+      # synthetic POST upload of multi-GB ~/.konan can hang past the
+      # job-level timeout-minutes, stranding the workflow. The split
+      # makes save a regular step where timeout-minutes +
+      # continue-on-error apply.
+      - name: Restore Kotlin/Native cache (~/.konan)
+        id: konan-cache-restore
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
@@ -758,6 +768,20 @@ jobs:
         uses: ./.github/actions/cleanup-ios-signing
         with:
           app-store-connect-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+
+      # Paired with the Restore Kotlin/Native cache step at the head
+      # of the job. Runs as a regular step (NOT a synthetic POST step
+      # like combined actions/cache) so the safety attributes below
+      # actually apply when GitHub's cache backend hangs mid-upload.
+      # See ios-tests.yml PR #951 for the original split rationale.
+      - name: Save Kotlin/Native cache (~/.konan)
+        if: always() && steps.konan-cache-restore.outputs.cache-hit != 'true'
+        timeout-minutes: 10
+        continue-on-error: true
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.konan
+          key: ${{ steps.konan-cache-restore.outputs.cache-primary-key }}
 
   sanity-check:
     name: Dev Sanity Check
