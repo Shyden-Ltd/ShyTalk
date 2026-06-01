@@ -1,5 +1,14 @@
 name: Lint
 
+# Per-ref concurrency: newer commit on the same PR cancels in-progress
+# lint runs. Without this, an older commit's lint run holds the slot
+# and the newer commit's PR Checks queue can't fire (concurrency doesn't
+# propagate from caller pr-checks.yml into reusable workflows). Pinned
+# by tests/scripts/reusable-workflow-concurrency.test.js.
+concurrency:
+  group: lint-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
 on:
   workflow_call:
     inputs:

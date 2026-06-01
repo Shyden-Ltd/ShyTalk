@@ -49,8 +49,12 @@ concurrency:
   # per group, so the 3rd arrival cancels the 2nd's pending run, surfacing as
   # `playwright-web / Resolve Inputs: CANCELLED → PR Gate: FAILURE` on PRs
   # that did nothing wrong. (Observed 2026-05-09 against PR #568, #570.)
+  # cancel-in-progress: true so a newer commit on the same PR
+  # supersedes the older one's in-progress run. pr-checks.yml's
+  # cancellation does NOT propagate into reusable workflows. Pinned by
+  # tests/scripts/reusable-workflow-concurrency.test.js.
   group: playwright-tests-${{ inputs.ref || github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true

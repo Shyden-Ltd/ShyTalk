@@ -31,8 +31,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: integration-tests-${{ inputs.ref }}
-  cancel-in-progress: false
+  # Per-ref grouping already in place (was already correct). Switched
+  # cancel-in-progress to true so a newer commit on the same PR
+  # supersedes the older one's in-progress run -- pr-checks.yml's
+  # cancellation does not propagate into reusable workflows. Pinned by
+  # tests/scripts/reusable-workflow-concurrency.test.js.
+  group: integration-tests-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true

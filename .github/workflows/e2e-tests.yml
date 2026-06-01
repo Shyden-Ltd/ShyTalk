@@ -42,10 +42,18 @@ on:
 permissions:
   contents: write       # needed by allure-report.yml (gh-pages deploy)
 
-# Only one Android E2E run at a time — prevents emulator resource contention
+# Per-ref concurrency: each PR / branch has its own queue, so independent
+# PRs don't serialize through one global slot. cancel-in-progress: true so
+# a newer commit on the same PR supersedes the older one's in-progress run
+# -- pr-checks.yml's cancellation does NOT propagate into reusable
+# workflows, so this MUST be set locally. Emulator-resource contention
+# (the original rationale for the global group) only matters WITHIN a
+# single workflow run; GitHub-hosted runners are isolated VMs per-job, so
+# cross-PR contention isn't a real concern. Pinned by
+# tests/scripts/reusable-workflow-concurrency.test.js.
 concurrency:
-  group: e2e-tests
-  cancel-in-progress: false
+  group: e2e-tests-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
