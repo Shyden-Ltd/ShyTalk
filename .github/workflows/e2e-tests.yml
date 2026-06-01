@@ -123,11 +123,13 @@ jobs:
     #
     # Upstream tracker: ReactiveCircus/android-emulator-runner#400
     # ("Error on Ubuntu-24.04" — action does not yet document 24.04 as
-    # supported). The action's own CI exercises ubuntu-22.04 explicitly;
-    # 24.04 is only exercised at api-levels 24 and 34, neither of which
-    # is on ShyTalk's API 28 / 30 / 33 / 35 + pixel-profile matrix axis.
-    # So 22.04 is the empirically-stable target for THIS repo's axes
-    # (not blanket-stable for every consumer of the action).
+    # supported). The action's own CI exercises ubuntu-22.04 explicitly
+    # at the older API rows; the 24.04 / ubuntu-latest coverage is at
+    # API 24, 34, 34-ext10, 35 — exercising mostly different AVD
+    # profiles than ShyTalk's pixel_6 matrix axis. 22.04 is therefore
+    # the empirically-stable target for THIS repo (API 28 / 30 / 33 /
+    # 35 on pixel profiles) per the 4 boot failures we hit on 24.04,
+    # not a blanket statement about every consumer of the action.
     #
     # Sister jobs `resolve-inputs` + `e2e-summary` do NOT run the emulator
     # and remain on ubuntu-latest (asserted by sibling tests in
