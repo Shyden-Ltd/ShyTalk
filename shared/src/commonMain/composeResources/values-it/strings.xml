@@ -132,7 +132,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="about">Di</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="sign_out">Disconnessione</string>
+    <string name="sign_out">Esci</string>
     <!-- google-translated 2026-05-04 -->
     <string name="sign_out_confirm">Sei sicuro di voler uscire?</string>
 
@@ -1645,7 +1645,7 @@
     <!-- translated 2026-06-01 -->
     <string name="account_error_code_label">Codice errore: %1$s</string>
     <!-- translated 2026-06-01 -->
-    <string name="account_error_sign_out">Disconnessione</string>
+    <string name="account_error_sign_out">Esci</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_needs_verification_title">Verifica la tua età</string>
     <!-- translated 2026-06-01 -->

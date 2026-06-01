@@ -132,7 +132,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="about">Acerca de</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="sign_out">Desconectar</string>
+    <string name="sign_out">Cerrar sesión</string>
     <!-- google-translated 2026-05-04 -->
     <string name="sign_out_confirm">¿Estás seguro de que deseas cerrar sesión?</string>
 
@@ -1645,7 +1645,7 @@
     <!-- translated 2026-06-01 -->
     <string name="account_error_code_label">Código de error: %1$s</string>
     <!-- translated 2026-06-01 -->
-    <string name="account_error_sign_out">Desconectar</string>
+    <string name="account_error_sign_out">Cerrar sesión</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_needs_verification_title">Verifica tu edad</string>
     <!-- translated 2026-06-01 -->
