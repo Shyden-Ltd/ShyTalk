@@ -56,6 +56,13 @@ describe('e2e-tests.yml — Android emulator boot headroom', () => {
     // boundary (`    \w` at 4-space indent).
     const headerIdx = yamlText.indexOf('      - name: Run E2E tests on emulator');
     expect(headerIdx).toBeGreaterThanOrEqual(0);
+    // Defence in depth: `substring(-1)` returns the whole string in
+    // ECMA-262, so a future `.skip()` of the assert above would let
+    // the rest of beforeAll silently slice the entire file and match
+    // regexes anywhere in the YAML, producing spurious "passes".
+    // Bail out so a missing header surfaces as a clear test failure
+    // rather than as misleading green tests.
+    if (headerIdx < 0) return;
     const lines = yamlText.substring(headerIdx).split('\n');
     let endLineIdx = lines.length;
     for (let i = 1; i < lines.length; i++) {
