@@ -110,3 +110,43 @@ describe('e2e-tests.yml — Android emulator boot headroom', () => {
     expect(emulatorStepBlock).toMatch(/emulator-options:[^\n]*-no-boot-anim/);
   });
 });
+
+describe('e2e-tests.yml — test-android job runs-on pinned to ubuntu-22.04', () => {
+  let yamlText;
+
+  beforeAll(() => {
+    yamlText = fs.readFileSync(E2E_TESTS_YML, 'utf8');
+  });
+
+  // PINNED 2026-06-01 — four consecutive Android-emulator boot failures
+  // on PRs #950 / #953 traced to ubuntu-24.04 image release 20260525.161
+  // (emulator launches but adb never sees sys.boot_completed, even with
+  // emulator-boot-timeout: 1800 — 30 min — applied). ubuntu-22.04 is
+  // the known-stable target for reactivecircus/android-emulator-runner
+  // @v2.37.0. A future "modernize CI" PR that resets this to
+  // ubuntu-latest would silently re-introduce the 4-failures-in-a-row
+  // regression on the next Android-touching PR. Catch it here.
+  //
+  // Sister jobs (resolve-inputs at line ~65, e2e-summary at line ~288)
+  // do not run the emulator and SHOULD stay on ubuntu-latest — this
+  // pin is specific to test-android.
+  test('test-android job runs on ubuntu-22.04 (NOT ubuntu-latest)', () => {
+    // Find the test-android job block: from `  test-android:` to the
+    // next top-level job (2-space indent + word) or EOF.
+    const headerIdx = yamlText.indexOf('  test-android:');
+    expect(headerIdx).toBeGreaterThanOrEqual(0);
+    if (headerIdx < 0) return;
+    const after = yamlText.substring(headerIdx).split('\n');
+    let endIdx = after.length;
+    for (let i = 1; i < after.length; i++) {
+      if (/^ {2}\S/.test(after[i])) {
+        endIdx = i;
+        break;
+      }
+    }
+    const jobBlock = after.slice(0, endIdx).join('\n');
+    const runsOnMatch = jobBlock.match(/^[ \t]{1,8}runs-on:[ \t]{1,4}(\S+)/m);
+    expect(runsOnMatch).not.toBeNull();
+    expect(runsOnMatch[1]).toBe('ubuntu-22.04');
+  });
+});

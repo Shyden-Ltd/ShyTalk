@@ -111,7 +111,21 @@ jobs:
     name: "Android E2E (API ${{ matrix.api-level }}, ${{ matrix.form-factor }})"
     needs: [resolve-inputs]
     if: always() && needs.resolve-inputs.result == 'success' && needs.resolve-inputs.outputs.run_android == 'true'
-    runs-on: ubuntu-latest
+    # PINNED 2026-06-01 to ubuntu-22.04 from ubuntu-latest (currently
+    # resolves to ubuntu-24.04). Four consecutive Android-emulator boot
+    # failures on PRs #950, #953 traced to ubuntu-24.04 image release
+    # 20260525.161 — emulator process launches but `adb wait-for-device`
+    # never sees `sys.boot_completed` go true, even with the
+    # `emulator-boot-timeout: 1800` (30 min) raise applied (validated
+    # by log: timeout fired at 1874s, the full window). PR #952's heap +
+    # boot-timeout headroom addresses the budget axis but NOT this
+    # runner-image axis. ubuntu-22.04 is the known-stable target for
+    # reactivecircus/android-emulator-runner@v2.37.0 (the action's CI
+    # itself runs on 22.04). Sister jobs `resolve-inputs` + `e2e-summary`
+    # do not run the emulator and remain on ubuntu-latest. Revisit when
+    # the action ships a release that documents 24.04 as supported, or
+    # when GitHub-runner-images publishes a 24.04 fix.
+    runs-on: ubuntu-22.04
     # Bumped 2026-06-01 from 60 → 90 alongside the emulator-boot-timeout
     # raise to 1800s. Boot/test split: worst-case 30 min boot + the
     # `connectedLocalDebugAndroidTest` suite (currently ~25 min on the
