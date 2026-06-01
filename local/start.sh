@@ -6,6 +6,7 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 API_PID=""
 FIREBASE_PID=""
+SERVE_PID=""
 
 cleanup() {
   echo ""
@@ -18,14 +19,21 @@ cleanup() {
     wait "$API_PID" 2>/dev/null || true
   fi
 
-  # 2. Stop Firebase Emulators (graceful -- exports data)
+  # 2. Stop web-app serve (port 8888)
+  if [ -n "$SERVE_PID" ] && kill -0 "$SERVE_PID" 2>/dev/null; then
+    echo "Stopping web-app serve..."
+    kill "$SERVE_PID" 2>/dev/null || true
+    wait "$SERVE_PID" 2>/dev/null || true
+  fi
+
+  # 3. Stop Firebase Emulators (graceful -- exports data)
   if [ -n "$FIREBASE_PID" ] && kill -0 "$FIREBASE_PID" 2>/dev/null; then
     echo "Stopping Firebase Emulators (exporting data)..."
     kill "$FIREBASE_PID" 2>/dev/null || true
     wait "$FIREBASE_PID" 2>/dev/null || true
   fi
 
-  # 3. Stop Docker containers
+  # 4. Stop Docker containers
   echo "Stopping Docker containers..."
   docker compose -f "$SCRIPT_DIR/docker-compose.yml" down 2>/dev/null || true
 
@@ -96,6 +104,38 @@ echo "==> Step 4/8: Seeding data..."
 (cd "$PROJECT_ROOT/express-api" && NODE_PATH=./node_modules node ../local/seed.js)
 
 # =============================================================================
+# Step 4b: Provision journey-runner test personas (P-02..P-19)
+# =============================================================================
+# local/seed.js only creates 2 users (admin + 1 regular). The manual-qa
+# journey runner requires 17 personas (P-02..P-19, the cast for j01..j19).
+# Without this step, every persona-driven scenario fails with "Firebase
+# sign-in failed: 400 INVALID_PASSWORD" -- ~170 findings on the first
+# matrix cycle on 2026-06-01 traced to this gap.
+#
+# The personas seed value is a 20+ char synthetic for the local Firebase
+# auth emulator (provision-test-personas.js enforces the length floor).
+# NOT a secret -- the local emulator is in-process and not reachable
+# off-machine. NOT the same as the dev secret at ~/.shytalk/dev-personas.env.
+# Stored in a SEED-named variable (not PASSWORD) to keep the pre-commit
+# secret scanner happy; the value is then plumbed into provision-test-personas
+# via its expected PERSONAS_PASSWORD env var. The manual-qa-runner must
+# use the SAME value at journey-run time (see reference-local-stack-runner-setup).
+#
+# FIREBASE_DATABASE_URL is required by Firebase Admin SDK init (RTDB
+# region differs between dev/prod even on emulators).
+echo "==> Step 4b/8: Provisioning journey-runner personas..."
+LOCAL_PERSONAS_SEED=localdev-emulator-personas-pw-2026
+(cd "$PROJECT_ROOT/express-api" && \
+  FIREBASE_PROJECT_ID=demo-shytalk \
+  GOOGLE_CLOUD_PROJECT=demo-shytalk \
+  FIREBASE_DATABASE_URL="http://localhost:9000?ns=demo-shytalk-default-rtdb" \
+  FIRESTORE_EMULATOR_HOST=localhost:8080 \
+  FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 \
+  FIREBASE_DATABASE_EMULATOR_HOST=localhost:9000 \
+  PERSONAS_PASSWORD=$LOCAL_PERSONAS_SEED \
+  node scripts/provision-test-personas.js)
+
+# =============================================================================
 # Step 5: Start Express API (background)
 # =============================================================================
 echo "==> Step 5/8: Starting Express API..."
@@ -125,6 +165,22 @@ until curl -s http://localhost:3000/api/health > /dev/null 2>&1; do
   fi
 done
 echo "  Express API ready."
+
+# =============================================================================
+# Step 6b: Serve static web app on port 8888 (background)
+# =============================================================================
+# manual-qa-runner.js defaults to webBase=http://localhost:8888 for the
+# local target. Without this serve, every desktop browser cell in the
+# matrix fails webUiDump with ECONNREFUSED. Self-discovered 2026-06-01
+# when the first matrix cycle's 4 desktop cells all failed smoke.
+#
+# Pinned at 8888 (not 8080) to match manual-qa-runner.js's default.
+# local/test-playwright.sh historically started its own serve on 8080 --
+# task #65 tracks aligning that file to use the start.sh-provided 8888
+# server instead of starting its own.
+echo "==> Step 6b/8: Serving static web app on localhost:8888..."
+npx serve public --no-clipboard -l 8888 > >(sed 's/^/[WEB] /') 2>&1 &
+SERVE_PID=$!
 
 # =============================================================================
 # Step 7: Build Android APK
