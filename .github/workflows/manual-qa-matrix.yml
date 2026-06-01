@@ -68,7 +68,7 @@ jobs:
         # qa-runner workflow family beats partial SHA-pinning that
         # locks down only checkout while setup-node/cache/upload-artifact
         # stay on floating tags (per reviewer C3).
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
         uses: actions/setup-node@v4
