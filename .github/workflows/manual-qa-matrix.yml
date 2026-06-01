@@ -177,7 +177,7 @@ jobs:
         # diagnosis. The report itself records per-cell pass/fail/skip/
         # timeout so the operator can see exactly which cells broke.
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: qa-matrix-report-${{ inputs.target }}-${{ github.run_id }}
           path: express-api/qa-matrix-report.*
