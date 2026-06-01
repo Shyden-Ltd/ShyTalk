@@ -260,87 +260,60 @@ describe('Local-stack resource diet', () => {
     // Gap #71: local/seed.js only creates 2 users (admin + 1 regular)
     // but the journey-test runner requires 17 personas (P-02..P-19).
     // Without integration, every journey run hits "Firebase sign-in
-    // failed: 400 INVALID_PASSWORD" for ~170 scenarios. Integrate
-    // provision-test-personas.js into start.sh so the local stack is
-    // journey-ready out of the box.
-    test('invokes provision-test-personas.js after seed.js', () => {
-      // The provision step must use the same NODE_PATH trick as the
-      // seed step so it can resolve firebase-admin from express-api's
-      // node_modules.
-      expect(scriptText).toMatch(/node[^\n]*scripts\/provision-test-personas\.js/m);
+    // failed: 400 INVALID_PASSWORD" for ~170 scenarios.
+    //
+    // Uses the existing seed-personas-local.js wrapper, NOT a direct
+    // provision-test-personas.js call. The wrapper supplies the local
+    // emulator password ("localdev123" -- matches the app's baked
+    // DEV_QA_PERSONAS_PASSWORD per app/build.gradle.kts:141) instead
+    // of the 20+ char floor the dev provisioner enforces. Calling
+    // the provisioner directly would create a mismatch with the app,
+    // shifting INVALID_PASSWORD failures from runner cells to picker
+    // cells -- caught by code-reviewer agent on PR #947 round 1.
+    test('invokes seed-personas-local.js after seed.js', () => {
+      expect(scriptText).toMatch(/node[^\n]*scripts\/seed-personas-local\.js/m);
     });
 
-    // Position pin: provision MUST come after seed (seed creates the
-    // baseline Firestore docs; provision adds persona-specific
-    // structure on top). Reversing the order would break the social
-    // graph (followingIds reference uniqueIds that seed.js writes).
-    test('provision step runs AFTER seed.js', () => {
+    // Position pin: seed-personas-local MUST come after seed (seed
+    // creates the baseline Firestore docs; persona seeding adds
+    // persona-specific structure on top). Reversing the order would
+    // break the social graph (followingIds reference uniqueIds that
+    // seed.js writes).
+    test('seed-personas-local step runs AFTER seed.js', () => {
       const lines = scriptText.split('\n');
       const seedIdx = lines.findIndex((l) => /local\/seed\.js/.test(l));
-      const provIdx = lines.findIndex((l) => /scripts\/provision-test-personas\.js/.test(l));
+      const provIdx = lines.findIndex((l) => /scripts\/seed-personas-local\.js/.test(l));
       expect(seedIdx).toBeGreaterThanOrEqual(0);
       expect(provIdx).toBeGreaterThanOrEqual(0);
       expect(provIdx).toBeGreaterThan(seedIdx);
     });
 
-    // Position pin: provision MUST come BEFORE Express API startup,
-    // so personas exist when any first-launch journey scenario hits
-    // the API. Otherwise a fresh run race-conditions the personas
-    // being available.
-    test('provision step runs BEFORE Express API startup', () => {
+    // Position pin: persona-seeding MUST come BEFORE Express API
+    // startup so personas exist when any first-launch journey scenario
+    // hits the API. Otherwise a fresh run race-conditions the
+    // personas being available.
+    test('seed-personas-local step runs BEFORE Express API startup', () => {
       const lines = scriptText.split('\n');
-      const provIdx = lines.findIndex((l) => /scripts\/provision-test-personas\.js/.test(l));
+      const provIdx = lines.findIndex((l) => /scripts\/seed-personas-local\.js/.test(l));
       const apiIdx = lines.findIndex((l) => /node src\/index\.js/.test(l));
       expect(provIdx).toBeGreaterThanOrEqual(0);
       expect(apiIdx).toBeGreaterThanOrEqual(0);
       expect(provIdx).toBeLessThan(apiIdx);
     });
 
-    // PERSONAS_PASSWORD: provision-test-personas.js enforces >=20 chars.
-    // start.sh must pass an env var with a value that satisfies this OR
-    // source one from a known location. Use a deterministic 20+ char
-    // value embedded in the script for local emulator (it's only used
-    // against the local fake Firebase auth emulator, never against real
-    // dev/prod). Distinct from PERSONAS_PASSWORD at ~/.shytalk/dev-personas.env
-    // which is the dev-target secret.
-    test('passes PERSONAS_PASSWORD env var to provision-test-personas (via SEED variable indirection)', () => {
-      // start.sh defines the seed value in a `LOCAL_PERSONAS_SEED=value`
-      // variable (intentionally NOT named *_PASSWORD to keep the
-      // pre-commit secret-scanner from flagging the literal), then
-      // plumbs it to provision-test-personas.js via PERSONAS_PASSWORD
-      // (the env var the provisioner actually reads).
-      //
-      // Two-part check:
-      //   1. SEED variable definition: 20+ char value (provisioner enforces
-      //      this floor too, so we mirror the constraint).
-      //   2. PERSONAS_PASSWORD is referenced as $LOCAL_PERSONAS_SEED in the
-      //      provision invocation.
-      const seedDef = scriptText.match(/^LOCAL_PERSONAS_SEED=(\S+)/m);
-      expect(seedDef).not.toBeNull();
-      expect(seedDef[1].length).toBeGreaterThanOrEqual(20);
-
-      // Note: the dollar-sign is wrapped in a character class `[$]` to
-      // dodge an interaction with the pre-commit secret scanner (its
-      // grep treats `\x27` literally rather than as the hex escape for
-      // a single quote, so a backslash following an env-var literal
-      // triggers a false positive). `[$]` is equivalent to the escaped
-      // form in JS regex and keeps the staged diff clean.
-      const provLine = scriptText.match(
-        /PERSONAS_PASSWORD=[$]LOCAL_PERSONAS_SEED[\s\S]*?provision-test-personas\.js/,
+    // --env-file=.env.local (Node 20.6+) sets NODE_ENV=local before
+    // the script's require() chain. This makes src/utils/firebase
+    // point firebase-admin at the emulator (project demo-shytalk)
+    // instead of honoring any GOOGLE_APPLICATION_CREDENTIALS the
+    // operator may have set for dev work. Without it, a stray dev
+    // SA path would route the persona writes at real shytalk-dev --
+    // the assertSafeProject guard inside the wrapper would catch
+    // most cases but is operator-dependent. Caught by reviewer on
+    // round 1 (Critical C2).
+    test('invokes seed-personas-local with --env-file=.env.local', () => {
+      expect(scriptText).toMatch(
+        /node[^\n]*--env-file=\.env\.local[^\n]*scripts\/seed-personas-local\.js/m,
       );
-      expect(provLine).not.toBeNull();
-    });
-
-    // FIREBASE_DATABASE_URL is required by provision-test-personas.js
-    // (Firebase Admin SDK initialization). Without it the script
-    // exits with "FIREBASE_DATABASE_URL env var is required" before
-    // any provisioning happens.
-    test('passes FIREBASE_DATABASE_URL pointing at the local RTDB emulator', () => {
-      // Multi-line tolerant — same rationale as the PERSONAS_PASSWORD test.
-      const provLine = scriptText.match(
-        /FIREBASE_DATABASE_URL=["'][^"']*localhost:9000[^"']*["'][\s\S]*?provision-test-personas\.js/,
-      );
-      expect(provLine).not.toBeNull();
     });
   });
 
@@ -374,12 +347,37 @@ describe('Local-stack resource diet', () => {
 
     // cleanup() must kill SERVE_PID alongside API_PID and FIREBASE_PID
     // so a Ctrl+C doesn't leak the serve process across runs (port 8888
-    // would stay held).
-    test('cleanup() kills SERVE_PID', () => {
-      // The cleanup function should reference SERVE_PID in the same
-      // pattern as API_PID — `kill "$SERVE_PID"` guarded by `kill -0`.
-      expect(scriptText).toMatch(/kill -0 "?\$SERVE_PID"?/);
-      expect(scriptText).toMatch(/kill "?\$SERVE_PID"?/);
+    // would stay held). Anchor to the cleanup function body so a
+    // future refactor moving the kill-block outside cleanup() trips
+    // this test (Important I2 from reviewer round 1).
+    test('cleanup() kills SERVE_PID (anchored to function body)', () => {
+      const cleanupBody = scriptText.match(/^cleanup\(\) \{([\s\S]*?)^\}/m);
+      expect(cleanupBody).not.toBeNull();
+      const body = cleanupBody[1];
+      expect(body).toMatch(/kill -0 "?\$SERVE_PID"?/);
+      expect(body).toMatch(/kill "?\$SERVE_PID"?/);
+    });
+
+    // Wait-for-port-8888 readiness probe (Critical C3 from reviewer
+    // round 1). Without this, a port conflict on 8888 (leftover serve
+    // from a prior run, or another local web server) silently leaves
+    // the SERVE_PID capture pointing at a dead PID. Step 7's 2-3min
+    // Gradle build then runs for the full duration while the browser
+    // cells will still fail webUiDump with ECONNREFUSED -- exactly
+    // the gap this PR aims to close. Wait-pattern mirrors Step 6's
+    // wait-for-API; kill -0 inner check fails fast on serve death.
+    test('waits for port 8888 readiness with kill-0 fail-fast', () => {
+      // The probe is a `curl -s http://localhost:8888` polled until
+      // a response OR until SERVE_PID dies OR until MAX_WAIT seconds.
+      // Match the curl probe + the kill -0 inner check on SERVE_PID.
+      expect(scriptText).toMatch(/curl -s http:\/\/localhost:8888/);
+      // The kill -0 check must reference SERVE_PID inside the until
+      // loop body, which means it appears AFTER the curl probe AND
+      // BEFORE the "Web serve ready" success log. Using a non-greedy
+      // multi-line match between those two anchors.
+      const probeBlock = scriptText.match(/curl -s http:\/\/localhost:8888[\s\S]*?Web serve ready/);
+      expect(probeBlock).not.toBeNull();
+      expect(probeBlock[0]).toMatch(/kill -0 "?\$SERVE_PID"?/);
     });
 
     // Position: serve must come AFTER Express API ready (Step 6) but

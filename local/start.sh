@@ -112,28 +112,22 @@ echo "==> Step 4/8: Seeding data..."
 # sign-in failed: 400 INVALID_PASSWORD" -- ~170 findings on the first
 # matrix cycle on 2026-06-01 traced to this gap.
 #
-# The personas seed value is a 20+ char synthetic for the local Firebase
-# auth emulator (provision-test-personas.js enforces the length floor).
-# NOT a secret -- the local emulator is in-process and not reachable
-# off-machine. NOT the same as the dev secret at ~/.shytalk/dev-personas.env.
-# Stored in a SEED-named variable (not PASSWORD) to keep the pre-commit
-# secret scanner happy; the value is then plumbed into provision-test-personas
-# via its expected PERSONAS_PASSWORD env var. The manual-qa-runner must
-# use the SAME value at journey-run time (see reference-local-stack-runner-setup).
+# Uses the existing `seed-personas-local.js` wrapper (NOT a direct call
+# to provision-test-personas.js). The wrapper bridges the 20-char-floor
+# vs the local-flavor app's baked credential ("localdev123" per
+# app/build.gradle.kts:141). Calling the provisioner directly with a
+# 20-char synthetic value would leave the app and emulator using
+# different passwords -- the picker would still fail INVALID_PASSWORD,
+# just on a different surface.
 #
-# FIREBASE_DATABASE_URL is required by Firebase Admin SDK init (RTDB
-# region differs between dev/prod even on emulators).
+# --env-file=.env.local (Node 20.6+) sets NODE_ENV=local before the
+# script's require() chain, so src/utils/firebase points firebase-admin
+# at the emulator (project demo-shytalk) and skips any
+# GOOGLE_APPLICATION_CREDENTIALS the operator may have set for dev work.
 echo "==> Step 4b/8: Provisioning journey-runner personas..."
-LOCAL_PERSONAS_SEED=localdev-emulator-personas-pw-2026
 (cd "$PROJECT_ROOT/express-api" && \
-  FIREBASE_PROJECT_ID=demo-shytalk \
-  GOOGLE_CLOUD_PROJECT=demo-shytalk \
-  FIREBASE_DATABASE_URL="http://localhost:9000?ns=demo-shytalk-default-rtdb" \
-  FIRESTORE_EMULATOR_HOST=localhost:8080 \
-  FIREBASE_AUTH_EMULATOR_HOST=localhost:9099 \
-  FIREBASE_DATABASE_EMULATOR_HOST=localhost:9000 \
-  PERSONAS_PASSWORD=$LOCAL_PERSONAS_SEED \
-  node scripts/provision-test-personas.js)
+  NODE_PATH=./node_modules \
+  node --env-file=.env.local scripts/seed-personas-local.js)
 
 # =============================================================================
 # Step 5: Start Express API (background)
@@ -175,12 +169,36 @@ echo "  Express API ready."
 # when the first matrix cycle's 4 desktop cells all failed smoke.
 #
 # Pinned at 8888 (not 8080) to match manual-qa-runner.js's default.
-# local/test-playwright.sh historically started its own serve on 8080 --
-# task #65 tracks aligning that file to use the start.sh-provided 8888
-# server instead of starting its own.
+# local/test-playwright.sh now also relies on this serve rather than
+# starting its own redundant one on 8080.
+#
+# `serve` is pinned as a root devDependency so `npx serve` resolves
+# deterministically (no registry fetch needed on a fresh clone).
 echo "==> Step 6b/8: Serving static web app on localhost:8888..."
 npx serve public --no-clipboard -l 8888 > >(sed 's/^/[WEB] /') 2>&1 &
 SERVE_PID=$!
+
+# Readiness probe -- mirrors Step 6's wait-for-API pattern. Without
+# this, a port-8888 conflict (leftover serve from a prior run) lets
+# Step 7's Gradle build run for 2-3min while the browser cells will
+# still fail webUiDump. The kill-0 inner check fails fast when the
+# serve dies at startup, sparing the operator the full 30s wait.
+echo "  Waiting for web serve (localhost:8888)..."
+MAX_WAIT=30; WAITED=0
+until curl -s http://localhost:8888 > /dev/null 2>&1; do
+  if ! kill -0 "$SERVE_PID" 2>/dev/null; then
+    echo "ERROR: npx serve died -- check [WEB] log lines (port 8888 in use?)"
+    cleanup
+    exit 1
+  fi
+  sleep 1; WAITED=$((WAITED+1))
+  if [ $WAITED -ge $MAX_WAIT ]; then
+    echo "ERROR: Web serve did not start within ${MAX_WAIT}s"
+    cleanup
+    exit 1
+  fi
+done
+echo "  Web serve ready."
 
 # =============================================================================
 # Step 7: Build Android APK
