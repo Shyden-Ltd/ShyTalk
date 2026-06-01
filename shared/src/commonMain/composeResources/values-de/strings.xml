@@ -1636,6 +1636,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">Zurückweisen</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">Konto erfordert Aufmerksamkeit</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">Es gibt ein Problem mit deinem Konto, das wir nicht automatisch beheben können. Bitte wende dich an unser Support-Team und nenne den unten angezeigten Fehlercode — sie lösen es für dich.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">Fehlercode: %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">Abmelden</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">Bestätige dein Alter</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">Private Nachrichten und Gacha sind Funktionen ab 18 Jahren. Um sie zu nutzen, bestätige bitte dein Alter, indem du einen amtlichen Lichtbildausweis einreichst. Das Bild wird von einer Person geprüft und gelöscht, sobald eine Entscheidung getroffen wurde.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">Jetzt bestätigen</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">Funktion nicht verfügbar</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">Private Nachrichten und Gacha sind nur für Nutzer ab 18 Jahren verfügbar. Basierend auf dem Geburtsdatum in deinem Konto bist du noch nicht berechtigt. Falls du glaubst, dass dies ein Fehler ist, wende dich bitte an den Support — wir können keine Ausweisdokumente akzeptieren, um das hinterlegte Geburtsdatum zu überschreiben.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">Support kontaktieren</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">Abbrechen</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">Überprüfen Sie Ihr Alter</string>
     <!-- google-translated 2026-05-04 -->

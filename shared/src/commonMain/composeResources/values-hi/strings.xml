@@ -1638,6 +1638,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">नकार देना</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">खाते पर ध्यान देने की आवश्यकता है</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">आपके खाते में एक समस्या है जिसे हम स्वचालित रूप से ठीक नहीं कर सकते। कृपया हमारी सहायता टीम से संपर्क करें और नीचे दिए गए त्रुटि कोड का उल्लेख करें — वे इसे आपके लिए हल कर देंगे।</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">त्रुटि कोड: %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">साइन आउट</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">अपनी आयु सत्यापित करें</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">निजी संदेश और गाचा 18+ सुविधाएँ हैं। इनका उपयोग करने के लिए, कृपया सरकार द्वारा जारी पहचान पत्र जमा करके अपनी आयु सत्यापित करें। छवि की समीक्षा एक व्यक्ति द्वारा की जाती है और निर्णय होते ही हटा दी जाती है।</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">अभी सत्यापित करें</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">सुविधा उपलब्ध नहीं है</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">निजी संदेश और गाचा केवल 18 वर्ष या उससे अधिक आयु के उपयोगकर्ताओं के लिए उपलब्ध हैं। आपके खाते में दर्ज जन्मतिथि के आधार पर, आप अभी तक पात्र नहीं हैं। यदि आपको लगता है कि यह गलत है, तो कृपया सहायता से संपर्क करें — हम दर्ज की गई जन्मतिथि को बदलने के लिए पहचान पत्र स्वीकार नहीं कर सकते।</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">सहायता से संपर्क करें</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">रद्द करें</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">अपनी आयु सत्यापित करें</string>
     <!-- google-translated 2026-05-04 -->

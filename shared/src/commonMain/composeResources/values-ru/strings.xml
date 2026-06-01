@@ -1638,6 +1638,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">Увольнять</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">Учётная запись требует внимания</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">Возникла проблема с вашей учётной записью, которую мы не можем устранить автоматически. Пожалуйста, свяжитесь с нашей службой поддержки и сообщите код ошибки ниже — они помогут вам её решить.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">Код ошибки: %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">Выйти</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">Подтвердите ваш возраст</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">Личные сообщения и гача доступны только пользователям от 18 лет. Чтобы воспользоваться ими, подтвердите свой возраст, отправив документ, удостоверяющий личность. Изображение проверяется человеком и удаляется сразу после принятия решения.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">Подтвердить сейчас</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">Функция недоступна</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">Личные сообщения и гача доступны только пользователям 18 лет и старше. Согласно дате рождения в вашей учётной записи, вы пока не соответствуете требованиям. Если вы считаете, что это ошибка, обратитесь в поддержку — мы не можем принимать документы, удостоверяющие личность, для изменения указанной даты рождения.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">Связаться с поддержкой</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">Отмена</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">Подтвердите свой возраст</string>
     <!-- google-translated 2026-05-04 -->

@@ -1638,6 +1638,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">Afwijzen</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">Account vereist aandacht</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">Er is een probleem met je account dat we niet automatisch kunnen oplossen. Neem contact op met ons supportteam en vermeld de foutcode hieronder — zij lossen het voor je op.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">Foutcode: %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">Uitloggen</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">Verifieer je leeftijd</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">Privéberichten en gacha zijn 18+-functies. Om ze te gebruiken, verifieer je leeftijd door een officieel legitimatiebewijs in te dienen. De afbeelding wordt door een mens beoordeeld en verwijderd zodra er een beslissing is genomen.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">Nu verifiëren</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">Functie niet beschikbaar</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">Privéberichten en gacha zijn alleen beschikbaar voor gebruikers van 18 jaar of ouder. Op basis van de geboortedatum in je account voldoe je nog niet aan de eisen. Als je denkt dat dit onjuist is, neem dan contact op met support — we kunnen geen ID-documenten accepteren om de geregistreerde geboortedatum te overschrijven.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">Contact opnemen met support</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">Annuleren</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">Controleer uw leeftijd</string>
     <!-- google-translated 2026-05-04 -->

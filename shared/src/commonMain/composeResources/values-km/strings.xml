@@ -1723,6 +1723,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">ច្រានចោល</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">គណនីត្រូវការការយកចិត្តទុកដាក់</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">មានបញ្ហាជាមួយគណនីរបស់អ្នកដែលយើងមិនអាចជួសជុលដោយស្វ័យប្រវត្តិបាន។ សូមទាក់ទងក្រុមការងារជំនួយរបស់យើង និងផ្តល់កូដកំហុសខាងក្រោម — ពួកគេនឹងដោះស្រាយវាជូនអ្នក។</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">កូដកំហុស៖ %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">ចេញពីគណនី</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">ផ្ទៀងផ្ទាត់អាយុរបស់អ្នក</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">សារឯកជន និងហ្គាឆាគឺជាមុខងារសម្រាប់អាយុ ១៨ ឆ្នាំ​ឡើង។ ដើម្បីប្រើ សូមផ្ទៀងផ្ទាត់អាយុរបស់អ្នកដោយផ្ញើឯកសារសម្គាល់ខ្លួនរបស់រដ្ឋាភិបាល។ រូបភាពត្រូវបានត្រួតពិនិត្យដោយមនុស្ស និងលុបនៅពេលដែលការសម្រេចចិត្តត្រូវបានធ្វើ។</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">ផ្ទៀងផ្ទាត់ឥឡូវនេះ</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">មុខងារមិនមាន</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">សារឯកជន និងហ្គាឆាមានសម្រាប់តែអ្នកប្រើដែលមានអាយុ ១៨ ឆ្នាំ ឬច្រើនជាងនេះប៉ុណ្ណោះ។ ផ្អែកលើថ្ងៃខែឆ្នាំកំណើតក្នុងគណនីរបស់អ្នក អ្នកមិនទាន់មានសិទ្ធិទេ។ ប្រសិនបើអ្នកជឿថានេះខុស សូមទាក់ទងជំនួយ — យើងមិនអាចទទួលយកឯកសារសម្គាល់ខ្លួនដើម្បីផ្លាស់ប្តូរថ្ងៃខែឆ្នាំកំណើតដែលបានកត់ត្រាបានទេ។</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">ទាក់ទងជំនួយ</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">បោះបង់</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">ផ្ទៀងផ្ទាត់អាយុរបស់អ្នក។</string>
     <!-- google-translated 2026-05-04 -->

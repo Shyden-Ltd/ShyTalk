@@ -1638,6 +1638,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">Congedare</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">L'account richiede attenzione</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">C'è un problema con il tuo account che non possiamo risolvere automaticamente. Contatta il nostro team di assistenza e fornisci il codice di errore qui sotto: lo risolveranno per te.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">Codice errore: %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">Disconnessione</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">Verifica la tua età</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">I messaggi privati e la gacha sono funzionalità per utenti maggiorenni (18+). Per usarli, verifica la tua età inviando un documento d'identità ufficiale. L'immagine viene esaminata da una persona ed eliminata non appena viene presa una decisione.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">Verifica ora</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">Funzionalità non disponibile</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">I messaggi privati e la gacha sono disponibili solo per utenti di 18 anni o più. In base alla data di nascita del tuo account, non sei ancora idoneo. Se ritieni che si tratti di un errore, contatta l'assistenza: non possiamo accettare documenti d'identità per modificare la data di nascita registrata.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">Contatta l'assistenza</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">Annulla</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">Verifica la tua età</string>
     <!-- google-translated 2026-05-04 -->

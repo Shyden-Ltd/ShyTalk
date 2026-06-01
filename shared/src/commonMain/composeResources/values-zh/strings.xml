@@ -1638,6 +1638,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">解雇</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">账户需要您的关注</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">您的账户出现了我们无法自动解决的问题。请联系我们的支持团队，并提供下方的错误代码 — 他们会为您解决。</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">错误代码：%1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">登出</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">验证您的年龄</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">私信和扭蛋是 18+ 功能。要使用这些功能，请通过提交政府颁发的身份证件验证您的年龄。图片由人工审核，决定作出后立即删除。</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">立即验证</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">功能不可用</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">私信和扭蛋仅向年满 18 周岁的用户开放。根据您账户的出生日期，您尚不符合条件。如果您认为这是错误，请联系支持 — 我们无法接受身份证件提交以覆盖记录中的出生日期。</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">联系支持</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">取消</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">验证您的年龄</string>
     <!-- google-translated 2026-05-04 -->

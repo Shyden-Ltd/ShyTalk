@@ -1637,6 +1637,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">Avfärda</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">Kontot behöver uppmärksamhet</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">Det finns ett problem med ditt konto som vi inte kan åtgärda automatiskt. Kontakta vårt supportteam och ange felkoden nedan — de löser det åt dig.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">Felkod: %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">Logga ut</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">Verifiera din ålder</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">Privata meddelanden och gacha är 18+-funktioner. För att använda dem, verifiera din ålder genom att skicka in ett officiellt id-kort. Bilden granskas av en människa och raderas så snart ett beslut har fattats.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">Verifiera nu</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">Funktion otillgänglig</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">Privata meddelanden och gacha är endast tillgängliga för användare som är 18 år eller äldre. Baserat på födelsedatumet på ditt konto är du ännu inte behörig. Om du tror att detta är fel, kontakta supporten — vi kan inte godta id-handlingar för att åsidosätta det registrerade födelsedatumet.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">Kontakta supporten</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">Avbryt</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">Verifiera din ålder</string>
     <!-- google-translated 2026-05-04 -->

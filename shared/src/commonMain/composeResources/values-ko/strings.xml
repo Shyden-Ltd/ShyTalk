@@ -1638,6 +1638,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">해고하다</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">계정에 주의가 필요합니다</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">자동으로 해결할 수 없는 문제가 계정에 발생했습니다. 아래의 오류 코드를 안내하여 고객 지원팀에 문의해 주세요. 담당자가 해결해 드립니다.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">오류 코드: %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">로그아웃</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">나이 확인</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">개인 메시지와 가챠는 만 18세 이상 전용 기능입니다. 사용하려면 정부 발행 신분증을 제출하여 나이를 확인해 주세요. 이미지는 사람이 검토하며 결정이 내려지는 즉시 삭제됩니다.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">지금 확인</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">사용할 수 없는 기능</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">개인 메시지와 가챠는 만 18세 이상 사용자만 이용할 수 있습니다. 계정에 등록된 생년월일을 기준으로 아직 이용 자격이 없습니다. 잘못된 경우 고객 지원에 문의해 주세요. 등록된 생년월일을 변경하기 위한 신분증 제출은 받지 않습니다.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">고객 지원 문의</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">취소</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">나이를 확인하세요</string>
     <!-- google-translated 2026-05-04 -->

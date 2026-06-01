@@ -1638,6 +1638,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">Azletmek</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">Hesap dikkat gerektiriyor</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">Hesabınızla otomatik olarak çözemediğimiz bir sorun var. Lütfen destek ekibimizle iletişime geçin ve aşağıdaki hata kodunu paylaşın — sizin için çözeceklerdir.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">Hata kodu: %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">Oturumu Kapat</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">Yaşınızı doğrulayın</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">Özel mesajlar ve gacha, 18+ yaş kullanıcılar için ayrılmış özelliklerdir. Bunları kullanmak için resmi bir kimlik belgesi göndererek yaşınızı doğrulayın. Görüntü bir kişi tarafından incelenir ve karar verilir verilmez silinir.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">Şimdi doğrula</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">Özellik kullanılamıyor</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">Özel mesajlar ve gacha yalnızca 18 yaş ve üzeri kullanıcılar tarafından kullanılabilir. Hesabınızdaki doğum tarihine göre henüz uygun değilsiniz. Bunun bir hata olduğunu düşünüyorsanız lütfen destekle iletişime geçin — kayıtlı doğum tarihinizi değiştirmek için kimlik belgesi gönderilmesini kabul edemiyoruz.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">Destekle iletişime geç</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">İptal</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">Yaşınızı doğrulayın</string>
     <!-- google-translated 2026-05-04 -->

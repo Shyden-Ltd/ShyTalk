@@ -1634,6 +1634,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">Rejeter</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">Le compte nécessite une attention</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">Il y a un problème avec votre compte que nous ne pouvons pas résoudre automatiquement. Veuillez contacter notre équipe d'assistance et fournir le code d'erreur ci-dessous — ils le résoudront pour vous.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">Code d'erreur : %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">Se déconnecter</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">Vérifiez votre âge</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">Les messages privés et le gacha sont des fonctionnalités réservées aux 18 ans et plus. Pour les utiliser, veuillez vérifier votre âge en soumettant une pièce d'identité officielle. L'image est examinée par une personne et supprimée dès qu'une décision est prise.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">Vérifier maintenant</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">Fonctionnalité indisponible</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">Les messages privés et le gacha sont disponibles uniquement pour les utilisateurs de 18 ans ou plus. Selon la date de naissance enregistrée sur votre compte, vous n'êtes pas encore éligible. Si vous pensez qu'il s'agit d'une erreur, veuillez contacter l'assistance — nous ne pouvons pas accepter de pièces d'identité pour modifier la date de naissance enregistrée.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">Contacter l'assistance</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">Annuler</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">Vérifiez votre âge</string>
     <!-- google-translated 2026-05-04 -->

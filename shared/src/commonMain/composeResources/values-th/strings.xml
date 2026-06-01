@@ -1636,6 +1636,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">อนุญาตให้ออกไป</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">บัญชีต้องการความสนใจ</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">บัญชีของคุณมีปัญหาที่เราไม่สามารถแก้ไขโดยอัตโนมัติได้ โปรดติดต่อทีมสนับสนุนของเราพร้อมแจ้งรหัสข้อผิดพลาดด้านล่าง — พวกเขาจะแก้ไขให้คุณ</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">รหัสข้อผิดพลาด: %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">ออกจากระบบ</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">ยืนยันอายุของคุณ</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">ข้อความส่วนตัวและกาชาเป็นฟีเจอร์สำหรับผู้ใช้อายุ 18 ปีขึ้นไป ในการใช้งาน โปรดยืนยันอายุของคุณโดยส่งบัตรประจำตัวที่ออกโดยรัฐบาล รูปภาพจะได้รับการตรวจสอบโดยมนุษย์และลบทันทีที่มีการตัดสินใจ</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">ยืนยันตอนนี้</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">ฟีเจอร์ไม่พร้อมใช้งาน</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">ข้อความส่วนตัวและกาชาให้บริการเฉพาะผู้ใช้ที่มีอายุ 18 ปีขึ้นไปเท่านั้น ตามวันเกิดในบัญชีของคุณ คุณยังไม่มีคุณสมบัติ หากคุณคิดว่านี่ไม่ถูกต้อง โปรดติดต่อฝ่ายสนับสนุน — เราไม่สามารถรับการส่งบัตรประจำตัวเพื่อเปลี่ยนวันเกิดที่บันทึกไว้ได้</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">ติดต่อฝ่ายสนับสนุน</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">ยกเลิก</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">ยืนยันอายุของคุณ</string>
     <!-- google-translated 2026-05-04 -->

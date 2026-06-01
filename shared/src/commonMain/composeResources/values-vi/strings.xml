@@ -1638,6 +1638,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">Miễn nhiệm</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">Tài khoản cần được chú ý</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">Có một sự cố với tài khoản của bạn mà chúng tôi không thể tự động khắc phục. Vui lòng liên hệ với đội hỗ trợ của chúng tôi và cung cấp mã lỗi bên dưới — họ sẽ giúp bạn giải quyết.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">Mã lỗi: %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">Đăng xuất</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">Xác minh độ tuổi của bạn</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">Tin nhắn riêng và gacha là các tính năng dành cho người từ 18 tuổi trở lên. Để sử dụng, vui lòng xác minh độ tuổi của bạn bằng cách gửi giấy tờ tùy thân do chính phủ cấp. Hình ảnh sẽ được con người xem xét và xóa ngay sau khi có quyết định.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">Xác minh ngay</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">Tính năng không khả dụng</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">Tin nhắn riêng và gacha chỉ dành cho người dùng từ 18 tuổi trở lên. Dựa trên ngày sinh trên tài khoản của bạn, bạn chưa đủ điều kiện. Nếu bạn cho rằng điều này không chính xác, vui lòng liên hệ hỗ trợ — chúng tôi không thể chấp nhận giấy tờ tùy thân để thay đổi ngày sinh đã đăng ký.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">Liên hệ hỗ trợ</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">Hủy</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">Xác minh tuổi của bạn</string>
     <!-- google-translated 2026-05-04 -->

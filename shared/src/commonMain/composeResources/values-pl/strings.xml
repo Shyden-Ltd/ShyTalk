@@ -1638,6 +1638,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">Odrzucać</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">Konto wymaga uwagi</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">Wystąpił problem z Twoim kontem, którego nie możemy rozwiązać automatycznie. Skontaktuj się z naszym zespołem pomocy i podaj poniższy kod błędu — pomogą Ci go rozwiązać.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">Kod błędu: %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">Wyloguj się</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">Zweryfikuj swój wiek</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">Wiadomości prywatne i gacha to funkcje dostępne tylko dla osób w wieku 18+ lat. Aby z nich korzystać, zweryfikuj swój wiek, przesyłając urzędowy dokument tożsamości. Obraz jest sprawdzany przez człowieka i usuwany natychmiast po podjęciu decyzji.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">Zweryfikuj teraz</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">Funkcja niedostępna</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">Wiadomości prywatne i gacha są dostępne tylko dla użytkowników w wieku 18 lat lub starszych. Na podstawie daty urodzenia w Twoim koncie nie kwalifikujesz się jeszcze. Jeśli uważasz, że to błąd, skontaktuj się z pomocą — nie możemy zaakceptować dokumentów tożsamości w celu zmiany zapisanej daty urodzenia.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">Skontaktuj się z pomocą</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">Anuluj</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">Sprawdź swój wiek</string>
     <!-- google-translated 2026-05-04 -->

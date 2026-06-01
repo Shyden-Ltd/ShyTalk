@@ -1638,6 +1638,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">Membubarkan</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">Akun memerlukan perhatian</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">Ada masalah dengan akun Anda yang tidak dapat kami perbaiki secara otomatis. Silakan hubungi tim dukungan kami dan sebutkan kode kesalahan di bawah — mereka akan menyelesaikannya untuk Anda.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">Kode kesalahan: %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">Keluar</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">Verifikasi usia Anda</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">Pesan pribadi dan gacha adalah fitur 18+. Untuk menggunakannya, harap verifikasi usia Anda dengan mengirimkan kartu identitas resmi. Gambar ditinjau oleh manusia dan dihapus segera setelah keputusan dibuat.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">Verifikasi sekarang</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">Fitur tidak tersedia</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">Pesan pribadi dan gacha hanya tersedia untuk pengguna berusia 18 tahun atau lebih. Berdasarkan tanggal lahir di akun Anda, Anda belum memenuhi syarat. Jika Anda yakin ini salah, harap hubungi dukungan — kami tidak dapat menerima kartu identitas untuk mengubah tanggal lahir yang tercatat.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">Hubungi dukungan</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">Batal</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">Verifikasi usia Anda</string>
     <!-- google-translated 2026-05-04 -->

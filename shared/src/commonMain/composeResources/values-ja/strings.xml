@@ -1638,6 +1638,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">却下する</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">アカウントに問題があります</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">お客様のアカウントに、自動的に修正できない問題が発生しています。サポートチームにお問い合わせのうえ、下記のエラーコードをお伝えください。担当者が対応いたします。</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">エラーコード: %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">サインアウト</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">年齢を確認</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">プライベートメッセージとガチャは 18 歳以上限定の機能です。ご利用には、政府発行の身分証明書を提出して年齢を確認してください。画像は担当者が確認し、判定が完了次第すぐに削除されます。</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">今すぐ確認</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">ご利用いただけません</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">プライベートメッセージとガチャは 18 歳以上のお客様限定の機能です。アカウントに登録された生年月日に基づくと、まだご利用いただけません。誤りと思われる場合はサポートまでお問い合わせください。登録済みの生年月日を上書きするための身分証明書の提出は承れません。</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">サポートに問い合わせる</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">キャンセル</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">年齢を確認してください</string>
     <!-- google-translated 2026-05-04 -->

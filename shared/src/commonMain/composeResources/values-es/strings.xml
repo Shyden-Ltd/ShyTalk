@@ -1638,6 +1638,29 @@
     <!-- google-translated 2026-05-04 -->
     <string name="seasonal_event_dismiss">Despedir</string>
 
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_title">La cuenta requiere atención</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_body">Hay un problema con tu cuenta que no podemos solucionar automáticamente. Por favor, contacta con nuestro equipo de soporte y proporciona el código de error que aparece a continuación: ellos lo resolverán por ti.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_code_label">Código de error: %1$s</string>
+    <!-- translated 2026-06-01 -->
+    <string name="account_error_sign_out">Desconectar</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_title">Verifica tu edad</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_body">Los mensajes privados y la gacha son funciones para mayores de 18 años. Para usarlos, verifica tu edad enviando un documento de identidad oficial. La imagen es revisada por una persona y se elimina en cuanto se toma una decisión.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_needs_verification_confirm">Verificar ahora</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_title">Función no disponible</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_body">Los mensajes privados y la gacha solo están disponibles para usuarios de 18 años o más. Según la fecha de nacimiento de tu cuenta, todavía no eres elegible. Si crees que esto es un error, contacta con soporte: no podemos aceptar documentos de identidad para sobrescribir la fecha de nacimiento registrada.</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_sub_eighteen_confirm">Contactar con soporte</string>
+    <!-- translated 2026-06-01 -->
+    <string name="age_restriction_dismiss">Cancelar</string>
+
     <!-- google-translated 2026-05-04 -->
     <string name="age_verif_submit_title">Verifica tu edad</string>
     <!-- google-translated 2026-05-04 -->
