@@ -1649,13 +1649,13 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_needs_verification_title">تحقق من عمرك</string>
     <!-- translated 2026-06-01 -->
-    <string name="age_restriction_needs_verification_body">الرسائل الخاصة وميزة غاتشا متاحة للمستخدمين الذين تبلغ أعمارهم 18 عامًا أو أكثر فقط. للاستخدام، يرجى التحقق من عمرك عن طريق تقديم وثيقة هوية رسمية. تتم مراجعة الصورة بواسطة شخص وحذفها بمجرد اتخاذ القرار.</string>
+    <string name="age_restriction_needs_verification_body">الرسائل الخاصة وميزة غاشا متاحة للمستخدمين الذين تبلغ أعمارهم 18 عامًا أو أكثر فقط. للاستخدام، يرجى التحقق من عمرك عن طريق تقديم وثيقة هوية رسمية. تتم مراجعة الصورة بواسطة شخص وحذفها بمجرد اتخاذ القرار.</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_needs_verification_confirm">التحقق الآن</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_title">الميزة غير متاحة</string>
     <!-- translated 2026-06-01 -->
-    <string name="age_restriction_sub_eighteen_body">الرسائل الخاصة وميزة غاتشا متاحة فقط للمستخدمين الذين تبلغ أعمارهم 18 عامًا أو أكثر. بناءً على تاريخ الميلاد في حسابك، فأنت غير مؤهل بعد. إذا كنت تعتقد أن هذا خطأ، يرجى التواصل مع الدعم — لا يمكننا قبول وثائق الهوية لتغيير تاريخ الميلاد المسجل.</string>
+    <string name="age_restriction_sub_eighteen_body">الرسائل الخاصة وميزة غاشا متاحة فقط للمستخدمين الذين تبلغ أعمارهم 18 عامًا أو أكثر. بناءً على تاريخ الميلاد في حسابك، فأنت غير مؤهل بعد. إذا كنت تعتقد أن هذا خطأ، يرجى التواصل مع الدعم — لا يمكننا قبول وثائق الهوية لتغيير تاريخ الميلاد المسجل.</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_confirm">التواصل مع الدعم</string>
     <!-- translated 2026-06-01 -->

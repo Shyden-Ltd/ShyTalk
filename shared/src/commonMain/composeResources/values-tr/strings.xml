@@ -1649,13 +1649,13 @@
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_needs_verification_title">Yaşınızı doğrulayın</string>
     <!-- translated 2026-06-01 -->
-    <string name="age_restriction_needs_verification_body">Özel mesajlar ve gacha, 18+ yaş kullanıcılar için ayrılmış özelliklerdir. Bunları kullanmak için resmi bir kimlik belgesi göndererek yaşınızı doğrulayın. Görüntü bir kişi tarafından incelenir ve karar verilir verilmez silinir.</string>
+    <string name="age_restriction_needs_verification_body">Özel mesajlar ve Gaça, 18+ yaş kullanıcılar için ayrılmış özelliklerdir. Bunları kullanmak için resmi bir kimlik belgesi göndererek yaşınızı doğrulayın. Görüntü bir kişi tarafından incelenir ve karar verilir verilmez silinir.</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_needs_verification_confirm">Şimdi doğrula</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_title">Özellik kullanılamıyor</string>
     <!-- translated 2026-06-01 -->
-    <string name="age_restriction_sub_eighteen_body">Özel mesajlar ve gacha yalnızca 18 yaş ve üzeri kullanıcılar tarafından kullanılabilir. Hesabınızdaki doğum tarihine göre henüz uygun değilsiniz. Bunun bir hata olduğunu düşünüyorsanız lütfen destekle iletişime geçin — kayıtlı doğum tarihinizi değiştirmek için kimlik belgesi gönderilmesini kabul edemiyoruz.</string>
+    <string name="age_restriction_sub_eighteen_body">Özel mesajlar ve Gaça yalnızca 18 yaş ve üzeri kullanıcılar tarafından kullanılabilir. Hesabınızdaki doğum tarihine göre henüz uygun değilsiniz. Bunun bir hata olduğunu düşünüyorsanız lütfen destekle iletişime geçin — kayıtlı doğum tarihinizi değiştirmek için kimlik belgesi gönderilmesini kabul edemiyoruz.</string>
     <!-- translated 2026-06-01 -->
     <string name="age_restriction_sub_eighteen_confirm">Destekle iletişime geç</string>
     <!-- translated 2026-06-01 -->
