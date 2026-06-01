@@ -441,80 +441,8 @@ fun SignInScreen(
             // Spacer(modifier = Modifier.height(12.dp))
             // EmailSignInButton(onClick = onNavigateToEmail)
 
-            // Dev sign-in shortcut. The outer flag
-            // ([BuildVariant.isDevAffordancesVisible]) hides the button
-            // on PROD regardless of any credential misconfig (operator
-            // directive 2026-05-29) and shows it on LOCAL + DEV. The
-            // inner re-check ([BuildVariant.isDevSignInAvailable] +
-            // empty-credential probes) is defence-in-depth against:
-            //   1. A Frida-style runtime flip of the environment flag
-            //      after boot.
-            //   2. A misconfigured dev build that renders the button but
-            //      has no baked credentials — the handler shows an
-            //      actionable error in that case rather than silently
-            //      no-op-ing.
-            //
-            // Available on:
-            //   - local flavor (claude-test@shytalk.dev hardcoded; uses
-            //     Firebase emulator)
-            //   - dev flavor when built with `-PDEV_QA_EMAIL=… -PDEV_QA_PASSWORD=…`
-            //     or `DEV_QA_EMAIL=… DEV_QA_PASSWORD=…` env vars (uses real
-            //     dev Firebase)
-            if (BuildVariant.isDevAffordancesVisible) {
-                Spacer(modifier = Modifier.height(24.dp))
-                TextButton(
-                    onClick = {
-                        if (isBusy) return@TextButton
-                        if (!BuildVariant.isDevSignInAvailable) {
-                            logW(
-                                "SignInScreen",
-                                "Dev sign-in guard mismatch: button rendered but isDevSignInAvailable=false",
-                            )
-                            return@TextButton
-                        }
-                        // Both values come from `BuildVariant`, populated at
-                        // boot from Android's per-flavour `BuildConfig.LOCAL_DEV_*`
-                        // (empty on dev / prod) and from iOS's `#if DEBUG`
-                        // block in `iOSApp.swift` (nil on Release IPAs). The
-                        // empty / null check fails closed in either case.
-                        val devEmail = BuildVariant.localDevEmail
-                        val devPassword = BuildVariant.localDevPassword
-                        if (devEmail.isNullOrEmpty() || devPassword.isNullOrEmpty()) {
-                            logW(
-                                "SignInScreen",
-                                "Dev sign-in invoked but credentials are empty — non-local flavor or BuildVariant uninitialised",
-                            )
-                            return@TextButton
-                        }
-                        signingInProvider = "dev"
-                        scope.launch {
-                            try {
-                                performDevSignIn(email = devEmail, password = devPassword)
-                                viewModel.resolveAfterExternalSignIn("email", devEmail)
-                            } catch (e: kotlinx.coroutines.CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                logW("SignInScreen", "Dev sign-in failed", e)
-                                snackbarHostState.showSnackbar("Dev sign-in failed")
-                            } finally {
-                                signingInProvider = null
-                            }
-                        }
-                    },
-                    enabled = !isBusy,
-                    modifier = Modifier.testTag("dev_sign_in"),
-                ) {
-                    // Label intentionally generic ("Dev Sign-In") rather
-                    // than naming a specific flavor — the same button now
-                    // works on both local and dev builds. The watermark
-                    // overlay still shows the actual flavor for clarity.
-                    Text("Dev Sign-In", color = MaterialTheme.colorScheme.tertiary)
-                }
-            }
-
-            // Persona-picker sign-in. Distinct from the single-account Dev
-            // Sign-In above: the picker lets QA operators pick from the 17
-            // test personas (P-02..P-19) so journey scenarios that target
+            // Persona-picker sign-in. The picker lets QA operators pick
+            // from the 17 test personas (P-02..P-19) so journey scenarios that target
             // a specific persona (e.g. j04 Hayato DOB-flip, j08 Vexa cross-
             // cohort prober) can run against the right Firebase identity
             // without a rebuild between personas.
@@ -552,8 +480,11 @@ fun SignInScreen(
 
             // Persona picker dialog. Shown only when explicitly opened by
             // the button above. Defence-in-depth re-check of
-            // isPersonaPickerAvailable inside the click handler — same
-            // Frida-mitigation pattern as the single-account Dev Sign-In.
+            // isPersonaPickerAvailable inside the click handler protects
+            // against a misconfigured prod build where the visibility
+            // gate is somehow bypassed (Frida-style runtime patching) —
+            // the inner check fails closed and never reaches Firebase
+            // Auth with the persona password.
             if (showPersonaPicker && BuildVariant.isPersonaPickerAvailable) {
                 AlertDialog(
                     onDismissRequest = { if (!isBusy) showPersonaPicker = false },

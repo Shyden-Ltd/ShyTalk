@@ -36,15 +36,14 @@ struct iOSApp: App {
         options.databaseURL = "http://localhost:9000?ns=demo-shytalk"
         options.storageBucket = "demo-shytalk.appspot.com"
         FirebaseApp.configure(options: options)
-        // Dev sign-in inputs are passed in only inside #if DEBUG so the
-        // literals are stripped from Release iOS binaries at compile time —
-        // closes the "reverse-engineer the IPA to learn the seed credential"
-        // leak. The runtime gate requires `useEmulators=true` to even show
-        // the button, so on a Release build both values are nil and the
-        // SignInScreen dev path fails closed. Source of truth for the value
-        // is `local/seed.js` — keep them in sync.
-        let emulatorSeed = "localdev123"
-        let emulatorEmail = "claude-test@shytalk.dev"
+        // Persona-picker password (shared across the 17 seeded test
+        // personas) is passed in only inside #if DEBUG so the literal is
+        // stripped from Release iOS binaries at compile time — closes the
+        // "reverse-engineer the IPA to learn the seed credential" leak.
+        // Source of truth for the value is `local/seed.js` — keep in sync.
+        // (The legacy single-account dev-sign-in slot was removed
+        // 2026-06-01; only the persona-shared password remains.)
+        let emulatorPersonasSeed = "localdev123"
         // Eager device-ID compute. Calling UIDevice.identifierForVendor
         // here (after UIApplication setup, before doInitKoin → Firebase init)
         // is the safe pattern — the previous attempt to read it lazily from
@@ -68,8 +67,7 @@ struct iOSApp: App {
         // real Google OAuth client wired up to the demo project).
         KoinHelperKt.doInitKoin(
             useEmulators: true,
-            devSignInPassword: emulatorSeed,
-            devSignInEmail: emulatorEmail,
+            devPersonasPassword: emulatorPersonasSeed,
             deviceId: deviceId,
             environment: "local",
             buildVersion: buildVersion,
@@ -100,8 +98,7 @@ struct iOSApp: App {
         // the user side.
         KoinHelperKt.doInitKoin(
             useEmulators: false,
-            devSignInPassword: nil,
-            devSignInEmail: nil,
+            devPersonasPassword: nil,
             deviceId: deviceId,
             environment: "dev",
             buildVersion: buildVersion,

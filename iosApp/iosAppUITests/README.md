@@ -35,7 +35,7 @@ automatically at the end of a corpus run.
 
 ## Accessibility identifiers
 
-For the runner's `iosTap("dev_sign_in")` to find an element, the
+For the runner's `iosTap("persona_picker_open")` to find an element, the
 Compose UI must wire `accessibilityIdentifier` on the relevant node.
 The Android equivalent is `Modifier.testTag(...)` plus
 `testTagsAsResourceId = true` on the root (see W113); the iOS side

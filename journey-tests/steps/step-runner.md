@@ -29,8 +29,7 @@ A Scenario inherits the platform context from its tags. If multiple platform tag
 | Phrase | web | android | ios | api |
 |---|---|---|---|---|
 | `Given the user is signed out` | `browser_evaluate(() => { localStorage.clear(); document.cookie = '...'; })` then navigate to sign-in | `adb shell am force-stop ${pkg}` + clear app data | `xcrun simctl uninstall booted ${bundleId}` (heavy) or app's own sign-out | clear `users/{uid}` session-tracking |
-| `Given the user is signed in as "{email}"` | Firebase Auth REST `signInWithPassword` → set localStorage with idToken | tap Dev Sign-In button (if available) OR firestore-admin mint-id-token + adb deep-link | same as android | mint via firebase-admin |
-| `Given the user is signed in as a fresh dev QA account` | Use claude-qa@shytalk.dev + password from `~/.shytalk/dev-qa-credentials` | same | same | same |
+| `Given the user is signed in as "{email}"` | Firebase Auth REST `signInWithPassword` → set localStorage with idToken | open persona picker → tap row matching email (uses shared persona password) OR firestore-admin mint-id-token + adb deep-link | same as android | mint via firebase-admin |
 | `When the user signs out` | tap signout button OR clear localStorage | tap signout button via adb input tap | tap via simctl (uiautomator-equivalent) | n/a |
 
 ### Navigation

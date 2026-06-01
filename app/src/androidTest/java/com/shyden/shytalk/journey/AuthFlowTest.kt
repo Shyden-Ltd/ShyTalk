@@ -98,8 +98,8 @@ class AuthFlowTest : KoinTest {
     @After
     fun resetBuildVariant() {
         // Test fixtures must not leak isLocalEmulator=true into other suites,
-        // since the dev sign-in path is unreachable on prod and a leaked
-        // `true` would let unrelated tests trip the dev-only branch.
+        // since a leaked `true` would let unrelated tests trip the dev-only
+        // branches (persona picker visibility, emulator-only auth paths).
         // Also clear the test-only googleWebClientId so subsequent test
         // classes pick up the real (or empty) flavor value via setUp().
         BuildVariant.initLocalEmulator(false)
@@ -112,41 +112,26 @@ class AuthFlowTest : KoinTest {
     }
 
     @Test
-    fun signInScreen_devButton_hiddenWhenCredentialsEmpty() {
-        // No devEmail/devPassword passed → BuildVariant.isDevSignInAvailable
-        // returns false. The Google button anchor still renders so the
-        // assert-not-exists has a meaningful "page is loaded" precondition.
-        BuildVariant.initLocalEmulator(false, googleWebClientId = "test-google-client-id")
+    fun signInScreen_personaPicker_hiddenOnProd() {
+        // Operator directive: persona picker must be HIDDEN on prod
+        // regardless of credential presence. Lock-in test against
+        // accidental reintroduction.
+        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "test")
         val fakeAuth = authRepository as FakeAuthRepository
         fakeAuth.fakeAuthenticated = false
         fakeAuth.fakeUserId = null
 
         composeTestRule.launchSignIn()
         composeTestRule.waitForTag("signIn_googleButton")
-        // Dev button MUST NOT render when credentials are empty — that is
-        // the only path on prod (always empty) and on dev builds that
-        // weren't built with DEV_QA_EMAIL/PASSWORD env vars.
-        composeTestRule.onNodeWithTag("dev_sign_in").assertDoesNotExist()
+        composeTestRule.onNodeWithTag("persona_picker_open").assertDoesNotExist()
     }
 
     @Test
-    fun signInScreen_devButton_visibleOnLocalEmulatorWithCredentials() {
-        // Variable indirection avoids the secret-scanner pre-commit hook
-        // (matches literal `password\s*[:=]\s*["']…["']` with 8+ chars).
-        // Same pattern used elsewhere in this file's existing tests.
-        val seedPwd = "localdev123"
-        // PR #882 changed the dev-sign-in gate from `isLocalEmulator`-based
-        // (with credential-presence as the proxy for "this is a dev/local
-        // flavor") to environment-based (`isDevAffordancesVisible` =
-        // environment in {"local", "dev"}). The new gate matches the
-        // operator's defence-in-depth directive: a prod APK accidentally
-        // shipped with DEV_QA_* env vars must NEVER render the dev button.
-        // Tests now have to init the environment explicitly to match.
+    fun signInScreen_personaPicker_visibleOnLocal() {
         BuildVariant.initBuildInfo(environment = "local", buildVersion = "test")
         BuildVariant.initLocalEmulator(
             value = true,
-            devEmail = "claude-test@shytalk.dev",
-            devPassword = seedPwd,
+            devPersonasPassword = "pw",
             googleWebClientId = "test-google-client-id",
         )
         val fakeAuth = authRepository as FakeAuthRepository
@@ -154,25 +139,16 @@ class AuthFlowTest : KoinTest {
         fakeAuth.fakeUserId = null
 
         composeTestRule.launchSignIn()
-        composeTestRule.waitForTag("dev_sign_in")
-        composeTestRule.onNodeWithTag("dev_sign_in").assertIsDisplayed()
+        composeTestRule.waitForTag("persona_picker_open")
+        composeTestRule.onNodeWithTag("persona_picker_open").assertIsDisplayed()
     }
 
     @Test
-    fun signInScreen_devButton_visibleOnDevFlavorWithCredentials() {
-        // Simulates a dev flavor build where the operator passed
-        // DEV_QA_EMAIL/PASSWORD at build time. isLocalEmulator=false
-        // (the dev flavor talks to real Firebase, not the emulator),
-        // but credentials are present → button renders.
-        //
-        // See the parallel "OnLocalEmulator" test above for why the
-        // initBuildInfo call is required after PR #882 — the gate moved
-        // from credential-presence to environment-based.
+    fun signInScreen_personaPicker_visibleOnDev() {
         BuildVariant.initBuildInfo(environment = "dev", buildVersion = "test")
         BuildVariant.initLocalEmulator(
             value = false,
-            devEmail = "dev-qa@shytalk.example",
-            devPassword = "pw",
+            devPersonasPassword = "pw",
             googleWebClientId = "test-google-client-id",
         )
         val fakeAuth = authRepository as FakeAuthRepository
@@ -180,16 +156,22 @@ class AuthFlowTest : KoinTest {
         fakeAuth.fakeUserId = null
 
         composeTestRule.launchSignIn()
-        composeTestRule.waitForTag("dev_sign_in")
-        composeTestRule.onNodeWithTag("dev_sign_in").assertIsDisplayed()
+        composeTestRule.waitForTag("persona_picker_open")
+        composeTestRule.onNodeWithTag("persona_picker_open").assertIsDisplayed()
     }
 
     @Test
-    fun signInScreen_devButton_hiddenWhenLocalEmulatorButCredentialsMissing() {
-        // Defence-in-depth: even if isLocalEmulator was forced true (via
-        // a Frida-style flag flip), the button MUST stay hidden when
-        // credentials are missing — there's nothing to sign in WITH.
-        BuildVariant.initLocalEmulator(value = true, googleWebClientId = "test-google-client-id")
+    fun signInScreen_devSignInButton_doesNotExistAnywhere() {
+        // Drift catch: a future PR re-adding the dev_sign_in test tag
+        // would mean the broken single-account dev sign-in came back.
+        // Test on local (most permissive environment) — if the button
+        // doesn't render here, it doesn't render anywhere.
+        BuildVariant.initBuildInfo(environment = "local", buildVersion = "test")
+        BuildVariant.initLocalEmulator(
+            value = true,
+            devPersonasPassword = "pw",
+            googleWebClientId = "test-google-client-id",
+        )
         val fakeAuth = authRepository as FakeAuthRepository
         fakeAuth.fakeAuthenticated = false
         fakeAuth.fakeUserId = null

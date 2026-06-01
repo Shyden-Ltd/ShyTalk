@@ -39,8 +39,7 @@ The persona name resolves to a PersonaId via `_personas.md`. The platform resolv
 
 | Verb pattern | Android | iOS Sim | Web / Web Admin |
 |---|---|---|---|
-| `is signed in (?:on \S+ )?(?:with .+)?` | `adb shell am start -n {pkg}/.LoginActivity` → Dev Sign-In flow with persona credentials | XCTest UI: tap Dev Sign-In button, enter creds | Playwright `page.goto('/login.html')` then form-fill with persona email + PERSONAS_PASSWORD |
-| `signs in as a fresh dev QA account` | Ephemeral account path; generates new email | same | same |
+| `is signed in (?:on \S+ )?(?:with .+)?` | `adb shell am start -n {pkg}/.LoginActivity` → open persona picker → tap persona row (uses PERSONAS_PASSWORD) | XCTest UI: open persona picker, tap persona row | Playwright `page.goto('/login.html')` then form-fill with persona email + PERSONAS_PASSWORD |
 | `signs out` | `adb shell input tap` on signout button | XCTest UI tap | Playwright click |
 | `kills and relaunches the app` | `adb shell am force-stop {pkg}` → `am start` | `xcrun simctl terminate booted {bundle}` → `launch` | `page.reload()` |
 | `force-refreshes the JWT` | Call `securetoken.googleapis.com/v1/token?key=...` with the persona's refresh token | same REST call | same |
