@@ -21,6 +21,8 @@ const path = require('path');
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const COMPOSE_PATH = path.join(REPO_ROOT, 'local/docker-compose.yml');
 const START_SH_PATH = path.join(REPO_ROOT, 'local/start.sh');
+const ROOT_PACKAGE_PATH = path.join(REPO_ROOT, 'package.json');
+const ROOT_LOCKFILE_PATH = path.join(REPO_ROOT, 'package-lock.json');
 
 /**
  * Extract a single service's YAML block from docker-compose.yml so
@@ -391,6 +393,47 @@ describe('Local-stack resource diet', () => {
       expect(apiReadyIdx).toBeGreaterThanOrEqual(0);
       expect(serveIdx).toBeGreaterThanOrEqual(0);
       expect(serveIdx).toBeGreaterThan(apiReadyIdx);
+    });
+  });
+
+  // Round 2 coverage gap (Important I1-NEW from reviewer): when a root
+  // devDependency is added/bumped in package.json, the matching
+  // package-lock.json entry must be regenerated. Round 1 added
+  // `"serve": "^14.2.4"` to package.json but didn't run `npm install`,
+  // leaving the lockfile stale. CI uses `npm ci` (lockfile-strict)
+  // across 6 workflows and would have broken with `EUSAGE Missing:
+  // serve@^14.2.4 from lock file`. This pin catches the next
+  // recurrence pre-merge.
+  describe('package-lock.json must list every root devDependency', () => {
+    let pkg;
+    let lock;
+
+    beforeAll(() => {
+      pkg = JSON.parse(fs.readFileSync(ROOT_PACKAGE_PATH, 'utf8'));
+      lock = JSON.parse(fs.readFileSync(ROOT_LOCKFILE_PATH, 'utf8'));
+    });
+
+    test('every devDependency in package.json has an entry in package-lock.json', () => {
+      const devDeps = Object.keys(pkg.devDependencies || {});
+      // npm v7+ lockfile shape: each installed dep appears as
+      // `lock.packages["node_modules/<name>"]` (or nested for
+      // workspace deps; the root devDeps are flat).
+      const missing = devDeps.filter((name) => !lock.packages[`node_modules/${name}`]);
+      // Surface the offending names so a future drift makes the
+      // failure self-diagnosing.
+      expect(missing).toEqual([]);
+    });
+
+    // Defence-in-depth: the lockfile's `name` and `version` should
+    // match `package.json` for the root entry itself. If a manual
+    // edit to either file forgets to align them, CI's `npm ci` would
+    // still install — but downstream tools that read either file
+    // would diverge.
+    test('lockfile root entry matches package.json name + version', () => {
+      const rootEntry = lock.packages[''] || {};
+      // package.json:2 is "name": "shytalk" and no version (private).
+      // Lockfile mirrors that.
+      expect(rootEntry.name).toBe(pkg.name);
     });
   });
 
