@@ -173,6 +173,26 @@ jobs:
           force-avd-creation: true
           emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
+          # Self-discovered 2026-06-01 on PR #950: the emulator boot hit the
+          # default 600s timeout exactly (started 15:02:25, "Timeout waiting
+          # for emulator to boot" fired at 15:12:28) on a runner that ran the
+          # SAME workflow with the SAME ubuntu-24.04 image successfully ~2h
+          # earlier. Without explicit headroom, the default 600s leaves zero
+          # margin for the natural variance in emulator-boot duration on
+          # 2-core GHA runners (cold sdkmanager install + AVD create + first
+          # boot routinely takes 8-9 min of the 10 budget). Raising to 1800s
+          # gives 3× headroom; the action exits cleanly on real failure
+          # signals (process died, kvm unavailable) without waiting the full
+          # window, so the extra ceiling only costs time when boot is
+          # genuinely slow rather than broken.
+          emulator-boot-timeout: 1800
+          # Default heap is the AVD profile default (2048M for pixel_6, 1024M
+          # for older pixel_2). API 33 + google_apis system services peak
+          # well past 2GB during early boot; OOM-kill of zygote produces the
+          # silent-boot-failure signature observed here. 4096 is the
+          # action-author's documented recommendation for stable API 30+
+          # boots on GHA-hosted runners.
+          heap-size: 4096
           # The android-emulator-runner action executes `script` via /usr/bin/sh
           # (dash on Ubuntu runners), which does NOT support `set -o pipefail`.
           # Wrap the command in `bash -c` so pipefail propagates the gradlew
