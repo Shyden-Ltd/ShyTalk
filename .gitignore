@@ -39,6 +39,7 @@ public/js/roadmap-config.js
 e2e_results/
 test_output.txt
 nul
+coverage/
 
 # JVM crash/replay logs
 hs_err_pid*.log
