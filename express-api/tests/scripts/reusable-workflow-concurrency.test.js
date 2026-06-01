@@ -48,6 +48,7 @@ const CANCEL_REUSABLES = [
   'ios-tests.yml',
   'integration-tests.yml',
   'playwright-tests.yml',
+  'qa-runner-driver-checks.yml',
 ];
 
 describe('reusable workflow concurrency — per-ref + cancel-in-progress', () => {

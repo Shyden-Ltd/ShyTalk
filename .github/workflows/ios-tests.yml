@@ -41,7 +41,7 @@ permissions:
 # global slot for 2 hours while bd754dc waited). Simulator-resource
 # contention (original rationale for the global group) only matters
 # WITHIN a single workflow run, not across them. Pinned by
-# tests/scripts/reusable-workflow-concurrency.test.js.
+# express-api/tests/scripts/reusable-workflow-concurrency.test.js.
 concurrency:
   group: ios-tests-${{ inputs.ref || github.ref }}
   cancel-in-progress: true

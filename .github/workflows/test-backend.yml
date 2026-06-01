@@ -2,7 +2,7 @@ name: Test Backend
 
 # Per-ref concurrency: newer commit on the same PR cancels in-progress
 # backend-test runs. See lint.yml for the full rationale. Pinned by
-# tests/scripts/reusable-workflow-concurrency.test.js.
+# express-api/tests/scripts/reusable-workflow-concurrency.test.js.
 concurrency:
   group: test-backend-${{ inputs.ref || github.ref }}
   cancel-in-progress: true

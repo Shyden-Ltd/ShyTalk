@@ -50,7 +50,7 @@ permissions:
 # (the original rationale for the global group) only matters WITHIN a
 # single workflow run; GitHub-hosted runners are isolated VMs per-job, so
 # cross-PR contention isn't a real concern. Pinned by
-# tests/scripts/reusable-workflow-concurrency.test.js.
+# express-api/tests/scripts/reusable-workflow-concurrency.test.js.
 concurrency:
   group: e2e-tests-${{ inputs.ref || github.ref }}
   cancel-in-progress: true

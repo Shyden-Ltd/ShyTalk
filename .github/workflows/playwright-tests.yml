@@ -52,7 +52,7 @@ concurrency:
   # cancel-in-progress: true so a newer commit on the same PR
   # supersedes the older one's in-progress run. pr-checks.yml's
   # cancellation does NOT propagate into reusable workflows. Pinned by
-  # tests/scripts/reusable-workflow-concurrency.test.js.
+  # express-api/tests/scripts/reusable-workflow-concurrency.test.js.
   group: playwright-tests-${{ inputs.ref || github.ref }}
   cancel-in-progress: true
 

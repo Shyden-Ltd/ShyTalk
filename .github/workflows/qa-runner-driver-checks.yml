@@ -24,6 +24,14 @@ name: QA Runner Driver Checks
 # block. Operator's E1 (manual-qa-matrix.yml) is the full-matrix
 # entrypoint; PR-time runs the cheap subset.
 
+# Per-ref concurrency: newer commit on the same PR cancels in-progress
+# driver-check runs. See lint.yml for the full rationale + the
+# propagation gap in pr-checks.yml's concurrency. Pinned by
+# express-api/tests/scripts/reusable-workflow-concurrency.test.js.
+concurrency:
+  group: qa-runner-driver-checks-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
 on:
   workflow_call:
     inputs:
