@@ -396,6 +396,78 @@ describe('Local-stack resource diet', () => {
     });
   });
 
+  describe('start.sh — pre-flight port check before any service starts', () => {
+    let scriptText;
+
+    beforeAll(() => {
+      scriptText = fs.readFileSync(START_SH_PATH, 'utf8');
+    });
+
+    // Gap #70: when an orphan process (leftover Firebase emulator,
+    // Express API, or web serve from a prior crashed run) holds one of
+    // the required ports, start.sh's emulator chain enters a half-
+    // wedged state. Observed 2026-06-01: Firebase Emulator UI failed
+    // with "port taken" (port 4000), `wait $FIREBASE_PID` returned
+    // early, cleanup() killed Docker containers, but the underlying
+    // Firestore Java process survived as an orphan. Pre-flight port
+    // check at the top of the script aborts with a clear error BEFORE
+    // entering the wedged state.
+    //
+    // Ports checked (matches the services start.sh launches):
+    //   4000  Firebase Emulator UI
+    //   8080  Firestore emulator
+    //   9000  Realtime Database emulator
+    //   9099  Auth emulator
+    //   3000  Express API
+    //   7880  LiveKit (Docker)
+    //   9002  MinIO API (Docker; internal 9000 mapped to host 9002)
+    //   8025  Mailpit UI (Docker)
+    //   8888  npx serve (added by PR #947)
+    const REQUIRED_PORTS = [4000, 8080, 9000, 9099, 3000, 7880, 9002, 8025, 8888];
+
+    test('declares a preflight port-check step before any service start', () => {
+      // Match the step header marker. Anchored to ==> Step pattern.
+      expect(scriptText).toMatch(/==> Step 0[/.][^\n]*[Pp]re-flight/);
+    });
+
+    test.each(REQUIRED_PORTS)('preflight checks port %d', (port) => {
+      // The implementation typically loops over the ports via a shell
+      // `for port in 4000 8080 ...; do` and invokes lsof with the loop
+      // variable. So each port must appear as a LITERAL in the iteration
+      // list. Match `for port in ... <port> ...; do` so an omission is
+      // caught immediately.
+      const pattern = new RegExp(`for port in [^;]*\\b${port}\\b[^;]*;\\s*do`);
+      expect(scriptText).toMatch(pattern);
+    });
+
+    test('preflight step exits non-zero with diagnostic on conflict', () => {
+      // The preflight step must `exit` (not just echo a warning) when
+      // a port is held -- otherwise start.sh proceeds into the wedged
+      // state. The exit must be paired with an error message
+      // mentioning the conflicting port so the operator knows which
+      // service to stop.
+      const preflightBlock = scriptText.match(
+        /==> Step 0[/.][^\n]*[Pp]re-flight[\s\S]*?==> Step 1/,
+      );
+      expect(preflightBlock).not.toBeNull();
+      expect(preflightBlock[0]).toMatch(/exit 1/);
+      expect(preflightBlock[0]).toMatch(/port|Port|PORT/);
+    });
+
+    test('preflight runs BEFORE docker compose up', () => {
+      const lines = scriptText.split('\n');
+      const preflightIdx = lines.findIndex((l) => /==> Step 0[/.][^\n]*[Pp]re-flight/.test(l));
+      // Match `docker compose -f ... docker-compose.yml" up` (the yml
+      // path may be quoted, hence the `["']?` between yml and ` up`).
+      const dockerIdx = lines.findIndex((l) =>
+        /docker compose -f.*docker-compose\.yml["']? up/.test(l),
+      );
+      expect(preflightIdx).toBeGreaterThanOrEqual(0);
+      expect(dockerIdx).toBeGreaterThanOrEqual(0);
+      expect(preflightIdx).toBeLessThan(dockerIdx);
+    });
+  });
+
   // Round 2 coverage gap (Important I1-NEW from reviewer): when a root
   // devDependency is added/bumped in package.json, the matching
   // package-lock.json entry must be regenerated. Round 1 added

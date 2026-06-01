@@ -43,6 +43,45 @@ cleanup() {
 trap 'cleanup; exit 0' INT TERM
 
 # =============================================================================
+# Step 0: Pre-flight port check
+# =============================================================================
+# When an orphan process (leftover Firebase emulator, Express API, or web
+# serve from a prior crashed run) holds one of the required ports,
+# start.sh's emulator chain enters a half-wedged state. Self-discovered
+# 2026-06-01: Firebase Emulator UI failed with "port taken" (port 4000),
+# `wait $FIREBASE_PID` returned early, cleanup() killed Docker containers,
+# but the underlying Firestore Java process survived as an orphan. Each
+# subsequent start.sh invocation hit the same UI port conflict + re-entered
+# the wedged state.
+#
+# Pre-flight aborts with a clear error BEFORE any service starts. The
+# operator either kills the orphan process(es) or runs `bash local/stop.sh`
+# for a clean slate. Pinned by
+# express-api/tests/scripts/local-stack-resource-diet.test.js.
+echo "==> Step 0/8: Pre-flight port check..."
+PREFLIGHT_CONFLICTS=()
+for port in 4000 8080 9000 9099 3000 7880 9002 8025 8888; do
+  pid=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null | head -1)
+  if [ -n "$pid" ]; then
+    cmd=$(ps -o comm= -p "$pid" 2>/dev/null | head -1)
+    PREFLIGHT_CONFLICTS+=("port $port held by PID $pid ($cmd)")
+  fi
+done
+if [ ${#PREFLIGHT_CONFLICTS[@]} -gt 0 ]; then
+  echo "ERROR: Cannot start local stack -- required port(s) already in use:" >&2
+  for c in "${PREFLIGHT_CONFLICTS[@]}"; do
+    echo "  - $c" >&2
+  done
+  echo "" >&2
+  echo "Fix: run \`bash local/stop.sh\` to release orphan processes from a" >&2
+  echo "prior run, or kill the offending PID(s) manually via" >&2
+  echo "\`kill -9 <PID>\`. Re-run \`bash local/start.sh\` after the ports" >&2
+  echo "are free." >&2
+  exit 1
+fi
+echo "  All required ports are free."
+
+# =============================================================================
 # Step 1: Docker Compose up (LiveKit + MinIO + Mailpit)
 # =============================================================================
 echo "==> Step 1/8: Starting Docker containers (LiveKit, MinIO, Mailpit)..."
