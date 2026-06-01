@@ -673,7 +673,17 @@ jobs:
     if: |
       always() &&
       needs.deploy-android-prod.result == 'success'
-    runs-on: ubuntu-latest
+    # PINNED 2026-06-01 to ubuntu-22.04 — same rationale as the
+    # `test-android` job in e2e-tests.yml (see the comment block
+    # there for full provenance). This smoke job uses the IDENTICAL
+    # reactivecircus/android-emulator-runner@v2.37.0 SHA on API 33 +
+    # pixel_6 + x86_64 + google_apis, so it inherits the same
+    # ubuntu-24.04 emulator-boot regression. Failing here would
+    # block a prod release on every cut, which is worse than the
+    # PR-gate impact that triggered the pin. Revisit alongside the
+    # e2e-tests.yml pin when the action ships a release that
+    # documents 24.04 as supported.
+    runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
       - name: Download debug APK
