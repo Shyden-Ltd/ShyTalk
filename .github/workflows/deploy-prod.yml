@@ -507,7 +507,7 @@ jobs:
             -scheme iosApp \
             -sdk iphoneos \
             -configuration Release \
-            -archivePath $RUNNER_TEMP/iosApp.xcarchive \
+            -archivePath "$RUNNER_TEMP/iosApp.xcarchive" \
             DEVELOPMENT_TEAM=F3XX4PM3MF \
             CURRENT_PROJECT_VERSION="${VERSION_CODE}" \
             MARKETING_VERSION="${VERSION_NAME}" \
@@ -522,9 +522,9 @@ jobs:
           cd iosApp
           xcodebuild \
             -exportArchive \
-            -archivePath $RUNNER_TEMP/iosApp.xcarchive \
+            -archivePath "$RUNNER_TEMP/iosApp.xcarchive" \
             -exportOptionsPlist ExportOptions.plist \
-            -exportPath $RUNNER_TEMP/export \
+            -exportPath "$RUNNER_TEMP/export" \
             -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8" \
             -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
             -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
