@@ -237,7 +237,15 @@ describe('ios-tests.yml — build-ios job cold-cache survival', () => {
   beforeAll(() => {
     yamlText = fs.readFileSync(IOS_TESTS_PATH, 'utf8');
     buildIosJob = extractJob(yamlText, 'build-ios');
-    cacheStep = extractStep(yamlText, 'Cache Kotlin/Native (~/.konan)');
+    // Step renamed 2026-06-01: the combined actions/cache step was
+    // split into restore + save to bound the cache-save blast radius
+    // (the combined step's POST-job upload would hang for hours on
+    // ~/.konan's multi-GB payload, with job-level timeout-minutes
+    // unable to enforce a kill on the synthetic POST). The restore
+    // step carries the key + restore-keys + path that this suite
+    // pins; the save step's safety attributes are pinned separately
+    // by ios-konan-cache-no-hang.test.js.
+    cacheStep = extractStep(yamlText, 'Restore Kotlin/Native cache (~/.konan)');
     kmpBuildStep = extractStep(yamlText, 'Build shared KMP framework for iOS Simulator');
   });
 
@@ -259,11 +267,11 @@ describe('ios-tests.yml — build-ios job cold-cache survival', () => {
   // The full SHA string contains 'actions/cache' as a substring, so
   // asserting both would be redundant — a single assertion on the
   // pinned SHA covers both the action choice and the version pin.
-  test('Cache Kotlin/Native step pins actions/cache@v5.0.5 SHA (matches deploy-dev)', () => {
-    expect(cacheStep).toContain('actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae');
+  test('Restore Kotlin/Native step pins actions/cache/restore@v5.0.5 SHA (matches deploy-dev)', () => {
+    expect(cacheStep).toContain('actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae');
   });
 
-  test('Cache Kotlin/Native step targets ~/.konan', () => {
+  test('Restore Kotlin/Native step targets ~/.konan', () => {
     expect(cacheStep).toContain('~/.konan');
   });
 
@@ -292,8 +300,14 @@ describe('ios-tests.yml — build-ios job cold-cache survival', () => {
     // in the step that mentions `konan-` carries the `${{ runner.os }}`
     // scope. Guards a future PR that adds a second restore-key entry
     // with a bare `konan-` prefix (which the prior single-line check
-    // would silently miss). The `restore-keys:` literal itself is
-    // excluded — it's the keyword, not a cache key value.
+    // would silently miss).
+    //
+    // Exclusions (none of these are cache key values):
+    //   - `restore-keys:` — the keyword itself
+    //   - `id:` — step identifier (e.g. `id: konan-cache-restore`),
+    //     added 2026-06-01 when the cache step was split into
+    //     restore + save and the restore step gained an `id` so the
+    //     save step can gate on its cache-hit output.
     //
     // Filter-into-violations pattern (not forEach + nested expect):
     // when a forEach-with-expect fails, Jest reports only the offending
@@ -303,7 +317,10 @@ describe('ios-tests.yml — build-ios job cold-cache survival', () => {
     // the test in a debugger.
     const violations = lines.filter(
       (l) =>
-        l.includes('konan-') && !l.includes('restore-keys:') && !l.includes('${{ runner.os }}'),
+        l.includes('konan-') &&
+        !l.includes('restore-keys:') &&
+        !/^\s*id:\s+/.test(l) &&
+        !l.includes('${{ runner.os }}'),
     );
     expect(violations).toEqual([]);
   });
@@ -312,8 +329,14 @@ describe('ios-tests.yml — build-ios job cold-cache survival', () => {
   // (`      - name: …`), not the bare `- name: …` substring. A YAML
   // comment can never literally equal that prefix because comments
   // are introduced by `#`, not 6 spaces.
-  test('konan cache step appears before the Build shared KMP framework step', () => {
-    const cacheStepIdx = yamlText.indexOf('      - name: Cache Kotlin/Native (~/.konan)');
+  //
+  // Renamed 2026-06-01 from `Cache Kotlin/Native (~/.konan)` to the
+  // restore step (cache step split into restore + save). The ordering
+  // invariant remains the same: restore must happen before the
+  // KMP build step so the cache is warm when the build resolves
+  // K/N artifacts.
+  test('Restore Kotlin/Native cache step appears before the Build shared KMP framework step', () => {
+    const cacheStepIdx = yamlText.indexOf('      - name: Restore Kotlin/Native cache (~/.konan)');
     const kmpBuildIdx = yamlText.indexOf(
       '      - name: Build shared KMP framework for iOS Simulator',
     );

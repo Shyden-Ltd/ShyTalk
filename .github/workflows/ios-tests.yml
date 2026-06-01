@@ -203,8 +203,23 @@ jobs:
       # Cache key uses the gradle versions-catalog hash so a Kotlin
       # version bump correctly invalidates; restore-keys provide
       # partial warmth on bumps.
-      - name: Cache Kotlin/Native (~/.konan)
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      #
+      # Split into restore (here) + save (at the END of the job, after
+      # the heavy build steps) instead of using the combined
+      # `actions/cache` step. Self-discovered 2026-06-01 on a hung
+      # 9858c4c run that stalled in "Post Cache Kotlin/Native"
+      # in_progress for 2h+ because actions/cache's synthetic POST
+      # step does NOT respect job-level `timeout-minutes: 90`. The
+      # split lets the save run as a regular step where the safety
+      # attributes (`timeout-minutes` + `continue-on-error: true`)
+      # actually apply. `~/.konan` is multi-GB and is the largest cache
+      # in the job — the smaller caches (SwiftPM/DerivedData/Pods/
+      # CocoaPods specs) all completed cleanly, so they keep using the
+      # combined action. Pinned by
+      # tests/scripts/ios-konan-cache-no-hang.test.js.
+      - name: Restore Kotlin/Native cache (~/.konan)
+        id: konan-cache-restore
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
@@ -417,6 +432,34 @@ jobs:
           name: ios-test-bundle
           path: build/ios-derived-data/
           retention-days: 3
+
+      # Paired with the Restore Kotlin/Native cache step at the head
+      # of the job. Runs as a regular step (NOT a synthetic POST step
+      # like combined actions/cache) so the safety attributes below
+      # actually apply when GitHub's cache backend hangs mid-upload.
+      #
+      # `if:` skips re-uploading on cache-hit — the restored bundle
+      # is byte-identical so a save would be wasted bytes.
+      #
+      # `timeout-minutes: 10` bounds the blast radius. Real ~/.konan
+      # uploads complete in 1-3 min on a green network; 10 min is 3×
+      # the worst legitimate duration. A longer hang means the cache
+      # backend is the bottleneck and the job should bail rather than
+      # eat the runner's 6h budget.
+      #
+      # `continue-on-error: true` because the cache is a perf
+      # optimization, not a correctness gate. A failed/timed-out save
+      # means the NEXT cold-cache run pays the K/N-toolchain download
+      # tax (~hundreds of MB, ~2-3 min) — annoying but not blocking.
+      # Don't fail the iOS Build job for it.
+      - name: Save Kotlin/Native cache (~/.konan)
+        if: always() && steps.konan-cache-restore.outputs.cache-hit != 'true'
+        timeout-minutes: 10
+        continue-on-error: true
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.konan
+          key: ${{ steps.konan-cache-restore.outputs.cache-primary-key }}
 
     outputs:
       has_tests: ${{ steps.check-tests.outputs.has_tests }}
