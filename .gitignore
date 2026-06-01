@@ -69,6 +69,12 @@ backups/
 iosApp/iosApp.xcodeproj/xcuserdata/
 iosApp/iosApp.xcodeproj/project.xcworkspace/xcuserdata/
 iosApp/iosApp.xcworkspace/xcuserdata/
+# Xcode regenerates SPM Package.resolved inside the xcodeproj bundle when
+# someone opens iosApp.xcodeproj instead of the canonical iosApp.xcworkspace.
+# The canonical copy at iosApp/iosApp.xcworkspace/xcshareddata/swiftpm/
+# Package.resolved IS tracked; this duplicate must stay ignored to prevent
+# drift between the two workspaces.
+iosApp/iosApp.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 iosApp/DerivedData/
 iosApp/Pods/
 *.xcarchive
