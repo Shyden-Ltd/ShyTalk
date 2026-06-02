@@ -240,6 +240,41 @@ describe('admin click-handler re-entrancy', () => {
     );
   });
 
+  // Multi-step wizard step-locks: nuclear-reset.js + sync-prod.js have
+  // a `let *StepLock = false` module-level flag that prevents step-1→2
+  // rapid double-tap from skipping the "last warning" UI. Without
+  // pinning by name, GUARD_PATTERN[0] (`btn.disabled`) is enough to
+  // pass the broader invariant — but a future refactor could silently
+  // remove the step-lock and re-introduce the UX-skip bug. Pin by
+  // name, structure, and the setTimeout-cleared release semantics.
+  test('multi-step wizard handlers carry a step-transition lock', () => {
+    const cases = [
+      { file: 'public/admin/js/nuclear-reset.js', name: 'nuclearStepLock' },
+      { file: 'public/admin/js/sync-prod.js', name: 'syncStepLock' },
+    ];
+    const issues = [];
+    for (const { file, name } of cases) {
+      const src = fs.readFileSync(path.join(REPO_ROOT, file), 'utf-8');
+      // Declaration: `let <name> = false`.
+      const declRe = new RegExp(`let\\s+${name}\\s*=\\s*false`);
+      // Entry check: `if (<name>) return`.
+      const checkRe = new RegExp(`if\\s*\\(\\s*${name}\\s*\\)\\s*return`);
+      // Set then schedule release on next macrotask:
+      //   <name> = true;
+      //   ...setTimeout(() => { <name> = false; }, 0)
+      const setRe = new RegExp(`${name}\\s*=\\s*true\\b`);
+      const releaseRe = new RegExp(`setTimeout\\([^,]+${name}\\s*=\\s*false[^,]+,\\s*0\\s*\\)`);
+      if (!declRe.test(src)) issues.push(`${file}: missing \`let ${name} = false\` declaration`);
+      if (!checkRe.test(src)) issues.push(`${file}: missing \`if (${name}) return\` entry check`);
+      if (!setRe.test(src)) issues.push(`${file}: missing \`${name} = true\` set`);
+      if (!releaseRe.test(src)) {
+        issues.push(`${file}: missing setTimeout(0) release of ${name}`);
+      }
+    }
+    if (issues.length === 0) return;
+    throw new Error(`Multi-step wizard step-lock invariants violated:\n  ${issues.join('\n  ')}`);
+  });
+
   // revokeWarning is a thin-wrapper handler: registered via
   // `() => revokeWarning(uid, w.id, w.gcsDeduction, rb)` so the AST
   // scan sees the arrow wrapper (no confirm/apiCall in the wrapper body

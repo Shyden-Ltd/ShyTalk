@@ -351,7 +351,36 @@ test.describe('Admin Maintenance Tab', () => {
     await expect(overlay).not.toHaveClass(/visible/);
   });
 
-  // ── Test 16: Mute toggle ──
+  // ── Test 16: Step-transition lock — rapid double-tap at step 1
+  //            cannot skip the "last warning" UI ──
+  test('rapid double-tap at step 1 does not skip step 2', async ({ page }) => {
+    // Open nuclear dialog
+    await page.locator('#reset-all-btn').click();
+    const overlay = page.locator('#nuclear-overlay');
+    await expect(overlay).toHaveClass(/visible/);
+
+    // Dispatch two synchronous click events on #nuclear-proceed in the
+    // same browser-side macrotask. JavaScript is single-threaded, so
+    // both events queue before either handler runs. Without the
+    // `nuclearStepLock` flag, both handlers would advance `step`
+    // synchronously: click 1 sets step=2, click 2 reads step===2 and
+    // skips straight to step 3 — bypassing the "last warning" screen.
+    await page.evaluate(() => {
+      const btn = document.getElementById('nuclear-proceed')!;
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Must be at Step 2 (not Step 3) — step-lock blocked the second click.
+    await expect(page.locator('#nuclear-step-label')).toHaveText('Step 2 of 3');
+    await expect(page.locator('#nuclear-title')).toContainText('last warning');
+
+    // Cancel to clean up
+    await page.locator('#nuclear-cancel').click();
+    await expect(overlay).not.toHaveClass(/visible/);
+  });
+
+  // ── Test 17: Mute toggle ──
   test('mute button toggles mute state during nuclear dialog', async ({ page }) => {
     // Open nuclear dialog
     await page.locator('#reset-all-btn').click();
