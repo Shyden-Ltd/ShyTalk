@@ -82,6 +82,47 @@ describe('admin/translations.js', () => {
     const content = fs.readFileSync(filePath, 'utf-8');
     expect(content).toMatch(/^\s{2}km:/m);
   });
+
+  // ── Reverse-parity: en keys ⊆ each non-en locale's keys ─────────
+  //
+  // The block-presence tests above caught missing locale blocks but not
+  // missing keys *within* a block — that asymmetry is what let the
+  // age-segregation feature add 41 en-only keys silently in May 2026.
+  // At runtime, the admin panel falls back to en for undefined keys,
+  // so the user sees English mixed with their selected locale —
+  // indistinguishable from intended behavior to a casual eye.
+  //
+  // Parser shared with translate-admin-strings.js so the test fails
+  // loudly if either side gets the JS-object grammar wrong, instead of
+  // a duplicate regex silently disagreeing.
+  describe('locale parity', () => {
+    const { parseAdminTranslations } = require(
+      path.join(__dirname, '..', '..', '..', 'scripts', 'translate-admin-strings.js'),
+    );
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const parsed = parseAdminTranslations(content);
+
+    test('en block has a sanity-check minimum of 100 keys', () => {
+      expect(Object.keys(parsed.en || {}).length).toBeGreaterThanOrEqual(100);
+    });
+
+    test.each(ALL_LANGUAGES)('%s contains every en key', (lang) => {
+      const enKeys = Object.keys(parsed.en);
+      const localeKeys = new Set(Object.keys(parsed[lang] || {}));
+      const missing = enKeys.filter((k) => !localeKeys.has(k)).sort();
+      // Per-locale assertion shape mirrors compose-resources-locale-parity:
+      // the failure message names every missing key so a single CI run
+      // pinpoints exactly what needs translating.
+      expect({ lang, missing }).toEqual({ lang, missing: [] });
+    });
+
+    test.each(ALL_LANGUAGES)('%s has no extra keys vs en (no drift)', (lang) => {
+      const enKeySet = new Set(Object.keys(parsed.en));
+      const localeKeys = Object.keys(parsed[lang] || {});
+      const extra = localeKeys.filter((k) => !enKeySet.has(k)).sort();
+      expect({ lang, extra }).toEqual({ lang, extra: [] });
+    });
+  });
 });
 
 // ── Legal translations ─────────────────────────────────────────
