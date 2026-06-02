@@ -243,7 +243,10 @@ jobs:
         run: ssh ubuntu@213.35.98.160 "cd ~/shytalk-api && tar czf /tmp/api-previous.tar.gz --exclude='node_modules' --exclude='.env' ."
 
       - name: Deploy Express API to Singapore (prod)
+        env:
+          DEPLOYED_SHA: ${{ needs.validate-release.outputs.commit-sha }}
         run: |
+          set -euo pipefail
           cd express-api
           tar czf /tmp/api.tar.gz --exclude='node_modules' --exclude='.env' .
           scp /tmp/api.tar.gz ubuntu@213.35.98.160:/tmp/
@@ -254,7 +257,23 @@ jobs:
           # time), which for branch/commit deploys is NOT the same as the
           # checked-out deploy ref — using it would write a misleading SHA to
           # .deployed-sha and pass the health check while serving different code.
-          ssh ubuntu@213.35.98.160 "cd ~/shytalk-api && tar xzf /tmp/api.tar.gz && echo '${{ needs.validate-release.outputs.commit-sha }}' > .deployed-sha && npm install --omit=dev && DEPLOYED_SHA='${{ needs.validate-release.outputs.commit-sha }}' pm2 restart shytalk-api --update-env"
+          #
+          # Build the remote-side deploy script LOCALLY (with the SHA baked
+          # in via the env-block expansion), then scp + exec. Mirrors
+          # deploy-dev.yml: splits local-expansion from the ssh invocation
+          # so neither shellcheck SC2029 (client-side ssh-string expansion)
+          # nor SC2087 (heredoc expansion locale) fires — the local heredoc
+          # is the only place expansion happens, which is exactly its
+          # purpose.
+          cat > /tmp/deploy-remote.sh <<EOF
+          set -e
+          cd ~/shytalk-api && tar xzf /tmp/api.tar.gz
+          echo '${DEPLOYED_SHA}' > .deployed-sha
+          npm install --omit=dev
+          DEPLOYED_SHA='${DEPLOYED_SHA}' pm2 restart shytalk-api --update-env
+          EOF
+          scp /tmp/deploy-remote.sh ubuntu@213.35.98.160:/tmp/
+          ssh ubuntu@213.35.98.160 'bash /tmp/deploy-remote.sh'
 
       - name: Verify prod API health
         run: |
