@@ -123,8 +123,17 @@ test.describe('Admin Users - Security Subtab', () => {
     expect(otpMetrics.limit).toBe(100);
     expect(typeof otpMetrics.count).toBe('number');
 
-    // Verify displayed count matches API count
-    expect(Number(otpCountText!.trim())).toBe(otpMetrics.count);
+    // Verify displayed count matches API count. The DOM element starts
+    // with placeholder "—" before the metrics fetch resolves, and the
+    // initial `toBeVisible` check above only confirms the element is
+    // mounted (not populated). A synchronous `textContent()` here used
+    // to read "—" mid-load → `Number("—")` → NaN → flaky failure.
+    // Poll until the displayed number matches the API value.
+    await expect
+      .poll(async () => Number((await otpCount.textContent())?.trim() ?? ''), {
+        timeout: 10_000,
+      })
+      .toBe(otpMetrics.count);
   });
 
   // ── Test 4: Reset PIN lockout ──
@@ -227,6 +236,22 @@ test.describe('Admin Users - Security Subtab', () => {
     // Wait for PIN status to load
     const pinStatusGrid = page.locator('#pin-status-grid');
     await expect(pinStatusGrid).toBeVisible({ timeout: 15_000 });
+
+    // Wait for the async data-fetch to replace placeholder "—" values
+    // before reading. The grid becomes "visible" before the fetch
+    // resolves; reading textContent too early returns "—" placeholders
+    // and downstream `Number(...)` calls become NaN → flaky fail. Gate
+    // all reads on `#pin-set` having a real value (Yes/No), which is
+    // the LAST field populated by the loader.
+    await page.waitForFunction(
+      () => {
+        const setEl = document.getElementById('pin-set');
+        const txt = setEl?.textContent?.trim();
+        return txt === 'Yes' || txt === 'No';
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
 
     // Read all displayed PIN fields
     const pinSetText = (await page.locator('#pin-set').textContent())!.trim();

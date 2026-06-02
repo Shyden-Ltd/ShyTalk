@@ -364,6 +364,17 @@ async function loadReports() {
     if (reportSearchQuery) url += `&search=${encodeURIComponent(reportSearchQuery)}`;
     const result = await apiCall('GET', url);
 
+    // Re-check resolveInProgress AFTER the API call returns. The poll
+    // callback already checks this gate before INVOKING loadReports
+    // (reports.js:340), but an in-flight loadReports started before the
+    // resolve click can complete its render mid-resolve and wipe form
+    // state (radio selection, action selection, admin note). This
+    // surfaced as the admin-cross-tab severity-radio flake — the user's
+    // sev-2 selection got wiped by a poll that started before the click,
+    // and `resolveReport` then read sev-1 default. Bailing here is
+    // safe: the next poll tick (15s later) will re-fetch.
+    if (resolveInProgress) return;
+
     if (result.users.length === 0) {
       reportsList.innerHTML = '<div style="color:var(--text2);font-size:13px;font-style:italic;">No reports found</div>';
       reportCards = [];

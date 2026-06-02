@@ -383,8 +383,13 @@ test.describe('Admin Fun Facts', () => {
     // Card should show "Inactive" badge
     await expect(factCard(page, factText)).toContainText('Inactive', { timeout: 10_000 });
 
-    // API: the user-facing endpoint should NOT include this fact
-    const activeFacts = await testData.api.get('/api/fun-facts');
+    // API: the user-facing endpoint should NOT include this fact.
+    // Cache-bust the request — `/api/fun-facts` sets
+    // `Cache-Control: public, max-age=3600`, and the worker-scoped
+    // Playwright context honours that across tests. Without a buster
+    // the first call's cached body (with this fact still active) is
+    // served back, masking the deactivation.
+    const activeFacts = await testData.api.get(`/api/fun-facts?_=${Date.now()}`);
     const activeIds = (Array.isArray(activeFacts) ? activeFacts : activeFacts.funFacts || [])
       .map((f: any) => f.text);
     expect(activeIds).not.toContain(factText);
@@ -401,8 +406,9 @@ test.describe('Admin Fun Facts', () => {
     // Card should show "Active" badge
     await expect(factCard(page, factText)).toContainText('Active', { timeout: 10_000 });
 
-    // API: user-facing endpoint should now include it again
-    const reactiveFacts = await testData.api.get('/api/fun-facts');
+    // API: user-facing endpoint should now include it again — same
+    // cache-buster as above.
+    const reactiveFacts = await testData.api.get(`/api/fun-facts?_=${Date.now()}`);
     const reactiveTexts = (Array.isArray(reactiveFacts) ? reactiveFacts : reactiveFacts.funFacts || [])
       .map((f: any) => f.text);
     expect(reactiveTexts).toContain(factText);
