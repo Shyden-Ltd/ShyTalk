@@ -78,6 +78,25 @@ test.describe('Admin Appeals', () => {
     });
   });
 
+  // Restore the worker-scoped test user to unsuspended on exit, so
+  // subsequent test files (admin-keyboard, admin-users-*, etc.) see a
+  // clean baseline. Without this, files alphabetically after
+  // admin-appeals would inherit the suspension and observe
+  // `displayName = "Suspended Account"` whenever they read the user
+  // — surfaced as the "Enter key triggers user search" flake. Per
+  // [[feedback-test-isolation-no-leaks]]: tests that mutate
+  // worker-shared state MUST restore it before exiting.
+  test.afterAll(async ({ testData }) => {
+    try {
+      await testData.api.post(`/api/user/${testData.user.uniqueId}/unsuspend`, {});
+    } catch (err) {
+      // Best-effort: the test file itself may have already unsuspended
+      // (e.g. test 4 verifies approve-unsuspends). Re-calling unsuspend
+      // on a non-suspended user is a 200 no-op on the server.
+      console.warn(`[admin-appeals.afterAll] unsuspend failed: ${(err as Error).message}`);
+    }
+  });
+
   test.beforeEach(async ({ page }) => {
     await adminLogin(page);
     await navigateToTab(page, 'Appeals');

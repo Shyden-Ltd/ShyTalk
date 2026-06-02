@@ -88,6 +88,18 @@ test.describe('Admin Cross-Tab Interactions', () => {
     await adminLogin(page);
   });
 
+  // Test 2 ("appeal approve results in user unsuspension") explicitly
+  // suspends the worker-scoped user before driving the appeal flow.
+  // If any step before the appeal-approve fails, the user is left
+  // suspended for every subsequent test file (admin-keyboard,
+  // admin-users-*, etc.) — surfaced as the "Enter key triggers user
+  // search" flake (displayName mask = "Suspended Account"). Defensive
+  // afterAll keeps the leak contained even when a flaky retry leaves
+  // mid-test state. Per [[feedback-test-isolation-no-leaks]].
+  test.afterAll(async ({ testData }) => {
+    await unsuspendAndResetGcs(testData);
+  });
+
   // ── Test 1: Report resolve-as-warned → warning in user history ──
   test('report warned resolution creates warning in user moderation history', async ({ page, testData }) => {
     // Seed a fresh report
@@ -117,17 +129,35 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // radio stays unchecked, the resolve handler falls back to severity 1
     // (`reports.js:694`: `const severity = sevInput ? Number(...) : 1`),
     // and this test then asserts "Severity 2" against an actual Severity 1
-    // warning. Set `checked` and fire `change` directly on the hidden input
-    // so the resolve handler reads our chosen severity. `setChecked()` and
-    // `click({force:true})` both fail Playwright's visibility check on the
-    // display:none input, so we go straight to evaluate.
-    await firstCard.locator(`input[name="sev-${uid}"][value="2"]`).evaluate((el: HTMLInputElement) => {
-      el.checked = true;
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-
-    const resolveBtn = firstCard.locator(`button[data-resolve-first="${uid}"]`);
-    await resolveBtn.click();
+    // warning.
+    //
+    // Two compounding issues to avoid:
+    //   1. Setting `el.checked = true` on a single radio doesn't auto-
+    //      uncheck siblings — that behaviour only fires on USER input
+    //      (click/tap), not programmatic `.checked` assignment. The
+    //      default sev-1 stays checked alongside sev-2 and reports.js's
+    //      `querySelector(':checked')` returns whichever appears first
+    //      in DOM order (sev-1).
+    //   2. Reports tab polls every 15s and re-renders the cards
+    //      (reports.js:338), wiping the radio state. If the poll fires
+    //      between our `set checked` and the resolve click, the radio
+    //      reverts to default-checked sev-1. `resolveInProgress` only
+    //      pauses polling AFTER the resolve handler starts — so the race
+    //      window is the gap we open by `await`ing between operations.
+    //
+    // Fix: do "set sev-2 checked + uncheck siblings + click resolve" in
+    // a SINGLE synchronous browser-side function. JavaScript is single-
+    // threaded; the setInterval poll cannot fire mid-function. By the
+    // time control returns to JS, the resolve handler has already set
+    // `resolveInProgress = true`, so subsequent polls are also suppressed.
+    await firstCard.evaluate((card: HTMLElement, evalUid: string) => {
+      const group = card.querySelectorAll<HTMLInputElement>(`input[name="sev-${evalUid}"]`);
+      for (const r of group) r.checked = (r.value === '2');
+      const target = card.querySelector<HTMLInputElement>(`input[name="sev-${evalUid}"][value="2"]`);
+      if (target) target.dispatchEvent(new Event('change', { bubbles: true }));
+      const resolveBtn = card.querySelector<HTMLButtonElement>(`button[data-resolve-first="${evalUid}"]`);
+      if (resolveBtn) resolveBtn.click();
+    }, uid);
 
     // Handle confirm dialog
     const confirmBtn = page.locator('.confirm-ok');

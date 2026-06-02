@@ -42,6 +42,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { googleTranslate, sleep, GOOGLE_QUOTA_EXHAUSTED } = require(
+  path.join(__dirname, 'lib', 'google-translate.js'),
+);
+
 const LOCALES = [
   'ar',
   'de',
@@ -111,48 +115,6 @@ function escapeXml(s) {
     .replace(/'/g, "\\'");
 }
 
-// ── Google Translate free endpoint ────────────────────────────────
-
-/**
- * Call Google Translate's undocumented public endpoint.
- *
- * This is the same endpoint used by https://translate.google.com/ for
- * unauthenticated users. It's free, rate-limited (~100 req/min before
- * a 429), and stable enough for batch CLI use. The official Cloud
- * Translation API requires a paid GCP project + key — overkill for
- * this volume.
- *
- * Throws on rate-limit / network failure so the caller can fall back
- * to Claude.
- */
-async function googleTranslate(text, targetLang) {
-  // Map our locale codes to Google's expectations.
-  const tl = targetLang === 'zh' ? 'zh-CN' : targetLang;
-  const url =
-    'https://translate.googleapis.com/translate_a/single' +
-    '?client=gtx&sl=en&dt=t' +
-    `&tl=${encodeURIComponent(tl)}` +
-    `&q=${encodeURIComponent(text)}`;
-  const resp = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; ShyTalk-Translate/1.0)' },
-  });
-  if (resp.status === 429) {
-    throw new Error('GOOGLE_QUOTA_EXHAUSTED');
-  }
-  if (!resp.ok) {
-    throw new Error(`Google Translate HTTP ${resp.status}`);
-  }
-  const json = await resp.json();
-  // The response shape is `[[[ "translated", "source", null, null, ... ], ...], ...]`
-  // Multiple sentences can come back as separate sub-arrays — concatenate them.
-  if (!Array.isArray(json) || !Array.isArray(json[0])) {
-    throw new Error('Unexpected Google Translate response shape');
-  }
-  return json[0]
-    .map((seg) => (Array.isArray(seg) ? seg[0] : ''))
-    .join('');
-}
-
 // ── Locale file mutation ──────────────────────────────────────────
 
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -212,7 +174,7 @@ async function translateKeys(keys, englishMap, apply) {
         console.log(`  ✓ ${locale}/${key}: ${translated.slice(0, 60)}${translated.length > 60 ? '…' : ''}`);
         googleCount++;
       } catch (err) {
-        if (err.message === 'GOOGLE_QUOTA_EXHAUSTED') {
+        if (err.message === GOOGLE_QUOTA_EXHAUSTED) {
           console.warn(`  ⚠ Google quota — fallback for ${locale}/${key}`);
           claudeTodo.push({ locale, key, en: enValue });
         } else {
@@ -227,10 +189,6 @@ async function translateKeys(keys, englishMap, apply) {
   }
 
   return { googleCount, skipCount, claudeTodo };
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ── Retranslate non-Google scan ───────────────────────────────────
@@ -310,7 +268,7 @@ async function retranslateClaudeStrings(apply) {
         upgraded++;
         if (upgraded % 50 === 0) console.log(`  ↑ ${locale} progress: ${upgraded}/${total}`);
       } catch (err) {
-        if (err.message === 'GOOGLE_QUOTA_EXHAUSTED') {
+        if (err.message === GOOGLE_QUOTA_EXHAUSTED) {
           console.warn(`  ⚠ Google quota — stopping. Resume with same command later.`);
           quotaHit = true;
           break;

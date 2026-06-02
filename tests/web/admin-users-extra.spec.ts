@@ -33,6 +33,21 @@ async function reloadAndSearch(page: Page, uniqueId: string): Promise<void> {
 test.describe('Admin Users - Extra Profile Fields', () => {
   test.describe.configure({ mode: 'serial' });
 
+  // Test 16 ("pre-suspension profile displays when user is suspended")
+  // suspends the worker-scoped user mid-test and only unsuspends at
+  // the END. If any assertion before line 453 fails, the user is left
+  // suspended for downstream test files — same leak class as
+  // admin-appeals and admin-cross-tab. Defensive afterAll keeps the
+  // leak contained even when test 16 dies mid-flight. Per
+  // [[feedback-test-isolation-no-leaks]].
+  test.afterAll(async ({ testData }) => {
+    try {
+      await testData.api.post(`/api/user/${testData.user.uniqueId}/unsuspend`, {});
+    } catch (err) {
+      console.warn(`[admin-users-extra.afterAll] unsuspend failed: ${(err as Error).message}`);
+    }
+  });
+
   test.beforeEach(async ({ page, testData }) => {
     await adminLogin(page);
     await navigateToTab(page, 'Users');

@@ -338,6 +338,15 @@ function startReportListener() {
   reportsPollInterval = setInterval(async () => {
     if (_getCurrentTab() !== 'reports') return;
     if (resolveInProgress) return;
+    // Test-only escape hatch: when `window.__SHYTALK_PAUSE_REPORTS_POLL__`
+    // is truthy, skip the poll. Playwright tests that exercise
+    // keyboard shortcuts on the Reports tab race against the 15s
+    // re-render — the poll can fire between e.g. pressing D and
+    // asserting the resulting action-select value, wiping the user's
+    // selection. Tests set this flag at the start of `beforeEach`
+    // and let it stay set for the test's lifetime. Production code
+    // never sets the flag so the poll behaviour is unchanged.
+    if (typeof window !== 'undefined' && window.__SHYTALK_PAUSE_REPORTS_POLL__) return;
     try { await loadReports(); } catch (_) {}
   }, 15000);
 }
@@ -363,6 +372,17 @@ async function loadReports() {
     let url = `/api/reports?status=${currentReportFilter}`;
     if (reportSearchQuery) url += `&search=${encodeURIComponent(reportSearchQuery)}`;
     const result = await apiCall('GET', url);
+
+    // Re-check resolveInProgress AFTER the API call returns. The poll
+    // callback already checks this gate before INVOKING loadReports
+    // (reports.js:340), but an in-flight loadReports started before the
+    // resolve click can complete its render mid-resolve and wipe form
+    // state (radio selection, action selection, admin note). This
+    // surfaced as the admin-cross-tab severity-radio flake — the user's
+    // sev-2 selection got wiped by a poll that started before the click,
+    // and `resolveReport` then read sev-1 default. Bailing here is
+    // safe: the next poll tick (15s later) will re-fetch.
+    if (resolveInProgress) return;
 
     if (result.users.length === 0) {
       reportsList.innerHTML = '<div style="color:var(--text2);font-size:13px;font-style:italic;">No reports found</div>';
@@ -528,6 +548,19 @@ function renderMoreCards() {
 
   // Wire up newly rendered cards
   wireUpReportCards();
+
+  // Restore the user's selection across re-renders. The 15s poll
+  // (line 338) rebuilds `reportCards` from scratch, wiping the
+  // `.selected` class from whatever was highlighted. Without this,
+  // pressing ArrowDown to select a card then waiting more than 15s
+  // (or any other test/UI flow that races against the poll) loses
+  // the selection silently — and the W/S/D/Enter shortcuts that
+  // depend on `selectedCardIndex` quietly become no-ops. Re-apply
+  // the highlight here so the selection survives every render.
+  if (selectedCardIndex >= 0 && selectedCardIndex < reportCards.length) {
+    highlightCard();
+  }
+
 }
 
 function wireUpReportCards() {

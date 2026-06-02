@@ -85,9 +85,12 @@ if [ "$HAS_WORKFLOW_CHANGES" = "true" ] && command -v actionlint >/dev/null 2>&1
   echo "  ✓ actionlint passed"
 fi
 
-# Skip SonarCloud for workflow-only changes
+# Skip SonarCloud for workflow-only changes. Include public/ so changes
+# to admin/translations.js (and other web JS bundles tested under
+# express-api/tests/scripts/) trigger the parity guards on push — the
+# 41-key admin gap accumulated silently because public/ was excluded.
 HAS_CODE=false
-if echo "$CHANGED" | grep -qE '^(app/|shared/|express-api/src/|express-api/tests/)'; then
+if echo "$CHANGED" | grep -qE '^(app/|shared/|express-api/src/|express-api/tests/|public/)'; then
   HAS_CODE=true
 fi
 

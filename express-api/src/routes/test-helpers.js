@@ -421,6 +421,12 @@ router.post('/test/write/:collection', async (req, res) => {
       // tests. Teardown sweeps these via the `_testRun` field
       // (deleteTestData → otherCollections list).
       'coinPackages',
+      // Allow tests that DELETE a device binding to re-seed it after
+      // verifying deletion, so worker-scoped shared state is restored
+      // for subsequent test files (per
+      // [[feedback-test-isolation-no-leaks]]: never leak state between
+      // tests). admin-maintenance.spec.ts:58 was the first caller.
+      'deviceBindings',
     ];
     if (!ALLOWED_COLLECTIONS.includes(collection)) {
       return res.status(400).json({ error: 'Collection not allowed' });

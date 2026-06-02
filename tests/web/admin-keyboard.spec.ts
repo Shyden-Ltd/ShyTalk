@@ -41,6 +41,16 @@ test.describe('Admin Keyboard Shortcuts', () => {
     // Keyboard shortcuts are desktop-only — skip on mobile viewports
     const projectName = test.info().project.name;
     test.skip(projectName.includes('mobile'), 'Keyboard shortcuts not applicable on mobile viewports');
+    // Pause the Reports tab's 15s poll BEFORE login so the flag is
+    // present in the JS realm by the time the Reports tab's
+    // activate() schedules its setInterval. See reports.js:340 + the
+    // __SHYTALK_PAUSE_REPORTS_POLL__ escape hatch added 2026-06-02.
+    // Without this the poll fires mid-test and wipes the action-
+    // select / sev-radio / selected-card state the keyboard handlers
+    // operate on, flaking W/S/D/Enter shortcut tests.
+    await page.addInitScript(() => {
+      (window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
+    });
     await adminLogin(page);
   });
 

@@ -359,7 +359,15 @@ test.describe('Admin Fun Facts', () => {
 
   // ── Test 9: Active toggle — deactivate, API excludes, re-activate ──
   test('active toggle controls user-facing visibility', async ({ page, testData }) => {
+    // testData is a lazy fixture — accessing .funFact.text NOW triggers
+    // the fixture's setup which creates the fact in Firestore. The
+    // beforeEach's goToFunFacts() already ran with the list that did NOT
+    // include this fact (because the access hadn't fired yet), so the
+    // card won't appear in the cached UI list. Re-navigate to force a
+    // reload that picks up the just-created fact. Matches the pattern
+    // used by test 1 ("seeded fact appears in list").
     const factText = testData.funFact.text;
+    await goToFunFacts(page);
 
     // Deactivate the seeded fact
     const card = factCard(page, factText);
@@ -375,11 +383,29 @@ test.describe('Admin Fun Facts', () => {
     // Card should show "Inactive" badge
     await expect(factCard(page, factText)).toContainText('Inactive', { timeout: 10_000 });
 
-    // API: the user-facing endpoint should NOT include this fact
-    const activeFacts = await testData.api.get('/api/fun-facts');
-    const activeIds = (Array.isArray(activeFacts) ? activeFacts : activeFacts.funFacts || [])
-      .map((f: any) => f.text);
-    expect(activeIds).not.toContain(factText);
+    // API: the user-facing endpoint should NOT include this fact.
+    // Two compounding flakes here:
+    //   1. `/api/fun-facts` sets `Cache-Control: public, max-age=3600`,
+    //      and the worker-scoped Playwright context honours that
+    //      across tests. Cache-bust via `?_=${Date.now()}` per request.
+    //   2. The Firestore emulator's `where('isActive', '==', true)`
+    //      query can lag write propagation by 100-500ms (eventual
+    //      consistency in the emulator's snapshot listener path). A
+    //      one-shot GET right after the admin save may still see the
+    //      pre-deactivation snapshot. Poll until the absence settles
+    //      or timeout.
+    await expect
+      .poll(
+        async () => {
+          const facts = await testData.api.get(`/api/fun-facts?_=${Date.now()}`);
+          const ids = (Array.isArray(facts) ? facts : facts.funFacts || []).map(
+            (f: any) => f.text,
+          );
+          return ids.includes(factText);
+        },
+        { timeout: 20_000, intervals: [200, 500, 1000, 2000] },
+      )
+      .toBe(false);
 
     // Re-activate
     const inactiveCard = factCard(page, factText);
@@ -393,11 +419,21 @@ test.describe('Admin Fun Facts', () => {
     // Card should show "Active" badge
     await expect(factCard(page, factText)).toContainText('Active', { timeout: 10_000 });
 
-    // API: user-facing endpoint should now include it again
-    const reactiveFacts = await testData.api.get('/api/fun-facts');
-    const reactiveTexts = (Array.isArray(reactiveFacts) ? reactiveFacts : reactiveFacts.funFacts || [])
-      .map((f: any) => f.text);
-    expect(reactiveTexts).toContain(factText);
+    // API: user-facing endpoint should now include it again — same
+    // cache-buster + poll-until-consistent treatment as the
+    // deactivation check above.
+    await expect
+      .poll(
+        async () => {
+          const facts = await testData.api.get(`/api/fun-facts?_=${Date.now()}`);
+          const ids = (Array.isArray(facts) ? facts : facts.funFacts || []).map(
+            (f: any) => f.text,
+          );
+          return ids.includes(factText);
+        },
+        { timeout: 20_000, intervals: [200, 500, 1000, 2000] },
+      )
+      .toBe(true);
   });
 
   // ── Test 10: Empty state — delete all, verify message, re-seed ──

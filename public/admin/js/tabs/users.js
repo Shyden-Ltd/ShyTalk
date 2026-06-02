@@ -1303,6 +1303,14 @@ export function wireModerationListeners() {
   // Direct warning
   const directWarnBtn = $("#direct-warn-btn");
   if (directWarnBtn) directWarnBtn.addEventListener("click", async () => {
+    // Re-entrancy guard: queued click events still fire even after
+    // `button.disabled = true` (setting disabled only blocks NEW user
+    // clicks). The double-click test surfaces this — rapid double-tap
+    // queues two events, the first opens confirm(), the second is held
+    // in the event queue until the first handler returns, then runs
+    // even though the button is now disabled. Bail at the top of any
+    // handler that's the second-in-flight.
+    if (directWarnBtn.disabled) return;
     if (!currentUid) return;
     const reason = $("#direct-warn-reason")?.value;
     if (!reason) { showToast(window.tAdmin("toast_select_reason"), "error"); return; }

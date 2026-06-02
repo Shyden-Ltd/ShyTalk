@@ -357,10 +357,17 @@ test.describe('Admin Users - Moderation Subtab', () => {
       await expect(page.locator('#direct-warn-btn')).toContainText('Issue Warning', { timeout: 15_000 });
     }
 
-    // Verify at least 3 warnings appear in history (previous tests may have left revoked warnings)
-    const warningItems = page.locator('#warning-history-list .warning-item');
-    const count = await warningItems.count();
-    expect(count).toBeGreaterThanOrEqual(3);
+    // Verify at least 3 warnings appear in history (previous tests may have left revoked warnings).
+    // `users.js`'s warn-button handler does not AWAIT loadWarningHistory after the
+    // API call — the button re-enables (and the test moves on) BEFORE the history
+    // list has been re-rendered with the new entry. A one-shot `.count()` reads
+    // the stale (empty) list and fails with "Received: 0". Poll via `expect.poll`
+    // until the count settles to >= 3 or we hit the timeout.
+    await expect
+      .poll(() => page.locator('#warning-history-list .warning-item').count(), {
+        timeout: 15_000,
+      })
+      .toBeGreaterThanOrEqual(3);
 
     // Clean up: revoke all 3 via API
     const warningsData = await testData.api.get(`/api/user/${uid}/warnings`);

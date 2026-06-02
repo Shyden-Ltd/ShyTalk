@@ -243,7 +243,10 @@ jobs:
         run: ssh ubuntu@213.35.98.160 "cd ~/shytalk-api && tar czf /tmp/api-previous.tar.gz --exclude='node_modules' --exclude='.env' ."
 
       - name: Deploy Express API to Singapore (prod)
+        env:
+          DEPLOYED_SHA: ${{ needs.validate-release.outputs.commit-sha }}
         run: |
+          set -euo pipefail
           cd express-api
           tar czf /tmp/api.tar.gz --exclude='node_modules' --exclude='.env' .
           scp /tmp/api.tar.gz ubuntu@213.35.98.160:/tmp/
@@ -254,7 +257,23 @@ jobs:
           # time), which for branch/commit deploys is NOT the same as the
           # checked-out deploy ref — using it would write a misleading SHA to
           # .deployed-sha and pass the health check while serving different code.
-          ssh ubuntu@213.35.98.160 "cd ~/shytalk-api && tar xzf /tmp/api.tar.gz && echo '${{ needs.validate-release.outputs.commit-sha }}' > .deployed-sha && npm install --omit=dev && DEPLOYED_SHA='${{ needs.validate-release.outputs.commit-sha }}' pm2 restart shytalk-api --update-env"
+          #
+          # Build the remote-side deploy script LOCALLY (with the SHA baked
+          # in via the env-block expansion), then scp + exec. Mirrors
+          # deploy-dev.yml: splits local-expansion from the ssh invocation
+          # so neither shellcheck SC2029 (client-side ssh-string expansion)
+          # nor SC2087 (heredoc expansion locale) fires — the local heredoc
+          # is the only place expansion happens, which is exactly its
+          # purpose.
+          cat > /tmp/deploy-remote.sh <<EOF
+          set -e
+          cd ~/shytalk-api && tar xzf /tmp/api.tar.gz
+          echo '${DEPLOYED_SHA}' > .deployed-sha
+          npm install --omit=dev
+          DEPLOYED_SHA='${DEPLOYED_SHA}' pm2 restart shytalk-api --update-env
+          EOF
+          scp /tmp/deploy-remote.sh ubuntu@213.35.98.160:/tmp/
+          ssh ubuntu@213.35.98.160 'bash /tmp/deploy-remote.sh'
 
       - name: Verify prod API health
         run: |
@@ -436,8 +455,12 @@ jobs:
 
       # See deploy-dev.yml's matching step for rationale — ~/.konan is the
       # only big iOS-relevant cache that setup-gradle doesn't cover.
-      - name: Cache Kotlin/Native (~/.konan)
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      # Split into restore (here) + save (at job tail) per ios-tests.yml
+      # PR #951's pattern — combined actions/cache's synthetic POST save
+      # can hang past timeout-minutes when GitHub's cache backend is slow.
+      - name: Restore Kotlin/Native cache (~/.konan)
+        id: konan-cache-restore
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
@@ -503,7 +526,7 @@ jobs:
             -scheme iosApp \
             -sdk iphoneos \
             -configuration Release \
-            -archivePath $RUNNER_TEMP/iosApp.xcarchive \
+            -archivePath "$RUNNER_TEMP/iosApp.xcarchive" \
             DEVELOPMENT_TEAM=F3XX4PM3MF \
             CURRENT_PROJECT_VERSION="${VERSION_CODE}" \
             MARKETING_VERSION="${VERSION_NAME}" \
@@ -518,9 +541,9 @@ jobs:
           cd iosApp
           xcodebuild \
             -exportArchive \
-            -archivePath $RUNNER_TEMP/iosApp.xcarchive \
+            -archivePath "$RUNNER_TEMP/iosApp.xcarchive" \
             -exportOptionsPlist ExportOptions.plist \
-            -exportPath $RUNNER_TEMP/export \
+            -exportPath "$RUNNER_TEMP/export" \
             -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_ID}.p8" \
             -authenticationKeyID "$APP_STORE_CONNECT_KEY_ID" \
             -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
@@ -582,6 +605,20 @@ jobs:
         uses: ./.github/actions/cleanup-ios-signing
         with:
           app-store-connect-key-id: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+
+      # Paired with the Restore Kotlin/Native cache step at the head
+      # of the job. Regular step (NOT a synthetic POST) so timeout-
+      # minutes + continue-on-error actually apply when GitHub's cache
+      # backend hangs mid-upload. See ios-tests.yml PR #951 for full
+      # rationale.
+      - name: Save Kotlin/Native cache (~/.konan)
+        if: always() && steps.konan-cache-restore.outputs.cache-hit != 'true'
+        timeout-minutes: 10
+        continue-on-error: true
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.konan
+          key: ${{ steps.konan-cache-restore.outputs.cache-primary-key }}
 
   # ── Smoke tests (after deploys) ────────────────────────────
   # Smoke tests are split per-surface so the GitHub UI status reflects what
@@ -775,8 +812,11 @@ jobs:
       # Mirror of deploy-ios-prod's konan cache. ~/.konan isn't covered by
       # setup-gradle. Sharing the same cache key across all iOS jobs lets
       # them all hit the same warm cache once any of them has populated it.
-      - name: Cache Kotlin/Native (~/.konan)
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+      # Split restore/save per ios-tests.yml PR #951 — combined POST save
+      # can hang past timeout-minutes.
+      - name: Restore Kotlin/Native cache (~/.konan)
+        id: konan-cache-restore
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: ~/.konan
           key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
@@ -864,6 +904,20 @@ jobs:
 
           echo "No crashes detected — iOS app boots successfully"
           xcrun simctl shutdown "$DEVICE_ID" || true
+
+      # Paired with the Restore Kotlin/Native cache step at the head
+      # of the job. Regular step (NOT a synthetic POST) so timeout-
+      # minutes + continue-on-error actually apply when GitHub's cache
+      # backend hangs mid-upload. See ios-tests.yml PR #951 for full
+      # rationale.
+      - name: Save Kotlin/Native cache (~/.konan)
+        if: always() && steps.konan-cache-restore.outputs.cache-hit != 'true'
+        timeout-minutes: 10
+        continue-on-error: true
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ~/.konan
+          key: ${{ steps.konan-cache-restore.outputs.cache-primary-key }}
 
   # ── Alert on failure ───────────────────────────────────────
   alert-desync:

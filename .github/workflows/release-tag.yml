@@ -143,8 +143,16 @@ jobs:
           # First-parent walk on main; allowlist of feat/fix/perf
           # Conventional-Commits prefixes; reverts summarised separately.
           # See release.yml for the rationale on each filter choice.
-          # shellcheck disable=SC2086
-          ALL_LINES=$(git log $RANGE --first-parent --pretty=format:'%s')
+          #
+          # Use a bash array to pass RANGE: an unquoted `$RANGE` triggers
+          # SC2086, but a quoted `"$RANGE"` would pass an empty-string
+          # argument to git in the first-release-ever case (RANGE="") and
+          # confuse the rev parser. Array expands to ZERO args when
+          # RANGE is empty, ONE arg when set ("tag..HEAD"). See
+          # release.yml for the same pattern.
+          range_args=()
+          [ -n "$RANGE" ] && range_args=("$RANGE")
+          ALL_LINES=$(git log "${range_args[@]}" --first-parent --pretty=format:'%s')
           USER_FACING=$(echo "$ALL_LINES" \
             | { grep -E '^(feat|fix|perf)(\(.+\))?:' || [ $? -eq 1 ]; } \
             | sed -E 's/^[a-z]+(\([^)]*\))?: //')
