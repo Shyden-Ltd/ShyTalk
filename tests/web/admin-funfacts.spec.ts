@@ -359,7 +359,15 @@ test.describe('Admin Fun Facts', () => {
 
   // ── Test 9: Active toggle — deactivate, API excludes, re-activate ──
   test('active toggle controls user-facing visibility', async ({ page, testData }) => {
+    // testData is a lazy fixture — accessing .funFact.text NOW triggers
+    // the fixture's setup which creates the fact in Firestore. The
+    // beforeEach's goToFunFacts() already ran with the list that did NOT
+    // include this fact (because the access hadn't fired yet), so the
+    // card won't appear in the cached UI list. Re-navigate to force a
+    // reload that picks up the just-created fact. Matches the pattern
+    // used by test 1 ("seeded fact appears in list").
     const factText = testData.funFact.text;
+    await goToFunFacts(page);
 
     // Deactivate the seeded fact
     const card = factCard(page, factText);

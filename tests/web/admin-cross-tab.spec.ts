@@ -119,34 +119,33 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // and this test then asserts "Severity 2" against an actual Severity 1
     // warning.
     //
-    // Setting `el.checked = true` on a single radio is NOT enough either:
-    // the HTML radio-group auto-uncheck-siblings behaviour fires on USER
-    // input (click/tap), not on programmatic `.checked` assignment. The
-    // default sev-1 stayed checked alongside sev-2, and reports.js's
-    // `querySelector(':checked')` returned whichever appeared first in
-    // DOM order (sev-1) — explaining the intermittent severity-1
-    // warning we saw on retry-pass flaky runs. Fix: walk the whole
-    // radio group, set checked explicitly on each one (true for the
-    // target value, false for everyone else), then dispatch change.
-    await firstCard.locator(`input[name="sev-${uid}"][value="2"]`).evaluate((targetRadio: HTMLInputElement) => {
-      const group = document.querySelectorAll<HTMLInputElement>(
-        `input[name="${targetRadio.name}"]`,
-      );
-      for (const r of group) {
-        r.checked = r === targetRadio;
-      }
-      targetRadio.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-
-    // Defensive: verify the radio group settled into exactly one
-    // checked input with the expected value. If a future regression
-    // breaks the group-uncheck loop, this turns the silent severity-1
-    // bug into a loud test failure.
-    await expect(firstCard.locator(`input[name="sev-${uid}"]:checked`)).toHaveCount(1);
-    await expect(firstCard.locator(`input[name="sev-${uid}"][value="2"]`)).toBeChecked();
-
-    const resolveBtn = firstCard.locator(`button[data-resolve-first="${uid}"]`);
-    await resolveBtn.click();
+    // Two compounding issues to avoid:
+    //   1. Setting `el.checked = true` on a single radio doesn't auto-
+    //      uncheck siblings — that behaviour only fires on USER input
+    //      (click/tap), not programmatic `.checked` assignment. The
+    //      default sev-1 stays checked alongside sev-2 and reports.js's
+    //      `querySelector(':checked')` returns whichever appears first
+    //      in DOM order (sev-1).
+    //   2. Reports tab polls every 15s and re-renders the cards
+    //      (reports.js:338), wiping the radio state. If the poll fires
+    //      between our `set checked` and the resolve click, the radio
+    //      reverts to default-checked sev-1. `resolveInProgress` only
+    //      pauses polling AFTER the resolve handler starts — so the race
+    //      window is the gap we open by `await`ing between operations.
+    //
+    // Fix: do "set sev-2 checked + uncheck siblings + click resolve" in
+    // a SINGLE synchronous browser-side function. JavaScript is single-
+    // threaded; the setInterval poll cannot fire mid-function. By the
+    // time control returns to JS, the resolve handler has already set
+    // `resolveInProgress = true`, so subsequent polls are also suppressed.
+    await firstCard.evaluate((card: HTMLElement, evalUid: string) => {
+      const group = card.querySelectorAll<HTMLInputElement>(`input[name="sev-${evalUid}"]`);
+      for (const r of group) r.checked = (r.value === '2');
+      const target = card.querySelector<HTMLInputElement>(`input[name="sev-${evalUid}"][value="2"]`);
+      if (target) target.dispatchEvent(new Event('change', { bubbles: true }));
+      const resolveBtn = card.querySelector<HTMLButtonElement>(`button[data-resolve-first="${evalUid}"]`);
+      if (resolveBtn) resolveBtn.click();
+    }, uid);
 
     // Handle confirm dialog
     const confirmBtn = page.locator('.confirm-ok');
