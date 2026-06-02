@@ -319,6 +319,7 @@ function showConfirmation() {
 async function applyChanges() {
   const submitBtn = $('#gift-confirm-submit');
   const cancelBtn = $('#gift-confirm-cancel');
+  if (submitBtn.disabled) return;
   submitBtn.disabled = true;
   cancelBtn.disabled = true;
   submitBtn.textContent = 'Applying...';
@@ -348,9 +349,9 @@ async function applyChanges() {
         ' \u2014 pending changes kept for retry',
       'error',
     );
+  } finally {
+    submitBtn.disabled = false;
+    cancelBtn.disabled = false;
+    submitBtn.textContent = 'Confirm';
   }
-
-  submitBtn.disabled = false;
-  cancelBtn.disabled = false;
-  submitBtn.textContent = 'Confirm';
 }

@@ -90,6 +90,7 @@ async function runAction(btnId, resultId, endpoint, confirmMsg) {
   const btn = document.getElementById(btnId);
   const result = document.getElementById(resultId);
   if (!btn || !result) return;
+  if (btn.disabled) return;
   if (!confirm(confirmMsg)) return;
 
   btn.disabled = true;
@@ -118,9 +119,10 @@ async function runAction(btnId, resultId, endpoint, confirmMsg) {
     result.className = 'maintenance-result error';
     result.textContent = err.message;
     result.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = btn.dataset.label || 'Run';
   }
-  btn.disabled = false;
-  btn.textContent = btn.dataset.label || 'Run';
 }
 
 function formatBytes(bytes) {
@@ -133,6 +135,7 @@ function formatBytes(bytes) {
 async function auditStorage() {
   const btn = document.getElementById('audit-storage-btn');
   const result = document.getElementById('storage-result');
+  if (btn.disabled) return;
   btn.disabled = true;
   btn.textContent = 'Auditing...';
   result.className = 'maintenance-result';
@@ -161,14 +164,16 @@ async function auditStorage() {
     result.className = 'maintenance-result error';
     result.textContent = err.message;
     result.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Audit Storage';
   }
-  btn.disabled = false;
-  btn.textContent = 'Audit Storage';
 }
 
 async function purgeStorage() {
   const btn = document.getElementById('purge-storage-btn');
   const result = document.getElementById('storage-result');
+  if (btn.disabled) return;
   const folders = ['pm_images/', 'stickers/', 'report_evidence/'];
   if (
     !confirm(
@@ -201,7 +206,8 @@ async function purgeStorage() {
     result.className = 'maintenance-result error';
     result.textContent = err.message;
     result.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Purge Orphaned Files';
   }
-  btn.disabled = false;
-  btn.textContent = 'Purge Orphaned Files';
 }

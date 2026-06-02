@@ -329,6 +329,7 @@ function collectMilestoneRewards() {
 async function save() {
   const btn = $('#eco-save-btn');
   const info = $('#eco-save-info');
+  if (btn.disabled) return;
   btn.disabled = true;
   btn.textContent = 'Saving...';
 
@@ -398,8 +399,8 @@ async function save() {
     info.textContent = err.message;
     info.style.color = 'var(--danger)';
     showToast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Economy Config';
   }
-
-  btn.disabled = false;
-  btn.textContent = 'Save Economy Config';
 }

@@ -247,6 +247,11 @@ async function handleNuclearProceed() {
   const proceedBtn = document.getElementById('nuclear-proceed');
   const confirmInput = document.getElementById('nuclear-confirm-input');
 
+  // Re-entrancy guard: blocks a queued second click after step 2
+  // disables the button for input gating, AND after step 3 disables
+  // the button before awaiting executeNuclearReset.
+  if (proceedBtn.disabled) return;
+
   if (step === 1) {
     step = 2;
     document.getElementById('nuclear-step-label').textContent = 'Step 2 of 3';
@@ -269,7 +274,16 @@ async function handleNuclearProceed() {
   }
   if (step === 3) {
     if (confirmInput.value !== CONFIRM_PHRASE) return;
-    await executeNuclearReset();
+    // Disable BEFORE the await so a queued second click hits the
+    // guard above. `finally` re-enables for retry on error; the
+    // success path destroys the dialog (proceedBtn becomes hidden),
+    // making the re-enable a harmless no-op.
+    proceedBtn.disabled = true;
+    try {
+      await executeNuclearReset();
+    } finally {
+      proceedBtn.disabled = false;
+    }
   }
 }
 

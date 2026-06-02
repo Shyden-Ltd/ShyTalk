@@ -156,6 +156,7 @@ export function switchUserSubtab(subtab) {
 // ── Search ─────────────────────────────────────────────────────────
 
 async function doSearchFinal() {
+  if (searchBtnEl.disabled) return;
   const q = searchUidEl.value.trim();
   if (!q) return;
   await _flushNotifications();
@@ -172,9 +173,10 @@ async function doSearchFinal() {
     if (err.name === "AbortError") return;
     showToast(err.message, "error");
     sessionStorage.removeItem("admin_user_search");
+  } finally {
+    searchBtnEl.disabled = false;
+    searchBtnEl.textContent = window.tAdmin("btn_search");
   }
-  searchBtnEl.disabled = false;
-  searchBtnEl.textContent = window.tAdmin("btn_search");
 }
 
 /**

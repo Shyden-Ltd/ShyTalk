@@ -25,10 +25,13 @@ test.describe('Admin Users - Moderation Subtab', () => {
   // admin-users-deletion) that suspend or otherwise touch the worker
   // user can leave the score below 100 — making the
   // "issue warning → expect 85" assertion intermittently fail when the
-  // start state was already below 15. Idempotent API call.
+  // start state was already below 15. Idempotent API call. We let the
+  // setup throw rather than silently swallowing — a failed reset
+  // produces a clear "beforeAll failed" message instead of test 1
+  // failing with "Expected 85, Received <something else>".
   test.beforeAll(async ({ testData }) => {
     const uid = String(testData.user.uniqueId);
-    await testData.api.post(`/api/user/${uid}/reset-gcs`, {}).catch(() => {});
+    await testData.api.post(`/api/user/${uid}/reset-gcs`, {});
   });
 
   test.beforeEach(async ({ page, testData }) => {

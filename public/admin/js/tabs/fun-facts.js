@@ -218,13 +218,14 @@ function closeDialog() {
 }
 
 async function saveDialog() {
+  const saveBtnEl = document.getElementById('funfact-dialog-save');
+  if (saveBtnEl.disabled) return;
   const text = textInput.value.trim();
   if (!text) {
     showToast('Fact text is required', 'error');
     return;
   }
 
-  const saveBtnEl = document.getElementById('funfact-dialog-save');
   saveBtnEl.disabled = true;
   saveBtnEl.textContent = 'Saving...';
 

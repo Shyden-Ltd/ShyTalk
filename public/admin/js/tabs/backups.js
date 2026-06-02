@@ -200,6 +200,7 @@ async function restoreBackup(date, mode) {
 
 async function triggerBackup() {
   const btn = document.getElementById('backup-trigger-btn');
+  if (btn.disabled) return;
   btn.disabled = true;
   btn.textContent = 'Backing up...';
   try {
@@ -223,6 +224,7 @@ async function triggerBackup() {
 async function recoverPhotos() {
   const btn = document.getElementById('backup-recover-photos-btn');
   if (!btn) return;
+  if (btn.disabled) return;
   if (!confirm('Recover missing profile/cover photos from R2 storage?'))
     return;
   btn.disabled = true;

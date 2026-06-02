@@ -610,6 +610,7 @@ async function loadGuaranteeStatus() {
 }
 
 async function handleGuaranteeSet() {
+  if (guaranteeSetBtn.disabled) return;
   if (!monitorUid) {
     showToast("Start monitoring a user first", "error");
     return;
@@ -622,8 +623,8 @@ async function handleGuaranteeSet() {
   const selectedText = guaranteeGiftSelect.options[guaranteeGiftSelect.selectedIndex].textContent;
   if (!confirm(`Set guaranteed next pull to "${selectedText}" for the monitored user?`)) return;
 
+  guaranteeSetBtn.disabled = true;
   try {
-    guaranteeSetBtn.disabled = true;
     const result = await apiCall("POST", `/api/users/${monitorUid}/guarantee-next-pull`, { giftId });
     showToast(`Guarantee set: ${result.giftName} (${result.coinValue} coins)`);
     await loadGuaranteeStatus();
@@ -635,11 +636,12 @@ async function handleGuaranteeSet() {
 }
 
 async function handleGuaranteeRevoke() {
+  if (guaranteeRevokeBtn.disabled) return;
   if (!monitorUid) return;
   if (!confirm("Revoke the guaranteed next pull for this user?")) return;
 
+  guaranteeRevokeBtn.disabled = true;
   try {
-    guaranteeRevokeBtn.disabled = true;
     await apiCall("DELETE", `/api/users/${monitorUid}/guarantee-next-pull`);
     showToast("Guarantee revoked");
     await loadGuaranteeStatus();

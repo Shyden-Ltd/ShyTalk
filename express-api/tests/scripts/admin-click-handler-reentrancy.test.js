@@ -28,8 +28,10 @@
  *
  * KNOWN LIMITATIONS (documented as accepted gaps, not bugs):
  *   - Named-function references (`addEventListener("click", handleX)`
- *     where handleX is declared elsewhere) are NOT resolved. Add a
- *     direct test case for new exported handlers that fit this shape.
+ *     where handleX is a FunctionDeclaration or const-arrow IN THE SAME
+ *     FILE) ARE now resolved via collectFunctionDecls(). Cross-file
+ *     imports are NOT resolved — if a future handler is imported from
+ *     another module, add a hard-coded pin test.
  *   - Inline `onclick=` HTML attributes are NOT scanned. Functions
  *     exposed via `window.X = X` for HTML onclick (e.g. resetPinLockout,
  *     revokeBiometricKey in users.js) must carry their own module-level
@@ -40,6 +42,12 @@
  *     or false-negative in the inverse case. For the current codebase
  *     this is not a problem; revisit if `addEventListener` calls become
  *     nested.
+ *   - Guard regex `[^)]{0,40}` after `.disabled\b` terminates at the
+ *     first `)`. A guard with a nested-call condition like
+ *     `if (btn.disabled && helper() === true) return;` would prematurely
+ *     terminate and not match. No such pattern exists today; document
+ *     the bound here so future developers know to use simple guard
+ *     conditions.
  */
 
 const fs = require('node:fs');
@@ -85,6 +93,42 @@ function reEnablesInFinally(bodyText) {
   return /\.\s*disabled\s*=\s*false/.test(win);
 }
 
+// Collect every FunctionDeclaration in the file keyed by name. Used to
+// resolve `addEventListener("click", namedFn)` to its actual body so the
+// invariants apply to named-function refs, not just inline arrows.
+function collectFunctionDecls(ast, source) {
+  const map = new Map();
+  traverse(ast, {
+    FunctionDeclaration(p) {
+      if (!p.node.id?.name) return;
+      map.set(p.node.id.name, source.slice(p.node.body.start, p.node.body.end));
+    },
+    VariableDeclarator(p) {
+      const init = p.node.init;
+      if (!init || !p.node.id?.name) return;
+      if (init.type !== 'ArrowFunctionExpression' && init.type !== 'FunctionExpression') return;
+      const bodyNode = init.body;
+      map.set(p.node.id.name, source.slice(bodyNode.start, bodyNode.end));
+    },
+  });
+  return map;
+}
+
+function analyseBody(bodyText) {
+  const hasConfirm = /\bconfirm\s*\(/.test(bodyText);
+  const hasApiCall = /\bapiCall\s*\(/.test(bodyText) || /\bfetch\s*\(/.test(bodyText);
+  const racePattern = (hasConfirm && hasApiCall) || setsDisabledBeforeAwait(bodyText);
+  if (!racePattern) return null;
+  return {
+    hasGuard: hasGuard(bodyText),
+    // `finally` only matters when the handler actually disables the
+    // button. Handlers using a module-level in-flight flag manage
+    // their own finally separately.
+    needsFinally: /\.\s*disabled\s*=\s*true/.test(bodyText),
+    hasFinally: reEnablesInFinally(bodyText),
+  };
+}
+
 function collectClickHandlers(file) {
   const source = fs.readFileSync(file, 'utf-8');
   let ast;
@@ -93,6 +137,7 @@ function collectClickHandlers(file) {
   } catch (_e) {
     ast = parser.parse(source, { sourceType: 'script' });
   }
+  const fnDecls = collectFunctionDecls(ast, source);
   const hits = [];
   traverse(ast, {
     CallExpression(nodePath) {
@@ -103,24 +148,22 @@ function collectClickHandlers(file) {
       const arg0 = node.arguments[0];
       if (arg0.type !== 'StringLiteral' || arg0.value !== 'click') return;
       const handler = node.arguments[1];
-      if (handler.type !== 'ArrowFunctionExpression' && handler.type !== 'FunctionExpression') {
+      let bodyText;
+      if (handler.type === 'ArrowFunctionExpression' || handler.type === 'FunctionExpression') {
+        bodyText = source.slice(handler.body.start, handler.body.end);
+      } else if (handler.type === 'Identifier' && fnDecls.has(handler.name)) {
+        // `addEventListener("click", namedFn)` — resolve to the
+        // function body declared in the same file.
+        bodyText = fnDecls.get(handler.name);
+      } else {
         return;
       }
-      const body = handler.body;
-      const bodyText = source.slice(body.start, body.end);
-      const hasConfirm = /\bconfirm\s*\(/.test(bodyText);
-      const hasApiCall = /\bapiCall\s*\(/.test(bodyText) || /\bfetch\s*\(/.test(bodyText);
-      const racePattern = (hasConfirm && hasApiCall) || setsDisabledBeforeAwait(bodyText);
-      if (!racePattern) return;
+      const analysis = analyseBody(bodyText);
+      if (!analysis) return;
       hits.push({
         file: path.relative(REPO_ROOT, file),
         line: node.loc.start.line,
-        hasGuard: hasGuard(bodyText),
-        // `finally` only matters when the handler actually disables the
-        // button. Handlers using a module-level in-flight flag manage
-        // their own finally separately.
-        needsFinally: /\.\s*disabled\s*=\s*true/.test(bodyText),
-        hasFinally: reEnablesInFinally(bodyText),
+        ...analysis,
       });
     },
   });
@@ -167,7 +210,9 @@ describe('admin click-handler re-entrancy', () => {
   // Inline-onclick globals: confirm()+apiCall() functions exposed via
   // `window.X = X` for HTML onclick=. The AST scan above doesn't see
   // them (no addEventListener wrapper). Pin their in-flight discipline
-  // explicitly by name.
+  // explicitly by name. Convention: exactly `let _<name>InFlight = false`
+  // (no `_is` prefix variation); a future global must follow this
+  // convention so the regex pin stays consistent with the guard pattern.
   test('inline-onclick globals carry module-level in-flight flags', () => {
     const usersJs = fs.readFileSync(path.join(REPO_ROOT, 'public/admin/js/tabs/users.js'), 'utf-8');
     const targets = ['resetPinLockout', 'revokeBiometricKey'];
@@ -183,7 +228,34 @@ describe('admin click-handler re-entrancy', () => {
     if (missing.length === 0) return;
     throw new Error(
       `Inline-onclick admin globals missing in-flight flag: ${missing.join(', ')}. ` +
-        `Each must declare \`let _<name>InFlight = false\` and check it on entry.`,
+        `Each must declare exactly \`let _<name>InFlight = false\` (no _is prefix) ` +
+        `and check it on entry.`,
     );
+  });
+
+  // revokeWarning is a thin-wrapper handler: registered via
+  // `() => revokeWarning(uid, w.id, w.gcsDeduction, rb)` so the AST
+  // scan sees the arrow wrapper (no confirm/apiCall in the wrapper body
+  // — both live inside revokeWarning itself). Pin its discipline
+  // explicitly: must carry a `btn.disabled` guard at the top. Success
+  // path destroys the button via list re-render, so finally-symmetry
+  // does NOT apply — the catch-only re-enable is intentional.
+  test('revokeWarning carries the entry guard', () => {
+    const usersJs = fs.readFileSync(path.join(REPO_ROOT, 'public/admin/js/tabs/users.js'), 'utf-8');
+    // Match the function header + the next ~200 chars; assert the guard
+    // lands before the first `confirm(`.
+    const fnIdx = usersJs.search(/export\s+async\s+function\s+revokeWarning\s*\(/);
+    if (fnIdx < 0) {
+      throw new Error('revokeWarning function not found in users.js — refactor may have moved it');
+    }
+    const window = usersJs.slice(fnIdx, fnIdx + 400);
+    const guardIdx = window.search(/if\s*\(\s*btn\.disabled\s*\)\s*return/);
+    const confirmIdx = window.search(/\bconfirm\s*\(/);
+    if (guardIdx < 0) {
+      throw new Error('revokeWarning is missing the `if (btn.disabled) return;` guard at the top');
+    }
+    if (confirmIdx >= 0 && guardIdx > confirmIdx) {
+      throw new Error('revokeWarning guard must come BEFORE the confirm() — same race as PR #968');
+    }
   });
 });

@@ -387,6 +387,7 @@ function closeDialog() {
 
 async function saveDialog() {
   const saveBtnEl = document.getElementById('banner-dialog-save');
+  if (saveBtnEl.disabled) return;
   saveBtnEl.disabled = true;
   saveBtnEl.textContent = 'Saving...';
 
