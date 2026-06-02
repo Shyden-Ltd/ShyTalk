@@ -780,6 +780,7 @@ function renderDeletedScreenCard(screenId, screen) {
   card
     .querySelector('.permanent-delete-btn')
     .addEventListener('click', async function () {
+      if (this.disabled) return;
       if (
         !confirm(
           'Permanently delete screen "' +

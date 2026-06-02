@@ -280,13 +280,17 @@ function renderList() {
     deleteBtn.style.cssText =
       'padding:6px 14px;background:var(--danger);color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:13px;';
     deleteBtn.addEventListener('click', async () => {
+      if (deleteBtn.disabled) return;
       if (!confirm('Delete this banner? This cannot be undone.')) return;
+      deleteBtn.disabled = true;
       try {
         await apiCall('DELETE', `/api/admin/banners/${b.id}`);
         showToast('Banner deleted');
         await loadBanners();
       } catch (err) {
         showToast('Delete failed: ' + err.message, 'error');
+      } finally {
+        deleteBtn.disabled = false;
       }
     });
     actions.appendChild(deleteBtn);
