@@ -262,6 +262,11 @@ describe('admin click-handler re-entrancy', () => {
       // Set then schedule release on next macrotask:
       //   <name> = true;
       //   ...setTimeout(() => { <name> = false; }, 0)
+      // The releaseRe assumes a single-line setTimeout shape with no
+      // commas in the body slice between `false` and the `, 0)` tail.
+      // A future refactor that adds commas inside the arrow body (e.g.
+      // a sequence expression) would false-negative — keep the shape
+      // simple, no comma operators in the release body.
       const setRe = new RegExp(`${name}\\s*=\\s*true\\b`);
       const releaseRe = new RegExp(`setTimeout\\([^,]+${name}\\s*=\\s*false[^,]+,\\s*0\\s*\\)`);
       if (!declRe.test(src)) issues.push(`${file}: missing \`let ${name} = false\` declaration`);

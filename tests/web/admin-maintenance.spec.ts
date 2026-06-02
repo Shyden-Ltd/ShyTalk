@@ -380,7 +380,44 @@ test.describe('Admin Maintenance Tab', () => {
     await expect(overlay).not.toHaveClass(/visible/);
   });
 
-  // ── Test 17: Mute toggle ──
+  // ── Test 17: Sync-prod step-transition lock ──
+  // Mirror of test 16 for the sync-prod wizard. The migrate-prod-card
+  // is only shown when apiBase contains "dev-api" (local stack runs
+  // on localhost so the card is hidden by default) — force it visible
+  // before clicking so the test runs in any environment.
+  test('sync-prod rapid double-tap at step 1 does not skip step 2', async ({ page }) => {
+    // Force-show the sync card and open the wizard
+    await page.evaluate(() => {
+      const card = document.getElementById('migrate-prod-card');
+      if (card) card.style.display = '';
+    });
+    await page.locator('#migrate-prod-btn').click();
+    const overlay = page.locator('#sync-overlay');
+    await expect(overlay).toHaveClass(/visible/);
+    await expect(page.locator('#sync-step-label')).toHaveText('Step 1 of 3');
+
+    // Dispatch two synchronous click events on #sync-proceed in the
+    // same browser-side macrotask. Without `syncStepLock`, click 1
+    // advances syncStep=2 + returns; click 2 reads syncStep===2 and
+    // skips to step 3 — bypassing the "this will overwrite
+    // everything" warning. Lock blocks click 2 on the entry check.
+    await page.evaluate(() => {
+      const btn = document.getElementById('sync-proceed')!;
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    // Must be at Step 2 (not Step 3) — step-lock blocked the second click.
+    await expect(page.locator('#sync-step-label')).toHaveText('Step 2 of 3');
+    await expect(page.locator('#sync-title')).toContainText('overwrite everything');
+
+    // Cancel to clean up — both for state hygiene and to silence the
+    // sync-beep audio that openSyncOverlay started.
+    await page.locator('#sync-cancel').click();
+    await expect(overlay).not.toHaveClass(/visible/);
+  });
+
+  // ── Test 18: Mute toggle ──
   test('mute button toggles mute state during nuclear dialog', async ({ page }) => {
     // Open nuclear dialog
     await page.locator('#reset-all-btn').click();
