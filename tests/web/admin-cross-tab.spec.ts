@@ -117,14 +117,33 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // radio stays unchecked, the resolve handler falls back to severity 1
     // (`reports.js:694`: `const severity = sevInput ? Number(...) : 1`),
     // and this test then asserts "Severity 2" against an actual Severity 1
-    // warning. Set `checked` and fire `change` directly on the hidden input
-    // so the resolve handler reads our chosen severity. `setChecked()` and
-    // `click({force:true})` both fail Playwright's visibility check on the
-    // display:none input, so we go straight to evaluate.
-    await firstCard.locator(`input[name="sev-${uid}"][value="2"]`).evaluate((el: HTMLInputElement) => {
-      el.checked = true;
-      el.dispatchEvent(new Event('change', { bubbles: true }));
+    // warning.
+    //
+    // Setting `el.checked = true` on a single radio is NOT enough either:
+    // the HTML radio-group auto-uncheck-siblings behaviour fires on USER
+    // input (click/tap), not on programmatic `.checked` assignment. The
+    // default sev-1 stayed checked alongside sev-2, and reports.js's
+    // `querySelector(':checked')` returned whichever appeared first in
+    // DOM order (sev-1) — explaining the intermittent severity-1
+    // warning we saw on retry-pass flaky runs. Fix: walk the whole
+    // radio group, set checked explicitly on each one (true for the
+    // target value, false for everyone else), then dispatch change.
+    await firstCard.locator(`input[name="sev-${uid}"][value="2"]`).evaluate((targetRadio: HTMLInputElement) => {
+      const group = document.querySelectorAll<HTMLInputElement>(
+        `input[name="${targetRadio.name}"]`,
+      );
+      for (const r of group) {
+        r.checked = r === targetRadio;
+      }
+      targetRadio.dispatchEvent(new Event('change', { bubbles: true }));
     });
+
+    // Defensive: verify the radio group settled into exactly one
+    // checked input with the expected value. If a future regression
+    // breaks the group-uncheck loop, this turns the silent severity-1
+    // bug into a loud test failure.
+    await expect(firstCard.locator(`input[name="sev-${uid}"]:checked`)).toHaveCount(1);
+    await expect(firstCard.locator(`input[name="sev-${uid}"][value="2"]`)).toBeChecked();
 
     const resolveBtn = firstCard.locator(`button[data-resolve-first="${uid}"]`);
     await resolveBtn.click();
