@@ -528,6 +528,18 @@ function renderMoreCards() {
 
   // Wire up newly rendered cards
   wireUpReportCards();
+
+  // Restore the user's selection across re-renders. The 15s poll
+  // (line 338) rebuilds `reportCards` from scratch, wiping the
+  // `.selected` class from whatever was highlighted. Without this,
+  // pressing ArrowDown to select a card then waiting more than 15s
+  // (or any other test/UI flow that races against the poll) loses
+  // the selection silently — and the W/S/D/Enter shortcuts that
+  // depend on `selectedCardIndex` quietly become no-ops. Re-apply
+  // the highlight here so the selection survives every render.
+  if (selectedCardIndex >= 0 && selectedCardIndex < reportCards.length) {
+    highlightCard();
+  }
 }
 
 function wireUpReportCards() {

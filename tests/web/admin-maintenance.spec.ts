@@ -72,11 +72,24 @@ test.describe('Admin Maintenance Tab', () => {
       const hasAfter = (devicesAfter.devices || []).some((d: any) => d.id === deviceId);
       expect(hasAfter).toBe(false);
 
-      // Re-seed just the device binding directly via Firestore (no new user needed).
-      // We can't use testSetup because it creates a new user with a new uniqueId.
-      // Instead, skip re-seeding — subsequent tests that need the device should
-      // check for its existence and skip gracefully if absent.
-      // The device binding was created by the fixture and is now deleted — that's expected.
+      // Re-seed the device binding via testWrite so subsequent tests in
+      // other files (admin-users-moderation.spec.ts:233 "device binding
+      // section shows seeded data", admin-devices specs, etc.) see the
+      // same shape the worker-scoped fixture originally created. Per
+      // [[feedback-test-isolation-no-leaks]]: tests that mutate shared
+      // worker-scoped state MUST restore it before exiting, NOT punt to
+      // "subsequent tests should check existence and skip gracefully" —
+      // that's a leak that creates cross-file flakies depending on
+      // alphabetical file-execution order.
+      await testData.api.testWrite('deviceBindings', {
+        deviceId,
+        uniqueId,
+        manufacturer: 'Google',
+        model: 'Pixel 6',
+        lastIp: '203.0.113.1',
+        isp: 'Test ISP',
+        boundAt: Date.now(),
+      });
     }
   });
 
