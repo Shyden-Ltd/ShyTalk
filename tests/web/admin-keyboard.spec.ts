@@ -48,7 +48,14 @@ test.describe('Admin Keyboard Shortcuts', () => {
     // Without this the poll fires mid-test and wipes the action-
     // select / sev-radio / selected-card state the keyboard handlers
     // operate on, flaking W/S/D/Enter shortcut tests.
+    //
+    // addInitScript only runs on FUTURE navigations; the page is
+    // already mounted from the fixture, so we also page.evaluate to
+    // cover the current realm. Belt-and-braces.
     await page.addInitScript(() => {
+      (window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
+    });
+    await page.evaluate(() => {
       (window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
     });
     await adminLogin(page);

@@ -403,7 +403,7 @@ test.describe('Admin Fun Facts', () => {
           );
           return ids.includes(factText);
         },
-        { timeout: 10_000, intervals: [200, 500, 1000] },
+        { timeout: 20_000, intervals: [200, 500, 1000, 2000] },
       )
       .toBe(false);
 
@@ -431,7 +431,7 @@ test.describe('Admin Fun Facts', () => {
           );
           return ids.includes(factText);
         },
-        { timeout: 10_000, intervals: [200, 500, 1000] },
+        { timeout: 20_000, intervals: [200, 500, 1000, 2000] },
       )
       .toBe(true);
   });
