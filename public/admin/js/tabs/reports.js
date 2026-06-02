@@ -359,25 +359,6 @@ async function loadReports() {
   if (!reportsList.querySelector('.report-card')) {
     reportsList.innerHTML = '<div style="color:var(--text2);font-size:13px;">Loading...</div>';
   }
-  // Snapshot per-user form state so the 15s poll re-render doesn't
-  // wipe in-progress edits. Without this, the keyboard-shortcut tests
-  // (admin-reports.spec.ts:553/576/etc.) flake because the poll fires
-  // between e.g. pressing D and asserting the action-select value,
-  // resetting the select back to its default ("warn"). Restored at
-  // the end of the render so the user / test sees their choice
-  // persist.
-  const formStateSnapshot = {};
-  for (const form of reportsList.querySelectorAll('[data-form-uid]')) {
-    const uid = form.dataset.formUid;
-    const actionSel = form.querySelector('[data-action-select]');
-    const sevChecked = form.querySelector('input[name="sev-' + uid + '"]:checked');
-    const adminNote = form.querySelector('[data-admin-note]');
-    formStateSnapshot[uid] = {
-      action: actionSel ? actionSel.value : null,
-      severity: sevChecked ? sevChecked.value : null,
-      adminNote: adminNote ? adminNote.value : null,
-    };
-  }
   try {
     let url = `/api/reports?status=${currentReportFilter}`;
     if (reportSearchQuery) url += `&search=${encodeURIComponent(reportSearchQuery)}`;
@@ -571,27 +552,6 @@ function renderMoreCards() {
     highlightCard();
   }
 
-  // Restore per-user form state captured before the re-render. See
-  // the snapshot block at the top of this function for the
-  // motivation — the poll wiping in-progress radio / select edits
-  // breaks every keyboard-shortcut and resolve-flow test.
-  for (const [uid, state] of Object.entries(formStateSnapshot)) {
-    if (state.action !== null) {
-      const sel = reportsList.querySelector('[data-action-select="' + uid + '"]');
-      if (sel) {
-        sel.value = state.action;
-        sel.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    }
-    if (state.severity !== null) {
-      const radios = reportsList.querySelectorAll('input[name="sev-' + uid + '"]');
-      for (const r of radios) r.checked = (r.value === state.severity);
-    }
-    if (state.adminNote !== null) {
-      const note = reportsList.querySelector('[data-admin-note="' + uid + '"]');
-      if (note) note.value = state.adminNote;
-    }
-  }
 }
 
 function wireUpReportCards() {
