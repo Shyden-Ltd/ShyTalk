@@ -251,6 +251,18 @@ test.describe('Admin Validation', () => {
 
     await switchUserSubtab(page, 'moderation');
 
+    // Capture warning IDs BEFORE clicking so we can compute the delta
+    // afterward. Earlier tests in the worker may have left unrevoked
+    // Spam warnings on the same user (multiple files create Spam
+    // warnings — admin-cross-tab, admin-realtime, admin-reports,
+    // admin-users-moderation, admin-users-room-cascade); filtering by
+    // `reason === 'Spam'` alone counted those leftovers and flaked
+    // randomly depending on which prior tests passed/failed. Per
+    // [[feedback-test-isolation-no-leaks]]: scope the assertion to
+    // THIS test's mutations.
+    const before = await testData.api.get(`/api/user/${uid}/warnings`);
+    const beforeIds = new Set((before.warnings || []).map((w: any) => w.id));
+
     // Select reason and severity
     await page.locator('#direct-warn-reason').selectOption('Spam');
     await page.locator('input[name="direct-warn-severity"][value="1"]').click();
@@ -263,13 +275,15 @@ test.describe('Admin Validation', () => {
     // Wait for processing to complete
     await expect(warnBtn).toContainText('Issue Warning');
 
-    // Verify only 1 warning was created (button should have been disabled during API call)
-    const warningsData = await testData.api.get(`/api/user/${uid}/warnings`);
-    const warnings = warningsData.warnings || [];
-    const recentWarnings = warnings.filter(
-      (w: any) => !w.revoked && w.reason === 'Spam',
+    // Verify EXACTLY ONE new warning was created by this test (the
+    // re-entrancy guard in users.js's direct-warn-btn handler must
+    // have suppressed the second queued click event).
+    const after = await testData.api.get(`/api/user/${uid}/warnings`);
+    const warnings = after.warnings || [];
+    const newWarnings = warnings.filter(
+      (w: any) => !beforeIds.has(w.id) && w.reason === 'Spam',
     );
-    expect(recentWarnings.length).toBe(1);
+    expect(newWarnings.length).toBe(1);
 
     // Clean up: revoke warning and reset GCS
     for (const w of warnings) {

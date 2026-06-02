@@ -384,15 +384,28 @@ test.describe('Admin Fun Facts', () => {
     await expect(factCard(page, factText)).toContainText('Inactive', { timeout: 10_000 });
 
     // API: the user-facing endpoint should NOT include this fact.
-    // Cache-bust the request — `/api/fun-facts` sets
-    // `Cache-Control: public, max-age=3600`, and the worker-scoped
-    // Playwright context honours that across tests. Without a buster
-    // the first call's cached body (with this fact still active) is
-    // served back, masking the deactivation.
-    const activeFacts = await testData.api.get(`/api/fun-facts?_=${Date.now()}`);
-    const activeIds = (Array.isArray(activeFacts) ? activeFacts : activeFacts.funFacts || [])
-      .map((f: any) => f.text);
-    expect(activeIds).not.toContain(factText);
+    // Two compounding flakes here:
+    //   1. `/api/fun-facts` sets `Cache-Control: public, max-age=3600`,
+    //      and the worker-scoped Playwright context honours that
+    //      across tests. Cache-bust via `?_=${Date.now()}` per request.
+    //   2. The Firestore emulator's `where('isActive', '==', true)`
+    //      query can lag write propagation by 100-500ms (eventual
+    //      consistency in the emulator's snapshot listener path). A
+    //      one-shot GET right after the admin save may still see the
+    //      pre-deactivation snapshot. Poll until the absence settles
+    //      or timeout.
+    await expect
+      .poll(
+        async () => {
+          const facts = await testData.api.get(`/api/fun-facts?_=${Date.now()}`);
+          const ids = (Array.isArray(facts) ? facts : facts.funFacts || []).map(
+            (f: any) => f.text,
+          );
+          return ids.includes(factText);
+        },
+        { timeout: 10_000, intervals: [200, 500, 1000] },
+      )
+      .toBe(false);
 
     // Re-activate
     const inactiveCard = factCard(page, factText);
@@ -407,11 +420,20 @@ test.describe('Admin Fun Facts', () => {
     await expect(factCard(page, factText)).toContainText('Active', { timeout: 10_000 });
 
     // API: user-facing endpoint should now include it again — same
-    // cache-buster as above.
-    const reactiveFacts = await testData.api.get(`/api/fun-facts?_=${Date.now()}`);
-    const reactiveTexts = (Array.isArray(reactiveFacts) ? reactiveFacts : reactiveFacts.funFacts || [])
-      .map((f: any) => f.text);
-    expect(reactiveTexts).toContain(factText);
+    // cache-buster + poll-until-consistent treatment as the
+    // deactivation check above.
+    await expect
+      .poll(
+        async () => {
+          const facts = await testData.api.get(`/api/fun-facts?_=${Date.now()}`);
+          const ids = (Array.isArray(facts) ? facts : facts.funFacts || []).map(
+            (f: any) => f.text,
+          );
+          return ids.includes(factText);
+        },
+        { timeout: 10_000, intervals: [200, 500, 1000] },
+      )
+      .toBe(true);
   });
 
   // ── Test 10: Empty state — delete all, verify message, re-seed ──
