@@ -87,16 +87,7 @@ test.describe('Admin Reports', () => {
     // pressing D and asserting the result. See reports.js:340 +
     // [[feedback-test-isolation-no-leaks]] for context. Production
     // code never sets this flag — only tests.
-    //
-    // addInitScript only fires on FUTURE navigations; the fixture-
-    // created page is already loaded by this point, so we also
-    // page.evaluate to set the flag on the current JS realm. Belt-
-    // and-braces so the very first activate() of the Reports tab in
-    // this beforeEach picks up the pause.
     await page.addInitScript(() => {
-      (window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
-    });
-    await page.evaluate(() => {
       (window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
     });
     await adminLogin(page);
