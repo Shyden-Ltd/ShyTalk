@@ -278,6 +278,10 @@ export function init(deps) {
 
 /** Called every time the Reports tab is activated. */
 export function activate() {
+  // Tab re-entry is a "new view" event — any selection from a prior
+  // session is stale because reportCards[] is about to be rebuilt.
+  // Same rationale as the filter/search click handlers above.
+  selectedCardIndex = -1;
   loadReports();
   loadReportStats();
 }
@@ -639,6 +643,9 @@ function wireUpReportCards() {
         const ok = await acquireLock(uid);
         if (ok) {
           showToast('Review taken over');
+          // Takeover refreshes the whole list — the API contract doesn't
+          // guarantee order parity, so any prior selection is unreliable.
+          selectedCardIndex = -1;
           loadReports();
         }
       } catch (err) {
