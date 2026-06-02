@@ -114,6 +114,16 @@ export function init(deps) {
       void btn.offsetHeight; // Force layout flush for WebKit
       currentReportFilter = btn.dataset.reportFilter;
       sessionStorage.setItem('admin_report_filter', currentReportFilter);
+      // Reset selection — the new view's cards are unrelated to the old.
+      // Without this, the keyboard-shortcut handler reads a stale
+      // `selectedCardIndex` from the prior filter and a subsequent
+      // ArrowDown lands on the wrong card. Tests 18→19 (W then D) used
+      // to flake when test 18 left selectedCardIndex=0 and test 19's
+      // ArrowDown incremented to 1 instead of selecting 0. The
+      // periodic 15s poll path (line ~340) intentionally preserves
+      // selectedCardIndex so a user reviewing reports isn't yanked
+      // out of their selection mid-task.
+      selectedCardIndex = -1;
       loadReports();
     });
   }
@@ -125,6 +135,9 @@ export function init(deps) {
     reportSearchBtn.addEventListener('click', () => {
       reportSearchQuery = reportSearchInput.value.trim();
       sessionStorage.setItem('admin_report_search', reportSearchQuery);
+      // See filter-button click handler — search re-scopes the list,
+      // so the prior selection has no referent in the new view.
+      selectedCardIndex = -1;
       loadReports();
     });
   }
@@ -133,6 +146,7 @@ export function init(deps) {
       if (e.key === 'Enter') {
         reportSearchQuery = reportSearchInput.value.trim();
         sessionStorage.setItem('admin_report_search', reportSearchQuery);
+        selectedCardIndex = -1;
         loadReports();
       }
     });

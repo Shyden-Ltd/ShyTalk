@@ -591,20 +591,20 @@ test.describe('Admin Reports', () => {
       return;
     }
 
+    // Use the same selection helper as the W test (real Playwright
+    // keyboard.press) — synthetic `document.dispatchEvent(new
+    // KeyboardEvent(...))` calls don't dispatch through the same
+    // dispatch path as user input and miss the report tab handler in
+    // some build configurations. The selectFirstReportCard helper
+    // awaits `.selected` so the handler has actually run before we
+    // proceed.
+    await selectFirstReportCard(page);
+
     const uid = await firstCard.getAttribute('data-uid');
     const actionSelect = firstCard.locator(`select[data-action-select="${uid}"]`);
 
-    // Do the select-card + press-D atomically in one browser-side
-    // function so the 15s poll cannot fire between the ArrowDown
-    // (sets selectedCardIndex + .selected) and the D press (handler
-    // checks selectedCardIndex). Same pattern as
-    // admin-cross-tab.spec.ts atomic radio-set+resolve.
-    await page.evaluate(() => {
-      const e1 = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true });
-      document.dispatchEvent(e1);
-      const e2 = new KeyboardEvent('keydown', { key: 'd', bubbles: true });
-      document.dispatchEvent(e2);
-    });
+    // Press D — real keyboard event, matches the W test's mechanism.
+    await page.keyboard.press('d');
 
     // Verify "dismiss" is selected
     await expect(actionSelect).toHaveValue('dismiss');
