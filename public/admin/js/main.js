@@ -389,6 +389,7 @@ loginBtn.addEventListener('click', async (e) => {
   // (Enter key) — preventDefault here too to keep the chain idempotent
   // even if the form-level handler is removed.
   e.preventDefault?.();
+  if (loginBtn.disabled) return;
   loginError.textContent = '';
   const email = loginEmail.value.trim();
   const pass = loginPassword.value;
@@ -407,8 +408,9 @@ loginBtn.addEventListener('click', async (e) => {
     } else {
       loginError.textContent = err.message;
     }
+  } finally {
+    loginBtn.disabled = false;
   }
-  loginBtn.disabled = false;
 });
 
 loginPassword.addEventListener('keydown', (e) => { if (e.key === 'Enter') loginBtn.click(); });

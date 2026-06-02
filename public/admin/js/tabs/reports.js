@@ -164,6 +164,7 @@ export function init(deps) {
 
   if (exportCsvBtn) {
     exportCsvBtn.addEventListener('click', async () => {
+      if (exportCsvBtn.disabled) return;
       if (!exportFrom.value || !exportTo.value) {
         showToast('Select a date range', 'error');
         return;

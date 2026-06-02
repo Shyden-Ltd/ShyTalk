@@ -1083,6 +1083,7 @@ function renderWarningItem(w, uid) {
 }
 
 export async function revokeWarning(uid, warningId, deduction, btn) {
+  if (btn.disabled) return;
   if (!confirm(window.tAdminFmt("confirm_revoke_warning", { deduction }))) return;
   btn.disabled = true; btn.textContent = "...";
   try {
@@ -1091,6 +1092,9 @@ export async function revokeWarning(uid, warningId, deduction, btn) {
     const data = await apiCall("GET", "/api/user/" + uid);
     populateGcsSection(data);
     loadWarningHistory(uid, false);
+    // Success path rerenders the list (loadWarningHistory) destroying
+    // `btn` — no re-enable needed. Only the catch branch needs to
+    // re-enable so the admin can retry the revoke after an error.
   } catch (err) { showToast(err.message, "error"); btn.disabled = false; btn.textContent = window.tAdmin("btn_revoke"); }
 }
 
@@ -1214,25 +1218,43 @@ export async function loadSecurityPanel() {
   }
 }
 
+// Module-level in-flight flags for functions called via inline `onclick=`
+// in admin/index.html (exposed via wireSecurityGlobals). Unlike the
+// addEventListener handlers below, these have no `btn` reference, so the
+// `if (btn.disabled) return;` pattern from PR #968 doesn't apply. The
+// flag closes the same race window: blocking-`confirm()` resolves
+// instantly under Playwright auto-accept, both calls pass the flag check
+// before either sets it, so the flag must be set BEFORE the first `await`.
+let _resetPinLockoutInFlight = false;
+let _revokeBiometricKeyInFlight = false;
+
 export async function resetPinLockout() {
+  if (_resetPinLockoutInFlight) return;
   if (!currentUid || !confirm(window.tAdmin("confirm_reset_pin_lockout"))) return;
+  _resetPinLockoutInFlight = true;
   try {
     await apiCall("POST", `/api/user/${currentUid}/reset-pin-lockout`);
     showToast(window.tAdmin("toast_pin_lockout_reset"));
     loadSecurityPanel();
   } catch (err) {
     showToast(window.tAdminFmt("toast_action_failed", { error: err.message }), "error");
+  } finally {
+    _resetPinLockoutInFlight = false;
   }
 }
 
 export async function revokeBiometricKey(uniqueId, deviceId) {
+  if (_revokeBiometricKeyInFlight) return;
   if (!confirm(window.tAdminFmt("confirm_revoke_biometric", { deviceId }))) return;
+  _revokeBiometricKeyInFlight = true;
   try {
     await apiCall("DELETE", `/api/user/${uniqueId}/biometric-keys/${deviceId}`);
     showToast(window.tAdmin("toast_biometric_revoked"));
     loadSecurityPanel();
   } catch (err) {
     showToast(window.tAdminFmt("toast_action_failed", { error: err.message }), "error");
+  } finally {
+    _revokeBiometricKeyInFlight = false;
   }
 }
 
@@ -1247,6 +1269,7 @@ export function wireModerationListeners() {
   // Suspend
   const suspendBtn = $("#suspend-btn");
   if (suspendBtn) suspendBtn.addEventListener("click", async () => {
+    if (suspendBtn.disabled) return;
     const reason = $("#suspend-reason")?.value?.trim();
     if (!reason) { showToast(window.tAdmin("toast_reason_required"), "error"); return; }
     const endDateVal = $("#suspend-end-date")?.value;
@@ -1259,7 +1282,7 @@ export function wireModerationListeners() {
       const data = await apiCall("GET", `/api/user/${currentUid}`);
       await populateFormFull(data);
     } catch (err) { showToast(err.message, "error"); }
-    suspendBtn.disabled = false;
+    finally { suspendBtn.disabled = false; }
   });
   // Unsuspend
   const unsuspendBtn = $("#unsuspend-btn");
@@ -1276,7 +1299,7 @@ export function wireModerationListeners() {
       const data = await apiCall("GET", `/api/user/${currentUid}`);
       await populateFormFull(data);
     } catch (err) { showToast(err.message, "error"); }
-    unsuspendBtn.disabled = false;
+    finally { unsuspendBtn.disabled = false; }
   });
   // Duration presets
   for (const btn of document.querySelectorAll(".duration-presets button")) {
@@ -1503,7 +1526,7 @@ function showClearAllConfirmation() {
   const confirmBtn = document.createElement("button"); confirmBtn.style.cssText = "padding:8px 20px;background:var(--danger);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:14px;opacity:0.5;"; confirmBtn.disabled = true;
   let countdown = 5; confirmBtn.textContent = window.tAdminFmt("btn_confirming", { countdown });
   const timer = setInterval(function() { countdown--; if (countdown <= 0) { clearInterval(timer); confirmBtn.disabled = false; confirmBtn.style.opacity = "1"; confirmBtn.textContent = window.tAdmin("btn_confirm_clear_all"); } else { confirmBtn.textContent = window.tAdminFmt("btn_confirming", { countdown }); } }, 1000);
-  confirmBtn.addEventListener("click", async function() { if (confirmBtn.disabled) return; clearInterval(timer); confirmBtn.disabled = true; confirmBtn.textContent = window.tAdmin("btn_clearing"); await clearAllBackpack(); document.body.removeChild(overlay); });
+  confirmBtn.addEventListener("click", async function() { if (confirmBtn.disabled) return; clearInterval(timer); confirmBtn.disabled = true; confirmBtn.textContent = window.tAdmin("btn_clearing"); try { await clearAllBackpack(); document.body.removeChild(overlay); } finally { confirmBtn.disabled = false; } });
   btnRow.appendChild(confirmBtn); dialog.appendChild(btnRow); overlay.appendChild(dialog);
   overlay.addEventListener("click", function(e) { if (e.target === overlay) { clearInterval(timer); document.body.removeChild(overlay); } });
   document.body.appendChild(overlay);

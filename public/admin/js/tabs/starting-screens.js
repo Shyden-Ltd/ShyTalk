@@ -761,6 +761,7 @@ function renderDeletedScreenCard(screenId, screen) {
   card
     .querySelector('.restore-screen-btn')
     .addEventListener('click', async function () {
+      if (this.disabled) return;
       this.disabled = true;
       try {
         await apiCall(
@@ -773,8 +774,9 @@ function renderDeletedScreenCard(screenId, screen) {
         load();
       } catch (err) {
         showToast('Failed to restore: ' + err.message, 'error');
+      } finally {
+        this.disabled = false;
       }
-      this.disabled = false;
     });
 
   card
@@ -804,8 +806,9 @@ function renderDeletedScreenCard(screenId, screen) {
           'Failed to permanently delete: ' + err.message,
           'error',
         );
+      } finally {
+        this.disabled = false;
       }
-      this.disabled = false;
     });
 
   return card;

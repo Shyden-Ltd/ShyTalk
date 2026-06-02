@@ -68,6 +68,7 @@ async function load(status) {
     // Bind resolve buttons
     for (const btn of list.querySelectorAll('[data-resolve]')) {
       btn.addEventListener('click', async () => {
+        if (btn.disabled) return;
         const appealId = btn.dataset.resolve;
         const newStatus = btn.dataset.status;
         const noteInput = list.querySelector(
@@ -84,8 +85,9 @@ async function load(status) {
           load(currentFilter);
         } catch (err) {
           showToast(err.message, 'error');
+        } finally {
+          btn.disabled = false;
         }
-        btn.disabled = false;
       });
     }
 
