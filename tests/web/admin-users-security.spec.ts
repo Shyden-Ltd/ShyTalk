@@ -33,9 +33,22 @@ test.describe('Admin Users - Security Subtab', () => {
     const pinStatusGrid = page.locator('#pin-status-grid');
     await expect(pinStatusGrid).toBeVisible({ timeout: 15_000 });
 
-    // Verify #pin-set shows "Yes" or "No"
+    // Wait for #pin-set to settle on a real value ("Yes" or "No")
+    // before reading other fields — the grid renders the placeholder
+    // "—" synchronously and populates via an async fetch. Same fix
+    // pattern as the sibling PIN test at line 224. Without this gate,
+    // every subsequent `textContent` read returns "—" mid-load and the
+    // assertion fails flakily.
     const pinSet = page.locator('#pin-set');
     await expect(pinSet).toBeVisible({ timeout: 15_000 });
+    await page.waitForFunction(
+      () => {
+        const txt = document.getElementById('pin-set')?.textContent?.trim();
+        return txt === 'Yes' || txt === 'No';
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
     const pinSetText = await pinSet.textContent();
     expect(pinSetText).toBeTruthy();
     expect(['Yes', 'No']).toContain(pinSetText!.trim());

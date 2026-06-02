@@ -88,6 +88,18 @@ test.describe('Admin Cross-Tab Interactions', () => {
     await adminLogin(page);
   });
 
+  // Test 2 ("appeal approve results in user unsuspension") explicitly
+  // suspends the worker-scoped user before driving the appeal flow.
+  // If any step before the appeal-approve fails, the user is left
+  // suspended for every subsequent test file (admin-keyboard,
+  // admin-users-*, etc.) — surfaced as the "Enter key triggers user
+  // search" flake (displayName mask = "Suspended Account"). Defensive
+  // afterAll keeps the leak contained even when a flaky retry leaves
+  // mid-test state. Per [[feedback-test-isolation-no-leaks]].
+  test.afterAll(async ({ testData }) => {
+    await unsuspendAndResetGcs(testData);
+  });
+
   // ── Test 1: Report resolve-as-warned → warning in user history ──
   test('report warned resolution creates warning in user moderation history', async ({ page, testData }) => {
     // Seed a fresh report
