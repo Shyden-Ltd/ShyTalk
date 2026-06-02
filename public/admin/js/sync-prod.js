@@ -70,6 +70,10 @@ const SYNC_PHRASE = 'SYNC';
 let syncStep = 0;
 let syncExecuting = false;
 let syncMuted = false;
+// See nuclear-reset.js for rationale. Step-transition lock cleared on
+// next macrotask; blocks step 1→2 double-tap from skipping the "this
+// will overwrite everything" warning screen.
+let syncStepLock = false;
 
 // ── Web Audio: digital pulse (confirmation steps) ─────────────────
 
@@ -206,6 +210,11 @@ async function handleSyncProceed() {
   // disables the button for input gating, AND after step 3 disables
   // the button before awaiting executeSyncFromProd.
   if (proceedBtn.disabled) return;
+  // Step-transition lock: blocks step 1→2 double-tap from skipping
+  // the "this will overwrite everything" warning. Cleared next tick.
+  if (syncStepLock) return;
+  syncStepLock = true;
+  setTimeout(() => { syncStepLock = false; }, 0);
 
   if (syncStep === 1) {
     syncStep = 2;

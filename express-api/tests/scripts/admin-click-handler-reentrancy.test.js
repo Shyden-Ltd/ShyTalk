@@ -48,6 +48,13 @@
  *     terminate and not match. No such pattern exists today; document
  *     the bound here so future developers know to use simple guard
  *     conditions.
+ *   - MemberExpression handler arguments (e.g. `addEventListener("click",
+ *     obj.method)` or `addEventListener("click", this.fn.bind(this))`)
+ *     are NOT resolved — they fall through to the silent `return` at the
+ *     end of the CallExpression visitor. No such pattern exists in the
+ *     admin or shared JS today; if a future class-based module appears,
+ *     add a hard-coded pin test for it like the inline-onclick globals
+ *     and revokeWarning sections below.
  */
 
 const fs = require('node:fs');
