@@ -591,13 +591,20 @@ test.describe('Admin Reports', () => {
       return;
     }
 
-    await selectFirstReportCard(page);
-
     const uid = await firstCard.getAttribute('data-uid');
     const actionSelect = firstCard.locator(`select[data-action-select="${uid}"]`);
 
-    // Press D
-    await page.keyboard.press('d');
+    // Do the select-card + press-D atomically in one browser-side
+    // function so the 15s poll cannot fire between the ArrowDown
+    // (sets selectedCardIndex + .selected) and the D press (handler
+    // checks selectedCardIndex). Same pattern as
+    // admin-cross-tab.spec.ts atomic radio-set+resolve.
+    await page.evaluate(() => {
+      const e1 = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true });
+      document.dispatchEvent(e1);
+      const e2 = new KeyboardEvent('keydown', { key: 'd', bubbles: true });
+      document.dispatchEvent(e2);
+    });
 
     // Verify "dismiss" is selected
     await expect(actionSelect).toHaveValue('dismiss');
