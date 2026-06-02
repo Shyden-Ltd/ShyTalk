@@ -224,8 +224,10 @@ async function setupApiMocks(page: Page): Promise<void> {
 
   // ── GET /api/admin/audit-log ──
   // Proxy to the real backend first so filters by admin/action/target/date
-  // are honoured. Fall back to MOCK_AUDIT_ENTRIES only if the backend is
-  // unreachable or returns no data.
+  // are honoured. Fall back to a FILTERED view of MOCK_AUDIT_ENTRIES when
+  // the backend is unreachable or returns no data — applying the same
+  // query-param filters the real API does so tests like "filter by target
+  // type works" remain meaningful in mock-only mode.
   await page.route('**/api/admin/audit-log*', async (route) => {
     if (route.request().method() !== 'GET') { await route.fallback(); return; }
     try {
@@ -240,10 +242,59 @@ async function setupApiMocks(page: Page): Promise<void> {
     } catch {
       // Fall through to static mock
     }
+    // Replicate the real route's filter contract from
+    // express-api/src/routes/admin-audit-log.js so the mock honours
+    // ?admin=, ?action=, ?target=, ?start=, ?end=. Otherwise tests that
+    // assert "filtered rows match the filter" fail when run against the
+    // mock — the filter is silently dropped.
+    const url = new URL(route.request().url());
+    const adminUid = url.searchParams.get('adminUid') || url.searchParams.get('admin');
+    const actionType = url.searchParams.get('actionType') || url.searchParams.get('action');
+    const targetType = url.searchParams.get('targetType');
+    const targetId = url.searchParams.get('target');
+    const from = url.searchParams.get('from') || url.searchParams.get('start');
+    const to = url.searchParams.get('to') || url.searchParams.get('end');
+
+    let entries = [...MOCK_AUDIT_ENTRIES.entries];
+    if (adminUid) {
+      const needle = adminUid.toLowerCase();
+      entries = entries.filter(
+        (e) =>
+          String(e.adminUid || '').toLowerCase().includes(needle) ||
+          String(e.adminName || '').toLowerCase().includes(needle),
+      );
+    }
+    if (actionType) {
+      entries = entries.filter((e) => {
+        const act = e.actionType || e.action || '';
+        if (act === actionType) return true;
+        return act.split('_').pop() === actionType;
+      });
+    }
+    if (targetType) {
+      entries = entries.filter((e) => e.targetType === targetType);
+    }
+    if (targetId) {
+      entries = entries.filter(
+        (e) =>
+          e.targetType === targetId ||
+          String(e.targetId || '').includes(targetId) ||
+          String(e.target || '').includes(targetId),
+      );
+    }
+    if (from) {
+      const fromTs = new Date(from).getTime();
+      if (!isNaN(fromTs)) entries = entries.filter((e) => (e.timestamp || 0) >= fromTs);
+    }
+    if (to) {
+      const toTs = new Date(to).getTime() + 86400000;
+      if (!isNaN(toTs)) entries = entries.filter((e) => (e.timestamp || 0) <= toTs);
+    }
+
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(MOCK_AUDIT_ENTRIES),
+      body: JSON.stringify({ ...MOCK_AUDIT_ENTRIES, entries, total: entries.length }),
     });
   });
 
