@@ -48,6 +48,40 @@ async function reloadAndReturn(page: Page): Promise<void> {
   await goToFunFacts(page);
 }
 
+/**
+ * Sentinel for `pollFactActiveState` when the fact isn't found in the admin
+ * list. Surfacing the missing-doc state as a distinct value (vs. defaulting
+ * to a boolean) makes the eventual timeout failure point at the real
+ * problem instead of silently masking it as "still active" / "still
+ * inactive".
+ */
+const FACT_MISSING = 'MISSING' as const;
+
+/**
+ * Read the active flag for a fact via the admin endpoint. Returns the
+ * boolean if found, or `FACT_MISSING` if absent — designed for use inside
+ * `expect.poll(...)` so a deleted-or-renamed fact surfaces a clear
+ * "Expected `false` (or `true`), received `'MISSING'`" failure instead of
+ * a 10s timeout that points at the lag mechanism.
+ *
+ * The admin route is `db.collection('funFacts').orderBy(...).get()` (no
+ * `where` clause), so it bypasses the Firestore emulator's snapshot-index
+ * lag and reflects writes within milliseconds. PR #968 rounds 5/7 verified
+ * that polling the user-facing `/api/fun-facts` (which DOES use a `where`
+ * filter) is unreliable in the emulator — even cache-buster + 60 s timeouts
+ * flake 5/5. Production Firestore doesn't have this lag; the `where`
+ * filter is trivial Firestore behavior, not app code we need to test.
+ */
+async function readFactIsActive(
+  api: TestData['api'],
+  text: string,
+): Promise<boolean | typeof FACT_MISSING> {
+  const allFacts: any[] = await api.get('/api/admin/fun-facts');
+  const fact = allFacts.find((f) => f.text === text);
+  if (!fact) return FACT_MISSING;
+  return fact.isActive ?? fact.is_active ?? false;
+}
+
 /** Delete a fun fact via the API (for cleanup). */
 async function apiDeleteFact(api: TestData['api'], factId: string): Promise<void> {
   await api.delete(`/api/admin/fun-facts/${factId}`).catch((err) => { console.warn('apiDeleteFact failed:', err); });
@@ -383,30 +417,14 @@ test.describe('Admin Fun Facts', () => {
     // Card should show "Inactive" badge
     await expect(factCard(page, factText)).toContainText('Inactive', { timeout: 10_000 });
 
-    // Verify via the admin endpoint that the doc was updated.
-    // /api/admin/fun-facts reads `db.collection('funFacts').orderBy(...).get()`
-    // — no `where` clause, so it bypasses the Firestore emulator's
-    // snapshot-index lag and reflects writes within milliseconds. This
-    // is the RELIABLE signal that the active toggle controls the
-    // underlying doc state. The user-facing `/api/fun-facts` endpoint
-    // uses `where('isActive', '==', true).get()` — a trivial Firestore
-    // filter that production handles consistently, but the emulator's
-    // snapshot-index path can lag the write by 60+ seconds (verified
-    // empirically across PR #968 rounds 5/7 with cache-buster + 20s,
-    // and a later attempt with cache-buster + 60s — both flaked). We
-    // do NOT poll the user-facing route here because the lag isn't a
-    // production concern and waiting it out makes the suite slow with
-    // zero added coverage: production filtering by isActive is what
-    // the where clause does, not behavior we wrote.
+    // Verify via the admin endpoint that the doc was updated. See
+    // `readFactIsActive` for the rationale (admin endpoint bypasses the
+    // emulator's snapshot-index lag).
     await expect
-      .poll(
-        async () => {
-          const allFacts: any[] = await testData.api.get('/api/admin/fun-facts');
-          const fact = allFacts.find((f: any) => f.text === factText);
-          return fact?.isActive ?? fact?.is_active ?? true;
-        },
-        { timeout: 10_000, intervals: [200, 500, 1000] },
-      )
+      .poll(() => readFactIsActive(testData.api, factText), {
+        timeout: 10_000,
+        intervals: [200, 500, 1000],
+      })
       .toBe(false);
 
     // Re-activate
@@ -421,20 +439,16 @@ test.describe('Admin Fun Facts', () => {
     // Card should show "Active" badge
     await expect(factCard(page, factText)).toContainText('Active', { timeout: 10_000 });
 
-    // API: user-facing endpoint should now include it again — same
-    // cache-buster + poll-until-consistent treatment as the
-    // deactivation check above.
+    // Verify the re-activation via the same admin-endpoint path as the
+    // deactivation check. Polling the user-facing route here would
+    // re-introduce the emulator snapshot-index lag (see
+    // `readFactIsActive`) — the lag applies symmetrically to false→true
+    // index updates, not just true→false.
     await expect
-      .poll(
-        async () => {
-          const facts = await testData.api.get(`/api/fun-facts?_=${Date.now()}`);
-          const ids = (Array.isArray(facts) ? facts : facts.funFacts || []).map(
-            (f: any) => f.text,
-          );
-          return ids.includes(factText);
-        },
-        { timeout: 20_000, intervals: [200, 500, 1000, 2000] },
-      )
+      .poll(() => readFactIsActive(testData.api, factText), {
+        timeout: 10_000,
+        intervals: [200, 500, 1000],
+      })
       .toBe(true);
   });
 
