@@ -82,6 +82,14 @@ test.describe('Admin Reports', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
+    // Pause the Reports tab's 15s poll so it can't fire mid-test and
+    // wipe action-select / sev-radio / .selected state between e.g.
+    // pressing D and asserting the result. See reports.js:340 +
+    // [[feedback-test-isolation-no-leaks]] for context. Production
+    // code never sets this flag — only tests.
+    await page.addInitScript(() => {
+      (window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
+    });
     await adminLogin(page);
     await navigateToTab(page, 'Reports');
     await waitForReportsLoaded(page);

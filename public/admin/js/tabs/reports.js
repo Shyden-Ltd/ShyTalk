@@ -338,6 +338,15 @@ function startReportListener() {
   reportsPollInterval = setInterval(async () => {
     if (_getCurrentTab() !== 'reports') return;
     if (resolveInProgress) return;
+    // Test-only escape hatch: when `window.__SHYTALK_PAUSE_REPORTS_POLL__`
+    // is truthy, skip the poll. Playwright tests that exercise
+    // keyboard shortcuts on the Reports tab race against the 15s
+    // re-render — the poll can fire between e.g. pressing D and
+    // asserting the resulting action-select value, wiping the user's
+    // selection. Tests set this flag at the start of `beforeEach`
+    // and let it stay set for the test's lifetime. Production code
+    // never sets the flag so the poll behaviour is unchanged.
+    if (typeof window !== 'undefined' && window.__SHYTALK_PAUSE_REPORTS_POLL__) return;
     try { await loadReports(); } catch (_) {}
   }, 15000);
 }
