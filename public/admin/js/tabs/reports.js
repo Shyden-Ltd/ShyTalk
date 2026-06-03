@@ -356,6 +356,15 @@ function renderReportsFromSnapshot(snapshot) {
   // Skip auto-refresh while a resolve operation is in progress to avoid
   // wiping the DOM (and the action form) mid-flow.
   if (resolveInProgress) return;
+  // Test-only escape hatch: same flag the 15s poll honours. The
+  // snapshot listener fires on every Firestore write (suspend, ban,
+  // appeal-write, etc.) — in tests, those writes are intentional setup
+  // and we don't want the resulting card rebuild to race with the
+  // test's atomic radio-set + click sequence. See the poll comment
+  // above + [[feedback-test-isolation-no-leaks]] for context. The
+  // production behaviour is unchanged because production never sets
+  // the flag.
+  if (typeof window !== 'undefined' && window.__SHYTALK_PAUSE_REPORTS_POLL__) return;
   // This just triggers a reload via API for full data
   loadReports();
 }

@@ -55,7 +55,7 @@ describe('.github/workflows/qa-runner-driver-checks.yml', () => {
     // [[feedback-ci-cache-downloads-version-aware]] — newer Playwright
     // must bust the cache automatically. The key must reference the
     // resolved version (steps.pw.outputs.version), not just runner.os.
-    expect(reusable).toMatch(/uses:\s*actions\/cache@v4/);
+    expect(reusable).toMatch(/uses:\s*actions\/cache@v5/);
     expect(reusable).toMatch(
       /key:\s*playwright-\$\{\{\s*runner\.os\s*\}\}-\$\{\{\s*steps\.pw\.outputs\.version\s*\}\}/,
     );

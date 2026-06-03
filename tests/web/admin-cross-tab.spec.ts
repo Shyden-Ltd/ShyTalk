@@ -85,6 +85,20 @@ test.describe('Admin Cross-Tab Interactions', () => {
   test.describe.configure({ mode: 'serial' });
 
   test.beforeEach(async ({ page }) => {
+    // Pause the Reports tab's 15s poll so it can't fire mid-test and
+    // re-render the .severity-radio inputs between the atomic
+    // `set sev-2 checked + click resolve` evaluate and the resolve
+    // handler's `:checked` read. Without this pause, the cross-tab
+    // test "report warned resolution …" intermittently records a
+    // Severity 1 warning instead of Severity 2: the poll fires during
+    // resolveReport's `await acquireLock(...)`, rebuilds reportCards,
+    // resets sev-1 to the default-checked state, and the subsequent
+    // `form.querySelector('input[name="sev-${uid}"]:checked')` returns
+    // sev-1. See reports.js:340 + [[feedback-test-isolation-no-leaks]].
+    // Production code never sets this flag — only tests.
+    await page.addInitScript(() => {
+      (window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
+    });
     await adminLogin(page);
   });
 
