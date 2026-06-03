@@ -210,6 +210,50 @@ test.describe('Admin Users - Moderation Subtab', () => {
     await testData.api.post(`/api/user/${uid}/reset-gcs`);
   });
 
+  // ── Test 3b: Unsuspend on already-unsuspended user shows neutral toast ──
+  // Regression guard for the users.js UI branch on
+  // `result.alreadyUnsuspended`. A future commit that removes the UI
+  // branch would show the affirmative "User unsuspended" toast even
+  // when the server reported the no-op state. Uses `page.route()` to
+  // mock the API response — keeps the test isolation-clean and doesn't
+  // depend on the live Express having the matching code deployed.
+  // The server-side guard itself is covered by the Jest unit test in
+  // express-api/tests/routes/admin-users-write.test.js.
+  test('unsuspend on already-unsuspended user shows neutral toast', async ({ page, testData }) => {
+    const uid = String(testData.user.uniqueId);
+
+    // Mock the unsuspend POST to return the idempotency response. Must
+    // be installed BEFORE clicking the button. The mock matches both
+    // /api/user/${uid}/unsuspend and the trailing-slash variant.
+    await page.route(`**/api/user/${uid}/unsuspend`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ success: true, alreadyUnsuspended: true }),
+      });
+    });
+
+    // Force the unsuspend button visible — production hides it unless
+    // the user IS suspended. Simulates the stale-UI scenario where an
+    // admin clicks unsuspend on a user whose suspension expired between
+    // renders, or a double-click during rapid status changes.
+    await page.evaluate(() => {
+      const btn = document.getElementById('unsuspend-btn');
+      if (btn) btn.style.display = '';
+    });
+
+    await page.locator('#unsuspend-btn').click();
+
+    // The "already unsuspended" neutral toast must appear instead of the
+    // affirmative "User unsuspended" lift toast.
+    await expect(
+      page.locator('text=User is already unsuspended').first(),
+    ).toBeVisible({ timeout: 5_000 });
+    // Negative assertion: the affirmative "User unsuspended" toast
+    // must NOT appear (would imply the UI branch was bypassed).
+    await expect(page.locator('text=/^User unsuspended$/').first()).toBeHidden();
+  });
+
   // ── Test 4: GCS reset to 100 ──
   test('GCS reset to 100', async ({ page, testData }) => {
     const uid = String(testData.user.uniqueId);

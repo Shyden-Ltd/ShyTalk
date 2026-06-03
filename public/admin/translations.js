@@ -2167,8 +2167,9 @@ var ADMIN_TRANSLATIONS = {
     age_verif_new_dob_label: "ថ្ងៃខែឆ្នាំកំណើតនៅលើអត្តសញ្ញាណប័ណ្ណ៖",
     // google-translated 2026-06-02
     age_verif_modify_button: "ធ្វើបច្ចុប្បន្នភាព DOB និងសម្រេចចិត្ត",
-    // google-translated 2026-06-03
-    toast_user_already_unsuspended: "អ្នក​ប្រើ​ត្រូវ​បាន​ផ្អាក​រួច​ហើយ។",
+    // Hand-overridden: Google produced "ត្រូវបានផ្អាករួចហើយ" — "already
+    // SUSPENDED" (missing "ដក" = remove/lift). Opposite meaning.
+    toast_user_already_unsuspended: "អ្នកប្រើត្រូវបានដកការផ្អាករួចហើយ",
   },
   ko: {
     tab_users: '\uC0AC\uC6A9\uC790', tab_appeals: '\uC774\uC758 \uC2E0\uCCAD', tab_reports: '\uC2E0\uACE0', tab_gifts: '\uC120\uBB3C',

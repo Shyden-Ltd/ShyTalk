@@ -33,6 +33,7 @@ const PHASE_2G_KEYS = [
   'toast_partial_retry',
   'toast_user_suspended',
   'toast_user_unsuspended',
+  'toast_user_already_unsuspended',
   'toast_warning_issued_successfully',
 ];
 
