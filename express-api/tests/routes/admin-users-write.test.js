@@ -641,12 +641,25 @@ describe('POST /api/user/:uniqueId/unsuspend --- validation', () => {
     // Confirm the route returned BEFORE any write side effects fired.
     // Without the early-return guard, a defensive beforeAll calling
     // unsuspend on a clean user would emit a spurious PM, write a
-    // phantom UNSUSPEND audit log entry, and run liftAutoAppliedBans
-    // — polluting state for the suite. None of these should fire here.
+    // phantom UNSUSPEND audit log entry, run liftAutoAppliedBans, and
+    // invalidate the suspension cache — polluting state for the suite.
+    // Pin every side-effect channel explicitly so a future refactor
+    // that moves any of them above the guard is caught.
     expect(mockDocUpdate).not.toHaveBeenCalled();
+    // audit log writes use `db.doc('adminAuditLog/...').set(...)` →
+    // mockDocSet (not mockDocUpdate); the guard must suppress this too.
+    expect(mockDocSet).not.toHaveBeenCalled();
     // liftAutoAppliedBans queries `bans` via `db.collection`; on the
     // early-return path it must never execute.
     expect(db.collection).not.toHaveBeenCalled();
+    // System PM ("Your suspension has been lifted") would surprise the
+    // already-unsuspended user.
+    const { sendSystemPm } = require('../../src/utils/system-pm');
+    expect(sendSystemPm).not.toHaveBeenCalled();
+    // Cache invalidation is only meaningful when the suspension state
+    // actually changed — pin its absence on the no-op path.
+    const { clearSuspensionCache } = require('../../src/middleware/auth');
+    expect(clearSuspensionCache).not.toHaveBeenCalled();
   });
 
   it('should restore pre-suspension profile data on unsuspend', async () => {

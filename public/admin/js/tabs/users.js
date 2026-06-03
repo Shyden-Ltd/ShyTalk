@@ -1297,7 +1297,17 @@ export function wireModerationListeners() {
     unsuspendBtn.disabled = true;
     try {
       const result = await apiCall("POST", `/api/user/${currentUid}/unsuspend`);
-      window.PartialFailureToast?.showResultToast(showToast, result, window.tAdmin("toast_user_unsuspended"));
+      // Server returns { success: true, alreadyUnsuspended: true } when
+      // the user was not actually suspended (idempotency guard in
+      // admin-users.js). Surface a distinct neutral toast so the admin
+      // knows nothing changed, instead of the misleading "User
+      // unsuspended" affirmation. Falls back to the lift toast on a
+      // real unsuspend.
+      if (result?.alreadyUnsuspended) {
+        showToast(window.tAdmin("toast_user_already_unsuspended"));
+      } else {
+        window.PartialFailureToast?.showResultToast(showToast, result, window.tAdmin("toast_user_unsuspended"));
+      }
       const data = await apiCall("GET", `/api/user/${currentUid}`);
       await populateFormFull(data);
     } catch (err) { showToast(err.message, "error"); }
