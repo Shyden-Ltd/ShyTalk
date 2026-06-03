@@ -587,6 +587,62 @@ describe('buildDataExport', () => {
     expect(result.failedSections).toContain('notifications');
   });
 
+  // ─── queryDocs-backed sections: backpack, giftWall, transactions, warnings
+  // The seven error-path tests above all route the failure via path-keyed
+  // `db.collection.mockImplementation`. The four sections below take a
+  // different code path: they call `queryDocs(db.collection(...))`, and
+  // `queryDocs` is mocked separately (line 53-55) — so a path predicate
+  // on db.collection alone never fires for them. Each test below stamps
+  // the collection mock to attach `_path` to the returned chain, then
+  // routes `queryDocs.mockImplementation` by `ref._path` so exactly one
+  // section's queryDocs call rejects while the other three resolve. The
+  // partial-failure contract (recordFailure → partial=true →
+  // failedSections.contains) is the GDPR Article 20 compliance pin and
+  // is asserted symmetrically with the seven chain-backed tests above.
+  describe.each([
+    ['backpack', 'users/10000001/backpack', 'Backpack permission denied'],
+    ['giftWall', 'users/10000001/giftWall', 'GiftWall permission denied'],
+    ['transactions', 'users/10000001/transactions', 'Transactions permission denied'],
+    ['warnings', 'users/10000001/warnings', 'Warnings permission denied'],
+  ])('handles %s queryDocs error gracefully', (section, collectionPath, errorMessage) => {
+    test('records failure and propagates partial-export state', async () => {
+      mockDocGet.mockResolvedValue({
+        exists: true,
+        data: () => testUser,
+      });
+
+      const { db } = require('../../src/utils/firebase');
+      db.collection.mockImplementation((path) => {
+        const chain = {
+          _path: path,
+          where: jest.fn().mockImplementation(() => chain),
+          orderBy: jest.fn().mockImplementation(() => chain),
+          limit: jest.fn().mockImplementation(() => chain),
+          get: mockCollectionGet,
+        };
+        return chain;
+      });
+      queryDocs.mockImplementation((ref) => {
+        if (ref && ref._path === collectionPath) {
+          return Promise.reject(new Error(errorMessage));
+        }
+        return Promise.resolve([]);
+      });
+
+      const result = await buildDataExport('10000001');
+      expect(result.buffer).toBeInstanceOf(Buffer);
+
+      const log = require('../../src/utils/log');
+      expect(log.error).toHaveBeenCalledWith(
+        'data-export',
+        `Failed to query ${section}`,
+        expect.objectContaining({ uniqueId: '10000001' }),
+      );
+      expect(result.partial).toBe(true);
+      expect(result.failedSections).toContain(section);
+    });
+  });
+
   // --- Suggestion votes scanning --------------------------------------------
 
   test('collects suggestion votes via collection-group query (Phase 2A finding #1)', async () => {
@@ -929,6 +985,8 @@ describe('buildDataExport', () => {
       'Failed to query conversations',
       expect.objectContaining({ uniqueId: '10000001' }),
     );
+    expect(result.partial).toBe(true);
+    expect(result.failedSections).toContain('conversations');
   });
 
   // ─── Partial-failure contract (Phase 2A finding #4) ─────────────────
