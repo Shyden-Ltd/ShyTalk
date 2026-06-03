@@ -223,8 +223,10 @@ test.describe('Admin Users - Moderation Subtab', () => {
     const uid = String(testData.user.uniqueId);
 
     // Mock the unsuspend POST to return the idempotency response. Must
-    // be installed BEFORE clicking the button. The mock matches both
-    // /api/user/${uid}/unsuspend and the trailing-slash variant.
+    // be installed BEFORE clicking the button. The pattern matches the
+    // production call from users.js:1299 (`/api/user/${uid}/unsuspend`,
+    // no trailing slash). If a future refactor adds a trailing slash,
+    // the pattern needs `{,/}` brace-expansion.
     await page.route(`**/api/user/${uid}/unsuspend`, async (route) => {
       await route.fulfill({
         status: 200,

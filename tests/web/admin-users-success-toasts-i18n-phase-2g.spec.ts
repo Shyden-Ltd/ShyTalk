@@ -118,6 +118,7 @@ test.describe('Admin users-tab success + auto-escalate i18n (Phase 2g)', () => {
         partial: w.tAdminFmt('toast_partial_retry', { summary: '1/3 PMs failed' }),
         suspended: w.tAdmin('toast_user_suspended'),
         unsuspended: w.tAdmin('toast_user_unsuspended'),
+        alreadyUnsuspended: w.tAdmin('toast_user_already_unsuspended'),
         warningIssued: w.tAdmin('toast_warning_issued_successfully'),
       };
     });
@@ -148,6 +149,9 @@ test.describe('Admin users-tab success + auto-escalate i18n (Phase 2g)', () => {
 
     expect(result!.unsuspended).toMatch(/[가-힯]/);
     expect(result!.unsuspended).not.toBe('User unsuspended');
+
+    expect(result!.alreadyUnsuspended).toMatch(/[가-힯]/);
+    expect(result!.alreadyUnsuspended).not.toBe('User is already unsuspended');
 
     expect(result!.warningIssued).toMatch(/[가-힯]/);
     expect(result!.warningIssued).not.toBe('Warning issued successfully');
