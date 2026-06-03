@@ -643,8 +643,12 @@ function wireUpReportCards() {
         const ok = await acquireLock(uid);
         if (ok) {
           showToast('Review taken over');
-          // Takeover refreshes the whole list — the API contract doesn't
-          // guarantee order parity, so any prior selection is unreliable.
+          // Same rationale as activate()/filter/search above: the
+          // refresh rebuilds reportCards[] and the API contract doesn't
+          // guarantee order parity, so any prior selectedCardIndex is
+          // stale. The periodic poll path (line ~340) deliberately
+          // does NOT reset here — that's a background render where
+          // yanking the user out of their selection would be jarring.
           selectedCardIndex = -1;
           loadReports();
         }

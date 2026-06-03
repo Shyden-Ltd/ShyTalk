@@ -126,6 +126,58 @@ test.describe('Admin Keyboard Shortcuts', () => {
     await expect(actionSelect).toHaveValue('dismiss');
   });
 
+  // ── Test 3b: Reports — D key after tab re-entry resets stale index ──
+  // Regression guard for the `activate()` reset added to
+  // public/admin/js/tabs/reports.js. Without that reset, an admin who
+  // selected card N in Reports, switched to Users, then switched back,
+  // would press ArrowDown and land on card N+1 (not 0) because
+  // `selectedCardIndex` survived the deactivate/activate round trip
+  // and the rebuilt `reportCards[]` was still indexed against the
+  // stale value. A future commit that removes the `activate()` reset
+  // would leave the basic D test (test 3) green because beforeEach's
+  // adminLogin triggers a full page load — only this round-trip path
+  // surfaces the bug.
+  test('D key after Users→Reports round-trip selects first card', async ({ page }) => {
+    await navigateToTab(page, 'Reports');
+    await waitForReportsLoaded(page);
+    await filterReports(page, 'pending');
+
+    const firstCard = page.locator('.report-card').first();
+    if (await firstCard.count() === 0) {
+      test.skip(true, 'No pending reports for keyboard shortcuts');
+      return;
+    }
+
+    // Establish a stale selectedCardIndex by selecting card 0 first
+    await selectFirstReportCard(page);
+
+    // Round-trip: leave Reports → return to Reports. deactivate() does
+    // not reset selectedCardIndex; activate() must.
+    await navigateToTab(page, 'Users');
+    await navigateToTab(page, 'Reports');
+    await waitForReportsLoaded(page);
+    await filterReports(page, 'pending');
+
+    // Re-locate the first card after the rebuild
+    const firstCardAfter = page.locator('.report-card').first();
+    if (await firstCardAfter.count() === 0) {
+      test.skip(true, 'No pending reports after round-trip');
+      return;
+    }
+
+    // ArrowDown should land on card 0 — proving selectedCardIndex was
+    // reset on tab re-entry, not preserved from the prior selection.
+    await page.evaluate(() => (document.activeElement as HTMLElement)?.blur?.());
+    await page.keyboard.press('ArrowDown');
+    await expect(firstCardAfter).toHaveClass(/selected/, { timeout: 5_000 });
+
+    // D on the freshly selected card 0 sets its action-select to dismiss
+    const uid = await firstCardAfter.getAttribute('data-uid');
+    const actionSelect = firstCardAfter.locator(`select[data-action-select="${uid}"]`);
+    await page.keyboard.press('d');
+    await expect(actionSelect).toHaveValue('dismiss');
+  });
+
   // ── Test 4: Reports — Enter key triggers resolve ──
   test('Enter key triggers resolve on selected report', async ({ page, testData }) => {
     await navigateToTab(page, 'Reports');
