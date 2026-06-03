@@ -4,10 +4,11 @@
  * Extracted from users.js, reports.js, banners.js, config.js, etc. to
  * eliminate duplication.
  *
- * Spread-order invariant (both helpers): the payload is spread BEFORE the
- * trusted `id` so a legacy or adversarially-shaped `id` field on the doc
- * body cannot override the storage-layer key. See the "spread-order safety"
- * tests in firestore-helpers.test.js for the failing-without-the-fix proof.
+ * Spread-order invariant (`getDoc` and `queryDocs`): the payload is spread
+ * BEFORE the trusted `id` so a legacy or adversarially-shaped `id` field on
+ * the doc body cannot override the storage-layer key. See the "spread-order
+ * safety" tests in firestore-helpers.test.js for the failing-without-the-fix
+ * proof.
  */
 
 const { db } = require('./firebase');

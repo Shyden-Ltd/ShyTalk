@@ -100,4 +100,22 @@ describe('spread-order safety (privacy invariant)', () => {
     expect(results.map((r) => r.id)).toEqual(['real-a', 'real-b']);
     expect(results.map((r) => r.name)).toEqual(['Alice', 'Bob']);
   });
+
+  // ECMAScript spread of `undefined` produces `{}` silently. A mocked or
+  // legacy-tier Firestore snap that reports `exists: true` but whose `data()`
+  // returns `undefined` would therefore pass through the helper as
+  // `{ id: snap.id }` — the trusted id still wins, no crash, payload is empty.
+  // Pinning this avoids a future "defensive" refactor (e.g. wrapping
+  // `snap.data() ?? {}` then changing spread order again) silently regressing
+  // the contract or introducing a TypeError on the spread.
+  test('getDoc: data() returning undefined on an existing doc yields { id } (no crash)', async () => {
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'doc-undef',
+      data: () => undefined,
+    });
+
+    const result = await getDoc('collection/doc-undef');
+    expect(result).toEqual({ id: 'doc-undef' });
+  });
 });

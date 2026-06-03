@@ -66,8 +66,11 @@ router.get('/roadmap/me', async (req, res) => {
 
           const userDoc = await db.doc(`users/${idData.uniqueId}`).get();
           if (userDoc.exists) {
-            // Same identity-pinning as the direct path above.
-            userData = { ...userDoc.data(), uniqueId: idData.uniqueId };
+            // Same identity-pinning + numeric coercion as the direct path
+            // above. `Number(...)` keeps the response shape consistent
+            // across both auth paths (identityMap may legacy-store the FK
+            // as a string).
+            userData = { ...userDoc.data(), uniqueId: Number(idData.uniqueId) };
             break;
           }
         }

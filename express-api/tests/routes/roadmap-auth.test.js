@@ -219,6 +219,7 @@ describe('GET /api/roadmap/me', () => {
     });
     const app = createApp();
     const res = await request(app).get('/api/roadmap/me').expect(200);
+    expect(res.body).not.toHaveProperty('isSuspended');
     expect(res.body).not.toHaveProperty('suspensionReason');
   });
 
@@ -412,9 +413,11 @@ describe('GET /api/roadmap/me', () => {
     });
     const app = createApp({ uid: 'firebase-uid-multi', uniqueId: null });
     const res = await request(app).get('/api/roadmap/me').expect(200);
-    // Should pick the first matched entry
-    expect(res.body.displayName).toBeDefined();
-    expect([3001, 3002]).toContain(res.body.uniqueId);
+    // The route loops idSnap.docs in iteration order and `break`s on the
+    // first existing user doc — pin the determinism (first entry: 3001).
+    // A regression that picked a different entry would otherwise pass.
+    expect(res.body.uniqueId).toBe(3001);
+    expect(res.body.displayName).toBe('FirstEntry');
   });
 
   test('identityMap with unlinked entry (unlinked: true) skipped', async () => {
@@ -431,20 +434,23 @@ describe('GET /api/roadmap/me', () => {
         },
       ],
     });
+    // Both user docs EXIST with distinguishable displayNames so the
+    // assertion truly pins "unlinked entry skipped". A regression that
+    // failed to skip would resolve to 4001 first and return UnlinkedUser
+    // instead of LinkedUser.
     mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('users/4001')) {
+        return Promise.resolve(makeUserDoc(4001, { displayName: 'UnlinkedUser' }));
+      }
       if (path && path.includes('users/4002')) {
         return Promise.resolve(makeUserDoc(4002, { displayName: 'LinkedUser' }));
       }
       return Promise.resolve({ exists: false });
     });
     const app = createApp({ uid: 'uid-unlinked', uniqueId: null });
-    const res = await request(app).get('/api/roadmap/me');
-    // Should skip the unlinked entry and use the linked one, or 404 if not handled
-    if (res.status === 200) {
-      expect(res.body.uniqueId).toBe(4002);
-    } else {
-      expect(res.status).toBe(404);
-    }
+    const res = await request(app).get('/api/roadmap/me').expect(200);
+    expect(res.body.uniqueId).toBe(4002);
+    expect(res.body.displayName).toBe('LinkedUser');
   });
 
   // ─── New tests: type safety ────────────────────────────────────
@@ -600,6 +606,34 @@ describe('GET /api/roadmap/me — spread-order safety (identity invariant)', () 
     const res = await request(app).get('/api/roadmap/me').expect(200);
     expect(res.body.uniqueId).toBe(2002);
     expect(res.body.displayName).toBe('FallbackUser');
+  });
+
+  // Type-shape parity between the two auth paths: the direct path coerces
+  // `req.auth.uniqueId` to Number via `Number(...)`; the fallback must do
+  // the same so legacy identityMap docs that store the FK as a string don't
+  // produce a string `uniqueId` in the response. Without the coercion, a
+  // single API contract leaks two different runtime types for the same
+  // field, depending on which auth path resolved the request.
+  test('identityMap fallback path: string uniqueId in identityMap is coerced to number in response', async () => {
+    mockCollectionGet.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: 'google:legacy@gmail.com',
+          data: () => ({ uniqueId: '5005', firebaseUid: 'firebase-uid-legacy' }),
+        },
+      ],
+    });
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('users/5005')) {
+        return Promise.resolve(makeUserDoc(5005, { displayName: 'LegacyString' }));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp({ uid: 'firebase-uid-legacy', uniqueId: null });
+    const res = await request(app).get('/api/roadmap/me').expect(200);
+    expect(typeof res.body.uniqueId).toBe('number');
+    expect(res.body.uniqueId).toBe(5005);
   });
 });
 
