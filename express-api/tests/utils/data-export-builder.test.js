@@ -65,6 +65,14 @@ const { queryDocs } = require('../../src/utils/firestore-helpers');
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // jest.clearAllMocks() clears CALL HISTORY but not mockImplementation
+  // overrides. The queryDocs-backed error-path tests below use
+  // queryDocs.mockImplementation(...) to route rejections by collection
+  // path; without this re-stamp, the routing predicate would leak into
+  // any subsequent test that doesn't explicitly override queryDocs.
+  // Symmetric with the existing mockCollectionGet / mockCollectionGroupGet
+  // / mockCollectionGroupCommentsGet / db.collection re-stamps below.
+  queryDocs.mockResolvedValue([]);
   mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
   // Default: no votes for the user — tests that exercise the votes path
   // override with mockCollectionGroupGet.mockResolvedValueOnce(...).
