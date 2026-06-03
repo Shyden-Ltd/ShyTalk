@@ -117,6 +117,30 @@ const _suggestionCommentMapper = (suggestionId, commentDoc) => ({
   id: commentDoc.id,
 });
 
+// Per-section mappers for the remaining eight GDPR-export sections. Same
+// testability + spread-order reasoning as the two suggestion mappers above:
+// each places trusted reference fields (`id` from the doc ref, and
+// `conversationId` from the parent conversation doc for user messages)
+// AFTER the payload spread so a same-named field in the payload — whether
+// from a future schema or an adversarial Firestore write — cannot
+// misattribute the entry in a user's GDPR export. See the
+// `_suggestionCommentMapper` block above for the full rationale.
+//
+// `_userMessageMapper` carries two trusted fields (parent-conversation id
+// + message-doc id); the remaining seven are single-arg `id`-only shapes.
+const _userMessageMapper = (conv, m) => ({
+  ...m.data(),
+  conversationId: conv.id,
+  id: m.id,
+});
+const _roomOwnedMapper = (d) => ({ ...d.data(), id: d.id });
+const _reportFiledMapper = (d) => ({ ...d.data(), id: d.id });
+const _appealMapper = (d) => ({ ...d.data(), id: d.id });
+const _identityEntryMapper = (d) => ({ ...d.data(), id: d.id });
+const _deviceBindingMapper = (d) => ({ ...d.data(), id: d.id });
+const _submittedSuggestionMapper = (d) => ({ ...d.data(), id: d.id });
+const _notificationMapper = (d) => ({ ...d.data(), id: d.id });
+
 async function buildDataExport(uniqueId) {
   // Single numeric coercion shared by every Firestore equality query in
   // this function — the function previously did this seven times inline
@@ -250,7 +274,7 @@ async function buildDataExport(uniqueId) {
           .limit(remaining)
           .get();
         for (const m of msgSnap.docs) {
-          userMessages.push({ conversationId: conv.id, id: m.id, ...m.data() });
+          userMessages.push(_userMessageMapper(conv, m));
         }
       } catch (msgErr) {
         // Per-conversation message failure: record the conversation id in
@@ -267,7 +291,7 @@ async function buildDataExport(uniqueId) {
   let roomsOwned = [];
   try {
     const roomSnap = await db.collection('rooms').where('ownerId', '==', uniqueId).get();
-    roomsOwned = roomSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    roomsOwned = roomSnap.docs.map(_roomOwnedMapper);
   } catch (err) {
     recordFailure('rooms', err);
   }
@@ -276,7 +300,7 @@ async function buildDataExport(uniqueId) {
   let reportsFiled = [];
   try {
     const reportSnap = await db.collection('reports').where('reporterId', '==', uniqueId).get();
-    reportsFiled = reportSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    reportsFiled = reportSnap.docs.map(_reportFiledMapper);
   } catch (err) {
     recordFailure('reports', err);
   }
@@ -288,7 +312,7 @@ async function buildDataExport(uniqueId) {
       .collection('suspensionAppeals')
       .where('userId', '==', uniqueId)
       .get();
-    appeals = appealSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    appeals = appealSnap.docs.map(_appealMapper);
   } catch (err) {
     recordFailure('appeals', err);
   }
@@ -297,7 +321,7 @@ async function buildDataExport(uniqueId) {
   let identity = [];
   try {
     const idSnap = await db.collection('identityMap').where('uniqueId', '==', numericUid).get();
-    identity = idSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    identity = idSnap.docs.map(_identityEntryMapper);
   } catch (err) {
     recordFailure('identity', err);
   }
@@ -309,7 +333,7 @@ async function buildDataExport(uniqueId) {
       .collection('deviceBindings')
       .where('uniqueId', '==', numericUid)
       .get();
-    deviceBindings = bindSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    deviceBindings = bindSnap.docs.map(_deviceBindingMapper);
   } catch (err) {
     recordFailure('deviceBindings', err);
   }
@@ -321,7 +345,7 @@ async function buildDataExport(uniqueId) {
       .collection('suggestions')
       .where('submitterUid', '==', numericUid)
       .get();
-    suggestions = sugSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    suggestions = sugSnap.docs.map(_submittedSuggestionMapper);
   } catch (err) {
     recordFailure('suggestions', err);
   }
@@ -382,7 +406,7 @@ async function buildDataExport(uniqueId) {
   let notificationHistory = [];
   try {
     const notifSnap = await db.collection('notifications').where('uid', '==', numericUid).get();
-    notificationHistory = notifSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    notificationHistory = notifSnap.docs.map(_notificationMapper);
   } catch (err) {
     recordFailure('notifications', err);
   }
@@ -561,3 +585,11 @@ module.exports = buildDataExport;
 module.exports._collectSuggestionScopedEntries = collectSuggestionScopedEntries;
 module.exports._suggestionVoteMapper = _suggestionVoteMapper;
 module.exports._suggestionCommentMapper = _suggestionCommentMapper;
+module.exports._userMessageMapper = _userMessageMapper;
+module.exports._roomOwnedMapper = _roomOwnedMapper;
+module.exports._reportFiledMapper = _reportFiledMapper;
+module.exports._appealMapper = _appealMapper;
+module.exports._identityEntryMapper = _identityEntryMapper;
+module.exports._deviceBindingMapper = _deviceBindingMapper;
+module.exports._submittedSuggestionMapper = _submittedSuggestionMapper;
+module.exports._notificationMapper = _notificationMapper;

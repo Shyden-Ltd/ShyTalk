@@ -1267,4 +1267,160 @@ describe('buildDataExport', () => {
       expect(result.direction).toBe('up');
     });
   });
+
+  // ─── Remaining GDPR-section mapper contracts ────────────────────────
+  // Eight section mappers from buildDataExport that PR #975 didn't reach
+  // (PR #975 only extracted the two collection-group suggestion mappers
+  // above). Same testability tactic: each one exported as a named
+  // module-level constant so its spread-order invariant + payload shape
+  // can be pinned directly against production code, without decoding the
+  // level-9-compressed ZIP buffer (no unzip lib is on the project's dep
+  // tree, see top-of-file rationale on `collectSuggestionScopedEntries`).
+  describe('remaining GDPR-section mappers', () => {
+    const {
+      _roomOwnedMapper,
+      _reportFiledMapper,
+      _appealMapper,
+      _identityEntryMapper,
+      _deviceBindingMapper,
+      _submittedSuggestionMapper,
+      _notificationMapper,
+      _userMessageMapper,
+    } = require('../../src/utils/data-export-builder');
+
+    // Seven of the eight share the single-arg shape
+    //   (d) => ({ ...d.data(), id: d.id })
+    // A regression that flips the spread order on ANY of them breaks GDPR
+    // export attribution — the exported entry would carry a payload-supplied
+    // id that does not match its real storage location, leaving the user
+    // unable to correlate the export with audit/moderation records that
+    // reference the true id.
+    describe.each([
+      ['rooms-owned', _roomOwnedMapper],
+      ['reports-filed', _reportFiledMapper],
+      ['appeals', _appealMapper],
+      ['identity-entries', _identityEntryMapper],
+      ['device-bindings', _deviceBindingMapper],
+      ['submitted-suggestions', _submittedSuggestionMapper],
+      ['notifications', _notificationMapper],
+    ])('%s mapper', (_section, mapper) => {
+      test('spreads payload then writes trusted id last (basic shape pin)', () => {
+        const fakeDoc = {
+          id: 'real-doc-id',
+          data: () => ({ foo: 'bar', count: 7, nested: { x: 1 } }),
+        };
+        const result = mapper(fakeDoc);
+        expect(result).toEqual({
+          foo: 'bar',
+          count: 7,
+          nested: { x: 1 },
+          id: 'real-doc-id',
+        });
+      });
+
+      test('trusted id wins over rogue id in payload (privacy invariant)', () => {
+        // Adversarial payload: tries to claim a different doc identity.
+        // The mapper must override with the trusted ref id from d.id —
+        // otherwise an attacker who can write to this collection could
+        // misattribute their entry to appear as a different doc in
+        // someone else's GDPR export.
+        const fakeDoc = {
+          id: 'real-doc-id',
+          data: () => ({
+            id: 'rogue-spoofed-id',
+            foo: 'bar',
+          }),
+        };
+        const result = mapper(fakeDoc);
+        expect(result.id).toBe('real-doc-id');
+        expect(result.foo).toBe('bar');
+      });
+
+      test('undefined data() spreads to empty — pure ECMAScript object-spread semantics', () => {
+        // Sanity-pin that the export resolved to a function before the
+        // shape assertion — without this, a missing module.exports line
+        // (typo, accidental deletion) would let `mapper` be undefined,
+        // and `expect(undefined(...))` would surface a confusing
+        // "undefined is not a function" failure instead of the
+        // straightforward "mapper export missing" signal.
+        expect(typeof mapper).toBe('function');
+        // Production reality: Firestore Admin SDK's `doc.data()` only
+        // returns undefined for docs that don't exist, and QuerySnapshot
+        // .docs only includes existing docs — so this case cannot occur
+        // in production. The pin protects against a future defensive
+        // refactor (e.g. `?? {}`, a `throw if !data` guard) that would
+        // silently change the mapper's contract; the surrounding
+        // buildDataExport tests assume a pure spread. Object-spread on
+        // undefined is a no-op per ECMAScript (unlike iterable spread on
+        // arrays which throws), so the mapper produces a payload-less
+        // entry with only its trusted reference fields.
+        const fakeDoc = { id: 'irrelevant', data: () => undefined };
+        expect(mapper(fakeDoc)).toEqual({ id: 'irrelevant' });
+      });
+    });
+
+    // ─── User-message mapper: two trusted fields (conversationId + id) ──
+    // Unlike the other seven, this mapper carries TWO trusted identifiers —
+    // the parent-conversation id and the message-doc id. Both must beat any
+    // same-named field a malicious sender (or future schema migration)
+    // could embed in their own message payload, otherwise the exported
+    // message could appear in the wrong conversation or carry a spoofed
+    // doc id — either break user-side correlation against moderation
+    // and audit refs.
+    describe('user-message mapper (two trusted fields)', () => {
+      test('spreads payload then writes trusted conversationId + id last', () => {
+        const conv = { id: 'conv-real' };
+        const m = {
+          id: 'msg-real',
+          data: () => ({
+            senderId: '10000001',
+            text: 'hello',
+            createdAt: 1700000000000,
+          }),
+        };
+        const result = _userMessageMapper(conv, m);
+        expect(result).toEqual({
+          senderId: '10000001',
+          text: 'hello',
+          createdAt: 1700000000000,
+          conversationId: 'conv-real',
+          id: 'msg-real',
+        });
+      });
+
+      test('trusted conversationId AND id win over rogue payload fields (privacy invariant)', () => {
+        const conv = { id: 'conv-real' };
+        const m = {
+          id: 'msg-real',
+          data: () => ({
+            conversationId: 'rogue-conv',
+            id: 'rogue-msg',
+            senderId: '10000001',
+            text: 'attempted misattribution',
+          }),
+        };
+        const result = _userMessageMapper(conv, m);
+        expect(result.conversationId).toBe('conv-real');
+        expect(result.id).toBe('msg-real');
+        expect(result.senderId).toBe('10000001');
+        expect(result.text).toBe('attempted misattribution');
+      });
+
+      test('undefined data() spreads to empty — pure ECMAScript object-spread semantics', () => {
+        // Mirror of the single-arg mappers' shape pin: typeof guard
+        // catches a missing export, then the assertion pins the
+        // payload-less {trusted-fields-only} entry that object-spread
+        // on undefined produces. Same impossible-in-production caveat
+        // applies — Firestore Admin's QuerySnapshot.docs cannot yield
+        // a doc whose data() is undefined.
+        expect(typeof _userMessageMapper).toBe('function');
+        const conv = { id: 'conv-real' };
+        const m = { id: 'msg-real', data: () => undefined };
+        expect(_userMessageMapper(conv, m)).toEqual({
+          conversationId: 'conv-real',
+          id: 'msg-real',
+        });
+      });
+    });
+  });
 });
