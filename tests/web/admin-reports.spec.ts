@@ -81,6 +81,19 @@ async function selectFirstReportCard(page: Page): Promise<void> {
 test.describe('Admin Reports', () => {
   test.describe.configure({ mode: 'serial' });
 
+  // Test 6 (test('resolve as warned …') and related) suspends the
+  // worker user inline and resets state with `unsuspendAndResetGcs`
+  // in the test body. If the inline cleanup throws (network blip,
+  // unhandled exception mid-test), the user stays suspended for
+  // every alphabetically-later file (admin-suggestions, admin-users-*,
+  // …). Per [[feedback-test-isolation-no-leaks]]: belt-and-braces
+  // afterAll restore — same pattern as admin-appeals.spec.ts:89 and
+  // admin-cross-tab.spec.ts:99. The server-side idempotency guard in
+  // admin-users.js makes this a true no-op when no leak occurred.
+  test.afterAll(async ({ testData }) => {
+    await unsuspendAndResetGcs(testData);
+  });
+
   test.beforeEach(async ({ page }) => {
     // Pause the Reports tab's 15s poll so it can't fire mid-test and
     // wipe action-select / sev-radio / .selected state between e.g.

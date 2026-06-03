@@ -622,6 +622,33 @@ describe('POST /api/user/:uniqueId/unsuspend --- validation', () => {
     expect(res.body.error).toMatch(/not found/i);
   });
 
+  it('should return alreadyUnsuspended without writing when isSuspended is false', async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: '42',
+      data: () => ({
+        isSuspended: false,
+        displayName: 'Clean User',
+      }),
+    });
+
+    const res = await request(app).post('/api/user/42/unsuspend');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, alreadyUnsuspended: true });
+
+    // Confirm the route returned BEFORE any write side effects fired.
+    // Without the early-return guard, a defensive beforeAll calling
+    // unsuspend on a clean user would emit a spurious PM, write a
+    // phantom UNSUSPEND audit log entry, and run liftAutoAppliedBans
+    // — polluting state for the suite. None of these should fire here.
+    expect(mockDocUpdate).not.toHaveBeenCalled();
+    // liftAutoAppliedBans queries `bans` via `db.collection`; on the
+    // early-return path it must never execute.
+    expect(db.collection).not.toHaveBeenCalled();
+  });
+
   it('should restore pre-suspension profile data on unsuspend', async () => {
     const { db } = require('../../src/utils/firebase');
 

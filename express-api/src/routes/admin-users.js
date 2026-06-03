@@ -1237,6 +1237,19 @@ router.post('/user/:uniqueId/unsuspend', async (req, res) => {
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
     const user = { id: snap.id, ...snap.data() };
 
+    // Idempotency guard: skip the write + PM + audit log + ban-lift
+    // when the user is already unsuspended. Without this, defensive
+    // `beforeAll` hooks in tests (admin-keyboard.spec.ts,
+    // admin-users-moderation.spec.ts) that call unsuspend
+    // belt-and-braces fire a spurious "Your suspension has been
+    // lifted" PM, write a phantom UNSUSPEND audit log entry, and
+    // unnecessarily call liftAutoAppliedBans on every clean run.
+    // In production this also suppresses double-clicks from an admin
+    // unsuspending a user whose timed suspension already expired.
+    if (!user.isSuspended) {
+      return res.json({ success: true, alreadyUnsuspended: true });
+    }
+
     const restore = {};
     const preName = user.preSuspensionDisplayName ?? user.pre_suspension_display_name ?? null;
     const prePhoto =
