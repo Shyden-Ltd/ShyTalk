@@ -624,19 +624,10 @@ describe('11.72 — GDPR Data Export & Account Deletion', () => {
   // path is integration-tested.
   test.skip('TODO: data export includes user votes', async () => {});
   test.skip('TODO: data export includes user comments', async () => {});
-  // ── Account-deletion cascade — TODO group ───────────────────────
-  // These tests currently set up mocks but assert nothing meaningful
-  // (`expect(true).toBe(true)` or `expect(mockX).toBeDefined()`).
-  // Marked test.skip to surface honestly that the cascade behaviour
-  // is NOT covered, rather than passing falsely. Implement properly
-  // when the suggestions cascade logic is hardened, OR migrate to
-  // the integration framework (cron #8 pattern in PR #514) which
-  // exercises real Firestore + the cron.
-  test.skip('TODO: account deletion cascade: user suggestions anonymized or deleted', async () => {});
-  test.skip('TODO: account deletion cascade: user votes removed and counts decremented', async () => {});
-  test.skip('TODO: account deletion cascade: user comments anonymized', async () => {});
-  test.skip('TODO: account deletion cascade: subscription preferences removed', async () => {});
-  test.skip('TODO: account deletion cascade: notification inbox cleared', async () => {});
+  // Account-deletion cascade is now covered by the cron-level integration
+  // pattern in tests/cron/accountDeletion.test.js (Step 6b group). That is
+  // the right home for it — these route-level mocks cannot exercise the
+  // cron's collectionGroup queries or batch-update fan-out faithfully.
   test('GDPR export: suspended user can still request data export', async () => {
     const res = await request(createApp({ uniqueId: 1001, isSuspended: true })).get(
       '/api/suggestions/mine',

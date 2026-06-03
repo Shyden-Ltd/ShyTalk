@@ -16,6 +16,7 @@
  *   Step 5: Follower/following array cleanup
  *   Step 5b: Gift rankings cleanup
  *   Step 6: Reports & appeals deletion
+ *   Step 6b: Suggestions-content cleanup (GDPR right-to-erasure cascade)
  *   Step 7: Auth-related cleanup (biometricKeys, otpCodes, emailMetrics)
  *   Step 8: User doc + subcollections deletion
  *   Step 9: Identity map soft-delete
@@ -52,6 +53,9 @@ const mockDoc = jest.fn((path) => ({
 const mockWhere = jest.fn();
 const mockLimit = jest.fn();
 const mockCollection = jest.fn();
+const mockCollectionGroup = jest.fn();
+
+let mockLastQueried = { type: null, name: null };
 
 jest.mock('../../src/utils/firebase', () => {
   const chain = {
@@ -63,14 +67,24 @@ jest.mock('../../src/utils/firebase', () => {
       mockLimit(...args);
       return chain;
     },
-    get: () => mockCollectionGet(),
+    // Pass the most-recent collection/collectionGroup target into get(). Existing
+    // Once-chain tests ignore the arg and still work; new tests can use
+    // mockImplementation(({type, name}) => …) to dispatch by target instead of
+    // counting prior get() calls.
+    get: () => mockCollectionGet({ ...mockLastQueried }),
   };
 
   return {
     db: {
       doc: (...args) => mockDoc(...args),
-      collection: (...args) => {
-        mockCollection(...args);
+      collection: (name, ...rest) => {
+        mockLastQueried = { type: 'col', name };
+        mockCollection(name, ...rest);
+        return chain;
+      },
+      collectionGroup: (name, ...rest) => {
+        mockLastQueried = { type: 'cg', name };
+        mockCollectionGroup(name, ...rest);
         return chain;
       },
       batch: jest.fn(() => ({
@@ -91,6 +105,7 @@ jest.mock('../../src/utils/firebase', () => {
     },
     FieldValue: {
       arrayRemove: jest.fn((...args) => `arrayRemove(${args})`),
+      increment: jest.fn((n) => `increment(${n})`),
     },
   };
 });
@@ -418,6 +433,226 @@ describe('hardDeleteAccount', () => {
     expect(mockCollection).toHaveBeenCalledWith('suspensionAppeals');
   });
 
+  // ── Step 6b: suggestions-content cleanup (GDPR cascade) ────────
+  //
+  // hardDeleteAccount must also wipe the user's suggestions footprint:
+  //   - Anonymise own suggestions (preserve community value, redact identity)
+  //   - Delete own votes + decrement parent voteCount per up/down
+  //   - Anonymise own comments (preserve thread structure)
+  //   - Delete subscription preferences doc
+  //   - Delete inbox notifications
+  //
+  // Without this, a deleted user's submitterUid/voterId/authorUid still
+  // identifies them across suggestions — a GDPR right-to-erasure gap.
+  // The tests below assert the contract; the implementation lives in
+  // src/cron/accountDeletion.js#cleanupSuggestionsContent.
+
+  function makeSuggestionDoc(id, data = {}) {
+    return {
+      id,
+      ref: { path: `suggestions/${id}`, _isSuggestion: true },
+      data: () => ({ submitterUid: 10000001, ...data }),
+    };
+  }
+
+  function makeVoteDoc(suggestionId, voterId, vote = 'up') {
+    const suggestionRef = {
+      path: `suggestions/${suggestionId}`,
+      parent: { id: 'suggestions' },
+    };
+    return {
+      ref: {
+        path: `suggestions/${suggestionId}/votes/${voterId}`,
+        parent: { parent: suggestionRef },
+      },
+      data: () => ({ voterId, vote, votedAt: 1717000000000 }),
+    };
+  }
+
+  function makeCommentDoc(suggestionId, commentId, authorUid) {
+    const suggestionRef = {
+      path: `suggestions/${suggestionId}`,
+      parent: { id: 'suggestions' },
+    };
+    return {
+      ref: {
+        path: `suggestions/${suggestionId}/comments/${commentId}`,
+        parent: { parent: suggestionRef },
+      },
+      data: () => ({ authorUid, text: 'original text' }),
+    };
+  }
+
+  // Dispatch helper: returns mockImplementation that switches by query target.
+  // Avoids brittle call-order counting given Steps 3–6 already make ~12 queries
+  // before our Step 6b runs. Unmatched targets fall through to empty.
+  function dispatchByTarget(map) {
+    return ({ type, name }) => {
+      const key = type === 'cg' ? `cg:${name}` : `col:${name}`;
+      if (Object.prototype.hasOwnProperty.call(map, key)) return Promise.resolve(map[key]);
+      return Promise.resolve({ docs: [], empty: true });
+    };
+  }
+
+  test('Step 6b: anonymises own suggestions by submitterUid', async () => {
+    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+    mockCollectionGet.mockImplementation(
+      dispatchByTarget({
+        'col:suggestions': {
+          docs: [makeSuggestionDoc('sug-1'), makeSuggestionDoc('sug-2')],
+          empty: false,
+        },
+      }),
+    );
+
+    await hardDeleteAccount(testUser);
+
+    expect(mockCollection).toHaveBeenCalledWith('suggestions');
+    expect(mockWhere).toHaveBeenCalledWith('submitterUid', '==', 10000001);
+    expect(mockBatchUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ _isSuggestion: true }),
+      expect.objectContaining({
+        submitterUid: 0,
+        submitterDeleted: true,
+      }),
+    );
+  });
+
+  test('Step 6b: deletes votes via collectionGroup and decrements parent voteCount', async () => {
+    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+
+    const upVote = makeVoteDoc('sug-A', 10000001, 'up');
+    const downVote = makeVoteDoc('sug-B', 10000001, 'down');
+
+    mockCollectionGet.mockImplementation(
+      dispatchByTarget({
+        'cg:votes': { docs: [upVote, downVote], empty: false },
+      }),
+    );
+
+    await hardDeleteAccount(testUser);
+
+    expect(mockCollectionGroup).toHaveBeenCalledWith('votes');
+    expect(mockWhere).toHaveBeenCalledWith('voterId', '==', 10000001);
+    expect(mockBatchDelete).toHaveBeenCalledWith(upVote.ref);
+    expect(mockBatchDelete).toHaveBeenCalledWith(downVote.ref);
+    expect(mockBatchUpdate).toHaveBeenCalledWith(upVote.ref.parent.parent, {
+      voteCount: 'increment(-1)',
+    });
+    expect(mockBatchUpdate).toHaveBeenCalledWith(downVote.ref.parent.parent, {
+      voteCount: 'increment(1)',
+    });
+  });
+
+  test('Step 6b: anonymises comments via collectionGroup by authorUid', async () => {
+    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+
+    const comment = makeCommentDoc('sug-C', 'comment-1', 10000001);
+
+    mockCollectionGet.mockImplementation(
+      dispatchByTarget({
+        'cg:comments': { docs: [comment], empty: false },
+      }),
+    );
+
+    await hardDeleteAccount(testUser);
+
+    expect(mockCollectionGroup).toHaveBeenCalledWith('comments');
+    expect(mockWhere).toHaveBeenCalledWith('authorUid', '==', 10000001);
+    expect(mockBatchUpdate).toHaveBeenCalledWith(
+      comment.ref,
+      expect.objectContaining({
+        authorUid: 0,
+        authorDeleted: true,
+        text: '[Comment from deleted user]',
+      }),
+    );
+  });
+
+  test('Step 6b: deletes subscription preferences doc', async () => {
+    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+
+    await hardDeleteAccount(testUser);
+
+    expect(mockDocDelete).toHaveBeenCalledWith('subscriptions/10000001');
+  });
+
+  test('Step 6b: deletes notifications inbox by uid', async () => {
+    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+
+    const notif1 = { id: 'notif-1', ref: { path: 'notifications/notif-1' } };
+    const notif2 = { id: 'notif-2', ref: { path: 'notifications/notif-2' } };
+
+    mockCollectionGet.mockImplementation(
+      dispatchByTarget({
+        'col:notifications': { docs: [notif1, notif2], empty: false },
+      }),
+    );
+
+    await hardDeleteAccount(testUser);
+
+    expect(mockCollection).toHaveBeenCalledWith('notifications');
+    expect(mockWhere).toHaveBeenCalledWith('uid', '==', 10000001);
+    expect(mockBatchDelete).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'notifications/notif-1' }),
+    );
+    expect(mockBatchDelete).toHaveBeenCalledWith(
+      expect.objectContaining({ path: 'notifications/notif-2' }),
+    );
+  });
+
+  test('Step 6b: skips collectionGroup hits whose parent is not "suggestions"', async () => {
+    // Defensive: future feature could introduce another `votes` subcollection
+    // (e.g. polls/{id}/votes/...). The cron must ignore those.
+    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+
+    const goodVote = makeVoteDoc('sug-X', 10000001, 'up');
+    const strayVote = {
+      ref: {
+        path: 'polls/p1/votes/10000001',
+        parent: { parent: { parent: { id: 'polls' } } },
+      },
+      data: () => ({ voterId: 10000001, vote: 'up' }),
+    };
+
+    mockCollectionGet.mockImplementation(
+      dispatchByTarget({
+        'cg:votes': { docs: [goodVote, strayVote], empty: false },
+      }),
+    );
+
+    await hardDeleteAccount(testUser);
+
+    expect(mockBatchDelete).toHaveBeenCalledWith(goodVote.ref);
+    expect(mockBatchDelete).not.toHaveBeenCalledWith(strayVote.ref);
+  });
+
+  test('Step 6b: error in one substep does not abort hardDeleteAccount', async () => {
+    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+
+    // The suggestions query throws — cron must log + continue past Step 6b.
+    mockCollectionGet.mockImplementation(({ type, name }) => {
+      if (type === 'col' && name === 'suggestions') {
+        return Promise.reject(new Error('suggestions query failed'));
+      }
+      return Promise.resolve({ docs: [], empty: true });
+    });
+
+    await hardDeleteAccount(testUser);
+
+    // Subsequent steps still happen — Firebase Auth deletion is Step 11.
+    expect(auth.deleteUser).toHaveBeenCalled();
+    expect(log.error).toHaveBeenCalledWith(
+      'cron',
+      expect.stringContaining('suggestion'),
+      // uniqueId is logged as a string because hardDeleteAccount derives it
+      // from userDoc.id (always a string), even though Firestore queries
+      // convert to Number for type-safety against the schema.
+      expect.objectContaining({ uniqueId: '10000001' }),
+    );
+  });
+
   test('Step 7: deletes auth-related data', async () => {
     mockDocGet.mockResolvedValue({ exists: false, data: () => null });
 
@@ -511,7 +746,17 @@ describe('hardDeleteAccount', () => {
         reason: 'self',
         triggeredBy: 'system',
         standing: 'clean',
-        dataDeleted: expect.arrayContaining(['user', 'conversations', 'rooms', 'r2']),
+        dataDeleted: expect.arrayContaining([
+          'user',
+          'conversations',
+          'rooms',
+          'r2',
+          'suggestions',
+          'votes',
+          'comments',
+          'subscriptions',
+          'notifications',
+        ]),
       }),
     );
 
