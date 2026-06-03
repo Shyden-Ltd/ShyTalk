@@ -16,7 +16,12 @@ const mockDocGet = jest.fn();
 const mockCollectionGet = jest.fn();
 // Collection-group queries (Phase 2A finding #1) — separate mock so tests
 // can return votes-subset without polluting normal collection queries.
+// Routed by collection-group name so the votes vs. comments paths are
+// independently controllable: a votes-only test must not have to pre-stuff
+// a comments response (and vice versa). Default mock (mockCollectionGroupGet)
+// catches any name not in the routing table.
 const mockCollectionGroupGet = jest.fn();
+const mockCollectionGroupCommentsGet = jest.fn();
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
@@ -33,12 +38,12 @@ jest.mock('../../src/utils/firebase', () => ({
       };
       return chain;
     }),
-    collectionGroup: jest.fn(() => {
+    collectionGroup: jest.fn((name) => {
       const chain = {
         where: jest.fn().mockImplementation(() => chain),
         orderBy: jest.fn().mockImplementation(() => chain),
         limit: jest.fn().mockImplementation(() => chain),
-        get: mockCollectionGroupGet,
+        get: name === 'comments' ? mockCollectionGroupCommentsGet : mockCollectionGroupGet,
       };
       return chain;
     }),
@@ -64,6 +69,10 @@ beforeEach(() => {
   // Default: no votes for the user — tests that exercise the votes path
   // override with mockCollectionGroupGet.mockResolvedValueOnce(...).
   mockCollectionGroupGet.mockResolvedValue({ docs: [], empty: true });
+  // Default: no comments by the user — comments-path tests override with
+  // mockCollectionGroupCommentsGet.mockResolvedValueOnce(...). Mirror of the
+  // votes default so all non-comments tests stay simple.
+  mockCollectionGroupCommentsGet.mockResolvedValue({ docs: [], empty: true });
   // Reset the db.collection implementation between tests — `clearAllMocks`
   // clears call history but not `.mockImplementation(...)` overrides, so
   // a test that selectively rejects (e.g., `name === 'reports' ? throw`)
@@ -709,6 +718,128 @@ describe('buildDataExport', () => {
       'Failed to query suggestionVotes',
       expect.objectContaining({ uniqueId: '10000001' }),
     );
+    // Partial-failure contract assertions (parity with the comments error
+    // path test below): a regression that silently swallowed the error
+    // and left partial=false would pass without these.
+    expect(result.partial).toBe(true);
+    expect(result.failedSections).toContain('suggestionVotes');
+  });
+
+  // --- Suggestion comments scanning -----------------------------------------
+  // Mirrors the votes path: comments live at suggestions/{id}/comments/{cid}
+  // with authorUid as the FK, so collectionGroup('comments').where('authorUid')
+  // is the same quota-safe shape. Index override exists in firestore.indexes.json
+  // (added with the GDPR account-deletion cascade work). Tests pin three things:
+  //   (1) the query shape is the collection-group entry, not an N+1 scan
+  //   (2) a defensive grandparent-id guard rejects rogue `comments` subcollections
+  //   (3) failures are recorded as a partial-export section, not silently dropped
+
+  test('collects suggestion comments via collection-group query', async () => {
+    mockDocGet.mockResolvedValue({ exists: true, data: () => testUser });
+    queryDocs.mockResolvedValue([]);
+
+    // Comments doc ref shape mirrors Firestore exactly:
+    //   suggestions/{suggestionId}/comments/{commentId}
+    // so `.parent` is the comments subcollection, `.parent.parent` is the
+    // parent suggestion doc, and `.parent.parent.parent` is the suggestions
+    // collection. The export reads `.parent.parent` (the suggestion doc) and
+    // pushes its id alongside the comment payload.
+    function makeSuggestionsCollection() {
+      return { id: 'suggestions' };
+    }
+    function makeCommentDoc(suggestionId, commentData) {
+      const suggestionsCol = makeSuggestionsCollection();
+      const suggestionDoc = { id: suggestionId, parent: suggestionsCol };
+      const commentsCol = { id: 'comments', parent: suggestionDoc };
+      return {
+        ref: { parent: commentsCol },
+        data: () => commentData,
+      };
+    }
+    mockCollectionGroupCommentsGet.mockResolvedValueOnce({
+      docs: [
+        makeCommentDoc('sug-1', {
+          authorUid: 10000001,
+          text: 'Great idea',
+          isPublic: true,
+          createdAt: 1700000000000,
+        }),
+        makeCommentDoc('sug-4', {
+          authorUid: 10000001,
+          text: 'Already shipped — see release notes',
+          isPublic: true,
+          createdAt: 1700000000200,
+        }),
+      ],
+    });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    // The collection-group entry point was used for `comments` — verifies
+    // the quota-safe shape is real and not silently regressed to a
+    // per-suggestion subcollection scan.
+    const { db } = require('../../src/utils/firebase');
+    expect(db.collectionGroup).toHaveBeenCalledWith('comments');
+    // Confirm we don't load individual comment docs (no N+1 fallback)
+    expect(db.doc).not.toHaveBeenCalledWith(expect.stringMatching(/^suggestions\/.+\/comments\//));
+  });
+
+  test('skips collection-group comment entries whose grandparent is NOT the suggestions collection', async () => {
+    // Defensive guard parallel to the votes path: if a future schema adds
+    // another `comments` subcollection under a different parent collection
+    // (e.g. `posts/{id}/comments`), the export must not leak those entries
+    // — they're not suggestion comments and would constitute a privacy
+    // bleed (a stranger's post-comment showing up in this user's export
+    // because the authorUid happens to match).
+    mockDocGet.mockResolvedValue({ exists: true, data: () => testUser });
+    queryDocs.mockResolvedValue([]);
+
+    function makeRogueCommentDoc() {
+      const otherCol = { id: 'posts' };
+      const otherDoc = { id: 'post-1', parent: otherCol };
+      const commentsCol = { id: 'comments', parent: otherDoc };
+      return {
+        ref: { parent: commentsCol },
+        data: () => ({ authorUid: 10000001, text: 'rogue' }),
+      };
+    }
+    mockCollectionGroupCommentsGet.mockResolvedValueOnce({ docs: [makeRogueCommentDoc()] });
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+    // Pass condition: the rogue comment was filtered (no crash on the
+    // grandparent-id check). A regression that removes the guard would
+    // throw or leak the rogue entry into the export. The PRIMARY pin for
+    // the guard's filter-vs-pass-all behavior lives in the dedicated
+    // `collectSuggestionScopedEntries` describe block below, where the
+    // helper is unit-tested directly with mixed-legit-and-rogue inputs.
+  });
+
+  test('handles suggestion comments query error gracefully', async () => {
+    // Index-missing is the realistic failure mode here — the collection-group
+    // query needs the `comments.authorUid` field override, and a future
+    // firestore.indexes.json rewrite could drop it. The export must continue
+    // (other sections still ship) and the failure must surface in
+    // failedSections so the user knows.
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      data: () => testUser,
+    });
+    queryDocs.mockResolvedValue([]);
+    mockCollectionGroupCommentsGet.mockRejectedValueOnce(new Error('CG comments index missing'));
+
+    const result = await buildDataExport('10000001');
+    expect(result.buffer).toBeInstanceOf(Buffer);
+
+    const log = require('../../src/utils/log');
+    expect(log.error).toHaveBeenCalledWith(
+      'data-export',
+      'Failed to query suggestionComments',
+      expect.objectContaining({ uniqueId: '10000001' }),
+    );
+    expect(result.partial).toBe(true);
+    expect(result.failedSections).toContain('suggestionComments');
   });
 
   // --- Empty data defaults --------------------------------------------------
@@ -865,6 +996,275 @@ describe('buildDataExport', () => {
       // user gets SOMETHING back, not an empty error response).
       expect(result.buffer).toBeInstanceOf(Buffer);
       expect(result.buffer.length).toBeGreaterThan(0);
+    });
+  });
+
+  // ─── collectSuggestionScopedEntries (privacy-critical grandparent guard) ───
+  // The buildDataExport-level rogue tests above can only assert "the buffer
+  // still builds" because the ZIP is `level: 9` compressed and there's no
+  // unzip lib on the dep tree to decode the result. That's a weak pin: it
+  // passes even if the guard is deleted and the rogue leaks into the export.
+  // The guard is privacy-critical (any future schema with a sibling
+  // `comments`/`votes` subcollection at a different nesting level — e.g.
+  // posts/{id}/comments — must NOT leak into a user's export), so it
+  // deserves a load-bearing test. The production helper is exported as
+  // `_collectSuggestionScopedEntries` for that purpose. These tests pin:
+  //   (1) filter-not-pass-all: mixed legitimate + rogue → only legitimate
+  //   (2) filter-not-skip-all: all-legitimate batch → all pass through
+  //   (3) null grandparent (top-level collection-group hit) doesn't crash
+  //   (4) null grandparent-parent (pathological nesting) doesn't crash
+  //   (5) empty input returns []
+  //   (6) the mapper actually shapes the output per caller's contract
+  describe('collectSuggestionScopedEntries (privacy guard)', () => {
+    const {
+      _collectSuggestionScopedEntries: helper,
+    } = require('../../src/utils/data-export-builder');
+
+    // Synthetic doc shape that models the relevant slice of the Firestore
+    // Admin SDK's `DocumentSnapshot`. `ref` carries `id`, `path`, and
+    // `parent` because the helper currently only touches `.ref.parent`
+    // but any natural extension (logging `ref.path` on a rogue doc,
+    // exposing `ref.id` to the mapper) should not silently no-op against
+    // the fixture — including all three matches the SDK's minimum shape.
+    function makeDoc(
+      grandparentId,
+      suggestionId,
+      payload,
+      leafColName = 'comments',
+      docId = undefined,
+    ) {
+      const grandparentCol = { id: grandparentId };
+      const grandparentDoc = { id: suggestionId, parent: grandparentCol };
+      const leafCol = { id: leafColName, parent: grandparentDoc };
+      const refPath = `${grandparentId}/${suggestionId}/${leafColName}/${docId ?? '_'}`;
+      return {
+        id: docId,
+        ref: { id: docId, path: refPath, parent: leafCol },
+        data: () => payload,
+      };
+    }
+
+    test('keeps only docs whose grandparent is the suggestions collection (mixed batch)', () => {
+      const docs = [
+        makeDoc('suggestions', 'sug-1', { authorUid: 1, text: 'legitimate-1' }, 'comments', 'c1'),
+        makeDoc('posts', 'post-1', { authorUid: 1, text: 'rogue-from-posts' }, 'comments', 'c2'),
+        makeDoc('suggestions', 'sug-2', { authorUid: 1, text: 'legitimate-2' }, 'comments', 'c3'),
+        makeDoc('events', 'evt-1', { authorUid: 1, text: 'rogue-from-events' }, 'comments', 'c4'),
+      ];
+
+      const result = helper(docs, (suggestionId, doc) => ({
+        suggestionId,
+        id: doc.id,
+        ...doc.data(),
+      }));
+
+      // Exactly 2 legitimate entries pass through; rogue entries are filtered.
+      // The negative assertion is the load-bearing one — without it, a
+      // regression where the helper returns ALL docs would still produce
+      // a non-empty array and the positive `expect(length).toBe(2)`
+      // would catch it, but the explicit `not.toContainEqual` makes
+      // the privacy contract self-documenting.
+      expect(result).toHaveLength(2);
+      expect(result).toEqual([
+        { suggestionId: 'sug-1', id: 'c1', authorUid: 1, text: 'legitimate-1' },
+        { suggestionId: 'sug-2', id: 'c3', authorUid: 1, text: 'legitimate-2' },
+      ]);
+      expect(result).not.toContainEqual(expect.objectContaining({ text: 'rogue-from-posts' }));
+      expect(result).not.toContainEqual(expect.objectContaining({ text: 'rogue-from-events' }));
+    });
+
+    test('passes through every doc when ALL grandparents are suggestions (no false drops)', () => {
+      const docs = [
+        makeDoc('suggestions', 'sug-1', { voterId: 1, direction: 'up' }, 'votes'),
+        makeDoc('suggestions', 'sug-2', { voterId: 1, direction: 'down' }, 'votes'),
+        makeDoc('suggestions', 'sug-3', { voterId: 1, direction: 'up' }, 'votes'),
+      ];
+
+      const result = helper(docs, (suggestionId, doc) => ({
+        suggestionId,
+        ...doc.data(),
+      }));
+
+      // Pins the inverse failure mode: a regression where the guard
+      // accidentally rejects valid suggestion-scoped docs (e.g. a typo
+      // changing `=== 'suggestions'` to `!== 'suggestions'`) would
+      // produce an empty array. This test makes that immediately visible.
+      expect(result).toHaveLength(3);
+    });
+
+    test('skips doc whose grandparent is null (top-level collection-group hit)', () => {
+      // Edge case: a collection-group query may return docs whose
+      // `.parent.parent` is null (a root-level collection at the same
+      // leaf name, if Firestore ever permits that). The guard must
+      // short-circuit on `!suggestionRef` before dereferencing `.parent.id`.
+      const orphanLeafCol = { id: 'comments', parent: null };
+      const orphanDoc = {
+        ref: { parent: orphanLeafCol },
+        data: () => ({ authorUid: 1, text: 'orphan' }),
+      };
+      const result = helper([orphanDoc], (suggestionId, doc) => ({ suggestionId, ...doc.data() }));
+      // No crash + orphan filtered.
+      expect(result).toEqual([]);
+    });
+
+    test('skips doc whose grandparent-parent is null (pathologically shallow nesting)', () => {
+      // Second guard branch: `suggestionRef` is truthy but
+      // `suggestionRef.parent` is null. Cannot happen in current Firestore
+      // semantics (every doc has a parent collection) but a malformed
+      // fixture or Admin-SDK version drift could surface it. Without the
+      // `!suggestionRef.parent` short-circuit the helper would throw
+      // `TypeError: Cannot read properties of null (reading 'id')`.
+      const grandparentDoc = { id: 'sug-1', parent: null };
+      const leafCol = { id: 'comments', parent: grandparentDoc };
+      const pathologicalDoc = {
+        id: 'c-x',
+        ref: { id: 'c-x', path: '?/sug-1/comments/c-x', parent: leafCol },
+        data: () => ({ authorUid: 1, text: 'pathological' }),
+      };
+      const result = helper([pathologicalDoc], (suggestionId, doc) => ({
+        suggestionId,
+        ...doc.data(),
+      }));
+      expect(result).toEqual([]);
+    });
+
+    test('returns empty array for empty input (no off-by-one)', () => {
+      // Pins that an empty snapshot returns `[]`, not `undefined`.
+      // The buildDataExport-level code spreads/serialises this directly
+      // into the manifest, so a regression returning `undefined` would
+      // produce malformed JSON in the export ZIP.
+      expect(helper([], () => ({}))).toEqual([]);
+    });
+
+    test('mapper receives suggestionId and the full doc object', () => {
+      // Pins the helper's contract with the mapper. Both call sites need
+      // the suggestion ID extracted from `.parent.parent.id`, and the
+      // comments call site needs `doc.id` (Firestore auto-ID) which the
+      // helper must hand through unmodified. A regression that handed
+      // `doc.data()` instead of `doc` would break the comments mapper's
+      // `doc.id` access silently.
+      const mockMapper = jest.fn((suggestionId, doc) => ({ suggestionId, _id: doc.id }));
+      const docs = [makeDoc('suggestions', 'sug-1', { x: 1 }, 'comments', 'auto-id-abc')];
+
+      const result = helper(docs, mockMapper);
+
+      expect(mockMapper).toHaveBeenCalledTimes(1);
+      expect(mockMapper).toHaveBeenCalledWith(
+        'sug-1',
+        expect.objectContaining({ id: 'auto-id-abc' }),
+      );
+      expect(result).toEqual([{ suggestionId: 'sug-1', _id: 'auto-id-abc' }]);
+    });
+  });
+
+  // ─── Per-section mapper contracts ──────────────────────────────────────
+  // Pin each section mapper's exact output shape. These run against the
+  // production-exported mapper constants (not inline arrow lambdas) so a
+  // regression deleting e.g. `id: commentDoc.id` from the comments mapper
+  // fails here directly, without needing to decode the ZIP.
+  describe('section mappers', () => {
+    const {
+      _suggestionVoteMapper: voteMapper,
+      _suggestionCommentMapper: commentMapper,
+    } = require('../../src/utils/data-export-builder');
+
+    test('vote mapper: spreads voteDoc.data() and prepends suggestionId (no id field)', () => {
+      // Vote doc IDs are the voterId — already in the payload as `voterId`.
+      // Pinning the absence of an `id:` here prevents a future "consistency"
+      // refactor from adding it (which would expose Firestore's internal
+      // doc-key, a privacy-tangential leak even if cosmetically harmless).
+      const fakeVoteDoc = {
+        id: '10000001',
+        data: () => ({ voterId: 10000001, direction: 'up', votedAt: 1700000000000 }),
+      };
+      const result = voteMapper('sug-7', fakeVoteDoc);
+      expect(result).toEqual({
+        suggestionId: 'sug-7',
+        voterId: 10000001,
+        direction: 'up',
+        votedAt: 1700000000000,
+      });
+      expect(result).not.toHaveProperty('id');
+    });
+
+    test('comment mapper: propagates commentDoc.id (auto-generated, otherwise unrecoverable)', () => {
+      // The load-bearing assertion for R1-I2: the auto-generated Firestore
+      // doc ID MUST appear in the exported payload because it's the only
+      // stable identifier a user can use to correlate an exported comment
+      // with one cited in a moderation appeal or admin response. Deleting
+      // `id: commentDoc.id` from the mapper fails this test directly.
+      const fakeCommentDoc = {
+        id: 'auto-id-firestore-7xyz',
+        data: () => ({
+          authorUid: 10000001,
+          text: 'pinned by the mapper test',
+          isPublic: true,
+          createdAt: 1700000000000,
+        }),
+      };
+      const result = commentMapper('sug-42', fakeCommentDoc);
+      expect(result).toEqual({
+        suggestionId: 'sug-42',
+        id: 'auto-id-firestore-7xyz',
+        authorUid: 10000001,
+        text: 'pinned by the mapper test',
+        isPublic: true,
+        createdAt: 1700000000000,
+      });
+    });
+
+    test('comment mapper: trusted explicit fields win over same-named payload fields (privacy invariant)', () => {
+      // The mapper's explicit `suggestionId` (from the doc path) and `id`
+      // (from the doc ref) are TRUSTED — they come from the storage layer
+      // and identify the entry's true location in the corpus. The payload
+      // is UNTRUSTED user-or-future-schema data. If a comment payload
+      // ever stores fields named `suggestionId` or `id`, those must NOT
+      // be able to override the trusted values — otherwise an export
+      // could misattribute a comment, breaking the user's ability to
+      // correlate the entry with a real comment in the system.
+      // Production code achieves this by ordering the spread BEFORE the
+      // explicit fields in the mapper's object literal. This test pins
+      // that ordering as a privacy invariant.
+      const fakeCommentDoc = {
+        id: 'real-comment-id',
+        data: () => ({
+          // Adversarial payload: tries to claim a different identity
+          suggestionId: 'rogue-suggestion-id',
+          id: 'rogue-comment-id',
+          authorUid: 1,
+          text: 'attempted override',
+        }),
+      };
+      const result = commentMapper('sug-true', fakeCommentDoc);
+      // Trusted values win
+      expect(result.suggestionId).toBe('sug-true');
+      expect(result.id).toBe('real-comment-id');
+      // Other payload fields still pass through
+      expect(result.authorUid).toBe(1);
+      expect(result.text).toBe('attempted override');
+    });
+
+    test('vote mapper: trusted suggestionId wins over same-named payload field (privacy invariant)', () => {
+      // Pre-existing path with the same concern: if a vote payload ever
+      // stores a `suggestionId` field, it must NOT override the trusted
+      // value from the doc path. The bug existed in the pre-extraction
+      // inline mapper but was only surfaced by the comments-mapper test
+      // architecture — fixed in the same PR per the project's
+      // "fix pre-existing and new findings the same way" rule.
+      const fakeVoteDoc = {
+        id: '10000001',
+        data: () => ({
+          // Adversarial payload: tries to claim a different suggestion
+          suggestionId: 'rogue-suggestion-id',
+          voterId: 10000001,
+          direction: 'up',
+          votedAt: 1700000000000,
+        }),
+      };
+      const result = voteMapper('sug-real', fakeVoteDoc);
+      expect(result.suggestionId).toBe('sug-real');
+      expect(result.voterId).toBe(10000001);
+      expect(result.direction).toBe('up');
     });
   });
 });

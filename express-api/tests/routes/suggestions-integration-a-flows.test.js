@@ -618,12 +618,11 @@ describe('11.72 — GDPR Data Export & Account Deletion', () => {
       expect(res.body).toBeDefined();
     }
   });
-  // Both of these placeholder tests asserted only that the mock
-  // collection helper exists (always true), not that the data export
-  // actually included votes/comments. Honest TODO until the export
-  // path is integration-tested.
-  test.skip('TODO: data export includes user votes', async () => {});
-  test.skip('TODO: data export includes user comments', async () => {});
+  // Data-export votes & comments coverage lives in
+  // `tests/utils/data-export-builder.test.js` (the unit boundary where
+  // the collection-group queries actually fire). The prior placeholders
+  // here asserted only that the mock-collection helper exists (always
+  // true) — they were honest TODOs, now resolved by the builder tests.
   // Account-deletion cascade is now covered by the cron-level integration
   // pattern in tests/cron/accountDeletion.test.js (Step 6b group). That is
   // the right home for it — these route-level mocks cannot exercise the

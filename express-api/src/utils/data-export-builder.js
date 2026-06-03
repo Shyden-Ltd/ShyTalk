@@ -44,7 +44,88 @@ const STRIP_FIELDS = [
   '_testRun',
 ];
 
+/**
+ * Walk a collection-group snapshot and keep only docs whose grandparent is
+ * the top-level `suggestions` collection. Pulled out of the votes + comments
+ * loops because (a) the defensive grandparent-id guard is the load-bearing
+ * privacy invariant — any rogue subcollection with the same leaf name (e.g.
+ * a future `posts/{id}/comments`) must NOT leak into a user's export — and
+ * (b) inline, the guard's behavior could only be tested by decoding the
+ * compressed ZIP buffer (no unzip lib is on the project's dep tree). As an
+ * exported helper it can be unit-tested directly with mixed-legit-and-rogue
+ * inputs, which is the only shape that actually pins `continue` as
+ * filter-not-pass-all. The `mapper` lets each caller shape its own payload
+ * (votes spread voteDoc.data(); comments also expose `id` because comment
+ * doc IDs are auto-generated and meaningful to users, unlike vote doc IDs
+ * which are just the voterId).
+ *
+ * @param {Array<{ref: {parent: {parent: {id: string, parent: {id: string}}}}, data: () => object, id?: string}>} docs
+ * @param {(suggestionId: string, doc: object) => object} mapper
+ * @returns {Array<object>}
+ */
+function collectSuggestionScopedEntries(docs, mapper) {
+  const result = [];
+  for (const doc of docs) {
+    const suggestionRef = doc.ref.parent.parent;
+    // Three failure modes to short-circuit BEFORE the `.parent.id` deref:
+    //   (1) `suggestionRef === null` — top-level collection-group hit
+    //       (a root-level `comments`/`votes` collection, if Firestore
+    //       ever permits one).
+    //   (2) `suggestionRef.parent === null` — pathologically deep nesting
+    //       where the grandparent doc exists but its containing collection
+    //       has no parent. Cannot happen in current Firestore semantics
+    //       (every doc has a parent collection) but a malformed test
+    //       fixture or an Admin-SDK version drift could surface it; the
+    //       guard prevents a TypeError in either case.
+    //   (3) The grandparent collection's name isn't `suggestions` — this
+    //       is the actual privacy guard: any sibling subcollection with
+    //       the same leaf name (e.g. `posts/{id}/comments`) must NOT leak.
+    if (!suggestionRef || !suggestionRef.parent || suggestionRef.parent.id !== 'suggestions') {
+      continue;
+    }
+    result.push(mapper(suggestionRef.id, doc));
+  }
+  return result;
+}
+
+// Per-section mappers, extracted as module-level constants so the test
+// suite can pin each one's payload shape directly (the previous inline
+// arrow functions made `id: commentDoc.id` propagation only testable
+// through the compressed ZIP buffer, which has no unzip lib on the dep
+// tree).
+//
+// Votes: doc ID is the voter's uniqueId (path `votes/{voterId}`), so
+//   it's redundant with the `voterId` field in the payload — no `id:`.
+// Comments: doc ID is `generateId()`-derived (path `comments/{auto}`),
+//   so it's the ONLY stable identifier the user can use to correlate
+//   an exported comment with one cited in a moderation appeal — `id:`
+//   is required.
+//
+// Spread order: payload spread FIRST, explicit fields LAST. The trusted
+// values (`suggestionId` from the doc-path, `id` from the doc-ref) must
+// win over any same-named field that might end up in the payload — a
+// future schema or a malicious write storing `id: '<spoofed>'` or
+// `suggestionId: '<wrong>'` in the data must NOT be able to misattribute
+// the entry in a user's GDPR export.
+const _suggestionVoteMapper = (suggestionId, voteDoc) => ({
+  ...voteDoc.data(),
+  suggestionId,
+});
+const _suggestionCommentMapper = (suggestionId, commentDoc) => ({
+  ...commentDoc.data(),
+  suggestionId,
+  id: commentDoc.id,
+});
+
 async function buildDataExport(uniqueId) {
+  // Single numeric coercion shared by every Firestore equality query in
+  // this function — the function previously did this seven times inline
+  // (and once as a separately-named `numericId` local in the conversations
+  // block). `parseInt` is safe to call before any awaits; if the input is
+  // non-numeric the result is NaN and the downstream `where(...==..., NaN)`
+  // returns an empty set, matching Firestore's strict-equality semantics.
+  const numericUid = Number.parseInt(uniqueId, 10);
+
   // Track every section's outcome so the manifest + caller can see exactly
   // which subcollection queries succeeded. Insertion order matches the order
   // of section reads below — useful for debugging which doc is failing on
@@ -142,9 +223,8 @@ async function buildDataExport(uniqueId) {
   try {
     const convSnap = await db
       .collection('conversations')
-      .where('participantIds', 'array-contains', Number.parseInt(uniqueId, 10))
+      .where('participantIds', 'array-contains', numericUid)
       .get();
-    const numericId = Number.parseInt(uniqueId, 10);
     conversations = convSnap.docs.map((d) => {
       const data = d.data();
       return {
@@ -154,7 +234,7 @@ async function buildDataExport(uniqueId) {
         updatedAt: data.updatedAt,
         participantCount: data.participantIds ? data.participantIds.length : undefined,
         userRole: data.roles ? data.roles[uniqueId] : undefined,
-        isUserOwner: data.ownerId === numericId,
+        isUserOwner: data.ownerId === numericUid,
       };
     });
 
@@ -216,10 +296,7 @@ async function buildDataExport(uniqueId) {
   // Identity
   let identity = [];
   try {
-    const idSnap = await db
-      .collection('identityMap')
-      .where('uniqueId', '==', Number.parseInt(uniqueId, 10))
-      .get();
+    const idSnap = await db.collection('identityMap').where('uniqueId', '==', numericUid).get();
     identity = idSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
     recordFailure('identity', err);
@@ -230,7 +307,7 @@ async function buildDataExport(uniqueId) {
   try {
     const bindSnap = await db
       .collection('deviceBindings')
-      .where('uniqueId', '==', Number.parseInt(uniqueId, 10))
+      .where('uniqueId', '==', numericUid)
       .get();
     deviceBindings = bindSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
@@ -242,7 +319,7 @@ async function buildDataExport(uniqueId) {
   try {
     const sugSnap = await db
       .collection('suggestions')
-      .where('submitterUid', '==', Number.parseInt(uniqueId, 10))
+      .where('submitterUid', '==', numericUid)
       .get();
     suggestions = sugSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
@@ -256,22 +333,40 @@ async function buildDataExport(uniqueId) {
   // become routine. The collection-group query reads ONLY the docs where
   // `voterId === uniqueId` — at most ~hundreds per user. Requires a
   // collection-group composite index on `votes.voterId` (added in firestore.indexes.json).
-  const suggestionVotes = [];
+  let suggestionVotes = [];
   try {
-    const numericUid = Number.parseInt(uniqueId, 10);
     const votesSnap = await db.collectionGroup('votes').where('voterId', '==', numericUid).get();
-    for (const voteDoc of votesSnap.docs) {
-      // votes are stored at suggestions/{suggestionId}/votes/{voterId}, so the
-      // suggestion ID is the parent's parent (the votes subcollection's parent
-      // doc, which is the suggestion). Defensive null check in case a future
-      // collection-group expansion introduces a different `votes` subcollection
-      // at another nesting level.
-      const suggestionRef = voteDoc.ref.parent.parent;
-      if (!suggestionRef || suggestionRef.parent.id !== 'suggestions') continue;
-      suggestionVotes.push({ suggestionId: suggestionRef.id, ...voteDoc.data() });
-    }
+    // Votes live at `suggestions/{suggestionId}/votes/{voterId}` — the doc
+    // ID is the voter's uniqueId so it's redundant with `voterId` in the
+    // payload (no `id:` in the mapper, unlike comments). The grandparent-id
+    // guard inside `collectSuggestionScopedEntries` rejects any rogue
+    // `votes` subcollection at a different nesting level.
+    suggestionVotes = collectSuggestionScopedEntries(votesSnap.docs, _suggestionVoteMapper);
   } catch (err) {
     recordFailure('suggestionVotes', err);
+  }
+
+  // Suggestion comments authored by this user — same collection-group shape
+  // as votes above, same quota motivation. Comments live at
+  // `suggestions/{suggestionId}/comments/{commentId}` with `authorUid` as the
+  // user FK, so the index override is on `comments.authorUid` (added in
+  // firestore.indexes.json alongside the votes override). The mapper exposes
+  // `id: commentDoc.id` because comment doc IDs are auto-generated (not
+  // derived from any payload field) and are the only stable identifier a
+  // user can use to correlate an exported comment with one cited in a
+  // moderation appeal or admin response.
+  let suggestionComments = [];
+  try {
+    const commentsSnap = await db
+      .collectionGroup('comments')
+      .where('authorUid', '==', numericUid)
+      .get();
+    suggestionComments = collectSuggestionScopedEntries(
+      commentsSnap.docs,
+      _suggestionCommentMapper,
+    );
+  } catch (err) {
+    recordFailure('suggestionComments', err);
   }
 
   // Subscription preferences
@@ -286,10 +381,7 @@ async function buildDataExport(uniqueId) {
   // Notification history
   let notificationHistory = [];
   try {
-    const notifSnap = await db
-      .collection('notifications')
-      .where('uid', '==', Number.parseInt(uniqueId, 10))
-      .get();
+    const notifSnap = await db.collection('notifications').where('uid', '==', numericUid).get();
     notificationHistory = notifSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
     recordFailure('notifications', err);
@@ -324,6 +416,7 @@ async function buildDataExport(uniqueId) {
       deviceBindings: failedSections.includes('deviceBindings') ? 'failed' : 'ok',
       suggestions: failedSections.includes('suggestions') ? 'failed' : 'ok',
       suggestionVotes: failedSections.includes('suggestionVotes') ? 'failed' : 'ok',
+      suggestionComments: failedSections.includes('suggestionComments') ? 'failed' : 'ok',
       subscriptionPrefs: failedSections.includes('subscriptionPrefs') ? 'failed' : 'ok',
       notifications: failedSections.includes('notifications') ? 'failed' : 'ok',
     },
@@ -384,6 +477,7 @@ async function buildDataExport(uniqueId) {
       '  reports/          — Reports you filed and appeals',
       '  devices/          — Your device bindings',
       '  moderation/       — Your warning history',
+      '  suggestions/      — Suggestions you submitted, votes & comments you made, your subscription preferences, and notifications you received',
     );
     const readme = readmeLines.join('\n');
 
@@ -439,6 +533,9 @@ async function buildDataExport(uniqueId) {
     archive.append(JSON.stringify(suggestionVotes, null, 2), {
       name: 'suggestions/votes.json',
     });
+    archive.append(JSON.stringify(suggestionComments, null, 2), {
+      name: 'suggestions/comments.json',
+    });
     if (subscriptionPrefs) {
       archive.append(JSON.stringify(subscriptionPrefs, null, 2), {
         name: 'suggestions/subscription-preferences.json',
@@ -455,3 +552,12 @@ async function buildDataExport(uniqueId) {
 }
 
 module.exports = buildDataExport;
+// Exposed for direct unit testing of the privacy-critical grandparent-id
+// guard with mixed-legit-and-rogue inputs (the only assertion shape that
+// actually pins the guard's behavior — see test file for the rationale).
+// The per-section mappers are also exported so each one's payload shape
+// (notably `id: commentDoc.id` for comments) can be pinned without
+// decoding the compressed ZIP buffer.
+module.exports._collectSuggestionScopedEntries = collectSuggestionScopedEntries;
+module.exports._suggestionVoteMapper = _suggestionVoteMapper;
+module.exports._suggestionCommentMapper = _suggestionCommentMapper;
