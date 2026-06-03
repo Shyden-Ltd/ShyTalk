@@ -138,3 +138,21 @@ describe('spread-order safety (privacy invariant)', () => {
     expect(results).toEqual([{ id: 'normal', name: 'Alice' }, { id: 'undef' }]);
   });
 });
+
+// The helpers do not try/catch — they let Firestore rejections propagate to
+// the caller, which is the documented contract every consumer depends on for
+// upstream error handling. Pin both rejection paths so a future "defensive"
+// wrapper (e.g. swallowing errors and returning null/[]) cannot silently
+// turn every consumer's catch block into dead code.
+describe('error propagation', () => {
+  test('getDoc: rejects unmodified when snap.get() rejects', async () => {
+    mockDocGet.mockRejectedValue(new Error('DEADLINE_EXCEEDED'));
+    await expect(getDoc('collection/anything')).rejects.toThrow('DEADLINE_EXCEEDED');
+  });
+
+  test('queryDocs: rejects unmodified when ref.get() rejects', async () => {
+    const mockRef = { get: mockQueryGet };
+    mockQueryGet.mockRejectedValue(new Error('PERMISSION_DENIED'));
+    await expect(queryDocs(mockRef)).rejects.toThrow('PERMISSION_DENIED');
+  });
+});

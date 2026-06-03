@@ -334,12 +334,9 @@ describe('GET /api/roadmap/me', () => {
     expect(typeof res.body.displayName).toBe('string');
   });
 
-  // Replaces the prior `response time under 500ms` test (non-load-bearing on
-  // a synchronous mock — could never fail in CI, could only flake). Pin the
-  // request-shape invariant instead: when `req.auth.uniqueId` is set, the
-  // route makes exactly one direct `users/{id}` read and SKIPS the
-  // identityMap fallback query — a regression that always ran the fallback
-  // would double the Firestore RPC count on every authenticated request.
+  // Pin the request-shape invariant: the direct-uniqueId path makes one
+  // users-doc read and skips the identityMap query. A regression that always
+  // ran the fallback would double the Firestore RPC count per authed request.
   test('direct-uniqueId path makes exactly one users-doc read and skips identityMap', async () => {
     mockDocGet.mockImplementation((path) => {
       if (path && path.includes('users/')) {
@@ -456,10 +453,8 @@ describe('GET /api/roadmap/me', () => {
     const res = await request(app).get('/api/roadmap/me').expect(200);
     expect(res.body.uniqueId).toBe(4002);
     expect(res.body.displayName).toBe('LinkedUser');
-    // Strong pin: the unlinked entry's user doc must NEVER be fetched. A
-    // "fetch all then pick last" regression that happened to land on 4002
-    // would pass the toBe-4002 assertion above — this negative assertion
-    // closes that gap.
+    // Closes the "fetch all, pick last" regression: a route that fetched
+    // users/4001 anyway would pass the toBe(4002) above but fail here.
     expect(mockDocGet).not.toHaveBeenCalledWith('users/4001');
     expect(mockDocGet).toHaveBeenCalledWith('users/4002');
   });
@@ -553,17 +548,11 @@ describe('GET /api/roadmap/me', () => {
 // GET /api/roadmap/me — spread-order safety (identity invariant)
 // ═══════════════════════════════════════════════════════════════
 //
-// `uniqueId` is the authoritative identity for the authenticated request —
-// either copied from `req.auth.uniqueId` (verified by upstream auth middleware
-// against the Firebase token) or sourced from the identityMap lookup. The
-// user doc payload is treated as untrusted: even though Firestore rules deny
-// client writes to the `uniqueId` field today, a future schema migration,
-// admin-tool write, or rule-drift could persist a rogue value. If the user
-// doc's payload ever overrode the trusted uniqueId, /roadmap/me would return
-// a profile under the *wrong* numeric identity — the strongest possible
-// identity-spoofing shape for an authenticated endpoint.
-//
-// Pins the spread-order contract: `{ ...userDoc.data(), uniqueId: <trusted> }`.
+// Pins the spread-order contract `{ ...userDoc.data(), uniqueId: <trusted> }`
+// on both auth paths. A rogue `uniqueId` field in the user doc payload (from
+// schema drift, admin-tool write, or rule drift) must not override the
+// trusted authenticated value — that is the strongest identity-spoofing
+// shape on an authenticated endpoint.
 
 describe('GET /api/roadmap/me — spread-order safety (identity invariant)', () => {
   test('direct uniqueId path: payload uniqueId cannot override authenticated uniqueId', async () => {
@@ -698,14 +687,10 @@ describe('GET /api/roadmap/me — Auth edge cases', () => {
     expect(res.status).toBe(404);
   });
 
-  // Pre-existing falsy-guard analysis: requireAuth's `!req.auth.uniqueId`
-  // treats 0 the same as null/undefined. With a truthy uid the guard does
-  // NOT fire on uniqueId=0; the route falls through to the identityMap
-  // fallback. This test pins that current behavior so a future "tighten the
-  // guard" refactor (e.g. switching to `req.auth.uniqueId == null`) doesn't
-  // change the response shape unintentionally. ShyTalk uniqueIds are
-  // demonstrably positive integers (provisioning never assigns 0), so this
-  // is a regression pin, not a real-world bug surface.
+  // requireAuth's `!req.auth.uniqueId` treats 0 like null/undefined — with a
+  // truthy uid, the guard does NOT fire and the route falls through to the
+  // identityMap path. Pin that contract so a future "tighten the guard"
+  // refactor (e.g. switching to `== null`) doesn't change the response shape.
   test('uniqueId of 0 with truthy uid falls through to identityMap (returns 404 when empty)', async () => {
     mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
     mockDocGet.mockResolvedValue({ exists: false });
