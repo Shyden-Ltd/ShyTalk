@@ -234,7 +234,13 @@ router.get('/conversations/:id/messages', async (req, res) => {
       .limit(limit)
       .get();
 
-    const messages = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    // Spread the payload BEFORE writing the trusted doc-ref id, so that a
+    // same-named `id` field in the stored message data (whether from a
+    // future schema migration or an adversarial Firestore write) cannot
+    // override the doc's true identity in the response. buildMessage
+    // below reads `doc.id`, so a payload-supplied id would otherwise
+    // propagate all the way to the JSON sent to the client.
+    const messages = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     // Return in chronological order (oldest first)
     return res.json(messages.toReversed().map(buildMessage));
@@ -384,8 +390,14 @@ router.post('/conversations/:id/messages', async (req, res) => {
       }),
     );
 
+    // Spread msgData BEFORE the trusted server-generated `id` so that
+    // an `id` field never wins from the spread side — defensive
+    // ordering for the day msgData gains an `id` field via a future
+    // schema migration. `replyToMessageId` is also written last so it
+    // overrides msgData.replyToMessageId if present (the explicit
+    // rewrite from `replyToId` is the canonical name).
     return res.json(
-      buildMessage({ id: messageId, ...msgData, replyToMessageId: msgData.replyToId }),
+      buildMessage({ ...msgData, id: messageId, replyToMessageId: msgData.replyToId }),
     );
   } catch (err) {
     log.error('conversations', 'Failed to send message', {

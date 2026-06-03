@@ -142,6 +142,56 @@ describe('GET /api/conversations/:id/messages', () => {
     const app = createApp('user-A');
     await request(app).get('/api/conversations/conv-1/messages').expect(403);
   });
+
+  test('payload id in stored doc does NOT override doc-ref id in response (spread-order privacy invariant)', async () => {
+    // Adversarial: a stored message doc has `id: 'rogue-spoofed-id'` in
+    // its payload (from a future schema migration or a malicious write
+    // to Firestore). The response's `id` MUST be the doc-ref id
+    // ('real-doc-id'), not the payload value — otherwise an attacker
+    // could misattribute message identity in the API response, breaking
+    // user-side correlation with audit/moderation refs that cite the
+    // real doc id. Same defense-in-depth pattern as the data-export-
+    // builder mappers (PR #977) and the firestore-helpers queryDocs
+    // fix (PR #976).
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      data: () => ({ participantIds: ['user-A', 'user-B'] }),
+    });
+
+    const { db } = require('../../src/utils/firebase');
+    db.collection.mockReturnValueOnce({
+      orderBy: jest.fn(() => ({
+        limit: jest.fn(() => ({
+          get: jest.fn().mockResolvedValue({
+            docs: [
+              {
+                id: 'real-doc-id',
+                data: () => ({
+                  id: 'rogue-spoofed-id',
+                  senderId: 'user-A',
+                  text: 'attempted spoof',
+                  createdAt: 1700000000000,
+                }),
+              },
+            ],
+          }),
+        })),
+      })),
+    });
+
+    const app = createApp();
+    const res = await request(app).get('/api/conversations/conv-1/messages').expect(200);
+
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].id).toBe('real-doc-id');
+    expect(res.body[0].id).not.toBe('rogue-spoofed-id');
+    // buildMessage also emits messageId = doc.id; the same spread-order
+    // protection must keep both id fields trusted.
+    expect(res.body[0].messageId).toBe('real-doc-id');
+    // Sanity: other payload fields still flow through unchanged.
+    expect(res.body[0].text).toBe('attempted spoof');
+    expect(res.body[0].senderId).toBe('user-A');
+  });
 });
 
 describe('POST /api/conversations/:id/messages', () => {
