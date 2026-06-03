@@ -141,7 +141,7 @@ router.get('/suggestions/mine', async (req, res) => {
       .orderBy('createdAt', 'desc')
       .get();
 
-    const suggestions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const suggestions = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
     res.json({ suggestions });
   } catch (err) {
     log.error('suggestions', 'Failed to list own suggestions', { error: err.message });
@@ -180,7 +180,7 @@ router.get('/suggestions/search', async (req, res) => {
 
     const query = q.toLowerCase().trim();
     const matches = snap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
+      .map((d) => ({ ...d.data(), id: d.id }))
       .filter((s) => {
         const title = (s.title || '').toLowerCase();
         const desc = (s.description || '').toLowerCase();
@@ -207,7 +207,7 @@ router.get('/suggestions/blocked', async (req, res) => {
 
     const snap = await db.collection('blockedTopics').get();
     const topics = snap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
+      .map((d) => ({ ...d.data(), id: d.id }))
       .filter((t) => similarity(q, t.title) >= SIMILARITY_THRESHOLD * 0.75);
 
     const matches = topics.map((t) => ({
@@ -262,14 +262,21 @@ router.get('/suggestions/:id', async (req, res) => {
       .orderBy('createdAt', 'asc')
       .get();
 
-    let comments = commentsSnap.docs.map((c) => ({ id: c.id, ...c.data() }));
+    let comments = commentsSnap.docs.map((c) => ({ ...c.data(), id: c.id }));
     if (!isAdmin) {
       comments = comments.filter((c) => c.isPublic !== false);
     }
 
+    // Spread the doc payload BEFORE the trusted doc-ref id so that a
+    // same-named `id` field in the stored suggestion data — whether from
+    // a future schema migration or an adversarial Firestore write —
+    // cannot override the doc's true identity in the response. Same
+    // defense-in-depth pattern as conversations.js (PR #978),
+    // data-export-builder mappers (PR #977), firestore-helpers
+    // queryDocs (PR #976), and roadmap-auth (PR #975).
     const result = {
-      id: doc.id,
       ...data,
+      id: doc.id,
       netScore: (data.upvotes || 0) - (data.downvotes || 0),
       comments,
       commentCount: commentsSnap.size,
@@ -287,7 +294,7 @@ router.get('/suggestions/:id', async (req, res) => {
           .get();
         result.submitterOtherSuggestions = otherSnap.docs
           .filter((d) => d.id !== id)
-          .map((d) => ({ id: d.id, ...d.data() }));
+          .map((d) => ({ ...d.data(), id: d.id }));
       } catch {
         result.submitterOtherSuggestions = [];
       }
@@ -330,7 +337,7 @@ router.get('/suggestions', async (req, res) => {
     }
 
     const snap = await query.get();
-    let suggestions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    let suggestions = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     // Enforce status filter client-side (Firestore where may not filter in all environments)
     if (!status) {
@@ -844,7 +851,12 @@ router.post('/suggestions/:id/comments', async (req, res) => {
     };
 
     await db.doc(`suggestions/${id}/comments/${commentId}`).set(comment);
-    res.status(201).json({ id: commentId, ...comment });
+    // Defensive spread order: even though `comment` is server-built from
+    // cherry-picked body fields (authorUid, text, isPublic, createdAt) and
+    // therefore has no current `id` input vector, place the spread BEFORE
+    // the trusted commentId so the order would still hold if the comment
+    // shape ever gains an `id` field via a future schema migration.
+    res.status(201).json({ ...comment, id: commentId });
   } catch (err) {
     log.error('suggestions', 'Failed to add comment', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
@@ -953,7 +965,7 @@ router.get('/admin/suggestions/disputes', async (req, res) => {
       .orderBy('createdAt', 'desc')
       .get();
 
-    const disputes = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const disputes = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
     res.json({ disputes });
   } catch (err) {
     log.error('admin-suggestions', 'Failed to list disputes', { error: err.message });
@@ -1040,7 +1052,7 @@ router.get('/admin/suggestions', async (req, res) => {
 
     const { q, status } = req.query;
     const snap = await db.collection('suggestions').get();
-    let suggestions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    let suggestions = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     // Apply status filter if provided (11.92 badge count test depends on this).
     if (status) {
@@ -1590,7 +1602,7 @@ router.get('/admin/suggestions/:id', async (req, res) => {
     const { id } = req.params;
     const doc = await db.doc(`suggestions/${id}`).get();
     if (!doc.exists) return res.status(404).json({ error: 'Suggestion not found' });
-    res.json({ id: doc.id, ...doc.data() });
+    res.json({ ...doc.data(), id: doc.id });
   } catch (err) {
     log.error('admin-suggestions', 'Get single failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
@@ -1744,7 +1756,7 @@ router.get('/admin/notifications', async (req, res) => {
     if (await requireAdmin(req, res)) return;
     const { userId, type } = req.query;
     const snap = await db.collection('notifications').get();
-    let notifications = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    let notifications = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
     if (userId) {
       notifications = notifications.filter(
         (n) =>
@@ -1819,7 +1831,7 @@ router.get('/admin/suggestions/:id/history', async (req, res) => {
       return map[raw] || raw;
     }
     const events = uniqueDocs
-      .map((d) => ({ id: d.id, ...d.data() }))
+      .map((d) => ({ ...d.data(), id: d.id }))
       .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
       .map((e) => ({
         action: normaliseAction(e),

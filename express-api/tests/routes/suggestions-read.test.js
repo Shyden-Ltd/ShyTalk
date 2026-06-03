@@ -453,6 +453,35 @@ describe('GET /api/suggestions/:id — Get single', () => {
     const res = await request(app).get('/api/suggestions/sug1').expect(200);
     expect(res.body.rejectReason).toBe('Too vague');
   });
+
+  test('payload id in stored doc does NOT override doc-ref id (spread-order privacy invariant)', async () => {
+    // Adversarial: a stored suggestion doc has `id: 'rogue-spoofed-id'`
+    // inside its data payload — e.g. from a future schema migration that
+    // denormalised an id field, or from a malicious direct Firestore
+    // write by a user with write access to their own suggestion doc.
+    // The response's top-level `id` MUST be the doc-ref id
+    // ('real-doc-id'), not the payload value, otherwise an attacker
+    // could misattribute suggestion identity in the API response and
+    // break user-side correlation with audit/moderation/dispute refs
+    // that cite the real doc id. Same defense-in-depth pattern as
+    // conversations.js read path (PR #978), data-export-builder mappers
+    // (PR #977), firestore-helpers queryDocs (PR #976), and
+    // roadmap-auth (PR #975).
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('suggestions/')) {
+        return Promise.resolve(makeSuggestionDoc('real-doc-id', { id: 'rogue-spoofed-id' }));
+      }
+      return Promise.resolve({ exists: false });
+    });
+    mockCollectionGet.mockResolvedValueOnce({ empty: true, docs: [], size: 0 }); // comments
+    const app = createApp();
+    const res = await request(app).get('/api/suggestions/real-doc-id').expect(200);
+    expect(res.body.id).toBe('real-doc-id');
+    expect(res.body.id).not.toBe('rogue-spoofed-id');
+    // Sanity: other payload fields still flow through unchanged.
+    expect(res.body.title).toBe('Test suggestion');
+    expect(res.body.status).toBe('accepted');
+  });
 });
 
 describe('GET /api/suggestions/mine — Own submissions', () => {

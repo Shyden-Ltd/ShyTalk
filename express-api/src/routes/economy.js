@@ -212,9 +212,14 @@ async function updateGiftWall(recipientId, giftId, senderId, quantity, senderCoh
  * Write a transaction record.
  */
 async function writeTransaction(userId, txId, data) {
+  // Defensive spread order: place the caller-supplied `data` BEFORE the
+  // trusted server-generated txId so that an accidental or malicious
+  // `id` field in `data` cannot override the canonical transaction id
+  // written to Firestore. Same defense-in-depth pattern as PR
+  // #975/#976/#977/#978.
   await db.doc(`users/${userId}/transactions/${txId}`).set({
-    id: txId,
     ...data,
+    id: txId,
     timestamp: data.timestamp || now(),
   });
 }
@@ -590,7 +595,7 @@ router.post('/economy/gacha', async (req, res) => {
       .orderBy('order')
       .limit(16)
       .get();
-    const allGifts = giftsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const allGifts = giftsSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     if (allGifts.length === 0) return res.status(500).json({ error: 'No winnable gifts' });
 
@@ -779,7 +784,7 @@ router.post('/economy/gift', async (req, res) => {
       db.doc(`users/${recipientId}`).get(),
     ]);
 
-    const gift = giftSnap.exists ? { id: giftSnap.id, ...giftSnap.data() } : null;
+    const gift = giftSnap.exists ? { ...giftSnap.data(), id: giftSnap.id } : null;
     const bpItem = bpSnap.exists ? bpSnap.data() : null;
     const sender = senderSnap.exists ? senderSnap.data() : null;
     const recipient = recipientSnap.exists ? recipientSnap.data() : null;
@@ -934,7 +939,7 @@ router.post('/economy/gift-direct', async (req, res) => {
       db.doc(`users/${recipientId}`).get(),
     ]);
 
-    const gift = giftSnap.exists ? { id: giftSnap.id, ...giftSnap.data() } : null;
+    const gift = giftSnap.exists ? { ...giftSnap.data(), id: giftSnap.id } : null;
     const sender = senderSnap.exists ? senderSnap.data() : null;
     const recipient = recipientSnap.exists ? recipientSnap.data() : null;
 
@@ -1080,7 +1085,7 @@ router.post('/economy/gift-batch', async (req, res) => {
 
     const giftSnap = await db.doc(`gifts/${giftId}`).get();
     if (!giftSnap.exists) return res.status(404).json({ error: 'Gift not found' });
-    const gift = { id: giftSnap.id, ...giftSnap.data() };
+    const gift = { ...giftSnap.data(), id: giftSnap.id };
 
     const senderSnap = await db.doc(`users/${uniqueId}`).get();
     if (!senderSnap.exists) return res.status(404).json({ error: 'Sender not found' });
@@ -1293,7 +1298,7 @@ router.post('/economy/backpack-send', async (req, res) => {
 
     // Get backpack items (excluding trial items)
     const backpackSnap = await db.collection(`users/${uniqueId}/backpack`).get();
-    const backpackItems = backpackSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const backpackItems = backpackSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
     const sendableItems = backpackItems.filter(
       (item) => item.giftId !== 'super_shy_trial' && (item.quantity || 0) > 0,
     );
@@ -1916,7 +1921,7 @@ router.get('/economy/transactions', async (req, res) => {
     query = query.orderBy('timestamp', 'desc').limit(limit);
 
     const snap = await query.get();
-    const results = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const results = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
     res.json(results);
   } catch (err) {
     log.error('economy', 'GET /economy/transactions failed', { error: err.message });
@@ -1932,7 +1937,7 @@ router.get('/users/:uniqueId/backpack', async (req, res) => {
       return res.status(403).json({ error: "Cannot access another user's backpack" });
     }
     const snap = await db.collection(`users/${req.params.uniqueId}/backpack`).get();
-    const results = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const results = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
     res.json(results);
   } catch (err) {
     log.error('economy', 'GET /users/:uniqueId/backpack failed', { error: err.message });
@@ -1961,7 +1966,7 @@ router.get('/users/:uniqueId/gift-wall', async (req, res) => {
     }
 
     const snap = await db.collection(`users/${req.params.uniqueId}/giftWall`).get();
-    const results = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const results = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
     res.json(results);
   } catch (err) {
     log.error('economy', 'GET /users/:uniqueId/gift-wall failed', { error: err.message });

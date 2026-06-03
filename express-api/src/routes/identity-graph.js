@@ -90,7 +90,11 @@ router.get('/admin/bans/graph/:id', async (req, res) => {
     const doc = await db.doc(`identityGraphs/${req.params.id}`).get();
     if (!doc.exists) return res.status(404).json({ error: 'Identity graph not found' });
 
-    res.json({ id: doc.id, ...doc.data() });
+    // Spread payload BEFORE doc-ref id so a same-named `id` field in the
+    // stored identityGraph data cannot override the doc's true identity.
+    // Admin-only endpoint, so currently low exploitability, but follows
+    // the canonical defense-in-depth pattern (PR #975/#976/#977/#978).
+    res.json({ ...doc.data(), id: doc.id });
   } catch (err) {
     log.error('identity-graph', 'Failed to get graph', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
