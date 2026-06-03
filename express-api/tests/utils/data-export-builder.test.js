@@ -357,10 +357,7 @@ describe('buildDataExport', () => {
 
     // conversations succeed, then rooms fail, rest succeed
     const { db } = require('../../src/utils/firebase');
-    let collCallCount = 0;
     db.collection.mockImplementation((path) => {
-      collCallCount++;
-      expect(collCallCount).toBeGreaterThan(0);
       const chain = {
         where: jest.fn().mockImplementation(() => chain),
         orderBy: jest.fn().mockImplementation(() => chain),
@@ -382,6 +379,8 @@ describe('buildDataExport', () => {
       'Failed to query rooms',
       expect.objectContaining({ uniqueId: '10000001' }),
     );
+    expect(result.partial).toBe(true);
+    expect(result.failedSections).toContain('rooms');
   });
 
   test('handles reports query error gracefully', async () => {
@@ -414,6 +413,8 @@ describe('buildDataExport', () => {
       'Failed to query reports',
       expect.objectContaining({ uniqueId: '10000001' }),
     );
+    expect(result.partial).toBe(true);
+    expect(result.failedSections).toContain('reports');
   });
 
   test('handles appeals query error gracefully', async () => {
@@ -446,6 +447,8 @@ describe('buildDataExport', () => {
       'Failed to query appeals',
       expect.objectContaining({ uniqueId: '10000001' }),
     );
+    expect(result.partial).toBe(true);
+    expect(result.failedSections).toContain('appeals');
   });
 
   test('handles identity query error gracefully', async () => {
@@ -478,6 +481,8 @@ describe('buildDataExport', () => {
       'Failed to query identity',
       expect.objectContaining({ uniqueId: '10000001' }),
     );
+    expect(result.partial).toBe(true);
+    expect(result.failedSections).toContain('identity');
   });
 
   test('handles deviceBindings query error gracefully', async () => {
@@ -544,6 +549,8 @@ describe('buildDataExport', () => {
       'Failed to query suggestions',
       expect.objectContaining({ uniqueId: '10000001' }),
     );
+    expect(result.partial).toBe(true);
+    expect(result.failedSections).toContain('suggestions');
   });
 
   test('handles notifications query error gracefully', async () => {
@@ -576,6 +583,8 @@ describe('buildDataExport', () => {
       'Failed to query notifications',
       expect.objectContaining({ uniqueId: '10000001' }),
     );
+    expect(result.partial).toBe(true);
+    expect(result.failedSections).toContain('notifications');
   });
 
   // --- Suggestion votes scanning --------------------------------------------
@@ -1304,18 +1313,29 @@ describe('buildDataExport', () => {
       ['submitted-suggestions', _submittedSuggestionMapper],
       ['notifications', _notificationMapper],
     ])('%s mapper', (_section, mapper) => {
-      test('spreads payload then writes trusted id last (basic shape pin)', () => {
+      test('spreads payload first, then writes trusted id last (key-order + value pin)', () => {
         const fakeDoc = {
           id: 'real-doc-id',
           data: () => ({ foo: 'bar', count: 7, nested: { x: 1 } }),
         };
         const result = mapper(fakeDoc);
+        // Value pin: each payload field passes through and id is set.
         expect(result).toEqual({
           foo: 'bar',
           count: 7,
           nested: { x: 1 },
           id: 'real-doc-id',
         });
+        // Key-order pin: ES2020 guarantees string-key insertion order on
+        // Object.keys / Object.entries / JSON.stringify. A regression
+        // flipping the spread order (`{ id: d.id, ...d.data() }`) would
+        // put 'id' FIRST, not last; toEqual above performs structural
+        // equality and would not catch the order change on its own.
+        // The "trusted id wins" test below is the load-bearing privacy
+        // pin (it catches the value-override symptom), but this pin
+        // catches the order regression even when no payload `id` is
+        // present to trigger the override — strictly narrower failure.
+        expect(Object.keys(result)).toEqual(['foo', 'count', 'nested', 'id']);
       });
 
       test('trusted id wins over rogue id in payload (privacy invariant)', () => {
@@ -1368,7 +1388,7 @@ describe('buildDataExport', () => {
     // doc id — either break user-side correlation against moderation
     // and audit refs.
     describe('user-message mapper (two trusted fields)', () => {
-      test('spreads payload then writes trusted conversationId + id last', () => {
+      test('spreads payload first, then writes trusted conversationId + id last (key-order + value pin)', () => {
         const conv = { id: 'conv-real' };
         const m = {
           id: 'msg-real',
@@ -1379,6 +1399,7 @@ describe('buildDataExport', () => {
           }),
         };
         const result = _userMessageMapper(conv, m);
+        // Value pin.
         expect(result).toEqual({
           senderId: '10000001',
           text: 'hello',
@@ -1386,6 +1407,15 @@ describe('buildDataExport', () => {
           conversationId: 'conv-real',
           id: 'msg-real',
         });
+        // Key-order pin — see single-arg mapper test for the full
+        // rationale; same protection against a flipped spread order.
+        expect(Object.keys(result)).toEqual([
+          'senderId',
+          'text',
+          'createdAt',
+          'conversationId',
+          'id',
+        ]);
       });
 
       test('trusted conversationId AND id win over rogue payload fields (privacy invariant)', () => {
