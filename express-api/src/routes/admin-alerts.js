@@ -48,6 +48,8 @@ router.get('/admin/alerts', async (req, res) => {
 });
 
 // POST /admin/alerts — Create a new alert
+const ALERT_STATUS_ALLOWLIST = ['new', 'unresolved', 'acknowledged', 'resolved'];
+
 router.post('/admin/alerts', async (req, res) => {
   if (await requireAdmin(req, res)) return;
 
@@ -56,6 +58,11 @@ router.post('/admin/alerts', async (req, res) => {
 
     if (!type || !message) {
       return res.status(400).json({ error: 'type and message are required' });
+    }
+    if (status !== undefined && !ALERT_STATUS_ALLOWLIST.includes(status)) {
+      return res.status(400).json({
+        error: `Invalid status. Must be one of: ${ALERT_STATUS_ALLOWLIST.join(', ')}`,
+      });
     }
 
     const alertId = `alert_${generateId()}`;

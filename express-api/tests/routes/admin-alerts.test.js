@@ -478,6 +478,32 @@ describe('POST /api/admin/alerts — all branches', () => {
     expect(res.body.error).toMatch(/Admin/i);
   });
 
+  test('rejects status not in the allowlist (400)', async () => {
+    // Guard against attackers (or careless admin tooling) persisting
+    // arbitrary status strings via POST. The allowlist mirrors what GET
+    // filtering / PATCH transitions already accept: new, unresolved,
+    // acknowledged, resolved. Anything outside is a 400.
+    const app = createApp(true);
+    const res = await request(app)
+      .post('/api/admin/alerts')
+      .send({ type: 'error_spike', message: 'rogue', status: 'pwned' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/status/i);
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
+  test('accepts each allowlisted status value (200)', async () => {
+    for (const status of ['new', 'unresolved', 'acknowledged', 'resolved']) {
+      const app = createApp(true);
+      const res = await request(app)
+        .post('/api/admin/alerts')
+        .send({ type: 'error_spike', message: `alert with ${status}`, status });
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe(status);
+    }
+  });
+
   test('returns 500 on Firestore error', async () => {
     mockSet.mockRejectedValueOnce(new Error('Firestore down'));
 
