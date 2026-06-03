@@ -334,7 +334,13 @@ describe('GET /api/roadmap/me', () => {
     expect(typeof res.body.displayName).toBe('string');
   });
 
-  test('response time under 500ms for cached users', async () => {
+  // Replaces the prior `response time under 500ms` test (non-load-bearing on
+  // a synchronous mock — could never fail in CI, could only flake). Pin the
+  // request-shape invariant instead: when `req.auth.uniqueId` is set, the
+  // route makes exactly one direct `users/{id}` read and SKIPS the
+  // identityMap fallback query — a regression that always ran the fallback
+  // would double the Firestore RPC count on every authenticated request.
+  test('direct-uniqueId path makes exactly one users-doc read and skips identityMap', async () => {
     mockDocGet.mockImplementation((path) => {
       if (path && path.includes('users/')) {
         return Promise.resolve(makeUserDoc(1001));
@@ -342,10 +348,9 @@ describe('GET /api/roadmap/me', () => {
       return Promise.resolve({ exists: false });
     });
     const app = createApp();
-    const start = Date.now();
     await request(app).get('/api/roadmap/me').expect(200);
-    const elapsed = Date.now() - start;
-    expect(elapsed).toBeLessThan(500);
+    expect(mockDocGet).toHaveBeenCalledTimes(1);
+    expect(mockCollectionGet).not.toHaveBeenCalled();
   });
 
   test('multiple rapid requests return same data (idempotent)', async () => {
@@ -451,6 +456,12 @@ describe('GET /api/roadmap/me', () => {
     const res = await request(app).get('/api/roadmap/me').expect(200);
     expect(res.body.uniqueId).toBe(4002);
     expect(res.body.displayName).toBe('LinkedUser');
+    // Strong pin: the unlinked entry's user doc must NEVER be fetched. A
+    // "fetch all then pick last" regression that happened to land on 4002
+    // would pass the toBe-4002 assertion above — this negative assertion
+    // closes that gap.
+    expect(mockDocGet).not.toHaveBeenCalledWith('users/4001');
+    expect(mockDocGet).toHaveBeenCalledWith('users/4002');
   });
 
   // ─── New tests: type safety ────────────────────────────────────
@@ -684,12 +695,14 @@ describe('GET /api/roadmap/me — Auth edge cases', () => {
     expect([200, 404]).toContain(res.status);
   });
 
-  test('auth with empty string uid returns 404 (no user found)', async () => {
+  test('auth with empty string uid returns 401 (requireAuth rejects falsy uid)', async () => {
     mockDocGet.mockResolvedValue({ exists: false });
     mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
     const app = createApp({ uid: '', uniqueId: null });
     const res = await request(app).get('/api/roadmap/me');
-    expect([401, 404]).toContain(res.status);
+    // Empty string is falsy, so requireAuth's `!req.auth.uid && !req.auth.uniqueId`
+    // guard fires deterministically — pin 401, not a disjunctive [401, 404].
+    expect(res.status).toBe(401);
   });
 });
 

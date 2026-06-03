@@ -118,4 +118,23 @@ describe('spread-order safety (privacy invariant)', () => {
     const result = await getDoc('collection/doc-undef');
     expect(result).toEqual({ id: 'doc-undef' });
   });
+
+  // Same `{ ...undefined } -> {}` invariant for queryDocs: a single
+  // undefined-payload doc must not poison the entire result array nor crash
+  // the spread; neighbouring well-formed docs must still pass through. Pins
+  // the queryDocs side of the contract symmetrically with the getDoc case
+  // above so a future spread-shape refactor can't regress one without
+  // failing both.
+  test('queryDocs: data() returning undefined on one doc yields { id } only, others unaffected', async () => {
+    const mockRef = { get: mockQueryGet };
+    mockQueryGet.mockResolvedValue({
+      docs: [
+        { id: 'normal', data: () => ({ name: 'Alice' }) },
+        { id: 'undef', data: () => undefined },
+      ],
+    });
+
+    const results = await queryDocs(mockRef);
+    expect(results).toEqual([{ id: 'normal', name: 'Alice' }, { id: 'undef' }]);
+  });
 });
