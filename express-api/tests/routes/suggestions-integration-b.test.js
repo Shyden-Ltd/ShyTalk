@@ -811,6 +811,87 @@ describe('11.115 — Error Recovery Flows', () => {
 });
 
 // =============================================================================
+// 11.115b — GDPR-Deleted Submitter Guards
+// =============================================================================
+//
+// Verifies the explicit `submitterDeleted` guards on:
+//   - notifySubscribers (suggestions.js:879-887) — must NOT FCM/SystemPm the
+//     anonymised submitter when admin changes status on their suggestion
+//   - GET /suggestions/:id admin sidebar (suggestions.js:279) — must NOT
+//     query "other suggestions" by submitterUid=0 when submitterDeleted=true
+//
+// Both guards previously relied on `submitterUid: 0` being JavaScript-falsy.
+// That is correct behaviour today but breaks silently if the sentinel value
+// ever changes — these tests force the contract to be load-bearing.
+
+describe('11.115b — GDPR-Deleted Submitter Guards', () => {
+  test('admin status-change on anonymised suggestion does NOT notify uid=0', async () => {
+    setupDocMocks({
+      'suggestions/sug-1': makeSuggestionDoc('sug-1', {
+        status: 'pending',
+        submitterUid: 0,
+        submitterDeleted: true,
+        subscribers: [], // no other subscribers either
+      }),
+    });
+
+    await request(createApp({ uniqueId: 9999, isAdmin: true }))
+      .put('/api/admin/suggestions/sug-1/status')
+      .send({ status: 'accepted' });
+
+    // No FCM / system-PM should target the anonymised submitter
+    const fcmTargetedUid0 = sendFcmToTokens.mock.calls.some(
+      ([tokens]) => Array.isArray(tokens) && tokens.includes(0),
+    );
+    expect(fcmTargetedUid0).toBe(false);
+    const pmTargetedUid0 = sendSystemPm.mock.calls.some(([uid]) => uid === 0);
+    expect(pmTargetedUid0).toBe(false);
+  });
+
+  test('admin status-change on live submitter DOES notify them (regression guard)', async () => {
+    // Counterpart to the above — confirms the guard fires only for deleted
+    // submitters, not as a blanket suppression.
+    setupDocMocks({
+      'suggestions/sug-2': makeSuggestionDoc('sug-2', {
+        status: 'pending',
+        submitterUid: 1001,
+        subscribers: [],
+      }),
+      'users/1001': makeUserDoc(1001),
+    });
+
+    await request(createApp({ uniqueId: 9999, isAdmin: true }))
+      .put('/api/admin/suggestions/sug-2/status')
+      .send({ status: 'accepted' });
+
+    const pmTargetedSubmitter = sendSystemPm.mock.calls.some(([uid]) => uid === 1001);
+    expect(pmTargetedSubmitter).toBe(true);
+  });
+
+  test('GET /suggestions/:id (admin) skips submitterOtherSuggestions when submitterDeleted', async () => {
+    setupDocMocks({
+      'suggestions/sug-3': makeSuggestionDoc('sug-3', {
+        status: 'accepted',
+        submitterUid: 0,
+        submitterDeleted: true,
+      }),
+    });
+
+    const res = await request(createApp({ uniqueId: 9999, isAdmin: true })).get(
+      '/api/suggestions/sug-3',
+    );
+
+    // Either the field is absent, or it is an empty array — what we MUST
+    // NOT see is a populated list of suggestions for a deleted user.
+    if (res.body.submitterOtherSuggestions !== undefined) {
+      expect(res.body.submitterOtherSuggestions).toEqual([]);
+    } else {
+      expect(res.body).not.toHaveProperty('submitterOtherSuggestions');
+    }
+  });
+});
+
+// =============================================================================
 // 11.116 — Cross-Feature Interactions
 // =============================================================================
 

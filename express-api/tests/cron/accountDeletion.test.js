@@ -653,6 +653,94 @@ describe('hardDeleteAccount', () => {
     );
   });
 
+  test('Step 6b: vote with null vote field deletes without voteCount update', async () => {
+    // Defensive against malformed vote docs (no `vote: up|down`). Production
+    // code computes `delta = 0` for unknown vote shapes; the vote MUST still
+    // be deleted (PII erasure) but the parent voteCount MUST NOT be touched
+    // (no way to know which direction to adjust).
+    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+
+    const malformedVote = makeVoteDoc('sug-Z', 10000001, null);
+    mockCollectionGet.mockImplementation(
+      dispatchByTarget({
+        'cg:votes': { docs: [malformedVote], empty: false },
+      }),
+    );
+
+    await hardDeleteAccount(testUser);
+
+    expect(mockBatchDelete).toHaveBeenCalledWith(malformedVote.ref);
+    expect(mockBatchUpdate).not.toHaveBeenCalledWith(
+      malformedVote.ref.parent.parent,
+      expect.objectContaining({ voteCount: expect.anything() }),
+    );
+  });
+
+  test('Step 6b: subscription-doc deletion failure logs but does not abort', async () => {
+    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
+    mockDocDelete.mockImplementation((path) => {
+      if (path === 'subscriptions/10000001') {
+        return Promise.reject(new Error('subscriptions delete failed'));
+      }
+      return Promise.resolve();
+    });
+
+    await hardDeleteAccount(testUser);
+
+    expect(auth.deleteUser).toHaveBeenCalled();
+    expect(log.error).toHaveBeenCalledWith(
+      'cron',
+      expect.stringContaining('subscription'),
+      expect.objectContaining({ uniqueId: '10000001' }),
+    );
+  });
+
+  test('Step 6b: notifications query failure logs but does not abort', async () => {
+    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+    mockCollectionGet.mockImplementation(({ type, name }) => {
+      if (type === 'col' && name === 'notifications') {
+        return Promise.reject(new Error('notifications query failed'));
+      }
+      return Promise.resolve({ docs: [], empty: true });
+    });
+
+    await hardDeleteAccount(testUser);
+
+    expect(auth.deleteUser).toHaveBeenCalled();
+    expect(log.error).toHaveBeenCalledWith(
+      'cron',
+      expect.stringContaining('notification'),
+      expect.objectContaining({ uniqueId: '10000001' }),
+    );
+  });
+
+  test('Step 6b: notifications cleanup queries BOTH uid and recipientUid, dedupes by ref', async () => {
+    // The cron runs two queries in parallel and dedupes results by ref.path —
+    // a notification matching BOTH fields (today's invariant) must be deleted
+    // exactly once, not twice.
+    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+
+    const dualMatch = { id: 'n-1', ref: { path: 'notifications/n-1' } };
+    mockCollectionGet.mockImplementation(({ type, name }) => {
+      if (type === 'col' && name === 'notifications') {
+        // Both queries return the same doc (since today both fields equal uid)
+        return Promise.resolve({ docs: [dualMatch], empty: false });
+      }
+      return Promise.resolve({ docs: [], empty: true });
+    });
+
+    await hardDeleteAccount(testUser);
+
+    expect(mockWhere).toHaveBeenCalledWith('uid', '==', 10000001);
+    expect(mockWhere).toHaveBeenCalledWith('recipientUid', '==', 10000001);
+    // Despite appearing in BOTH result sets, deleted exactly once.
+    const deleteCallsForN1 = mockBatchDelete.mock.calls.filter(
+      ([ref]) => ref?.path === 'notifications/n-1',
+    );
+    expect(deleteCallsForN1).toHaveLength(1);
+  });
+
   test('Step 7: deletes auth-related data', async () => {
     mockDocGet.mockResolvedValue({ exists: false, data: () => null });
 
@@ -746,17 +834,25 @@ describe('hardDeleteAccount', () => {
         reason: 'self',
         triggeredBy: 'system',
         standing: 'clean',
-        dataDeleted: expect.arrayContaining([
+        // Exact-match assertion — the audit-log contract is a public surface
+        // (admin feed), so adding/removing entries is a deliberate decision
+        // that should force this test to update, not silently pass.
+        dataDeleted: [
           'user',
           'conversations',
           'rooms',
           'r2',
+          'reports',
+          'appeals',
           'suggestions',
           'votes',
           'comments',
           'subscriptions',
           'notifications',
-        ]),
+          'auth',
+          'identity',
+          'deviceBindings',
+        ],
       }),
     );
 

@@ -275,8 +275,11 @@ router.get('/suggestions/:id', async (req, res) => {
       commentCount: commentsSnap.size,
     };
 
-    // Admin view: include submitter's other suggestions
-    if (isAdmin && data.submitterUid) {
+    // Admin view: include submitter's other suggestions. Skip for anonymised
+    // (GDPR-deleted) submitters — the `submitterDeleted` flag is canonical;
+    // do not rely on the `submitterUid: 0` sentinel being falsy because a
+    // future sentinel change would silently break this guard.
+    if (isAdmin && !data.submitterDeleted && data.submitterUid) {
       try {
         const otherSnap = await db
           .collection('suggestions')
@@ -878,7 +881,12 @@ async function notifySubscribers(suggestionData, eventType, extraData = {}) {
     const subscribers = suggestionData.subscribers || [];
     const submitterUid = suggestionData.submitterUid;
     const uidsToNotify = new Set(subscribers);
-    if (submitterUid) uidsToNotify.add(submitterUid);
+    // Skip notifying a GDPR-deleted submitter. The `submitterDeleted` flag is
+    // canonical here, not the sentinel value of `submitterUid` — `0` happens
+    // to be falsy today but the contract should not depend on that.
+    if (submitterUid && !suggestionData.submitterDeleted) {
+      uidsToNotify.add(submitterUid);
+    }
 
     let notified = 0;
     const failedUids = [];

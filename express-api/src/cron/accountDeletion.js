@@ -340,10 +340,21 @@ async function cleanupSuggestionsContent(uniqueId) {
   }
 
   try {
-    const notifSnap = await db.collection('notifications').where('uid', '==', numericUid).get();
+    // Notifications today set both `uid` and `recipientUid` to the same value
+    // on every write path. Querying both fields and deduplicating by ref makes
+    // erasure forward-safe: if a future path writes only `recipientUid`, that
+    // record still gets deleted instead of silently surviving the cascade.
+    const [byUid, byRecipient] = await Promise.all([
+      db.collection('notifications').where('uid', '==', numericUid).get(),
+      db.collection('notifications').where('recipientUid', '==', numericUid).get(),
+    ]);
+    const seen = new Set();
     let batch = db.batch();
     let count = 0;
-    for (const notifDoc of notifSnap.docs || []) {
+    for (const notifDoc of [...(byUid.docs || []), ...(byRecipient.docs || [])]) {
+      const path = notifDoc.ref.path;
+      if (seen.has(path)) continue;
+      seen.add(path);
       batch.delete(notifDoc.ref);
       count++;
       if (count === 500) {
