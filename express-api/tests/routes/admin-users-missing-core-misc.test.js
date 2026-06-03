@@ -162,6 +162,31 @@ describe('GET /api/user/:uniqueId', () => {
     expect(res.body.displayName).toBe('Alice');
     expect(res.body.gcsDisplayScore).toBeDefined();
   });
+
+  it('uses trusted snap.id (not payload id) when user doc data contains an attacker-controlled id field', async () => {
+    // Adversarial: the doc's REAL id is '10000001', but data() injects an `id`
+    // field that an attacker would have written to the user doc. With the
+    // unsafe spread order `{ id: snap.id, ...snap.data() }` the payload id
+    // overrides the trusted doc id; with the safe order
+    // `{ ...snap.data(), id: snap.id }` the trusted doc.id wins.
+    mockDocGet.mockResolvedValueOnce({
+      exists: true,
+      id: '10000001',
+      data: () => ({
+        id: '99999999-rogue-id',
+        uniqueId: 10000001,
+        displayName: 'Alice',
+        gcsScore: 90,
+        email: 'alice@example.com',
+        firebaseUid: 'uid-alice',
+      }),
+    });
+
+    const app = createAdminApp();
+    const res = await request(app).get('/api/user/10000001');
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe('10000001');
+  });
 });
 
 // ─── POST /api/user/:uniqueId/warn ───────────────────────────────

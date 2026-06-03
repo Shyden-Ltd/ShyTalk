@@ -144,7 +144,7 @@ router.get('/user/:uniqueId', async (req, res) => {
 
     const snap = await db.doc(`users/${req.params.uniqueId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
-    const user = normalizeUser({ id: snap.id, ...snap.data() });
+    const user = normalizeUser({ ...snap.data(), id: snap.id });
     await backfillAuthInfo(user, req.params.uniqueId, user.uid || snap.id);
 
     res.json(user);
@@ -417,7 +417,7 @@ async function createWarning(
 
   const snap = await db.doc(`users/${uniqueId}`).get();
   if (!snap.exists) throw new Error('User not found');
-  const user = { id: snap.id, ...snap.data() };
+  const user = { ...snap.data(), id: snap.id };
 
   const gcsScore = user.gcsScore ?? user.gcs_score ?? 100;
   const warningCount = user.warningCount ?? user.warning_count ?? 0;
@@ -552,7 +552,7 @@ router.get('/user/:uniqueId/warnings', async (req, res) => {
     query = query.limit(limit + 1); // fetch one extra to detect "has more"
 
     const snapshot = await query.get();
-    const docs = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const docs = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
     const hasMore = docs.length > limit;
     if (hasMore) docs.pop();
 
@@ -961,7 +961,7 @@ router.get('/conversations/:id/messages', async (req, res) => {
       .limit(messageLimit)
       .get();
 
-    const messages = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const messages = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     // Return chronological order
     res.json(messages.toReversed());
@@ -995,13 +995,13 @@ router.get('/search/uniqueId/:id', async (req, res) => {
         .get();
       if (tempSnap.empty) return res.status(404).json({ error: 'User not found' });
       const doc = tempSnap.docs[0];
-      const user = normalizeUser({ id: doc.id, ...doc.data() });
+      const user = normalizeUser({ ...doc.data(), id: doc.id });
       await backfillAuthInfo(user, doc.id, user.uid || doc.id);
       return res.json(user);
     }
 
     const doc = snapshot.docs[0];
-    const user = normalizeUser({ id: doc.id, ...doc.data() });
+    const user = normalizeUser({ ...doc.data(), id: doc.id });
     await backfillAuthInfo(user, doc.id, user.uid || doc.id);
 
     res.json(user);
@@ -1097,7 +1097,7 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
 
     const snap = await db.doc(`users/${req.params.uniqueId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
-    const user = { id: snap.id, ...snap.data() };
+    const user = { ...snap.data(), id: snap.id };
 
     const timestamp = now();
 
@@ -1235,7 +1235,7 @@ router.post('/user/:uniqueId/unsuspend', async (req, res) => {
 
     const snap = await db.doc(`users/${req.params.uniqueId}`).get();
     if (!snap.exists) return res.status(404).json({ error: 'User not found' });
-    const user = { id: snap.id, ...snap.data() };
+    const user = { ...snap.data(), id: snap.id };
 
     // Idempotency guard: skip the write + PM + audit log + ban-lift
     // when the user is already unsuspended. Without this, defensive
