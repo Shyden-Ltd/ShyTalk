@@ -686,13 +686,32 @@ describe('GET /api/roadmap/me — Auth edge cases', () => {
     expect(res.status).toBe(401);
   });
 
-  test('auth with uid but no uniqueId still attempts identity lookup', async () => {
+  test('auth with uid but no uniqueId falls through identityMap and returns 404 when empty', async () => {
     mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
     mockDocGet.mockResolvedValue({ exists: false });
     const app = createApp({ uid: 'uid-no-unique', uniqueId: null });
     const res = await request(app).get('/api/roadmap/me');
-    // Should either find via identityMap or return 404 — not crash
-    expect([200, 404]).toContain(res.status);
+    // requireAuth passes (uid is truthy), direct path skipped (uniqueId null
+    // is falsy), identityMap fallback finds nothing → deterministic 404. Pin
+    // exact status, not a disjunctive [200, 404] that would also accept
+    // a successful resolution that shouldn't happen against this mock.
+    expect(res.status).toBe(404);
+  });
+
+  // Pre-existing falsy-guard analysis: requireAuth's `!req.auth.uniqueId`
+  // treats 0 the same as null/undefined. With a truthy uid the guard does
+  // NOT fire on uniqueId=0; the route falls through to the identityMap
+  // fallback. This test pins that current behavior so a future "tighten the
+  // guard" refactor (e.g. switching to `req.auth.uniqueId == null`) doesn't
+  // change the response shape unintentionally. ShyTalk uniqueIds are
+  // demonstrably positive integers (provisioning never assigns 0), so this
+  // is a regression pin, not a real-world bug surface.
+  test('uniqueId of 0 with truthy uid falls through to identityMap (returns 404 when empty)', async () => {
+    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
+    mockDocGet.mockResolvedValue({ exists: false });
+    const app = createApp({ uid: 'uid-zero', uniqueId: 0 });
+    const res = await request(app).get('/api/roadmap/me');
+    expect(res.status).toBe(404);
   });
 
   test('auth with empty string uid returns 401 (requireAuth rejects falsy uid)', async () => {
