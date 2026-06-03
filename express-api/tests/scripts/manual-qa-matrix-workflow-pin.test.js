@@ -179,7 +179,7 @@ describe('manual-qa-matrix.yml — structural pin', () => {
   test('Playwright browser cache keyed on resolved version', () => {
     // [[feedback-ci-cache-downloads-version-aware]] — cache must
     // invalidate when Playwright version bumps.
-    expect(yamlText).toMatch(/actions\/cache@v4/);
+    expect(yamlText).toMatch(/actions\/cache@v5/);
     expect(yamlText).toMatch(
       /playwright-\$\{\{ runner\.os \}\}-\$\{\{ steps\.pw\.outputs\.version \}\}/,
     );
@@ -191,7 +191,7 @@ describe('manual-qa-matrix.yml — structural pin', () => {
   });
 
   test('upload-artifact uses if: always() (uploads on failure too)', () => {
-    expect(yamlText).toMatch(/uses:\s*actions\/upload-artifact@v4/);
+    expect(yamlText).toMatch(/uses:\s*actions\/upload-artifact@v7/);
     expect(yamlText).toMatch(/if:\s*always\(\)/);
   });
 
