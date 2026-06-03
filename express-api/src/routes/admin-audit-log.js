@@ -88,7 +88,7 @@ router.get('/admin/audit-log', async (req, res) => {
     for (const d of [...adminSnap.docs, ...auditSnap.docs, ...modSnap.docs]) {
       if (seen.has(d.id)) continue;
       seen.add(d.id);
-      merged.push({ id: d.id, ...d.data() });
+      merged.push({ ...d.data(), id: d.id });
     }
     merged.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 

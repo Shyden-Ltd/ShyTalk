@@ -143,7 +143,7 @@ router.get('/admin/age-verification/pending', async (req, res) => {
       .where('status', '==', 'pending')
       .orderBy('submittedAt', 'asc')
       .get();
-    const submissions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const submissions = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
     return res.json({ submissions });
   } catch (err) {
     log.error('admin-age-verification', 'list pending failed', { error: err?.message });

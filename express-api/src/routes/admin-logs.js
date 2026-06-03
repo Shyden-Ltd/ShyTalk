@@ -55,7 +55,7 @@ router.get('/admin/logs', async (req, res) => {
 
     const snapshot = await query.get();
 
-    let logs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    let logs = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
 
     // Client-side filters (can't be compound-queried in Firestore)
     if (route) {
@@ -93,7 +93,7 @@ router.get('/admin/logs/trace/:traceId', async (req, res) => {
       .limit(MAX_TRACE_LIMIT)
       .get();
 
-    const logs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const logs = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
 
     res.json({ logs });
   } catch (err) {

@@ -185,6 +185,29 @@ describe('GET /api/admin/devices/:deviceId', () => {
 
     expect(res.body.error).toBe('Device binding not found');
   });
+
+  test('uses trusted snap.id (not payload id) when device doc data contains an attacker-controlled id field', async () => {
+    // Adversarial: the doc's REAL id is 'dev-001', but data() injects an `id`
+    // field that an attacker would have written to the deviceBindings doc.
+    // With the unsafe spread order `{ id: snap.id, ...snap.data() }` the
+    // payload id overrides the trusted doc id; with the safe order
+    // `{ ...snap.data(), id: snap.id }` the trusted doc.id wins.
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: 'dev-001',
+      data: () => ({
+        id: 'rogue-device-id',
+        userId: 'u1',
+        manufacturer: 'Samsung',
+        model: 'Galaxy S21',
+      }),
+    });
+
+    const app = createApp();
+    const res = await request(app).get('/api/admin/devices/dev-001').expect(200);
+
+    expect(res.body.id).toBe('dev-001');
+  });
 });
 
 describe('GET /api/admin/devices/user/:uniqueId', () => {

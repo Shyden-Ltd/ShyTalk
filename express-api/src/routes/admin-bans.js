@@ -51,11 +51,11 @@ router.get('/admin/bans', async (req, res) => {
     const nowMs = Date.now();
 
     const deviceBans = deviceSnap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
+      .map((d) => ({ ...d.data(), id: d.id }))
       .filter((b) => !b.expiresAt || new Date(b.expiresAt).getTime() > nowMs);
 
     const networkBans = networkSnap.docs
-      .map((d) => ({ id: d.id, ...d.data() }))
+      .map((d) => ({ ...d.data(), id: d.id }))
       .filter((b) => !b.expiresAt || new Date(b.expiresAt).getTime() > nowMs);
 
     res.json({ deviceBans, networkBans });
@@ -316,7 +316,7 @@ router.get('/admin/bans/user/:uniqueId', async (req, res) => {
       for (const d of snap.docs) {
         if (!seenDevice.has(d.id)) {
           seenDevice.add(d.id);
-          deviceBans.push({ id: d.id, ...d.data() });
+          deviceBans.push({ ...d.data(), id: d.id });
         }
       }
     }
@@ -327,7 +327,7 @@ router.get('/admin/bans/user/:uniqueId', async (req, res) => {
       for (const d of snap.docs) {
         if (!seenNetwork.has(d.id)) {
           seenNetwork.add(d.id);
-          networkBans.push({ id: d.id, ...d.data() });
+          networkBans.push({ ...d.data(), id: d.id });
         }
       }
     }

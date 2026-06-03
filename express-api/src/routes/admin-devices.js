@@ -26,7 +26,7 @@ router.get('/admin/devices', async (req, res) => {
     const offset = Math.max(Number.parseInt(req.query.offset, 10) || 0, 0);
 
     const snap = await db.collection('deviceBindings').get();
-    let devices = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    let devices = snap.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
 
     // In-memory search (Firestore doesn't support full-text search)
     if (searchQuery) {
@@ -96,7 +96,7 @@ router.get('/admin/devices/user/:uniqueId', async (req, res) => {
     const uniqueId = Number(req.params.uniqueId);
     const snap = await db.collection('deviceBindings').where('uniqueId', '==', uniqueId).get();
 
-    const devices = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const devices = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     res.json({ devices });
   } catch (err) {
@@ -121,7 +121,7 @@ router.get('/admin/devices/:deviceId', async (req, res) => {
       return res.status(404).json({ error: 'Device binding not found' });
     }
 
-    res.json({ id: snap.id, ...snap.data() });
+    res.json({ ...snap.data(), id: snap.id });
   } catch (err) {
     log.error('admin-devices', 'Error fetching device binding', {
       deviceId: req.params.deviceId,

@@ -290,7 +290,7 @@ router.get('/users/:uniqueId/transactions', async (req, res) => {
     query = query.limit(limit);
 
     const snapshot = await query.get();
-    const results = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const results = snapshot.docs.map((d) => ({ ...d.data(), id: d.id }));
     results.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
     res.json(results);

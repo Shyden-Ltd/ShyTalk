@@ -38,7 +38,7 @@ router.get('/admin/alerts', async (req, res) => {
     query = query.limit(limit);
 
     const snapshot = await query.get();
-    const alerts = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    const alerts = snapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
 
     res.json({ alerts });
   } catch (err) {
@@ -89,7 +89,7 @@ router.get('/admin/alerts/:alertId', async (req, res) => {
       return res.status(404).json({ error: 'Alert not found' });
     }
 
-    res.json({ id: snap.id, ...snap.data() });
+    res.json({ ...snap.data(), id: snap.id });
   } catch (err) {
     log.error('admin-alerts', 'Error getting alert', {
       alertId: req.params.alertId,
