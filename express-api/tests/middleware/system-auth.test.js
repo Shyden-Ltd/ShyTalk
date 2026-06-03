@@ -61,9 +61,23 @@ describe('requireSystemAuth', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('returns 401 when bearer token length differs from secret', () => {
+  test('returns 401 when bearer token is shorter than secret', () => {
     process.env.SYSTEM_SHARED_SECRET = 'correct-secret';
     req.get.mockReturnValue('Bearer too-short');
+
+    requireSystemAuth(req, res, next);
+
+    // HMAC compare path means no length-mismatch fast-exit: both
+    // wrong-length and wrong-content tokens go through the same
+    // constant-time compare and end here.
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid bearer token' });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('returns 401 when bearer token is longer than secret', () => {
+    process.env.SYSTEM_SHARED_SECRET = 'correct-secret';
+    req.get.mockReturnValue('Bearer correct-secret-with-extra-bytes-appended');
 
     requireSystemAuth(req, res, next);
 
@@ -102,10 +116,13 @@ describe('requireSystemAuth', () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  test('uses Authorization header lookup (not auth)', () => {
+  test('uses lowercase "authorization" header lookup (Express normalises)', () => {
     process.env.SYSTEM_SHARED_SECRET = 'correct-secret';
+    // Pin the lowercase-only invariant — if the source switches to
+    // 'Authorization', this mock returns '' (the default) and the test
+    // will fail.
     req.get.mockImplementation((header) =>
-      header === 'authorization' || header === 'Authorization' ? 'Bearer correct-secret' : '',
+      header === 'authorization' ? 'Bearer correct-secret' : '',
     );
 
     requireSystemAuth(req, res, next);
@@ -117,6 +134,15 @@ describe('requireSystemAuth', () => {
   test('handles non-ASCII secrets correctly', () => {
     process.env.SYSTEM_SHARED_SECRET = 'sécret-with-unicodé';
     req.get.mockReturnValue('Bearer sécret-with-unicodé');
+
+    requireSystemAuth(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  test('tolerates extra whitespace after Bearer', () => {
+    process.env.SYSTEM_SHARED_SECRET = 'correct-secret';
+    req.get.mockReturnValue('Bearer    correct-secret');
 
     requireSystemAuth(req, res, next);
 

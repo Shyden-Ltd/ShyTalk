@@ -14,15 +14,29 @@
  *
  * Per the same-secret-many-callers model, each scheduled workflow (and
  * any other ops-only tooling) configures the same value via repo
- * secrets / Better Stack monitor headers / etc. Rotation is
- * coordinated by updating the Express API env first, then the callers.
+ * secrets / Better Stack monitor headers / etc. Rotation is coordinated
+ * by updating the Express API env first, then the callers.
  *
- * Comparison uses `crypto.timingSafeEqual` so a token-guessing attacker
- * can't infer the secret one character at a time from response timing.
+ * Verification uses an HMAC-of-HMAC comparison rather than a direct
+ * `timingSafeEqual` of the bytes. Both HMACs are always 32 bytes
+ * regardless of the provided token's length, so the work done by the
+ * comparison is identical in EVERY rejection path — same-length wrong
+ * token, wrong-length token, and matching token all execute the same
+ * sequence of allocations + a 32-byte timing-safe compare. This
+ * eliminates the byte-length side channel that the naive
+ * `if (expectedBuf.length !== providedBuf.length) return 401` pattern
+ * leaks (because `Buffer.from(provided, 'utf8')` is O(provided.length),
+ * an attacker can binary-search the secret's byte length by measuring
+ * the response delta between the fast-path length-mismatch and the
+ * slower constant-time compare).
+ *
+ * Reference: https://www.synopsys.com/blogs/software-security/timing-attacks-explained/
  */
 
 const crypto = require('node:crypto');
 const log = require('../utils/log');
+
+const BEARER_PREFIX = 'Bearer ';
 
 function requireSystemAuth(req, res, next) {
   const expected = process.env.SYSTEM_SHARED_SECRET;
@@ -38,31 +52,30 @@ function requireSystemAuth(req, res, next) {
   }
 
   const header = req.get('authorization') || '';
-  // Prefix-check avoids regex backtracking risk on pathological inputs
-  // (e.g. `Authorization: Bearer ` + 10kb of whitespace would force a
-  // greedy regex to backtrack). The case-insensitive prefix check +
-  // index slice does the same job as `/^Bearer\s+(.+)$/i` in
-  // bounded time.
-  const PREFIX_LEN = 'Bearer '.length;
-  if (header.length <= PREFIX_LEN || header.slice(0, PREFIX_LEN).toLowerCase() !== 'bearer ') {
+  // Prefix-check + slice avoids regex backtracking on pathological
+  // inputs (e.g. `Authorization: Bearer ` + 10kb of whitespace would
+  // force `/^Bearer\s+(.+)$/i` to backtrack). The slice + trimStart
+  // accepts RFC-6750-compliant whitespace after `Bearer`.
+  if (
+    header.length <= BEARER_PREFIX.length ||
+    header.slice(0, BEARER_PREFIX.length).toLowerCase() !== BEARER_PREFIX.toLowerCase()
+  ) {
     return res.status(401).json({ error: 'Missing bearer token' });
   }
-  const provided = header.slice(PREFIX_LEN).trimStart();
+  const provided = header.slice(BEARER_PREFIX.length).trimStart();
   if (!provided) {
     return res.status(401).json({ error: 'Missing bearer token' });
   }
-  const expectedBuf = Buffer.from(expected, 'utf8');
-  const providedBuf = Buffer.from(provided, 'utf8');
 
-  // timingSafeEqual requires equal-length buffers. Reject length
-  // mismatch up-front to avoid the throw — that branch is constant
-  // time regardless of secret contents because we don't compare
-  // anything beyond the length check.
-  if (expectedBuf.length !== providedBuf.length) {
-    return res.status(401).json({ error: 'Invalid bearer token' });
-  }
-
-  if (!crypto.timingSafeEqual(expectedBuf, providedBuf)) {
+  // HMAC both the expected and the provided string under a shared key
+  // (the expected secret itself) so both digests are always 32 bytes
+  // regardless of input length. timingSafeEqual then compares two
+  // fixed-length buffers in constant time. No length-mismatch branch
+  // is needed at all — wrong-length, wrong-content, and right tokens
+  // all take the same code path.
+  const referenceDigest = crypto.createHmac('sha256', expected).update(expected).digest();
+  const providedDigest = crypto.createHmac('sha256', expected).update(provided).digest();
+  if (!crypto.timingSafeEqual(referenceDigest, providedDigest)) {
     return res.status(401).json({ error: 'Invalid bearer token' });
   }
 

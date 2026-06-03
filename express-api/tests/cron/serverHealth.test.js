@@ -579,4 +579,70 @@ describe('serverHealth', () => {
       expect.objectContaining({ error: 'Alert DB down' }),
     );
   });
+
+  test('in-flight guard: concurrent invocations do not double-fire the metrics check', async () => {
+    // Heartbeat-class endpoint can be hit multiple times during a slow
+    // PM2 jlist (10s timeout). The module-level inFlight guard ensures
+    // only one run reaches createAlert per overlap window — otherwise
+    // duplicate PM2-restart alerts emit because alertManager has no
+    // dedup. Restarts (1) crossing the threshold (0) would create one
+    // alert per concurrent caller without the guard.
+    const createAlert = jest.fn().mockResolvedValue(undefined);
+    const mockManager = {
+      getConfig: () => ({
+        serverMemoryWarningPercent: 30,
+        pm2RestartAlert: true,
+      }),
+      createAlert,
+    };
+
+    mockMemory(100, 8000);
+
+    // Hold the PM2 jlist callback so the first invocation stays
+    // in-flight while the second starts.
+    let releasePm2;
+    execFile.mockImplementation((_cmd, _args, _opts, callback) => {
+      releasePm2 = () => {
+        callback(null, JSON.stringify([{ name: 'api', pm2_env: { restart_time: 5 } }]));
+      };
+    });
+
+    // Prime baseline with a synchronous run (sets lastRestartCounts).
+    execFile.mockImplementationOnce((_cmd, _args, _opts, callback) => {
+      callback(null, JSON.stringify([{ name: 'api', pm2_env: { restart_time: 1 } }]));
+    });
+    await serverHealth(mockManager);
+    jest.clearAllMocks();
+
+    // Re-establish the held mock for the overlap test.
+    execFile.mockImplementation((_cmd, _args, _opts, callback) => {
+      releasePm2 = () => {
+        callback(null, JSON.stringify([{ name: 'api', pm2_env: { restart_time: 5 } }]));
+      };
+    });
+
+    // Start TWO concurrent invocations. The second sees inFlight === true
+    // and returns immediately without entering the body.
+    const first = serverHealth(mockManager);
+    const second = serverHealth(mockManager);
+
+    // Second invocation resolves immediately (guard hit) while the
+    // first is still awaiting the PM2 callback.
+    await second;
+    expect(createAlert).not.toHaveBeenCalled();
+
+    // Release PM2 so the first invocation completes.
+    releasePm2();
+    await first;
+
+    // Only one alert was created across both invocations.
+    expect(createAlert).toHaveBeenCalledTimes(1);
+    expect(createAlert).toHaveBeenCalledWith(
+      'pm2_restart',
+      'warning',
+      expect.stringContaining('api'),
+      expect.any(String),
+      expect.objectContaining({ processName: 'api' }),
+    );
+  });
 });

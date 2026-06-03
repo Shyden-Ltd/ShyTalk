@@ -1,17 +1,43 @@
 /**
- * Server health check cron — monitors memory usage and PM2 restarts.
+ * Server health metrics check — memory usage + PM2 restart detection.
  *
- * Runs every 5 minutes. Creates alerts when thresholds are exceeded.
+ * Originally a 5-min in-process cron; now invoked by the Better Stack
+ * heartbeat endpoint at GET /api/system/health. The in-flight guard
+ * below ensures concurrent heartbeat hits don't double-fire the PM2
+ * check or race on `lastRestartCounts` (which would emit duplicate
+ * alerts because alertManager has no dedup of its own).
  */
 
 const { execFile } = require('node:child_process');
 const os = require('node:os');
 const log = require('../utils/log');
 
-// Track last-known restart counts to only alert on NEW restarts
+// Track last-known restart counts to only alert on NEW restarts. Now
+// shared across HTTP-triggered invocations; the in-flight guard below
+// keeps the read-then-write race window single-threaded.
 const lastRestartCounts = {};
 
+// Concurrent-invocation guard. Multiple Better Stack hits (or a future
+// secondary monitor) firing during a slow `pm2 jlist` (10s timeout)
+// would otherwise overlap, double-counting restarts and forking
+// duplicate child processes. A boolean flag is enough — JavaScript's
+// single-threaded model means the read+write in the guard is atomic.
+let inFlight = false;
+
 async function serverHealth(alertManager) {
+  if (inFlight) {
+    log.debug('server-health', 'check already in flight — skipping concurrent invocation');
+    return;
+  }
+  inFlight = true;
+  try {
+    return await runHealthCheck(alertManager);
+  } finally {
+    inFlight = false;
+  }
+}
+
+async function runHealthCheck(alertManager) {
   // Check memory usage — RSS vs system total (not V8 heap ratio, which is
   // misleadingly high because V8 keeps heapTotal close to heapUsed)
   const mem = process.memoryUsage();

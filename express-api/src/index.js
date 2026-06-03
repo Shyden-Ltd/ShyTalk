@@ -98,7 +98,15 @@ app.use('/api', require('./routes/legal-versions'));
 // GitHub Actions scheduled workflows that replace internal node-cron.
 // Mounted before the Firebase auth middleware so all /system/* routes
 // bypass the user-auth flow.
-app.use('/api', require('./routes/system'));
+//
+// `generalLimiter` is applied INLINE on the mount (not relying on the
+// downstream block at line ~137) because routes/system.js responds
+// synchronously inside its handler, so a downstream `app.use(...,
+// generalLimiter)` block never runs. Without this guard, /system/health
+// would be an unauthenticated DoS path into the alertManager — every
+// hit triggers serverHealth() async-fire, which can write Firestore
+// docs and dispatch FCM messages.
+app.use('/api', generalLimiter, require('./routes/system'));
 
 // Auth middleware for all /api routes (except health, log-config, auth, and pre-auth endpoints)
 app.use('/api', (req, res, next) => {

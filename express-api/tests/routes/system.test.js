@@ -13,12 +13,16 @@ jest.mock('../../src/utils/alertManagerInstance', () => ({
   createAlert: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock('../../src/utils/log', () => ({
+// Mock log at module scope (used by both production code under test
+// and the assertion in test 3). Lifting the require out of the test
+// body avoids the sonarjs/no-require-or-internal-modules pattern.
+const mockLog = {
   debug: jest.fn(),
   info: jest.fn(),
   warn: jest.fn(),
   error: jest.fn(),
-}));
+};
+jest.mock('../../src/utils/log', () => mockLog);
 
 const systemRouter = require('../../src/routes/system');
 
@@ -54,7 +58,6 @@ describe('GET /api/system/health', () => {
   });
 
   test('returns 200 even when serverHealth rejects (logged, not surfaced)', async () => {
-    const log = require('../../src/utils/log');
     mockServerHealth.mockRejectedValueOnce(new Error('PM2 unavailable'));
 
     const app = createApp();
@@ -66,34 +69,38 @@ describe('GET /api/system/health', () => {
     // Flush the microtask + macrotask queue so the catch handler runs.
     await new Promise((resolve) => setImmediate(resolve));
 
-    expect(log.error).toHaveBeenCalledWith(
+    expect(mockLog.error).toHaveBeenCalledWith(
       'system',
       'serverHealth metrics check failed',
       expect.objectContaining({ error: 'PM2 unavailable' }),
     );
   });
 
-  test('responds quickly without awaiting serverHealth', async () => {
-    // Simulate a slow serverHealth (e.g., PM2 jlist hanging at the
-    // 10-sec timeout). Heartbeat should still return promptly.
+  test('responds before awaiting serverHealth (structural fire-and-forget assertion)', async () => {
+    // Replace wall-clock timing with a structural check: the heartbeat
+    // response must complete BEFORE the metrics check resolves. A
+    // pending Promise that we hold open simulates a slow PM2 jlist
+    // (10-sec timeout). The response should arrive while that Promise
+    // is still pending; the metrics check is only OBSERVABLY called
+    // after we let the event loop flush, but the response has long
+    // since been sent.
     let resolveSlowCheck;
-    mockServerHealth.mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveSlowCheck = resolve;
-      }),
-    );
+    const slowMetricsPromise = new Promise((resolve) => {
+      resolveSlowCheck = resolve;
+    });
+    mockServerHealth.mockReturnValueOnce(slowMetricsPromise);
 
     const app = createApp();
-    const start = Date.now();
     const res = await request(app).get('/api/system/health');
-    const elapsed = Date.now() - start;
 
+    // The supertest await resolved → response was sent. The metrics
+    // check is still pending. If the handler awaited serverHealth, the
+    // supertest await would not have resolved yet.
     expect(res.status).toBe(200);
-    // The endpoint should not block on the metrics check — 100ms is a
-    // generous bound for a local supertest call.
-    expect(elapsed).toBeLessThan(100);
+    expect(res.body).toEqual({ status: 'ok' });
 
-    // Cleanup so the pending Promise doesn't dangle.
+    // Cleanup the dangling Promise so Jest doesn't warn about open handles.
     resolveSlowCheck();
+    await slowMetricsPromise;
   });
 });
