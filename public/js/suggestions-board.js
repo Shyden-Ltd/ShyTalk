@@ -960,6 +960,15 @@
       html += '<div class="sg-comment-list">';
       for (var i = 0; i < comments.length; i++) {
         var c = comments[i];
+        // When the comment's author has been hard-deleted (account
+        // deletion cron in express-api/src/cron/accountDeletion.js),
+        // the server-stored `text` is a fixed English fallback. Prefer
+        // the locale-aware string here so non-English users see a
+        // translated placeholder; sgT falls back to en when the locale
+        // has no override for this key.
+        var commentText = c.authorDeleted
+          ? sgT("commentFromDeletedUser")
+          : c.text;
         html +=
           '<div class="sg-comment" data-testid="comment-' +
           (c.id || i) +
@@ -973,7 +982,7 @@
           "</span>" +
           "</div>" +
           '<div class="sg-comment-text">' +
-          escapeHtml(c.text) +
+          escapeHtml(commentText) +
           "</div>" +
           "</div>";
       }
