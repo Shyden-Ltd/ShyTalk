@@ -492,6 +492,43 @@ describe('POST /api/cleanup/system-conversations', () => {
     expect(res.status).toBe(500);
     expect(res.body.error).toBeDefined();
   });
+
+  test('uses trusted doc.id (not payload id) when a duplicate doc carries an attacker-controlled id field', async () => {
+    const { queryDocs } = require('../../src/utils/firestore-helpers');
+    queryDocs.mockResolvedValue([]);
+
+    // Both docs share participantIds ['user-1', 'SHYTALK_SYSTEM']; canonical id is
+    // 'SHYTALK_SYSTEM_user-1' (uppercase S < lowercase u under localeCompare).
+    // The duplicate's REAL doc id is 'dup-rogue-id', but its data() injects a
+    // payload `id` matching the canonical id. With the unsafe spread order
+    // `{ id: d.id, ...d.data() }` the payload wins, the route mistakes the
+    // duplicate for canonical, and it survives (deleted: 0). With the safe
+    // order `{ ...d.data(), id: d.id }` the trusted doc.id wins, the route
+    // identifies the duplicate correctly, and deletes it (deleted: 1).
+    mockCollectionSnap = {
+      empty: false,
+      docs: [
+        {
+          id: 'SHYTALK_SYSTEM_user-1',
+          data: () => ({ participantIds: ['user-1', 'SHYTALK_SYSTEM'] }),
+        },
+        {
+          id: 'dup-rogue-id',
+          data: () => ({
+            id: 'SHYTALK_SYSTEM_user-1',
+            participantIds: ['user-1', 'SHYTALK_SYSTEM'],
+          }),
+        },
+      ],
+    };
+
+    const app = createApp(true);
+    const res = await request(app).post('/api/cleanup/system-conversations');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.deleted).toBe(1);
+  });
 });
 
 // ── POST /cleanup/all-system-conversations ──────────────────────

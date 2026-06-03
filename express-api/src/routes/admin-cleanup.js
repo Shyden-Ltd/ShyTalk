@@ -136,7 +136,7 @@ router.post('/cleanup/system-conversations', async (req, res) => {
       .collection('conversations')
       .where('participantIds', 'array-contains', 'SHYTALK_SYSTEM')
       .get();
-    const systemConvs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const systemConvs = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     let deleted = 0;
     const seen = new Map(); // recipientUid → first conversation id
@@ -178,7 +178,7 @@ router.post('/cleanup/all-system-conversations', async (req, res) => {
       .collection('conversations')
       .where('participantIds', 'array-contains', 'SHYTALK_SYSTEM')
       .get();
-    const systemConvs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const systemConvs = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     for (const conv of systemConvs) {
       await deleteConversation(conv.id);
@@ -272,7 +272,7 @@ router.post('/cleanup/all-backpacks', async (req, res) => {
     log.info('admin-cleanup', 'Clearing all backpacks', { adminId: req.auth.uniqueId });
 
     const usersSnap = await db.collection('users').orderBy('uid').get();
-    const users = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const users = usersSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     let deleted = 0;
     for (const user of users) {
@@ -304,7 +304,7 @@ router.post('/cleanup/all-giftwalls', async (req, res) => {
     log.info('admin-cleanup', 'Clearing all gift walls', { adminId: req.auth.uniqueId });
 
     const usersSnap = await db.collection('users').orderBy('uid').get();
-    const users = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const users = usersSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     let deleted = 0;
     for (const user of users) {
@@ -395,7 +395,7 @@ router.post('/cleanup/all-spin-history', async (req, res) => {
 
     // Delete GACHA_PULL transactions from every user's transactions subcollection
     const usersSnap = await db.collection('users').orderBy('uid').get();
-    const users = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const users = usersSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     let txDeleted = 0;
     for (const user of users) {
@@ -458,7 +458,7 @@ router.post('/cleanup/all-transactions', async (req, res) => {
     log.info('admin-cleanup', 'Deleting all transactions', { adminId: req.auth.uniqueId });
 
     const usersSnap = await db.collection('users').orderBy('uid').get();
-    const users = usersSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const users = usersSnap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     let deleted = 0;
     for (const user of users) {
@@ -513,7 +513,7 @@ router.post('/cleanup/backfill-user-type', async (req, res) => {
     log.info('admin-cleanup', 'Backfilling userType', { adminId: req.auth.uniqueId });
 
     const snap = await db.collection('users').limit(5000).get();
-    const users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const users = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
     const missing = users.filter((u) => !u.userType && !u.user_type);
 
     if (missing.length === 0) {
@@ -564,7 +564,7 @@ router.post('/cleanup/all-private-messages', async (req, res) => {
     log.info('admin-cleanup', 'Deleting all private messages', { adminId: req.auth.uniqueId });
 
     const snap = await db.collection('conversations').limit(5000).get();
-    const allConvs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const allConvs = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
     const pms = allConvs.filter((c) => !c.isGroup);
 
     if (pms.length === 0) {
@@ -601,7 +601,7 @@ router.post('/cleanup/all-group-chats', async (req, res) => {
       .where('isGroup', '==', true)
       .limit(5000)
       .get();
-    const allConvs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const allConvs = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     if (allConvs.length === 0) {
       return res.json({
@@ -646,7 +646,7 @@ router.post('/cleanup/all-rooms', async (req, res) => {
     log.info('admin-cleanup', 'Deleting all closed rooms', { adminId: req.auth.uniqueId });
 
     const snap = await db.collection('rooms').where('state', '==', 'CLOSED').limit(200).get();
-    const closedRooms = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const closedRooms = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     if (closedRooms.length === 0) {
       return res.json({ success: true, deleted: 0, message: 'No closed rooms found' });
@@ -734,7 +734,7 @@ router.post('/cleanup/destroyed-users', async (req, res) => {
     });
 
     const snap = await db.collection('users').limit(5000).get();
-    const users = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const users = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
 
     const destroyed = users.filter((u) => !u.createdAt);
     const intact = users.length - destroyed.length;
@@ -902,7 +902,7 @@ async function collectReferencedR2Keys(CDN_PREFIX) {
 
   // Conversations
   const convsSnap = await db.collection('conversations').limit(2000).get();
-  const convs = convsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const convs = convsSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
   for (const conv of convs) {
     const key = extractR2Key(conv.groupPhotoUrl ?? conv.group_photo_url, CDN_PREFIX);
     if (key) referencedKeys.add(key);
@@ -911,7 +911,7 @@ async function collectReferencedR2Keys(CDN_PREFIX) {
   // Collect image keys from messages (conversations + rooms)
   await collectImageMessageKeys(convs.slice(0, 30), 'conversations', CDN_PREFIX, referencedKeys);
   const roomsSnap = await db.collection('rooms').limit(200).get();
-  const rooms = roomsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  const rooms = roomsSnap.docs.map((doc) => ({ ...doc.data(), id: doc.id }));
   await collectImageMessageKeys(rooms.slice(0, 30), 'rooms', CDN_PREFIX, referencedKeys);
 
   // Reports + archive
