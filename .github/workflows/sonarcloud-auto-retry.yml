@@ -1,0 +1,133 @@
+name: SonarCloud Auto-Retry
+
+# Auto-retry the SonarCloud Analysis job when it 403s on
+# api.sonarcloud.io endpoints (`/analysis/jres`, `/analysis/engine`)
+# because the GitHub Actions runner's IP is on an AWS reputation block.
+# SonarSource confirmed in their community forum that some GitHub-hosted
+# runner IPs are intermittently blocked at AWS's edge — see
+# https://community.sonarsource.com/t/138939. The block is per-IP and
+# persists for the job lifetime, so within-job retries on the same
+# runner don't help. Re-triggering failed jobs gives a fresh runner
+# with a different IP and almost always clears the failure.
+#
+# PR #981 landed `systemProp.sonar.scanner.skipJreProvisioning=true`
+# which eliminated the `/analysis/jres` request. PR #983 then hit the
+# same 403 class on the `/analysis/engine` endpoint (the scanner-engine
+# bootstrap can't be skipped — it IS the scanner). This workflow is the
+# defensive remediation: when only sonarcloud failed (signal of the AWS
+# IP class), auto re-run failed jobs once. Anything more than one
+# auto-retry is bounded out — persistent failures still surface to the
+# operator instead of being masked.
+#
+# Filter logic ("only sonar failed"):
+#   - sonarcloud / SonarCloud Analysis failed
+#   - PR Gate failed (it's downstream of sonarcloud — always co-fails)
+#   - Every OTHER required check (lint, test-backend, integration-tests,
+#     Analyze JavaScript, Detect Changes) either succeeded or was
+#     skipped (skip is fine — pr-checks.yml's Detect Changes job
+#     intentionally skips paths based on diff)
+#
+# Bound: github.event.workflow_run.run_attempt < 2 → exactly one
+# auto-retry. If retry also fails, the workflow stays red and the
+# operator (or a separate manual rerun) takes over.
+
+on:
+  workflow_run:
+    workflows: ['PR Checks']
+    types: [completed]
+
+permissions:
+  actions: write    # gh run rerun
+  contents: read
+
+jobs:
+  auto-retry-sonar:
+    name: Auto-retry sonarcloud when only sonar failed
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.run_attempt < 2
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Identify failed jobs in the run
+        id: classify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+
+          # Enumerate all jobs in this run with their conclusions.
+          # --paginate covers runs with >100 jobs (matrix-heavy E2E).
+          # We need names + conclusions only, hence the lean jq projection.
+          JOBS_JSON=$(gh api --paginate \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" \
+            --jq '[.jobs[] | {name, conclusion}]')
+
+          # Failed jobs (failure or cancelled — treat cancelled like failed
+          # because GitHub may cancel downstream jobs when an upstream
+          # fails, and we still want to differentiate from a clean skip).
+          FAILED=$(echo "$JOBS_JSON" | jq -r '
+            map(select(.conclusion == "failure" or .conclusion == "cancelled"))
+            | map(.name) | .[]
+          ')
+
+          echo "Failed jobs:"
+          echo "$FAILED"
+          echo "---"
+
+          # The signal we auto-retry on: sonarcloud is among the failed,
+          # AND every failed job is in the allowlist of sonar-related names.
+          # PR Gate fails downstream of sonarcloud — it's an expected co-fail.
+          # Anything outside this allowlist means a real code/test failure
+          # that retries won't fix.
+          ALLOWLIST_REGEX='^(sonarcloud / SonarCloud Analysis|PR Gate|auto-merge)$'
+
+          SONAR_FAILED=$(echo "$FAILED" | grep -cxE 'sonarcloud / SonarCloud Analysis' || true)
+          NON_ALLOWLISTED=$(echo "$FAILED" | grep -vxE "$ALLOWLIST_REGEX" | grep -c . || true)
+
+          echo "sonar_failed=$SONAR_FAILED"
+          echo "non_allowlisted_failed=$NON_ALLOWLISTED"
+
+          if [ "$SONAR_FAILED" -ge 1 ] && [ "$NON_ALLOWLISTED" -eq 0 ]; then
+            echo "should_retry=true" >> "$GITHUB_OUTPUT"
+            echo "Decision: auto-retry (sonar-only failure pattern matches)"
+          else
+            echo "should_retry=false" >> "$GITHUB_OUTPUT"
+            echo "Decision: skip (non-sonar failures present or sonar not failed)"
+          fi
+
+      - name: Re-run failed jobs
+        if: steps.classify.outputs.should_retry == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          PREV_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          set -euo pipefail
+          NEXT_ATTEMPT=$((PREV_ATTEMPT + 1))
+          echo "Re-running failed jobs on run ${RUN_ID} (auto-retry attempt ${NEXT_ATTEMPT})"
+          gh run rerun "${RUN_ID}" --failed --repo "${GITHUB_REPOSITORY}"
+
+      - name: Summary
+        if: always()
+        env:
+          DECISION: ${{ steps.classify.outputs.should_retry }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          {
+            echo "### SonarCloud Auto-Retry Decision"
+            echo ""
+            echo "- Source run: \`${RUN_ID}\` (attempt ${ATTEMPT})"
+            echo "- Head SHA: \`${HEAD_SHA}\`"
+            echo "- Decision: \`${DECISION}\`"
+            echo ""
+            if [ "${DECISION}" = "true" ]; then
+              echo "Triggered \`gh run rerun --failed\` to get a fresh runner IP."
+              echo "If the failure persists on the next attempt, manual investigation is required (workflow re-runs are bounded at 1)."
+            else
+              echo "No retry triggered. Either sonarcloud passed, the failure mix included a real code/test failure that retries won't fix, or this is already the second attempt."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
