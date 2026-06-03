@@ -4,11 +4,11 @@
  * triggering the firebase-admin init side-effect.
  *
  * Phase 2A finding #2 introduced the denormalised `roadmapUpdateOptedIn`
- * flag — `routes/subscriptions.js` writes it on every PUT, the
- * `backfillRoadmapOptedIn` cron migrates legacy docs, and
+ * flag — `routes/subscriptions.js` writes it on every PUT and
  * `utils/roadmap-notify.js` reads via a server-side equality filter.
- * Consolidating the computation here prevents drift between those three
- * sites.
+ * Legacy docs were one-time-migrated by a self-stopping cron (removed
+ * 2026-06 after every doc had the field). Consolidating the
+ * computation here prevents drift between the write and read sites.
  */
 
 /**

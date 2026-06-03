@@ -23,8 +23,9 @@ async function notifyRoadmapSubscribers(message) {
     // (Phase 2A finding #2). The previous full-collection scan was a
     // quota grenade — at 5K subs every roadmap edit cost 5K reads
     // regardless of how few opted in. The flag is maintained on every
-    // PUT /subscriptions/me and backfilled by the
-    // `backfillRoadmapOptedIn` cron for legacy subs.
+    // PUT /subscriptions/me. Legacy subs were one-time-migrated by a
+    // self-stopping cron that ran daily from 2026-05-06 until removal
+    // in 2026-06; all docs now carry the field.
     const snap = await db
       .collection('subscriptions')
       .where('roadmapUpdateOptedIn', '==', true)
