@@ -91,6 +91,15 @@ app.use('/api', require('./routes/auth'));
 // for the rationale on why versions are hardcoded.
 app.use('/api', require('./routes/legal-versions'));
 
+// System endpoints for external schedulers and uptime monitoring.
+// `/system/health` is public for Better Stack heartbeat pings.
+// `/system/sweep-*` endpoints (added in subsequent cron-cluster PRs)
+// apply requireSystemAuth internally — bearer-token guarded for the
+// GitHub Actions scheduled workflows that replace internal node-cron.
+// Mounted before the Firebase auth middleware so all /system/* routes
+// bypass the user-auth flow.
+app.use('/api', require('./routes/system'));
+
 // Auth middleware for all /api routes (except health, log-config, auth, and pre-auth endpoints)
 app.use('/api', (req, res, next) => {
   if (

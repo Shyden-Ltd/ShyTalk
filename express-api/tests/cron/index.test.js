@@ -30,7 +30,6 @@ jest.mock('../../src/cron/orphanedStorage', () => jest.fn());
 jest.mock('../../src/cron/rotateLogs', () => jest.fn());
 jest.mock('../../src/cron/expireBans', () => jest.fn());
 jest.mock('../../src/cron/expireTempIds', () => jest.fn());
-jest.mock('../../src/cron/serverHealth', () => jest.fn());
 jest.mock('../../src/cron/accountDeletion', () => jest.fn());
 jest.mock('../../src/cron/expireDataExports', () => jest.fn());
 jest.mock('../../src/cron/notification-dispatch', () => jest.fn());
@@ -48,7 +47,6 @@ const orphanedStorage = require('../../src/cron/orphanedStorage');
 const rotateLogs = require('../../src/cron/rotateLogs');
 const expireBans = require('../../src/cron/expireBans');
 const expireTempIds = require('../../src/cron/expireTempIds');
-const serverHealth = require('../../src/cron/serverHealth');
 beforeEach(() => {
   jest.clearAllMocks();
 });
@@ -121,10 +119,10 @@ describe('startCronJobs', () => {
       // ageVerificationAuditReconcile — daily 05:00 UTC
       expect(schedules).toContain('0 5 * * *');
 
-      // Total: 12 schedules in production (staleRooms + serverHealth share */5,
-      // + accountDeletion, + expireDataExports, + notification-dispatch,
-      // + ageVerificationAuditReconcile)
-      expect(mockSchedule).toHaveBeenCalledTimes(12);
+      // Total: 11 schedules in production. serverHealth was migrated to
+      // an externally-triggered ping (Better Stack heartbeat hits
+      // /api/system/health) so it no longer appears as a node-cron job.
+      expect(mockSchedule).toHaveBeenCalledTimes(11);
     });
 
     test('does not register testDataCleanup in production', () => {
@@ -139,7 +137,9 @@ describe('startCronJobs', () => {
       startCronJobs();
 
       const fiveMinCalls = mockSchedule.mock.calls.filter((c) => c[0] === '*/5 * * * *');
-      expect(fiveMinCalls.length).toBe(2); // staleRooms + serverHealth
+      // staleRooms is the only remaining */5 schedule after serverHealth
+      // was migrated to the Better Stack heartbeat endpoint.
+      expect(fiveMinCalls.length).toBe(1);
 
       fiveMinCalls[0][1]();
       expect(staleRooms).toHaveBeenCalled();
@@ -154,19 +154,6 @@ describe('startCronJobs', () => {
 
       expireCall[1]();
       expect(expireBans).toHaveBeenCalled();
-    });
-
-    test('serverHealth callback invokes the job with alertManager', () => {
-      serverHealth.mockResolvedValue(undefined);
-      startCronJobs();
-
-      const fiveMinCalls = mockSchedule.mock.calls.filter((c) => c[0] === '*/5 * * * *');
-      // serverHealth is the second */5 schedule
-      fiveMinCalls[1][1]();
-
-      expect(serverHealth).toHaveBeenCalled();
-      const alertManager = require('../../src/utils/alertManagerInstance');
-      expect(serverHealth).toHaveBeenCalledWith(alertManager);
     });
 
     test('rotateLogs uses hourly schedule in production', () => {
