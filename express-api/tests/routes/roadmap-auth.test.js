@@ -533,6 +533,77 @@ describe('GET /api/roadmap/me', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════
+// GET /api/roadmap/me — spread-order safety (identity invariant)
+// ═══════════════════════════════════════════════════════════════
+//
+// `uniqueId` is the authoritative identity for the authenticated request —
+// either copied from `req.auth.uniqueId` (verified by upstream auth middleware
+// against the Firebase token) or sourced from the identityMap lookup. The
+// user doc payload is treated as untrusted: even though Firestore rules deny
+// client writes to the `uniqueId` field today, a future schema migration,
+// admin-tool write, or rule-drift could persist a rogue value. If the user
+// doc's payload ever overrode the trusted uniqueId, /roadmap/me would return
+// a profile under the *wrong* numeric identity — the strongest possible
+// identity-spoofing shape for an authenticated endpoint.
+//
+// Pins the spread-order contract: `{ ...userDoc.data(), uniqueId: <trusted> }`.
+
+describe('GET /api/roadmap/me — spread-order safety (identity invariant)', () => {
+  test('direct uniqueId path: payload uniqueId cannot override authenticated uniqueId', async () => {
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('users/1001')) {
+        // Adversarial: user doc payload tries to claim a different identity.
+        return Promise.resolve({
+          exists: true,
+          data: () => ({
+            uniqueId: 9999,
+            displayName: 'AuthenticatedUser',
+            avatarUrl: 'https://example.com/a.png',
+            profilePhotoUrl: 'https://example.com/p.png',
+          }),
+        });
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp({ uid: 'firebase-uid-1', uniqueId: 1001 });
+    const res = await request(app).get('/api/roadmap/me').expect(200);
+    expect(res.body.uniqueId).toBe(1001);
+    expect(res.body.displayName).toBe('AuthenticatedUser');
+  });
+
+  test('identityMap fallback path: payload uniqueId cannot override identityMap-resolved uniqueId', async () => {
+    mockCollectionGet.mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: 'google:linked@gmail.com',
+          data: () => ({ uniqueId: 2002, firebaseUid: 'firebase-uid-fallback' }),
+        },
+      ],
+    });
+    mockDocGet.mockImplementation((path) => {
+      if (path && path.includes('users/2002')) {
+        // Adversarial: user doc payload tries to claim a different identity.
+        return Promise.resolve({
+          exists: true,
+          data: () => ({
+            uniqueId: 9999,
+            displayName: 'FallbackUser',
+            avatarUrl: 'https://example.com/a.png',
+            profilePhotoUrl: 'https://example.com/p.png',
+          }),
+        });
+      }
+      return Promise.resolve({ exists: false });
+    });
+    const app = createApp({ uid: 'firebase-uid-fallback', uniqueId: null });
+    const res = await request(app).get('/api/roadmap/me').expect(200);
+    expect(res.body.uniqueId).toBe(2002);
+    expect(res.body.displayName).toBe('FallbackUser');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
 // GET /api/roadmap/me — Auth edge cases
 // ═══════════════════════════════════════════════════════════════
 

@@ -1,27 +1,25 @@
 /**
  * Shared Firestore helper functions.
  *
- * Extracted from users.js, reports.js, banners.js, config.js, etc. to eliminate duplication.
+ * Extracted from users.js, reports.js, banners.js, config.js, etc. to
+ * eliminate duplication.
+ *
+ * Spread-order invariant (both helpers): the payload is spread BEFORE the
+ * trusted `id` so a legacy or adversarially-shaped `id` field on the doc
+ * body cannot override the storage-layer key. See the "spread-order safety"
+ * tests in firestore-helpers.test.js for the failing-without-the-fix proof.
  */
 
 const { db } = require('./firebase');
 
-/**
- * Get a single Firestore document by path.
- * Returns { id, ...data } or null if the document doesn't exist.
- */
 async function getDoc(path) {
   const snap = await db.doc(path).get();
-  return snap.exists ? { id: snap.id, ...snap.data() } : null;
+  return snap.exists ? { ...snap.data(), id: snap.id } : null;
 }
 
-/**
- * Execute a Firestore query reference and return all matching documents
- * as an array of { id, ...data } objects.
- */
 async function queryDocs(ref) {
   const snap = await ref.get();
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  return snap.docs.map((d) => ({ ...d.data(), id: d.id }));
 }
 
 module.exports = { getDoc, queryDocs };

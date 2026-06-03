@@ -45,7 +45,9 @@ router.get('/roadmap/me', async (req, res) => {
     if (req.auth.uniqueId) {
       const userDoc = await db.doc(`users/${req.auth.uniqueId}`).get();
       if (userDoc.exists) {
-        userData = { uniqueId: Number(req.auth.uniqueId), ...userDoc.data() };
+        // Trust the authenticated uniqueId, NOT whatever the user-doc payload
+        // claims — payload spread comes first so the trusted value wins.
+        userData = { ...userDoc.data(), uniqueId: Number(req.auth.uniqueId) };
       }
     }
 
@@ -64,7 +66,8 @@ router.get('/roadmap/me', async (req, res) => {
 
           const userDoc = await db.doc(`users/${idData.uniqueId}`).get();
           if (userDoc.exists) {
-            userData = { uniqueId: idData.uniqueId, ...userDoc.data() };
+            // Same identity-pinning as the direct path above.
+            userData = { ...userDoc.data(), uniqueId: idData.uniqueId };
             break;
           }
         }
