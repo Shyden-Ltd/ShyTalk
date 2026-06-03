@@ -868,7 +868,7 @@ describe('11.115b — GDPR-Deleted Submitter Guards', () => {
     expect(pmTargetedSubmitter).toBe(true);
   });
 
-  test('GET /suggestions/:id (admin) skips submitterOtherSuggestions when submitterDeleted', async () => {
+  test('GET /suggestions/:id (admin) skips submitterOtherSuggestions when submitterDeleted (uid=0)', async () => {
     setupDocMocks({
       'suggestions/sug-3': makeSuggestionDoc('sug-3', {
         status: 'accepted',
@@ -881,13 +881,31 @@ describe('11.115b — GDPR-Deleted Submitter Guards', () => {
       '/api/suggestions/sug-3',
     );
 
-    // Either the field is absent, or it is an empty array — what we MUST
-    // NOT see is a populated list of suggestions for a deleted user.
-    if (res.body.submitterOtherSuggestions !== undefined) {
-      expect(res.body.submitterOtherSuggestions).toEqual([]);
-    } else {
-      expect(res.body).not.toHaveProperty('submitterOtherSuggestions');
-    }
+    // Field MUST be either absent or an empty array — what we MUST NOT see
+    // is a populated list for a deleted user. `field || []` normalises both
+    // null and undefined to the same empty-array contract.
+    expect(res.body.submitterOtherSuggestions || []).toEqual([]);
+  });
+
+  test('GET /suggestions/:id (admin) skips submitterOtherSuggestions when submitterDeleted with NON-ZERO uid', async () => {
+    // Pins the load-bearing condition: the `!data.submitterDeleted` check is
+    // the canonical gate, not the `submitterUid: 0` sentinel happening to be
+    // falsy. If a future refactor reorders the conditions or someone
+    // anonymises by setting `submitterDeleted: true` without zeroing the uid,
+    // this test catches the regression. (Round-2 reviewer N2.)
+    setupDocMocks({
+      'suggestions/sug-4': makeSuggestionDoc('sug-4', {
+        status: 'accepted',
+        submitterUid: 1001, // intentionally non-zero
+        submitterDeleted: true, // but flag says deleted
+      }),
+    });
+
+    const res = await request(createApp({ uniqueId: 9999, isAdmin: true })).get(
+      '/api/suggestions/sug-4',
+    );
+
+    expect(res.body.submitterOtherSuggestions || []).toEqual([]);
   });
 });
 
