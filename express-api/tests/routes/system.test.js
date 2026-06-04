@@ -23,6 +23,11 @@ jest.mock('../../src/cron/expireBans', () => mockExpireBans);
 const mockDispatchNotifications = jest.fn().mockResolvedValue(undefined);
 jest.mock('../../src/cron/notification-dispatch', () => mockDispatchNotifications);
 
+// Mock the staleRooms worker the same way — sweep-stale-rooms endpoint
+// awaits this synchronously.
+const mockStaleRooms = jest.fn().mockResolvedValue(undefined);
+jest.mock('../../src/cron/staleRooms', () => mockStaleRooms);
+
 // Mock alertManager — its real init touches Firestore which we don't
 // need for the heartbeat endpoint's contract.
 jest.mock('../../src/utils/alertManagerInstance', () => ({
@@ -73,6 +78,7 @@ beforeEach(() => {
   mockAccountDeletion.mockResolvedValue(undefined);
   mockExpireBans.mockResolvedValue(undefined);
   mockDispatchNotifications.mockResolvedValue(undefined);
+  mockStaleRooms.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -676,5 +682,163 @@ describe('POST /api/system/dispatch-notifications', () => {
     const { err, res: dispatchRes } = await dispatchResponse;
     expect(err).toBeNull();
     expect(dispatchRes.status).toBe(200);
+  });
+});
+
+describe('POST /api/system/sweep-stale-rooms', () => {
+  test('returns 401 without bearer token', async () => {
+    const app = createApp();
+    const res = await request(app).post('/api/system/sweep-stale-rooms');
+
+    expect(res.status).toBe(401);
+    expect(mockStaleRooms).not.toHaveBeenCalled();
+  });
+
+  test('returns 401 with wrong bearer token', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/system/sweep-stale-rooms')
+      .set('Authorization', 'Bearer wrong-secret');
+
+    expect(res.status).toBe(401);
+    expect(mockStaleRooms).not.toHaveBeenCalled();
+  });
+
+  test('returns 200 and invokes staleRooms with correct secret', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/system/sweep-stale-rooms')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: 'ok' });
+    expect(mockStaleRooms).toHaveBeenCalledTimes(1);
+  });
+
+  test('returns 500 when staleRooms throws', async () => {
+    mockStaleRooms.mockRejectedValueOnce(new Error('Firestore unreachable'));
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/system/sweep-stale-rooms')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: 'sweep failed' });
+    expect(mockStaleRooms).toHaveBeenCalledTimes(1);
+    expect(mockLog.error).toHaveBeenCalledWith(
+      'system',
+      'sweep-stale-rooms failed',
+      expect.objectContaining({ error: 'Firestore unreachable' }),
+    );
+  });
+
+  test('returns 409 when a concurrent sweep is in flight', async () => {
+    let resolveFirst;
+    const firstPromise = new Promise((resolve) => {
+      resolveFirst = resolve;
+    });
+    mockStaleRooms.mockReturnValueOnce(firstPromise);
+
+    const app = createApp();
+
+    let captureFirstResponse;
+    const firstResponse = new Promise((resolve) => {
+      captureFirstResponse = resolve;
+    });
+    request(app)
+      .post('/api/system/sweep-stale-rooms')
+      .set('Authorization', `Bearer ${TEST_SECRET}`)
+      .end((err, res) => captureFirstResponse({ err, res }));
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const secondRes = await request(app)
+      .post('/api/system/sweep-stale-rooms')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+
+    expect(secondRes.status).toBe(409);
+    expect(secondRes.body).toEqual({ error: 'sweep already in flight' });
+    expect(mockStaleRooms).toHaveBeenCalledTimes(1);
+
+    resolveFirst();
+    const { err, res: firstRes } = await firstResponse;
+    expect(err).toBeNull();
+    expect(firstRes.status).toBe(200);
+  });
+
+  test('times out and returns 500 if staleRooms hangs forever', async () => {
+    mockStaleRooms.mockReturnValueOnce(new Promise(() => {}));
+    process.env.SWEEP_TIMEOUT_MS_OVERRIDE = '50';
+
+    try {
+      const app = createApp();
+      const res = await request(app)
+        .post('/api/system/sweep-stale-rooms')
+        .set('Authorization', `Bearer ${TEST_SECRET}`);
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'sweep failed' });
+      expect(mockLog.error).toHaveBeenCalledWith(
+        'system',
+        'sweep-stale-rooms failed',
+        expect.objectContaining({ error: expect.stringContaining('timed out') }),
+      );
+
+      mockStaleRooms.mockResolvedValueOnce(undefined);
+      const next = await request(app)
+        .post('/api/system/sweep-stale-rooms')
+        .set('Authorization', `Bearer ${TEST_SECRET}`);
+      expect(next.status).toBe(200);
+    } finally {
+      delete process.env.SWEEP_TIMEOUT_MS_OVERRIDE;
+    }
+  });
+
+  test('sweep-stale-rooms guard is INDEPENDENT from the other three sweeps', async () => {
+    // Closure-per-handler from the factory means a hung stale-rooms
+    // sweep must not block any other sweep. Holds via a manually-
+    // resolvable Promise so the dispatch stays in-flight during the
+    // other-sweep assertions (matches the system.test.js:481 pattern
+    // PR #989 + the corrected PR #991 independence test).
+    let resolveStaleRooms;
+    const staleRoomsHeld = new Promise((resolve) => {
+      resolveStaleRooms = resolve;
+    });
+    mockStaleRooms.mockReturnValueOnce(staleRoomsHeld);
+
+    const app = createApp();
+
+    let captureStaleRooms;
+    const staleRoomsResponse = new Promise((resolve) => {
+      captureStaleRooms = resolve;
+    });
+    request(app)
+      .post('/api/system/sweep-stale-rooms')
+      .set('Authorization', `Bearer ${TEST_SECRET}`)
+      .end((err, res) => captureStaleRooms({ err, res }));
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    // All three other sweeps must proceed in parallel.
+    const bansRes = await request(app)
+      .post('/api/system/sweep-bans')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+    expect(bansRes.status).toBe(200);
+
+    const accountRes = await request(app)
+      .post('/api/system/sweep-account-deletions')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+    expect(accountRes.status).toBe(200);
+
+    const dispatchRes = await request(app)
+      .post('/api/system/dispatch-notifications')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+    expect(dispatchRes.status).toBe(200);
+
+    resolveStaleRooms();
+    const { err, res: staleRoomsRes } = await staleRoomsResponse;
+    expect(err).toBeNull();
+    expect(staleRoomsRes.status).toBe(200);
   });
 });

@@ -34,6 +34,16 @@
  *                                             total cluster minutes low
  *                                             (operator-approved).
  *
+ * POST /api/system/sweep-stale-rooms        — requires Bearer auth.
+ *                                             Synchronously runs
+ *                                             staleRooms() — every-5-min
+ *                                             sweep scheduled by
+ *                                             .github/workflows/
+ *                                             cron-stale-rooms.yml.
+ *                                             Closes voice rooms whose
+ *                                             owner has been OWNER_AWAY
+ *                                             past the 10-min timeout.
+ *
  * Architecture: replaces in-process node-cron schedules with either
  * external monitors (Better Stack for serverHealth) or GitHub Actions
  * scheduled workflows (for sweep operations). Public repo means GH
@@ -47,6 +57,7 @@ const serverHealth = require('../cron/serverHealth');
 const accountDeletion = require('../cron/accountDeletion');
 const expireBans = require('../cron/expireBans');
 const dispatchNotifications = require('../cron/notification-dispatch');
+const staleRooms = require('../cron/staleRooms');
 const alertManager = require('../utils/alertManagerInstance');
 const { requireSystemAuth } = require('../middleware/system-auth');
 
@@ -154,10 +165,12 @@ const dispatchNotificationsHandler = createSweepHandler(
   'dispatch-notifications',
   dispatchNotifications,
 );
+const sweepStaleRooms = createSweepHandler('sweep-stale-rooms', staleRooms);
 
 router.post('/system/sweep-account-deletions', requireSystemAuth, sweepAccountDeletions);
 router.post('/system/sweep-bans', requireSystemAuth, sweepBans);
 router.post('/system/dispatch-notifications', requireSystemAuth, dispatchNotificationsHandler);
+router.post('/system/sweep-stale-rooms', requireSystemAuth, sweepStaleRooms);
 
 // Test-only reset hook. Exported behind a NODE_ENV guard so production
 // code can't accidentally clobber the in-flight flags. Calls each
@@ -167,6 +180,7 @@ if (process.env.NODE_ENV === 'test') {
     sweepAccountDeletions._reset();
     sweepBans._reset();
     dispatchNotificationsHandler._reset();
+    sweepStaleRooms._reset();
   };
 }
 

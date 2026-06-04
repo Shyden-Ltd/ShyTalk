@@ -22,7 +22,6 @@ jest.mock('../../src/utils/alertManagerInstance', () => ({
 // Mock all cron job modules
 jest.mock('../../src/cron/archiveReports', () => jest.fn());
 jest.mock('../../src/cron/subscriptions', () => jest.fn());
-jest.mock('../../src/cron/staleRooms', () => jest.fn());
 jest.mock('../../src/cron/backpackCleanup', () => jest.fn());
 jest.mock('../../src/cron/backups', () => jest.fn());
 jest.mock('../../src/cron/closedRooms', () => jest.fn());
@@ -36,7 +35,6 @@ const log = require('../../src/utils/log');
 
 const archiveReports = require('../../src/cron/archiveReports');
 const subscriptions = require('../../src/cron/subscriptions');
-const staleRooms = require('../../src/cron/staleRooms');
 const backpackCleanup = require('../../src/cron/backpackCleanup');
 const backups = require('../../src/cron/backups');
 const closedRooms = require('../../src/cron/closedRooms');
@@ -100,8 +98,9 @@ describe('startCronJobs', () => {
       expect(schedules).toContain('0 3 * * 0');
       // subscriptions + backpackCleanup + expireTempIds — daily midnight
       expect(schedules).toContain('0 0 * * *');
-      // staleRooms — every 5 minutes
-      expect(schedules).toContain('*/5 * * * *');
+      // staleRooms migrated to GH Actions scheduled workflow — no
+      // longer in the node-cron list.
+      expect(schedules).not.toContain('*/5 * * * *');
       // backups + closedRooms — daily 02:00 UTC
       expect(schedules).toContain('0 2 * * *');
       // orphanedStorage — daily 04:00 UTC
@@ -118,13 +117,13 @@ describe('startCronJobs', () => {
       // ageVerificationAuditReconcile — daily 05:00 UTC
       expect(schedules).toContain('0 5 * * *');
 
-      // Total: 8 schedules in production. serverHealth migrated to
-      // Better Stack (PR #988); accountDeletion → GH Actions (PR #989);
-      // expireBans → GH Actions (PR #990); dispatchNotifications → GH
-      // Actions (this PR — every 5 min via
-      // .github/workflows/cron-dispatch-notifications.yml POSTs to
-      // /api/system/dispatch-notifications).
-      expect(mockSchedule).toHaveBeenCalledTimes(8);
+      // Total: 7 schedules in production. serverHealth → Better Stack
+      // (PR #988); accountDeletion → GH Actions (PR #989); expireBans
+      // → GH Actions (PR #990); dispatchNotifications → GH Actions (PR
+      // #991); staleRooms → GH Actions (this PR — every 5 min via
+      // .github/workflows/cron-stale-rooms.yml POSTs to
+      // /api/system/sweep-stale-rooms).
+      expect(mockSchedule).toHaveBeenCalledTimes(7);
     });
 
     test('does not register testDataCleanup in production', () => {
@@ -134,18 +133,11 @@ describe('startCronJobs', () => {
       expect(schedules).not.toContain('*/30 * * * *');
     });
 
-    test('staleRooms callback invokes the job', () => {
-      staleRooms.mockResolvedValue(undefined);
-      startCronJobs();
-
-      const fiveMinCalls = mockSchedule.mock.calls.filter((c) => c[0] === '*/5 * * * *');
-      // staleRooms is the only remaining */5 schedule after serverHealth
-      // was migrated to the Better Stack heartbeat endpoint.
-      expect(fiveMinCalls.length).toBe(1);
-
-      fiveMinCalls[0][1]();
-      expect(staleRooms).toHaveBeenCalled();
-    });
+    // staleRooms callback test removed — staleRooms is no longer
+    // registered as a node-cron schedule. The endpoint POST
+    // /api/system/sweep-stale-rooms is exercised by tests in
+    // tests/routes/system.test.js + the workflow at
+    // .github/workflows/cron-stale-rooms.yml.
 
     // expireBans callback test removed — expireBans is no longer
     // registered as a node-cron schedule. Its functionality moved to
@@ -292,20 +284,9 @@ describe('startCronJobs', () => {
       });
     });
 
-    test('staleRooms error is caught and logged', async () => {
-      const error = new Error('stale error');
-      staleRooms.mockRejectedValue(error);
-      startCronJobs();
-
-      const fiveMinCalls = mockSchedule.mock.calls.filter((c) => c[0] === '*/5 * * * *');
-      fiveMinCalls[0][1]();
-
-      await new Promise((r) => setTimeout(r, 10));
-
-      expect(log.error).toHaveBeenCalledWith('cron', 'staleRooms failed', {
-        error: 'stale error',
-      });
-    });
+    // staleRooms error-catch test removed — function moved to the GH
+    // Actions sweep endpoint at POST /api/system/sweep-stale-rooms,
+    // exercised by tests in tests/routes/system.test.js.
 
     test('ageVerificationAuditReconcile callback invokes the job', async () => {
       const ageVerificationAuditReconcile = require('../../src/cron/ageVerificationAuditReconcile');

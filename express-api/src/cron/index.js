@@ -3,13 +3,14 @@ const log = require('../utils/log');
 
 const archiveReports = require('./archiveReports');
 const subscriptions = require('./subscriptions');
-const staleRooms = require('./staleRooms');
 const backpackCleanup = require('./backpackCleanup');
 const backups = require('./backups');
 const closedRooms = require('./closedRooms');
 const orphanedStorage = require('./orphanedStorage');
 const rotateLogs = require('./rotateLogs');
 const expireTempIds = require('./expireTempIds');
+// staleRooms moved to .github/workflows/cron-stale-rooms.yml — function
+// kept in src/cron/staleRooms.js, invoked via POST /api/system/sweep-stale-rooms.
 const expireDataExports = require('./expireDataExports');
 const alertManager = require('../utils/alertManagerInstance');
 const ageVerificationAuditReconcile = require('./ageVerificationAuditReconcile');
@@ -47,10 +48,14 @@ function startCronJobs() {
     );
   });
 
-  // Close stale OWNER_AWAY rooms — every 5 minutes
-  cron.schedule('*/5 * * * *', () => {
-    staleRooms().catch((err) => log.error('cron', 'staleRooms failed', { error: err.message }));
-  });
+  // staleRooms migrated to GitHub Actions scheduled workflow
+  // (.github/workflows/cron-stale-rooms.yml) which POSTs to
+  // /api/system/sweep-stale-rooms every 5 minutes. The function itself
+  // still lives in src/cron/staleRooms.js — only the schedule moved
+  // out of the in-process node-cron list. Voice-room presence-based
+  // event-driven design (RTDB onDisconnect, multi-platform client
+  // changes) deferred to a follow-up where operator can validate the
+  // presence semantics interactively.
 
   // Backup user profiles + cleanup old closed rooms — daily 02:00 UTC
   cron.schedule('0 2 * * *', () => {

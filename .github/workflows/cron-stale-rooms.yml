@@ -1,0 +1,96 @@
+name: Cron — Stale Rooms Sweep
+
+# External replacement for the in-process node-cron schedule that used
+# to run `staleRooms()` every 5 minutes inside the Express API
+# process. Closes voice rooms whose owner has been in OWNER_AWAY state
+# past the 10-minute timeout (or immediately if no other participants
+# are seated). The function itself still lives in
+# `express-api/src/cron/staleRooms.js`; this workflow only changes the
+# trigger from `node-cron` to `gh actions schedule`, POSTing to a
+# secured HTTP endpoint that wraps the same function.
+#
+# This is the SIXTH and FINAL PR of the cron-cluster refactor. The
+# operator-chosen ideal endpoint (RTDB `onDisconnect` for instant
+# room-close on owner-disconnect, multi-platform with Kotlin + Swift
+# client changes) is deferred to a follow-up where the operator can
+# validate the presence semantics interactively — that's a UX feature
+# rather than a cron-cluster architectural fix and benefits from
+# synchronous design discussion.
+#
+# The GH Actions migration still satisfies the cron-cluster's main
+# goal — `[[feedback-avoid-crons-prefer-event-driven]]` was about
+# moving the SCHEDULING layer out of the long-running Node process,
+# which this does. Voice-room responsiveness stays at the current
+# 5-min cadence until the RTDB onDisconnect work lands separately.
+#
+# Companion endpoint:
+#   POST /api/system/sweep-stale-rooms
+#   Headers: Authorization: Bearer ${{ secrets.SYSTEM_SHARED_SECRET }}
+#   Body:    (empty)
+#
+# Deploy steps (operator action, ONCE PER REPO):
+# Same `SYSTEM_SHARED_SECRET` as the other cron-cluster workflows —
+# no new setup once PR #989 landed.
+#
+# Failure behaviour: standard 200/409/non-2xx — 409 (in-flight) treated
+# as success because the next */5 tick (within 5 min) will pick up
+# anything new.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target environment (prod is the only valid choice today; dev does not run crons)'
+        type: choice
+        options: [prod]
+        default: 'prod'
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    name: POST /api/system/sweep-stale-rooms
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Invoke sweep endpoint
+        env:
+          API_URL: https://api.shytalk.shyden.co.uk/api/system/sweep-stale-rooms
+          SYSTEM_SHARED_SECRET: ${{ secrets.SYSTEM_SHARED_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SYSTEM_SHARED_SECRET}" ]; then
+            echo "::error::SYSTEM_SHARED_SECRET secret is not configured on this repo"
+            exit 1
+          fi
+
+          # --max-time 240 leaves a 60s buffer before the */5 cadence
+          # tick fires the next scheduled run (matches the dispatch-
+          # notifications workflow's tightening from the reviewer's
+          # finding on PR #991).
+          HTTP_CODE=$(curl -sS -o /tmp/sweep-response.txt -w "%{http_code}" \
+            -X POST "${API_URL}" \
+            -H "Authorization: Bearer ${SYSTEM_SHARED_SECRET}" \
+            -H "Content-Length: 0" \
+            --max-time 240)
+
+          echo "Server status: ${HTTP_CODE}"
+          echo "Server body:"
+          cat /tmp/sweep-response.txt
+          echo
+
+          case "${HTTP_CODE}" in
+            200)
+              echo "✓ sweep completed successfully"
+              ;;
+            409)
+              echo "✓ sweep already in flight on the server — treating as success"
+              ;;
+            *)
+              echo "::error::sweep failed with status ${HTTP_CODE}"
+              exit 1
+              ;;
+          esac
