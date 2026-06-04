@@ -1212,11 +1212,32 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
       cascade = buildCascadeFailure(err, 'cascade_failed');
     }
 
+    // Suggestion cascade is independent of room cascade — partial failure of one
+    // must not skip the other. Awaited (not fire-and-forget) so admin response
+    // reflects whether the flagging actually committed.
+    let suggestionsCascade;
+    try {
+      suggestionsCascade = await flagSuspendedUserSuggestions(req.params.uniqueId, req.auth.uid);
+    } catch (err) {
+      log.error('admin-users', 'Failed to flag suspended user suggestions', {
+        uniqueId: req.params.uniqueId,
+        error: err.message,
+      });
+      suggestionsCascade = {
+        flaggedCount: 0,
+        skippedCount: 0,
+        partial: true,
+        failedSuggestionIds: [],
+        error: err && err.message ? err.message : 'cascade_failed',
+      };
+    }
+
     // pms shape matches partial-failure-toast.js (failed, total). Single PM
     // for the suspension reason; either delivered or not.
     res.json({
       success: true,
       cascade,
+      suggestionsCascade,
       pms: { failed: pmFailed ? 1 : 0, total: 1 },
     });
   } catch (err) {
@@ -1294,6 +1315,27 @@ router.post('/user/:uniqueId/unsuspend', async (req, res) => {
       }),
     );
 
+    // Reverse the suggestion ban-cascade: clear `flaggedForReview` on suggestions
+    // whose flag was set by the matching suspension. Only `submitter_suspended`
+    // flags are cleared — unrelated manual admin flags (different reason) are
+    // preserved. Awaited so the admin response reports partial failures.
+    let suggestionsCascade;
+    try {
+      suggestionsCascade = await unflagUnsuspendedUserSuggestions(req.params.uniqueId);
+    } catch (err) {
+      log.error('admin-users', 'Failed to unflag suspended user suggestions', {
+        uniqueId: req.params.uniqueId,
+        error: err.message,
+      });
+      suggestionsCascade = {
+        unflaggedCount: 0,
+        skippedCount: 0,
+        partial: true,
+        failedSuggestionIds: [],
+        error: err && err.message ? err.message : 'cascade_failed',
+      };
+    }
+
     // Send system PM about unsuspension — track failure so admin UI can
     // surface that the user wasn't informed about being unsuspended.
     let pmFailed = false;
@@ -1307,6 +1349,7 @@ router.post('/user/:uniqueId/unsuspend', async (req, res) => {
     clearSuspensionCache(Number(req.params.uniqueId));
     res.json({
       success: true,
+      suggestionsCascade,
       pms: { failed: pmFailed ? 1 : 0, total: 1 },
     });
   } catch (err) {
@@ -1510,6 +1553,15 @@ async function liftAutoAppliedBans(uniqueId, adminUid) {
 // (Pass-17: previously two literals omitted rtdbEventsFailed and used a stale
 // 'cascade_failed' string token, drifting from the resolve routes).
 const { evictSuspendedUser, buildCascadeFailure } = require('../utils/evict-suspended-user');
+
+// Ban-cascade for the suggestions surface: a suspended user's live (accepted/planned)
+// suggestions get a `flaggedForReview` sticky note so an admin can decide case-by-case
+// whether they stay on the roadmap. Status is preserved, so unsuspend cleanly reverses
+// by clearing the flag fields. See utils/flag-suspended-user-suggestions.js for design.
+const {
+  flagSuspendedUserSuggestions,
+  unflagUnsuspendedUserSuggestions,
+} = require('../utils/flag-suspended-user-suggestions');
 
 // ═══════════════════════════════════════════════════════════════════
 // Admin Auth Management (PIN lockout, biometric keys, OTP metrics)

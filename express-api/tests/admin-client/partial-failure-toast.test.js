@@ -62,6 +62,50 @@ describe('buildPartialFailureMessage — single-flag rendering', () => {
     expect(msg).toContain('3 room(s) need manual cleanup');
   });
 
+  it('suggestionsCascade.partial with failed suggestions', () => {
+    const msg = buildPartialFailureMessage({
+      success: true,
+      suggestionsCascade: {
+        partial: true,
+        failedSuggestionIds: ['sug-1', 'sug-2'],
+        error: 'Firestore unavailable',
+      },
+    });
+    expect(msg).toContain('suggestion cascade partial');
+    expect(msg).toContain('2 suggestion(s) need manual cleanup');
+  });
+
+  it('suggestionsCascade.partial with empty failedSuggestionIds (cascade utility threw)', () => {
+    const msg = buildPartialFailureMessage({
+      success: true,
+      suggestionsCascade: {
+        partial: true,
+        failedSuggestionIds: [],
+        error: 'cascade_failed',
+      },
+    });
+    expect(msg).toContain('suggestion cascade partial');
+    // Falls back to a generic "manual cleanup" hint when the failed list
+    // is empty (utility threw before populating failedSuggestionIds).
+    expect(msg).toContain('manual cleanup');
+  });
+
+  it('suggestionsCascade.partial=false does NOT render even with non-empty failedSuggestionIds', () => {
+    // Defensive: protects against a state contradiction where a future code path
+    // sets failedSuggestionIds without flipping `partial: true`. The toast must
+    // gate on `partial`, not on failed-list length, so a fully-committed cascade
+    // never produces a misleading "partial" toast.
+    const result = buildPartialFailureMessage({
+      success: true,
+      suggestionsCascade: {
+        partial: false,
+        failedSuggestionIds: ['sug-this-should-not-render'],
+        error: null,
+      },
+    });
+    expect(result).toBeNull();
+  });
+
   it('cascade.rtdbEventsFailed (Pass-13 L2)', () => {
     const msg = buildPartialFailureMessage({
       success: true,
@@ -277,7 +321,11 @@ describe('buildPartialFailureMessage — ordering invariants', () => {
   it('full chain order locked: every branch fires in canonical order (Pass-15 fix)', () => {
     // Pass-15 test-analyzer criticality 7: a refactor moving `pms` ahead of
     // `auditLog` (e.g. for "delivery first" UX) would silently change the
-    // admin-facing message order. Lock all 7 positions with one fixture.
+    // admin-facing message order. Lock all positions with one fixture.
+    //
+    // Reviewer-flagged 2026-06-04: the suggestions ban-cascade (slot 4, between
+    // room cascade and RTDB events) was added without being represented here,
+    // so the fixture didn't lock its position. Now included.
     const msg = buildPartialFailureMessage({
       success: true,
       warning: { failed: true, error: 'warning_create_failed' },
@@ -288,6 +336,11 @@ describe('buildPartialFailureMessage — ordering invariants', () => {
         failedRoomIds: ['r1', 'r2'],
         rtdbEventsFailed: 3,
       },
+      suggestionsCascade: {
+        partial: true,
+        failedSuggestionIds: ['sug-1'],
+        error: 'Firestore unavailable',
+      },
       reports: { committed: 2, failed: 1, total: 3, error: 'reports_commit_failed' },
       auditLog: { failed: true, error: 'audit_write_failed' },
       lockRelease: { failed: true },
@@ -297,6 +350,7 @@ describe('buildPartialFailureMessage — ordering invariants', () => {
       'warning was NOT applied',
       'suspension was NOT applied',
       'room cascade partial',
+      'suggestion cascade partial',
       "RTDB event(s) didn't deliver",
       'reports did not commit',
       'audit log failed — escalate to ops',
@@ -309,8 +363,8 @@ describe('buildPartialFailureMessage — ordering invariants', () => {
       expect(idx).toBeGreaterThan(lastIdx);
       lastIdx = idx;
     }
-    // Verify exactly 8 semicolon-separated parts (the 8 positions above).
-    expect(msg.split('; ').length).toBe(8);
+    // Verify exactly 9 semicolon-separated parts (the 9 positions above).
+    expect(msg.split('; ').length).toBe(9);
   });
 });
 

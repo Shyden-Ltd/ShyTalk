@@ -605,11 +605,258 @@ describe('11.31 — Integration Tests Full Flows', () => {
         .send(VALID_SUGGESTION);
       expect(res.status).toBe(403);
     });
-    // The ban cascade behaviour (user-ban → existing-suggestions
-    // re-flagged for review) is not asserted here. Marked skip until
-    // implemented properly, rather than passing falsely on a check
-    // that the mock helper exists.
-    test.skip('TODO: ban cascade: user ban marks their suggestions for review', async () => {});
+
+    // The ban cascade flags a suspended user's live (accepted/planned) suggestions for
+    // admin re-review rather than mutating their status — see [[feedback-fill-gaps-always-no-skip]]
+    // and ADR in src/utils/flag-suspended-user-suggestions.js. Terminal-state suggestions
+    // (rejected/completed) and already-pending ones are left untouched.
+    describe('user ban marks their accepted/planned suggestions for review', () => {
+      const {
+        flagSuspendedUserSuggestions,
+        unflagUnsuspendedUserSuggestions,
+      } = require('../../src/utils/flag-suspended-user-suggestions');
+
+      function suggestionDoc(id, status, submitterUid, extra = {}) {
+        const path = `suggestions/${id}`;
+        return {
+          id,
+          ref: { _path: path, update: (...args) => mockDocUpdate(path, ...args) },
+          data: () => ({ status, submitterUid, ...extra }),
+        };
+      }
+
+      test('accepted and planned suggestions get flagged; pending/rejected/completed are left alone', async () => {
+        mockCollectionGet.mockResolvedValueOnce({
+          empty: false,
+          size: 5,
+          docs: [
+            suggestionDoc('sug-acc', 'accepted', 7777),
+            suggestionDoc('sug-pln', 'planned', 7777),
+            suggestionDoc('sug-pen', 'pending', 7777),
+            suggestionDoc('sug-rej', 'rejected', 7777),
+            suggestionDoc('sug-cmp', 'completed', 7777),
+          ],
+        });
+
+        const result = await flagSuspendedUserSuggestions(7777, 'admin-uid-1');
+
+        expect(result.flaggedCount).toBe(2);
+        expect(result.partial).toBe(false);
+        expect(result.error).toBeNull();
+
+        const flaggedPaths = mockBatchUpdate.mock.calls.map((c) => c[0]._path);
+        expect(flaggedPaths).toEqual(
+          expect.arrayContaining(['suggestions/sug-acc', 'suggestions/sug-pln']),
+        );
+        expect(flaggedPaths).not.toEqual(
+          expect.arrayContaining([
+            'suggestions/sug-pen',
+            'suggestions/sug-rej',
+            'suggestions/sug-cmp',
+          ]),
+        );
+
+        const flagPayloads = mockBatchUpdate.mock.calls.map((c) => c[1]);
+        for (const payload of flagPayloads) {
+          expect(payload.flaggedForReview).toBe(true);
+          expect(payload.flaggedReason).toBe('submitter_suspended');
+          expect(payload.flaggedBy).toBe('admin-uid-1');
+          expect(typeof payload.flaggedAt).toBe('number');
+        }
+      });
+
+      test('returns zero-counts shape when user has no suggestions', async () => {
+        mockCollectionGet.mockResolvedValueOnce({ empty: true, size: 0, docs: [] });
+
+        const result = await flagSuspendedUserSuggestions(8888, 'admin-uid-1');
+
+        expect(result).toEqual({
+          flaggedCount: 0,
+          skippedCount: 0,
+          partial: false,
+          failedSuggestionIds: [],
+          error: null,
+        });
+        expect(mockBatchCommit).not.toHaveBeenCalled();
+      });
+
+      test('does not re-flag suggestions already marked submitter_suspended (idempotent)', async () => {
+        mockCollectionGet.mockResolvedValueOnce({
+          empty: false,
+          size: 1,
+          docs: [
+            suggestionDoc('sug-already', 'accepted', 9999, {
+              flaggedForReview: true,
+              flaggedReason: 'submitter_suspended',
+            }),
+          ],
+        });
+
+        const result = await flagSuspendedUserSuggestions(9999, 'admin-uid-2');
+
+        expect(result.flaggedCount).toBe(0);
+        expect(result.skippedCount).toBe(1);
+        expect(mockBatchUpdate).not.toHaveBeenCalled();
+      });
+
+      test('unsuspend reversal clears only flags whose reason is submitter_suspended', async () => {
+        mockCollectionGet.mockResolvedValueOnce({
+          empty: false,
+          size: 3,
+          docs: [
+            suggestionDoc('sug-ban', 'accepted', 7777, {
+              flaggedForReview: true,
+              flaggedReason: 'submitter_suspended',
+            }),
+            suggestionDoc('sug-other', 'accepted', 7777, {
+              flaggedForReview: true,
+              flaggedReason: 'manual_admin_flag',
+            }),
+            suggestionDoc('sug-also-ban', 'planned', 7777, {
+              flaggedForReview: true,
+              flaggedReason: 'submitter_suspended',
+            }),
+          ],
+        });
+
+        const result = await unflagUnsuspendedUserSuggestions(7777);
+
+        expect(result.unflaggedCount).toBe(2);
+        // Pin the "doc skipped because its reason wasn't submitter_suspended" branch.
+        // sug-other carries reason 'manual_admin_flag' — must not be cleared, must
+        // contribute to skippedCount. Without this assertion the else-branch on the
+        // unflag path is uncovered.
+        expect(result.skippedCount).toBe(1);
+        const clearedPaths = mockBatchUpdate.mock.calls.map((c) => c[0]._path);
+        expect(clearedPaths).toEqual(
+          expect.arrayContaining(['suggestions/sug-ban', 'suggestions/sug-also-ban']),
+        );
+        expect(clearedPaths).not.toContain('suggestions/sug-other');
+      });
+
+      test('string uid from URL params is normalized to number for Firestore equality', async () => {
+        // Regression: submitterUid is stored numerically (req.auth.uniqueId);
+        // callers pass req.params.uniqueId (string). Without normalization the
+        // where('==') silently matches nothing and the cascade is a no-op.
+        mockCollectionGet.mockResolvedValueOnce({ empty: true, size: 0, docs: [] });
+
+        await flagSuspendedUserSuggestions('7777', 'admin-uid-1');
+
+        const submitterEqCall = mockWhere.mock.calls.find(
+          (c) => c[0] === 'submitterUid' && c[1] === '==',
+        );
+        expect(submitterEqCall).toBeDefined();
+        expect(submitterEqCall[2]).toBe(7777);
+        expect(typeof submitterEqCall[2]).toBe('number');
+      });
+
+      test('numeric uid passes through normalizeUid unchanged', async () => {
+        mockCollectionGet.mockResolvedValueOnce({ empty: true, size: 0, docs: [] });
+
+        await flagSuspendedUserSuggestions(7777, 'admin-uid-1');
+
+        const submitterEqCall = mockWhere.mock.calls.find(
+          (c) => c[0] === 'submitterUid' && c[1] === '==',
+        );
+        expect(submitterEqCall[2]).toBe(7777);
+        expect(typeof submitterEqCall[2]).toBe('number');
+      });
+
+      test('negative integer string is normalized (test uniqueIds can be negative for system actors)', async () => {
+        mockCollectionGet.mockResolvedValueOnce({ empty: true, size: 0, docs: [] });
+
+        await flagSuspendedUserSuggestions('-42', 'admin-uid-1');
+
+        const submitterEqCall = mockWhere.mock.calls.find(
+          (c) => c[0] === 'submitterUid' && c[1] === '==',
+        );
+        expect(submitterEqCall[2]).toBe(-42);
+        expect(typeof submitterEqCall[2]).toBe('number');
+      });
+
+      test('float string and non-numeric string pass through unchanged (Firestore will match nothing)', async () => {
+        // Defensive: a caller sending a malformed uid must not silently coerce
+        // to integer 7 (Number('7.5') === 7.5 — pre-empt; 'abc' → NaN — pre-empt).
+        // Both must surface as the original value so Firestore strict-eq matches nothing.
+        mockCollectionGet.mockResolvedValue({ empty: true, size: 0, docs: [] });
+
+        await flagSuspendedUserSuggestions('7.5', 'admin-uid-1');
+        await flagSuspendedUserSuggestions('abc', 'admin-uid-1');
+
+        const eqCalls = mockWhere.mock.calls.filter(
+          (c) => c[0] === 'submitterUid' && c[1] === '==',
+        );
+        expect(eqCalls[0][2]).toBe('7.5');
+        expect(eqCalls[1][2]).toBe('abc');
+      });
+
+      test('chunked commit (unflag): >500 docs split across 2 batches; partial failure in chunk 2 leaves chunk 1 cleared', async () => {
+        // Mirror of the flag-path chunk-boundary test below — commitChunked is
+        // shared between flag and unflag modes, so the unflag path needs an
+        // equivalent pin against the same refactor regressions.
+        const docs = Array.from({ length: 501 }, (_, i) =>
+          suggestionDoc(`sug-${i}`, 'accepted', 6666, {
+            flaggedForReview: true,
+            flaggedReason: 'submitter_suspended',
+          }),
+        );
+        mockCollectionGet.mockResolvedValueOnce({ empty: false, size: 501, docs });
+
+        mockBatchCommit
+          .mockResolvedValueOnce(undefined)
+          .mockRejectedValueOnce(new Error('Firestore unavailable on unflag chunk 2'));
+
+        const result = await unflagUnsuspendedUserSuggestions(6666);
+
+        expect(result.unflaggedCount).toBe(500);
+        expect(result.partial).toBe(true);
+        expect(result.failedSuggestionIds).toEqual(['sug-500']);
+        expect(result.error).toBe('Firestore unavailable on unflag chunk 2');
+        expect(mockBatchCommit).toHaveBeenCalledTimes(2);
+      });
+
+      test('chunked commit: >500 docs split across 2 batches; partial failure in chunk 2 leaves chunk 1 committed', async () => {
+        // Pins the chunk-boundary branch of commitChunked. Without this, a future
+        // refactor of the batching loop (e.g. wrong slice arithmetic, missed
+        // try/catch per chunk) regresses silently because all existing tests
+        // fit in a single chunk.
+        const docs = Array.from({ length: 501 }, (_, i) =>
+          suggestionDoc(`sug-${i}`, 'accepted', 8888),
+        );
+        mockCollectionGet.mockResolvedValueOnce({ empty: false, size: 501, docs });
+
+        // First chunk (500) commits, second chunk (1) fails.
+        mockBatchCommit
+          .mockResolvedValueOnce(undefined)
+          .mockRejectedValueOnce(new Error('Firestore unavailable on chunk 2'));
+
+        const result = await flagSuspendedUserSuggestions(8888, 'admin-uid-1');
+
+        expect(result.flaggedCount).toBe(500);
+        expect(result.partial).toBe(true);
+        expect(result.failedSuggestionIds).toEqual(['sug-500']);
+        expect(result.error).toBe('Firestore unavailable on chunk 2');
+        // Pin that TWO DISTINCT batch.commit() calls were made — not one batch
+        // object reused twice (which would silently double-write chunk-1 docs
+        // in production while still matching the output-shape assertions above).
+        expect(mockBatchCommit).toHaveBeenCalledTimes(2);
+      });
+
+      test('batch commit failure surfaces partial=true and failedSuggestionIds', async () => {
+        mockCollectionGet.mockResolvedValueOnce({
+          empty: false,
+          size: 1,
+          docs: [suggestionDoc('sug-fail', 'accepted', 4444)],
+        });
+        mockBatchCommit.mockRejectedValueOnce(new Error('Firestore unavailable'));
+
+        const result = await flagSuspendedUserSuggestions(4444, 'admin-uid-1');
+
+        expect(result.partial).toBe(true);
+        expect(result.failedSuggestionIds).toContain('sug-fail');
+        expect(result.error).toBe('Firestore unavailable');
+      });
+    });
   });
 
   describe('Multi-account flow', () => {

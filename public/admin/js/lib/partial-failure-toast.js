@@ -39,6 +39,17 @@
         : (result.cascade.failedRoomIds || []).length + ' room(s) need manual cleanup';
       parts.push('room cascade partial — ' + detail);
     }
+    // Ban cascade for the suggestions surface — admin suspend/unsuspend routes
+    // expose suggestionsCascade.partial when the flag/unflag batch couldn't
+    // commit. failedSuggestionIds is empty when the cascade utility threw
+    // before populating it (e.g. the initial query failed), so fall back to a
+    // generic "manual cleanup" hint rather than rendering "0 suggestion(s)".
+    if (result.suggestionsCascade && result.suggestionsCascade.partial) {
+      const failed = (result.suggestionsCascade.failedSuggestionIds || []).length;
+      const detail =
+        failed > 0 ? failed + ' suggestion(s) need manual cleanup' : 'manual cleanup needed';
+      parts.push('suggestion cascade partial — ' + detail);
+    }
     // Number.isFinite rejects NaN, ±Infinity, AND non-numbers — stricter than
     // typeof === 'number' which admits NaN. A misimplemented backend sending
     // `failed: NaN` would otherwise coerce `NaN > 0` → false and silently

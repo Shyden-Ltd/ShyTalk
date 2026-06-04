@@ -1079,6 +1079,330 @@ describe('POST /api/user/:uniqueId/suspend --- room eviction', () => {
   });
 });
 
+// --- Suspend / unsuspend --- suggestion ban-cascade wiring ------------------
+//
+// Defence-in-depth alongside the unit tests in
+// tests/routes/suggestions-integration-a-submission.test.js: those prove the
+// cascade utility flags the right docs; these prove the suspend/unsuspend
+// routes actually CALL it and surface the result in the response.
+
+describe('POST /api/user/:uniqueId/suspend --- suggestion cascade', () => {
+  let app;
+
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it('flags accepted/planned suggestions of the suspended user and reports cascade in response', async () => {
+    const { db } = require('../../src/utils/firebase');
+    const futureDate = new Date(Date.now() + 86400000).toISOString();
+
+    const flagBatchUpdate = jest.fn();
+    const flagBatchCommit = jest.fn().mockResolvedValue();
+    db.batch.mockReturnValue({
+      set: jest.fn(),
+      update: flagBatchUpdate,
+      commit: flagBatchCommit,
+    });
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: '5151',
+      data: () => ({ displayName: 'Banned User', gcsScore: 50 }),
+    });
+
+    db.collection.mockImplementation((name) => {
+      if (name === 'suggestions') {
+        return {
+          where: jest.fn().mockReturnValue({
+            where: jest.fn().mockReturnThis(),
+            get: jest.fn().mockResolvedValue({
+              empty: false,
+              size: 2,
+              docs: [
+                {
+                  id: 'sug-A',
+                  ref: { _path: 'suggestions/sug-A', update: jest.fn() },
+                  data: () => ({ status: 'accepted', submitterUid: 5151 }),
+                },
+                {
+                  id: 'sug-B',
+                  ref: { _path: 'suggestions/sug-B', update: jest.fn() },
+                  data: () => ({ status: 'planned', submitterUid: 5151 }),
+                },
+              ],
+            }),
+          }),
+        };
+      }
+      // Rooms / deviceBindings / other collections → empty (no other cascade work).
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
+      };
+      return chain;
+    });
+
+    const res = await request(app)
+      .post('/api/user/5151/suspend')
+      .send({ reason: 'Repeated harassment', canAppeal: true, endDate: futureDate });
+
+    expect(res.status).toBe(200);
+    expect(res.body.suggestionsCascade).toBeDefined();
+    expect(res.body.suggestionsCascade.flaggedCount).toBe(2);
+    expect(res.body.suggestionsCascade.partial).toBe(false);
+    expect(res.body.suggestionsCascade.error).toBeNull();
+
+    // Batch update payload: confirms route-level wiring actually fanned out.
+    expect(flagBatchUpdate).toHaveBeenCalledTimes(2);
+    const samplePayload = flagBatchUpdate.mock.calls[0][1];
+    expect(samplePayload.flaggedForReview).toBe(true);
+    expect(samplePayload.flaggedReason).toBe('submitter_suspended');
+    expect(samplePayload.flaggedBy).toBe('admin-1');
+  });
+
+  it('returns partial=true in suggestionsCascade when the cascade utility throws', async () => {
+    const { db } = require('../../src/utils/firebase');
+    const futureDate = new Date(Date.now() + 86400000).toISOString();
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: '5252',
+      data: () => ({ displayName: 'Banned User', gcsScore: 50 }),
+    });
+
+    db.collection.mockImplementation((name) => {
+      if (name === 'suggestions') {
+        return {
+          where: jest.fn().mockReturnValue({
+            get: jest.fn().mockRejectedValue(new Error('Firestore unavailable')),
+          }),
+        };
+      }
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
+      };
+      return chain;
+    });
+
+    const res = await request(app)
+      .post('/api/user/5252/suspend')
+      .send({ reason: 'Spam', canAppeal: false, endDate: futureDate });
+
+    // Suspension itself MUST still succeed even when the cascade fails — admin
+    // must always be able to ban. Cascade failure is reported, not blocking.
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.suggestionsCascade.partial).toBe(true);
+    expect(res.body.suggestionsCascade.error).toBe('Firestore unavailable');
+  });
+
+  it('surfaces utility-returned partial=true (batch failed without throw) without entering route catch', async () => {
+    // The route's try/catch only fires when the utility ITSELF throws. The
+    // commitChunked path catches batch failures internally and returns
+    // partial:true normally — that path must still surface in the response.
+    //
+    // Content-aware batch mock: autoApplyBans (fire-and-forget on the suspend
+    // path) ALSO calls db.batch(); a blanket `mockRejectedValueOnce` would
+    // consume the rejection on the wrong batch. Reject only when the batch's
+    // first update carries the `flaggedForReview` payload signature.
+    const { db } = require('../../src/utils/firebase');
+    const futureDate = new Date(Date.now() + 86400000).toISOString();
+
+    db.batch.mockImplementation(() => {
+      let isFlagBatch = false;
+      return {
+        set: jest.fn(),
+        update: jest.fn((_ref, payload) => {
+          if (payload && payload.flaggedForReview !== undefined) {
+            isFlagBatch = true;
+          }
+        }),
+        commit: jest.fn(() => {
+          if (isFlagBatch) {
+            return Promise.reject(new Error('Firestore batch commit blocked by quota'));
+          }
+          return Promise.resolve();
+        }),
+      };
+    });
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: '5454',
+      data: () => ({ displayName: 'Banned User', gcsScore: 50 }),
+    });
+
+    db.collection.mockImplementation((name) => {
+      if (name === 'suggestions') {
+        return {
+          where: jest.fn().mockReturnValue({
+            get: jest.fn().mockResolvedValue({
+              empty: false,
+              size: 1,
+              docs: [
+                {
+                  id: 'sug-Q',
+                  ref: { _path: 'suggestions/sug-Q', update: jest.fn() },
+                  data: () => ({ status: 'accepted', submitterUid: 5454 }),
+                },
+              ],
+            }),
+          }),
+        };
+      }
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
+      };
+      return chain;
+    });
+
+    const res = await request(app)
+      .post('/api/user/5454/suspend')
+      .send({ reason: 'Spam', canAppeal: false, endDate: futureDate });
+
+    expect(res.status).toBe(200);
+    expect(res.body.suggestionsCascade.partial).toBe(true);
+    expect(res.body.suggestionsCascade.flaggedCount).toBe(0);
+    expect(res.body.suggestionsCascade.failedSuggestionIds).toEqual(['sug-Q']);
+    expect(res.body.suggestionsCascade.error).toBe('Firestore batch commit blocked by quota');
+  });
+});
+
+describe('POST /api/user/:uniqueId/unsuspend --- suggestion cascade', () => {
+  let app;
+
+  beforeEach(() => {
+    app = createApp();
+    jest.clearAllMocks();
+  });
+
+  it("clears submitter_suspended flags from the user's suggestions on unsuspend", async () => {
+    const { db } = require('../../src/utils/firebase');
+
+    const clearBatchUpdate = jest.fn();
+    const clearBatchCommit = jest.fn().mockResolvedValue();
+    db.batch.mockReturnValue({
+      set: jest.fn(),
+      update: clearBatchUpdate,
+      commit: clearBatchCommit,
+    });
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: '5151',
+      data: () => ({
+        displayName: 'Reformed User',
+        isSuspended: true,
+        preSuspensionDisplayName: 'Reformed User',
+      }),
+    });
+
+    db.collection.mockImplementation((name) => {
+      if (name === 'suggestions') {
+        return {
+          where: jest.fn().mockReturnValue({
+            get: jest.fn().mockResolvedValue({
+              empty: false,
+              size: 2,
+              docs: [
+                {
+                  id: 'sug-X',
+                  ref: { _path: 'suggestions/sug-X', update: jest.fn() },
+                  data: () => ({
+                    status: 'accepted',
+                    submitterUid: 5151,
+                    flaggedForReview: true,
+                    flaggedReason: 'submitter_suspended',
+                  }),
+                },
+                {
+                  id: 'sug-Y',
+                  ref: { _path: 'suggestions/sug-Y', update: jest.fn() },
+                  data: () => ({
+                    status: 'accepted',
+                    submitterUid: 5151,
+                    flaggedForReview: true,
+                    flaggedReason: 'manual_admin_flag',
+                  }),
+                },
+              ],
+            }),
+          }),
+        };
+      }
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
+      };
+      return chain;
+    });
+
+    const res = await request(app).post('/api/user/5151/unsuspend');
+
+    expect(res.status).toBe(200);
+    expect(res.body.suggestionsCascade).toBeDefined();
+    expect(res.body.suggestionsCascade.unflaggedCount).toBe(1);
+
+    // Only sug-X (submitter_suspended) is cleared; sug-Y (manual_admin_flag) is preserved.
+    expect(clearBatchUpdate).toHaveBeenCalledTimes(1);
+    const clearedPayload = clearBatchUpdate.mock.calls[0][1];
+    expect(clearedPayload.flaggedForReview).toBe(false);
+    expect(clearedPayload.flaggedReason).toBeNull();
+  });
+
+  it('returns partial=true in suggestionsCascade when the unflag utility throws', async () => {
+    // Pair with the suspend-route throw test: the unsuspend route's outer
+    // catch for unflagUnsuspendedUserSuggestions is otherwise uncovered.
+    const { db } = require('../../src/utils/firebase');
+
+    mockDocGet.mockResolvedValue({
+      exists: true,
+      id: '5353',
+      data: () => ({
+        displayName: 'Reformed User',
+        isSuspended: true,
+      }),
+    });
+
+    db.collection.mockImplementation((name) => {
+      if (name === 'suggestions') {
+        return {
+          where: jest.fn().mockReturnValue({
+            get: jest.fn().mockRejectedValue(new Error('Firestore unavailable on unflag')),
+          }),
+        };
+      }
+      const chain = {
+        where: jest.fn().mockImplementation(() => chain),
+        orderBy: jest.fn().mockImplementation(() => chain),
+        limit: jest.fn().mockImplementation(() => chain),
+        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
+      };
+      return chain;
+    });
+
+    const res = await request(app).post('/api/user/5353/unsuspend');
+
+    // Unsuspension must still succeed — cascade failure is reported, not blocking.
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.suggestionsCascade.partial).toBe(true);
+    expect(res.body.suggestionsCascade.error).toBe('Firestore unavailable on unflag');
+  });
+});
+
 // --- Suspend --- suspension-match duration for timed bans -------------------
 
 describe('POST /api/user/:uniqueId/suspend --- timed ban duration', () => {
