@@ -27,6 +27,7 @@ const zipArchivePromise = import('archiver').then((m) => m.ZipArchive);
 const { db } = require('./firebase');
 const { queryDocs } = require('./firestore-helpers');
 const log = require('./log');
+const { buildReadme } = require('./data-export-readme-i18n');
 
 // Fields to strip from the profile (internal/sensitive)
 const STRIP_FIELDS = [
@@ -456,54 +457,19 @@ async function buildDataExport(uniqueId) {
     archive.on('end', () => resolve(Buffer.concat(chunks)));
     archive.on('error', reject);
 
-    const readmeLines = [
-      'ShyTalk Data Export',
-      '===================',
-      '',
-      `User ID: ${uniqueId}`,
-      `Export date: ${new Date().toISOString()}`,
-      '',
-    ];
-    if (partial) {
-      // Surface partial-export state explicitly in the README so the user
-      // sees it without parsing manifest.json. The list of failed sections
-      // tells them exactly what they're missing.
-      readmeLines.push(
-        '⚠️  PARTIAL EXPORT',
-        '',
-        'This export is incomplete. The following sections could not be',
-        'retrieved due to a transient backend failure:',
-        '',
-        ...failedSections.map((s) => `  - ${s}`),
-        '',
-        'You can request a fresh export in 24 hours. We apologise for the',
-        'inconvenience — this is a compliance issue we take seriously.',
-        '',
-      );
-    } else {
-      readmeLines.push(
-        'This ZIP contains all personal data associated with your ShyTalk account.',
-        '',
-      );
-    }
-    readmeLines.push(
-      'Files:',
-      '  manifest.json     — Section-by-section status of this export',
-      '  profile.json      — Your profile information',
-      '  settings.json     — Your privacy and notification settings',
-      '  identity.json     — Your linked sign-in providers',
-      '  followers.json    — Your followers and following lists',
-      '  blocked.json      — Your blocked users list',
-      '  economy/          — Your coins, beans, transactions, and backpack',
-      '  gifts/            — Your gift wall',
-      '  conversations/    — Your conversation metadata and messages',
-      '  rooms/            — Rooms you own',
-      '  reports/          — Reports you filed and appeals',
-      '  devices/          — Your device bindings',
-      '  moderation/       — Your warning history',
-      '  suggestions/      — Suggestions you submitted, votes & comments you made, your subscription preferences, and notifications you received',
-    );
-    const readme = readmeLines.join('\n');
+    // README.txt is rendered via the locale-aware builder. The owner's
+    // language preference is on the user doc (set by the in-app
+    // language picker). Untranslated locales fall back to English
+    // automatically — see src/utils/data-export-readme-i18n.js for
+    // the translation table and the contributor guidance for adding
+    // a new locale.
+    const readme = buildReadme({
+      language: userData.language,
+      uniqueId,
+      exportDateIso: new Date().toISOString(),
+      partial,
+      failedSections,
+    });
 
     archive.append(readme, { name: 'README.txt' });
     archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
