@@ -154,6 +154,18 @@ describe('rooms/{roomId} unaffected verbs — read / create / delete unchanged',
     expect(ROOM_BLOCK).toContain('request.resource.data.ownerId');
   });
 
+  test('create binds ownerFirebaseUid (when present) to request.auth.uid (cron-elim PR A0)', () => {
+    // The owner-left RTDB listener attests signals against
+    // `room.ownerFirebaseUid`. The Firestore rule binds the field — when
+    // the new-version client writes it — to `request.auth.uid`, making it
+    // unspoofable. The `.get(field, request.auth.uid)` default lets legacy
+    // app versions still create rooms during the Play/App Store rollout
+    // window (orchestrator's user-doc fallback covers their signals). A
+    // follow-up PR after rollout tightens this to a strict empty default.
+    expect(ROOM_BLOCK).toContain("request.resource.data.get('ownerFirebaseUid', request.auth.uid)");
+    expect(ROOM_BLOCK).toContain('== request.auth.uid');
+  });
+
   test('delete remains owner-only', () => {
     // closeRoom now writes state=CLOSED rather than deleting, but the rule
     // stays in place for legitimate owner-deletes (rare).

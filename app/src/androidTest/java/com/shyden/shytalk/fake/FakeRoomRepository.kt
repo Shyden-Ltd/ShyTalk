@@ -23,13 +23,16 @@ class FakeRoomRepository : RoomRepository {
     override suspend fun createRoom(
         name: String,
         ownerId: String,
+        ownerFirebaseUid: String,
         cohort: String,
     ): Resource<String> {
         // `cohort` is stamped on the Firestore room doc by the real
         // impl and bound to the caller's JWT claim by firestore.rules.
-        // The fake doesn't model the cohort gate (E2E tests are
-        // single-cohort by construction) — accept the arg to satisfy
-        // the interface and discard.
+        // `ownerFirebaseUid` is similarly stamped and read by the
+        // owner-left RTDB listener for signal attestation. The fake
+        // doesn't model either gate (E2E tests use a single
+        // authenticated identity) — accept the args to satisfy the
+        // interface and discard.
         val newRoom = ChatRoom(roomId = "room-new", name = name, ownerId = ownerId)
         rooms.value = rooms.value + newRoom
         return Resource.Success("room-new")

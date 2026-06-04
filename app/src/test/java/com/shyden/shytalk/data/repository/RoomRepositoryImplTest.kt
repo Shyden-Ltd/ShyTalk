@@ -91,7 +91,7 @@ class RoomRepositoryImplTest {
     @Test
     fun `createRoom returns Success with roomId`() =
         runTest {
-            val result = repo.createRoom("My Room", "owner-1", "adult")
+            val result = repo.createRoom("My Room", "owner-1", "owner-fuid-1", "adult")
             assertTrue(result is Resource.Success)
         }
 
@@ -100,7 +100,7 @@ class RoomRepositoryImplTest {
         runTest {
             every { mockDocRef.set(any()) } returns Tasks.forException(RuntimeException("Network error"))
 
-            val result = repo.createRoom("My Room", "owner-1", "adult")
+            val result = repo.createRoom("My Room", "owner-1", "owner-fuid-1", "adult")
             assertTrue(result is Resource.Error)
         }
 
@@ -117,7 +117,7 @@ class RoomRepositoryImplTest {
             val captured = slot<Map<String, Any?>>()
             every { mockDocRef.set(capture(captured)) } returns Tasks.forResult(null)
 
-            repo.createRoom("My Room", "owner-1", "adult")
+            repo.createRoom("My Room", "owner-1", "owner-fuid-1", "adult")
             assertTrue(captured.captured["cohort"] == "adult")
         }
 
@@ -127,8 +127,44 @@ class RoomRepositoryImplTest {
             val captured = slot<Map<String, Any?>>()
             every { mockDocRef.set(capture(captured)) } returns Tasks.forResult(null)
 
-            repo.createRoom("Kids Room", "owner-2", "minor")
+            repo.createRoom("Kids Room", "owner-2", "owner-fuid-2", "minor")
             assertTrue(captured.captured["cohort"] == "minor")
+        }
+
+    @Test
+    fun `createRoom stamps ownerFirebaseUid on the room doc`() =
+        runTest {
+            // Cron-elim PR A0 — firestore.rules binds
+            // `ownerFirebaseUid` to `request.auth.uid` when present. The
+            // owner-left RTDB listener attests signals against this field
+            // (Firebase Auth uid namespace, not the Firestore uniqueId
+            // namespace used by `ownerId`). Without this stamp the
+            // orchestrator falls back to a per-signal user-doc lookup,
+            // which works during transition but defeats the denormalisation
+            // goal. Pin the stamp so future refactors can't silently drop
+            // the fast-path field.
+            val captured = slot<Map<String, Any?>>()
+            every { mockDocRef.set(capture(captured)) } returns Tasks.forResult(null)
+
+            repo.createRoom("My Room", "owner-1", "owner-fuid-XYZ", "adult")
+            assertTrue(captured.captured["ownerFirebaseUid"] == "owner-fuid-XYZ")
+        }
+
+    @Test
+    fun `createRoom does not conflate ownerId and ownerFirebaseUid`() =
+        runTest {
+            // Regression guard for the two-namespace bug class. If a
+            // refactor accidentally passes ownerId in both positions, the
+            // stamp passes the rules-layer (defaults match auth.uid) but
+            // breaks owner-left signal attestation in production. The
+            // captured payload must show DIFFERENT values for the two
+            // fields when DIFFERENT values were passed.
+            val captured = slot<Map<String, Any?>>()
+            every { mockDocRef.set(capture(captured)) } returns Tasks.forResult(null)
+
+            repo.createRoom("My Room", "10000005", "abcDEF123XYZ", "adult")
+            assertTrue(captured.captured["ownerId"] == "10000005")
+            assertTrue(captured.captured["ownerFirebaseUid"] == "abcDEF123XYZ")
         }
 
     // endregion

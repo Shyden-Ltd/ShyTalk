@@ -48,11 +48,20 @@ class HomeViewModelTest {
     private val roomsFlow = MutableSharedFlow<List<ChatRoom>>()
     private val currentUserId = "current-user"
 
+    // Cron-elim PR A0 — currentUserId (Firestore uniqueId) and
+    // currentFirebaseUid (Firebase Auth uid) live in different identity
+    // namespaces. The HomeViewModel must pass BOTH to createRoom — uniqueId
+    // as ownerId and firebaseUid as ownerFirebaseUid. The two values are
+    // deliberately distinct in tests so a bug that swaps them surfaces
+    // as a coVerify mismatch.
+    private val currentFirebaseUid = "current-firebase-uid"
+
     private val activeViewModels = mutableListOf<HomeViewModel>()
 
     @Before
     fun setup() {
         every { authRepository.currentUserId } returns currentUserId
+        every { authRepository.currentFirebaseUid } returns currentFirebaseUid
         every { roomRepository.getActiveRooms() } returns roomsFlow
         every { userRepository.userUpdates } returns MutableSharedFlow()
         coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
@@ -145,13 +154,13 @@ class HomeViewModelTest {
                 Resource.Success(TestData.createTestUser(uid = currentUserId).copy(cohort = "adult"))
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Success("new-room-id")
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("new-room-id")
 
             vm.createRoom("My Room")
             advanceUntilIdle()
 
             coVerify(exactly = 0) { roomRepository.closeAllRoomsByOwner(any()) }
-            coVerify { roomRepository.createRoom("My Room", currentUserId, "adult") }
+            coVerify { roomRepository.createRoom("My Room", currentUserId, currentFirebaseUid, "adult") }
             assertEquals("new-room-id", vm.uiState.value.createdRoomId)
         }
 
@@ -162,7 +171,7 @@ class HomeViewModelTest {
                 Resource.Success(TestData.createTestUser(uid = currentUserId))
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Error("failed")
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Error("failed")
 
             vm.createRoom("My Room")
             advanceUntilIdle()
@@ -178,7 +187,7 @@ class HomeViewModelTest {
                 Resource.Success(TestData.createTestUser(uid = currentUserId))
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Success("new-room")
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("new-room")
             vm.createRoom("Room")
             advanceUntilIdle()
 
@@ -194,7 +203,7 @@ class HomeViewModelTest {
                 Resource.Success(TestData.createTestUser(uid = currentUserId))
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Error("err")
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Error("err")
             vm.createRoom("Room")
             advanceUntilIdle()
 
@@ -216,12 +225,12 @@ class HomeViewModelTest {
                 Resource.Success(TestData.createTestUser(uid = currentUserId).copy(cohort = "minor"))
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Success("rid")
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("rid")
 
             vm.createRoom("Kids Room")
             advanceUntilIdle()
 
-            coVerify { roomRepository.createRoom("Kids Room", currentUserId, "minor") }
+            coVerify { roomRepository.createRoom("Kids Room", currentUserId, currentFirebaseUid, "minor") }
         }
 
     @Test
@@ -233,12 +242,12 @@ class HomeViewModelTest {
             coEvery { userRepository.getUser(currentUserId) } returns Resource.Error("rpc timeout")
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Success("rid")
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("rid")
 
             vm.createRoom("Fallback Room")
             advanceUntilIdle()
 
-            coVerify { roomRepository.createRoom("Fallback Room", currentUserId, "minor") }
+            coVerify { roomRepository.createRoom("Fallback Room", currentUserId, currentFirebaseUid, "minor") }
         }
 
     @Test
@@ -260,12 +269,85 @@ class HomeViewModelTest {
                 )
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Success("rid")
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("rid")
 
             vm.createRoom("Override Room")
             advanceUntilIdle()
 
-            coVerify { roomRepository.createRoom("Override Room", currentUserId, "adult") }
+            coVerify { roomRepository.createRoom("Override Room", currentUserId, currentFirebaseUid, "adult") }
+        }
+
+    @Test
+    fun `createRoom passes Firebase Auth uid as ownerFirebaseUid, not uniqueId`() =
+        runTest {
+            // Cron-elim PR A0 regression guard for the two-namespace bug
+            // class. AuthRepository exposes BOTH:
+            //   - currentUserId (Firestore uniqueId, e.g. "10000005")
+            //   - currentFirebaseUid (Firebase Auth uid, e.g. "abc123XYZ")
+            // The RTDB owner-left signal rule forces writerUid to equal
+            // `auth.uid`; the orchestrator attests it against
+            // room.ownerFirebaseUid. If the ViewModel accidentally passes
+            // currentUserId in BOTH positions, the rules-layer create-bind
+            // (which has a `.get(field, request.auth.uid)` default) might
+            // still let the write through, but the room would carry the
+            // wrong value and every owner-left signal would fail
+            // attestation. Pin DIFFERENT values for the two namespaces and
+            // assert each one lands in its own slot.
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(TestData.createTestUser(uid = currentUserId).copy(cohort = "adult"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("rid")
+
+            vm.createRoom("Namespace Room")
+            advanceUntilIdle()
+
+            // Strict positional verification: the 2nd arg is the uniqueId,
+            // the 3rd is the firebaseUid. A swap would put firebaseUid in
+            // position 2 (where rules check ownerId == callerUniqueId) and
+            // PERMISSION_DENIED — but the mock has no rules-layer, so the
+            // test must catch the swap by positional pinning.
+            coVerify {
+                roomRepository.createRoom(
+                    "Namespace Room",
+                    currentUserId,
+                    currentFirebaseUid,
+                    "adult",
+                )
+            }
+            // Negative pin: the firebaseUid must NOT equal the uniqueId
+            // (otherwise the regression guard above is vacuous).
+            assertTrue(currentUserId != currentFirebaseUid)
+        }
+
+    @Test
+    fun `createRoom passes empty ownerFirebaseUid when AuthRepository returns null`() =
+        runTest {
+            // Defensive: if currentFirebaseUid is somehow null (impossible
+            // when authenticated — but defend in case AuthRepository's
+            // implementation introduces a transient null window), the
+            // ViewModel substitutes empty string. The Firestore rule's
+            // `.get('ownerFirebaseUid', request.auth.uid)` default makes
+            // this still pass create-side; the orchestrator's user-doc
+            // fallback covers signal attestation.
+            every { authRepository.currentFirebaseUid } returns null
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(TestData.createTestUser(uid = currentUserId).copy(cohort = "adult"))
+            val vm = createViewModel()
+            advanceUntilIdle()
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("rid")
+
+            vm.createRoom("Null Firebase Uid Room")
+            advanceUntilIdle()
+
+            coVerify {
+                roomRepository.createRoom(
+                    "Null Firebase Uid Room",
+                    currentUserId,
+                    "",
+                    "adult",
+                )
+            }
         }
 
     @Test
@@ -284,12 +366,12 @@ class HomeViewModelTest {
                 )
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Success("rid")
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("rid")
 
             vm.createRoom("Corrupt Override Room")
             advanceUntilIdle()
 
-            coVerify { roomRepository.createRoom("Corrupt Override Room", currentUserId, "adult") }
+            coVerify { roomRepository.createRoom("Corrupt Override Room", currentUserId, currentFirebaseUid, "adult") }
         }
 
     @Test
@@ -384,7 +466,7 @@ class HomeViewModelTest {
         runTest {
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Success("new-room-id")
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("new-room-id")
 
             vm.createRoom("My Cool Room")
             advanceUntilIdle()
@@ -528,7 +610,7 @@ class HomeViewModelTest {
             vm.createRoom("My Room")
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { roomRepository.createRoom(any(), any(), any()) }
+            coVerify(exactly = 0) { roomRepository.createRoom(any(), any(), any(), any()) }
         }
 
     // ===== createRoom - persists lastRoomName via updateProfile =====
@@ -538,7 +620,7 @@ class HomeViewModelTest {
         runTest {
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Success("new-id")
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("new-id")
 
             vm.createRoom("Persisted Room")
             advanceUntilIdle()
@@ -707,12 +789,12 @@ class HomeViewModelTest {
         runTest {
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Error("first error")
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Error("first error")
             vm.createRoom("Room1")
             advanceUntilIdle()
             assertNotNull(vm.uiState.value.error)
 
-            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Success("room-2")
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("room-2")
             vm.createRoom("Room2")
             advanceUntilIdle()
 
@@ -735,7 +817,7 @@ class HomeViewModelTest {
             // Should show confirmation instead of creating or showing error
             assertTrue(vm.uiState.value.showReplaceRoomConfirmation)
             assertEquals("New Room", vm.uiState.value.pendingRoomName)
-            coVerify(exactly = 0) { roomRepository.createRoom(any(), any(), any()) }
+            coVerify(exactly = 0) { roomRepository.createRoom(any(), any(), any(), any()) }
         }
 
     @Test
@@ -744,12 +826,12 @@ class HomeViewModelTest {
             val vm = createViewModel()
             advanceUntilIdle()
             coEvery { roomRepository.findActiveRoomByOwner(currentUserId) } returns null
-            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Success("new-room-id")
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("new-room-id")
 
             vm.createRoom("New Room")
             advanceUntilIdle()
 
-            coVerify { roomRepository.createRoom("New Room", currentUserId, any()) }
+            coVerify { roomRepository.createRoom("New Room", currentUserId, currentFirebaseUid, any()) }
             assertEquals("new-room-id", vm.uiState.value.createdRoomId)
         }
 
@@ -759,7 +841,7 @@ class HomeViewModelTest {
             val vm = createViewModel()
             advanceUntilIdle()
             coEvery { roomRepository.findActiveRoomByOwner(currentUserId) } returns "existing-room-id"
-            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Success("new-id")
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("new-id")
 
             // First, createRoom shows confirmation
             vm.createRoom("New Room")
@@ -775,7 +857,7 @@ class HomeViewModelTest {
 
             coVerifyOrder {
                 roomRepository.closeAllRoomsByOwner(currentUserId)
-                roomRepository.createRoom("New Room", currentUserId, any())
+                roomRepository.createRoom("New Room", currentUserId, currentFirebaseUid, any())
             }
             assertFalse(vm.uiState.value.showReplaceRoomConfirmation)
             assertEquals("new-id", vm.uiState.value.createdRoomId)
@@ -952,11 +1034,11 @@ class HomeViewModelTest {
                 )
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.createRoom(any(), any(), any()) } returns Resource.Success("rid")
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("rid")
 
             vm.createRoom("My Room")
             advanceUntilIdle()
 
-            coVerify { roomRepository.createRoom("My Room", currentUserId, "minor") }
+            coVerify { roomRepository.createRoom("My Room", currentUserId, currentFirebaseUid, "minor") }
         }
 }

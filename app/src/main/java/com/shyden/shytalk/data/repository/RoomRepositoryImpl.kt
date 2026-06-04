@@ -92,6 +92,7 @@ class RoomRepositoryImpl(
     override suspend fun createRoom(
         name: String,
         ownerId: String,
+        ownerFirebaseUid: String,
         cohort: String,
     ): Resource<String> =
         firebaseCall("Failed to create room") {
@@ -108,6 +109,13 @@ class RoomRepositoryImpl(
                     "id" to roomId,
                     "name" to name,
                     "ownerId" to ownerId,
+                    // Cron-elim PR A0 — denormalised Firebase Auth uid of
+                    // the room owner. Bound to request.auth.uid by the
+                    // firestore.rules rooms-create rule and read by the
+                    // owner-left RTDB listener to attest signals. Two
+                    // identity namespaces exist for every user; ownerId is
+                    // the Firestore uniqueId, this is the Firebase Auth uid.
+                    "ownerFirebaseUid" to ownerFirebaseUid,
                     "state" to "ACTIVE",
                     "createdAt" to timestamp,
                     "participantIds" to listOf(ownerId),

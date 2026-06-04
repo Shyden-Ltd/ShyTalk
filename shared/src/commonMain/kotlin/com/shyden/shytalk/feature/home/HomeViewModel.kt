@@ -404,7 +404,16 @@ class HomeViewModel(
                 else -> COHORT_MINOR
             }
 
-        when (val result = roomRepository.createRoom(name, userId, cohort)) {
+        // Cron-elim PR A0 — pass the Firebase Auth uid alongside the
+        // Firestore uniqueId. firestore.rules binds `ownerFirebaseUid` to
+        // `request.auth.uid` (unspoofable), and the owner-left RTDB
+        // listener attests signals against this field. Empty fallback if
+        // the user is somehow authenticated-without-firebaseUid (shouldn't
+        // happen — currentFirebaseUid returns auth.currentUser.uid which is
+        // present iff the user is signed in — but defends against an
+        // impossible-but-defensible NPE).
+        val ownerFirebaseUid = authRepository.currentFirebaseUid ?: ""
+        when (val result = roomRepository.createRoom(name, userId, ownerFirebaseUid, cohort)) {
             is Resource.Success -> {
                 logI(TAG, "Room created: id=${result.data}")
                 _uiState.update { it.copy(isLoading = false, createdRoomId = result.data) }

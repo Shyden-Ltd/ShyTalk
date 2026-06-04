@@ -28,6 +28,7 @@ interface RoomRepository {
     suspend fun createRoom(
         name: String,
         ownerId: String,
+        ownerFirebaseUid: String,
         cohort: String,
     ): Resource<String>
 

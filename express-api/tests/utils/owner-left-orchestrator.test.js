@@ -21,6 +21,13 @@ const {
 const baseActiveRoom = {
   state: 'ACTIVE',
   ownerId: 'owner-1',
+  // Denormalised Firebase Auth uid of the room owner, written at create-time
+  // and bound unspoofable via the Firestore rule on rooms/{roomId} create
+  // (`request.resource.data.ownerFirebaseUid == request.auth.uid`). The
+  // writer-attestation check in the orchestrator compares the RTDB-signal
+  // writerUid (which the RTDB rule forces to equal `auth.uid`) against this
+  // field — same identity namespace on both sides.
+  ownerFirebaseUid: 'owner-fuid-1',
   ownerLeftAt: null,
   participantIds: ['owner-1', 'user-2'],
   seats: {
@@ -42,17 +49,33 @@ const activeWithSeatedUser = {
  * orchestrator: `db.doc(path)` returns a stable ref; `db.runTransaction(cb)`
  * supplies a transaction object with `t.get(ref)` and `t.update(ref, patch)`.
  *
+ * Path routing: `rooms/{...}` returns the room ref (driven by `initialRoom`),
+ * `users/{...}` returns the user ref (driven by `ownerUserDoc`, default null
+ * → exists:false). Any other path also routes to the room ref for backward
+ * compatibility with tests written before user-doc lookups existed; this
+ * matches what the original `jest.fn(() => roomRef)` did.
+ *
  * The factory exposes the captured mocks so tests can assert against them.
  */
-function makeMockDb({ initialRoom }) {
-  const roomRef = { __ref: true };
+function makeMockDb({ initialRoom, ownerUserDoc = null }) {
+  const roomRef = { __ref: 'room' };
+  const userRef = { __ref: 'user' };
   let currentRoom = initialRoom; // may be null/undefined to simulate missing
-  const docFn = jest.fn(() => roomRef);
 
   const preGetMock = jest
     .fn()
     .mockImplementation(async () => ({ exists: !!currentRoom, data: () => currentRoom }));
   roomRef.get = preGetMock;
+
+  const userGetMock = jest
+    .fn()
+    .mockImplementation(async () => ({ exists: !!ownerUserDoc, data: () => ownerUserDoc }));
+  userRef.get = userGetMock;
+
+  const docFn = jest.fn((path) => {
+    if (typeof path === 'string' && path.startsWith('users/')) return userRef;
+    return roomRef;
+  });
 
   const txMock = {
     get: jest
@@ -67,7 +90,14 @@ function makeMockDb({ initialRoom }) {
 
   const runTransaction = jest.fn().mockImplementation(async (callback) => callback(txMock));
 
-  return { db: { doc: docFn, runTransaction }, roomRef, txMock, preGetMock };
+  return {
+    db: { doc: docFn, runTransaction },
+    roomRef,
+    userRef,
+    txMock,
+    preGetMock,
+    userGetMock,
+  };
 }
 
 describe('handleOwnerLeftSignal', () => {
@@ -631,92 +661,6 @@ describe('handleOwnerLeftSignal', () => {
     });
   });
 
-  describe('writer-uid spoof prevention', () => {
-    // Without this check, an attacker can write `ownerLeft/{victim-room} = attacker-uid`
-    // (allowed by the RTDB rule `newData.val() === auth.uid`); the listener fires;
-    // the server reads room.ownerId = victim; presenceChecker for victim returns
-    // false if victim has a brief network blip — and the room is illegitimately
-    // closed or transitioned to OWNER_AWAY. The writerUid arg is the value at
-    // the RTDB signal entry (snap.val()) — it MUST match the room owner.
-    test('returns NOOP when writerUid does not match preRoom.ownerId', async () => {
-      const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId: 'owner-1' } });
-      const result = await handleOwnerLeftSignal({
-        db,
-        presenceChecker,
-        roomId: 'room-1',
-        writerUid: 'attacker-uid',
-        nowMs,
-      });
-      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
-      expect(result.reason).toBe('writer-not-owner');
-      // Critical: presenceChecker was NOT called — attacker can't even probe
-      // the victim's presence state via this signal-spam.
-      expect(presenceChecker).not.toHaveBeenCalled();
-    });
-
-    test('proceeds when writerUid matches preRoom.ownerId', async () => {
-      const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId: 'owner-1' } });
-      presenceChecker.mockResolvedValue(false);
-      const result = await handleOwnerLeftSignal({
-        db,
-        presenceChecker,
-        roomId: 'room-1',
-        writerUid: 'owner-1',
-        nowMs,
-      });
-      expect(result.action).toBe(OWNER_LEFT_ACTION.CLOSE_IMMEDIATE);
-      expect(presenceChecker).toHaveBeenCalledWith('room-1', 'owner-1');
-    });
-
-    test('writerUid omitted (undefined) is accepted — backward compat for direct callers', async () => {
-      // The orchestrator can be called from contexts other than the RTDB
-      // listener; when no writer attestation is available, the existing
-      // ownerStillPresent / state-machine guards still apply.
-      const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId: 'owner-1' } });
-      presenceChecker.mockResolvedValue(false);
-      const result = await handleOwnerLeftSignal({
-        db,
-        presenceChecker,
-        roomId: 'room-1',
-        nowMs,
-      });
-      expect(result.action).toBe(OWNER_LEFT_ACTION.CLOSE_IMMEDIATE);
-    });
-
-    test('writerUid normalisation handles string vs numeric ownerId', async () => {
-      const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId: 42 } });
-      presenceChecker.mockResolvedValue(true);
-      const result = await handleOwnerLeftSignal({
-        db,
-        presenceChecker,
-        roomId: 'room-1',
-        writerUid: '42',
-        nowMs,
-      });
-      // Match by string-normalised compare — should NOT be writer-not-owner.
-      expect(result.reason).not.toBe('writer-not-owner');
-    });
-
-    // R3 I1: the listener forwards `null` as writerUid when snap.val() is
-    // null. The orchestrator's `writerUid !== null && writerUid !== undefined`
-    // guard treats both as "no attestation" — but null and undefined exit
-    // the check at DIFFERENT short-circuit conditions, so test both paths.
-    test('writerUid explicitly null is accepted — treated as no attestation', async () => {
-      const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId: 'owner-1' } });
-      presenceChecker.mockResolvedValue(false);
-      const result = await handleOwnerLeftSignal({
-        db,
-        presenceChecker,
-        roomId: 'room-1',
-        writerUid: null,
-        nowMs,
-      });
-      expect(result.reason).not.toBe('writer-not-owner');
-      expect(result.action).toBe(OWNER_LEFT_ACTION.CLOSE_IMMEDIATE);
-      expect(presenceChecker).toHaveBeenCalledWith('room-1', 'owner-1');
-    });
-  });
-
   describe('transaction retry on contention (I3)', () => {
     // Firestore Admin SDK retries the transaction callback on contention.
     // ownerStillPresent is captured BEFORE the txn opens and re-used across
@@ -791,6 +735,299 @@ describe('handleOwnerLeftSignal', () => {
         expect(call[0]).toBe(roomRef);
         expect(call[1]).toEqual({ state: 'OWNER_AWAY', ownerLeftAt: nowMs });
       }
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // Writer-attestation — fast path (room has ownerFirebaseUid)
+  // ═══════════════════════════════════════════════════════════════
+  //
+  // When the room doc carries the denormalised `ownerFirebaseUid` (rooms
+  // created after the denormalisation PR), the orchestrator compares the
+  // RTDB-signal writerUid against that field directly — no per-signal
+  // user-doc lookup needed. The Firestore rule on rooms create binds
+  // ownerFirebaseUid to `request.auth.uid` so the field is unspoofable.
+
+  describe('writer-attestation — fast path (room.ownerFirebaseUid present)', () => {
+    test('proceeds when writerUid matches room.ownerFirebaseUid', async () => {
+      const { db, txMock } = makeMockDb({ initialRoom: baseActiveRoom });
+      presenceChecker.mockResolvedValue(false);
+
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        writerUid: 'owner-fuid-1',
+        nowMs,
+      });
+
+      // Fast path: legit owner-arming signal closes the empty room.
+      expect(result.action).toBe(OWNER_LEFT_ACTION.CLOSE_IMMEDIATE);
+      expect(txMock.update).toHaveBeenCalledTimes(1);
+    });
+
+    test('rejects forgery when writerUid does not match room.ownerFirebaseUid', async () => {
+      const { db, txMock } = makeMockDb({ initialRoom: baseActiveRoom });
+      presenceChecker.mockResolvedValue(false);
+
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        writerUid: 'attacker-fuid',
+        nowMs,
+      });
+
+      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+      expect(result.reason).toBe('writer-not-owner');
+      // No presence read, no transaction — short-circuits to defend against
+      // presence-probing via spoofed ownerLeft writes.
+      expect(presenceChecker).not.toHaveBeenCalled();
+      expect(txMock.update).not.toHaveBeenCalled();
+    });
+
+    test('rejects forgery via the namespace-mismatch case (writerUid = ownerId-as-uniqueId)', async () => {
+      // The pre-denormalisation bug shape: an attacker (or buggy client)
+      // writes the room's uniqueId namespace value as the signal payload.
+      // Even though it matches room.ownerId, it does NOT match the Firebase
+      // Auth uid, so the rule-layer write would have been rejected upstream
+      // — but we still defend in depth at the orchestrator layer.
+      const { db, txMock } = makeMockDb({ initialRoom: baseActiveRoom });
+      presenceChecker.mockResolvedValue(false);
+
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        writerUid: 'owner-1', // ownerId-as-uniqueId, NOT the firebaseUid
+        nowMs,
+      });
+
+      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+      expect(result.reason).toBe('writer-not-owner');
+      expect(txMock.update).not.toHaveBeenCalled();
+    });
+
+    test('still skips attestation when writerUid is undefined (direct caller)', async () => {
+      // Backward compat: callers that invoke handleOwnerLeftSignal directly
+      // (not through the RTDB listener) don't have an attesting writer.
+      // The check must short-circuit so legit direct callers still work.
+      const { db, txMock } = makeMockDb({ initialRoom: baseActiveRoom });
+      presenceChecker.mockResolvedValue(false);
+
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        // no writerUid
+        nowMs,
+      });
+
+      expect(result.action).toBe(OWNER_LEFT_ACTION.CLOSE_IMMEDIATE);
+      expect(txMock.update).toHaveBeenCalledTimes(1);
+    });
+
+    test('still skips attestation when writerUid is null', async () => {
+      const { db, txMock } = makeMockDb({ initialRoom: baseActiveRoom });
+      presenceChecker.mockResolvedValue(false);
+
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        writerUid: null,
+        nowMs,
+      });
+
+      expect(result.action).toBe(OWNER_LEFT_ACTION.CLOSE_IMMEDIATE);
+      expect(txMock.update).toHaveBeenCalledTimes(1);
+    });
+
+    test('does NOT query users-doc when room.ownerFirebaseUid is present', async () => {
+      const { db, userGetMock } = makeMockDb({
+        initialRoom: baseActiveRoom,
+        ownerUserDoc: { firebaseUid: 'owner-fuid-1' },
+      });
+      presenceChecker.mockResolvedValue(false);
+
+      await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        writerUid: 'owner-fuid-1',
+        nowMs,
+      });
+
+      // Fast path: the denormalised field on the room shortcuts the lookup.
+      expect(userGetMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // Writer-attestation — legacy fallback (room missing ownerFirebaseUid)
+  // ═══════════════════════════════════════════════════════════════
+  //
+  // Rooms created before the denormalisation landed have no
+  // `ownerFirebaseUid`. The orchestrator falls back to reading
+  // `users/{ownerId}.firebaseUid` for these. Once the cron-elim cluster's
+  // PR A4 deletes the staleRooms safety net AND enough time has passed
+  // that all live rooms have closed, the fallback can be deleted.
+
+  describe('writer-attestation — legacy fallback (room missing ownerFirebaseUid)', () => {
+    const legacyRoom = { ...baseActiveRoom };
+    delete legacyRoom.ownerFirebaseUid;
+
+    test('proceeds when writerUid matches the looked-up users.firebaseUid', async () => {
+      const { db, txMock, userGetMock } = makeMockDb({
+        initialRoom: legacyRoom,
+        ownerUserDoc: { firebaseUid: 'looked-up-fuid' },
+      });
+      presenceChecker.mockResolvedValue(false);
+
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        writerUid: 'looked-up-fuid',
+        nowMs,
+      });
+
+      expect(result.action).toBe(OWNER_LEFT_ACTION.CLOSE_IMMEDIATE);
+      expect(txMock.update).toHaveBeenCalledTimes(1);
+      // Fallback path: the user doc IS queried.
+      expect(userGetMock).toHaveBeenCalledTimes(1);
+    });
+
+    test('rejects forgery when writerUid does not match looked-up firebaseUid', async () => {
+      const { db, txMock } = makeMockDb({
+        initialRoom: legacyRoom,
+        ownerUserDoc: { firebaseUid: 'looked-up-fuid' },
+      });
+      presenceChecker.mockResolvedValue(false);
+
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        writerUid: 'attacker-fuid',
+        nowMs,
+      });
+
+      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+      expect(result.reason).toBe('writer-not-owner');
+      expect(presenceChecker).not.toHaveBeenCalled();
+      expect(txMock.update).not.toHaveBeenCalled();
+    });
+
+    test('rejects when user doc is missing (cannot attest)', async () => {
+      // Defensive: legacy room with no ownerFirebaseUid AND owner's user doc
+      // doesn't exist (orphaned room). Treating this as "skip attestation"
+      // would re-open the forgery vector — reject as writer-not-owner.
+      const { db, txMock } = makeMockDb({
+        initialRoom: legacyRoom,
+        ownerUserDoc: null, // user doc missing
+      });
+      presenceChecker.mockResolvedValue(false);
+
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        writerUid: 'any-fuid',
+        nowMs,
+      });
+
+      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+      expect(result.reason).toBe('writer-not-owner');
+      expect(presenceChecker).not.toHaveBeenCalled();
+      expect(txMock.update).not.toHaveBeenCalled();
+    });
+
+    test('rejects when user doc exists but firebaseUid field is missing', async () => {
+      // Corrupt user doc — has the doc shell but no firebaseUid (shouldn't
+      // happen but defend anyway). Same outcome as a missing doc.
+      const { db, txMock } = makeMockDb({
+        initialRoom: legacyRoom,
+        ownerUserDoc: { someOtherField: 'value' }, // no firebaseUid
+      });
+      presenceChecker.mockResolvedValue(false);
+
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        writerUid: 'any-fuid',
+        nowMs,
+      });
+
+      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+      expect(result.reason).toBe('writer-not-owner');
+      expect(txMock.update).not.toHaveBeenCalled();
+    });
+
+    test('rejects when user doc firebaseUid is an empty string', async () => {
+      const { db, txMock } = makeMockDb({
+        initialRoom: legacyRoom,
+        ownerUserDoc: { firebaseUid: '' }, // empty string — not a valid uid
+      });
+      presenceChecker.mockResolvedValue(false);
+
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        writerUid: '',
+        nowMs,
+      });
+
+      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+      expect(result.reason).toBe('writer-not-owner');
+      expect(txMock.update).not.toHaveBeenCalled();
+    });
+
+    test('rejects when ownerFirebaseUid is present but empty string (treats as missing)', async () => {
+      // Edge case: someone wrote `ownerFirebaseUid: ''` to the room. Empty
+      // string is not a valid uid — must fall through to the lookup path
+      // (which will also fail here because no user doc is provided).
+      const { db } = makeMockDb({
+        initialRoom: { ...baseActiveRoom, ownerFirebaseUid: '' },
+        ownerUserDoc: null,
+      });
+      presenceChecker.mockResolvedValue(false);
+
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        writerUid: 'any-fuid',
+        nowMs,
+      });
+
+      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+      expect(result.reason).toBe('writer-not-owner');
+    });
+
+    test('still skips attestation when writerUid is undefined (legacy room, direct caller)', async () => {
+      // Direct callers without an attesting writer are accepted regardless
+      // of legacy/fast-path state — same skip applies.
+      const { db, txMock, userGetMock } = makeMockDb({
+        initialRoom: legacyRoom,
+        ownerUserDoc: { firebaseUid: 'whatever' },
+      });
+      presenceChecker.mockResolvedValue(false);
+
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        nowMs,
+      });
+
+      expect(result.action).toBe(OWNER_LEFT_ACTION.CLOSE_IMMEDIATE);
+      expect(txMock.update).toHaveBeenCalledTimes(1);
+      // Fast bail before fallback: undefined writerUid means we never look
+      // up the user doc either.
+      expect(userGetMock).not.toHaveBeenCalled();
     });
   });
 });

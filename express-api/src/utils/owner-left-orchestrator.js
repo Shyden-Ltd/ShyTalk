@@ -49,6 +49,34 @@ function isValidOwnerId(ownerId) {
 }
 
 /**
+ * Resolves the Firebase Auth uid the room owner should be attested under.
+ *
+ * Fast path: the room doc carries the denormalised `ownerFirebaseUid`
+ * (written at create-time, enforced unspoofable by the Firestore rule
+ * `request.resource.data.ownerFirebaseUid == request.auth.uid`). Returns it
+ * verbatim, no extra read.
+ *
+ * Fallback path (legacy rooms created before the denormalisation landed):
+ * looks up the owner's user doc at `users/{ownerId}` and reads
+ * `.firebaseUid`. Same lookup direction as `middleware/auth.js` but reversed
+ * — we have the uniqueId (room.ownerId) and need the firebaseUid.
+ *
+ * Returns null if neither path produces a non-empty string. The caller must
+ * treat null as a failed attestation (NOOP `writer-not-owner`) — silently
+ * defaulting to "accept" would re-open the forgery vector the attestation
+ * exists to close.
+ */
+async function resolveOwnerFirebaseUid(preRoom, db) {
+  if (typeof preRoom.ownerFirebaseUid === 'string' && preRoom.ownerFirebaseUid.length > 0) {
+    return preRoom.ownerFirebaseUid;
+  }
+  const userSnap = await db.doc(`users/${preRoom.ownerId}`).get();
+  if (!userSnap.exists) return null;
+  const fuid = userSnap.data() && userSnap.data().firebaseUid;
+  return typeof fuid === 'string' && fuid.length > 0 ? fuid : null;
+}
+
+/**
  * Process an owner-left signal for `roomId`.
  *
  * @param {object} args
@@ -94,17 +122,36 @@ async function handleOwnerLeftSignal({ db, presenceChecker, roomId, writerUid, n
   }
 
   // Writer-attestation check: the client that armed the RTDB onDisconnect
-  // signs the entry value with their own uid (enforced by the rule
-  // `newData.val() === auth.uid`). Here we additionally verify the writer
-  // is the room's owner — closes the "attacker writes ownerLeft for victim's
-  // room" forgery. Omitted writerUid is accepted for direct (non-listener)
-  // callers that don't have an attesting writer.
-  if (
-    writerUid !== undefined &&
-    writerUid !== null &&
-    String(writerUid) !== String(preRoom.ownerId)
-  ) {
-    return { action: OWNER_LEFT_ACTION.NOOP, reason: 'writer-not-owner' };
+  // signs the entry value with their own Firebase Auth uid (enforced by the
+  // rule `newData.val() === auth.uid` on `ownerLeft/{roomId}`). Here we
+  // additionally verify the writer matches the room's owner — closes the
+  // "attacker writes ownerLeft for victim's room" forgery vector.
+  //
+  // The comparison is against `room.ownerFirebaseUid`, the room owner's
+  // Firebase Auth uid denormalised at create-time. Two identity namespaces
+  // exist for every user: the Firestore `uniqueId` (room.ownerId, e.g.
+  // "10000005") and the Firebase Auth uid (firebaseUid, e.g. "abc123XYZ").
+  // The RTDB rule forces writerUid into the Firebase-Auth-uid namespace, so
+  // comparing it against ownerId (uniqueId namespace) would always fail.
+  // Denormalising ownerFirebaseUid lets the comparison happen in a single
+  // namespace without a per-signal cross-namespace lookup.
+  //
+  // Legacy rooms created before this field existed fall back to the users-
+  // collection lookup (matches the cached firebaseUid→uniqueId resolver in
+  // `middleware/auth.js`, just in the reverse direction). The fallback can
+  // be removed in a follow-up once all live rooms have closed and been
+  // recreated with the field.
+  //
+  // Omitted writerUid is accepted for direct (non-listener) callers that
+  // don't have an attesting writer.
+  if (writerUid !== undefined && writerUid !== null) {
+    const attestedOwnerFirebaseUid = await resolveOwnerFirebaseUid(preRoom, db);
+    if (
+      attestedOwnerFirebaseUid === null ||
+      String(writerUid) !== String(attestedOwnerFirebaseUid)
+    ) {
+      return { action: OWNER_LEFT_ACTION.NOOP, reason: 'writer-not-owner' };
+    }
   }
 
   // TOCTOU re-check: the signal may be stale by the time we process it (owner

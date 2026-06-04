@@ -198,12 +198,31 @@ service cloud.firestore {
       // be used here because it reads `resource.data` (only valid
       // for update/read) — create-time the new doc is at
       // `request.resource.data`.
+      //
+      // Cron-elim PR A0 — `ownerFirebaseUid` is bound to
+      // `request.auth.uid` (the Firebase Auth uid baked into the
+      // server-signed JWT). The owner-left RTDB listener attests
+      // ownerLeft signals against this field; binding it to the
+      // signed JWT uid here makes it unspoofable.
+      //
+      // The `.get(field, request.auth.uid)` default is deliberate —
+      // legacy app versions (pre-cron-elim) don't write the field
+      // and we cannot break their createRoom path until Play Store
+      // and App Store rollout completes. Field-missing → default
+      // matches itself → passes; field-present-and-matching →
+      // passes; field-present-and-forged → fails. Forgery is closed
+      // in both branches; the orchestrator's legacy-fallback path
+      // handles rooms that arrive without the field. Follow-up PR
+      // (after rollout) tightens this to a strict
+      // `get('ownerFirebaseUid', '') == request.auth.uid`.
       allow create: if request.auth != null
         && request.resource.data.get('cohort', '')
             == request.auth.token.get('cohort', 'minor')
         && (request.resource.data.get('cohort', '') == 'adult'
             || request.resource.data.get('cohort', '') == 'minor')
-        && string(callerUniqueId()) == request.resource.data.ownerId;
+        && string(callerUniqueId()) == request.resource.data.ownerId
+        && request.resource.data.get('ownerFirebaseUid', request.auth.uid)
+            == request.auth.uid;
 
       // POST-LOCKDOWN (PR #858 server-authz cutover, this PR): client-side
       // room-doc UPDATEs are denied. ALL room-doc mutations now route through
