@@ -107,8 +107,8 @@ describe('startCronJobs', () => {
       expect(schedules).toContain('0 4 * * *');
       // rotateLogs — every hour
       expect(schedules).toContain('0 * * * *');
-      // expireBans migrated to GH Actions scheduled workflow — no
-      // longer in the node-cron list.
+      // expireBans eliminated — checkBans filters expired bans inline
+      // via Firestore OR query, so no sweep is needed.
       expect(schedules).not.toContain('*/15 * * * *');
 
       // Should NOT have dev-only jobs
@@ -118,11 +118,9 @@ describe('startCronJobs', () => {
       expect(schedules).toContain('0 5 * * *');
 
       // Total: 7 schedules in production. serverHealth → Better Stack
-      // (PR #988); accountDeletion → GH Actions (PR #989); expireBans
-      // → GH Actions (PR #990); dispatchNotifications → GH Actions (PR
-      // #991); staleRooms → GH Actions (this PR — every 5 min via
-      // .github/workflows/cron-stale-rooms.yml POSTs to
-      // /api/system/sweep-stale-rooms).
+      // monitor; accountDeletion / dispatchNotifications / staleRooms
+      // → GH Actions scheduled workflows; expireBans → eliminated
+      // entirely (server-side filter in checkBans removes the sweep).
       expect(mockSchedule).toHaveBeenCalledTimes(7);
     });
 
@@ -139,11 +137,12 @@ describe('startCronJobs', () => {
     // tests/routes/system.test.js + the workflow at
     // .github/workflows/cron-stale-rooms.yml.
 
-    // expireBans callback test removed — expireBans is no longer
-    // registered as a node-cron schedule. Its functionality moved to
-    // POST /api/system/sweep-bans, exercised by tests in
-    // tests/routes/system.test.js + the GH Actions workflow at
-    // .github/workflows/cron-expire-bans.yml.
+    // expireBans is gone entirely — no node-cron schedule, no system
+    // endpoint, no workflow. Ban expiry is enforced at query time via
+    // the Firestore composite OR filter in routes/device-info.js
+    // (`where(or(expiresAt == null, expiresAt > now))`), which returns
+    // only currently-active bans. Tests for that path live in
+    // tests/routes/device-info.test.js.
 
     test('rotateLogs uses hourly schedule in production', () => {
       rotateLogs.mockResolvedValue(undefined);

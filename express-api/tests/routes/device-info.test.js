@@ -16,9 +16,19 @@ const mockLimit = jest.fn(() => ({
   get: mockCollectionGet,
 }));
 
+// Chain supports `.where(filter).limit(N).get()` for the active-bans
+// query that replaced the expireBans cron. Returns the same
+// `mockCollectionGet` regardless of filter/limit, so existing tests
+// that read network bans still work.
+const mockWhere = jest.fn(() => ({
+  get: mockCollectionGet,
+  limit: mockLimit,
+}));
+
 const mockCollection = jest.fn(() => ({
   get: mockCollectionGet,
   limit: mockLimit,
+  where: mockWhere,
 }));
 
 jest.mock('../../src/utils/firebase', () => ({
@@ -245,6 +255,128 @@ describe('POST /api/device-info', () => {
     const res = await request(app).post('/api/device-info').send(validBody).expect(200);
 
     expect(res.body.banStatus.isBanned).toBe(false);
+  });
+
+  test('uses Firestore .where() filter to fetch only active network bans', async () => {
+    // Confirms the query layer filters out expired bans before they
+    // reach checkBans's per-doc safety check. This is the change that
+    // eliminates the need for the expireBans cron — Firestore returns
+    // only currently-active bans (expiresAt == null OR > now), so reads
+    // are bounded by the active-ban count, not total stored count.
+    mockDocGet.mockResolvedValue({ exists: false });
+    mockCollectionGet.mockResolvedValue({ empty: true, size: 0, docs: [] });
+
+    const app = createApp();
+
+    await request(app).post('/api/device-info').send(validBody).expect(200);
+
+    expect(mockWhere).toHaveBeenCalled();
+  });
+
+  test('matches permanent network ban (expiresAt === null) under the where-filter', async () => {
+    // Permanent bans (no expiresAt) must still be returned by the OR
+    // filter. A naive `where('expiresAt', '>', now)` would silently
+    // drop them; the OR branch for `== null` keeps them visible.
+    mockDocGet.mockResolvedValue({ exists: false });
+    mockCollectionGet.mockResolvedValue({
+      empty: false,
+      size: 1,
+      docs: [
+        {
+          data: () => ({
+            type: 'ip',
+            value: '203.0.113.50',
+            reason: 'Permanent IP ban',
+            expiresAt: null,
+          }),
+        },
+      ],
+    });
+
+    const app = createApp();
+
+    const res = await request(app)
+      .post('/api/device-info')
+      .set('x-forwarded-for', '203.0.113.50')
+      .send(validBody)
+      .expect(200);
+
+    expect(res.body.banStatus.isBanned).toBe(true);
+    expect(res.body.banStatus.banType).toBe('network_ip');
+    expect(res.body.banStatus.expiresAt).toBeNull();
+  });
+
+  test('logs truncation warning when networkBans hits the 500 limit', async () => {
+    // The query is capped at 500 to bound per-request reads on the
+    // Spark tier. If a deployment ever has >500 simultaneously-active
+    // network bans, this log tells ops the bound was hit so they can
+    // consider a different query strategy.
+    const log = require('../../src/utils/log');
+    const warnSpy = jest.spyOn(log, 'warn').mockImplementation(() => {});
+
+    try {
+      mockDocGet.mockResolvedValue({ exists: false });
+      // 500 non-matching docs — exercises the truncation branch without
+      // short-circuiting on a match.
+      const docs = Array.from({ length: 500 }, (_, i) => ({
+        data: () => ({
+          type: 'ip',
+          value: `10.${Math.floor(i / 65536)}.${Math.floor(i / 256) % 256}.${i % 256}`,
+          reason: 'bulk',
+          expiresAt: null,
+        }),
+      }));
+      mockCollectionGet.mockResolvedValue({ empty: false, size: 500, docs });
+
+      const app = createApp();
+
+      await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.99')
+        .send(validBody)
+        .expect(200);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        'device-info',
+        expect.stringContaining('truncat'),
+        expect.objectContaining({ limit: 500 }),
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  test('does not log truncation warning when networkBans size < 500', async () => {
+    // Regression guard: a contributor flipping `===` to `>=` or
+    // changing the constant could fire the warning on every healthy
+    // request. Pin the silent-success path.
+    const log = require('../../src/utils/log');
+    const warnSpy = jest.spyOn(log, 'warn').mockImplementation(() => {});
+
+    try {
+      mockDocGet.mockResolvedValue({ exists: false });
+      mockCollectionGet.mockResolvedValue({
+        empty: false,
+        size: 3,
+        docs: [
+          { data: () => ({ type: 'ip', value: '10.0.0.1', reason: 'x', expiresAt: null }) },
+          { data: () => ({ type: 'ip', value: '10.0.0.2', reason: 'y', expiresAt: null }) },
+          { data: () => ({ type: 'ip', value: '10.0.0.3', reason: 'z', expiresAt: null }) },
+        ],
+      });
+
+      const app = createApp();
+
+      await request(app)
+        .post('/api/device-info')
+        .set('x-forwarded-for', '203.0.113.99')
+        .send(validBody)
+        .expect(200);
+
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   test('handles IP geolocation failure gracefully', async () => {

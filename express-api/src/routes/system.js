@@ -14,13 +14,6 @@
  *                                             by .github/workflows/
  *                                             cron-account-deletion.yml.
  *
- * POST /api/system/sweep-bans               — requires Bearer auth.
- *                                             Synchronously runs
- *                                             expireBans() — every-15-min
- *                                             sweep scheduled by
- *                                             .github/workflows/
- *                                             cron-expire-bans.yml.
- *
  * POST /api/system/dispatch-notifications   — requires Bearer auth.
  *                                             Synchronously runs
  *                                             dispatchNotifications() —
@@ -55,7 +48,6 @@ const router = require('express').Router();
 const log = require('../utils/log');
 const serverHealth = require('../cron/serverHealth');
 const accountDeletion = require('../cron/accountDeletion');
-const expireBans = require('../cron/expireBans');
 const dispatchNotifications = require('../cron/notification-dispatch');
 const staleRooms = require('../cron/staleRooms');
 const alertManager = require('../utils/alertManagerInstance');
@@ -160,7 +152,6 @@ function createSweepHandler(name, sweepFn) {
 }
 
 const sweepAccountDeletions = createSweepHandler('sweep-account-deletions', accountDeletion);
-const sweepBans = createSweepHandler('sweep-bans', expireBans);
 const dispatchNotificationsHandler = createSweepHandler(
   'dispatch-notifications',
   dispatchNotifications,
@@ -168,7 +159,6 @@ const dispatchNotificationsHandler = createSweepHandler(
 const sweepStaleRooms = createSweepHandler('sweep-stale-rooms', staleRooms);
 
 router.post('/system/sweep-account-deletions', requireSystemAuth, sweepAccountDeletions);
-router.post('/system/sweep-bans', requireSystemAuth, sweepBans);
 router.post('/system/dispatch-notifications', requireSystemAuth, dispatchNotificationsHandler);
 router.post('/system/sweep-stale-rooms', requireSystemAuth, sweepStaleRooms);
 
@@ -178,7 +168,6 @@ router.post('/system/sweep-stale-rooms', requireSystemAuth, sweepStaleRooms);
 if (process.env.NODE_ENV === 'test') {
   router._resetInFlightForTesting = () => {
     sweepAccountDeletions._reset();
-    sweepBans._reset();
     dispatchNotificationsHandler._reset();
     sweepStaleRooms._reset();
   };

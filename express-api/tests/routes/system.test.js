@@ -11,11 +11,6 @@ jest.mock('../../src/cron/serverHealth', () => mockServerHealth);
 const mockAccountDeletion = jest.fn().mockResolvedValue(undefined);
 jest.mock('../../src/cron/accountDeletion', () => mockAccountDeletion);
 
-// Mock the expireBans cron-style worker the same way — the sweep-bans
-// endpoint awaits this function synchronously.
-const mockExpireBans = jest.fn().mockResolvedValue(undefined);
-jest.mock('../../src/cron/expireBans', () => mockExpireBans);
-
 // Mock the notification-dispatch worker the same way — dispatch-
 // notifications endpoint awaits this synchronously. Also avoids
 // touching the firebase init chain in notification-dispatch.js's
@@ -76,7 +71,6 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockServerHealth.mockResolvedValue(undefined);
   mockAccountDeletion.mockResolvedValue(undefined);
-  mockExpireBans.mockResolvedValue(undefined);
   mockDispatchNotifications.mockResolvedValue(undefined);
   mockStaleRooms.mockResolvedValue(undefined);
 });
@@ -338,190 +332,6 @@ describe('POST /api/system/sweep-account-deletions', () => {
   });
 });
 
-describe('POST /api/system/sweep-bans', () => {
-  test('returns 401 without bearer token', async () => {
-    const app = createApp();
-    const res = await request(app).post('/api/system/sweep-bans');
-
-    expect(res.status).toBe(401);
-    expect(mockExpireBans).not.toHaveBeenCalled();
-  });
-
-  test('returns 401 with wrong bearer token', async () => {
-    const app = createApp();
-    const res = await request(app)
-      .post('/api/system/sweep-bans')
-      .set('Authorization', 'Bearer wrong-secret');
-
-    expect(res.status).toBe(401);
-    expect(mockExpireBans).not.toHaveBeenCalled();
-  });
-
-  test('returns 200 and invokes expireBans with correct secret', async () => {
-    const app = createApp();
-    const res = await request(app)
-      .post('/api/system/sweep-bans')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: 'ok' });
-    expect(mockExpireBans).toHaveBeenCalledTimes(1);
-  });
-
-  test('returns 500 when expireBans throws', async () => {
-    mockExpireBans.mockRejectedValueOnce(new Error('Firestore down'));
-
-    const app = createApp();
-    const res = await request(app)
-      .post('/api/system/sweep-bans')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
-
-    expect(res.status).toBe(500);
-    expect(res.body).toEqual({ error: 'sweep failed' });
-    expect(mockExpireBans).toHaveBeenCalledTimes(1);
-    expect(mockLog.error).toHaveBeenCalledWith(
-      'system',
-      'sweep-bans failed',
-      expect.objectContaining({ error: 'Firestore down' }),
-    );
-  });
-
-  test('returns 409 when a concurrent sweep is in flight', async () => {
-    let resolveFirst;
-    const firstPromise = new Promise((resolve) => {
-      resolveFirst = resolve;
-    });
-    mockExpireBans.mockReturnValueOnce(firstPromise);
-
-    const app = createApp();
-
-    let captureFirstResponse;
-    const firstResponse = new Promise((resolve) => {
-      captureFirstResponse = resolve;
-    });
-    request(app)
-      .post('/api/system/sweep-bans')
-      .set('Authorization', `Bearer ${TEST_SECRET}`)
-      .end((err, res) => captureFirstResponse({ err, res }));
-
-    await new Promise((resolve) => setImmediate(resolve));
-
-    const secondRes = await request(app)
-      .post('/api/system/sweep-bans')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
-
-    expect(secondRes.status).toBe(409);
-    expect(secondRes.body).toEqual({ error: 'sweep already in flight' });
-    expect(mockExpireBans).toHaveBeenCalledTimes(1);
-
-    resolveFirst();
-    const { err, res: firstRes } = await firstResponse;
-    expect(err).toBeNull();
-    expect(firstRes.status).toBe(200);
-  });
-
-  test('clears in-flight guard after sweep completes (allows next sweep)', async () => {
-    const app = createApp();
-
-    const first = await request(app)
-      .post('/api/system/sweep-bans')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
-    expect(first.status).toBe(200);
-
-    const second = await request(app)
-      .post('/api/system/sweep-bans')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
-    expect(second.status).toBe(200);
-
-    expect(mockExpireBans).toHaveBeenCalledTimes(2);
-  });
-
-  test('clears in-flight guard after sweep throws (allows next sweep)', async () => {
-    mockExpireBans.mockRejectedValueOnce(new Error('transient Firestore'));
-    mockExpireBans.mockResolvedValueOnce(undefined);
-
-    const app = createApp();
-
-    const first = await request(app)
-      .post('/api/system/sweep-bans')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
-    expect(first.status).toBe(500);
-
-    const second = await request(app)
-      .post('/api/system/sweep-bans')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
-    expect(second.status).toBe(200);
-
-    expect(mockExpireBans).toHaveBeenCalledTimes(2);
-  });
-
-  test('times out and returns 500 if expireBans hangs forever', async () => {
-    mockExpireBans.mockReturnValueOnce(new Promise(() => {}));
-    process.env.SWEEP_TIMEOUT_MS_OVERRIDE = '50';
-
-    try {
-      const app = createApp();
-      const res = await request(app)
-        .post('/api/system/sweep-bans')
-        .set('Authorization', `Bearer ${TEST_SECRET}`);
-
-      expect(res.status).toBe(500);
-      expect(res.body).toEqual({ error: 'sweep failed' });
-      expect(mockLog.error).toHaveBeenCalledWith(
-        'system',
-        'sweep-bans failed',
-        expect.objectContaining({ error: expect.stringContaining('timed out') }),
-      );
-
-      // Flag cleared → next sweep works.
-      mockExpireBans.mockResolvedValueOnce(undefined);
-      const next = await request(app)
-        .post('/api/system/sweep-bans')
-        .set('Authorization', `Bearer ${TEST_SECRET}`);
-      expect(next.status).toBe(200);
-    } finally {
-      delete process.env.SWEEP_TIMEOUT_MS_OVERRIDE;
-    }
-  });
-
-  test('sweep-bans in-flight guard is INDEPENDENT from sweep-account-deletions', async () => {
-    // Each sweep endpoint has its own module-level flag, so a hung
-    // account-deletion sweep must not block an unrelated bans sweep.
-    let resolveAccountDeletion;
-    mockAccountDeletion.mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveAccountDeletion = resolve;
-      }),
-    );
-
-    const app = createApp();
-
-    let captureAccountResponse;
-    const accountResponse = new Promise((resolve) => {
-      captureAccountResponse = resolve;
-    });
-    request(app)
-      .post('/api/system/sweep-account-deletions')
-      .set('Authorization', `Bearer ${TEST_SECRET}`)
-      .end((err, res) => captureAccountResponse({ err, res }));
-
-    await new Promise((resolve) => setImmediate(resolve));
-
-    // sweep-bans should proceed normally even with account-deletions hung.
-    const bansRes = await request(app)
-      .post('/api/system/sweep-bans')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
-    expect(bansRes.status).toBe(200);
-    expect(mockExpireBans).toHaveBeenCalledTimes(1);
-
-    // Cleanup the hung account-deletion sweep.
-    resolveAccountDeletion();
-    const { err, res: accountRes } = await accountResponse;
-    expect(err).toBeNull();
-    expect(accountRes.status).toBe(200);
-  });
-});
-
 describe('POST /api/system/dispatch-notifications', () => {
   test('returns 401 without bearer token', async () => {
     const app = createApp();
@@ -633,17 +443,16 @@ describe('POST /api/system/dispatch-notifications', () => {
     }
   });
 
-  test('dispatch-notifications guard is INDEPENDENT from sweep-bans and sweep-account-deletions', async () => {
+  test('dispatch-notifications guard is INDEPENDENT from sweep-stale-rooms and sweep-account-deletions', async () => {
     // All three sweeps have their own closure-captured flag from the
-    // createSweepHandler factory. A hung dispatch must not block bans
-    // or account-deletions, and vice versa.
+    // createSweepHandler factory. A hung dispatch must not block
+    // stale-rooms or account-deletions, and vice versa.
     //
     // Hold dispatch via a manually-resolvable Promise (not a timeout
     // override) so the dispatch sweep stays in-flight for the FULL
-    // duration of the bans + account-deletion assertions. A timeout
-    // approach would clear the dispatch flag mid-test, defeating the
-    // structural guarantee the test is meant to prove (reviewer's
-    // Important #1 on PR #5).
+    // duration of the other assertions. A timeout approach would
+    // clear the dispatch flag mid-test, defeating the structural
+    // guarantee the test is meant to prove.
     let resolveDispatch;
     const dispatchHeld = new Promise((resolve) => {
       resolveDispatch = resolve;
@@ -665,11 +474,11 @@ describe('POST /api/system/dispatch-notifications', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     // The dispatch is now genuinely in-flight (no timeout fallback).
-    // sweep-bans must proceed because its flag is INDEPENDENT.
-    const bansRes = await request(app)
-      .post('/api/system/sweep-bans')
+    // sweep-stale-rooms must proceed because its flag is INDEPENDENT.
+    const staleRoomsRes = await request(app)
+      .post('/api/system/sweep-stale-rooms')
       .set('Authorization', `Bearer ${TEST_SECRET}`);
-    expect(bansRes.status).toBe(200);
+    expect(staleRoomsRes.status).toBe(200);
 
     // sweep-account-deletions must also proceed — also INDEPENDENT.
     const accountRes = await request(app)
@@ -795,12 +604,11 @@ describe('POST /api/system/sweep-stale-rooms', () => {
     }
   });
 
-  test('sweep-stale-rooms guard is INDEPENDENT from the other three sweeps', async () => {
+  test('sweep-stale-rooms guard is INDEPENDENT from the other two sweeps', async () => {
     // Closure-per-handler from the factory means a hung stale-rooms
     // sweep must not block any other sweep. Holds via a manually-
     // resolvable Promise so the dispatch stays in-flight during the
-    // other-sweep assertions (matches the system.test.js:481 pattern
-    // PR #989 + the corrected PR #991 independence test).
+    // other-sweep assertions.
     let resolveStaleRooms;
     const staleRoomsHeld = new Promise((resolve) => {
       resolveStaleRooms = resolve;
@@ -820,12 +628,7 @@ describe('POST /api/system/sweep-stale-rooms', () => {
 
     await new Promise((resolve) => setImmediate(resolve));
 
-    // All three other sweeps must proceed in parallel.
-    const bansRes = await request(app)
-      .post('/api/system/sweep-bans')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
-    expect(bansRes.status).toBe(200);
-
+    // The other two sweeps must proceed in parallel.
     const accountRes = await request(app)
       .post('/api/system/sweep-account-deletions')
       .set('Authorization', `Bearer ${TEST_SECRET}`);

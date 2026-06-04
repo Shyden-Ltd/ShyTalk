@@ -7,8 +7,15 @@
 
 const router = require('express').Router();
 const { db } = require('../utils/firebase');
+const { Filter } = require('firebase-admin/firestore');
 const { now } = require('../utils/helpers');
 const log = require('../utils/log');
+
+// Bound per-request network-ban reads to keep Spark-tier quota safe if
+// the active-ban list ever grows. Matches the cap the old expireBans
+// cron used; 500 simultaneously-active network bans is far above any
+// realistic ShyTalk-scale value.
+const NETWORK_BANS_QUERY_LIMIT = 500;
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
@@ -148,9 +155,32 @@ async function checkBans(deviceId, ip, asn) {
       return buildBanResult('device', deviceBanSnap.data());
     }
 
-    const networkBansSnap = await db.collection('networkBans').limit(500).get();
+    // Server-side filter: only fetch currently-active bans. The OR
+    // branch keeps permanent bans (expiresAt == null) AND temporary
+    // bans whose expiry is still in the future. Without this filter,
+    // expired bans would accumulate in the result set, wasting reads
+    // and requiring a sweep cron to delete them. With it, expired bans
+    // simply stop being returned — no cleanup needed.
+    const nowIso = new Date().toISOString();
+    const networkBansSnap = await db
+      .collection('networkBans')
+      .where(
+        Filter.or(Filter.where('expiresAt', '==', null), Filter.where('expiresAt', '>', nowIso)),
+      )
+      .limit(NETWORK_BANS_QUERY_LIMIT)
+      .get();
+
+    if (networkBansSnap.size === NETWORK_BANS_QUERY_LIMIT) {
+      log.warn('device-info', 'checkBans: networkBans hit limit — possible truncation', {
+        limit: NETWORK_BANS_QUERY_LIMIT,
+      });
+    }
+
     for (const doc of networkBansSnap.docs) {
       const ban = doc.data();
+      // Query already excludes expired bans; the inline check is
+      // defense-in-depth for the unlikely race between expiry tick
+      // and read (a ban that became expired between query and consume).
       if (!isBanActive(ban)) continue;
       if (networkBanMatches(ban, ip, asn)) {
         return buildBanResult(`network_${ban.type}`, ban);
