@@ -171,7 +171,7 @@ describe('POST /api/device-info', () => {
         exists: true,
         data: () => ({
           reason: 'Cheating',
-          expiresAt: Date.now() + 86400000, // future
+          expiresAt: new Date(Date.now() + 86400000).toISOString(), // future
         }),
       });
     });
@@ -198,7 +198,7 @@ describe('POST /api/device-info', () => {
             type: 'ip',
             value: '203.0.113.50',
             reason: 'Spam IP',
-            expiresAt: Date.now() + 86400000,
+            expiresAt: new Date(Date.now() + 86400000).toISOString(),
           }),
         },
       ],
@@ -230,7 +230,7 @@ describe('POST /api/device-info', () => {
         exists: true,
         data: () => ({
           reason: 'Old ban',
-          expiresAt: Date.now() - 86400000, // past
+          expiresAt: new Date(Date.now() - 86400000).toISOString(), // past
         }),
       });
     });
@@ -244,7 +244,7 @@ describe('POST /api/device-info', () => {
             type: 'ip',
             value: '127.0.0.1',
             reason: 'Old IP ban',
-            expiresAt: Date.now() - 86400000,
+            expiresAt: new Date(Date.now() - 86400000).toISOString(),
           }),
         },
       ],
@@ -609,7 +609,7 @@ describe('POST /api/device-info', () => {
               type: 'asn',
               value: 'AS2856',
               reason: 'Banned ASN',
-              expiresAt: Date.now() + 86400000,
+              expiresAt: new Date(Date.now() + 86400000).toISOString(),
             }),
           },
         ],
@@ -639,7 +639,7 @@ describe('POST /api/device-info', () => {
               type: 'unknown_type',
               value: 'something',
               reason: 'Should not match',
-              expiresAt: Date.now() + 86400000,
+              expiresAt: new Date(Date.now() + 86400000).toISOString(),
             }),
           },
         ],
@@ -804,7 +804,7 @@ describe('POST /api/device-info', () => {
               type: 'ip',
               value: '10.0.0.1',
               reason: 'Wrong IP',
-              expiresAt: Date.now() + 86400000,
+              expiresAt: new Date(Date.now() + 86400000).toISOString(),
             }),
           },
         ],
@@ -860,7 +860,7 @@ describe('POST /api/device-info', () => {
               type: 'asn',
               value: 'AS99999',
               reason: 'Different ASN',
-              expiresAt: Date.now() + 86400000,
+              expiresAt: new Date(Date.now() + 86400000).toISOString(),
             }),
           },
         ],

@@ -78,14 +78,15 @@ function startCronJobs() {
     rotateLogs().catch((err) => log.error('cron', 'rotateLogs failed', { error: err.message }));
   });
 
-  // expireBans + accountDeletion both migrated to GitHub Actions
-  // scheduled workflows:
-  //   - .github/workflows/cron-expire-bans.yml         */15 * * * *
+  // accountDeletion migrated to a GitHub Actions scheduled workflow:
   //   - .github/workflows/cron-account-deletion.yml      0 3 * * *
-  // Each POSTs to /api/system/sweep-{bans,account-deletions}. The
-  // underlying functions still live in src/cron/{expireBans,
-  // accountDeletion}.js — only the schedule moved out of the
-  // in-process node-cron list.
+  // POSTs to /api/system/sweep-account-deletions; the underlying
+  // function lives in src/cron/accountDeletion.js.
+  //
+  // expireBans ELIMINATED — ban expiry is enforced at query time in
+  // routes/device-info.js via a Firestore Filter.or() that returns
+  // only currently-active bans (expiresAt == null OR > now). No sweep,
+  // no GH Actions workflow, no system endpoint needed.
 
   // Expire data exports — daily 04:00 UTC
   cron.schedule('0 4 * * *', () => {

@@ -11,7 +11,7 @@ const log = require('../utils/log');
 
 // Cap per-tick reads to keep Spark-tier quota bounded. Daily cron;
 // any backlog beyond CRON_LIMIT processes on the next day's tick.
-// Pattern matches subscriptions.js / expireBans.js cron caps.
+// Pattern matches subscriptions.js cron cap.
 const CRON_LIMIT = 500;
 
 async function expireDataExports() {
