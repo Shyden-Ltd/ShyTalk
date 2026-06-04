@@ -1,5 +1,5 @@
 {
-  "lastUpdated": "2026-05-31",
+  "lastUpdated": "2026-06-04",
   "currentlyWorkingOn": [
     {
       "name": "Age-gating per feature",
@@ -34,8 +34,8 @@
       },
       "status": "in-progress",
       "progress": {
-        "done": 5,
-        "total": 19
+        "done": 6,
+        "total": 20
       },
       "features": [
         {
@@ -132,6 +132,89 @@
           "description": "block-list integrity bug: blocked user can still view profile + see public gifts even though they can't send",
           "status": "done",
           "i18n": {}
+        },
+        {
+          "name": "Ban cascade for suggestions",
+          "description": "when a user is suspended, their accepted/planned suggestions are auto-flagged for admin re-review so banned-user content doesn't linger on the public roadmap",
+          "status": "done",
+          "i18n": {
+            "ar": {
+              "n": "تتالي حظر الاقتراحات",
+              "d": "اقتراحات المستخدمين المعلقين تُعلَّم تلقائيًا للمراجعة"
+            },
+            "de": {
+              "n": "Sperrkaskade für Vorschläge",
+              "d": "Vorschläge gesperrter Nutzer zur Prüfung markieren"
+            },
+            "es": {
+              "n": "Cascada de baneo de sugerencias",
+              "d": "Marca sugerencias de usuarios suspendidos para revisión"
+            },
+            "fr": {
+              "n": "Cascade de bannissement de suggestions",
+              "d": "Marque automatiquement les suggestions des utilisateurs suspendus"
+            },
+            "hi": {
+              "n": "सस्पेंडेड सुझाव कैस्केड",
+              "d": "निलंबित उपयोगकर्ताओं के सुझाव समीक्षा के लिए चिह्नित"
+            },
+            "id": {
+              "n": "Cascade larangan saran",
+              "d": "Tandai saran pengguna yang ditangguhkan untuk ditinjau"
+            },
+            "it": {
+              "n": "Cascata di ban per i suggerimenti",
+              "d": "Contrassegna i suggerimenti degli utenti sospesi per la revisione"
+            },
+            "ja": {
+              "n": "提案の禁止カスケード",
+              "d": "停止ユーザーの提案を自動的にレビュー対象に"
+            },
+            "ko": {
+              "n": "제안 차단 캐스케이드",
+              "d": "정지된 사용자의 제안을 검토 대상으로 자동 표시"
+            },
+            "nl": {
+              "n": "Banscascade voor suggesties",
+              "d": "Markeer suggesties van geschorste gebruikers voor review"
+            },
+            "pl": {
+              "n": "Kaskada banowania sugestii",
+              "d": "Oznacz sugestie zawieszonych użytkowników do przeglądu"
+            },
+            "pt": {
+              "n": "Cascata de banimento de sugestões",
+              "d": "Marca sugestões de usuários suspensos para revisão"
+            },
+            "ru": {
+              "n": "Каскад блокировки предложений",
+              "d": "Помечать предложения заблокированных пользователей для проверки"
+            },
+            "sv": {
+              "n": "Banncaskad för förslag",
+              "d": "Markera förslag från avstängda användare för granskning"
+            },
+            "th": {
+              "n": "การระงับข้อเสนอแนะแบบลูกโซ่",
+              "d": "ทำเครื่องหมายข้อเสนอแนะของผู้ใช้ที่ถูกระงับเพื่อตรวจสอบ"
+            },
+            "tr": {
+              "n": "Öneri yasaklama kademesi",
+              "d": "Askıya alınan kullanıcıların önerilerini incelemeye işaretle"
+            },
+            "uk": {
+              "n": "Каскад блокування пропозицій",
+              "d": "Позначати пропозиції заблокованих користувачів для перевірки"
+            },
+            "vi": {
+              "n": "Cascade cấm đề xuất",
+              "d": "Đánh dấu đề xuất của người dùng bị đình chỉ để xem xét"
+            },
+            "zh": {
+              "n": "建议封禁级联",
+              "d": "自动标记被封禁用户的建议以供审核"
+            }
+          }
         },
         {
           "name": "Age-based segregation",
