@@ -161,6 +161,13 @@ describe('rotateLogs', () => {
     mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ retentionHours: 48 }) });
     mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
 
+    // Pin "now" so the recent/old boundary is deterministic regardless
+    // of wall clock — without this, the test goes flaky as `recentKey`
+    // (originally written 2026-03-06) drifts past the 90-day window
+    // with calendar progression. Pre-existing flake surfaced on PR #988.
+    const FIXED_NOW = new Date('2026-04-01T00:00:00Z').getTime();
+    jest.spyOn(Date, 'now').mockReturnValue(FIXED_NOW);
+
     // Set up old and recent R2 keys
     const oldKey = 'logs/2025/01/01/12-1234567890.ndjson';
     const recentKey = `logs/2026/03/06/10-9999999999.ndjson`;
@@ -173,6 +180,8 @@ describe('rotateLogs', () => {
     const deletedKeys = r2.deleteObjects.mock.calls.flatMap((c) => c[0]);
     expect(deletedKeys).toContain(oldKey);
     expect(deletedKeys).not.toContain(recentKey);
+
+    Date.now.mockRestore();
   });
 
   test('handles missing config doc gracefully (uses default 48h)', async () => {
