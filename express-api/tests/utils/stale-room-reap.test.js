@@ -73,7 +73,7 @@ describe('shouldReapStaleRoom', () => {
       expect(shouldReapStaleRoom(baseRoom, pastGrace, 'other-1')).toBe(true);
     });
 
-    test('returns false at exactly ownerLeftAt + grace (strict greater-than-or-equal)', () => {
+    test('returns true at exactly ownerLeftAt + grace boundary (>=)', () => {
       // Predicate uses >= so AT grace boundary, returns true.
       const exactBoundary = baseRoom.ownerLeftAt + STALE_ROOM_NO_HOLDOUTS_GRACE_MS;
       expect(shouldReapStaleRoom(baseRoom, exactBoundary, 'other-1')).toBe(true);
@@ -144,7 +144,7 @@ describe('shouldReapStaleRoom', () => {
 });
 
 describe('buildClosePayload', () => {
-  test('returns shape matching staleRooms.js close payload', () => {
+  test('returns shape matching staleRooms.js + /close endpoint close payload', () => {
     const payload = buildClosePayload(1700000000000);
 
     expect(payload).toEqual({
@@ -152,7 +152,15 @@ describe('buildClosePayload', () => {
       closedAt: 1700000000000,
       seats: expect.any(Object),
       participantIds: [],
+      ownerLeftAt: null,
     });
+  });
+
+  test('clears ownerLeftAt to null (must match /close + cron payload)', () => {
+    // Reaped rooms must not carry the stale OWNER_AWAY timestamp on a
+    // CLOSED row — every other close path writes `ownerLeftAt: null`.
+    const payload = buildClosePayload(0);
+    expect(payload.ownerLeftAt).toBeNull();
   });
 
   test('emits all 8 seats as EMPTY', () => {
@@ -223,6 +231,8 @@ describe('reapStaleRoomTx', () => {
     expect(result.state).toBe('CLOSED');
     expect(result.closedAt).toBe(5000);
     expect(result.participantIds).toEqual([]);
+    // ownerLeftAt is explicitly cleared (matches /close + cron payload).
+    expect(result.ownerLeftAt).toBeNull();
   });
 });
 

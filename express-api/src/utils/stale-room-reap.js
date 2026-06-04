@@ -23,7 +23,7 @@
  *   - AND (no non-owner seated || ownerLeftAt < (now - timeout))
  */
 
-const { hasNonOwnerSeated } = require('./room-auth');
+const { hasNonOwnerSeated, MAX_SEATS } = require('./room-auth');
 
 // Matches src/cron/staleRooms.js's tenMinutesAgo computation. Aligns the
 // lazy-reap upper bound with what the cron would have done, so a room
@@ -39,8 +39,6 @@ const STALE_ROOM_TIMEOUT_MS = 10 * 60 * 1000;
 // returning or a user joining within the natural 5-min window. The
 // grace preserves owner-can-return-quickly and join-during-grace UX.
 const STALE_ROOM_NO_HOLDOUTS_GRACE_MS = 5 * 60 * 1000;
-
-const MAX_SEAT_INDEX = 8;
 
 /**
  * Should this room be reaped right now?
@@ -83,12 +81,17 @@ function shouldReapStaleRoom(room, nowMs, callerId = null) {
 function buildClosePayload(nowMs) {
   const emptySeat = { userId: null, state: 'EMPTY', isMuted: false };
   const emptySeats = {};
-  for (let i = 0; i < MAX_SEAT_INDEX; i++) emptySeats[String(i)] = { ...emptySeat };
+  for (let i = 0; i < MAX_SEATS; i++) emptySeats[String(i)] = { ...emptySeat };
+  // `ownerLeftAt: null` matches both staleRooms.js and the /close
+  // endpoint's payload. Without it, a reaped room would carry a
+  // stale OWNER_AWAY timestamp on a CLOSED row, diverging from
+  // every other close path.
   return {
     state: 'CLOSED',
     closedAt: nowMs,
     seats: emptySeats,
     participantIds: [],
+    ownerLeftAt: null,
   };
 }
 

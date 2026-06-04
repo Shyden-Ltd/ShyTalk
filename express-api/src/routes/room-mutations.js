@@ -108,8 +108,9 @@ async function inRoomTransaction(req, roomId, mutate) {
     // OWNER_AWAY → ACTIVE transition, not a close — so the predicate
     // takes callerId and short-circuits when caller === ownerId.
     const callerId = req.auth ? String(req.auth.uniqueId) : null;
-    if (shouldReapStaleRoom(room, Date.now(), callerId)) {
-      room = reapStaleRoomTx(t, roomRef, room, Date.now());
+    const nowMs = Date.now();
+    if (shouldReapStaleRoom(room, nowMs, callerId)) {
+      room = reapStaleRoomTx(t, roomRef, room, nowMs);
     }
     return mutate(room, t, roomRef);
   });
