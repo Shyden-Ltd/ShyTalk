@@ -1,0 +1,95 @@
+name: Cron — Dispatch Notifications
+
+# External replacement for the in-process node-cron schedule that used
+# to run `dispatchNotifications()` every 2 minutes inside the Express
+# API process. The function itself still lives in
+# `express-api/src/cron/notification-dispatch.js`; this workflow only
+# changes the trigger from `node-cron` to `gh actions schedule`.
+#
+# Cadence changed from every-2-min (in-process) to every-5-min in the
+# move — operator-approved relaxation to keep total cron-cluster
+# minutes low across the cluster's 4 GH-Actions cron workflows. Worst-
+# case notification dispatch latency rises from 2 min to 5 min, plus
+# the GH Actions ~10-min schedule-trigger delay envelope. Suggestion-
+# board users won't notice — the surfaces that consume these
+# notifications (inApp badge, email digest) are not latency-sensitive
+# at sub-15-min resolution.
+#
+# Companion endpoint:
+#   POST /api/system/dispatch-notifications
+#   Headers: Authorization: Bearer ${{ secrets.SYSTEM_SHARED_SECRET }}
+#   Body:    (empty)
+#
+# Deploy steps (operator action, ONCE PER REPO):
+# Same as cron-account-deletion.yml — sets `SYSTEM_SHARED_SECRET` repo
+# secret + matching env var on the production Express API. Reuses the
+# secret from PR #989; no new setup once that landed.
+#
+# Failure behaviour: if the endpoint returns 5xx, the workflow fails
+# visibly. The next */5 tick picks up the work the failed run would
+# have done (dispatchNotifications paginates by `firedAt` queue
+# position). A 409 response is treated as success (in-flight sweep
+# will complete; next tick handles new entries).
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target environment (prod is the only valid choice today; dev does not run crons)'
+        type: choice
+        options: [prod]
+        default: 'prod'
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    name: POST /api/system/dispatch-notifications
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Invoke dispatch endpoint
+        env:
+          API_URL: https://api.shytalk.shyden.co.uk/api/system/dispatch-notifications
+          SYSTEM_SHARED_SECRET: ${{ secrets.SYSTEM_SHARED_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SYSTEM_SHARED_SECRET}" ]; then
+            echo "::error::SYSTEM_SHARED_SECRET secret is not configured on this repo"
+            exit 1
+          fi
+
+          # --max-time 240 leaves a 60s buffer before the */5 cadence
+          # tick fires the next scheduled run. With --max-time 300 the
+          # curl exit would land right at the next-tick boundary,
+          # making overlap essentially guaranteed at production scale.
+          # The 60s buffer doesn't eliminate overlap (server-side sweep
+          # may still be running for up to 20 min — that's the 409-as-
+          # success path), but it removes the trivial case where two
+          # curls are in-flight against the SAME endpoint simultaneously.
+          HTTP_CODE=$(curl -sS -o /tmp/sweep-response.txt -w "%{http_code}" \
+            -X POST "${API_URL}" \
+            -H "Authorization: Bearer ${SYSTEM_SHARED_SECRET}" \
+            -H "Content-Length: 0" \
+            --max-time 240)
+
+          echo "Server status: ${HTTP_CODE}"
+          echo "Server body:"
+          cat /tmp/sweep-response.txt
+          echo
+
+          case "${HTTP_CODE}" in
+            200)
+              echo "✓ dispatch completed successfully"
+              ;;
+            409)
+              echo "✓ dispatch already in flight on the server — treating as success"
+              ;;
+            *)
+              echo "::error::dispatch failed with status ${HTTP_CODE}"
+              exit 1
+              ;;
+          esac

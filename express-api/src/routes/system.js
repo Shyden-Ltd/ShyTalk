@@ -21,8 +21,18 @@
  *                                             .github/workflows/
  *                                             cron-expire-bans.yml.
  *
- * Future endpoints (added per cron-cluster migration):
- * POST /api/system/dispatch-notifications   — requires Bearer
+ * POST /api/system/dispatch-notifications   — requires Bearer auth.
+ *                                             Synchronously runs
+ *                                             dispatchNotifications() —
+ *                                             every-5-min sweep scheduled
+ *                                             by .github/workflows/
+ *                                             cron-dispatch-notifications.yml.
+ *                                             Was every 2 min in the
+ *                                             in-process cron; cadence
+ *                                             relaxed to every 5 min in
+ *                                             the GH Actions move to keep
+ *                                             total cluster minutes low
+ *                                             (operator-approved).
  *
  * Architecture: replaces in-process node-cron schedules with either
  * external monitors (Better Stack for serverHealth) or GitHub Actions
@@ -36,6 +46,7 @@ const log = require('../utils/log');
 const serverHealth = require('../cron/serverHealth');
 const accountDeletion = require('../cron/accountDeletion');
 const expireBans = require('../cron/expireBans');
+const dispatchNotifications = require('../cron/notification-dispatch');
 const alertManager = require('../utils/alertManagerInstance');
 const { requireSystemAuth } = require('../middleware/system-auth');
 
@@ -51,29 +62,6 @@ router.get('/system/health', (req, res) => {
   });
 });
 
-// In-flight guards prevent concurrent sweeps from racing on the same
-// page of work. The GH Actions scheduled workflow runs once per cron
-// tick, but a hand-triggered re-dispatch or a delayed first run
-// overlapping the next scheduled run would otherwise pick up the same
-// rows. The guard returns 409 so the caller sees a clean rejection
-// rather than a partial double-execution.
-//
-// Each sweep has its own flag so a hung `accountDeletion` sweep doesn't
-// block an unrelated `bans` sweep, and vice versa.
-//
-// Paired with a hard timeout (SWEEP_TIMEOUT): if the underlying sweep
-// hangs forever (Firestore unreachable, R2 retry-loop, Auth SDK stuck),
-// the timeout races the sweep and forces the handler to respond 500.
-// Without this, the in-flight flag would stay `true` forever and the
-// GH Actions 409-as-success path would mask the wedge from the Actions
-// UI — operator only finds out a week later when the queue hasn't
-// drained. The 20-min bound is well inside the workflow's `timeout-
-// minutes: 30` and the curl `--max-time 600` (10 min) — curl times out
-// first so the workflow sees a hard failure, then the server's own
-// timeout clears the flag so the NEXT scheduled run can proceed
-// without manual intervention.
-let accountDeletionInFlight = false;
-let bansInFlight = false;
 const SWEEP_TIMEOUT_DEFAULT_MS = 20 * 60 * 1000;
 
 // Read the sweep timeout per-request so tests can inject a short
@@ -89,66 +77,96 @@ function getSweepTimeoutMs() {
   return SWEEP_TIMEOUT_DEFAULT_MS;
 }
 
-router.post('/system/sweep-account-deletions', requireSystemAuth, async (req, res) => {
-  if (accountDeletionInFlight) {
-    return res.status(409).json({ error: 'sweep already in flight' });
-  }
-  accountDeletionInFlight = true;
-  let timeoutHandle;
-  try {
-    const timeoutMs = getSweepTimeoutMs();
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutHandle = setTimeout(
-        () => reject(new Error(`sweep timed out after ${timeoutMs}ms`)),
-        timeoutMs,
-      );
-    });
-    await Promise.race([accountDeletion(), timeoutPromise]);
-    res.json({ status: 'ok' });
-  } catch (err) {
-    log.error('system', 'sweep-account-deletions failed', { error: err.message });
-    res.status(500).json({ error: 'sweep failed' });
-  } finally {
-    if (timeoutHandle) clearTimeout(timeoutHandle);
-    accountDeletionInFlight = false;
-  }
-});
+/**
+ * Factory for sweep-style endpoint handlers.
+ *
+ * Each sweep endpoint shares the same shape: bearer-auth (applied
+ * upstream by the route mounting), reject-if-in-flight with 409,
+ * Promise.race with a hard timeout, error → 500 + log, and a
+ * try/finally that guarantees the in-flight flag is cleared and the
+ * timeout handle released.
+ *
+ * Returning a closure-captured handler gives each sweep its OWN
+ * in-flight flag (independent of other sweeps), and exposes a
+ * `_reset()` method behind a NODE_ENV=test guard so the test suite can
+ * scrub any leaked flag from a Jest-aborted test without exposing the
+ * mutation to production callers. Per the operator's
+ * `[[feedback-test-isolation-no-leaks]]` directive.
+ *
+ * The factory is the "three similar lines" refactor of PRs #989, #990,
+ * and this PR — by the time we have three sweep endpoints with
+ * identical wrapping logic, the abstraction pays for itself in: (a)
+ * one place to audit auth / timeout / error-handling semantics; (b)
+ * the in-flight independence test only needs to assert per-endpoint
+ * flag closure; (c) future sweep endpoints (e.g. PR #6's voice-room
+ * scrap once RTDB onDisconnect lands) get the same defenses for free.
+ *
+ * @param {string} name short identifier used in log messages, e.g.
+ *   'sweep-bans', 'sweep-account-deletions'.
+ * @param {() => Promise<unknown>} sweepFn the underlying worker that
+ *   does the actual sweep — typically a function from src/cron/*.
+ * @returns Express handler.
+ */
+function createSweepHandler(name, sweepFn) {
+  let inFlight = false;
 
-router.post('/system/sweep-bans', requireSystemAuth, async (req, res) => {
-  if (bansInFlight) {
-    return res.status(409).json({ error: 'sweep already in flight' });
+  const handler = async (req, res) => {
+    if (inFlight) {
+      return res.status(409).json({ error: 'sweep already in flight' });
+    }
+    inFlight = true;
+    let timeoutHandle;
+    try {
+      const timeoutMs = getSweepTimeoutMs();
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutHandle = setTimeout(
+          () => reject(new Error(`sweep timed out after ${timeoutMs}ms`)),
+          timeoutMs,
+        );
+      });
+      await Promise.race([sweepFn(), timeoutPromise]);
+      res.json({ status: 'ok' });
+    } catch (err) {
+      log.error('system', `${name} failed`, { error: err.message });
+      res.status(500).json({ error: 'sweep failed' });
+    } finally {
+      // Clear the timer first so a successful sweep doesn't leak the
+      // pending setTimeout (the Promise.race winner ignores the loser
+      // but the loser's setTimeout is still scheduled and would keep
+      // Node alive past the response).
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      inFlight = false;
+    }
+  };
+
+  if (process.env.NODE_ENV === 'test') {
+    handler._reset = () => {
+      inFlight = false;
+    };
   }
-  bansInFlight = true;
-  let timeoutHandle;
-  try {
-    const timeoutMs = getSweepTimeoutMs();
-    const timeoutPromise = new Promise((_, reject) => {
-      timeoutHandle = setTimeout(
-        () => reject(new Error(`sweep timed out after ${timeoutMs}ms`)),
-        timeoutMs,
-      );
-    });
-    await Promise.race([expireBans(), timeoutPromise]);
-    res.json({ status: 'ok' });
-  } catch (err) {
-    log.error('system', 'sweep-bans failed', { error: err.message });
-    res.status(500).json({ error: 'sweep failed' });
-  } finally {
-    if (timeoutHandle) clearTimeout(timeoutHandle);
-    bansInFlight = false;
-  }
-});
+
+  return handler;
+}
+
+const sweepAccountDeletions = createSweepHandler('sweep-account-deletions', accountDeletion);
+const sweepBans = createSweepHandler('sweep-bans', expireBans);
+const dispatchNotificationsHandler = createSweepHandler(
+  'dispatch-notifications',
+  dispatchNotifications,
+);
+
+router.post('/system/sweep-account-deletions', requireSystemAuth, sweepAccountDeletions);
+router.post('/system/sweep-bans', requireSystemAuth, sweepBans);
+router.post('/system/dispatch-notifications', requireSystemAuth, dispatchNotificationsHandler);
 
 // Test-only reset hook. Exported behind a NODE_ENV guard so production
-// code can't accidentally clobber the in-flight flags — the consumer
-// (system.test.js afterEach) calls this to scrub any leaked state from
-// a Jest-timeout-aborted test that held a Promise open without
-// resolving it. Per the operator's `[[feedback-test-isolation-no-leaks]]`
-// directive: tests must be isolated, no leaked state across cases.
+// code can't accidentally clobber the in-flight flags. Calls each
+// sweep handler's `_reset()` closure so all flags scrub in one go.
 if (process.env.NODE_ENV === 'test') {
   router._resetInFlightForTesting = () => {
-    accountDeletionInFlight = false;
-    bansInFlight = false;
+    sweepAccountDeletions._reset();
+    sweepBans._reset();
+    dispatchNotificationsHandler._reset();
   };
 }
 

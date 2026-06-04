@@ -30,7 +30,6 @@ jest.mock('../../src/cron/orphanedStorage', () => jest.fn());
 jest.mock('../../src/cron/rotateLogs', () => jest.fn());
 jest.mock('../../src/cron/expireTempIds', () => jest.fn());
 jest.mock('../../src/cron/expireDataExports', () => jest.fn());
-jest.mock('../../src/cron/notification-dispatch', () => jest.fn());
 jest.mock('../../src/cron/ageVerificationAuditReconcile', () => jest.fn());
 const { startCronJobs } = require('../../src/cron/index');
 const log = require('../../src/utils/log');
@@ -45,7 +44,6 @@ const orphanedStorage = require('../../src/cron/orphanedStorage');
 const rotateLogs = require('../../src/cron/rotateLogs');
 const expireTempIds = require('../../src/cron/expireTempIds');
 const expireDataExports = require('../../src/cron/expireDataExports');
-const dispatchNotifications = require('../../src/cron/notification-dispatch');
 const ageVerificationAuditReconcile = require('../../src/cron/ageVerificationAuditReconcile');
 beforeEach(() => {
   jest.clearAllMocks();
@@ -120,12 +118,13 @@ describe('startCronJobs', () => {
       // ageVerificationAuditReconcile — daily 05:00 UTC
       expect(schedules).toContain('0 5 * * *');
 
-      // Total: 9 schedules in production. serverHealth migrated to
-      // Better Stack (PR #988); accountDeletion migrated to GitHub
-      // Actions (PR #989); expireBans migrated to GitHub Actions
-      // (this PR's .github/workflows/cron-expire-bans.yml POSTs to
-      // /api/system/sweep-bans at */15 * * * *).
-      expect(mockSchedule).toHaveBeenCalledTimes(9);
+      // Total: 8 schedules in production. serverHealth migrated to
+      // Better Stack (PR #988); accountDeletion → GH Actions (PR #989);
+      // expireBans → GH Actions (PR #990); dispatchNotifications → GH
+      // Actions (this PR — every 5 min via
+      // .github/workflows/cron-dispatch-notifications.yml POSTs to
+      // /api/system/dispatch-notifications).
+      expect(mockSchedule).toHaveBeenCalledTimes(8);
     });
 
     test('does not register testDataCleanup in production', () => {
@@ -201,16 +200,11 @@ describe('startCronJobs', () => {
       expect(expireDataExports).toHaveBeenCalled();
     });
 
-    test('dispatchNotifications callback invokes the job on every 2 minutes', () => {
-      dispatchNotifications.mockResolvedValue(undefined);
-      startCronJobs();
-
-      const twoMinCall = mockSchedule.mock.calls.find((c) => c[0] === '*/2 * * * *');
-      expect(twoMinCall).toBeDefined();
-
-      twoMinCall[1]();
-      expect(dispatchNotifications).toHaveBeenCalled();
-    });
+    // dispatchNotifications callback test removed — migrated to GH
+    // Actions scheduled workflow (*/5 in workflow vs */2 in-process,
+    // operator-approved cadence relaxation). The endpoint is exercised
+    // by tests in tests/routes/system.test.js + the workflow at
+    // .github/workflows/cron-dispatch-notifications.yml.
 
     test('ageVerificationAuditReconcile callback invokes the job', () => {
       ageVerificationAuditReconcile.mockResolvedValue(undefined);

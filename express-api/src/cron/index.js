@@ -12,7 +12,6 @@ const rotateLogs = require('./rotateLogs');
 const expireTempIds = require('./expireTempIds');
 const expireDataExports = require('./expireDataExports');
 const alertManager = require('../utils/alertManagerInstance');
-const dispatchNotifications = require('./notification-dispatch');
 const ageVerificationAuditReconcile = require('./ageVerificationAuditReconcile');
 
 function startCronJobs() {
@@ -91,12 +90,13 @@ function startCronJobs() {
     );
   });
 
-  // Dispatch queued suggestion notifications — every 2 minutes
-  cron.schedule('*/2 * * * *', () => {
-    dispatchNotifications().catch((err) =>
-      log.error('cron', 'notification-dispatch failed', { error: err.message }),
-    );
-  });
+  // dispatchNotifications migrated to GitHub Actions scheduled workflow
+  // (.github/workflows/cron-dispatch-notifications.yml) which POSTs to
+  // /api/system/dispatch-notifications every 5 minutes. The cadence was
+  // relaxed from every-2-min (in-process cron) to every-5-min in the GH
+  // Actions move to keep total cron-cluster minutes low; notification
+  // dispatch latency rises from 2-min worst case to 5-min worst case,
+  // operator-approved. Function lives in src/cron/notification-dispatch.js.
 
   // Age-verification audit-log reconciliation — daily 05:00 UTC.
   // Back-fills missing audit entries for decisions whose post-commit
