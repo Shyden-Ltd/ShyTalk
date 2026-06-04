@@ -23,6 +23,23 @@ const {
 } = require('./owner-left-handler');
 
 /**
+ * Path-safe identifier allowlist for RTDB path components. Mirrors the
+ * roomId allowlist in owner-left-listener.js so both ends of the path
+ * interpolation share the same defensive shape. Defends against `ownerId`
+ * values from corrupt Firestore docs containing `/`, `.`, `#`, `$`, `[`,
+ * `]`, whitespace, or being missing entirely.
+ */
+const MAX_OWNER_ID_LENGTH = 256;
+const SAFE_OWNER_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+
+function isValidOwnerId(ownerId) {
+  if (ownerId === null || ownerId === undefined) return false;
+  const s = String(ownerId);
+  if (s.length === 0 || s.length > MAX_OWNER_ID_LENGTH) return false;
+  return SAFE_OWNER_ID_PATTERN.test(s);
+}
+
+/**
  * Process an owner-left signal for `roomId`.
  *
  * @param {object} args
@@ -32,11 +49,20 @@ const {
  *   THROW on read errors so the caller can decide whether to retry — do not
  *   fail-safe-to-true inside the checker for this code path.
  * @param {string} args.roomId
+ * @param {string} [args.writerUid] - the uid stored in the RTDB signal entry
+ *   (snap.val()) — the client that armed the onDisconnect. The RTDB rule
+ *   forces this to equal `auth.uid` at write time; here we additionally
+ *   verify it matches the room's authoritative ownerId. An attacker who
+ *   writes `ownerLeft/{victim-room} = attacker-uid` would land at this
+ *   mismatch branch and the listener clears the signal without invoking
+ *   presenceChecker for the victim — preventing presence-probing as well.
+ *   Omit for direct callers that don't have an attesting writer.
  * @param {number} [args.nowMs] - server time captured by caller; defaults to
- *   Date.now() at the start of the transaction
+ *   Date.now() once, BEFORE `runTransaction` opens. Reused across SDK retry
+ *   attempts so the OWNER_AWAY timestamp is stable.
  * @returns {Promise<{action: string, reason?: string, postRoom?: object}>}
  */
-async function handleOwnerLeftSignal({ db, presenceChecker, roomId, nowMs }) {
+async function handleOwnerLeftSignal({ db, presenceChecker, roomId, writerUid, nowMs }) {
   const roomRef = db.doc(`rooms/${roomId}`);
 
   // Pre-txn read to extract the authoritative ownerId. We deliberately do NOT
@@ -49,10 +75,41 @@ async function handleOwnerLeftSignal({ db, presenceChecker, roomId, nowMs }) {
   }
   const preRoom = preSnap.data();
 
+  // Defense in depth: `ownerId` becomes an RTDB path segment via
+  // presenceChecker(roomId, ownerId). A corrupt room doc with ownerId
+  // null/undefined/empty/containing path-separators would either silently
+  // produce a false-absent (wrong path → snap.exists() = false → "absent" →
+  // spurious close) or open the path-traversal door. Reject early.
+  if (!isValidOwnerId(preRoom.ownerId)) {
+    return { action: OWNER_LEFT_ACTION.NOOP, reason: 'owner-id-missing-or-invalid' };
+  }
+
+  // Writer-attestation check: the client that armed the RTDB onDisconnect
+  // signs the entry value with their own uid (enforced by the rule
+  // `newData.val() === auth.uid`). Here we additionally verify the writer
+  // is the room's owner — closes the "attacker writes ownerLeft for victim's
+  // room" forgery. Omitted writerUid is accepted for direct (non-listener)
+  // callers that don't have an attesting writer.
+  if (
+    writerUid !== undefined &&
+    writerUid !== null &&
+    String(writerUid) !== String(preRoom.ownerId)
+  ) {
+    return { action: OWNER_LEFT_ACTION.NOOP, reason: 'writer-not-owner' };
+  }
+
   // TOCTOU re-check: the signal may be stale by the time we process it (owner
   // reconnected on a second device, or the same device finished a transient
   // disconnect). The checker is the authoritative gate; it throws on read
   // failure so the caller can preserve the signal for a later retry.
+  //
+  // NOTE on Firestore txn retries: ownerStillPresent is captured BEFORE the
+  // txn opens and is REUSED across every retry attempt. That is intentional —
+  // RTDB reads cannot run inside a Firestore transaction, so re-checking
+  // inside the callback is not an option. An owner who reconnects DURING
+  // the txn-retry window (typically sub-second on Firebase) will trigger a
+  // spurious OWNER_AWAY which self-heals via /owner-returned. Matches the
+  // /owner-away endpoint's documented residual TOCTOU window.
   const ownerStillPresent = await presenceChecker(roomId, preRoom.ownerId);
 
   const effectiveNowMs = nowMs ?? Date.now();
@@ -71,4 +128,5 @@ async function handleOwnerLeftSignal({ db, presenceChecker, roomId, nowMs }) {
 
 module.exports = {
   handleOwnerLeftSignal,
+  isValidOwnerId,
 };

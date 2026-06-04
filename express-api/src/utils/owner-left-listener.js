@@ -59,9 +59,17 @@ function registerOwnerLeftListener({
       return;
     }
 
+    // The signal entry's value is the uid of the client that armed the
+    // onDisconnect. The RTDB rule for `ownerLeft/{roomId}` forces
+    // `newData.val() === auth.uid`, so an authenticated writer can only sign
+    // with their own uid. The orchestrator additionally verifies the writer
+    // is the room's owner — closing the "attacker writes ownerLeft for
+    // victim's room" forgery vector.
+    const writerUid = snap && typeof snap.val === 'function' ? snap.val() : undefined;
+
     let result;
     try {
-      result = await handleSignal({ db, presenceChecker, roomId });
+      result = await handleSignal({ db, presenceChecker, roomId, writerUid });
     } catch (err) {
       // Orchestrator failed — leave the signal entry in place so a later
       // restart-scan or duplicate fire can retry.

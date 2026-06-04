@@ -425,6 +425,19 @@ describe('registerOwnerLeftListener — adversarial: race / re-fire / concurrenc
     const childRef = mock.getChildRef('ownerLeft/room-remove-fails');
     childRef.remove.mockRejectedValueOnce(new Error('rtdb unreachable'));
     await expect(mock.fireChildAdded('room-remove-fails')).resolves.not.toThrow();
+    // The error MUST be logged with the roomId, the action taken (so the
+    // operator knows the Firestore mutation HAS committed even though the
+    // signal entry is still around), and the error message — per the I4
+    // review finding.
+    expect(log.error).toHaveBeenCalledWith(
+      'owner-left-listener',
+      'Failed to clear signal after success',
+      expect.objectContaining({
+        roomId: 'room-remove-fails',
+        action: OWNER_LEFT_ACTION.OWNER_AWAY,
+        error: 'rtdb unreachable',
+      }),
+    );
     // After the failed remove, the next signal must still be processable
     await mock.fireChildAdded('room-after');
     expect(handleSignal).toHaveBeenCalledTimes(2);
@@ -447,5 +460,57 @@ describe('registerOwnerLeftListener — dependency injection', () => {
         // handleSignal omitted on purpose — should fall back to the real one
       }),
     ).not.toThrow();
+  });
+});
+
+describe('registerOwnerLeftListener — writer-uid forwarding (C2 + spoof prevention)', () => {
+  test('passes snap.val() to handleSignal as writerUid', async () => {
+    const handleSignal = jest.fn().mockResolvedValue({ action: OWNER_LEFT_ACTION.OWNER_AWAY });
+    const mock = makeMockRtdb();
+    registerOwnerLeftListener({
+      rtdb: mock.rtdb,
+      db: dummyDb,
+      presenceChecker: dummyPresenceChecker,
+      log: makeLog(),
+      handleSignal,
+    });
+    await mock.fireChildAdded('room-w1', 'owner-uid-99');
+    expect(handleSignal).toHaveBeenCalledWith(
+      expect.objectContaining({ roomId: 'room-w1', writerUid: 'owner-uid-99' }),
+    );
+  });
+
+  test('forwards a numeric writerUid verbatim (string normalisation happens downstream)', async () => {
+    const handleSignal = jest.fn().mockResolvedValue({ action: OWNER_LEFT_ACTION.OWNER_AWAY });
+    const mock = makeMockRtdb();
+    registerOwnerLeftListener({
+      rtdb: mock.rtdb,
+      db: dummyDb,
+      presenceChecker: dummyPresenceChecker,
+      log: makeLog(),
+      handleSignal,
+    });
+    await mock.fireChildAdded('room-w2', 42);
+    expect(handleSignal).toHaveBeenCalledWith(
+      expect.objectContaining({ roomId: 'room-w2', writerUid: 42 }),
+    );
+  });
+
+  test('forwards undefined writerUid when snap has no value (legacy / cancel arm)', async () => {
+    const handleSignal = jest.fn().mockResolvedValue({ action: OWNER_LEFT_ACTION.NOOP });
+    const mock = makeMockRtdb();
+    registerOwnerLeftListener({
+      rtdb: mock.rtdb,
+      db: dummyDb,
+      presenceChecker: dummyPresenceChecker,
+      log: makeLog(),
+      handleSignal,
+    });
+    await mock.fireChildAdded('room-w3', null);
+    // null becomes null on the wire; the orchestrator treats null and
+    // undefined as "no attestation" and falls back to ownerStillPresent.
+    expect(handleSignal).toHaveBeenCalledWith(
+      expect.objectContaining({ roomId: 'room-w3', writerUid: null }),
+    );
   });
 });

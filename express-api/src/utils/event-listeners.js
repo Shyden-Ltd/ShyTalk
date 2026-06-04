@@ -11,7 +11,12 @@
  *    `isUserPresent` which fail-safes to "present") because the listener
  *    relies on errors to preserve the signal entry for retry.
  *  - Returns a stop() that detaches all listeners — used by tests and
- *    process shutdown hooks.
+ *    process shutdown hooks (`wireProcessShutdown` in process-shutdown.js).
+ *  - INTENTIONALLY unconditional (not gated on NODE_ENV === 'production')
+ *    despite `startCronJobs` being prod-only: event-driven RTDB listeners
+ *    cost no Firestore quota (no polling), and they MUST run in local/dev
+ *    so journey tests can exercise the full owner-disconnect flow against
+ *    Firebase emulators. The asymmetry with crons is deliberate.
  */
 
 const { registerOwnerLeftListener } = require('./owner-left-listener');

@@ -17,6 +17,7 @@ const { startCronJobs } = require('./cron');
 const { db, rtdb } = require('./utils/firebase'); // Initialize Firebase before routes
 const log = require('./utils/log');
 const { startEventListeners } = require('./utils/event-listeners');
+const { wireProcessShutdown } = require('./utils/process-shutdown');
 const { patchConsole } = require('./utils/consoleLogger');
 
 // Route all console.log/warn/error through structured logger
@@ -295,5 +296,10 @@ app.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`ShyTalk API listening on port ${PORT}`);
   startCronJobs();
-  startEventListeners({ db, rtdb, log });
+  const stopEventListeners = startEventListeners({ db, rtdb, log });
+  // PM2 sends SIGTERM on graceful restart; without explicit wiring the RTDB
+  // listener detaches abruptly mid-processing, leaving signal entries in
+  // ambiguous state. Wire AFTER startEventListeners so the captured stop
+  // function is invoked on shutdown.
+  wireProcessShutdown({ proc: process, stopFns: [stopEventListeners], log });
 });

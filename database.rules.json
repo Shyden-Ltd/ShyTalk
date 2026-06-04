@@ -34,6 +34,12 @@
         }
       }
     },
+    "ownerLeft": {
+      "$roomId": {
+        ".write": "auth != null && (!newData.exists() || newData.val() === auth.uid)",
+        ".validate": "newData.isString() || !newData.exists()"
+      }
+    },
     ".read": false,
     ".write": false
   }
