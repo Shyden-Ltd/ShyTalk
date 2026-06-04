@@ -381,7 +381,7 @@ describe('POST /api/admin/bans/device — additional branches', () => {
   test('device ban with linkedUniqueId sends system PM', async () => {
     const { sendSystemPm } = require('../../src/utils/system-pm');
     const app = createApp();
-    await request(app)
+    const res = await request(app)
       .post('/api/admin/bans/device')
       .send({ deviceId: 'dev-linked', reason: 'Spam', duration: '7d', linkedUniqueId: 'user42' })
       .expect(200);
@@ -390,18 +390,25 @@ describe('POST /api/admin/bans/device — additional branches', () => {
       'user42',
       'A restriction has been placed on your account.',
     );
+    // Pin the wire shape so the admin UI's PartialFailureToast contract
+    // can't silently drift (e.g. a rename to `{failures, count}` would
+    // break every client but the success boolean would still be true).
+    expect(res.body.pms).toEqual({ failed: 0, total: 1 });
   });
 
   test('device ban without linkedUniqueId does not send system PM', async () => {
     const { sendSystemPm } = require('../../src/utils/system-pm');
     sendSystemPm.mockClear();
     const app = createApp();
-    await request(app)
+    const res = await request(app)
       .post('/api/admin/bans/device')
       .send({ deviceId: 'dev-no-link', reason: 'Spam', duration: '7d' })
       .expect(200);
 
     expect(sendSystemPm).not.toHaveBeenCalled();
+    // No PM sent → total=0; pms field still present with the canonical shape
+    // so the admin UI doesn't have to special-case undefined.
+    expect(res.body.pms).toEqual({ failed: 0, total: 0 });
   });
 
   test('device ban succeeds even when system PM fails', async () => {
@@ -413,6 +420,9 @@ describe('POST /api/admin/bans/device — additional branches', () => {
       .send({ deviceId: 'dev-pm-fail', reason: 'Spam', linkedUniqueId: 'user99' })
       .expect(200);
     expect(res.body.success).toBe(true);
+    // PM failed but ban succeeded — pms surfaces the partial failure to the
+    // admin UI so the operator sees "ban applied, PM delivery failed".
+    expect(res.body.pms).toEqual({ failed: 1, total: 1 });
   });
 });
 
@@ -466,7 +476,7 @@ describe('POST /api/admin/bans/network — additional branches', () => {
     const { sendSystemPm } = require('../../src/utils/system-pm');
     sendSystemPm.mockClear();
     const app = createApp();
-    await request(app)
+    const res = await request(app)
       .post('/api/admin/bans/network')
       .send({
         type: 'ip',
@@ -481,18 +491,21 @@ describe('POST /api/admin/bans/network — additional branches', () => {
       'user55',
       'A restriction has been placed on your account.',
     );
+    // Pin the wire shape — see /admin/bans/device counterpart for rationale.
+    expect(res.body.pms).toEqual({ failed: 0, total: 1 });
   });
 
   test('network ban without linkedUniqueId does not send system PM', async () => {
     const { sendSystemPm } = require('../../src/utils/system-pm');
     sendSystemPm.mockClear();
     const app = createApp();
-    await request(app)
+    const res = await request(app)
       .post('/api/admin/bans/network')
       .send({ type: 'ip', value: '9.9.9.9', reason: 'Spam' })
       .expect(200);
 
     expect(sendSystemPm).not.toHaveBeenCalled();
+    expect(res.body.pms).toEqual({ failed: 0, total: 0 });
   });
 
   test('network ban succeeds even when system PM fails', async () => {
@@ -504,6 +517,7 @@ describe('POST /api/admin/bans/network — additional branches', () => {
       .send({ type: 'ip', value: '8.8.4.4', reason: 'Test', linkedUniqueId: 'user77' })
       .expect(200);
     expect(res.body.success).toBe(true);
+    expect(res.body.pms).toEqual({ failed: 1, total: 1 });
   });
 
   test('permanent network ban (no duration): expiresAt is null', async () => {
@@ -575,12 +589,16 @@ describe('POST /api/admin/bans/unban-all — system PM', () => {
     mockWhereGet.mockResolvedValue({ empty: true, docs: [] });
 
     const app = createApp();
-    await request(app).post('/api/admin/bans/unban-all/user999').expect(200);
+    const res = await request(app).post('/api/admin/bans/unban-all/user999').expect(200);
 
     expect(sendSystemPm).toHaveBeenCalledWith(
       'user999',
       'A restriction on your account has been lifted.',
     );
+    // unban-all ALWAYS sends a PM (no linkedUniqueId branch), so total is
+    // hardcoded to 1 in the route. Pin the shape — see /admin/bans/device
+    // for the broader rationale.
+    expect(res.body.pms).toEqual({ failed: 0, total: 1 });
   });
 
   test('succeeds even when system PM fails', async () => {
@@ -591,6 +609,7 @@ describe('POST /api/admin/bans/unban-all — system PM', () => {
     const app = createApp();
     const res = await request(app).post('/api/admin/bans/unban-all/user888').expect(200);
     expect(res.body.success).toBe(true);
+    expect(res.body.pms).toEqual({ failed: 1, total: 1 });
   });
 });
 
