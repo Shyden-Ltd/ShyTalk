@@ -52,7 +52,28 @@ describe('wireProcessShutdown', () => {
     expect(getHandler('SIGTERM')).toBe(getHandler('SIGINT'));
   });
 
-  test('SIGTERM invokes every stop function in order', async () => {
+  test('SIGTERM invokes EVERY stop function', async () => {
+    // The handler runs all stops via Promise.allSettled, which provides
+    // NO completion-order guarantee for async stops. This test only
+    // asserts each stop was called exactly once.
+    const stopA = jest.fn();
+    const stopB = jest.fn();
+    const stopC = jest.fn();
+    const { proc, fire } = makeMockProcess();
+    wireProcessShutdown({ proc, stopFns: [stopA, stopB, stopC], log: makeLog() });
+    await fire('SIGTERM');
+    expect(stopA).toHaveBeenCalledTimes(1);
+    expect(stopB).toHaveBeenCalledTimes(1);
+    expect(stopC).toHaveBeenCalledTimes(1);
+  });
+
+  test('SIGTERM sync stops run in stopFns iteration order (specifically for sync)', async () => {
+    // R3 I3 clarification: ONLY for synchronous stop functions, the
+    // invocation order matches the stopFns array order. This is because
+    // `stopFns.map(async (stop) => { await stop(); ... })` calls the
+    // synchronous body of `stop()` before yielding at the await. For
+    // ASYNC stops, completion order depends on each stop's resolution
+    // time — see the async-parallel test below for that semantic.
     const calls = [];
     const stopA = jest.fn(() => calls.push('A'));
     const stopB = jest.fn(() => calls.push('B'));

@@ -585,6 +585,12 @@ describe('handleOwnerLeftSignal', () => {
       expect(isValidOwnerId('abc_DEF-123')).toBe(true);
     });
 
+    test('returns true for string "0" (path-safe single-char digit, distinct from numeric 0)', () => {
+      // R3 I2: pins the string-zero boundary so a future regex tightening
+      // (e.g. requiring leading non-digit) doesn't silently break valid IDs.
+      expect(isValidOwnerId('0')).toBe(true);
+    });
+
     test('returns true for finite numbers', () => {
       expect(isValidOwnerId(42)).toBe(true);
       expect(isValidOwnerId(0)).toBe(true);
@@ -689,6 +695,25 @@ describe('handleOwnerLeftSignal', () => {
       });
       // Match by string-normalised compare — should NOT be writer-not-owner.
       expect(result.reason).not.toBe('writer-not-owner');
+    });
+
+    // R3 I1: the listener forwards `null` as writerUid when snap.val() is
+    // null. The orchestrator's `writerUid !== null && writerUid !== undefined`
+    // guard treats both as "no attestation" — but null and undefined exit
+    // the check at DIFFERENT short-circuit conditions, so test both paths.
+    test('writerUid explicitly null is accepted — treated as no attestation', async () => {
+      const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId: 'owner-1' } });
+      presenceChecker.mockResolvedValue(false);
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        writerUid: null,
+        nowMs,
+      });
+      expect(result.reason).not.toBe('writer-not-owner');
+      expect(result.action).toBe(OWNER_LEFT_ACTION.CLOSE_IMMEDIATE);
+      expect(presenceChecker).toHaveBeenCalledWith('room-1', 'owner-1');
     });
   });
 
