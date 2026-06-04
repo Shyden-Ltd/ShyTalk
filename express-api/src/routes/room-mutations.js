@@ -39,6 +39,7 @@ const {
   MAX_SEATS,
   OWNER_SEAT_INDEX,
 } = require('../utils/room-auth');
+const { shouldReapStaleRoom, reapStaleRoomTx } = require('../utils/stale-room-reap');
 const log = require('../utils/log');
 
 // Mirrors the client room-name input cap (CreateRoomDialog: length <= 50).
@@ -92,9 +93,23 @@ async function inRoomTransaction(req, roomId, mutate) {
   return db.runTransaction(async (t) => {
     const snap = await t.get(roomRef);
     if (!snap.exists) return { status: 404, body: { error: 'Room not found' } };
-    const room = snap.data();
+    let room = snap.data();
     if (cohortFromClaim(req) !== (room.cohort ?? 'minor')) {
       return { status: 404, body: { error: 'Not found' } };
+    }
+    // Lazy reap: if the room has been OWNER_AWAY long enough that the
+    // staleRooms cron would have closed it on its next tick, close it
+    // inline within this same transaction. The mutate() callback below
+    // sees the post-close room shape and returns its standard "room is
+    // closed" 409. The cron stays running as the safety net for
+    // abandoned rooms (zero participant traffic post-departure).
+    //
+    // The owner returning never triggers reap — that path is the
+    // OWNER_AWAY → ACTIVE transition, not a close — so the predicate
+    // takes callerId and short-circuits when caller === ownerId.
+    const callerId = req.auth ? String(req.auth.uniqueId) : null;
+    if (shouldReapStaleRoom(room, Date.now(), callerId)) {
+      room = reapStaleRoomTx(t, roomRef, room, Date.now());
     }
     return mutate(room, t, roomRef);
   });
