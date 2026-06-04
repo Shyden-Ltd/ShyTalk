@@ -2,30 +2,22 @@
  * Tests for src/utils/roadmap-notify.js — bulk notification trigger for
  * roadmap updates.
  *
- * Phase 2A finding #2: previously the trigger read the entire subscriptions
- * collection on every roadmap edit, then filtered opted-in subscribers
- * client-side. The denormalised `roadmapUpdateOptedIn` flag now lets
- * Firestore filter server-side, eliminating the per-edit quota grenade.
- *
- * These tests pin both the wire format (the equality filter is on
- * `roadmapUpdateOptedIn`, not on missing-field tolerance) and the defensive
- * client-side double-check (so a doc whose flag has drifted from prefs
- * doesn't get notified anyway).
+ * Two contracts under test:
+ * - Server-side filter on the denormalised `roadmapUpdateOptedIn` flag,
+ *   so a roadmap edit doesn't trigger a full-collection scan
+ * - Inline fan-out via `dispatchNotificationInline` per subscriber,
+ *   with Promise.allSettled isolation so one failure doesn't cancel
+ *   the rest. NO `notificationQueue` collection writes happen — that
+ *   queue + cron path was eliminated.
  */
-
-const mockBatchSet = jest.fn();
-const mockBatchCommit = jest.fn().mockResolvedValue(undefined);
-const mockBatch = jest.fn(() => ({ set: mockBatchSet, commit: mockBatchCommit }));
 
 const mockWhere = jest.fn();
 const mockGet = jest.fn();
 const mockCollection = jest.fn();
-const mockDoc = jest.fn(() => ({ id: 'auto-doc-id' }));
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
     collection: (...args) => mockCollection(...args),
-    batch: () => mockBatch(),
   },
 }));
 
@@ -36,50 +28,49 @@ jest.mock('../../src/utils/log', () => ({
   error: jest.fn(),
 }));
 
-jest.mock('../../src/utils/helpers', () => ({
-  now: jest.fn(() => 1700000000000),
+const mockDispatchNotificationInline = jest.fn().mockResolvedValue({
+  email: null,
+  push: null,
+  systemMessage: null,
+});
+jest.mock('../../src/utils/notification-channels', () => ({
+  dispatchNotificationInline: (...args) => mockDispatchNotificationInline(...args),
 }));
 
 const { notifyRoadmapSubscribers } = require('../../src/utils/roadmap-notify');
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockDispatchNotificationInline.mockResolvedValue({
+    email: null,
+    push: null,
+    systemMessage: null,
+  });
   // Default: a chain that captures the where filter then resolves to empty.
   mockGet.mockResolvedValue({ docs: [], empty: true });
-  mockWhere.mockReturnValue({
-    get: mockGet,
-    doc: mockDoc,
-  });
+  mockWhere.mockReturnValue({ get: mockGet });
   mockCollection.mockImplementation(() => ({
     where: mockWhere,
     get: mockGet,
-    doc: mockDoc,
   }));
 });
 
-describe('notifyRoadmapSubscribers — server-side filter (Phase 2A finding #2)', () => {
+describe('notifyRoadmapSubscribers — server-side filter', () => {
   test('filters via roadmapUpdateOptedIn == true (no full-collection scan)', async () => {
     await notifyRoadmapSubscribers('Roadmap edited');
 
-    // The new wire format: server-side equality filter on the denormalised flag.
     expect(mockCollection).toHaveBeenCalledWith('subscriptions');
     expect(mockWhere).toHaveBeenCalledWith('roadmapUpdateOptedIn', '==', true);
   });
 
-  test('does not call .get() WITHOUT a .where() — proves we never bypass the filter', async () => {
-    // The previous (buggy) code did `db.collection('subscriptions').get()`
-    // directly. After the fix, every call path must go through .where(...).
-    // This test catches a regression that drops the filter.
+  test('does not call .get() without .where() — proves the filter is never bypassed', async () => {
     await notifyRoadmapSubscribers('Test');
-
-    // mockCollection returns a chain whose .get is the same mock as
-    // mockWhere().get. Either way, the assertion is that .where was hit.
     expect(mockWhere).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('notifyRoadmapSubscribers — defensive double-check', () => {
-  test('skips a doc whose denormalised flag is true but prefs are absent (drift recovery)', async () => {
+  test('skips a doc whose flag is true but channelPreferences.roadmapUpdate is absent', async () => {
     mockGet.mockResolvedValueOnce({
       empty: false,
       docs: [
@@ -88,8 +79,7 @@ describe('notifyRoadmapSubscribers — defensive double-check', () => {
           data: () => ({
             uid: 100,
             roadmapUpdateOptedIn: true,
-            // channelPreferences absent or roadmapUpdate undefined
-            channelPreferences: {},
+            channelPreferences: {}, // drift: flag true but prefs missing
           }),
         },
       ],
@@ -97,8 +87,7 @@ describe('notifyRoadmapSubscribers — defensive double-check', () => {
 
     await notifyRoadmapSubscribers('Edited');
 
-    // No notificationQueue set should have been written for this drifted doc.
-    expect(mockBatchSet).not.toHaveBeenCalled();
+    expect(mockDispatchNotificationInline).not.toHaveBeenCalled();
   });
 
   test('skips a doc with all roadmapUpdate channels disabled', async () => {
@@ -119,10 +108,12 @@ describe('notifyRoadmapSubscribers — defensive double-check', () => {
     });
 
     await notifyRoadmapSubscribers('Edited');
-    expect(mockBatchSet).not.toHaveBeenCalled();
+    expect(mockDispatchNotificationInline).not.toHaveBeenCalled();
   });
+});
 
-  test('writes a notificationQueue entry when the flag and prefs both confirm opt-in', async () => {
+describe('notifyRoadmapSubscribers — inline dispatch fan-out', () => {
+  test('dispatches inline when the flag and prefs both confirm opt-in', async () => {
     mockGet.mockResolvedValueOnce({
       empty: false,
       docs: [
@@ -141,14 +132,13 @@ describe('notifyRoadmapSubscribers — defensive double-check', () => {
 
     await notifyRoadmapSubscribers('A new feature shipped');
 
-    expect(mockBatchSet).toHaveBeenCalledTimes(1);
-    const [, payload] = mockBatchSet.mock.calls[0];
+    expect(mockDispatchNotificationInline).toHaveBeenCalledTimes(1);
+    const [payload] = mockDispatchNotificationInline.mock.calls[0];
     expect(payload).toMatchObject({
       type: 'roadmapUpdate',
       uid: 300,
       title: 'Roadmap Update',
       body: 'A new feature shipped',
-      status: 'queued',
     });
     expect(payload.channels).toEqual({
       email: false,
@@ -156,15 +146,115 @@ describe('notifyRoadmapSubscribers — defensive double-check', () => {
       inApp: true,
       systemMessage: false,
     });
-    expect(mockBatchCommit).toHaveBeenCalled();
+    // No `status` field in the inline payload — no queue persistence.
+    expect(payload).not.toHaveProperty('status');
   });
 
-  test('handles empty result set without throwing', async () => {
+  test('uses doc.id as uid fallback when sub.uid is missing', async () => {
+    mockGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [
+        {
+          id: 'doc-id-fallback',
+          data: () => ({
+            // no uid field
+            roadmapUpdateOptedIn: true,
+            channelPreferences: {
+              roadmapUpdate: { email: true, push: false, inApp: false, systemMessage: false },
+            },
+            email: 'fallback@example.com',
+          }),
+        },
+      ],
+    });
+
+    await notifyRoadmapSubscribers('Edited');
+
+    expect(mockDispatchNotificationInline).toHaveBeenCalledTimes(1);
+    const [payload] = mockDispatchNotificationInline.mock.calls[0];
+    expect(payload.uid).toBe('doc-id-fallback');
+  });
+
+  test('dispatches per subscriber in parallel (does NOT serialise)', async () => {
+    // Assert by counting calls: 3 subscribers → 3 dispatches in a
+    // single await — Promise.allSettled fans out concurrently.
+    mockGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [1, 2, 3].map((n) => ({
+        id: `sub-${n}`,
+        data: () => ({
+          uid: n,
+          roadmapUpdateOptedIn: true,
+          channelPreferences: {
+            roadmapUpdate: { email: true, push: false, inApp: false, systemMessage: false },
+          },
+          email: `u${n}@example.com`,
+        }),
+      })),
+    });
+
+    await notifyRoadmapSubscribers('Bulk');
+    expect(mockDispatchNotificationInline).toHaveBeenCalledTimes(3);
+  });
+
+  test('one subscriber rejecting does not block the others (allSettled isolation)', async () => {
+    mockDispatchNotificationInline
+      .mockResolvedValueOnce({ email: 'sent', push: null, systemMessage: null })
+      .mockRejectedValueOnce(new Error('runaway throw'))
+      .mockResolvedValueOnce({ email: 'sent', push: null, systemMessage: null });
+
+    mockGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [1, 2, 3].map((n) => ({
+        id: `sub-${n}`,
+        data: () => ({
+          uid: n,
+          roadmapUpdateOptedIn: true,
+          channelPreferences: {
+            roadmapUpdate: { email: true, push: false, inApp: false, systemMessage: false },
+          },
+          email: `u${n}@example.com`,
+        }),
+      })),
+    });
+
+    await expect(notifyRoadmapSubscribers('Bulk')).resolves.toBeUndefined();
+    expect(mockDispatchNotificationInline).toHaveBeenCalledTimes(3);
+  });
+
+  test('handles empty result set without dispatching anything', async () => {
     mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
 
     await expect(notifyRoadmapSubscribers('Empty')).resolves.toBeUndefined();
-    expect(mockBatchSet).not.toHaveBeenCalled();
-    expect(mockBatchCommit).not.toHaveBeenCalled();
+    expect(mockDispatchNotificationInline).not.toHaveBeenCalled();
+  });
+
+  test('NEVER writes to the notificationQueue collection', async () => {
+    // Regression guard: if a refactor accidentally reintroduces the
+    // queue write, this catches it — the production code must not
+    // touch any collection except `subscriptions`.
+    mockGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [
+        {
+          id: 'sub',
+          data: () => ({
+            uid: 1,
+            roadmapUpdateOptedIn: true,
+            channelPreferences: {
+              roadmapUpdate: { email: true, push: false, inApp: false, systemMessage: false },
+            },
+            email: 'u@example.com',
+          }),
+        },
+      ],
+    });
+
+    await notifyRoadmapSubscribers('Edited');
+
+    const collectionsTouched = mockCollection.mock.calls.map((c) => c[0]);
+    expect(collectionsTouched).toEqual(['subscriptions']);
+    expect(collectionsTouched).not.toContain('notificationQueue');
   });
 });
 

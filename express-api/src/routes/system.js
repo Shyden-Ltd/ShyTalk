@@ -14,19 +14,6 @@
  *                                             by .github/workflows/
  *                                             cron-account-deletion.yml.
  *
- * POST /api/system/dispatch-notifications   — requires Bearer auth.
- *                                             Synchronously runs
- *                                             dispatchNotifications() —
- *                                             every-5-min sweep scheduled
- *                                             by .github/workflows/
- *                                             cron-dispatch-notifications.yml.
- *                                             Was every 2 min in the
- *                                             in-process cron; cadence
- *                                             relaxed to every 5 min in
- *                                             the GH Actions move to keep
- *                                             total cluster minutes low
- *                                             (operator-approved).
- *
  * POST /api/system/sweep-stale-rooms        — requires Bearer auth.
  *                                             Synchronously runs
  *                                             staleRooms() — every-5-min
@@ -48,7 +35,6 @@ const router = require('express').Router();
 const log = require('../utils/log');
 const serverHealth = require('../cron/serverHealth');
 const accountDeletion = require('../cron/accountDeletion');
-const dispatchNotifications = require('../cron/notification-dispatch');
 const staleRooms = require('../cron/staleRooms');
 const alertManager = require('../utils/alertManagerInstance');
 const { requireSystemAuth } = require('../middleware/system-auth');
@@ -96,11 +82,11 @@ function getSweepTimeoutMs() {
  * mutation to production callers. Per the operator's
  * `[[feedback-test-isolation-no-leaks]]` directive.
  *
- * Covers the three active sweep endpoints — sweep-account-deletions,
- * dispatch-notifications, and sweep-stale-rooms — with one place to
- * audit auth / timeout / error-handling semantics, and an in-flight
- * independence test that only needs to assert per-endpoint flag
- * closure. New sweep endpoints get the same defenses for free.
+ * Covers the active sweep endpoints — sweep-account-deletions and
+ * sweep-stale-rooms — with one place to audit auth / timeout /
+ * error-handling semantics, and an in-flight independence test that
+ * only needs to assert per-endpoint flag closure. New sweep endpoints
+ * get the same defenses for free.
  *
  * @param {string} name short identifier used in log messages, e.g.
  *   'sweep-account-deletions', 'sweep-stale-rooms'.
@@ -150,14 +136,9 @@ function createSweepHandler(name, sweepFn) {
 }
 
 const sweepAccountDeletions = createSweepHandler('sweep-account-deletions', accountDeletion);
-const dispatchNotificationsHandler = createSweepHandler(
-  'dispatch-notifications',
-  dispatchNotifications,
-);
 const sweepStaleRooms = createSweepHandler('sweep-stale-rooms', staleRooms);
 
 router.post('/system/sweep-account-deletions', requireSystemAuth, sweepAccountDeletions);
-router.post('/system/dispatch-notifications', requireSystemAuth, dispatchNotificationsHandler);
 router.post('/system/sweep-stale-rooms', requireSystemAuth, sweepStaleRooms);
 
 // Test-only reset hook. Exported behind a NODE_ENV guard so production
@@ -166,7 +147,6 @@ router.post('/system/sweep-stale-rooms', requireSystemAuth, sweepStaleRooms);
 if (process.env.NODE_ENV === 'test') {
   router._resetInFlightForTesting = () => {
     sweepAccountDeletions._reset();
-    dispatchNotificationsHandler._reset();
     sweepStaleRooms._reset();
   };
 }

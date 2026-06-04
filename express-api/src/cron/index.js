@@ -96,13 +96,13 @@ function startCronJobs() {
     );
   });
 
-  // dispatchNotifications migrated to GitHub Actions scheduled workflow
-  // (.github/workflows/cron-dispatch-notifications.yml) which POSTs to
-  // /api/system/dispatch-notifications every 5 minutes. The cadence was
-  // relaxed from every-2-min (in-process cron) to every-5-min in the GH
-  // Actions move to keep total cron-cluster minutes low; notification
-  // dispatch latency rises from 2-min worst case to 5-min worst case,
-  // operator-approved. Function lives in src/cron/notification-dispatch.js.
+  // dispatchNotifications ELIMINATED — roadmap notifications now
+  // fan out INLINE via `dispatchNotificationInline` in
+  // utils/notification-channels.js, called from utils/roadmap-notify.js
+  // with Promise.allSettled per subscriber. Fire-and-forget at the
+  // route layer (suggestions.js routes use `.catch(...)`), so the
+  // admin HTTP response returns immediately. No queue, no cron, no
+  // workflow, no system endpoint.
 
   // Age-verification audit-log reconciliation — daily 05:00 UTC.
   // Back-fills missing audit entries for decisions whose post-commit

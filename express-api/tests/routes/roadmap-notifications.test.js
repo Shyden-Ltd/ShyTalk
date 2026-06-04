@@ -6,6 +6,11 @@
  * When the public roadmap JSON changes (new features done, phases updated),
  * subscribers who opted into roadmapUpdate notifications must be notified
  * via their configured channels (email, push, inApp, systemMessage).
+ *
+ * The dispatch path is INLINE — `notifyRoadmapSubscribers` calls
+ * `dispatchNotificationInline` per subscriber via Promise.allSettled.
+ * No persistent `notificationQueue` collection writes happen; the
+ * cron-based queue mechanism was eliminated.
  */
 
 // Firebase mock — imported values used by the mocked module below
@@ -57,19 +62,6 @@ jest.mock('../../src/utils/firebase', () => {
     db: {
       collection: jest.fn((name) => mockCollection(name)),
       doc: jest.fn((path) => mockDoc(path)),
-      batch: jest.fn(() => {
-        const pending = [];
-        return {
-          set: jest.fn((ref, data) => {
-            pending.push({ path: ref._path, data });
-          }),
-          commit: jest.fn(async () => {
-            for (const { path, data } of pending) {
-              store[path] = data;
-            }
-          }),
-        };
-      }),
     },
     _store: store,
     _reset: () => {
@@ -84,8 +76,13 @@ jest.mock('../../src/utils/log', () => ({
   error: jest.fn(),
 }));
 
-jest.mock('../../src/utils/helpers', () => ({
-  now: jest.fn(() => 1709913600000),
+const mockDispatchNotificationInline = jest.fn().mockResolvedValue({
+  email: null,
+  push: null,
+  systemMessage: null,
+});
+jest.mock('../../src/utils/notification-channels', () => ({
+  dispatchNotificationInline: (...args) => mockDispatchNotificationInline(...args),
 }));
 
 const { _store, _reset } = require('../../src/utils/firebase');
@@ -93,6 +90,11 @@ const { _store, _reset } = require('../../src/utils/firebase');
 beforeEach(() => {
   _reset();
   jest.clearAllMocks();
+  mockDispatchNotificationInline.mockResolvedValue({
+    email: null,
+    push: null,
+    systemMessage: null,
+  });
 });
 
 // ── Tests ──────────────────────────────────────────────────────
@@ -101,13 +103,10 @@ describe('notifyRoadmapSubscribers', () => {
   let notifyRoadmapSubscribers;
 
   beforeAll(() => {
-    // The function we're testing — it should be exported from a module
-    // that we'll create as part of the implementation
     notifyRoadmapSubscribers = require('../../src/utils/roadmap-notify').notifyRoadmapSubscribers;
   });
 
-  it('creates notification queue entries for subscribers with roadmapUpdate.inApp enabled', async () => {
-    // Arrange: subscriber with inApp enabled
+  it('dispatches inline for subscribers with roadmapUpdate.inApp enabled', async () => {
     _store['subscriptions/user1'] = {
       uid: 'user1',
       channelPreferences: {
@@ -115,22 +114,17 @@ describe('notifyRoadmapSubscribers', () => {
       },
     };
 
-    // Act
     await notifyRoadmapSubscribers('New feature shipped: voice rooms!');
 
-    // Assert: a notification queue entry was created
-    const queueEntries = Object.entries(_store).filter(([k]) => k.startsWith('notificationQueue/'));
-    expect(queueEntries.length).toBeGreaterThanOrEqual(1);
-
-    const [, entry] = queueEntries[0];
-    expect(entry.type).toBe('roadmapUpdate');
-    expect(entry.uid).toBe('user1');
-    expect(entry.status).toBe('queued');
-    expect(entry.title).toContain('Roadmap');
-    expect(entry.body).toContain('voice rooms');
+    expect(mockDispatchNotificationInline).toHaveBeenCalledTimes(1);
+    const [payload] = mockDispatchNotificationInline.mock.calls[0];
+    expect(payload.type).toBe('roadmapUpdate');
+    expect(payload.uid).toBe('user1');
+    expect(payload.title).toContain('Roadmap');
+    expect(payload.body).toContain('voice rooms');
   });
 
-  it('creates notification with email channel when subscriber has roadmapUpdate.email enabled', async () => {
+  it('passes email channel flag and recipient when subscriber has roadmapUpdate.email enabled', async () => {
     _store['subscriptions/user2'] = {
       uid: 'user2',
       email: 'user2@test.com',
@@ -141,15 +135,13 @@ describe('notifyRoadmapSubscribers', () => {
 
     await notifyRoadmapSubscribers('Phase 3 complete');
 
-    const queueEntries = Object.entries(_store).filter(([k]) => k.startsWith('notificationQueue/'));
-    expect(queueEntries.length).toBeGreaterThanOrEqual(1);
-
-    const [, entry] = queueEntries[0];
-    expect(entry.channels.email).toBe(true);
-    expect(entry.email).toBe('user2@test.com');
+    expect(mockDispatchNotificationInline).toHaveBeenCalledTimes(1);
+    const [payload] = mockDispatchNotificationInline.mock.calls[0];
+    expect(payload.channels.email).toBe(true);
+    expect(payload.email).toBe('user2@test.com');
   });
 
-  it('does NOT create notifications for subscribers with roadmapUpdate disabled', async () => {
+  it('does NOT dispatch for subscribers with all roadmapUpdate channels disabled', async () => {
     _store['subscriptions/user3'] = {
       uid: 'user3',
       channelPreferences: {
@@ -159,11 +151,10 @@ describe('notifyRoadmapSubscribers', () => {
 
     await notifyRoadmapSubscribers('Minor update');
 
-    const queueEntries = Object.entries(_store).filter(([k]) => k.startsWith('notificationQueue/'));
-    expect(queueEntries.length).toBe(0);
+    expect(mockDispatchNotificationInline).not.toHaveBeenCalled();
   });
 
-  it('does NOT create notifications for subscribers without roadmapUpdate preference', async () => {
+  it('does NOT dispatch for subscribers without a roadmapUpdate preference', async () => {
     _store['subscriptions/user4'] = {
       uid: 'user4',
       channelPreferences: {
@@ -173,11 +164,10 @@ describe('notifyRoadmapSubscribers', () => {
 
     await notifyRoadmapSubscribers('Another update');
 
-    const queueEntries = Object.entries(_store).filter(([k]) => k.startsWith('notificationQueue/'));
-    expect(queueEntries.length).toBe(0);
+    expect(mockDispatchNotificationInline).not.toHaveBeenCalled();
   });
 
-  it('handles multiple subscribers correctly', async () => {
+  it('handles multiple subscribers correctly (per-subscriber fan-out)', async () => {
     _store['subscriptions/userA'] = {
       uid: 'userA',
       channelPreferences: {
@@ -200,17 +190,16 @@ describe('notifyRoadmapSubscribers', () => {
 
     await notifyRoadmapSubscribers('Big release');
 
-    const queueEntries = Object.entries(_store).filter(([k]) => k.startsWith('notificationQueue/'));
-    // userA (inApp) + userB (all channels) = 2 entries. userC opted out = 0.
-    expect(queueEntries.length).toBe(2);
+    // userA (inApp) + userB (all channels) = 2 dispatches. userC opted out = 0.
+    expect(mockDispatchNotificationInline).toHaveBeenCalledTimes(2);
   });
 
   it('does not crash when there are no subscribers', async () => {
-    // No subscriptions in store
     await expect(notifyRoadmapSubscribers('No one listening')).resolves.not.toThrow();
+    expect(mockDispatchNotificationInline).not.toHaveBeenCalled();
   });
 
-  it('includes the update message in the notification body', async () => {
+  it('includes the update message in the dispatch body', async () => {
     _store['subscriptions/user5'] = {
       uid: 'user5',
       channelPreferences: {
@@ -221,7 +210,26 @@ describe('notifyRoadmapSubscribers', () => {
     const message = 'Voice rooms are now live! Join a room and start chatting.';
     await notifyRoadmapSubscribers(message);
 
+    expect(mockDispatchNotificationInline).toHaveBeenCalledTimes(1);
+    const [payload] = mockDispatchNotificationInline.mock.calls[0];
+    expect(payload.body).toBe(message);
+  });
+
+  it('NEVER writes to the notificationQueue collection (regression guard)', async () => {
+    // Without the queue + cron, the production code path must not
+    // touch `notificationQueue` at all. If a refactor reintroduces
+    // the queue write (e.g., by accident or by reverting), this
+    // catches it — the only collection touched is `subscriptions`.
+    _store['subscriptions/userQ'] = {
+      uid: 'userQ',
+      channelPreferences: {
+        roadmapUpdate: { email: false, push: false, inApp: true, systemMessage: false },
+      },
+    };
+
+    await notifyRoadmapSubscribers('Regression');
+
     const queueEntries = Object.entries(_store).filter(([k]) => k.startsWith('notificationQueue/'));
-    expect(queueEntries[0][1].body).toBe(message);
+    expect(queueEntries).toHaveLength(0);
   });
 });

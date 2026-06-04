@@ -118,9 +118,10 @@ describe('startCronJobs', () => {
       expect(schedules).toContain('0 5 * * *');
 
       // Total: 7 schedules in production. serverHealth → Better Stack
-      // monitor; accountDeletion / dispatchNotifications / staleRooms
-      // → GH Actions scheduled workflows; expireBans → eliminated
-      // entirely (server-side filter in checkBans removes the sweep).
+      // monitor; accountDeletion / staleRooms → GH Actions scheduled
+      // workflows; expireBans + dispatchNotifications → eliminated
+      // entirely (server-side filter in checkBans for the former,
+      // inline fan-out via dispatchNotificationInline for the latter).
       expect(mockSchedule).toHaveBeenCalledTimes(7);
     });
 
@@ -191,11 +192,13 @@ describe('startCronJobs', () => {
       expect(expireDataExports).toHaveBeenCalled();
     });
 
-    // dispatchNotifications callback test removed — migrated to GH
-    // Actions scheduled workflow (*/5 in workflow vs */2 in-process,
-    // operator-approved cadence relaxation). The endpoint is exercised
-    // by tests in tests/routes/system.test.js + the workflow at
-    // .github/workflows/cron-dispatch-notifications.yml.
+    // dispatchNotifications is gone entirely — no node-cron schedule,
+    // no system endpoint, no workflow. Roadmap notifications now fan
+    // out inline via dispatchNotificationInline (utils/notification-
+    // channels.js), called from utils/roadmap-notify.js with
+    // Promise.allSettled per subscriber. Tests for that path live in
+    // tests/utils/roadmap-notify.test.js +
+    // tests/utils/notification-channels.test.js.
 
     test('ageVerificationAuditReconcile callback invokes the job', () => {
       ageVerificationAuditReconcile.mockResolvedValue(undefined);

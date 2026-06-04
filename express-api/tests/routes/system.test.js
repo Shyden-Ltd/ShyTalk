@@ -11,13 +11,6 @@ jest.mock('../../src/cron/serverHealth', () => mockServerHealth);
 const mockAccountDeletion = jest.fn().mockResolvedValue(undefined);
 jest.mock('../../src/cron/accountDeletion', () => mockAccountDeletion);
 
-// Mock the notification-dispatch worker the same way — dispatch-
-// notifications endpoint awaits this synchronously. Also avoids
-// touching the firebase init chain in notification-dispatch.js's
-// require tree.
-const mockDispatchNotifications = jest.fn().mockResolvedValue(undefined);
-jest.mock('../../src/cron/notification-dispatch', () => mockDispatchNotifications);
-
 // Mock the staleRooms worker the same way — sweep-stale-rooms endpoint
 // awaits this synchronously.
 const mockStaleRooms = jest.fn().mockResolvedValue(undefined);
@@ -71,7 +64,6 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockServerHealth.mockResolvedValue(undefined);
   mockAccountDeletion.mockResolvedValue(undefined);
-  mockDispatchNotifications.mockResolvedValue(undefined);
   mockStaleRooms.mockResolvedValue(undefined);
 });
 
@@ -332,168 +324,6 @@ describe('POST /api/system/sweep-account-deletions', () => {
   });
 });
 
-describe('POST /api/system/dispatch-notifications', () => {
-  test('returns 401 without bearer token', async () => {
-    const app = createApp();
-    const res = await request(app).post('/api/system/dispatch-notifications');
-
-    expect(res.status).toBe(401);
-    expect(mockDispatchNotifications).not.toHaveBeenCalled();
-  });
-
-  test('returns 401 with wrong bearer token', async () => {
-    const app = createApp();
-    const res = await request(app)
-      .post('/api/system/dispatch-notifications')
-      .set('Authorization', 'Bearer wrong-secret');
-
-    expect(res.status).toBe(401);
-    expect(mockDispatchNotifications).not.toHaveBeenCalled();
-  });
-
-  test('returns 200 and invokes dispatchNotifications with correct secret', async () => {
-    const app = createApp();
-    const res = await request(app)
-      .post('/api/system/dispatch-notifications')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: 'ok' });
-    expect(mockDispatchNotifications).toHaveBeenCalledTimes(1);
-  });
-
-  test('returns 500 when dispatchNotifications throws', async () => {
-    mockDispatchNotifications.mockRejectedValueOnce(new Error('FCM unavailable'));
-
-    const app = createApp();
-    const res = await request(app)
-      .post('/api/system/dispatch-notifications')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
-
-    expect(res.status).toBe(500);
-    expect(res.body).toEqual({ error: 'sweep failed' });
-    expect(mockDispatchNotifications).toHaveBeenCalledTimes(1);
-    expect(mockLog.error).toHaveBeenCalledWith(
-      'system',
-      'dispatch-notifications failed',
-      expect.objectContaining({ error: 'FCM unavailable' }),
-    );
-  });
-
-  test('returns 409 when a concurrent dispatch is in flight', async () => {
-    let resolveFirst;
-    const firstPromise = new Promise((resolve) => {
-      resolveFirst = resolve;
-    });
-    mockDispatchNotifications.mockReturnValueOnce(firstPromise);
-
-    const app = createApp();
-
-    let captureFirstResponse;
-    const firstResponse = new Promise((resolve) => {
-      captureFirstResponse = resolve;
-    });
-    request(app)
-      .post('/api/system/dispatch-notifications')
-      .set('Authorization', `Bearer ${TEST_SECRET}`)
-      .end((err, res) => captureFirstResponse({ err, res }));
-
-    await new Promise((resolve) => setImmediate(resolve));
-
-    const secondRes = await request(app)
-      .post('/api/system/dispatch-notifications')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
-
-    expect(secondRes.status).toBe(409);
-    expect(secondRes.body).toEqual({ error: 'sweep already in flight' });
-    expect(mockDispatchNotifications).toHaveBeenCalledTimes(1);
-
-    resolveFirst();
-    const { err, res: firstRes } = await firstResponse;
-    expect(err).toBeNull();
-    expect(firstRes.status).toBe(200);
-  });
-
-  test('times out and returns 500 if dispatchNotifications hangs forever', async () => {
-    mockDispatchNotifications.mockReturnValueOnce(new Promise(() => {}));
-    process.env.SWEEP_TIMEOUT_MS_OVERRIDE = '50';
-
-    try {
-      const app = createApp();
-      const res = await request(app)
-        .post('/api/system/dispatch-notifications')
-        .set('Authorization', `Bearer ${TEST_SECRET}`);
-
-      expect(res.status).toBe(500);
-      expect(res.body).toEqual({ error: 'sweep failed' });
-      expect(mockLog.error).toHaveBeenCalledWith(
-        'system',
-        'dispatch-notifications failed',
-        expect.objectContaining({ error: expect.stringContaining('timed out') }),
-      );
-
-      // Flag cleared → next dispatch works.
-      mockDispatchNotifications.mockResolvedValueOnce(undefined);
-      const next = await request(app)
-        .post('/api/system/dispatch-notifications')
-        .set('Authorization', `Bearer ${TEST_SECRET}`);
-      expect(next.status).toBe(200);
-    } finally {
-      delete process.env.SWEEP_TIMEOUT_MS_OVERRIDE;
-    }
-  });
-
-  test('dispatch-notifications guard is INDEPENDENT from sweep-stale-rooms and sweep-account-deletions', async () => {
-    // All three sweeps have their own closure-captured flag from the
-    // createSweepHandler factory. A hung dispatch must not block
-    // stale-rooms or account-deletions, and vice versa.
-    //
-    // Hold dispatch via a manually-resolvable Promise (not a timeout
-    // override) so the dispatch sweep stays in-flight for the FULL
-    // duration of the other assertions. A timeout approach would
-    // clear the dispatch flag mid-test, defeating the structural
-    // guarantee the test is meant to prove.
-    let resolveDispatch;
-    const dispatchHeld = new Promise((resolve) => {
-      resolveDispatch = resolve;
-    });
-    mockDispatchNotifications.mockReturnValueOnce(dispatchHeld);
-
-    const app = createApp();
-
-    let captureDispatch;
-    const dispatchResponse = new Promise((resolve) => {
-      captureDispatch = resolve;
-    });
-    request(app)
-      .post('/api/system/dispatch-notifications')
-      .set('Authorization', `Bearer ${TEST_SECRET}`)
-      .end((err, res) => captureDispatch({ err, res }));
-
-    // Yield so the dispatch handler enters and sets its inFlight flag.
-    await new Promise((resolve) => setImmediate(resolve));
-
-    // The dispatch is now genuinely in-flight (no timeout fallback).
-    // sweep-stale-rooms must proceed because its flag is INDEPENDENT.
-    const staleRoomsRes = await request(app)
-      .post('/api/system/sweep-stale-rooms')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
-    expect(staleRoomsRes.status).toBe(200);
-
-    // sweep-account-deletions must also proceed — also INDEPENDENT.
-    const accountRes = await request(app)
-      .post('/api/system/sweep-account-deletions')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
-    expect(accountRes.status).toBe(200);
-
-    // Release the dispatch and confirm it completes cleanly.
-    resolveDispatch();
-    const { err, res: dispatchRes } = await dispatchResponse;
-    expect(err).toBeNull();
-    expect(dispatchRes.status).toBe(200);
-  });
-});
-
 describe('POST /api/system/sweep-stale-rooms', () => {
   test('returns 401 without bearer token', async () => {
     const app = createApp();
@@ -604,7 +434,7 @@ describe('POST /api/system/sweep-stale-rooms', () => {
     }
   });
 
-  test('sweep-stale-rooms guard is INDEPENDENT from the other two sweeps', async () => {
+  test('sweep-stale-rooms guard is INDEPENDENT from sweep-account-deletions', async () => {
     // Closure-per-handler from the factory means a hung stale-rooms
     // sweep must not block any other sweep. Holds via a manually-
     // resolvable Promise so the dispatch stays in-flight during the
@@ -628,16 +458,11 @@ describe('POST /api/system/sweep-stale-rooms', () => {
 
     await new Promise((resolve) => setImmediate(resolve));
 
-    // The other two sweeps must proceed in parallel.
+    // The other sweep must proceed in parallel.
     const accountRes = await request(app)
       .post('/api/system/sweep-account-deletions')
       .set('Authorization', `Bearer ${TEST_SECRET}`);
     expect(accountRes.status).toBe(200);
-
-    const dispatchRes = await request(app)
-      .post('/api/system/dispatch-notifications')
-      .set('Authorization', `Bearer ${TEST_SECRET}`);
-    expect(dispatchRes.status).toBe(200);
 
     resolveStaleRooms();
     const { err, res: staleRoomsRes } = await staleRoomsResponse;
