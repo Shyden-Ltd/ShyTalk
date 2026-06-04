@@ -11,6 +11,11 @@ jest.mock('../../src/cron/serverHealth', () => mockServerHealth);
 const mockAccountDeletion = jest.fn().mockResolvedValue(undefined);
 jest.mock('../../src/cron/accountDeletion', () => mockAccountDeletion);
 
+// Mock the expireBans cron-style worker the same way — the sweep-bans
+// endpoint awaits this function synchronously.
+const mockExpireBans = jest.fn().mockResolvedValue(undefined);
+jest.mock('../../src/cron/expireBans', () => mockExpireBans);
+
 // Mock alertManager — its real init touches Firestore which we don't
 // need for the heartbeat endpoint's contract.
 jest.mock('../../src/utils/alertManagerInstance', () => ({
@@ -59,6 +64,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockServerHealth.mockResolvedValue(undefined);
   mockAccountDeletion.mockResolvedValue(undefined);
+  mockExpireBans.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -315,5 +321,189 @@ describe('POST /api/system/sweep-account-deletions', () => {
     } finally {
       delete process.env.SWEEP_TIMEOUT_MS_OVERRIDE;
     }
+  });
+});
+
+describe('POST /api/system/sweep-bans', () => {
+  test('returns 401 without bearer token', async () => {
+    const app = createApp();
+    const res = await request(app).post('/api/system/sweep-bans');
+
+    expect(res.status).toBe(401);
+    expect(mockExpireBans).not.toHaveBeenCalled();
+  });
+
+  test('returns 401 with wrong bearer token', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/system/sweep-bans')
+      .set('Authorization', 'Bearer wrong-secret');
+
+    expect(res.status).toBe(401);
+    expect(mockExpireBans).not.toHaveBeenCalled();
+  });
+
+  test('returns 200 and invokes expireBans with correct secret', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/system/sweep-bans')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: 'ok' });
+    expect(mockExpireBans).toHaveBeenCalledTimes(1);
+  });
+
+  test('returns 500 when expireBans throws', async () => {
+    mockExpireBans.mockRejectedValueOnce(new Error('Firestore down'));
+
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/system/sweep-bans')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: 'sweep failed' });
+    expect(mockExpireBans).toHaveBeenCalledTimes(1);
+    expect(mockLog.error).toHaveBeenCalledWith(
+      'system',
+      'sweep-bans failed',
+      expect.objectContaining({ error: 'Firestore down' }),
+    );
+  });
+
+  test('returns 409 when a concurrent sweep is in flight', async () => {
+    let resolveFirst;
+    const firstPromise = new Promise((resolve) => {
+      resolveFirst = resolve;
+    });
+    mockExpireBans.mockReturnValueOnce(firstPromise);
+
+    const app = createApp();
+
+    let captureFirstResponse;
+    const firstResponse = new Promise((resolve) => {
+      captureFirstResponse = resolve;
+    });
+    request(app)
+      .post('/api/system/sweep-bans')
+      .set('Authorization', `Bearer ${TEST_SECRET}`)
+      .end((err, res) => captureFirstResponse({ err, res }));
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const secondRes = await request(app)
+      .post('/api/system/sweep-bans')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+
+    expect(secondRes.status).toBe(409);
+    expect(secondRes.body).toEqual({ error: 'sweep already in flight' });
+    expect(mockExpireBans).toHaveBeenCalledTimes(1);
+
+    resolveFirst();
+    const { err, res: firstRes } = await firstResponse;
+    expect(err).toBeNull();
+    expect(firstRes.status).toBe(200);
+  });
+
+  test('clears in-flight guard after sweep completes (allows next sweep)', async () => {
+    const app = createApp();
+
+    const first = await request(app)
+      .post('/api/system/sweep-bans')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+    expect(first.status).toBe(200);
+
+    const second = await request(app)
+      .post('/api/system/sweep-bans')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+    expect(second.status).toBe(200);
+
+    expect(mockExpireBans).toHaveBeenCalledTimes(2);
+  });
+
+  test('clears in-flight guard after sweep throws (allows next sweep)', async () => {
+    mockExpireBans.mockRejectedValueOnce(new Error('transient Firestore'));
+    mockExpireBans.mockResolvedValueOnce(undefined);
+
+    const app = createApp();
+
+    const first = await request(app)
+      .post('/api/system/sweep-bans')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+    expect(first.status).toBe(500);
+
+    const second = await request(app)
+      .post('/api/system/sweep-bans')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+    expect(second.status).toBe(200);
+
+    expect(mockExpireBans).toHaveBeenCalledTimes(2);
+  });
+
+  test('times out and returns 500 if expireBans hangs forever', async () => {
+    mockExpireBans.mockReturnValueOnce(new Promise(() => {}));
+    process.env.SWEEP_TIMEOUT_MS_OVERRIDE = '50';
+
+    try {
+      const app = createApp();
+      const res = await request(app)
+        .post('/api/system/sweep-bans')
+        .set('Authorization', `Bearer ${TEST_SECRET}`);
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'sweep failed' });
+      expect(mockLog.error).toHaveBeenCalledWith(
+        'system',
+        'sweep-bans failed',
+        expect.objectContaining({ error: expect.stringContaining('timed out') }),
+      );
+
+      // Flag cleared → next sweep works.
+      mockExpireBans.mockResolvedValueOnce(undefined);
+      const next = await request(app)
+        .post('/api/system/sweep-bans')
+        .set('Authorization', `Bearer ${TEST_SECRET}`);
+      expect(next.status).toBe(200);
+    } finally {
+      delete process.env.SWEEP_TIMEOUT_MS_OVERRIDE;
+    }
+  });
+
+  test('sweep-bans in-flight guard is INDEPENDENT from sweep-account-deletions', async () => {
+    // Each sweep endpoint has its own module-level flag, so a hung
+    // account-deletion sweep must not block an unrelated bans sweep.
+    let resolveAccountDeletion;
+    mockAccountDeletion.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveAccountDeletion = resolve;
+      }),
+    );
+
+    const app = createApp();
+
+    let captureAccountResponse;
+    const accountResponse = new Promise((resolve) => {
+      captureAccountResponse = resolve;
+    });
+    request(app)
+      .post('/api/system/sweep-account-deletions')
+      .set('Authorization', `Bearer ${TEST_SECRET}`)
+      .end((err, res) => captureAccountResponse({ err, res }));
+
+    await new Promise((resolve) => setImmediate(resolve));
+
+    // sweep-bans should proceed normally even with account-deletions hung.
+    const bansRes = await request(app)
+      .post('/api/system/sweep-bans')
+      .set('Authorization', `Bearer ${TEST_SECRET}`);
+    expect(bansRes.status).toBe(200);
+    expect(mockExpireBans).toHaveBeenCalledTimes(1);
+
+    // Cleanup the hung account-deletion sweep.
+    resolveAccountDeletion();
+    const { err, res: accountRes } = await accountResponse;
+    expect(err).toBeNull();
+    expect(accountRes.status).toBe(200);
   });
 });

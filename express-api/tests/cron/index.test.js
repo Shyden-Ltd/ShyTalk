@@ -28,7 +28,6 @@ jest.mock('../../src/cron/backups', () => jest.fn());
 jest.mock('../../src/cron/closedRooms', () => jest.fn());
 jest.mock('../../src/cron/orphanedStorage', () => jest.fn());
 jest.mock('../../src/cron/rotateLogs', () => jest.fn());
-jest.mock('../../src/cron/expireBans', () => jest.fn());
 jest.mock('../../src/cron/expireTempIds', () => jest.fn());
 jest.mock('../../src/cron/expireDataExports', () => jest.fn());
 jest.mock('../../src/cron/notification-dispatch', () => jest.fn());
@@ -44,7 +43,6 @@ const backups = require('../../src/cron/backups');
 const closedRooms = require('../../src/cron/closedRooms');
 const orphanedStorage = require('../../src/cron/orphanedStorage');
 const rotateLogs = require('../../src/cron/rotateLogs');
-const expireBans = require('../../src/cron/expireBans');
 const expireTempIds = require('../../src/cron/expireTempIds');
 const expireDataExports = require('../../src/cron/expireDataExports');
 const dispatchNotifications = require('../../src/cron/notification-dispatch');
@@ -112,8 +110,9 @@ describe('startCronJobs', () => {
       expect(schedules).toContain('0 4 * * *');
       // rotateLogs — every hour
       expect(schedules).toContain('0 * * * *');
-      // expireBans — every 15 minutes
-      expect(schedules).toContain('*/15 * * * *');
+      // expireBans migrated to GH Actions scheduled workflow — no
+      // longer in the node-cron list.
+      expect(schedules).not.toContain('*/15 * * * *');
 
       // Should NOT have dev-only jobs
       expect(schedules).not.toContain('*/30 * * * *'); // testDataCleanup
@@ -121,12 +120,12 @@ describe('startCronJobs', () => {
       // ageVerificationAuditReconcile — daily 05:00 UTC
       expect(schedules).toContain('0 5 * * *');
 
-      // Total: 10 schedules in production. serverHealth migrated to
+      // Total: 9 schedules in production. serverHealth migrated to
       // Better Stack (PR #988); accountDeletion migrated to GitHub
-      // Actions scheduled workflow (this PR's
-      // .github/workflows/cron-account-deletion.yml POSTs to
-      // /api/system/sweep-account-deletions at 0 3 * * *).
-      expect(mockSchedule).toHaveBeenCalledTimes(10);
+      // Actions (PR #989); expireBans migrated to GitHub Actions
+      // (this PR's .github/workflows/cron-expire-bans.yml POSTs to
+      // /api/system/sweep-bans at */15 * * * *).
+      expect(mockSchedule).toHaveBeenCalledTimes(9);
     });
 
     test('does not register testDataCleanup in production', () => {
@@ -149,16 +148,11 @@ describe('startCronJobs', () => {
       expect(staleRooms).toHaveBeenCalled();
     });
 
-    test('expireBans callback invokes the job', () => {
-      expireBans.mockResolvedValue(undefined);
-      startCronJobs();
-
-      const expireCall = mockSchedule.mock.calls.find((c) => c[0] === '*/15 * * * *');
-      expect(expireCall).toBeDefined();
-
-      expireCall[1]();
-      expect(expireBans).toHaveBeenCalled();
-    });
+    // expireBans callback test removed — expireBans is no longer
+    // registered as a node-cron schedule. Its functionality moved to
+    // POST /api/system/sweep-bans, exercised by tests in
+    // tests/routes/system.test.js + the GH Actions workflow at
+    // .github/workflows/cron-expire-bans.yml.
 
     test('rotateLogs uses hourly schedule in production', () => {
       rotateLogs.mockResolvedValue(undefined);

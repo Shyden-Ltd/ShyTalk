@@ -9,7 +9,6 @@ const backups = require('./backups');
 const closedRooms = require('./closedRooms');
 const orphanedStorage = require('./orphanedStorage');
 const rotateLogs = require('./rotateLogs');
-const expireBans = require('./expireBans');
 const expireTempIds = require('./expireTempIds');
 const expireDataExports = require('./expireDataExports');
 const alertManager = require('../utils/alertManagerInstance');
@@ -75,17 +74,14 @@ function startCronJobs() {
     rotateLogs().catch((err) => log.error('cron', 'rotateLogs failed', { error: err.message }));
   });
 
-  // Expire bans — every 15 minutes
-  cron.schedule('*/15 * * * *', () => {
-    log.info('cron', 'Running expireBans');
-    expireBans().catch((err) => log.error('cron', 'expireBans failed', { error: err.message }));
-  });
-
-  // accountDeletion migrated to GitHub Actions scheduled workflow
-  // (.github/workflows/cron-account-deletion.yml) which POSTs to
-  // /api/system/sweep-account-deletions at 0 3 * * *. The function
-  // itself still lives in src/cron/accountDeletion.js — only the
-  // schedule moved out of the in-process node-cron list.
+  // expireBans + accountDeletion both migrated to GitHub Actions
+  // scheduled workflows:
+  //   - .github/workflows/cron-expire-bans.yml         */15 * * * *
+  //   - .github/workflows/cron-account-deletion.yml      0 3 * * *
+  // Each POSTs to /api/system/sweep-{bans,account-deletions}. The
+  // underlying functions still live in src/cron/{expireBans,
+  // accountDeletion}.js — only the schedule moved out of the
+  // in-process node-cron list.
 
   // Expire data exports — daily 04:00 UTC
   cron.schedule('0 4 * * *', () => {

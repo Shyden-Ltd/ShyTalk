@@ -9,15 +9,19 @@
  *
  * POST /api/system/sweep-account-deletions  — requires Bearer auth.
  *                                             Synchronously runs
- *                                             accountDeletion() — the same
- *                                             function that used to fire
- *                                             from the daily 03:00 UTC cron,
- *                                             now driven by a GitHub Actions
- *                                             scheduled workflow at the same
- *                                             cron expression.
+ *                                             accountDeletion() — daily
+ *                                             03:00 UTC sweep scheduled
+ *                                             by .github/workflows/
+ *                                             cron-account-deletion.yml.
+ *
+ * POST /api/system/sweep-bans               — requires Bearer auth.
+ *                                             Synchronously runs
+ *                                             expireBans() — every-15-min
+ *                                             sweep scheduled by
+ *                                             .github/workflows/
+ *                                             cron-expire-bans.yml.
  *
  * Future endpoints (added per cron-cluster migration):
- * POST /api/system/sweep-bans               — requires Bearer
  * POST /api/system/dispatch-notifications   — requires Bearer
  *
  * Architecture: replaces in-process node-cron schedules with either
@@ -31,6 +35,7 @@ const router = require('express').Router();
 const log = require('../utils/log');
 const serverHealth = require('../cron/serverHealth');
 const accountDeletion = require('../cron/accountDeletion');
+const expireBans = require('../cron/expireBans');
 const alertManager = require('../utils/alertManagerInstance');
 const { requireSystemAuth } = require('../middleware/system-auth');
 
@@ -47,24 +52,28 @@ router.get('/system/health', (req, res) => {
 });
 
 // In-flight guards prevent concurrent sweeps from racing on the same
-// 10-doc page. The GH Actions scheduled workflow runs once per cron
+// page of work. The GH Actions scheduled workflow runs once per cron
 // tick, but a hand-triggered re-dispatch or a delayed first run
 // overlapping the next scheduled run would otherwise pick up the same
 // rows. The guard returns 409 so the caller sees a clean rejection
 // rather than a partial double-execution.
 //
-// Paired with a hard timeout (SWEEP_TIMEOUT_MS): if accountDeletion()
-// hangs forever (Firestore unreachable, R2 retry-loop, Auth SDK
-// stuck), the timeout races the sweep and forces the handler to
-// respond 500. Without this, the in-flight flag stays `true` forever
-// and the GH Actions 409-as-success path masks the wedge from the
-// Actions UI — operator only finds out a week later when the deletion
-// queue hasn't drained. The 20-min bound is well inside the workflow's
-// `timeout-minutes: 30` and the curl `--max-time 600` (10 min) — curl
-// times out first so the workflow sees a hard failure, then the
-// server's own timeout clears the flag so the NEXT day's run can
-// proceed without manual intervention.
+// Each sweep has its own flag so a hung `accountDeletion` sweep doesn't
+// block an unrelated `bans` sweep, and vice versa.
+//
+// Paired with a hard timeout (SWEEP_TIMEOUT): if the underlying sweep
+// hangs forever (Firestore unreachable, R2 retry-loop, Auth SDK stuck),
+// the timeout races the sweep and forces the handler to respond 500.
+// Without this, the in-flight flag would stay `true` forever and the
+// GH Actions 409-as-success path would mask the wedge from the Actions
+// UI — operator only finds out a week later when the queue hasn't
+// drained. The 20-min bound is well inside the workflow's `timeout-
+// minutes: 30` and the curl `--max-time 600` (10 min) — curl times out
+// first so the workflow sees a hard failure, then the server's own
+// timeout clears the flag so the NEXT scheduled run can proceed
+// without manual intervention.
 let accountDeletionInFlight = false;
+let bansInFlight = false;
 const SWEEP_TIMEOUT_DEFAULT_MS = 20 * 60 * 1000;
 
 // Read the sweep timeout per-request so tests can inject a short
@@ -100,16 +109,38 @@ router.post('/system/sweep-account-deletions', requireSystemAuth, async (req, re
     log.error('system', 'sweep-account-deletions failed', { error: err.message });
     res.status(500).json({ error: 'sweep failed' });
   } finally {
-    // Clear the timer first so a successful sweep doesn't leak it (the
-    // Promise.race winner ignores the loser but the loser's setTimeout
-    // is still pending and would keep Node alive past the response).
     if (timeoutHandle) clearTimeout(timeoutHandle);
     accountDeletionInFlight = false;
   }
 });
 
+router.post('/system/sweep-bans', requireSystemAuth, async (req, res) => {
+  if (bansInFlight) {
+    return res.status(409).json({ error: 'sweep already in flight' });
+  }
+  bansInFlight = true;
+  let timeoutHandle;
+  try {
+    const timeoutMs = getSweepTimeoutMs();
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutHandle = setTimeout(
+        () => reject(new Error(`sweep timed out after ${timeoutMs}ms`)),
+        timeoutMs,
+      );
+    });
+    await Promise.race([expireBans(), timeoutPromise]);
+    res.json({ status: 'ok' });
+  } catch (err) {
+    log.error('system', 'sweep-bans failed', { error: err.message });
+    res.status(500).json({ error: 'sweep failed' });
+  } finally {
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+    bansInFlight = false;
+  }
+});
+
 // Test-only reset hook. Exported behind a NODE_ENV guard so production
-// code can't accidentally clobber the in-flight flag — the consumer
+// code can't accidentally clobber the in-flight flags — the consumer
 // (system.test.js afterEach) calls this to scrub any leaked state from
 // a Jest-timeout-aborted test that held a Promise open without
 // resolving it. Per the operator's `[[feedback-test-isolation-no-leaks]]`
@@ -117,6 +148,7 @@ router.post('/system/sweep-account-deletions', requireSystemAuth, async (req, re
 if (process.env.NODE_ENV === 'test') {
   router._resetInFlightForTesting = () => {
     accountDeletionInFlight = false;
+    bansInFlight = false;
   };
 }
 
