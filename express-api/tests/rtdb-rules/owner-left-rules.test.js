@@ -45,15 +45,27 @@ describe('database.rules.json — ownerLeft rule', () => {
     expect(ownerLeftRule['.write']).toContain('auth != null');
   });
 
-  test('.write forces value to equal auth.uid OR be a removal (set null)', () => {
+  test('.write forces SET value to equal auth.uid (signed entries only)', () => {
     // The writer must SIGN the entry with their own uid (cannot forge
-    // a different uid into the signal). Removals (newData.exists() === false)
-    // are allowed so a graceful client-side cancel of the onDisconnect
-    // can clean up the path.
+    // a different uid into the signal).
     const write = ownerLeftRule['.write'];
     expect(write).toContain('newData.val()');
     expect(write).toContain('auth.uid');
-    expect(write).toContain('newData.exists()');
+  });
+
+  test('.write restricts REMOVAL to the original writer (data.val() === auth.uid) — R2 C1', () => {
+    // R2 reviewer finding C1: without this check, ANY authenticated user
+    // could delete another room's onDisconnect signal during the Express
+    // restart window. Now the removal branch requires `data.val() ===
+    // auth.uid` so only the original writer can clear their own arm.
+    // Admin SDK bypasses rules so server-side `snap.ref.remove()` after
+    // processing still works.
+    const write = ownerLeftRule['.write'];
+    expect(write).toContain('data.val()');
+    expect(write).toContain('!newData.exists()');
+    // Sanity: the removal branch (newData.exists() == false) must be
+    // conjoined with the data.val() === auth.uid check, not standalone.
+    expect(write).toMatch(/!newData\.exists\(\)\s*&&\s*data\.val\(\)\s*===\s*auth\.uid/);
   });
 
   test('.validate constrains the value to a string', () => {

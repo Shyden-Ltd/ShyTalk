@@ -1,5 +1,8 @@
 const { OWNER_LEFT_ACTION } = require('../../src/utils/owner-left-handler');
-const { handleOwnerLeftSignal } = require('../../src/utils/owner-left-orchestrator');
+const {
+  handleOwnerLeftSignal,
+  isValidOwnerId,
+} = require('../../src/utils/owner-left-orchestrator');
 
 // `handleOwnerLeftSignal` is the orchestrator wired to the RTDB `ownerLeft/{roomId}`
 // signal. Given a roomId, it:
@@ -436,6 +439,189 @@ describe('handleOwnerLeftSignal', () => {
         expect(result.reason).not.toBe('owner-id-missing-or-invalid');
         expect(presenceChecker).toHaveBeenCalledWith('room-1', ownerId);
       }
+    });
+
+    // R2 finding I1: boolean primitives silently passed the original guard
+    // because String(true)/String(false) yield alphanumeric strings.
+    test('returns NOOP when ownerId is the boolean true (data corruption)', async () => {
+      const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId: true } });
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        nowMs,
+      });
+      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+      expect(result.reason).toBe('owner-id-missing-or-invalid');
+      expect(presenceChecker).not.toHaveBeenCalled();
+    });
+
+    test('returns NOOP when ownerId is the boolean false (data corruption)', async () => {
+      const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId: false } });
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        nowMs,
+      });
+      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+      expect(result.reason).toBe('owner-id-missing-or-invalid');
+      expect(presenceChecker).not.toHaveBeenCalled();
+    });
+
+    test('returns NOOP when ownerId is NaN', async () => {
+      const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId: NaN } });
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        nowMs,
+      });
+      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+      expect(result.reason).toBe('owner-id-missing-or-invalid');
+    });
+
+    test('returns NOOP when ownerId is Infinity', async () => {
+      const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId: Infinity } });
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        nowMs,
+      });
+      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+      expect(result.reason).toBe('owner-id-missing-or-invalid');
+    });
+
+    test('returns NOOP when ownerId is an object', async () => {
+      const { db } = makeMockDb({
+        initialRoom: { ...baseActiveRoom, ownerId: { uniqueId: 42 } },
+      });
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        nowMs,
+      });
+      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+      expect(result.reason).toBe('owner-id-missing-or-invalid');
+    });
+
+    test('returns NOOP when ownerId is an array', async () => {
+      const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId: ['42'] } });
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        nowMs,
+      });
+      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+      expect(result.reason).toBe('owner-id-missing-or-invalid');
+    });
+
+    // ShyTalk's accountDeletion.js:148 calls `String(roomDoc.data().ownerId)`
+    // for comparison, which means the schema legitimately stores ownerId as
+    // either a string or a finite number. The guard MUST accept both.
+    test('accepts a finite number ownerId (e.g. uniqueId stored as int)', async () => {
+      presenceChecker.mockResolvedValue(true);
+      const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId: 42 } });
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        nowMs,
+      });
+      expect(result.reason).not.toBe('owner-id-missing-or-invalid');
+      expect(presenceChecker).toHaveBeenCalledWith('room-1', 42);
+    });
+
+    test('accepts numeric 0 (path-safe, single-char id)', async () => {
+      presenceChecker.mockResolvedValue(true);
+      const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId: 0 } });
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        nowMs,
+      });
+      expect(result.reason).not.toBe('owner-id-missing-or-invalid');
+      expect(presenceChecker).toHaveBeenCalledWith('room-1', 0);
+    });
+
+    test('accepts ownerId at exactly the 256-char boundary (inclusive)', async () => {
+      presenceChecker.mockResolvedValue(true);
+      const at256 = 'a'.repeat(256);
+      const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId: at256 } });
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        nowMs,
+      });
+      expect(result.reason).not.toBe('owner-id-missing-or-invalid');
+    });
+  });
+
+  describe('isValidOwnerId — direct unit tests (path-safety primitive)', () => {
+    // Direct tests on the exported guard so future callers can rely on
+    // documented behaviour without inferring it from integration paths.
+    test('returns false for null + undefined', () => {
+      expect(isValidOwnerId(null)).toBe(false);
+      expect(isValidOwnerId(undefined)).toBe(false);
+    });
+
+    test('returns false for booleans', () => {
+      expect(isValidOwnerId(true)).toBe(false);
+      expect(isValidOwnerId(false)).toBe(false);
+    });
+
+    test('returns false for empty string', () => {
+      expect(isValidOwnerId('')).toBe(false);
+    });
+
+    test('returns true for valid strings', () => {
+      expect(isValidOwnerId('owner-1')).toBe(true);
+      expect(isValidOwnerId('A')).toBe(true);
+      expect(isValidOwnerId('abc_DEF-123')).toBe(true);
+    });
+
+    test('returns true for finite numbers', () => {
+      expect(isValidOwnerId(42)).toBe(true);
+      expect(isValidOwnerId(0)).toBe(true);
+      expect(isValidOwnerId(1e9)).toBe(true);
+    });
+
+    test('returns false for non-finite numbers', () => {
+      expect(isValidOwnerId(NaN)).toBe(false);
+      expect(isValidOwnerId(Infinity)).toBe(false);
+      expect(isValidOwnerId(-Infinity)).toBe(false);
+    });
+
+    test('returns false for strings with RTDB-illegal chars', () => {
+      const bad = ['a/b', 'a.b', 'a#b', 'a$b', 'a[b]', 'a b', 'a\tb', '../../foo'];
+      for (const id of bad) expect(isValidOwnerId(id)).toBe(false);
+    });
+
+    test('returns false for objects + arrays + functions', () => {
+      expect(isValidOwnerId({})).toBe(false);
+      expect(isValidOwnerId([])).toBe(false);
+      expect(isValidOwnerId(['a'])).toBe(false);
+      expect(isValidOwnerId(() => 'fn')).toBe(false);
+    });
+
+    test('boundary: exactly 256 chars is accepted, 257 is rejected', () => {
+      expect(isValidOwnerId('a'.repeat(256))).toBe(true);
+      expect(isValidOwnerId('a'.repeat(257))).toBe(false);
+    });
+
+    test('returns false for negative numbers (dash is not interpreted in the regex)', () => {
+      // String(-1) = "-1"; "-1" contains a dash, which IS in the allowlist
+      // pattern [A-Za-z0-9_-]. So negative numbers DO pass the regex when
+      // string-normalised. This test documents that behaviour explicitly so
+      // a future reviewer doesn't misread "should be rejected".
+      // ShyTalk's uniqueIds are non-negative, but the path-safety guard is
+      // schema-agnostic; negative numbers are valid RTDB path components.
+      expect(isValidOwnerId(-1)).toBe(true);
     });
   });
 

@@ -28,12 +28,21 @@ const {
  * interpolation share the same defensive shape. Defends against `ownerId`
  * values from corrupt Firestore docs containing `/`, `.`, `#`, `$`, `[`,
  * `]`, whitespace, or being missing entirely.
+ *
+ * Type-strict: accepts ONLY `string` and finite `number` primitives. The
+ * schema stores ownerId as either (see `accountDeletion.js:148`'s
+ * `String(roomDoc.data().ownerId)` normalisation pattern), but anything
+ * else — boolean, object, array, function, NaN, Infinity — is corruption.
+ * Without the strict typeof check, `String(true)` / `String(false)` /
+ * `String(NaN)` yield strings that pass the alphanumeric regex.
  */
 const MAX_OWNER_ID_LENGTH = 256;
 const SAFE_OWNER_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 function isValidOwnerId(ownerId) {
-  if (ownerId === null || ownerId === undefined) return false;
+  const t = typeof ownerId;
+  if (t !== 'string' && t !== 'number') return false;
+  if (t === 'number' && !Number.isFinite(ownerId)) return false;
   const s = String(ownerId);
   if (s.length === 0 || s.length > MAX_OWNER_ID_LENGTH) return false;
   return SAFE_OWNER_ID_PATTERN.test(s);

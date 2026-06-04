@@ -496,7 +496,11 @@ describe('registerOwnerLeftListener — writer-uid forwarding (C2 + spoof preven
     );
   });
 
-  test('forwards undefined writerUid when snap has no value (legacy / cancel arm)', async () => {
+  test('forwards null writerUid when snap.val() returns null (removal / cancel arm)', async () => {
+    // RTDB child_added with a null value can occur in narrow edge cases
+    // (e.g. arming with explicit null, or test fixtures). The orchestrator
+    // treats null and undefined as "no attestation" and falls back to the
+    // ownerStillPresent check.
     const handleSignal = jest.fn().mockResolvedValue({ action: OWNER_LEFT_ACTION.NOOP });
     const mock = makeMockRtdb();
     registerOwnerLeftListener({
@@ -507,8 +511,6 @@ describe('registerOwnerLeftListener — writer-uid forwarding (C2 + spoof preven
       handleSignal,
     });
     await mock.fireChildAdded('room-w3', null);
-    // null becomes null on the wire; the orchestrator treats null and
-    // undefined as "no attestation" and falls back to ownerStillPresent.
     expect(handleSignal).toHaveBeenCalledWith(
       expect.objectContaining({ roomId: 'room-w3', writerUid: null }),
     );
