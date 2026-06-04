@@ -14,7 +14,9 @@ const {
 const portalRoutes = require('./routes/portal');
 const { portalLimiter, recoveryLimiter } = require('./middleware/rateLimit');
 const { startCronJobs } = require('./cron');
-require('./utils/firebase'); // Initialize Firebase before routes
+const { db, rtdb } = require('./utils/firebase'); // Initialize Firebase before routes
+const log = require('./utils/log');
+const { startEventListeners } = require('./utils/event-listeners');
 const { patchConsole } = require('./utils/consoleLogger');
 
 // Route all console.log/warn/error through structured logger
@@ -293,4 +295,5 @@ app.listen(PORT, () => {
   // eslint-disable-next-line no-console
   console.log(`ShyTalk API listening on port ${PORT}`);
   startCronJobs();
+  startEventListeners({ db, rtdb, log });
 });
