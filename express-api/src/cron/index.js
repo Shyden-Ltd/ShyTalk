@@ -11,7 +11,6 @@ const orphanedStorage = require('./orphanedStorage');
 const rotateLogs = require('./rotateLogs');
 const expireBans = require('./expireBans');
 const expireTempIds = require('./expireTempIds');
-const accountDeletion = require('./accountDeletion');
 const expireDataExports = require('./expireDataExports');
 const alertManager = require('../utils/alertManagerInstance');
 const dispatchNotifications = require('./notification-dispatch');
@@ -82,13 +81,11 @@ function startCronJobs() {
     expireBans().catch((err) => log.error('cron', 'expireBans failed', { error: err.message }));
   });
 
-  // Account deletion — daily 03:00 UTC
-  cron.schedule('0 3 * * *', () => {
-    log.info('cron', 'Running accountDeletion');
-    accountDeletion().catch((err) =>
-      log.error('cron', 'accountDeletion failed', { error: err.message }),
-    );
-  });
+  // accountDeletion migrated to GitHub Actions scheduled workflow
+  // (.github/workflows/cron-account-deletion.yml) which POSTs to
+  // /api/system/sweep-account-deletions at 0 3 * * *. The function
+  // itself still lives in src/cron/accountDeletion.js — only the
+  // schedule moved out of the in-process node-cron list.
 
   // Expire data exports — daily 04:00 UTC
   cron.schedule('0 4 * * *', () => {

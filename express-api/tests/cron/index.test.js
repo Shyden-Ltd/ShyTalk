@@ -30,7 +30,6 @@ jest.mock('../../src/cron/orphanedStorage', () => jest.fn());
 jest.mock('../../src/cron/rotateLogs', () => jest.fn());
 jest.mock('../../src/cron/expireBans', () => jest.fn());
 jest.mock('../../src/cron/expireTempIds', () => jest.fn());
-jest.mock('../../src/cron/accountDeletion', () => jest.fn());
 jest.mock('../../src/cron/expireDataExports', () => jest.fn());
 jest.mock('../../src/cron/notification-dispatch', () => jest.fn());
 jest.mock('../../src/cron/ageVerificationAuditReconcile', () => jest.fn());
@@ -47,6 +46,9 @@ const orphanedStorage = require('../../src/cron/orphanedStorage');
 const rotateLogs = require('../../src/cron/rotateLogs');
 const expireBans = require('../../src/cron/expireBans');
 const expireTempIds = require('../../src/cron/expireTempIds');
+const expireDataExports = require('../../src/cron/expireDataExports');
+const dispatchNotifications = require('../../src/cron/notification-dispatch');
+const ageVerificationAuditReconcile = require('../../src/cron/ageVerificationAuditReconcile');
 beforeEach(() => {
   jest.clearAllMocks();
 });
@@ -119,10 +121,12 @@ describe('startCronJobs', () => {
       // ageVerificationAuditReconcile — daily 05:00 UTC
       expect(schedules).toContain('0 5 * * *');
 
-      // Total: 11 schedules in production. serverHealth was migrated to
-      // an externally-triggered ping (Better Stack heartbeat hits
-      // /api/system/health) so it no longer appears as a node-cron job.
-      expect(mockSchedule).toHaveBeenCalledTimes(11);
+      // Total: 10 schedules in production. serverHealth migrated to
+      // Better Stack (PR #988); accountDeletion migrated to GitHub
+      // Actions scheduled workflow (this PR's
+      // .github/workflows/cron-account-deletion.yml POSTs to
+      // /api/system/sweep-account-deletions at 0 3 * * *).
+      expect(mockSchedule).toHaveBeenCalledTimes(10);
     });
 
     test('does not register testDataCleanup in production', () => {
@@ -183,6 +187,46 @@ describe('startCronJobs', () => {
       callback();
 
       expect(archiveReports).toHaveBeenCalled();
+    });
+
+    test('expireDataExports callback invokes the job', () => {
+      expireDataExports.mockResolvedValue(undefined);
+      startCronJobs();
+
+      // The 0 4 * * * schedule is shared by orphanedStorage and
+      // expireDataExports. Both schedules have separate callbacks, so
+      // we look for the one specifically tied to expireDataExports by
+      // matching the index after orphanedStorage's schedule.
+      const fourAmCalls = mockSchedule.mock.calls.filter((c) => c[0] === '0 4 * * *');
+      expect(fourAmCalls.length).toBe(2);
+
+      // Invoke each callback at the 0 4 schedule; expireDataExports
+      // should be hit by exactly one of them.
+      fourAmCalls.forEach((c) => c[1]());
+
+      expect(expireDataExports).toHaveBeenCalled();
+    });
+
+    test('dispatchNotifications callback invokes the job on every 2 minutes', () => {
+      dispatchNotifications.mockResolvedValue(undefined);
+      startCronJobs();
+
+      const twoMinCall = mockSchedule.mock.calls.find((c) => c[0] === '*/2 * * * *');
+      expect(twoMinCall).toBeDefined();
+
+      twoMinCall[1]();
+      expect(dispatchNotifications).toHaveBeenCalled();
+    });
+
+    test('ageVerificationAuditReconcile callback invokes the job', () => {
+      ageVerificationAuditReconcile.mockResolvedValue(undefined);
+      startCronJobs();
+
+      const fiveAmCall = mockSchedule.mock.calls.find((c) => c[0] === '0 5 * * *');
+      expect(fiveAmCall).toBeDefined();
+
+      fiveAmCall[1]();
+      expect(ageVerificationAuditReconcile).toHaveBeenCalled();
     });
 
     test('archiveReports error is caught and logged', async () => {

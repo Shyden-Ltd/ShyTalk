@@ -1,0 +1,107 @@
+name: Cron — Account Deletion Sweep
+
+# External replacement for the in-process node-cron schedule that used
+# to run `accountDeletion()` daily at 03:00 UTC inside the Express API
+# process. The function itself still lives in
+# `express-api/src/cron/accountDeletion.js`; this workflow only changes
+# the trigger from `node-cron` to `gh actions schedule`, POSTing to a
+# secured HTTP endpoint that wraps the same function.
+#
+# Why: per the operator's `[[feedback-avoid-crons-prefer-event-driven]]`
+# directive, in-process polling crons are an architectural concern even
+# when they're $0. GH Actions on a public repo is free + unlimited, so
+# moving the scheduling layer out of the long-running Node process
+# costs nothing and gains: (a) a hung Express process can't silently
+# skip its sweeps because the trigger is external; (b) the cron
+# expression lives in-repo and is auditable in PRs; (c) one-off manual
+# triggers via `workflow_dispatch` don't require SSH or PM2 surgery.
+#
+# Companion endpoint:
+#   POST /api/system/sweep-account-deletions
+#   Headers: Authorization: Bearer ${{ secrets.SYSTEM_SHARED_SECRET }}
+#   Body:    (empty)
+#
+# Deploy steps (operator action, FIRST TIME ONLY):
+#   1. Generate a strong secret: `openssl rand -hex 32`
+#   2. Add `SYSTEM_SHARED_SECRET` to repo secrets: `gh secret set
+#      SYSTEM_SHARED_SECRET --body "<value>"`
+#   3. Set the same value as the `SYSTEM_SHARED_SECRET` env var on the
+#      production Express API (Oracle Cloud / PM2 ecosystem.config.js)
+#   4. Restart the Express API so the new env var takes effect
+#
+# Failure behaviour: if the endpoint returns 5xx, the workflow fails
+# and surfaces in the GitHub Actions UI. The next 03:00 UTC tick picks
+# up the work the failed run would have done (accountDeletion processes
+# the next-due 10 accounts each tick, so a one-day skip just delays
+# those 10 accounts by 24 hours). A 409 response (a concurrent sweep
+# is in flight) is treated as success — the in-flight sweep will
+# complete the work.
+
+on:
+  schedule:
+    # Daily 03:00 UTC. Matches the previous in-process cron's schedule
+    # so the deletion cadence + Firestore quota footprint is unchanged.
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target environment (prod is the only valid choice today; dev does not run crons)'
+        type: choice
+        options: [prod]
+        default: 'prod'
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    name: POST /api/system/sweep-account-deletions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Invoke sweep endpoint
+        env:
+          API_URL: https://api.shytalk.shyden.co.uk/api/system/sweep-account-deletions
+          SYSTEM_SHARED_SECRET: ${{ secrets.SYSTEM_SHARED_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SYSTEM_SHARED_SECRET}" ]; then
+            echo "::error::SYSTEM_SHARED_SECRET secret is not configured on this repo"
+            exit 1
+          fi
+
+          # `--fail-with-body` (curl >=7.76) returns non-zero on 4xx/5xx
+          # AND prints the response body so workflow logs show the
+          # server's error message. Without it, curl prints nothing on
+          # 5xx by default. `-sS` keeps the output quiet on success
+          # but shows curl's own errors on connection failure.
+          # `-w "%{http_code}"` appends the status code so we can
+          # distinguish 200 from 409 (acceptable) vs other status.
+          HTTP_CODE=$(curl -sS -o /tmp/sweep-response.txt -w "%{http_code}" \
+            -X POST "${API_URL}" \
+            -H "Authorization: Bearer ${SYSTEM_SHARED_SECRET}" \
+            -H "Content-Length: 0" \
+            --max-time 600)
+
+          echo "Server status: ${HTTP_CODE}"
+          echo "Server body:"
+          cat /tmp/sweep-response.txt
+          echo
+
+          case "${HTTP_CODE}" in
+            200)
+              echo "✓ sweep completed successfully"
+              ;;
+            409)
+              # Another sweep is already running (manual re-dispatch
+              # overlapping the scheduled run, or the previous run is
+              # still finishing). Treat as success — the in-flight
+              # sweep will complete the work and the next scheduled
+              # run picks up anything new.
+              echo "✓ sweep already in flight on the server — treating as success"
+              ;;
+            *)
+              echo "::error::sweep failed with status ${HTTP_CODE}"
+              exit 1
+              ;;
+          esac
