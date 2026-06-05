@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retry
 import kotlinx.coroutines.launch
 
 private const val TAG = "RtdbServices"
@@ -81,7 +82,20 @@ class IosPresenceServiceImpl(
     private val database: FirebaseDatabase,
 ) : PresenceService {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    // @Volatile (via @kotlin.concurrent.Volatile per CLAUDE.md's KMP iOS
+    // compatibility rules) on state fields read by the reconnect-listener
+    // coroutine on Dispatchers.Default and written by caller-thread
+    // setPresence/removePresence/armOwnerLeftSignal/cancelOwnerLeftSignal.
+    // Without these, plain-var visibility across threads is not guaranteed
+    // on Kotlin/Native. Android's analogous service uses Dispatchers.Main.
+    // immediate so all access is single-threaded; iOS uses Default for
+    // the Firebase write-path, which makes cross-thread reads of these
+    // fields possible.
+    @kotlin.concurrent.Volatile
     private var currentRoomId: String? = null
+
+    @kotlin.concurrent.Volatile
     private var currentUserId: String? = null
 
     // Cron-elim A2 — owner-left signal state. Separate from currentRoomId
@@ -89,7 +103,10 @@ class IosPresenceServiceImpl(
     // owners arm the signal; cancelOwnerLeftSignal guards internally on
     // currentOwnerRoomId so the unconditional call from removePresence is
     // safe when no signal is armed.
+    @kotlin.concurrent.Volatile
     private var currentOwnerRoomId: String? = null
+
+    @kotlin.concurrent.Volatile
     private var currentOwnerFirebaseUid: String? = null
 
     // Cron-elim A2 followup — connected-listener Job for the
@@ -133,10 +150,20 @@ class IosPresenceServiceImpl(
         // removing the presence entry AND the owner-left signal entry.
         // Re-establish both (gated by currentRoomId/UserId match so a
         // stale listener for a now-replaced room is a no-op).
+        //
+        // .retry { e -> e !is CancellationException } re-subscribes the
+        // Flow on any non-cancellation error (RTDB connection reset,
+        // transient Firebase IPC failure, etc), giving the listener the
+        // same resilience that Android's persistent addValueEventListener
+        // gets for free. Cancellation propagates normally so
+        // connectedJob.cancel() still terminates the coroutine.
         connectedJob =
             scope.launch {
-                try {
-                    database.reference(".info/connected").valueEvents.collect { snapshot ->
+                database
+                    .reference(".info/connected")
+                    .valueEvents
+                    .retry { e -> e !is CancellationException }
+                    .collect { snapshot ->
                         val connected = snapshot.value<Boolean?>() ?: false
                         if (!connected ||
                             currentRoomId != roomId ||
@@ -167,11 +194,6 @@ class IosPresenceServiceImpl(
                             logW(TAG, "reconnect re-arm inner failed: ${e.message}")
                         }
                     }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    logW(TAG, "connectedListener failed: ${e.message}")
-                }
             }
     }
 
