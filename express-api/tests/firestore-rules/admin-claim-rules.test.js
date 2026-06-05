@@ -51,10 +51,15 @@ describe('Firestore rules: admin claim access (G025 regression guard)', () => {
 
   test('isAdmin() helper exists with the safe .get accessor', () => {
     // The helper is the canonical admin check. Verify its definition uses
-    // .get('admin', false) — the form that doesn't throw.
-    const helperPattern =
-      /function\s+isAdmin\s*\(\s*\)\s*\{[\s\S]*?\.get\(\s*['"]admin['"]\s*,\s*false\s*\)[\s\S]*?\}/;
-    expect(helperPattern.test(RULES)).toBe(true);
+    // .get('admin', false) — the form that doesn't throw. Use indexOf + slice
+    // (NOT lazy-quantifier regex) per the sibling room-rules.test.js note —
+    // [\s\S]*? triggers SonarJS S5852 super-linear-backtracking warnings.
+    const defStart = RULES.indexOf('function isAdmin()');
+    expect(defStart).toBeGreaterThanOrEqual(0);
+    const bodyEnd = RULES.indexOf('}', defStart);
+    expect(bodyEnd).toBeGreaterThan(defStart);
+    const helperBody = RULES.slice(defStart, bodyEnd + 1);
+    expect(helperBody).toContain(".get('admin', false)");
   });
 
   test('all admin-gated rules use isAdmin() instead of direct access', () => {
