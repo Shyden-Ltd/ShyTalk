@@ -180,6 +180,15 @@ class IosPresenceServiceImpl(
     override fun cancelOwnerLeftSignal() {
         // TODO(PR A2): real iOS impl via database.reference("ownerLeft/$currentOwnerRoomId")
         //   .onDisconnect().cancel() + .removeValue()
+        //
+        // IMPORTANT — A2 implementor: this method is called UNCONDITIONALLY
+        // from removePresence (line 113) BEFORE the currentRoomId null
+        // check. The implementation MUST guard internally on
+        // currentOwnerRoomId (mirror Android RtdbPresenceService.cancelOwnerLeftSignal
+        // line 261: `val roomId = currentOwnerRoomId ?: return`). Without
+        // the internal guard, calling cancelOwnerLeftSignal when no signal
+        // is armed will attempt to write to ownerLeft/null and corrupt
+        // the path. Safe today because this is a no-op log; trap for A2.
         logD(TAG, "cancelOwnerLeftSignal STUB (iOS A2 pending)")
     }
 }
