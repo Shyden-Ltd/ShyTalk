@@ -102,7 +102,7 @@ When adding new background work: prefer event-driven (RTDB `onDisconnect`, write
 ### Workflow / Actions hygiene (enforced by `lint.yml`):
 - **No paid runners** — `scripts/check-no-paid-runners.sh` rejects `*-xlarge`, `*-cores`, `*-large`, `large-*` runs-on specs (free for orgs, paid for personal repos; PR #370 incident)
 - **Scoped concurrency groups** — `scripts/check-workflow-concurrency-scoping.sh`
-- **SHA-pinned third-party actions** — `scripts/check-action-shas.sh` rejects `uses: foo/bar@vN` for any third-party action; only 40-hex SHAs and local (`./...`) refs pass. Supply-chain hardening. Get the SHA via `gh api repos/<owner>/<repo>/git/refs/tags/<tag> --jq '.object.sha'`.
+- **SHA-pinned third-party actions** (added in PR #1016, pending merge at time of writing) — `scripts/check-action-shas.sh` rejects `uses: foo/bar@vN` for any third-party action; only 40-hex SHAs and local (`./...`) refs pass. Supply-chain hardening. Get the SHA via `gh api repos/<owner>/<repo>/git/refs/tags/<tag> --jq '.object.sha'`. Once #1016 lands, drop the "pending merge" caveat from this bullet.
 - **actionlint** + embedded shellcheck — runs in pre-push hook + CI lint job
 
 ## Debugging
