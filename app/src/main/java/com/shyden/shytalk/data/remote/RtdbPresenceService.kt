@@ -213,8 +213,23 @@ class RtdbPresenceService(
         userId: String,
     ): Boolean =
         try {
+            // Cron-elim A2 followup — was previously
+            //   snapshot.exists() && snapshot.getValue(Boolean::class.java) == true
+            // The Boolean arm broke cross-platform presence checks: this client
+            // writes Boolean `true` via setValue(true) on line 66, but the iOS
+            // client writes a Long via setValue(currentTimeMillis()) — so an
+            // Android-checking-iOS-user invocation got
+            //   true && (null == true) = false
+            // because getValue(Boolean) returns null for a Long-valued node.
+            // Net effect: ActiveRoomManager.kt:493's grace-period TOCTOU
+            // re-check was a no-op when an Android client checked an iOS
+            // user's presence — brief mobile-network blips that should be
+            // filtered by the re-check still triggered spurious setOwnerAway
+            // and removeDisconnectedUser actions for iOS users in mixed-
+            // platform rooms. snapshot.exists() alone is type-agnostic and
+            // matches the iOS impl shape introduced in cron-elim A2.
             val snapshot = db.getReference("rooms/$roomId/presence/$userId").get().await()
-            snapshot.exists() && snapshot.getValue(Boolean::class.java) == true
+            snapshot.exists()
         } catch (e: Exception) {
             Log.w(TAG, "isUserPresent check failed: ${e.message}")
             false
