@@ -98,6 +98,20 @@ class IosPresenceServiceImpl(
         roomId: String,
         userId: String,
     ) {
+        // Cron-elim A2 gap: unlike Android RtdbPresenceService.setPresence
+        // (lines 81-102) which registers a .info/connected listener that
+        // re-arms BOTH presence AND the owner-left signal on RTDB
+        // reconnect blips, iOS has no such listener. Transient mobile-
+        // network drops (WiFi↔cellular handoffs, brief underground
+        // transit) on iOS-owned rooms will: fire the onDisconnect signal
+        // → server orchestrator processes → TOCTOU re-check sees owner
+        // re-present (owner just reconnected) → NOOP → signal cleared.
+        // The TOCTOU re-check mitigates correctness; the cost is one
+        // round-trip of spurious server work per reconnect blip. Adding
+        // the .info/connected listener requires also extending iOS
+        // basic-presence reconnect handling and is queued as a
+        // standalone follow-up (Task #9) per the architect blueprint
+        // scoping A2 to arm/cancel + isUserPresent.
         currentRoomId = roomId
         currentUserId = userId
         scope.launch {
@@ -164,11 +178,12 @@ class IosPresenceServiceImpl(
             // server-side TOCTOU re-check semantics for iOS-owned rooms
             // (the orchestrator's presenceChecker would always see the
             // owner as absent, triggering spurious room closures the
-            // moment any ownerLeft signal fired). Same shape as the
-            // Android isUserPresent: read the snapshot, treat any non-
-            // null value as present.
+            // moment any ownerLeft signal fired). Uses snapshot.exists
+            // — the serialization-free property exposed for exactly
+            // this check (same shape as Android isUserPresent which
+            // uses snapshot.exists()).
             val snapshot = database.reference("rooms/$roomId/presence/$userId").valueEvents.first()
-            snapshot.value<Any?>() != null
+            snapshot.exists
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -189,6 +204,17 @@ class IosPresenceServiceImpl(
             cancelOwnerLeftSignal()
         }
 
+        // State set BEFORE scope.launch so a synchronously-following
+        // cancelOwnerLeftSignal() (e.g., immediate removePresence) sees
+        // the armed state and queues a cancel. Race window: if the
+        // launched arm coroutine and the launched cancel coroutine
+        // interleave on Dispatchers.Default such that arm runs LAST,
+        // the RTDB write briefly creates an orphan signal. The server-
+        // side listener's TOCTOU re-check (owner still present at
+        // signal-fire time → NOOP → remove signal) self-heals this:
+        // the orphan exists for one server processing round-trip then
+        // disappears. A Mutex would eliminate the race but adds lock
+        // contention to every arm/cancel for a self-healing edge case.
         currentOwnerRoomId = roomId
         currentOwnerFirebaseUid = ownerFirebaseUid
 
