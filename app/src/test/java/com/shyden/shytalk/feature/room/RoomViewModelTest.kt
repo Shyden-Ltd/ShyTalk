@@ -5242,12 +5242,19 @@ class RoomViewModelTest {
             viewModel = createViewModel()
             advanceUntilIdle()
 
+            // handleFirstJoin auto-triggers ownerReturn when state is
+            // OWNER_AWAY — clear the mock call count so the verify below
+            // tests the EXPLICIT viewModel.ownerReturn() path in isolation.
+            // Without this, the verify would pass on the auto-fire alone
+            // and a broken explicit-call path would slip through.
+            io.mockk.clearMocks(presenceService, answers = false)
+
             viewModel.ownerReturn()
             advanceUntilIdle()
 
             // 3rd arg is the firebaseUid; assert exact value (not just any())
             // to defend against position-swap or null-fallback regressions.
-            verify { presenceService.armOwnerLeftSignal("room-1", testFirebaseUid) }
+            verify(exactly = 1) { presenceService.armOwnerLeftSignal("room-1", testFirebaseUid) }
             // Negative-pin sanity: the two identity values are distinct in
             // tests so a swap is observable, not vacuous.
             assertTrue(currentUserId != testFirebaseUid)
@@ -5275,6 +5282,11 @@ class RoomViewModelTest {
             )
             viewModel = createViewModel()
             advanceUntilIdle()
+
+            // Clear auto-triggered call counts before the explicit test.
+            // The null-firebaseUid guard MUST apply on the explicit path —
+            // not just on the auto-trigger path — so isolate the call.
+            io.mockk.clearMocks(presenceService, answers = false)
 
             viewModel.ownerReturn()
             advanceUntilIdle()
@@ -5305,6 +5317,10 @@ class RoomViewModelTest {
             viewModel = createViewModel()
             advanceUntilIdle()
 
+            // Clear before explicit ownerReturn — same reason as the null
+            // test: pin the explicit-call guard, not the auto-fire guard.
+            io.mockk.clearMocks(presenceService, answers = false)
+
             viewModel.ownerReturn()
             advanceUntilIdle()
 
@@ -5332,6 +5348,10 @@ class RoomViewModelTest {
             viewModel = createViewModel()
             advanceUntilIdle()
 
+            // Clear before explicit ownerReturn — the verifyOrder below
+            // tests the ordering of the EXPLICIT call's two operations.
+            io.mockk.clearMocks(presenceService, answers = false)
+
             viewModel.ownerReturn()
             advanceUntilIdle()
 
@@ -5339,6 +5359,43 @@ class RoomViewModelTest {
                 presenceService.setPresence("room-1", currentUserId)
                 presenceService.armOwnerLeftSignal("room-1", "firebase-uid-12345")
             }
+        }
+
+    @Test
+    fun `owner first-join arms owner-left signal via handleFirstJoin path`() =
+        roomTest {
+            // Cron-elim A1 — coverage for site 941 (joinRoom → handleFirstJoin).
+            // This is the primary production flow for an owner: room created,
+            // owner becomes participant, RoomViewModel observes the room and
+            // calls handleFirstJoin → joinRoom → setPresence + arm. Without
+            // this test, the only arm-covered path was ownerReturn — a
+            // refactor that broke the first-join arm would ship undetected.
+            val testFirebaseUid = "firebase-uid-12345"
+            every { authRepository.currentFirebaseUid } returns testFirebaseUid
+
+            // Default emitRoomAsOwner: ACTIVE state, owner in participantIds.
+            // Natural flow triggers handleFirstJoin (not ownerReturn).
+            emitRoomAsOwner()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            verify { presenceService.armOwnerLeftSignal("room-1", testFirebaseUid) }
+        }
+
+    @Test
+    fun `owner first-join does NOT arm with empty firebaseUid (defensive helper guard)`() =
+        roomTest {
+            // Defensive coverage: the maybeArmOwnerLeftSignal helper guard
+            // must apply at the joinRoom site (941), not just at ownerReturn.
+            // If the guard were inline-only at one site, a future inlining
+            // refactor that copied an unguarded version into the other sites
+            // would slip through.
+            every { authRepository.currentFirebaseUid } returns ""
+            emitRoomAsOwner()
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            verify(exactly = 0) { presenceService.armOwnerLeftSignal(any(), any()) }
         }
 
     @Test

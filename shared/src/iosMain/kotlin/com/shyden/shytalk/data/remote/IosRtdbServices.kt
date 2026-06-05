@@ -104,6 +104,13 @@ class IosPresenceServiceImpl(
     }
 
     override fun removePresence() {
+        // Cron-elim A1 — pin the auto-cancel contract NOW so PR A2 only has
+        // to implement the function body. cancelOwnerLeftSignal is a no-op
+        // stub today; once A2 makes it real, this call site already wires
+        // the contract that "every removePresence cleans up owner-left."
+        // Mirrors the Android RtdbPresenceService.removePresence pattern.
+        cancelOwnerLeftSignal()
+
         val roomId = currentRoomId ?: return
         val userId = currentUserId ?: return
         scope.launch {
