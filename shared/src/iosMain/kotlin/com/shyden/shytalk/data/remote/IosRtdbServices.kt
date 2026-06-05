@@ -175,17 +175,23 @@ class IosPresenceServiceImpl(
         try {
             // Cron-elim A2 — one-shot read via valueEvents.first(). The
             // pre-A2 stub returned false unconditionally, which broke
-            // server-side TOCTOU re-check semantics for iOS-owned rooms
-            // (the orchestrator's presenceChecker would always see the
-            // owner as absent, triggering spurious room closures the
-            // moment any ownerLeft signal fired). Uses snapshot.exists
-            // — the serialization-free property, which is the correct
-            // check for a timestamp-valued presence node (setPresence
-            // writes currentTimeMillis() via .setValue(Long)). The
-            // Android counterpart at RtdbPresenceService:217 also
-            // relies on exists() as the effective gate; its additional
-            // getValue(Boolean) == true arm is dead code since presence
-            // is a Long, not a Boolean — queued as Task #10 cleanup.
+            // client-side TOCTOU re-check semantics for iOS users —
+            // ActiveRoomManager.kt:493 uses isUserPresent as a grace-
+            // period re-check before marking users disconnected, and
+            // the pre-A2 stub made that re-check a no-op (always
+            // reported absent). Uses snapshot.exists — the
+            // serialization-free property, which is the correct check
+            // for a timestamp-valued presence node (setPresence writes
+            // currentTimeMillis() via .setValue(Long)).
+            //
+            // The Android counterpart at RtdbPresenceService:217 uses
+            //   snapshot.exists() && snapshot.getValue(Boolean::class.java) == true
+            // Because presence is a Long, getValue(Boolean) returns null,
+            // so the full expression evaluates to false EVEN when the
+            // node exists. Android isUserPresent therefore always
+            // returns false, making the grace-period TOCTOU re-check
+            // in ActiveRoomManager a no-op on Android. Task #10 fixes
+            // this correctness bug by simplifying to snapshot.exists().
             val snapshot = database.reference("rooms/$roomId/presence/$userId").valueEvents.first()
             snapshot.exists
         } catch (e: CancellationException) {
