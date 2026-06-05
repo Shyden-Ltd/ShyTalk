@@ -40,7 +40,10 @@ import androidx.navigation.compose.rememberNavController
 import com.google.firebase.auth.FirebaseAuth
 import com.shyden.shytalk.core.BuildVariant
 import com.shyden.shytalk.core.PreviewWatermark
+import com.shyden.shytalk.core.push.AndroidPushPermissionBridge
+import com.shyden.shytalk.core.push.PushPermissionStore
 import com.shyden.shytalk.core.push.consumeChatDeepLink
+import com.shyden.shytalk.core.push.refreshPushPermissionStateFromContext
 import com.shyden.shytalk.core.push.verifyPushNavigation
 import com.shyden.shytalk.core.room.ActiveRoomManager
 import com.shyden.shytalk.core.room.RoomLifecycleManager
@@ -135,12 +138,8 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
 
         // applicationContext (not `this`) so the bridge outlives Activity recreations without leaking it.
-        com.shyden.shytalk.core.push.PushPermissionStore.registerBridge(
-            com.shyden.shytalk.core.push
-                .AndroidPushPermissionBridge(applicationContext),
-        )
-        com.shyden.shytalk.core.push
-            .refreshPushPermissionStateFromContext(applicationContext)
+        PushPermissionStore.registerBridge(AndroidPushPermissionBridge(applicationContext))
+        refreshPushPermissionStateFromContext(applicationContext)
 
         // Track app background/foreground for lock timeout. Save the
         // observer so it can be removed in onDestroy — ProcessLifecycleOwner
@@ -581,8 +580,7 @@ class MainActivity : AppCompatActivity() {
         activeRoomManager.isAppInForeground = true
         startLastSeenUpdates()
         // Catches the user toggling the OS notification setting while paused.
-        com.shyden.shytalk.core.push
-            .refreshPushPermissionStateFromContext(applicationContext)
+        refreshPushPermissionStateFromContext(applicationContext)
     }
 
     override fun onStop() {

@@ -30,14 +30,6 @@ class AndroidPushPermissionBridge(
     }
 }
 
-/**
- * Pure mapping of the three signals the OS gives us into the shared store's enum.
- * Extracted so it can be exhaustively unit-tested without an android.jar dependency.
- *
- * The NOT_DETERMINED case only exists on API 33+ where POST_NOTIFICATIONS is a runtime
- * permission. Pre-33 the user toggle in Settings defaults ON and there is no "never asked"
- * concept, so the binary AUTHORIZED/DENIED faithfully reflects user intent.
- */
 internal fun mapPushPermissionState(
     enabled: Boolean,
     sdkInt: Int,
@@ -49,24 +41,36 @@ internal fun mapPushPermissionState(
         else -> PushPermissionState.DENIED
     }
 
+internal fun shouldBackfillSentinel(
+    enabled: Boolean,
+    sdkInt: Int,
+    hasAsked: Boolean,
+): Boolean = enabled && sdkInt >= Build.VERSION_CODES.TIRAMISU && !hasAsked
+
 fun refreshPushPermissionStateFromContext(context: Context) {
     val enabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
-    val mapped =
-        mapPushPermissionState(
-            enabled = enabled,
-            sdkInt = Build.VERSION.SDK_INT,
-            hasAsked = hasAskedForPushPermission(context),
-        )
+    val sdkInt = Build.VERSION.SDK_INT
+    // enabled=true definitively implies the user has been asked (or pre-granted via OEM/ADB),
+    // so back-fill the sentinel so a future revoke cold-starts to DENIED, not NOT_DETERMINED.
+    if (shouldBackfillSentinel(enabled, sdkInt, hasAskedInternal(context))) {
+        markAskedInternal(context)
+    }
+    val mapped = mapPushPermissionState(enabled, sdkInt, hasAskedInternal(context))
     PushPermissionStore.updateState(mapped)
 }
 
-fun hasAskedForPushPermission(context: Context): Boolean =
+/** Call from the host once the POST_NOTIFICATIONS system prompt has been shown. */
+fun notifyPushPermissionPrompted(context: Context) {
+    markAskedInternal(context)
+    refreshPushPermissionStateFromContext(context)
+}
+
+internal fun hasAskedInternal(context: Context): Boolean =
     context
         .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         .getBoolean(KEY_HAS_ASKED, false)
 
-/** Called by the host once the POST_NOTIFICATIONS system prompt has been shown. */
-fun markPushPermissionPrompted(context: Context) {
+internal fun markAskedInternal(context: Context) {
     context
         .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         .edit()
