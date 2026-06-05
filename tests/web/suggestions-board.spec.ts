@@ -1260,9 +1260,12 @@ test.describe('Mobile-Specific Interactions', () => {
     // added in the future on those two browsers. Closes G034.
     if (browserName === 'firefox' || browserName === 'webkit') {
       const box = await upvoteBtn.boundingBox();
-      if (box) {
-        await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-      }
+      // Hard-fail rather than silently no-op when the element has no
+      // bounding box (off-screen, zero dimensions, detached layout). A
+      // missing box on the previously-skipped browsers would have
+      // masked a real rendering regression as a vacuous pass.
+      expect(box, 'vote-up button must be laid out for the mouse-click fallback').not.toBeNull();
+      await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
     } else {
       await upvoteBtn.tap();
     }
