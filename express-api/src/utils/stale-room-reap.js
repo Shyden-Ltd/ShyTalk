@@ -1,50 +1,50 @@
 /**
- * Stale-room lazy reap — server-side replacement for the staleRooms cron's
- * close-decision path.
+ * Stale-room lazy reap — defense-in-depth for OWNER_AWAY room closure.
  *
  * When a room enters OWNER_AWAY state (owner gracefully or ungracefully
- * disconnects), the room must eventually close. The staleRooms cron polls
- * every 5 minutes (~288 Firestore reads/day baseline). This module lets
- * any participant-triggered room mutation reap the stale room inline as
- * part of the transaction — no polling needed for the active-traffic case.
+ * disconnects), the room must eventually close. Closure happens via three
+ * paths, in descending order of latency:
  *
- * Scope of this PR:
- *  - The cron stays running for abandoned-rooms safety (rooms with zero
- *    further participant traffic after owner leaves). Future PRs add
- *    RTDB onDisconnect client-side to catch those, and the cron is then
- *    deleted entirely.
- *  - User-doc currentRoomId clears are NOT done here — the cron handles
- *    them within 5 minutes. After RTDB onDisconnect lands, this module
- *    will take that over too.
+ *  1. RTDB ownerLeft signal (PRs A0-A2 of the cron-elim cluster) — the
+ *     owner client arms an onDisconnect at room entry; the server-side
+ *     listener consumes the signal within seconds of disconnect and
+ *     transitions the room via owner-left-handler's decideOwnerLeftAction.
+ *     This is the primary path.
+ *  2. This lazy reap — any participant-triggered room mutation reaps the
+ *     stale room inline as part of the transaction. Covers the residual
+ *     case where the ownerLeft signal somehow missed (signal failed to
+ *     fire, server-side retry exhausted, race conditions) AND a
+ *     participant happens to touch the room afterwards.
+ *  3. (Eliminated) The staleRooms cron polled every 5 min; deleted in
+ *     cron-elim A4 once the event-driven signal was verified in production.
  *
- * The close-decision MUST match the cron's predicate so behaviour stays
- * consistent during the transition:
+ * The lazy reap and the ownerLeft handler share the same close predicate
+ * for behaviour consistency:
  *   - state === 'OWNER_AWAY'
- *   - AND (no non-owner seated || ownerLeftAt < (now - timeout))
+ *   - AND (no non-owner seated past grace || ownerLeftAt < (now - timeout))
  */
 
 const { hasNonOwnerSeated, MAX_SEATS } = require('./room-auth');
 
-// Matches src/cron/staleRooms.js's tenMinutesAgo computation. Aligns the
-// lazy-reap upper bound with what the cron would have done, so a room
-// closed by lazy reap and a room closed by the cron use the same
-// `ownerLeftAt` cutoff.
+// Aligns with the owner-left handler's effective timeout. Rooms closed by
+// either path share the same `ownerLeftAt` cutoff so the close decision is
+// indistinguishable to downstream consumers.
 const STALE_ROOM_TIMEOUT_MS = 10 * 60 * 1000;
 
-// Grace window for the "no holdouts" case. The cron has an effective
-// 0-5 min grace because it only runs every 5 minutes — a room with no
-// non-owner seated stays OWNER_AWAY until the next cron tick. Lazy reap
-// has no tick rate (fires on every access), so without an explicit
-// grace it would close instantly on the first access — even the owner
-// returning or a user joining within the natural 5-min window. The
-// grace preserves owner-can-return-quickly and join-during-grace UX.
+// Grace window for the "no holdouts" case. Without an explicit grace
+// lazy reap (which has no tick rate — fires on every access) would close
+// instantly on the first access, including the owner's own /owner-returned
+// or a user joining within the natural 5-min window. The grace preserves
+// owner-can-return-quickly and join-during-grace UX. Matches the historical
+// 0-5 min effective grace from the deleted cron's tick rate.
 const STALE_ROOM_NO_HOLDOUTS_GRACE_MS = 5 * 60 * 1000;
 
 /**
  * Should this room be reaped right now?
  *
- * Semantics (matches the staleRooms cron's effective in-production
- * behaviour with the cron's tick-rate grace expressed explicitly):
+ * Semantics (mirrors the owner-left handler's decideOwnerLeftAction
+ * predicate with the historical cron's tick-rate grace expressed
+ * explicitly):
  *  - state must be OWNER_AWAY and ownerLeftAt must be set
  *  - the owner calling is never reaped (they're reclaiming the room
  *    via /owner-returned or any other mutation — the close-on-access
@@ -75,17 +75,18 @@ function shouldReapStaleRoom(room, nowMs, callerId = null) {
 }
 
 /**
- * Build the close payload that staleRooms.js writes — same shape so the
- * room transitions identically whether the cron or the lazy reap fires.
+ * Build the close payload. Same shape as the owner-left handler's
+ * applyOwnerLeftTx close branch and the /api/rooms/:id/close endpoint,
+ * so a room transitions identically regardless of which path fired.
  */
 function buildClosePayload(nowMs) {
   const emptySeat = { userId: null, state: 'EMPTY', isMuted: false };
   const emptySeats = {};
   for (let i = 0; i < MAX_SEATS; i++) emptySeats[String(i)] = { ...emptySeat };
-  // `ownerLeftAt: null` matches both staleRooms.js and the /close
-  // endpoint's payload. Without it, a reaped room would carry a
-  // stale OWNER_AWAY timestamp on a CLOSED row, diverging from
-  // every other close path.
+  // `ownerLeftAt: null` matches the owner-left handler's close branch
+  // and the /api/rooms/:id/close endpoint payload. Without it, a reaped
+  // room would carry a stale OWNER_AWAY timestamp on a CLOSED row,
+  // diverging from every other close path.
   return {
     state: 'CLOSED',
     closedAt: nowMs,
