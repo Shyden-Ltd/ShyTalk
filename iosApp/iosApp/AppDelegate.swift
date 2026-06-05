@@ -51,7 +51,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         ) { granted, error in
             if let error = error {
                 NSLog("[ShyTalkPush] auth request error: \(error.localizedDescription)")
-                // Refresh the shared store so the UI banner can show denial.
+                // Refresh the shared store regardless — on an error, the status
+                // stays .notDetermined (the OS didn't actually show the prompt),
+                // which is correctly NOT a denial signal. The refresh keeps the
+                // store in sync with the OS rather than relying on stale state.
                 self.refreshPushPermissionState()
                 return
             }
@@ -199,10 +202,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             case .denied:
                 mapped = .denied
             @unknown default:
-                // Future iOS may add new statuses; treat as denied for safety
-                // (better to over-surface the banner than to silently miss
-                // a denial state we don't yet recognise).
-                mapped = .denied
+                // Future iOS may add new statuses. Fail OPEN to .notDetermined
+                // rather than .denied — a new permissive status (e.g., a
+                // hypothetical "Focus-aware authorized") would be incorrectly
+                // accused of denial under fail-closed, surfacing a banner that
+                // asks the user to fix already-granted permissions. Log so a
+                // future engineer can detect when an unknown status appears
+                // in the wild.
+                NSLog("[ShyTalkPush] unknown UNAuthorizationStatus rawValue=\(settings.authorizationStatus.rawValue) — defaulting to notDetermined")
+                mapped = .notDetermined
             }
             PushPermissionStore.shared.updateState(newState: mapped)
             if settings.authorizationStatus == .authorized {

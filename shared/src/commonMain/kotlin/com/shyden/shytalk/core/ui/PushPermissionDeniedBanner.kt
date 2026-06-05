@@ -1,6 +1,5 @@
 package com.shyden.shytalk.core.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -18,6 +17,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -42,12 +46,19 @@ fun PushPermissionDeniedBanner(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val title = stringResource(Res.string.notifications_disabled_banner_title)
+    val action = stringResource(Res.string.notifications_disabled_banner_action)
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
         modifier =
             modifier
                 .fillMaxWidth()
-                .clickable(onClick = onOpenSettings),
+                .testTag("pushDeniedBanner")
+                .clickable(onClick = onOpenSettings)
+                .semantics(mergeDescendants = true) {
+                    role = Role.Button
+                    contentDescription = "$title. $action"
+                },
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -62,14 +73,13 @@ fun PushPermissionDeniedBanner(
             )
             Spacer(Modifier.width(10.dp))
             Text(
-                text = stringResource(Res.string.notifications_disabled_banner_title),
+                text = title,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.background(MaterialTheme.colorScheme.errorContainer),
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = stringResource(Res.string.notifications_disabled_banner_action),
+                text = action,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer,
                 fontWeight = FontWeight.Bold,

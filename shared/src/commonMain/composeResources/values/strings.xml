@@ -788,7 +788,11 @@
     <!-- Degraded Mode Banner -->
     <string name="reduced_functionality">Reduced functionality — some features may be unavailable</string>
 
-    <!-- Push Permission Denied Banner -->
+    <!-- Push Permission Denied Banner.
+         "Open Settings" wording matches iOS Settings.app naming. When Android
+         parity ships, translations should be reviewed for OS-specific terms
+         (e.g. French "Réglages" matches iOS but Android labels its app
+         "Paramètres" in French). -->
     <string name="notifications_disabled_banner_title">Notifications are off</string>
     <string name="notifications_disabled_banner_action">Open Settings</string>
 

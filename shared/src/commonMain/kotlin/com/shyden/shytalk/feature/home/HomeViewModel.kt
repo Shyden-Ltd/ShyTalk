@@ -6,6 +6,8 @@ import com.shyden.shytalk.core.model.Banner
 import com.shyden.shytalk.core.model.ChatRoom
 import com.shyden.shytalk.core.model.SeatState
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.push.PushPermissionState
+import com.shyden.shytalk.core.push.PushPermissionStore
 import com.shyden.shytalk.core.util.COHORT_MINOR
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
@@ -38,6 +40,8 @@ data class HomeUiState(
     val lastRoomName: String = "",
     val showReplaceRoomConfirmation: Boolean = false,
     val pendingRoomName: String? = null,
+    /** Folded in from [PushPermissionStore] so HomeScreen consumes via uiState (MVVM). */
+    val pushPermissionState: PushPermissionState = PushPermissionState.NOT_DETERMINED,
 )
 
 class HomeViewModel(
@@ -84,6 +88,21 @@ class HomeViewModel(
         observeRooms()
         observeUserUpdates()
         loadBanners()
+        observePushPermissionState()
+    }
+
+    /**
+     * Folds the global [PushPermissionStore] state into [HomeUiState] so the
+     * banner is consumed via MVVM rather than reading the singleton directly
+     * from the Composable. Lets the ViewModel be unit-tested for the denial
+     * banner without instantiating a Compose runtime.
+     */
+    private fun observePushPermissionState() {
+        viewModelScope.launch {
+            PushPermissionStore.state.collect { newState ->
+                _uiState.update { it.copy(pushPermissionState = newState) }
+            }
+        }
     }
 
     private fun loadBanners() {

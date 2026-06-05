@@ -91,11 +91,11 @@ fun RoomListContent(
                 // Push-permission denial banner — closes AppDelegate.swift:38's
                 // TODO(v2). Shown when the OS reports the permission as DENIED
                 // (user has actively denied OR Focus/DnD/parental-control has
-                // blocked it). The state is updated by the platform layer on
-                // launch + every foreground; tap defers to PushPermissionStore's
-                // registered bridge which opens system Settings.
-                val pushPermissionState by PushPermissionStore.state.collectAsState()
-                if (pushPermissionState == PushPermissionState.DENIED) {
+                // blocked it). State comes through HomeUiState (folded from
+                // PushPermissionStore by HomeViewModel) to keep the MVVM
+                // boundary intact; the tap action still defers to the store
+                // because the bridge is the actual platform-side actor.
+                if (uiState.pushPermissionState == PushPermissionState.DENIED) {
                     PushPermissionDeniedBanner(
                         onOpenSettings = { PushPermissionStore.openSystemSettings() },
                     )
