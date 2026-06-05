@@ -1,0 +1,83 @@
+package com.shyden.shytalk.steps
+
+import com.shyden.shytalk.core.push.PushPermissionBridge
+import com.shyden.shytalk.core.push.PushPermissionState
+import com.shyden.shytalk.core.push.PushPermissionStore
+import com.shyden.shytalk.util.ComposeTestRuleHolder
+import io.cucumber.java.Before
+import io.cucumber.java.en.Given
+import io.cucumber.java.en.Then
+import io.cucumber.java.en.When
+import org.junit.Assert.assertTrue
+import java.util.concurrent.atomic.AtomicInteger
+
+class PushPermissionSteps {
+    private val rule get() = ComposeTestRuleHolder.rule
+
+    // Bridge call-count is the single state we care about across steps in a
+    // scenario. Reset in @Before so each scenario starts with a clean slate
+    // even though PushPermissionStore is a process-singleton.
+    private val deeplinkCalls = AtomicInteger(0)
+
+    private val countingBridge =
+        object : PushPermissionBridge {
+            override fun openSystemSettings() {
+                deeplinkCalls.incrementAndGet()
+            }
+        }
+
+    @Before
+    fun resetPushPermissionStore() {
+        // PushPermissionStore.resetForTesting() is `internal` (commonTest-only).
+        // Re-seed the public surface instead: revert to the cold-start state and
+        // overwrite any bridge a prior scenario registered. last-writer-wins
+        // semantics on registerBridge() is documented in the store class.
+        PushPermissionStore.updateState(PushPermissionState.NOT_DETERMINED)
+        PushPermissionStore.registerBridge(countingBridge)
+        deeplinkCalls.set(0)
+    }
+
+    @Given("the push permission state is {string}")
+    fun givenPushPermissionState(stateName: String) {
+        PushPermissionStore.updateState(parseState(stateName))
+        propagateStateChange()
+    }
+
+    @When("the push permission state changes to {string}")
+    fun whenPushPermissionStateChangesTo(stateName: String) {
+        PushPermissionStore.updateState(parseState(stateName))
+        propagateStateChange()
+    }
+
+    /**
+     * NavGraphTestHelper disables Compose's auto-advance clock so ViewModel-scoped
+     * coroutines don't run unless the test explicitly advances time. HomeViewModel
+     * collects PushPermissionStore.state inside `viewModelScope.launch`, so updates
+     * are invisible to the Compose tree until the clock ticks. Advancing 500ms
+     * mirrors the bootstrap advance in NavGraphTestHelper.launchNavGraph — long
+     * enough for the collector and one downstream recomposition, short enough
+     * that scenarios stay fast.
+     */
+    private fun propagateStateChange() {
+        rule.mainClock.advanceTimeBy(500)
+        rule.waitForIdle()
+    }
+
+    @Then("the system settings deeplink should be invoked")
+    fun thenDeeplinkInvoked() {
+        assertTrue(
+            "Expected PushPermissionBridge.openSystemSettings to be called at least once, " +
+                "got ${deeplinkCalls.get()}",
+            deeplinkCalls.get() >= 1,
+        )
+    }
+
+    private fun parseState(stateName: String): PushPermissionState =
+        when (stateName.uppercase()) {
+            "NOT_DETERMINED" -> PushPermissionState.NOT_DETERMINED
+            "AUTHORIZED" -> PushPermissionState.AUTHORIZED
+            "DENIED" -> PushPermissionState.DENIED
+            "PROVISIONAL" -> PushPermissionState.PROVISIONAL
+            else -> error("Unknown push permission state: $stateName")
+        }
+}
