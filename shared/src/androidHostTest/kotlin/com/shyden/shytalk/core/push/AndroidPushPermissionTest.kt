@@ -280,21 +280,54 @@ class AndroidPushPermissionTest {
     }
 
     @Test
-    fun `notifyPushPermissionPromptedInternal authorises and writes sentinel when granted`() {
-        val (context, _, editor) = mockPrefsContextWithEditor(initialAsked = true)
-        notifyPushPermissionPromptedInternal(context = context, notifyEnabled = true)
+    fun `notifyPushPermissionPromptedInternal API 33 authorises when granted`() {
+        val (context, _, editor, _) = statefulPrefsContext(initialAsked = false)
+        notifyPushPermissionPromptedInternal(context = context, notifyEnabled = true, sdkInt = 33)
         verify(atLeast = 1) { editor.putBoolean("has_asked_for_push_permission", true) }
         verify(atLeast = 1) { editor.apply() }
         assertEquals(PushPermissionState.AUTHORIZED, PushPermissionStore.state.value)
     }
 
     @Test
-    fun `notifyPushPermissionPromptedInternal denies and writes sentinel when declined`() {
+    fun `notifyPushPermissionPromptedInternal API 33 denies when declined`() {
         // User saw the system prompt and tapped Don't allow — enabled=false,
-        // sentinel writes true so we map to DENIED (not NOT_DETERMINED).
-        val (context, _, editor) = mockPrefsContextWithEditor(initialAsked = true)
-        notifyPushPermissionPromptedInternal(context = context, notifyEnabled = false)
+        // sentinel writes true BEFORE refresh reads it, so we map to DENIED
+        // (not NOT_DETERMINED). This is the round-2 Critical scenario.
+        val (context, _, editor, _) = statefulPrefsContext(initialAsked = false)
+        notifyPushPermissionPromptedInternal(context = context, notifyEnabled = false, sdkInt = 33)
         verify(atLeast = 1) { editor.putBoolean("has_asked_for_push_permission", true) }
+        verify(atLeast = 1) { editor.apply() }
+        assertEquals(PushPermissionState.DENIED, PushPermissionStore.state.value)
+    }
+
+    @Test
+    fun `notifyPushPermissionPromptedInternal pre-33 authorises when granted`() {
+        val (context, _, editor, _) = statefulPrefsContext(initialAsked = false)
+        notifyPushPermissionPromptedInternal(context = context, notifyEnabled = true, sdkInt = 28)
+        verify(atLeast = 1) { editor.putBoolean("has_asked_for_push_permission", true) }
+        verify(atLeast = 1) { editor.apply() }
+        assertEquals(PushPermissionState.AUTHORIZED, PushPermissionStore.state.value)
+    }
+
+    @Test
+    fun `notifyPushPermissionPromptedInternal pre-33 denies when declined`() {
+        val (context, _, editor, _) = statefulPrefsContext(initialAsked = false)
+        notifyPushPermissionPromptedInternal(context = context, notifyEnabled = false, sdkInt = 28)
+        verify(atLeast = 1) { editor.putBoolean("has_asked_for_push_permission", true) }
+        verify(atLeast = 1) { editor.apply() }
+        assertEquals(PushPermissionState.DENIED, PushPermissionStore.state.value)
+    }
+
+    @Test
+    fun `notify on API 33 declined would map NOT_DETERMINED if mark fired after refresh — order guard`() {
+        // Defensive: stateful mock + sdk=33 + initialAsked=false means the
+        // mark/refresh ORDER is observable. Correct order (mark→refresh) maps
+        // to DENIED. If a future edit reversed the lines, the refresh would
+        // read sentinel=false and map to NOT_DETERMINED — the assertions in
+        // the DENIED test would fail, catching the regression.
+        val (context, _, _, sentinel) = statefulPrefsContext(initialAsked = false)
+        notifyPushPermissionPromptedInternal(context = context, notifyEnabled = false, sdkInt = 33)
+        assertTrue(sentinel.get(), "sentinel must be true after notify")
         assertEquals(PushPermissionState.DENIED, PushPermissionStore.state.value)
     }
 
@@ -320,5 +353,32 @@ class AndroidPushPermissionTest {
             context.getSharedPreferences("push_permission_prefs", Context.MODE_PRIVATE)
         } returns prefs
         return Triple(context, prefs, editor)
+    }
+
+    private data class StatefulPrefs(
+        val context: Context,
+        val prefs: SharedPreferences,
+        val editor: SharedPreferences.Editor,
+        val sentinel: java.util.concurrent.atomic.AtomicBoolean,
+    )
+
+    private fun statefulPrefsContext(initialAsked: Boolean): StatefulPrefs {
+        val sentinel =
+            java.util.concurrent.atomic
+                .AtomicBoolean(initialAsked)
+        val editor = mockk<SharedPreferences.Editor>()
+        every { editor.putBoolean(any(), any()) } answers {
+            sentinel.set(secondArg())
+            editor
+        }
+        every { editor.apply() } just Runs
+        val prefs = mockk<SharedPreferences>()
+        every { prefs.edit() } returns editor
+        every { prefs.getBoolean(any(), any()) } answers { sentinel.get() }
+        val context = mockk<Context>()
+        every {
+            context.getSharedPreferences("push_permission_prefs", Context.MODE_PRIVATE)
+        } returns prefs
+        return StatefulPrefs(context, prefs, editor, sentinel)
     }
 }

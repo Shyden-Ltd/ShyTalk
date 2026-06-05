@@ -82,11 +82,12 @@ fun notifyPushPermissionPrompted(context: Context) {
 internal fun notifyPushPermissionPromptedInternal(
     context: Context,
     notifyEnabled: Boolean,
+    sdkInt: Int = Build.VERSION.SDK_INT,
 ) {
     markAskedInternal(context)
     refreshPushPermissionState(
         enabled = notifyEnabled,
-        sdkInt = Build.VERSION.SDK_INT,
+        sdkInt = sdkInt,
         readHasAsked = { hasAskedInternal(context) },
         markAsked = { markAskedInternal(context) },
     )
