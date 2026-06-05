@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -80,6 +81,15 @@ class IosPresenceServiceImpl(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var currentRoomId: String? = null
     private var currentUserId: String? = null
+
+    // Cron-elim A2 — owner-left signal state. Separate from currentRoomId
+    // / currentUserId because non-owners also call setPresence but only
+    // owners arm the signal; cancelOwnerLeftSignal guards internally on
+    // currentOwnerRoomId so the unconditional call from removePresence is
+    // safe when no signal is armed.
+    private var currentOwnerRoomId: String? = null
+    private var currentOwnerFirebaseUid: String? = null
+
     private val _roomEvents = MutableSharedFlow<RoomEvent>(extraBufferCapacity = 10)
 
     override val roomEvents: Flow<RoomEvent> = _roomEvents.asSharedFlow()
@@ -104,10 +114,10 @@ class IosPresenceServiceImpl(
     }
 
     override fun removePresence() {
-        // Cron-elim A1 — pin the auto-cancel contract NOW so PR A2 only has
-        // to implement the function body. cancelOwnerLeftSignal is a no-op
-        // stub today; once A2 makes it real, this call site already wires
-        // the contract that "every removePresence cleans up owner-left."
+        // Cron-elim A1+A2 — cancelOwnerLeftSignal is called first so all
+        // room-exit paths get owner-left cleanup for free. Internal null-
+        // guard inside cancelOwnerLeftSignal makes this safe to call even
+        // when no signal is armed (non-owners, post-cancel re-call, etc).
         // Mirrors the Android RtdbPresenceService.removePresence pattern.
         cancelOwnerLeftSignal()
 
@@ -149,47 +159,88 @@ class IosPresenceServiceImpl(
         userId: String,
     ): Boolean =
         try {
-            val snapshot = database.reference("rooms/$roomId/presence/$userId").valueEvents
-            // Simple check — if value exists, user is present
-            false // Default to false — full implementation needs one-shot read
+            // Cron-elim A2 — one-shot read via valueEvents.first(). The
+            // pre-A2 stub returned false unconditionally, which broke
+            // server-side TOCTOU re-check semantics for iOS-owned rooms
+            // (the orchestrator's presenceChecker would always see the
+            // owner as absent, triggering spurious room closures the
+            // moment any ownerLeft signal fired). Same shape as the
+            // Android isUserPresent: read the snapshot, treat any non-
+            // null value as present.
+            val snapshot = database.reference("rooms/$roomId/presence/$userId").valueEvents.first()
+            snapshot.value<Any?>() != null
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            logW(TAG, "isUserPresent failed: ${e.message}")
             false
         }
-
-    // ── Owner-left signal (NO-OP STUB — real iOS impl in PR A2) ──
-    //
-    // The Android RtdbPresenceService implements arm/cancel against the
-    // RTDB `ownerLeft/{roomId}` path with an onDisconnect trigger; the
-    // server-side listener (express-api/src/utils/owner-left-*.js) consumes
-    // these signals and decides whether to close or transition the room.
-    // Until PR A2 lands the real iOS impl, owner-left signal arming on iOS
-    // is a no-op — the legacy lazy-reap path (PR #996) still handles iOS-
-    // owned rooms via on-access reaping with the 5-min grace window.
 
     override fun armOwnerLeftSignal(
         roomId: String,
         ownerFirebaseUid: String,
     ) {
-        // TODO(PR A2): real iOS impl via database.reference("ownerLeft/$roomId")
-        //   .setValue(ownerFirebaseUid) + .onDisconnect().setValue(ownerFirebaseUid)
-        logD(TAG, "armOwnerLeftSignal STUB (iOS A2 pending) roomId=$roomId")
+        // Replace-roomId idempotency: cancel any prior arm before
+        // installing the new one. Stale onDisconnect entries from a
+        // prior room would otherwise fire on disconnect and attempt to
+        // close a room the owner already cleanly left. Mirrors the
+        // Android RtdbPresenceService.armOwnerLeftSignal pattern.
+        if (currentOwnerRoomId != null && currentOwnerRoomId != roomId) {
+            cancelOwnerLeftSignal()
+        }
+
+        currentOwnerRoomId = roomId
+        currentOwnerFirebaseUid = ownerFirebaseUid
+
+        scope.launch {
+            try {
+                // Sequence: onDisconnect().cancel() → setValue → onDisconnect().setValue
+                // The cancel-first defends against a stale onDisconnect
+                // registration from a prior arm on the same path. The
+                // setValue ensures the entry exists BEFORE the
+                // onDisconnect arms so the server-side child_added
+                // listener fires on the arm (TOCTOU re-check resolves
+                // owner-still-present → NOOP), exercising the listener
+                // path on every arm.
+                val ref = database.reference("ownerLeft/$roomId")
+                ref.onDisconnect().cancel()
+                ref.setValue(ownerFirebaseUid)
+                ref.onDisconnect().setValue(ownerFirebaseUid)
+                logD(TAG, "armOwnerLeftSignal room=$roomId")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logW(TAG, "armOwnerLeftSignal failed: ${e.message}")
+            }
+        }
     }
 
     override fun cancelOwnerLeftSignal() {
-        // TODO(PR A2): real iOS impl via database.reference("ownerLeft/$currentOwnerRoomId")
-        //   .onDisconnect().cancel() + .removeValue()
-        //
-        // IMPORTANT — A2 implementor: this method is called UNCONDITIONALLY
-        // from removePresence (line 113) BEFORE the currentRoomId null
-        // check. The implementation MUST guard internally on
-        // currentOwnerRoomId (mirror Android RtdbPresenceService.cancelOwnerLeftSignal
-        // line 261: `val roomId = currentOwnerRoomId ?: return`). Without
-        // the internal guard, calling cancelOwnerLeftSignal when no signal
-        // is armed will attempt to write to ownerLeft/null and corrupt
-        // the path. Safe today because this is a no-op log; trap for A2.
-        logD(TAG, "cancelOwnerLeftSignal STUB (iOS A2 pending)")
+        // Internal null-guard — called UNCONDITIONALLY from removePresence
+        // BEFORE its own null-check on currentRoomId. Without this guard,
+        // attempting to write to ownerLeft/null would corrupt the path.
+        // Mirrors the Android RtdbPresenceService.cancelOwnerLeftSignal
+        // guard at line ~261.
+        val roomId = currentOwnerRoomId ?: return
+
+        currentOwnerRoomId = null
+        currentOwnerFirebaseUid = null
+
+        scope.launch {
+            try {
+                // Symmetric cleanup: cancel onDisconnect FIRST so a race-y
+                // disconnect during this method doesn't fire the stale
+                // signal, then remove the entry.
+                val ref = database.reference("ownerLeft/$roomId")
+                ref.onDisconnect().cancel()
+                ref.removeValue()
+                logD(TAG, "cancelOwnerLeftSignal room=$roomId")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logW(TAG, "cancelOwnerLeftSignal failed: ${e.message}")
+            }
+        }
     }
 }
 
