@@ -61,15 +61,29 @@ test.describe('Dev Sanity Checks', () => {
   });
 
   test('API health endpoint responds', async ({ page }) => {
-    // Skip if API isn't running (pre-push hook runs without full local stack)
     const probe = await page.request.get(`${API_BASE}/api/health`).catch(() => null);
-    test.skip(!probe, 'API not running — skipping API tests');
+    // CI starts the API in playwright-tests.yml (lines ~205-207 wait
+    // for /api/health to respond). A missing probe in CI means an
+    // unexpected outage — surface as a failure, not a silent skip
+    // (that was the G050 gap). Local pre-push may run without the
+    // full stack, so preserve the skip there.
+    if (!probe) {
+      if (process.env.CI) {
+        throw new Error(`API at ${API_BASE} did not respond — expected running in CI`);
+      }
+      test.skip(true, 'API not running — skipping (local pre-push without stack)');
+    }
     expect(probe!.ok()).toBe(true);
   });
 
   test('API firebase-config responds', async ({ page }) => {
     const probe = await page.request.get(`${API_BASE}/api/firebase-config`).catch(() => null);
-    test.skip(!probe, 'API not running — skipping API tests');
+    if (!probe) {
+      if (process.env.CI) {
+        throw new Error(`API at ${API_BASE} did not respond — expected running in CI`);
+      }
+      test.skip(true, 'API not running — skipping (local pre-push without stack)');
+    }
     expect(probe!.ok()).toBe(true);
     const data = await probe!.json();
     expect(data).toHaveProperty('apiKey');
