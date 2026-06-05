@@ -29,23 +29,29 @@ class PushPermissionSteps {
     @Before
     fun resetPushPermissionStore() {
         // PushPermissionStore.resetForTesting() is `internal` (commonTest-only).
-        // Re-seed the public surface instead: revert to the cold-start state and
-        // overwrite any bridge a prior scenario registered. last-writer-wins
-        // semantics on registerBridge() is documented in the store class.
+        // Re-seed the public surface instead: revert to the cold-start state.
+        // Bridge registration is deferred to the state-setting steps so that
+        // last-writer-wins ordering is guaranteed even if a future test setup
+        // boots MainActivity (which itself calls registerBridge in onCreate at
+        // app/src/main/java/com/shyden/shytalk/MainActivity.kt:141). The
+        // current launchNavGraph path (setContent { NavGraph(...) }) does NOT
+        // run MainActivity, so this is defence-in-depth rather than a fix for
+        // an observable bug — but the cost is one line per Given/When step.
         PushPermissionStore.updateState(PushPermissionState.NOT_DETERMINED)
-        PushPermissionStore.registerBridge(countingBridge)
         deeplinkCalls.set(0)
     }
 
     @Given("the push permission state is {string}")
     fun givenPushPermissionState(stateName: String) {
         PushPermissionStore.updateState(parseState(stateName))
+        PushPermissionStore.registerBridge(countingBridge)
         propagateStateChange()
     }
 
     @When("the push permission state changes to {string}")
     fun whenPushPermissionStateChangesTo(stateName: String) {
         PushPermissionStore.updateState(parseState(stateName))
+        PushPermissionStore.registerBridge(countingBridge)
         propagateStateChange()
     }
 
