@@ -130,8 +130,17 @@ test.describe('Admin Core Modules Integration', () => {
       const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
       const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
       if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
-        test.skip();
-        return;
+        // CI sets both env vars in playwright-tests.yml (lines ~254-255).
+        // Missing creds in CI means an unexpected workflow regression —
+        // surface as a failure, not a silent skip (that was the G024 gap).
+        // Local pre-push may omit them when running without the full
+        // stack, so the skip is preserved there with a clear reason.
+        if (process.env.CI) {
+          throw new Error(
+            'ADMIN_EMAIL/ADMIN_PASSWORD not set — CI must provide both (see playwright-tests.yml)',
+          );
+        }
+        test.skip(true, 'ADMIN_EMAIL/ADMIN_PASSWORD not set — skipping (local without stack)');
       }
       await page.getByRole('textbox', { name: 'Email' }).fill(ADMIN_EMAIL);
       await page.getByRole('textbox', { name: 'Password' }).fill(ADMIN_PASSWORD);
