@@ -98,8 +98,9 @@ describe('startCronJobs', () => {
       expect(schedules).toContain('0 3 * * 0');
       // subscriptions + backpackCleanup + expireTempIds — daily midnight
       expect(schedules).toContain('0 0 * * *');
-      // staleRooms migrated to GH Actions scheduled workflow — no
-      // longer in the node-cron list.
+      // staleRooms ELIMINATED — voice rooms now close event-driven via
+      // the RTDB ownerLeft signal (PRs A0-A2), so the every-5-min
+      // schedule must not exist in the node-cron list.
       expect(schedules).not.toContain('*/5 * * * *');
       // backups + closedRooms — daily 02:00 UTC
       expect(schedules).toContain('0 2 * * *');
@@ -118,10 +119,11 @@ describe('startCronJobs', () => {
       expect(schedules).toContain('0 5 * * *');
 
       // Total: 7 schedules in production. serverHealth → Better Stack
-      // monitor; accountDeletion / staleRooms → GH Actions scheduled
-      // workflows; expireBans + dispatchNotifications → eliminated
-      // entirely (server-side filter in checkBans for the former,
-      // inline fan-out via dispatchNotificationInline for the latter).
+      // monitor; accountDeletion → GH Actions scheduled workflow;
+      // expireBans + dispatchNotifications + staleRooms → eliminated
+      // entirely (server-side filter in checkBans for the first,
+      // inline fan-out via dispatchNotificationInline for the second,
+      // RTDB ownerLeft signal for the third — see PRs A0-A4).
       expect(mockSchedule).toHaveBeenCalledTimes(7);
     });
 
@@ -132,11 +134,11 @@ describe('startCronJobs', () => {
       expect(schedules).not.toContain('*/30 * * * *');
     });
 
-    // staleRooms callback test removed — staleRooms is no longer
-    // registered as a node-cron schedule. The endpoint POST
-    // /api/system/sweep-stale-rooms is exercised by tests in
-    // tests/routes/system.test.js + the workflow at
-    // .github/workflows/cron-stale-rooms.yml.
+    // staleRooms ELIMINATED — no node-cron schedule, no system endpoint,
+    // no workflow. Voice rooms now close event-driven via the RTDB
+    // `ownerLeft/{roomId}` signal (PRs A0-A4 of the cron-elim cluster).
+    // The lazy-reap path in src/utils/stale-room-reap.js remains as
+    // defense-in-depth on inRoomTransaction (PR #996).
 
     // expireBans is gone entirely — no node-cron schedule, no system
     // endpoint, no workflow. Ban expiry is enforced at query time via
@@ -286,9 +288,10 @@ describe('startCronJobs', () => {
       });
     });
 
-    // staleRooms error-catch test removed — function moved to the GH
-    // Actions sweep endpoint at POST /api/system/sweep-stale-rooms,
-    // exercised by tests in tests/routes/system.test.js.
+    // staleRooms error-catch test removed — function ELIMINATED with
+    // the entire cron path. Voice room closure is event-driven via the
+    // RTDB ownerLeft signal (PRs A0-A4); no cron-side error path exists
+    // to test on the closure path anymore.
 
     test('ageVerificationAuditReconcile callback invokes the job', async () => {
       const ageVerificationAuditReconcile = require('../../src/cron/ageVerificationAuditReconcile');

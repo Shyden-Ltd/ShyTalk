@@ -107,8 +107,8 @@ const OWNER_LEAVE_TIMEOUT_MS = 300000;
 /**
  * True if any seat is OCCUPIED by a non-owner, optionally excluding `exceptId`
  * (e.g. the caller who is in the act of leaving). Mirrors the client's
- * `hasSeatedNonOwners` + staleRooms.js predicate; used to decide when an
- * OWNER_AWAY room is empty enough to close.
+ * `hasSeatedNonOwners` + the owner-left-handler's decideOwnerLeftAction
+ * predicate; used to decide when an OWNER_AWAY room is empty enough to close.
  */
 function hasNonOwnerSeated(room, exceptId = null) {
   const ownerId = String(room.ownerId);

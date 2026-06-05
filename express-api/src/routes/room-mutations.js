@@ -98,11 +98,15 @@ async function inRoomTransaction(req, roomId, mutate) {
       return { status: 404, body: { error: 'Not found' } };
     }
     // Lazy reap: if the room has been OWNER_AWAY long enough that the
-    // staleRooms cron would have closed it on its next tick, close it
-    // inline within this same transaction. The mutate() callback below
-    // sees the post-close room shape and returns its standard "room is
-    // closed" 409. The cron stays running as the safety net for
-    // abandoned rooms (zero participant traffic post-departure).
+    // owner-left-handler's decideOwnerLeftAction would close it, close
+    // it inline within this same transaction. The mutate() callback
+    // below sees the post-close room shape and returns its standard
+    // "room is closed" 409. Defense-in-depth alongside the RTDB
+    // ownerLeft-signal-driven closure (PRs A0-A4): the event-driven
+    // signal handles the common "owner force-quit" case in seconds, and
+    // this lazy reap covers the residual case where an OWNER_AWAY room
+    // is touched after grace expiry but the ownerLeft signal somehow
+    // missed (signal failed to fire, retry exhausted, etc).
     //
     // The owner returning never triggers reap — that path is the
     // OWNER_AWAY → ACTIVE transition, not a close — so the predicate

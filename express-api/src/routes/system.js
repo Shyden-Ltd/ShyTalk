@@ -14,16 +14,6 @@
  *                                             by .github/workflows/
  *                                             cron-account-deletion.yml.
  *
- * POST /api/system/sweep-stale-rooms        — requires Bearer auth.
- *                                             Synchronously runs
- *                                             staleRooms() — every-5-min
- *                                             sweep scheduled by
- *                                             .github/workflows/
- *                                             cron-stale-rooms.yml.
- *                                             Closes voice rooms whose
- *                                             owner has been OWNER_AWAY
- *                                             past the 10-min timeout.
- *
  * Architecture: replaces in-process node-cron schedules with either
  * external monitors (Better Stack for serverHealth) or GitHub Actions
  * scheduled workflows (for sweep operations). Public repo means GH
@@ -35,7 +25,6 @@ const router = require('express').Router();
 const log = require('../utils/log');
 const serverHealth = require('../cron/serverHealth');
 const accountDeletion = require('../cron/accountDeletion');
-const staleRooms = require('../cron/staleRooms');
 const alertManager = require('../utils/alertManagerInstance');
 const { requireSystemAuth } = require('../middleware/system-auth');
 
@@ -82,14 +71,12 @@ function getSweepTimeoutMs() {
  * mutation to production callers. Per the operator's
  * `[[feedback-test-isolation-no-leaks]]` directive.
  *
- * Covers the active sweep endpoints — sweep-account-deletions and
- * sweep-stale-rooms — with one place to audit auth / timeout /
- * error-handling semantics, and an in-flight independence test that
- * only needs to assert per-endpoint flag closure. New sweep endpoints
- * get the same defenses for free.
+ * Covers the active sweep endpoint — sweep-account-deletions — with
+ * one place to audit auth / timeout / error-handling semantics. New
+ * sweep endpoints get the same defenses for free.
  *
  * @param {string} name short identifier used in log messages, e.g.
- *   'sweep-account-deletions', 'sweep-stale-rooms'.
+ *   'sweep-account-deletions'.
  * @param {() => Promise<unknown>} sweepFn the underlying worker that
  *   does the actual sweep — typically a function from src/cron/*.
  * @returns Express handler.
@@ -136,10 +123,8 @@ function createSweepHandler(name, sweepFn) {
 }
 
 const sweepAccountDeletions = createSweepHandler('sweep-account-deletions', accountDeletion);
-const sweepStaleRooms = createSweepHandler('sweep-stale-rooms', staleRooms);
 
 router.post('/system/sweep-account-deletions', requireSystemAuth, sweepAccountDeletions);
-router.post('/system/sweep-stale-rooms', requireSystemAuth, sweepStaleRooms);
 
 // Test-only reset hook. Exported behind a NODE_ENV guard so production
 // code can't accidentally clobber the in-flight flags. Calls each
@@ -147,7 +132,6 @@ router.post('/system/sweep-stale-rooms', requireSystemAuth, sweepStaleRooms);
 if (process.env.NODE_ENV === 'test') {
   router._resetInFlightForTesting = () => {
     sweepAccountDeletions._reset();
-    sweepStaleRooms._reset();
   };
 }
 
