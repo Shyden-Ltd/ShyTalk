@@ -788,6 +788,10 @@
     <!-- Degraded Mode Banner -->
     <string name="reduced_functionality">Reduced functionality — some features may be unavailable</string>
 
+    <!-- Push Permission Denied Banner -->
+    <string name="notifications_disabled_banner_title">Notifications are off</string>
+    <string name="notifications_disabled_banner_action">Open Settings</string>
+
     <!-- Fullscreen Image Viewer -->
     <string name="image_number">Image %1$d</string>
     <string name="page_indicator">%1$d / %2$d</string>

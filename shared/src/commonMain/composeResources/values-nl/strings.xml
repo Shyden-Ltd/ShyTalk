@@ -1355,6 +1355,8 @@
     <!-- Degraded Mode Banner -->
     <!-- google-translated 2026-05-04 -->
     <string name="reduced_functionality">Verminderde functionaliteit — sommige functies zijn mogelijk niet beschikbaar</string>
+    <string name="notifications_disabled_banner_title">Meldingen staan uit</string>
+    <string name="notifications_disabled_banner_action">Instellingen openen</string>
 
     <!-- Fullscreen Image Viewer -->
     <!-- google-translated 2026-05-04 -->

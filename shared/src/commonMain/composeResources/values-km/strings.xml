@@ -1454,6 +1454,8 @@
     <!-- Degraded Mode Banner -->
     <!-- google-translated 2026-05-04 -->
     <string name="reduced_functionality">មុខងារកាត់បន្ថយ — មុខងារមួយចំនួនប្រហែលជាមិនអាចប្រើបានទេ។</string>
+    <string name="notifications_disabled_banner_title">បានបិទការជូនដំណឹង</string>
+    <string name="notifications_disabled_banner_action">បើកការកំណត់</string>
 
     <!-- Fullscreen Image Viewer -->
     <!-- google-translated 2026-05-04 -->

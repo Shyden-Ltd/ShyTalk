@@ -1355,6 +1355,8 @@
     <!-- Degraded Mode Banner -->
     <!-- google-translated 2026-05-04 -->
     <string name="reduced_functionality">Ограниченная функциональность — некоторые функции могут быть недоступны.</string>
+    <string name="notifications_disabled_banner_title">Уведомления отключены</string>
+    <string name="notifications_disabled_banner_action">Открыть настройки</string>
 
     <!-- Fullscreen Image Viewer -->
     <!-- google-translated 2026-05-04 -->

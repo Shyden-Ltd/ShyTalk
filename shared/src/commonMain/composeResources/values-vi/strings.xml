@@ -1355,6 +1355,8 @@
     <!-- Degraded Mode Banner -->
     <!-- google-translated 2026-05-04 -->
     <string name="reduced_functionality">Giảm chức năng - một số tính năng có thể không khả dụng</string>
+    <string name="notifications_disabled_banner_title">Đã tắt thông báo</string>
+    <string name="notifications_disabled_banner_action">Mở Cài đặt</string>
 
     <!-- Fullscreen Image Viewer -->
     <!-- google-translated 2026-05-04 -->

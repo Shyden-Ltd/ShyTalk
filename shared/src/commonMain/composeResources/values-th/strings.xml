@@ -1353,6 +1353,8 @@
     <!-- Degraded Mode Banner -->
     <!-- google-translated 2026-05-04 -->
     <string name="reduced_functionality">ฟังก์ชั่นลดลง — คุณสมบัติบางอย่างอาจไม่พร้อมใช้งาน</string>
+    <string name="notifications_disabled_banner_title">ปิดการแจ้งเตือน</string>
+    <string name="notifications_disabled_banner_action">เปิดการตั้งค่า</string>
 
     <!-- Fullscreen Image Viewer -->
     <!-- google-translated 2026-05-04 -->

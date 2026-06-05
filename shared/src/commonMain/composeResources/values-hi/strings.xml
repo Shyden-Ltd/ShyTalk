@@ -1355,6 +1355,8 @@
     <!-- Degraded Mode Banner -->
     <!-- google-translated 2026-05-04 -->
     <string name="reduced_functionality">कम कार्यक्षमता - कुछ सुविधाएँ अनुपलब्ध हो सकती हैं</string>
+    <string name="notifications_disabled_banner_title">सूचनाएं बंद हैं</string>
+    <string name="notifications_disabled_banner_action">सेटिंग्स खोलें</string>
 
     <!-- Fullscreen Image Viewer -->
     <!-- google-translated 2026-05-04 -->

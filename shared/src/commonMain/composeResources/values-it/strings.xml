@@ -1355,6 +1355,8 @@
     <!-- Degraded Mode Banner -->
     <!-- google-translated 2026-05-04 -->
     <string name="reduced_functionality">Funzionalità ridotte: alcune funzionalità potrebbero non essere disponibili</string>
+    <string name="notifications_disabled_banner_title">Notifiche disattivate</string>
+    <string name="notifications_disabled_banner_action">Apri Impostazioni</string>
 
     <!-- Fullscreen Image Viewer -->
     <!-- google-translated 2026-05-04 -->

@@ -1355,6 +1355,8 @@
     <!-- Degraded Mode Banner -->
     <!-- google-translated 2026-05-04 -->
     <string name="reduced_functionality">機能の制限 - 一部の機能が利用できない場合があります</string>
+    <string name="notifications_disabled_banner_title">通知はオフです</string>
+    <string name="notifications_disabled_banner_action">設定を開く</string>
 
     <!-- Fullscreen Image Viewer -->
     <!-- google-translated 2026-05-04 -->

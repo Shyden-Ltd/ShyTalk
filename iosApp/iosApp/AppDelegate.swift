@@ -19,7 +19,10 @@ import shared
 ///
 /// Implements the Kotlin `PushTokenBridge` protocol so `PushTokenManager`
 /// (commonMain) reads/writes the FCM token cache from a single source of truth.
-final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate, PushTokenBridge {
+/// Also implements the `PushPermissionBridge` protocol so the shared
+/// `PushPermissionStore` can call back into Swift to open the iOS Settings
+/// app at the app-specific notifications page (closes the TODO(v2) below).
+final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, MessagingDelegate, PushTokenBridge, PushPermissionBridge {
     static let currentTokenKey = "shytalk.fcm.currentToken"
     static let lastRegisteredTokenKey = "shytalk.fcm.lastRegisteredToken"
 
@@ -34,16 +37,28 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // the cached FCM token from NSUserDefaults via this AppDelegate.
         IosPushBridgeKt.registerPushBridge(bridge: self)
 
+        // Register the push-permission bridge so the shared UI's "Open Settings"
+        // CTA can defer to the iOS Settings deep-link.
+        PushPermissionStore.shared.registerBridge(b: self)
+
+        // Push the current permission state into the shared store so the UI
+        // banner reflects reality from the first frame.
+        refreshPushPermissionState()
+
         // Request authorization (user prompt). If already-determined, this is a no-op.
-        // TODO(v2): surface auth error / denial to the user via Settings → Notifications status.
-        // Currently a Focus/DnD/parental-control denial gives no in-app feedback.
         UNUserNotificationCenter.current().requestAuthorization(
             options: [.alert, .badge, .sound]
         ) { granted, error in
             if let error = error {
                 NSLog("[ShyTalkPush] auth request error: \(error.localizedDescription)")
+                // Refresh the shared store so the UI banner can show denial.
+                self.refreshPushPermissionState()
                 return
             }
+            // Refresh the shared store regardless of granted result — the prompt
+            // settles the .notDetermined → .authorized OR .denied transition,
+            // and the banner UX hinges on the post-prompt state.
+            self.refreshPushPermissionState()
             if granted {
                 DispatchQueue.main.async {
                     UIApplication.shared.registerForRemoteNotifications()
@@ -155,16 +170,61 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     @objc private func handleDidBecomeActive() {
         // 1) Late permission grant: re-check authorization status. If user granted
         //    via Settings.app after a prior denial, kick off remote registration.
+        //    ALSO update the shared permission store so the UI banner reflects
+        //    any DENIED → AUTHORIZED transition from the system Settings round-trip.
+        refreshPushPermissionState()
+        // 2) Foreground token-sync retry: covers FCM rotation while suspended
+        //    AND any save that was deferred by a cold-start Koin race.
+        IosPushBridgeKt.trySyncFcmTokenForCurrentUser()
+    }
+
+    /// Query the OS notification settings, map to the shared
+    /// PushPermissionState enum, and push to the shared store. Also kicks
+    /// off remote registration when authorized — same UX as the late-grant
+    /// path that was previously inlined in handleDidBecomeActive.
+    private func refreshPushPermissionState() {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
+            let mapped: PushPermissionState
+            switch settings.authorizationStatus {
+            case .notDetermined:
+                mapped = .notDetermined
+            case .authorized:
+                mapped = .authorized
+            case .provisional:
+                mapped = .provisional
+            case .ephemeral:
+                // Ephemeral (App Clip) authorization is, for our UX, the same
+                // as provisional — quietly delivers without prompting.
+                mapped = .provisional
+            case .denied:
+                mapped = .denied
+            @unknown default:
+                // Future iOS may add new statuses; treat as denied for safety
+                // (better to over-surface the banner than to silently miss
+                // a denial state we don't yet recognise).
+                mapped = .denied
+            }
+            PushPermissionStore.shared.updateState(newState: mapped)
             if settings.authorizationStatus == .authorized {
                 DispatchQueue.main.async {
                     UIApplication.shared.registerForRemoteNotifications()
                 }
             }
         }
-        // 2) Foreground token-sync retry: covers FCM rotation while suspended
-        //    AND any save that was deferred by a cold-start Koin race.
-        IosPushBridgeKt.trySyncFcmTokenForCurrentUser()
+    }
+
+    // MARK: PushPermissionBridge (called from Kotlin via Objective-C interop)
+
+    /// Opens the iOS Settings app at the app-specific notifications page.
+    /// Invoked by the shared UI when the user taps the "Open Settings" CTA
+    /// on the denial banner. Wrapped in DispatchQueue.main.async because
+    /// the Kotlin caller's StateFlow collection may dispatch from a non-main
+    /// queue, and UIApplication.open requires main.
+    func openSystemSettings() {
+        DispatchQueue.main.async {
+            guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(url)
+        }
     }
 
     private func handleRemotePayload(_ userInfo: [AnyHashable: Any]) {

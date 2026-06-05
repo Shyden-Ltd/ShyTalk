@@ -1355,6 +1355,8 @@
     <!-- Degraded Mode Banner -->
     <!-- google-translated 2026-05-04 -->
     <string name="reduced_functionality">功能减少——某些功能可能不可用</string>
+    <string name="notifications_disabled_banner_title">通知已关闭</string>
+    <string name="notifications_disabled_banner_action">打开设置</string>
 
     <!-- Fullscreen Image Viewer -->
     <!-- google-translated 2026-05-04 -->
