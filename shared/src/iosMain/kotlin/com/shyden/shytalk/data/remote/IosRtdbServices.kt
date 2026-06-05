@@ -1,6 +1,7 @@
 package com.shyden.shytalk.data.remote
 
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.core.util.logD
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.repository.TypingRepository
 import dev.gitlive.firebase.database.FirebaseDatabase
@@ -149,6 +150,31 @@ class IosPresenceServiceImpl(
         } catch (e: Exception) {
             false
         }
+
+    // ── Owner-left signal (NO-OP STUB — real iOS impl in PR A2) ──
+    //
+    // The Android RtdbPresenceService implements arm/cancel against the
+    // RTDB `ownerLeft/{roomId}` path with an onDisconnect trigger; the
+    // server-side listener (express-api/src/utils/owner-left-*.js) consumes
+    // these signals and decides whether to close or transition the room.
+    // Until PR A2 lands the real iOS impl, owner-left signal arming on iOS
+    // is a no-op — the legacy lazy-reap path (PR #996) still handles iOS-
+    // owned rooms via on-access reaping with the 5-min grace window.
+
+    override fun armOwnerLeftSignal(
+        roomId: String,
+        ownerFirebaseUid: String,
+    ) {
+        // TODO(PR A2): real iOS impl via database.reference("ownerLeft/$roomId")
+        //   .setValue(ownerFirebaseUid) + .onDisconnect().setValue(ownerFirebaseUid)
+        logD(TAG, "armOwnerLeftSignal STUB (iOS A2 pending) roomId=$roomId")
+    }
+
+    override fun cancelOwnerLeftSignal() {
+        // TODO(PR A2): real iOS impl via database.reference("ownerLeft/$currentOwnerRoomId")
+        //   .onDisconnect().cancel() + .removeValue()
+        logD(TAG, "cancelOwnerLeftSignal STUB (iOS A2 pending)")
+    }
 }
 
 // ── ConversationWebSocketService (RTDB) ─────────────────────────

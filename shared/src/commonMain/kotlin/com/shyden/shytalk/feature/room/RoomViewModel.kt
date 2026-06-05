@@ -428,6 +428,9 @@ class RoomViewModel(
     }
 
     private fun disconnectFromRoom() {
+        // presenceService.removePresence() auto-cancels any armed owner-left
+        // signal (cron-elim A1) so non-owners and owners alike get cleanup
+        // for free; no explicit cancelOwnerLeftSignal call needed here.
         voiceService.leaveChannel()
         presenceService.removePresence()
         roomLifecycleManager.untrackRoom()
@@ -435,6 +438,24 @@ class RoomViewModel(
         viewModelScope.launch {
             userRepository.updateProfile(userId, mapOf("currentRoomId" to null))
         }
+    }
+
+    /**
+     * Arm the RTDB owner-left signal when this client is the room owner.
+     * Cron-elim A1 — paired with [PresenceService.setPresence] on every
+     * room-entry path. The signal MUST carry the Firebase Auth uid (NOT
+     * the Firestore uniqueId — see PR #1001 / cron-elim A0 for the
+     * namespace separation lesson). No-op for non-owners and for the
+     * impossible-but-defensible null-firebaseUid case.
+     */
+    private fun maybeArmOwnerLeftSignal(
+        room: ChatRoom,
+        userId: String,
+    ) {
+        if (room.ownerId != userId) return
+        val firebaseUid = authRepository.currentFirebaseUid.orEmpty()
+        if (firebaseUid.isEmpty()) return
+        presenceService.armOwnerLeftSignal(roomId, firebaseUid)
     }
 
     /** Returns true if user was kicked/removed and collection should stop. */
@@ -478,6 +499,7 @@ class RoomViewModel(
                     }
                     roomRepository.joinRoom(roomId, userId)
                     presenceService.setPresence(roomId, userId)
+                    maybeArmOwnerLeftSignal(room, userId)
                 }
                 return false
             }
@@ -914,7 +936,10 @@ class RoomViewModel(
                 }
             }
             // RTDB presence (independent)
-            launch { presenceService.setPresence(roomId, userId) }
+            launch {
+                presenceService.setPresence(roomId, userId)
+                if (room != null) maybeArmOwnerLeftSignal(room, userId)
+            }
             // User profile update (different document)
             launch { userRepository.updateProfile(userId, mapOf("currentRoomId" to roomId)) }
             // Voice join — biggest bottleneck, runs in parallel with writes
@@ -1464,6 +1489,9 @@ class RoomViewModel(
                 // fired while WiFi was off, removing the owner's presence entry.
                 // Without this, other phones keep detecting the owner as absent.
                 presenceService.setPresence(roomId, userId)
+                // Cron-elim A1 — re-arm owner-left after owner-returned. The
+                // function-entry guard at the top already confirmed ownership.
+                maybeArmOwnerLeftSignal(room, userId)
 
                 // Re-establish room tracking if lost during disconnect
                 if (!roomLifecycleManager.isInRoom(roomId)) {

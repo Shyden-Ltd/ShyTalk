@@ -39,6 +39,13 @@ class RtdbPresenceService(
     private var currentRoomId: String? = null
     private var currentUserId: String? = null
 
+    // Cron-elim A1 — owner-left signal state. Separate from currentRoomId/
+    // currentUserId because non-owners also call setPresence but only owners
+    // arm the signal; the reconnect listener guards re-arm by checking
+    // currentOwnerRoomId.
+    private var currentOwnerRoomId: String? = null
+    private var currentOwnerFirebaseUid: String? = null
+
     private var presenceListener: ValueEventListener? = null
     private var eventsListener: ValueEventListener? = null
     private var connectedListener: ValueEventListener? = null
@@ -66,15 +73,25 @@ class RtdbPresenceService(
         presenceRef.setValue(true)
         presenceRef.onDisconnect().removeValue()
 
-        // Re-establish presence on RTDB reconnect (onDisconnect may have fired during a blip)
+        // Re-establish presence on RTDB reconnect (onDisconnect may have fired during a blip).
+        // Cron-elim A1 — also re-arms the owner-left signal when this client
+        // is the owner of this room. Owner-left signals fire only on the
+        // owner-leaves-room transition, but a transient disconnect-reconnect
+        // blip during owner-attendance must not leave the signal disarmed.
         val connectedRef = db.getReference(".info/connected")
         connectedListener =
             object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
                     val connected = snapshot.getValue(Boolean::class.java) ?: false
-                    if (connected && currentRoomId == roomId && currentUserId == userId) {
-                        presenceRef.setValue(true)
-                        presenceRef.onDisconnect().removeValue()
+                    if (!connected || currentRoomId != roomId || currentUserId != userId) return
+                    presenceRef.setValue(true)
+                    presenceRef.onDisconnect().removeValue()
+                    val ownerFuid = currentOwnerFirebaseUid
+                    if (currentOwnerRoomId == roomId && ownerFuid != null) {
+                        val ownerLeftRef = db.getReference("ownerLeft/$roomId")
+                        ownerLeftRef.onDisconnect().cancel()
+                        ownerLeftRef.setValue(ownerFuid)
+                        ownerLeftRef.onDisconnect().setValue(ownerFuid)
                     }
                 }
 
@@ -155,6 +172,12 @@ class RtdbPresenceService(
     }
 
     override fun removePresence() {
+        // Cron-elim A1 — always cancel the owner-left signal first so every
+        // removePresence callsite (5+ in ActiveRoomManager) gets owner-left
+        // cancel "for free" without per-callsite churn. Safe no-op when no
+        // signal is armed.
+        cancelOwnerLeftSignal()
+
         val roomId = currentRoomId ?: return
         val userId = currentUserId ?: return
 
@@ -196,6 +219,64 @@ class RtdbPresenceService(
             Log.w(TAG, "isUserPresent check failed: ${e.message}")
             false
         }
+
+    override fun armOwnerLeftSignal(
+        roomId: String,
+        ownerFirebaseUid: String,
+    ) {
+        // Replace-roomId idempotency: if a prior signal is armed for a
+        // different room, cancel it first. Otherwise the stale signal would
+        // fire when the connection drops, attempting to close a room the
+        // owner already cleanly left.
+        if (currentOwnerRoomId != null && currentOwnerRoomId != roomId) {
+            cancelOwnerLeftSignal()
+        }
+
+        // Sequence MUST be: onDisconnect().cancel() → setValue → onDisconnect().setValue
+        //
+        // The cancel-first defends against a stale onDisconnect registration
+        // from a prior arm on the same path (e.g. re-entering the same room
+        // after a forced re-arm). Skipping cancel-first leaves both
+        // registrations queued and BOTH fire on disconnect, producing
+        // duplicate signal entries — the server-side listener handles
+        // dedup but spamming RTDB is wasteful.
+        //
+        // The setValue (vs no immediate write) ensures the entry exists
+        // BEFORE the onDisconnect arms — otherwise the server-side
+        // child_added listener would only fire on the next disconnect, not
+        // on the arm. The arm SHOULD trigger a child_added (the server
+        // orchestrator's TOCTOU re-check resolves: owner is still present,
+        // NOOP), making the listener path exercise itself on every arm.
+        val ownerLeftRef = db.getReference("ownerLeft/$roomId")
+        ownerLeftRef.onDisconnect().cancel()
+        ownerLeftRef.setValue(ownerFirebaseUid)
+        ownerLeftRef.onDisconnect().setValue(ownerFirebaseUid)
+
+        currentOwnerRoomId = roomId
+        currentOwnerFirebaseUid = ownerFirebaseUid
+
+        Log.d(TAG, "armOwnerLeftSignal room=$roomId")
+    }
+
+    override fun cancelOwnerLeftSignal() {
+        val roomId = currentOwnerRoomId ?: return
+
+        // Symmetric cleanup: cancel the onDisconnect FIRST (so a race-y
+        // disconnect during this method doesn't fire the stale signal),
+        // then remove the entry. Reverse order would briefly leave the
+        // entry present with no onDisconnect, but a disconnect at THAT
+        // moment would leave the entry orphaned — the server listener
+        // would still process it, but on a normal cancel-path that's a
+        // spurious signal.
+        val ownerLeftRef = db.getReference("ownerLeft/$roomId")
+        ownerLeftRef.onDisconnect().cancel()
+        ownerLeftRef.removeValue()
+
+        currentOwnerRoomId = null
+        currentOwnerFirebaseUid = null
+
+        Log.d(TAG, "cancelOwnerLeftSignal room=$roomId")
+    }
 
     /**
      * Detect owner absence from the presence set and call the Worker API.

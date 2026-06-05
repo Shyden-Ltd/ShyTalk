@@ -22,4 +22,11 @@ class FakePresenceService : PresenceService {
     ): Boolean = false
 
     override val roomEvents: Flow<RoomEvent> = MutableSharedFlow()
+
+    override fun armOwnerLeftSignal(
+        roomId: String,
+        ownerFirebaseUid: String,
+    ) { /* no-op */ }
+
+    override fun cancelOwnerLeftSignal() { /* no-op */ }
 }
