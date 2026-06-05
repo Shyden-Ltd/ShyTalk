@@ -105,3 +105,31 @@ internal fun markAskedInternal(context: Context) {
         .putBoolean(KEY_HAS_ASKED, true)
         .apply()
 }
+
+/**
+ * Test-only seed: drives [refreshPushPermissionState] with caller-supplied OS
+ * facts so androidTest BDD scenarios can exercise the OS-facts→state mapping
+ * end-to-end (instead of just store→banner with state seeded directly).
+ *
+ * Sister coverage: `AndroidPushPermissionTest` exercises the mapping helpers
+ * in isolation; this entry point exercises the same logic threaded through
+ * [PushPermissionStore], so the BDD layer can assert the banner UX given
+ * raw OS facts. Naming `*ForTesting` is the project convention for
+ * test-only API surface (mirrors [PushPermissionStore.resetForTesting]).
+ *
+ * Do NOT call from production code — the `hasAsked` parameter bypasses the
+ * SharedPreferences sentinel that the production path uses to remember
+ * whether the POST_NOTIFICATIONS prompt has been shown.
+ */
+fun seedPushPermissionStateForTesting(
+    enabled: Boolean,
+    sdkInt: Int,
+    hasAsked: Boolean,
+) {
+    refreshPushPermissionState(
+        enabled = enabled,
+        sdkInt = sdkInt,
+        readHasAsked = { hasAsked },
+        markAsked = { /* test-only: production-path sentinel write is intentionally a no-op */ },
+    )
+}
