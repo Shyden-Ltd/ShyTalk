@@ -103,7 +103,6 @@ import com.shyden.shytalk.core.util.calculateAge
 import com.shyden.shytalk.core.util.countryNameForCode
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.flagEmojiForCode
-import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.feature.gifting.GiftingViewModel
 import com.shyden.shytalk.feature.messaging.ReportUserDialog
 import com.shyden.shytalk.feature.shop.SuperShyBottomSheet

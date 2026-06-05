@@ -10,7 +10,6 @@ import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.logD
 import com.shyden.shytalk.core.util.logE
-import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.remote.PresenceService
 import com.shyden.shytalk.data.remote.VoiceConnectionState
