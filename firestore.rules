@@ -136,7 +136,7 @@ service cloud.firestore {
       // Transactions — owner or admin read, write only via API
       match /transactions/{txId} {
         allow read: if request.auth != null
-                    && (callerUniqueId() == int(uniqueId) || request.auth.token.admin == true);
+                    && (callerUniqueId() == int(uniqueId) || isAdmin());
         allow write: if false;
       }
 
@@ -513,7 +513,7 @@ service cloud.firestore {
       allow read: if request.auth != null
         && (resource.data.userId == string(callerUniqueId())
             || resource.data.uniqueId == string(callerUniqueId())
-            || request.auth.token.admin == true);
+            || isAdmin());
       allow create: if request.auth != null
         && (request.resource.data.userId == string(callerUniqueId())
             || request.resource.data.uniqueId == string(callerUniqueId()));
@@ -554,7 +554,7 @@ service cloud.firestore {
 
     // ── Reports — admin reads, server writes ─────────────────────
     match /reports/{reportId} {
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow read: if request.auth != null && isAdmin();
       allow create: if false;
       allow update: if false;
     }
@@ -594,7 +594,7 @@ service cloud.firestore {
 
     // ── Admin audit log — admin read, server write ───────────────
     match /adminAuditLog/{logId} {
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow read: if request.auth != null && isAdmin();
       allow write: if false;
     }
 
@@ -605,7 +605,7 @@ service cloud.firestore {
 
     // ── Logs — admin reads, server writes ────────────────────────
     match /logs/{logId} {
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow read: if request.auth != null && isAdmin();
       allow write: if false;
     }
 
@@ -623,25 +623,25 @@ service cloud.firestore {
 
     // ── Device bans — admin read, server write ───────────────────
     match /deviceBans/{deviceId} {
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow read: if request.auth != null && isAdmin();
       allow write: if false;
     }
 
     // ── Network bans — admin read, server write ──────────────────
     match /networkBans/{banId} {
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow read: if request.auth != null && isAdmin();
       allow write: if false;
     }
 
     // ── Alerts — admin read, server write ────────────────────────
     match /alerts/{alertId} {
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow read: if request.auth != null && isAdmin();
       allow write: if false;
     }
 
     // ── Alert config — admin read, server write ──────────────────
     match /alertConfig/{docId} {
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow read: if request.auth != null && isAdmin();
       allow write: if false;
     }
 
@@ -674,11 +674,11 @@ service cloud.firestore {
     match /suggestions/{suggestionId} {
       allow read: if resource.data.status != 'pending'
                   || (request.auth != null && string(callerUniqueId()) == resource.data.submitterUid)
-                  || (request.auth != null && request.auth.token.admin == true);
+                  || (request.auth != null && isAdmin());
       allow create: if request.auth != null;
       allow update: if request.auth != null
                     && (string(callerUniqueId()) == resource.data.submitterUid && resource.data.status == 'pending')
-                    || (request.auth != null && request.auth.token.admin == true);
+                    || (request.auth != null && isAdmin());
       allow delete: if request.auth != null
                     && string(callerUniqueId()) == resource.data.submitterUid
                     && resource.data.status == 'pending';
@@ -703,7 +703,7 @@ service cloud.firestore {
     // ── Blocked topics — admin write, public read ───────────────
     match /blockedTopics/{topicId} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.token.admin == true;
+      allow write: if request.auth != null && isAdmin();
     }
 
     // ── Suggestion disputes — submitter create, admin resolve ───
@@ -714,7 +714,7 @@ service cloud.firestore {
       allow read: if request.auth != null;
       allow create: if request.auth != null
         && request.resource.data.submitterUid == string(callerUniqueId());
-      allow update: if request.auth != null && request.auth.token.admin == true;
+      allow update: if request.auth != null && isAdmin();
     }
 
     // ── Subscriptions — owner-only read/write ───────────────────
@@ -733,7 +733,7 @@ service cloud.firestore {
 
     // ── Identity graphs — admin-only ────────────────────────────
     match /identityGraphs/{graphId} {
-      allow read, write: if request.auth != null && request.auth.token.admin == true;
+      allow read, write: if request.auth != null && isAdmin();
     }
 
     // ── Notification queue — server-only ────────────────────────
@@ -743,13 +743,13 @@ service cloud.firestore {
 
     // ── Audit log — admin read, server write ──────────────────
     match /auditLog/{logId} {
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow read: if request.auth != null && isAdmin();
       allow write: if false;
     }
 
     // ── Moderation log — admin read, server write ─────────────
     match /moderationLog/{logId} {
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow read: if request.auth != null && isAdmin();
       allow write: if false;
     }
 
@@ -762,7 +762,7 @@ service cloud.firestore {
     // Apple-side refunds with no matching purchaseReceipt. Ops resolves
     // these manually; the admin panel surfaces them via this collection.
     match /orphanRefunds/{notificationUUID} {
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow read: if request.auth != null && isAdmin();
       allow write: if false;
     }
 
@@ -772,7 +772,7 @@ service cloud.firestore {
     // for money-affecting paths, so the webhook delegates to ops via
     // this worklist + a critical alert.
     match /pendingRefundReversals/{notificationUUID} {
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow read: if request.auth != null && isAdmin();
       allow write: if false;
     }
 
@@ -789,7 +789,7 @@ service cloud.firestore {
     // Admin reads via the Express admin route (which uses Firebase
     // Admin SDK; rules are bypassed).
     match /ageVerificationSubmissions/{submissionId} {
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow read: if request.auth != null && isAdmin();
       allow write: if false;
     }
 
@@ -802,7 +802,7 @@ service cloud.firestore {
     // route through Express so the payload shape is canonical and
     // actor/route/cohort fields are server-controlled.
     match /segregationEvents/{evtId} {
-      allow read: if request.auth != null && request.auth.token.admin == true;
+      allow read: if request.auth != null && isAdmin();
       allow write: if false;
     }
   }
