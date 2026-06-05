@@ -281,10 +281,10 @@ class AndroidPushPermissionTest {
 
     @Test
     fun `notifyPushPermissionPromptedInternal API 33 authorises when granted`() {
-        val (context, _, editor, _) = statefulPrefsContext(initialAsked = false)
+        val (context, editor, _) = statefulPrefsContext(initialAsked = false)
         notifyPushPermissionPromptedInternal(context = context, notifyEnabled = true, sdkInt = 33)
-        verify(atLeast = 1) { editor.putBoolean("has_asked_for_push_permission", true) }
-        verify(atLeast = 1) { editor.apply() }
+        verify(exactly = 1) { editor.putBoolean("has_asked_for_push_permission", true) }
+        verify(exactly = 1) { editor.apply() }
         assertEquals(PushPermissionState.AUTHORIZED, PushPermissionStore.state.value)
     }
 
@@ -293,28 +293,28 @@ class AndroidPushPermissionTest {
         // User saw the system prompt and tapped Don't allow — enabled=false,
         // sentinel writes true BEFORE refresh reads it, so we map to DENIED
         // (not NOT_DETERMINED). This is the round-2 Critical scenario.
-        val (context, _, editor, _) = statefulPrefsContext(initialAsked = false)
+        val (context, editor, _) = statefulPrefsContext(initialAsked = false)
         notifyPushPermissionPromptedInternal(context = context, notifyEnabled = false, sdkInt = 33)
-        verify(atLeast = 1) { editor.putBoolean("has_asked_for_push_permission", true) }
-        verify(atLeast = 1) { editor.apply() }
+        verify(exactly = 1) { editor.putBoolean("has_asked_for_push_permission", true) }
+        verify(exactly = 1) { editor.apply() }
         assertEquals(PushPermissionState.DENIED, PushPermissionStore.state.value)
     }
 
     @Test
     fun `notifyPushPermissionPromptedInternal pre-33 authorises when granted`() {
-        val (context, _, editor, _) = statefulPrefsContext(initialAsked = false)
+        val (context, editor, _) = statefulPrefsContext(initialAsked = false)
         notifyPushPermissionPromptedInternal(context = context, notifyEnabled = true, sdkInt = 28)
-        verify(atLeast = 1) { editor.putBoolean("has_asked_for_push_permission", true) }
-        verify(atLeast = 1) { editor.apply() }
+        verify(exactly = 1) { editor.putBoolean("has_asked_for_push_permission", true) }
+        verify(exactly = 1) { editor.apply() }
         assertEquals(PushPermissionState.AUTHORIZED, PushPermissionStore.state.value)
     }
 
     @Test
     fun `notifyPushPermissionPromptedInternal pre-33 denies when declined`() {
-        val (context, _, editor, _) = statefulPrefsContext(initialAsked = false)
+        val (context, editor, _) = statefulPrefsContext(initialAsked = false)
         notifyPushPermissionPromptedInternal(context = context, notifyEnabled = false, sdkInt = 28)
-        verify(atLeast = 1) { editor.putBoolean("has_asked_for_push_permission", true) }
-        verify(atLeast = 1) { editor.apply() }
+        verify(exactly = 1) { editor.putBoolean("has_asked_for_push_permission", true) }
+        verify(exactly = 1) { editor.apply() }
         assertEquals(PushPermissionState.DENIED, PushPermissionStore.state.value)
     }
 
@@ -325,7 +325,7 @@ class AndroidPushPermissionTest {
         // to DENIED. If a future edit reversed the lines, the refresh would
         // read sentinel=false and map to NOT_DETERMINED — the assertions in
         // the DENIED test would fail, catching the regression.
-        val (context, _, _, sentinel) = statefulPrefsContext(initialAsked = false)
+        val (context, _, sentinel) = statefulPrefsContext(initialAsked = false)
         notifyPushPermissionPromptedInternal(context = context, notifyEnabled = false, sdkInt = 33)
         assertTrue(sentinel.get(), "sentinel must be true after notify")
         assertEquals(PushPermissionState.DENIED, PushPermissionStore.state.value)
@@ -357,7 +357,6 @@ class AndroidPushPermissionTest {
 
     private data class StatefulPrefs(
         val context: Context,
-        val prefs: SharedPreferences,
         val editor: SharedPreferences.Editor,
         val sentinel: java.util.concurrent.atomic.AtomicBoolean,
     )
@@ -379,6 +378,6 @@ class AndroidPushPermissionTest {
         every {
             context.getSharedPreferences("push_permission_prefs", Context.MODE_PRIVATE)
         } returns prefs
-        return StatefulPrefs(context, prefs, editor, sentinel)
+        return StatefulPrefs(context, editor, sentinel)
     }
 }
