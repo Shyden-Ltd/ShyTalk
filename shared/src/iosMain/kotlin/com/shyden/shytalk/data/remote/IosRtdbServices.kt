@@ -180,18 +180,28 @@ class IosPresenceServiceImpl(
             // period re-check before marking users disconnected, and
             // the pre-A2 stub made that re-check a no-op (always
             // reported absent). Uses snapshot.exists — the
-            // serialization-free property, which is the correct check
-            // for a timestamp-valued presence node (setPresence writes
-            // currentTimeMillis() via .setValue(Long)).
+            // serialization-free property that returns true for any
+            // non-null value, correct for the iOS presence shape (this
+            // file writes a Long timestamp via .setValue(Long) at
+            // setPresence).
             //
-            // The Android counterpart at RtdbPresenceService:217 uses
+            // Cross-platform presence-node data shape is inconsistent:
+            //   - Android (RtdbPresenceService:73): writes Boolean `true`
+            //   - iOS (IosPresenceServiceImpl:120):  writes Long timestamp
+            // Android's isUserPresent at RtdbPresenceService:217 uses
             //   snapshot.exists() && snapshot.getValue(Boolean::class.java) == true
-            // Because presence is a Long, getValue(Boolean) returns null,
-            // so the full expression evaluates to false EVEN when the
-            // node exists. Android isUserPresent therefore always
-            // returns false, making the grace-period TOCTOU re-check
-            // in ActiveRoomManager a no-op on Android. Task #10 fixes
-            // this correctness bug by simplifying to snapshot.exists().
+            // which works for Android-written nodes (Boolean true coerces
+            // back to true) but FAILS for iOS-written nodes: getValue(
+            // Boolean::class.java) returns null on a Long, so the full
+            // expression evaluates to false even when the node exists.
+            // Net effect: an Android client checking the presence of an
+            // iOS user always sees them as absent, making the grace-
+            // period TOCTOU re-check in ActiveRoomManager a no-op for
+            // cross-platform rooms. Task #10 fixes this by simplifying
+            // Android to snapshot.exists() (matches the iOS impl shape
+            // here and handles either data type). Harmonising the
+            // write-side data shape across platforms is a deeper
+            // anti-pattern fix tracked separately.
             val snapshot = database.reference("rooms/$roomId/presence/$userId").valueEvents.first()
             snapshot.exists
         } catch (e: CancellationException) {
