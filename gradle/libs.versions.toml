@@ -32,7 +32,7 @@ cucumberAndroid = "7.18.1"
 securityCrypto = "1.1.0"
 biometric = "1.4.0-alpha07"
 ktlint = "14.2.0"
-detekt = "1.23.8"
+detekt = "2.0.0-alpha.3"
 gitliveFirebase = "2.4.0"
 
 [libraries]
@@ -141,4 +141,4 @@ compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMu
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 play-publisher = { id = "com.github.triplet.play", version = "4.0.0" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
-detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+detekt = { id = "dev.detekt", version.ref = "detekt" }
