@@ -2495,6 +2495,24 @@ class RoomViewModelTest {
             advanceUntilIdle()
             every { roomLifecycleManager.isInRoom("room-1") } returns false
 
+            // handleFirstJoin auto-triggers ownerReturn when state=OWNER_AWAY,
+            // so without clearMocks the verifies below would pass on the
+            // auto-fire alone — a broken explicit-call path would slip
+            // through. Clear the call counts (preserving stub answers) so
+            // the verify pins the EXPLICIT viewModel.ownerReturn() path.
+            io.mockk.clearMocks(
+                presenceService,
+                roomRepository,
+                roomLifecycleManager,
+                answers = false,
+            )
+            // Restore the suspendable setOwnerReturned answer that
+            // clearMocks dropped (answers = false preserves only the
+            // every{} stubs, not coEvery{} ones in pre-test setup).
+            coEvery { roomRepository.setOwnerReturned(any(), any()) } returns Resource.Success(Unit)
+            // isInRoom was set above; the explicit-call path reads it again.
+            every { roomLifecycleManager.isInRoom("room-1") } returns false
+
             viewModel.ownerReturn()
             advanceUntilIdle()
 
@@ -2516,6 +2534,14 @@ class RoomViewModelTest {
             viewModel = createViewModel()
             advanceUntilIdle()
 
+            // Same isolation pattern as the prior test — the OWNER_AWAY
+            // state auto-triggers ownerReturn during the createViewModel
+            // flow observation, so the verifies below would vacuously
+            // pass without clearing the call counts.
+            io.mockk.clearMocks(presenceService, roomRepository, answers = false)
+            coEvery { roomRepository.setOwnerReturned(any(), any()) } returns Resource.Success(Unit)
+            every { roomLifecycleManager.isInRoom("room-1") } returns true
+
             viewModel.ownerReturn()
             advanceUntilIdle()
 
@@ -2536,6 +2562,12 @@ class RoomViewModelTest {
             emitRoomAsOwner(room)
             advanceUntilIdle()
             joinedFlow.value = false
+
+            // Clear voiceService call count before the explicit ownerReturn
+            // — the auto-trigger from handleFirstJoin would also have
+            // attempted voice rejoin during setup.
+            io.mockk.clearMocks(voiceService, roomRepository, answers = false)
+            coEvery { roomRepository.setOwnerReturned(any(), any()) } returns Resource.Success(Unit)
 
             viewModel.ownerReturn()
             advanceUntilIdle()
@@ -2559,6 +2591,13 @@ class RoomViewModelTest {
             // Grant audio permission so ownerReturn will enable mic
             viewModel.onAudioPermissionResult(true)
             advanceUntilIdle()
+
+            // Clear voiceService call count before the explicit ownerReturn
+            // — the auto-trigger from handleFirstJoin would have called
+            // setMicrophoneEnabled during setup since joinedFlow was true
+            // when the audio-permission grant fired.
+            io.mockk.clearMocks(voiceService, roomRepository, answers = false)
+            coEvery { roomRepository.setOwnerReturned(any(), any()) } returns Resource.Success(Unit)
 
             viewModel.ownerReturn()
             advanceUntilIdle()
