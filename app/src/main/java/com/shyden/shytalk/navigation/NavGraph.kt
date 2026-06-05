@@ -270,7 +270,18 @@ fun NavGraph(
                 val permissionLauncher =
                     rememberLauncherForActivityResult(
                         ActivityResultContracts.RequestMultiplePermissions(),
-                    ) { /* granted or denied — no action needed */ }
+                    ) { results ->
+                        // When POST_NOTIFICATIONS was in the request set, the user
+                        // has now seen the system prompt — mark it so the store
+                        // can distinguish NOT_DETERMINED from DENIED on API 33+,
+                        // then re-query so the banner reflects the user's choice.
+                        if (Manifest.permission.POST_NOTIFICATIONS in results) {
+                            com.shyden.shytalk.core.push
+                                .markPushPermissionPrompted(context)
+                            com.shyden.shytalk.core.push
+                                .refreshPushPermissionStateFromContext(context)
+                        }
+                    }
 
                 // Save FCM token on login
                 LaunchedEffect(Unit) {
