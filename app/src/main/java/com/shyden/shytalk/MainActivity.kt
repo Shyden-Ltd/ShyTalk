@@ -134,6 +134,14 @@ class MainActivity : AppCompatActivity() {
         biometricAuth.setActivity(this)
         enableEdgeToEdge()
 
+        // applicationContext (not `this`) so the bridge outlives Activity recreations without leaking it.
+        com.shyden.shytalk.core.push.PushPermissionStore.registerBridge(
+            com.shyden.shytalk.core.push
+                .AndroidPushPermissionBridge(applicationContext),
+        )
+        com.shyden.shytalk.core.push
+            .refreshPushPermissionStateFromContext(applicationContext)
+
         // Track app background/foreground for lock timeout. Save the
         // observer so it can be removed in onDestroy — ProcessLifecycleOwner
         // is process-scoped and would otherwise accumulate observers
@@ -572,6 +580,9 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         activeRoomManager.isAppInForeground = true
         startLastSeenUpdates()
+        // Catches the user toggling the OS notification setting while paused.
+        com.shyden.shytalk.core.push
+            .refreshPushPermissionStateFromContext(applicationContext)
     }
 
     override fun onStop() {
