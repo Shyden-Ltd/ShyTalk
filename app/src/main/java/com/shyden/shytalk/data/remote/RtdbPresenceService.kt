@@ -213,23 +213,8 @@ class RtdbPresenceService(
         userId: String,
     ): Boolean =
         try {
-            // Cron-elim A2 followup — was previously
-            //   snapshot.exists() && snapshot.getValue(Boolean::class.java) == true
-            // The Boolean arm broke cross-platform presence checks: this client
-            // writes Boolean `true` via setValue(true) on line 73, but the iOS
-            // client writes a Long via setValue(currentTimeMillis()) — so an
-            // Android-checking-iOS-user invocation got
-            //   true && (null == true) = false
-            // because getValue(Boolean) returns null for a Long-valued node.
-            // Net effect: ActiveRoomManager.kt:493's grace-period TOCTOU
-            // re-check was a no-op when an Android client checked an iOS
-            // user's presence — brief mobile-network blips that should be
-            // filtered by the re-check still triggered spurious setOwnerAway
-            // and removeDisconnectedUser actions for iOS users in mixed-
-            // platform rooms. snapshot.exists() alone is type-agnostic and
-            // matches the iOS impl shape introduced in cron-elim A2.
             val snapshot = db.getReference("rooms/$roomId/presence/$userId").get().await()
-            snapshot.exists()
+            snapshotIndicatesPresent(snapshot)
         } catch (e: Exception) {
             Log.w(TAG, "isUserPresent check failed: ${e.message}")
             false
@@ -324,3 +309,17 @@ class RtdbPresenceService(
         }
     }
 }
+
+/**
+ * Translates an RTDB DataSnapshot into a "user is present" Boolean.
+ *
+ * Pre-cron-elim-A2-followup2 (PR #1005), this was inline as
+ *   snapshot.exists() && snapshot.getValue(Boolean::class.java) == true
+ * which broke for iOS-written presence nodes (Long timestamp instead of
+ * Boolean true) — see PR #1005's commit message for the production
+ * impact. Extracted as an internal top-level helper for direct unit-
+ * test coverage of the cross-platform regression — see
+ * `PresenceServiceTest.kt`. The helper is type-agnostic by design;
+ * snapshot.exists is true iff the path has any non-null value.
+ */
+internal fun snapshotIndicatesPresent(snapshot: DataSnapshot): Boolean = snapshot.exists()
