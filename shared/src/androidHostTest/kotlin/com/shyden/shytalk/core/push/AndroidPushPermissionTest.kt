@@ -17,6 +17,7 @@ import kotlin.test.assertTrue
 class AndroidPushPermissionTest {
     @AfterTest
     fun cleanup() {
+        // Integration tests touch PushPermissionStore — keep tests isolated.
         PushPermissionStore.resetForTesting()
     }
 
@@ -159,6 +160,142 @@ class AndroidPushPermissionTest {
             context.getSharedPreferences("push_permission_prefs", Context.MODE_PRIVATE)
         }
         verify(exactly = 1) { prefs.getBoolean("has_asked_for_push_permission", false) }
+    }
+
+    @Test
+    fun `refresh enabled API 33 with sentinel false back-fills and authorises`() {
+        var hasAskedNow = false
+        var marked = 0
+        refreshPushPermissionState(
+            enabled = true,
+            sdkInt = 33,
+            readHasAsked = { hasAskedNow },
+            markAsked = {
+                marked++
+                hasAskedNow = true
+            },
+        )
+        assertEquals(1, marked, "back-fill should fire exactly once")
+        assertEquals(PushPermissionState.AUTHORIZED, PushPermissionStore.state.value)
+    }
+
+    @Test
+    fun `refresh enabled pre-33 does not back-fill but still authorises`() {
+        var marked = 0
+        refreshPushPermissionState(
+            enabled = true,
+            sdkInt = 28,
+            readHasAsked = { false },
+            markAsked = { marked++ },
+        )
+        assertEquals(0, marked, "pre-33 must never back-fill")
+        assertEquals(PushPermissionState.AUTHORIZED, PushPermissionStore.state.value)
+    }
+
+    @Test
+    fun `refresh disabled API 33 sentinel false maps NOT_DETERMINED without marking`() {
+        var marked = 0
+        refreshPushPermissionState(
+            enabled = false,
+            sdkInt = 33,
+            readHasAsked = { false },
+            markAsked = { marked++ },
+        )
+        assertEquals(0, marked, "must not back-fill when permission is actually denied")
+        assertEquals(PushPermissionState.NOT_DETERMINED, PushPermissionStore.state.value)
+    }
+
+    @Test
+    fun `refresh disabled API 33 sentinel true maps DENIED without marking`() {
+        var marked = 0
+        refreshPushPermissionState(
+            enabled = false,
+            sdkInt = 33,
+            readHasAsked = { true },
+            markAsked = { marked++ },
+        )
+        assertEquals(0, marked)
+        assertEquals(PushPermissionState.DENIED, PushPermissionStore.state.value)
+    }
+
+    @Test
+    fun `refresh disabled pre-33 maps DENIED without marking`() {
+        var marked = 0
+        refreshPushPermissionState(
+            enabled = false,
+            sdkInt = 28,
+            readHasAsked = { false },
+            markAsked = { marked++ },
+        )
+        assertEquals(0, marked)
+        assertEquals(PushPermissionState.DENIED, PushPermissionStore.state.value)
+    }
+
+    @Test
+    fun `refresh enabled API 33 already asked does not double-mark`() {
+        var marked = 0
+        refreshPushPermissionState(
+            enabled = true,
+            sdkInt = 33,
+            readHasAsked = { true },
+            markAsked = { marked++ },
+        )
+        assertEquals(0, marked, "no back-fill needed when sentinel already true")
+        assertEquals(PushPermissionState.AUTHORIZED, PushPermissionStore.state.value)
+    }
+
+    @Test
+    fun `revoke-via-Settings flow — cold-start back-fills then revoke maps DENIED`() {
+        // Walk-through of the round-2 Critical bug: simulate fresh-install API 33+
+        // user who grants permission via Settings (not the system prompt), then revokes.
+        var hasAskedNow = false
+        val markAsked = {
+            hasAskedNow = true
+            Unit
+        }
+
+        // Step 1: cold-start after grant-via-Settings — enabled=true, sentinel false.
+        refreshPushPermissionState(
+            enabled = true,
+            sdkInt = 33,
+            readHasAsked = { hasAskedNow },
+            markAsked = markAsked,
+        )
+        assertTrue(hasAskedNow, "back-fill must persist the sentinel")
+        assertEquals(PushPermissionState.AUTHORIZED, PushPermissionStore.state.value)
+
+        // Step 2: user revokes in Settings, app cold-starts again — enabled=false,
+        // sentinel now true (from back-fill in step 1).
+        refreshPushPermissionState(
+            enabled = false,
+            sdkInt = 33,
+            readHasAsked = { hasAskedNow },
+            markAsked = markAsked,
+        )
+        assertEquals(
+            PushPermissionState.DENIED,
+            PushPermissionStore.state.value,
+            "after revoke the banner MUST appear (DENIED, not NOT_DETERMINED)",
+        )
+    }
+
+    @Test
+    fun `notifyPushPermissionPromptedInternal authorises and writes sentinel when granted`() {
+        val (context, _, editor) = mockPrefsContextWithEditor(initialAsked = true)
+        notifyPushPermissionPromptedInternal(context = context, notifyEnabled = true)
+        verify(atLeast = 1) { editor.putBoolean("has_asked_for_push_permission", true) }
+        verify(atLeast = 1) { editor.apply() }
+        assertEquals(PushPermissionState.AUTHORIZED, PushPermissionStore.state.value)
+    }
+
+    @Test
+    fun `notifyPushPermissionPromptedInternal denies and writes sentinel when declined`() {
+        // User saw the system prompt and tapped Don't allow — enabled=false,
+        // sentinel writes true so we map to DENIED (not NOT_DETERMINED).
+        val (context, _, editor) = mockPrefsContextWithEditor(initialAsked = true)
+        notifyPushPermissionPromptedInternal(context = context, notifyEnabled = false)
+        verify(atLeast = 1) { editor.putBoolean("has_asked_for_push_permission", true) }
+        assertEquals(PushPermissionState.DENIED, PushPermissionStore.state.value)
     }
 
     private fun mockPrefsContext(initialAsked: Boolean): Pair<Context, SharedPreferences> {

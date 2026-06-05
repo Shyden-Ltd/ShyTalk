@@ -65,8 +65,10 @@ kotlin {
             implementation(libs.koin.test)
         }
 
-        getByName("androidHostTest").dependencies {
-            implementation(libs.mockk)
+        val androidHostTest by getting {
+            dependencies {
+                implementation(libs.mockk)
+            }
         }
 
         @Suppress("DEPRECATION")

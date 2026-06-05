@@ -47,22 +47,49 @@ internal fun shouldBackfillSentinel(
     hasAsked: Boolean,
 ): Boolean = enabled && sdkInt >= Build.VERSION_CODES.TIRAMISU && !hasAsked
 
-fun refreshPushPermissionStateFromContext(context: Context) {
-    val enabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
-    val sdkInt = Build.VERSION.SDK_INT
+internal fun refreshPushPermissionState(
+    enabled: Boolean,
+    sdkInt: Int,
+    readHasAsked: () -> Boolean,
+    markAsked: () -> Unit,
+) {
     // enabled=true definitively implies the user has been asked (or pre-granted via OEM/ADB),
     // so back-fill the sentinel so a future revoke cold-starts to DENIED, not NOT_DETERMINED.
-    if (shouldBackfillSentinel(enabled, sdkInt, hasAskedInternal(context))) {
-        markAskedInternal(context)
+    if (shouldBackfillSentinel(enabled, sdkInt, readHasAsked())) {
+        markAsked()
     }
-    val mapped = mapPushPermissionState(enabled, sdkInt, hasAskedInternal(context))
+    val mapped = mapPushPermissionState(enabled, sdkInt, readHasAsked())
     PushPermissionStore.updateState(mapped)
+}
+
+fun refreshPushPermissionStateFromContext(context: Context) {
+    refreshPushPermissionState(
+        enabled = NotificationManagerCompat.from(context).areNotificationsEnabled(),
+        sdkInt = Build.VERSION.SDK_INT,
+        readHasAsked = { hasAskedInternal(context) },
+        markAsked = { markAskedInternal(context) },
+    )
 }
 
 /** Call from the host once the POST_NOTIFICATIONS system prompt has been shown. */
 fun notifyPushPermissionPrompted(context: Context) {
+    notifyPushPermissionPromptedInternal(
+        context = context,
+        notifyEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled(),
+    )
+}
+
+internal fun notifyPushPermissionPromptedInternal(
+    context: Context,
+    notifyEnabled: Boolean,
+) {
     markAskedInternal(context)
-    refreshPushPermissionStateFromContext(context)
+    refreshPushPermissionState(
+        enabled = notifyEnabled,
+        sdkInt = Build.VERSION.SDK_INT,
+        readHasAsked = { hasAskedInternal(context) },
+        markAsked = { markAskedInternal(context) },
+    )
 }
 
 internal fun hasAskedInternal(context: Context): Boolean =
