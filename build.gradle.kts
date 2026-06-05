@@ -16,7 +16,7 @@ subprojects {
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
 
     configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
-        version.set("1.5.0")
+        version.set("1.8.0")
         android.set(true)
         outputToConsole.set(true)
         ignoreFailures.set(false)
