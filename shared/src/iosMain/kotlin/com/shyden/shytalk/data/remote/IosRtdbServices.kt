@@ -179,9 +179,13 @@ class IosPresenceServiceImpl(
             // (the orchestrator's presenceChecker would always see the
             // owner as absent, triggering spurious room closures the
             // moment any ownerLeft signal fired). Uses snapshot.exists
-            // — the serialization-free property exposed for exactly
-            // this check (same shape as Android isUserPresent which
-            // uses snapshot.exists()).
+            // — the serialization-free property, which is the correct
+            // check for a timestamp-valued presence node (setPresence
+            // writes currentTimeMillis() via .setValue(Long)). The
+            // Android counterpart at RtdbPresenceService:217 also
+            // relies on exists() as the effective gate; its additional
+            // getValue(Boolean) == true arm is dead code since presence
+            // is a Long, not a Boolean — queued as Task #10 cleanup.
             val snapshot = database.reference("rooms/$roomId/presence/$userId").valueEvents.first()
             snapshot.exists
         } catch (e: CancellationException) {
