@@ -3121,11 +3121,11 @@ class RoomViewModelTest {
             emitRoomAsOwner(TestData.createTestRoom(ownerId = currentUserId, seats = seats))
             advanceUntilIdle()
 
-            // Reset voice mock call count from setup
+            // Reset voice mock call count from setup. answers=false
+            // preserves all stubs (incl. the speakingUsers / isJoined /
+            // error flow stubs set in @Before at lines 90-92), so no
+            // re-stubs needed.
             clearMocks(voiceService, answers = false)
-            every { voiceService.speakingUsers } returns speakingFlow
-            every { voiceService.isJoined } returns joinedFlow
-            every { voiceService.error } returns voiceErrorFlow
 
             viewModel.toggleSelfMute(0)
             advanceUntilIdle()
