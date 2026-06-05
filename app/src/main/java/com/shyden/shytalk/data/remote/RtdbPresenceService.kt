@@ -216,7 +216,7 @@ class RtdbPresenceService(
             // Cron-elim A2 followup — was previously
             //   snapshot.exists() && snapshot.getValue(Boolean::class.java) == true
             // The Boolean arm broke cross-platform presence checks: this client
-            // writes Boolean `true` via setValue(true) on line 66, but the iOS
+            // writes Boolean `true` via setValue(true) on line 73, but the iOS
             // client writes a Long via setValue(currentTimeMillis()) — so an
             // Android-checking-iOS-user invocation got
             //   true && (null == true) = false
