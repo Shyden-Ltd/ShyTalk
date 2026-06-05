@@ -98,6 +98,9 @@ jobs:
       - name: Workflow concurrency groups are scoped or intentionally global
         run: bash scripts/check-workflow-concurrency-scoping.sh
 
+      - name: Third-party GitHub Actions are SHA-pinned (supply-chain)
+        run: bash scripts/check-action-shas.sh
+
       - name: HTML data-i18n keys all have JS translation definitions
         run: bash scripts/check-orphan-i18n-keys.sh
 
