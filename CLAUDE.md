@@ -32,7 +32,7 @@ Every piece of work is captured as ONE detailed user-story `.md` file at `.proje
 The `## Acceptance Criteria` section MUST contain 8 sub-headings — one per QA dimension:
 `### Happy path` · `### Error paths` · `### Edge cases` · `### Performance` · `### Security` · `### UX` · `### i18n` · `### Observability`.
 
-A dimension may carry `N/A — <one-line rationale>` if it genuinely doesn't apply; an empty sub-heading body is rejected by the architect/reviewer (not the validator). Every AC checkbox (`- [ ]` line inside the AC section) has ≥1 corresponding `**Scenario:** ...` block inside `## BDD Scenarios`. The validator enforces the count sectionally.
+A dimension may carry `N/A — <one-line rationale>` if it genuinely doesn't apply; an empty sub-heading body is rejected by the architect/reviewer (not the validator). The validator enforces BDD coverage presence-based and sectionally — it fails (exit 13) only when `## BDD Scenarios` has zero `**Scenario:**` blocks while `## Acceptance Criteria` has at least one `- [ ]` checkbox. One scenario may validly cover many AC bullets; per-bullet depth and correctness are the reviewer's responsibility, not the validator's.
 
 ### BDD scenario format (Markdown-native)
 ```

@@ -32,7 +32,7 @@ Operator-confirmed decisions across 5 question rounds on 2026-06-06 (every Recom
 - 10 required `##` body sections (User Story + Why + AC + BDD + Test Plan + Out of Scope + Dependencies + Risks + DoD + Notes) plus 1 `# <Title>` h1 (NOT validator-enforced).
 - 8-dimension AC (Happy / Errors / Edges / Performance / Security / UX / i18n / Observability) — same strict template for every `type`.
 - BDD format: Markdown-native (bold `Scenario:` + bold `Given / When / Then` bullets).
-- BDD coverage: 1:1 — every AC bullet has ≥1 scenario.
+- BDD coverage: presence-based — AC ≥1 checkbox requires BDD ≥1 scenario; one scenario may validly cover many bullets (architect round-2 Important #6 relaxed the original strict 1:1).
 - Status enum: `Draft` / `In Progress` / `In Review` / `Done` / `Cancelled` with explicit flip triggers.
 - Naming convention: strict (`story/SHY-NNNN-slug` branch, `[SHY-NNNN]` commit subject, `SHY-NNNN: Title` PR title).
 - Granularity: 1 PR-bundle = 1 SHY.
@@ -409,7 +409,7 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 - `it('exits 0 with ## Test Plan (TDD) header (prefix match)')`
 - `it('exits 0 with ## Notes (running log) header (prefix match)')`
 
-**BDD coverage (5 tests — sectional counting):**
+**BDD coverage (6 tests — sectional counting):**
 - `it('exits 13 when AC has bullets but BDD has zero scenarios')` (presence-based rule)
 - `it('exits 0 when scenarios < AC bullets — architect Important #6: 1 scenario can cover many AC bullets')`
 - `it('exits 0 when scenario count equals AC checkbox count')`
@@ -465,7 +465,9 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
      ```bash
      ac_count=$(awk '/^## Acceptance Criteria/{f=1;next} /^## [^#]/{f=0} f && /^- \[ \]/{c++} END{print c+0}' "$FILE")
      bdd_count=$(awk '/^## BDD Scenarios/{f=1;next} /^## [^#]/{f=0} f && /^\*\*Scenario:/{c++} END{print c+0}' "$FILE")
-     [ "$bdd_count" -lt "$ac_count" ] && fail 13 "BDD coverage gap: $ac_count AC bullets, $bdd_count scenarios ($bdd_count < $ac_count)"
+     if [ "$ac_count" -gt 0 ] && [ "$bdd_count" -eq 0 ]; then
+       fail "$abs" "bdd gap" "AC has ${ac_count} bullets but BDD has 0 scenarios — add at least one" 13
+     fi
      ```
    - `validate_dir()` function for `--scan`: globs `SHY-[0-9][0-9][0-9][0-9]-*.md` via `find -P "$DIR" -maxdepth 1 -type f ! -type l -name 'SHY-[0-9][0-9][0-9][0-9]-*.md' | sort` (the `! -type l` excludes symlinks by file type per architect round 2 C4 — `find -P` alone does not), iterates in lexicographical sort order, calls `validate_file` per entry, stops on FIRST failure
    - First validates that the `--scan` argument is a directory (`[ -d "$DIR" ]`); if it's a file, exit 2 with usage error
