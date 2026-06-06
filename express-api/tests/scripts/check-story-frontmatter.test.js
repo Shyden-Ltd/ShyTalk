@@ -221,6 +221,8 @@ describe('scripts/check-story-frontmatter.sh', () => {
       expect(code).toBe(11);
       expect(stderr).toMatch(/Draft/);
       expect(stderr).toMatch(/Cancelled/);
+      // UX AC: every failure message names the absolute file path.
+      expect(stderr).toMatch(/^\//m);
     });
 
     it('rejects priority outside {P0, P1, P2, P3}', () => {
@@ -230,6 +232,7 @@ describe('scripts/check-story-frontmatter.sh', () => {
       expect(code).toBe(11);
       expect(stderr).toMatch(/P0/);
       expect(stderr).toMatch(/P3/);
+      expect(stderr).toMatch(/^\//m);
     });
 
     it('rejects effort outside {XS, S, M, L, XL}', () => {
@@ -239,6 +242,7 @@ describe('scripts/check-story-frontmatter.sh', () => {
       expect(code).toBe(11);
       expect(stderr).toMatch(/\bXS\b/);
       expect(stderr).toMatch(/\bXL\b/);
+      expect(stderr).toMatch(/^\//m);
     });
 
     it('rejects type outside the 7-value enum', () => {
@@ -248,6 +252,7 @@ describe('scripts/check-story-frontmatter.sh', () => {
       expect(code).toBe(11);
       expect(stderr).toMatch(/feature/);
       expect(stderr).toMatch(/spike/);
+      expect(stderr).toMatch(/^\//m);
     });
 
     it('rejects scalar roadmap_ids (must be array form)', () => {
@@ -256,6 +261,7 @@ describe('scripts/check-story-frontmatter.sh', () => {
       const { code, stderr } = runScript([f]);
       expect(code).toBe(11);
       expect(stderr).toMatch(/roadmap_ids must be in array form/);
+      expect(stderr).toMatch(/^\//m);
     });
   });
 
