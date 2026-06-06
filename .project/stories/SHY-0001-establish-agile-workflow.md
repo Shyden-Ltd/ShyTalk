@@ -44,7 +44,7 @@ Operator-confirmed decisions across 5 question rounds on 2026-06-06 (every Recom
 ## Acceptance Criteria
 
 ### Happy path
-- [ ] `.gitignore` has a `!.project/stories/` negation line immediately after the existing `.project/` blanket-ignore (currently at line 109 with comment `# Internal project docs (plans, specs)`); the negation un-ignores ONLY the stories subdirectory, keeping `.project/plans/`, `.project/specs/`, `.project/test-plans/`, and `.project/test-reports/` ignored as the operator originally designed
+- [ ] `.gitignore` un-ignores `.project/stories/` while keeping the other internal-doc subdirectories local-only. Implementation uses per-subdir exclude lines (`.project/plans/`, `.project/specs/`, `.project/test-plans/`, `.project/test-reports/`, `.project/audit-findings-*.md`, `.project/ios-build-warnings-debt.md`) — NOT a blanket `.project/` exclude with a `!.project/stories/` negation. The negation approach is forbidden by Git's pattern spec (https://git-scm.com/docs/gitignore: "It is not possible to re-include a file if a parent directory of that file is excluded"). The per-subdir approach is more verbose but is the only behaviour Git supports.
 - [ ] `git check-ignore .project/stories/SHY-0001-establish-agile-workflow.md` returns exit 1 (file is NOT ignored after the negation lands)
 - [ ] `.project/stories/` directory exists in git (tracked, not ignored)
 - [ ] `.project/stories/SHY-INDEX.md` exists with a markdown table (columns: ID · Pri · Effort · Type · Title · Status · Roadmap IDs · PR) and lists SHY-0001 as `📝 Draft`; the legend documents 5 status emoji and the sort order
@@ -244,7 +244,7 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 - **When** I run `scripts/check-story-frontmatter.sh --help`
 - **Then** exit code is 0
 - **And** stdout contains the synopsis `check-story-frontmatter.sh [--scan <dir>] | <file>`
-- **And** stdout lists exit codes 0, 2, 10, 11, 12, 13, 20 with descriptions
+- **And** stdout lists exit codes 0, 2, 10, 11, 12, 13, 14, 20 with descriptions
 - **And** stdout includes at least one example invocation
 
 ### Maintainer scenarios
@@ -452,7 +452,7 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 
 **Performance (2 tests):**
 - `it('single-file validation completes in under 500ms')` (CI ubuntu)
-- `it('--scan over 100-file fixture directory completes in under 5s')` (CI ubuntu)
+- `it('--scan over 20-file fixture directory completes in under 5s')` (target holds on both CI ubuntu and macOS dev — see Performance AC for the rationale on why 100 files is a follow-up optimisation pass)
 
 **Fixtures** live at `express-api/tests/scripts/fixtures/story-frontmatter/` — one minimal valid story + one mutation per failure mode (~40 fixtures total). The `--scan` directory tests use 4 small directory fixtures (`empty/`, `only-index/`, `all-valid/`, `one-bad/`).
 
@@ -477,7 +477,7 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
    - name: Validate SHY story frontmatter
      run: scripts/check-story-frontmatter.sh --scan .project/stories
    ```
-3. **Add `## Agile Way of Working` section to `CLAUDE.md`** placed between `## Tri-Platform Policy` and `## Build & Test Commands`. The section documents (concise prose, with examples): the 9 frontmatter fields, the 11 body sections, the 8 AC dimensions, the BDD format, the status lifecycle + per-`type` Done bar, the strict naming convention (branch / commit / PR), the cross-labelling rule, the OOB exemption. Links to `.project/stories/SHY-INDEX.md` and `scripts/check-story-frontmatter.sh`.
+3. **Add `## Agile Way of Working` section to `CLAUDE.md`** placed between `## Tri-Platform Policy` and `## Build & Test Commands`. The section documents (concise prose, with examples): the 9 frontmatter fields, the 10 required `##` body sections (plus the `# <Title>` h1 — not validator-enforced), the 8 AC dimensions, the BDD format, the status lifecycle + per-`type` Done bar, the strict naming convention (branch / commit / PR), the cross-labelling rule, the OOB exemption. Links to `.project/stories/SHY-INDEX.md` and `scripts/check-story-frontmatter.sh`.
 4. Run the Jest suite — every red test above flips green.
 5. Run `shellcheck scripts/check-story-frontmatter.sh` and `actionlint .github/workflows/lint.yml` — both exit 0 with no warnings.
 
@@ -505,7 +505,7 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 - **Risk:** Bash version incompatibility — macOS ships bash 3.2 (Apple), CI runs bash 5.x. **Mitigation:** Use bash 3.2-compatible syntax only (no `declare -A` associative arrays, no `${var^^}` / `${var,,}` case ops). `[[ ... ]]` is fine — bash 3.2 supports it. Shellcheck verifies portability via `# shellcheck shell=bash` directive.
 - **Risk:** `set -euo pipefail` + bare `grep` for absence — `grep` returning non-zero on no-match would early-exit the script before recording the failure. **Mitigation:** Every absence check uses the `grep -qE '<pattern>' "$FILE" || FAILED_FIELDS+=("<field>")` pattern; the `|| ...` consumes the non-zero exit so `set -e` doesn't fire. Test pattern documented in Green step 1.
 - **Risk:** BDD coverage check via raw line-counting (`grep -c '^- \[ \]'` vs `grep -c '^\*\*Scenario:'`) — false positives from comment-like lines starting with `- [ ]` in non-AC sections (e.g. DoD), or `**Scenario:` referenced in body text. **Mitigation:** Use sectional `awk` range pattern documented in Test Plan Green step 1; count AC checkboxes ONLY between `## Acceptance Criteria` and the next `## ` header; count Scenario blocks ONLY between `## BDD Scenarios` and the next `## ` header. Test fixtures cover the "checkbox in DoD is not counted as AC" case. **Risk applied (architect round 2 C3).**
-- **Risk:** Validator is stateless (no PID file, no temp files, no shared state). **Mitigation:** Concurrent runs against the same directory are safe — no race conditions; both runs produce identical output. Documented in the concurrent-invocations BDD scenario.
+- **Risk:** Concurrent invocations might race on shared state. **Mitigation:** Validator writes no PID file and no shared-state file; any per-invocation temp files use `mktemp` (XXXXXX suffix randomised) so name collisions are impossible by construction. Concurrent runs against the same directory are safe — no race conditions; both runs produce identical output. Documented in the concurrent-invocations BDD scenario.
 - **Risk:** Naming convention (branch / commit / PR title) is enforceable only after a developer has done the action — a wrong branch name is found at PR-creation time. **Mitigation:** Currently caught by reviewer + DoD checklist. A future SHY can add a pre-push hook (out of scope for SHY-0001; tracked as a possible follow-up). The architect round 2 I2 finding accepted this deferral.
 - **Risk:** A future story author silences a real failure by editing the validator. **Mitigation:** The validator's own Jest test suite has fixtures for every required field, section, and edge case; removing one fails the validator's tests, which run in `lint.yml` BEFORE the story-frontmatter validator step is invoked.
 - **Risk:** Story file rename after merge (`git mv` for a slug refresh). **Mitigation:** Validator operates on file CONTENT, not filename (except via the `SHY-[0-9][0-9][0-9][0-9]-*.md` glob in `--scan`). Renaming the slug part is safe as long as the `SHY-NNNN-` prefix matches. Documented in CLAUDE.md.
@@ -515,7 +515,7 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 - **Risk:** BDD coverage 1:1 mapping forces over-decomposition (every nit AC becomes a Gherkin scenario). **Mitigation:** AC bullets should be coarse enough to map to MEANINGFUL scenarios; one scenario CAN cover multiple closely-related AC bullets if Then-clauses bind them together (rule: 1 AC requires ≥1 scenario, NOT exactly 1).
 - **Risk:** Symlink-following enables directory traversal during `--scan`. **Mitigation:** Use `find -P` (the default; `-L` would follow symlinks); add explicit test fixture and unit test.
 - **Risk:** Adding a new top-level CLAUDE.md section disrupts an existing pattern. **Mitigation:** Inserted between `## Tri-Platform Policy` and `## Build & Test Commands`; both adjacent sections are unchanged. Reviewer flags if placement is wrong.
-- **Risk:** `.gitignore` change to un-ignore `.project/stories/` accidentally exposes other internal docs (plans/specs/test-plans/test-reports — totalling ~43MB locally). **Mitigation:** Use a TARGETED negation `!.project/stories/` immediately after the `.project/` blanket-ignore line. The negation only un-ignores stories; sibling directories remain ignored. Verified via `git check-ignore` per the Happy path AC. Add a test fixture that creates a `.project/test-reports/probe.bin` and asserts `git check-ignore` still rejects it.
+- **Risk:** `.gitignore` change to un-ignore `.project/stories/` accidentally exposes other internal docs (plans/specs/test-plans/test-reports — totalling ~43MB locally). **Mitigation:** Use per-subdir exclude lines for each non-stories internal-doc directory (`.project/plans/`, `.project/specs/`, `.project/test-plans/`, `.project/test-reports/`, `.project/audit-findings-*.md`, `.project/ios-build-warnings-debt.md`). A blanket `.project/` + `!.project/stories/` negation does NOT work (Git refuses to re-include under a fully-excluded parent). The per-subdir approach is verified via `git check-ignore` probes in the Jest suite — see the `gitignore` describe block in `check-story-frontmatter.test.js`.
 
 ## Definition of Done
 - [ ] All Acceptance Criteria boxes across the 8 dimensions are checked

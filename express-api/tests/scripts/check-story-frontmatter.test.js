@@ -329,6 +329,17 @@ describe('scripts/check-story-frontmatter.sh', () => {
         );
       });
     });
+
+    it('exits 0 when an AC sub-heading body is "N/A — <rationale>" (validator does not parse rationale)', () => {
+      // The canonical fixture already uses `N/A — ...` for 7 of the 8 AC
+      // dimensions; this test makes the spec's commitment explicit (test
+      // plan line for N/A coverage) — a story author marking a dimension
+      // N/A with a single-line rationale passes validation. The validator
+      // delegates rationale-meaningfulness to the architect / reviewer
+      // gate.
+      const { code } = runScript([FIXTURE_VALID]);
+      expect(code).toBe(0);
+    });
   });
 
   // ============================================================== BDD coverage → exit 13
@@ -528,6 +539,22 @@ describe('scripts/check-story-frontmatter.sh', () => {
       expect(code).toBe(0);
     });
 
+    it('exits 0 against 5 valid stories + SHY-INDEX.md coexisting (BDD scenario verbatim)', () => {
+      // BDD scenario at SHY-0001 lines 252-257 specifies exactly this
+      // combination: 5 SHY-NNNN-*.md files plus SHY-INDEX.md in the
+      // same directory. The glob `SHY-[0-9][0-9][0-9][0-9]-*.md` must
+      // exclude SHY-INDEX.md while validating the 5 numbered stories in
+      // lexicographical order.
+      const dir = tempScanDir();
+      for (let i = 1; i <= 5; i++) {
+        const slug = String(i).padStart(4, '0');
+        fs.writeFileSync(path.join(dir, `SHY-${slug}-mixed.md`), VALID_CONTENT);
+      }
+      fs.writeFileSync(path.join(dir, 'SHY-INDEX.md'), '# Index\n');
+      const { code } = runScript(['--scan', dir]);
+      expect(code).toBe(0);
+    });
+
     it('exits 20 on the FIRST failing file in lexicographical order', () => {
       const dir = tempScanDir();
       fs.writeFileSync(path.join(dir, 'SHY-0001-good.md'), VALID_CONTENT);
@@ -720,8 +747,10 @@ describe('scripts/check-story-frontmatter.sh', () => {
       expect(stdout).toBe('');
     });
 
-    it('--verbose prints [check] lines to stderr with specific check names', () => {
-      const { stderr } = runScript(['--verbose', FIXTURE_VALID]);
+    it('--verbose prints [check] lines to stderr with specific check names; stdout silent; exit 0', () => {
+      const { code, stdout, stderr } = runScript(['--verbose', FIXTURE_VALID]);
+      expect(code).toBe(0);
+      expect(stdout).toBe('');
       expect(stderr).toMatch(/\[check\] frontmatter:id/);
       expect(stderr).toMatch(/\[check\] frontmatter:status/);
       expect(stderr).toMatch(/\[check\] value:id/);
@@ -729,6 +758,52 @@ describe('scripts/check-story-frontmatter.sh', () => {
       expect(stderr).toMatch(/\[check\] ac-dim:### Happy path/);
       expect(stderr).toMatch(/\[check\] bdd:count-ac-bullets/);
       expect(stderr).toMatch(/\[check\] bdd:count-scenarios/);
+    });
+  });
+
+  // ============================================================== gitignore probes
+  describe('gitignore (sibling .project/ directories stay ignored)', () => {
+    // Verifies the per-subdir gitignore approach actually keeps the
+    // sibling internal-doc directories out of git while .project/stories/
+    // is tracked. The probes spawn `git check-ignore` against well-known
+    // paths whose ignore-status MUST hold for the .gitignore change in
+    // this PR to be safe.
+    function checkIgnored(relPath) {
+      const res = spawnSync('git', ['check-ignore', '-q', '--', relPath], {
+        cwd: REPO_ROOT,
+        timeout: 5_000,
+        encoding: 'utf-8',
+      });
+      // git check-ignore exits 0 if the path IS ignored, 1 if NOT.
+      return res.status === 0;
+    }
+
+    it('.project/stories/SHY-0001-establish-agile-workflow.md is TRACKED (not ignored)', () => {
+      expect(checkIgnored('.project/stories/SHY-0001-establish-agile-workflow.md')).toBe(false);
+    });
+
+    it('.project/stories/SHY-INDEX.md is TRACKED (not ignored)', () => {
+      expect(checkIgnored('.project/stories/SHY-INDEX.md')).toBe(false);
+    });
+
+    it('.project/specs/<any>.md stays IGNORED', () => {
+      expect(checkIgnored('.project/specs/probe.md')).toBe(true);
+    });
+
+    it('.project/test-plans/<any>.md stays IGNORED', () => {
+      expect(checkIgnored('.project/test-plans/probe.md')).toBe(true);
+    });
+
+    it('.project/test-reports/<any>.bin stays IGNORED', () => {
+      expect(checkIgnored('.project/test-reports/probe.bin')).toBe(true);
+    });
+
+    it('.project/audit-findings-<date>.md stays IGNORED', () => {
+      expect(checkIgnored('.project/audit-findings-9999-12-31.md')).toBe(true);
+    });
+
+    it('.project/ios-build-warnings-debt.md stays IGNORED', () => {
+      expect(checkIgnored('.project/ios-build-warnings-debt.md')).toBe(true);
     });
   });
 
