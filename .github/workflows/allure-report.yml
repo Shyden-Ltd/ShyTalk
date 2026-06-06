@@ -114,6 +114,12 @@ jobs:
         with:
           ref: gh-pages
           path: gh-pages
+        # Intentional: on the first run for a new suite the gh-pages
+        # branch doesn't exist yet, and a missing ref would fail the
+        # whole job. The next step's `cp ... 2>/dev/null || echo "No
+        # previous history (first run)"` already handles the missing
+        # dir gracefully, so trend tracking just degrades to "no
+        # history" for the first run, then self-heals on run 2+.
         continue-on-error: true
 
       - name: Copy history for trend tracking
