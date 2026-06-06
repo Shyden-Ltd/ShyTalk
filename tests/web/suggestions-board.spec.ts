@@ -1249,10 +1249,26 @@ test.describe('Mobile-Specific Interactions', () => {
   });
 
   test('touch: tap vote arrow registers vote', async ({ page, browserName }) => {
-    test.skip(browserName === 'firefox' || browserName === 'webkit', 'Firefox/WebKit do not support touch/tap events reliably');
     const upvoteBtn = page.locator('[data-testid^="vote-up"]').first();
     await upvoteBtn.waitFor({ timeout: 10_000 });
-    await upvoteBtn.tap();
+    // Firefox/WebKit do not dispatch reliable touchstart/touchend
+    // through Playwright's `.tap()` API. The vote arrow binds via a
+    // standard `click` handler (no touch-specific gesture), so a
+    // bounding-box mouse click is functionally equivalent for what
+    // this scenario actually verifies — the registration code path.
+    // Trade-off: lost coverage of any touch-only listener if one is
+    // added in the future on those two browsers. Closes G034.
+    if (browserName === 'firefox' || browserName === 'webkit') {
+      const box = await upvoteBtn.boundingBox();
+      // Hard-fail rather than silently no-op when the element has no
+      // bounding box (off-screen, zero dimensions, detached layout). A
+      // missing box on the previously-skipped browsers would have
+      // masked a real rendering regression as a vacuous pass.
+      expect(box, 'vote-up button must be laid out for the mouse-click fallback').not.toBeNull();
+      await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    } else {
+      await upvoteBtn.tap();
+    }
     // Vote should register (or login prompt appears if unauthenticated)
   });
 
