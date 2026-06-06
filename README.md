@@ -203,7 +203,7 @@ The fastest way to get started. One command starts everything -- Firebase Emulat
 
 1. **Clone and install**
    ```bash
-   git clone https://github.com/ShydenMcM/ShyTalk.git
+   git clone https://github.com/Shyden-Ltd/ShyTalk.git
    cd ShyTalk
    cd express-api && npm install && cd ..
    ```

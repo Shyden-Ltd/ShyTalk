@@ -203,7 +203,7 @@ La forma mas rapida de comenzar. Un comando inicia todo -- emuladores de Firebas
 
 1. **Clonar e instalar**
    ```bash
-   git clone https://github.com/ShydenMcM/ShyTalk.git
+   git clone https://github.com/Shyden-Ltd/ShyTalk.git
    cd ShyTalk
    cd express-api && npm install && cd ..
    ```

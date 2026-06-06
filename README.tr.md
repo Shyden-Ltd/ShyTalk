@@ -203,7 +203,7 @@ Başlamanın en hızlı yolu. Bir komut her şeyi başlatır -- Firebase Emülat
 
 1. **Klonla ve yükle**
    ```bash
-   git clone https://github.com/ShydenMcM/ShyTalk.git
+   git clone https://github.com/Shyden-Ltd/ShyTalk.git
    cd ShyTalk
    cd express-api && npm install && cd ..
    ```
