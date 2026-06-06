@@ -64,7 +64,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           # Honour the optional `ref` input so the operator can deploy a
           # specific branch, tag (e.g. `v0.97.1`), or commit SHA. Falls
@@ -220,7 +220,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           # Honour the optional `ref` input so the operator can deploy a
           # specific branch, tag (e.g. `v0.97.1`), or commit SHA. Falls
@@ -275,7 +275,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           # Honour the optional `ref` input so the operator can deploy a
           # specific branch, tag (e.g. `v0.97.1`), or commit SHA. Falls
@@ -431,7 +431,7 @@ jobs:
     # net for anything unexpected before the step timeouts fire.
     timeout-minutes: 100
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           # Honour the optional `ref` input so the operator can deploy a
           # specific branch, tag (e.g. `v0.97.1`), or commit SHA. Falls
@@ -818,7 +818,7 @@ jobs:
     # well under the limit.
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           # Honour the optional `ref` input so the operator can deploy a
           # specific branch, tag (e.g. `v0.97.1`), or commit SHA. Falls
@@ -903,7 +903,7 @@ jobs:
     # warm runs complete much faster.
     timeout-minutes: 12
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: ${{ inputs.ref != '' && '0' || '1' }}
