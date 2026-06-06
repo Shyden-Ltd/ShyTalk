@@ -157,7 +157,15 @@ describe('manual-qa-matrix.yml — structural pin', () => {
     // cache + cache-dependency-path inputs; allow v4-v9 so future
     // maintenance bumps don't break the gate again. Pin a specific
     // version separately if a real incompatibility appears.
-    expect(yamlText).toMatch(/uses:\s*actions\/setup-node@v[4-9]/);
+    //
+    // Loosened again 2026-06-06 (after PR-G1 #1016 SHA-pinned all
+    // third-party actions) to also accept the SHA-pinned form, e.g.
+    // `actions/setup-node@<40-hex> # v6`. The `# vX` comment stays
+    // as the human-readable version anchor; this regex keeps the
+    // range invariant on that comment regardless of whether the ref
+    // is a tag or a SHA. The check-action-shas.sh CI guard
+    // (added in PR-G1) enforces the SHA-only side of the rule.
+    expect(yamlText).toMatch(/uses:\s*actions\/setup-node@(v[4-9]|[0-9a-f]{40}\s+#\s*v[4-9])/);
     expect(yamlText).toMatch(/cache:\s*npm/);
     expect(yamlText).toMatch(/cache-dependency-path:\s*express-api\/package-lock\.json/);
   });
@@ -178,8 +186,10 @@ describe('manual-qa-matrix.yml — structural pin', () => {
 
   test('Playwright browser cache keyed on resolved version', () => {
     // [[feedback-ci-cache-downloads-version-aware]] — cache must
-    // invalidate when Playwright version bumps.
-    expect(yamlText).toMatch(/actions\/cache@v5/);
+    // invalidate when Playwright version bumps. Accepts either the
+    // tag form or the SHA-pinned form with `# v5` comment (see the
+    // setup-node test above for the full rationale).
+    expect(yamlText).toMatch(/actions\/cache@(v5|[0-9a-f]{40}\s+#\s*v5)/);
     expect(yamlText).toMatch(
       /playwright-\$\{\{ runner\.os \}\}-\$\{\{ steps\.pw\.outputs\.version \}\}/,
     );
@@ -191,7 +201,8 @@ describe('manual-qa-matrix.yml — structural pin', () => {
   });
 
   test('upload-artifact uses if: always() (uploads on failure too)', () => {
-    expect(yamlText).toMatch(/uses:\s*actions\/upload-artifact@v7/);
+    // Accepts tag form or SHA-pinned form with `# v7` comment.
+    expect(yamlText).toMatch(/uses:\s*actions\/upload-artifact@(v7|[0-9a-f]{40}\s+#\s*v7)/);
     expect(yamlText).toMatch(/if:\s*always\(\)/);
   });
 
