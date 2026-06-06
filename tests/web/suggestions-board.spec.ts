@@ -1278,12 +1278,15 @@ test.describe('Mobile-Specific Interactions', () => {
 
     // Long press should not open browser context menu
     const box = await card.boundingBox();
-    if (box) {
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await page.mouse.down();
-      await page.waitForTimeout(1000);
-      await page.mouse.up();
-    }
+    // Hard-fail rather than silently no-op the entire mouse sequence.
+    // Without the box, the test would vacuously pass the "no context
+    // menu visible" assertion (no press happened, so of course no menu).
+    // Same silent-no-op pattern PR-G034 fixed for the vote-arrow site.
+    expect(box, 'suggestion card must be laid out for long-press to test anything').not.toBeNull();
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(1000);
+    await page.mouse.up();
     // No context menu should be visible
     const contextMenu = page.locator('[data-testid="context-menu"]');
     expect(await contextMenu.count()).toBe(0);
@@ -1325,11 +1328,14 @@ test.describe('Mobile-Specific Interactions', () => {
       await descInput.focus();
       await page.waitForTimeout(500);
       const box = await descInput.boundingBox();
-      if (box) {
-        // Element should be within the viewport
-        expect(box.y).toBeGreaterThanOrEqual(0);
-        expect(box.y + box.height).toBeLessThanOrEqual(812);
-      }
+      // Outer count() > 0 guard already gates on the element existing.
+      // The inner null-box guard previously silently no-op'd if the
+      // focused element was still in a transient unlaid-out state,
+      // hiding any real viewport-clipping bug. Hard-fail instead.
+      expect(box, 'desc input must be laid out after focus + 500ms wait').not.toBeNull();
+      // Element should be within the viewport
+      expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(812);
     }
   });
 
