@@ -1,21 +1,23 @@
 ---
 id: SHY-0001
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-06
 priority: P1
 effort: M
 type: infra
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1034
 ---
 
 # SHY-0001: Establish Agile user-story way of working
 
 ## User Story
+
 As the ShyTalk operator, I want every piece of work captured as a detailed user-story `.md` file with 9 frontmatter fields, 10 required `##` body sections (plus an `# <Title>` h1 that is not validator-enforced), an 8-dimension Acceptance Criteria checklist, and Markdown-native BDD scenarios, so that any future session (mine or another agent's) can resume the work cold without losing scope across `/clear`, context compaction, or session restart — and so the architect / code-reviewer pipeline operates against an explicit, machine-verifiable spec rather than implicit assumptions.
 
 ## Why
+
 Conversation-only context vanishes at `/clear` and compaction boundaries. Critical multi-day work loses spec fidelity. Codifying every PR's scope into a self-contained `.md` makes:
 
 1. **Resumption resilient** — pick up a story by reading one file.
@@ -27,6 +29,7 @@ Conversation-only context vanishes at `/clear` and compaction boundaries. Critic
 This story BOOTSTRAPS the workflow itself so SHY-0002+ inherit the template, validator, and CLAUDE.md guidance. It is intentionally the FIRST story.
 
 Operator-confirmed decisions across 5 question rounds on 2026-06-06 (every Recommended option selected):
+
 - ID format: `SHY-XXXX` (4-digit zero-padded).
 - 9 frontmatter fields: `id`, `status`, `owner`, `created`, `priority`, `effort`, `type`, `roadmap_ids`, `pr`.
 - 10 required `##` body sections (User Story + Why + AC + BDD + Test Plan + Out of Scope + Dependencies + Risks + DoD + Notes) plus 1 `# <Title>` h1 (NOT validator-enforced).
@@ -44,6 +47,7 @@ Operator-confirmed decisions across 5 question rounds on 2026-06-06 (every Recom
 ## Acceptance Criteria
 
 ### Happy path
+
 - [ ] `.gitignore` un-ignores `.project/stories/` while keeping the other internal-doc subdirectories local-only. Implementation uses per-subdir exclude lines (`.project/plans/`, `.project/specs/`, `.project/test-plans/`, `.project/test-reports/`, `.project/audit-findings-*.md`, `.project/ios-build-warnings-debt.md`) — NOT a blanket `.project/` exclude with a `!.project/stories/` negation. The negation approach is forbidden by Git's pattern spec (https://git-scm.com/docs/gitignore: "It is not possible to re-include a file if a parent directory of that file is excluded"). The per-subdir approach is more verbose but is the only behaviour Git supports.
 - [ ] `git check-ignore .project/stories/SHY-0001-establish-agile-workflow.md` returns exit 1 (file is NOT ignored after the negation lands)
 - [ ] `.project/stories/` directory exists in git (tracked, not ignored)
@@ -57,7 +61,9 @@ Operator-confirmed decisions across 5 question rounds on 2026-06-06 (every Recom
 - [ ] Global memory `feedback-agile-user-stories.md` exists in `~/.claude/projects/-Users-shyden/memory/` and is indexed in `MEMORY.md` (already done in-session before this PR; verified by the operator)
 
 ### Error paths
+
 For each of the following, the validator MUST exit with a NON-zero exit code AND print a structured stderr line `<absolute-path>: <category>: <details>`:
+
 - [ ] Missing `id` frontmatter field → exit 10, stderr contains `missing required frontmatter field: id`
 - [ ] Missing `status` field → exit 10, stderr names `status`
 - [ ] Missing `owner` field → exit 10, stderr names `owner`
@@ -79,6 +85,7 @@ For each of the following, the validator MUST exit with a NON-zero exit code AND
 - [ ] No file path argument provided → exit 2, stderr prints usage
 
 ### Edge cases
+
 - [ ] CRLF line endings (Windows-style `\r\n`) tolerated — `\r` stripped before any regex match; well-formed CRLF file exits 0
 - [ ] Empty file (0 bytes) rejected with exit 10, stderr `no frontmatter found`
 - [ ] File with only `---\n---\n` (frontmatter delimiters but no fields) rejected with the missing-field error chain
@@ -96,12 +103,14 @@ For each of the following, the validator MUST exit with a NON-zero exit code AND
 - [ ] BOM (UTF-8 byte-order mark `\xEF\xBB\xBF`) at file start tolerated — stripped before frontmatter parse
 
 ### Performance
+
 - [ ] Single-file validation: <500ms wall-clock on CI ubuntu-latest (measured via `time` in the test, with a margin)
 - [ ] `--scan` against a 20-file fixture directory: <5s wall-clock (CI ubuntu + macOS dev — chosen as a conservative bound that holds across both x86 CI and Apple Silicon dev; per-file cost is ~100ms due to mktemp + per-check process spawns in bash 3.2-compat mode, so 100 files would be ~10s on macOS, which exceeds the CI logbook-readability target). Larger fixture counts are an optimisation follow-up tracked separately.
 - [ ] Memory: <50MB resident for the largest expected story file (1MB) — verified via `/usr/bin/time -v` on the fixture
 - [ ] Validator runs sequentially (no fork bombs, no spawned background processes); single-process model documented in `--help`
 
 ### Security
+
 - [ ] Validator does NOT execute any content from the story file (no `eval`, no `source`, no `bash <(cat …)`); proved via shellcheck rule SC2294 absence
 - [ ] Validator does NOT print full file contents on failure (stderr names the field/section, not the value) — prevents accidental secret leakage even though stories shouldn't carry secrets
 - [ ] Validator does NOT follow symlinks during `--scan` — uses `find -P -maxdepth 1 ... ! -type l` to exclude symlinks by file TYPE before `open()` is called. **Correction (architect round 2 C4):** `find -P` alone is insufficient. `-P` controls how `find` itself traverses symlinks during the walk, but a symlink that matches the name glob is still returned, and any subsequent `open()` follows the symlink to its target. The `! -type l` predicate is what actually keeps the symlink out of the result set. This prevents directory traversal via a crafted `SHY-9999-malicious.md` symlink to `/etc/passwd`.
@@ -109,6 +118,7 @@ For each of the following, the validator MUST exit with a NON-zero exit code AND
 - [ ] Validator runs as the invoking user's UID; no setuid bit; no privilege escalation; documented in CLAUDE.md
 
 ### UX
+
 - [ ] Stderr messages fit within 80 chars per line (CI log readability)
 - [ ] Every failure message names the offending file with its absolute path (or relative path if `--scan` was passed a relative dir)
 - [ ] Every failure message names the specific check that failed (field name or section name)
@@ -117,12 +127,14 @@ For each of the following, the validator MUST exit with a NON-zero exit code AND
 - [ ] On any failure, exit code is documented and reproducible
 
 ### i18n
+
 - [ ] Story file content (frontmatter values, section headers, body text) tolerates Unicode — `SHY-0042-こんにちは-世界.md` filename and `owner: Sebastián Vidal` frontmatter value both pass
 - [ ] Validator's own stderr is English (matches CI log convention; not localized)
 - [ ] Locale-insensitive comparisons: validator works under `LC_ALL=C`, `LC_ALL=en_GB.UTF-8`, `LC_ALL=ja_JP.UTF-8` — fixture run under each in the test suite
 - [ ] RTL story content (Arabic/Hebrew in body) doesn't break the validator (it operates on byte-level header prefix match, not rendered direction)
 
 ### Observability
+
 - [ ] Exit codes are deterministic per category, documented in `--help` and in CLAUDE.md:
   - 0 = success
   - 2 = usage error (missing arg, unknown flag, `--scan` target is a file not a directory)
@@ -144,6 +156,7 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 ### Story-author scenarios
 
 **Scenario: Validator accepts a well-formed story**
+
 - **Given** a story file at `.project/stories/SHY-0042-example.md` with all 9 frontmatter fields valid and all 10 required `##` body sections (plus the `# <Title>` h1) present
 - **When** I run `scripts/check-story-frontmatter.sh .project/stories/SHY-0042-example.md`
 - **Then** the script exits with code 0
@@ -151,6 +164,7 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 - **And** stderr is empty
 
 **Scenario: Validator rejects missing `id` field**
+
 - **Given** a story file with frontmatter omitting the `id:` line
 - **When** I run the validator against the file
 - **Then** the script exits with code 10
@@ -159,63 +173,74 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 - **And** stderr fits within 80 chars on each line
 
 **Scenario: Validator rejects malformed `id` value**
+
 - **Given** a story file with `id: SHY-1` (3-digit, not 4-digit)
 - **When** I run the validator
 - **Then** the script exits with code 11
 - **And** stderr contains `id must match SHY-NNNN pattern`
 
 **Scenario: Validator rejects unknown `status` enum**
+
 - **Given** a story file with `status: pending`
 - **When** I run the validator
 - **Then** the script exits with code 11
 - **And** stderr lists the 5 allowed values: `Draft, In Progress, In Review, Done, Cancelled`
 
 **Scenario: Validator rejects unknown `priority`**
+
 - **Given** a story file with `priority: P5`
 - **When** I run the validator
 - **Then** exit code is 11
 - **And** stderr lists `P0, P1, P2, P3`
 
 **Scenario: Validator rejects unknown `effort`**
+
 - **Given** a story file with `effort: gigantic`
 - **When** I run the validator
 - **Then** exit code is 11
 - **And** stderr lists `XS, S, M, L, XL`
 
 **Scenario: Validator rejects unknown `type`**
+
 - **Given** a story file with `type: maintenance`
 - **When** I run the validator
 - **Then** exit code is 11
 - **And** stderr lists the 7 allowed values
 
 **Scenario: Validator accepts populated `roadmap_ids` array**
+
 - **Given** a story file with `roadmap_ids: [G005, G013, G029]`
 - **When** I run the validator
 - **Then** exit code is 0
 
 **Scenario: Validator accepts empty `roadmap_ids` array**
+
 - **Given** a story file with `roadmap_ids: []`
 - **When** I run the validator
 - **Then** exit code is 0
 
 **Scenario: Validator rejects scalar `roadmap_ids`**
+
 - **Given** a story file with `roadmap_ids: G001` (scalar form, not array)
 - **When** I run the validator
 - **Then** exit code is 11
 - **And** stderr contains `roadmap_ids must be in array form`
 
 **Scenario: Validator rejects missing required section**
+
 - **Given** a story file with no `## Risks & Mitigations` heading anywhere in the body
 - **When** I run the validator
 - **Then** exit code is 12
 - **And** stderr contains `missing required body section: ## Risks & Mitigations`
 
 **Scenario: Validator tolerates section header with suffix**
+
 - **Given** a story file using `## Test Plan (TDD)` as the section header (instead of bare `## Test Plan`)
 - **When** I run the validator
 - **Then** exit code is 0 — prefix match `^## Test Plan` accepts the suffixed variant
 
 **Scenario: Validator rejects BDD coverage gap (AC has bullets, BDD has zero scenarios)**
+
 - **Given** a story file with 12 AC checkboxes (`- [ ]` lines under `## Acceptance Criteria`) and ZERO `**Scenario:**` blocks under `## BDD Scenarios`
 - **When** I run the validator
 - **Then** exit code is 13
@@ -223,23 +248,27 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 - **Note:** Presence-based rule per architect round-2 Important #6 — a single scenario can validly cover multiple AC bullets, so the validator only fails when AC has expectations to verify AND BDD has none.
 
 **Scenario: Validator tolerates CRLF line endings**
+
 - **Given** a story file saved with Windows-style `\r\n` line endings (well-formed otherwise)
 - **When** I run the validator
 - **Then** `\r` is stripped before matching
 - **And** exit code is 0
 
 **Scenario: Validator rejects an empty file**
+
 - **Given** a 0-byte story file
 - **When** I run the validator
 - **Then** exit code is 10
 - **And** stderr contains `no frontmatter found`
 
 **Scenario: Validator tolerates UTF-8 content including emoji and CJK**
+
 - **Given** a story file with `owner: 山田太郎`, a `## User Story` body containing `🚀 ship-ready`, and an Arabic phrase in `## Why`
 - **When** I run the validator
 - **Then** exit code is 0
 
 **Scenario: `--help` prints usage including exit codes**
+
 - **Given** the validator script is executable
 - **When** I run `scripts/check-story-frontmatter.sh --help`
 - **Then** exit code is 0
@@ -250,6 +279,7 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 ### Maintainer scenarios
 
 **Scenario: `--scan` validates every story in a directory**
+
 - **Given** `.project/stories/` contains 5 well-formed `SHY-NNNN-*.md` files plus `SHY-INDEX.md`
 - **When** I run `scripts/check-story-frontmatter.sh --scan .project/stories`
 - **Then** the glob `SHY-[0-9][0-9][0-9][0-9]-*.md` excludes `SHY-INDEX.md`
@@ -258,6 +288,7 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 - **And** stdout is empty (silent on success)
 
 **Scenario: `--scan` stops on the first failing file (no accumulation)**
+
 - **Given** `.project/stories/` contains SHY-0001 (valid), SHY-0002 (missing `id`), SHY-0003 (also missing `id`)
 - **When** I run `--scan`
 - **Then** files process in lexicographical order
@@ -267,17 +298,20 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 - **And** stderr contains the full path of SHY-0002 plus `missing required frontmatter field: id`
 
 **Scenario: `--scan` on an empty directory exits 0**
+
 - **Given** `.project/stories/` exists but contains no `SHY-NNNN-*.md` files
 - **When** I run `--scan`
 - **Then** exit code is 0 (vacuously valid — zero failures across zero files)
 
 **Scenario: `--scan` ignores hidden files and non-story files**
+
 - **Given** the stories directory contains `SHY-0001-valid.md`, `.DS_Store`, `README.md`, and `SHY-INDEX.md`
 - **When** I run `--scan`
 - **Then** only `SHY-0001-valid.md` is validated
 - **And** exit code is 0
 
 **Scenario: `--verbose` prints each check to stderr**
+
 - **Given** a well-formed story file
 - **When** I run with `--verbose <file>`
 - **Then** stderr contains `[check] frontmatter:id`, `[check] frontmatter:status`, …, `[check] section:## User Story`, …
@@ -287,6 +321,7 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 ### CI scenarios
 
 **Scenario: lint.yml runs the validator as the LAST step**
+
 - **Given** a PR introduces both a malformed story file AND an actionlint warning on a workflow YAML
 - **When** CI's lint job runs
 - **Then** `actionlint` runs first and reports the YAML warning
@@ -296,6 +331,7 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 - **And** the lint job exits non-zero
 
 **Scenario: lint.yml passes when no story files are touched**
+
 - **Given** a PR changes only `.github/workflows/*.yml` and `express-api/src/*.js`
 - **When** lint.yml runs
 - **Then** the story validator scans `.project/stories/` and validates EXISTING stories
@@ -305,6 +341,7 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 ### Adversarial / security scenarios
 
 **Scenario: Validator does not execute frontmatter values**
+
 - **Given** a story file with `owner: $(rm -rf /)` (a shell-injection attempt)
 - **When** I run the validator
 - **Then** the validator quotes all variable expansions and does NOT execute the value
@@ -312,6 +349,7 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 - **And** the filesystem is unchanged
 
 **Scenario: Validator does not follow symlinks during `--scan`**
+
 - **Given** the stories directory contains a symlink `SHY-9999-evil.md` pointing to `/etc/passwd`
 - **When** I run `--scan`
 - **Then** the validator excludes the symlink via `find -P -maxdepth 1 ... ! -type l`
@@ -319,6 +357,7 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 - **And** exit code is 0 (the symlink is silently skipped, like any other non-matching file)
 
 **Scenario: `--scan` against a cyclic-symlink directory is bounded**
+
 - **Given** the stories directory contains `SHY-0042-cycle.md` which is a symlink to the same directory (creating a cyclic reference)
 - **When** I run `--scan`
 - **Then** `-maxdepth 1` prevents `find` from descending into the symlink
@@ -327,12 +366,14 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 - **And** exit code is 0
 
 **Scenario: `--scan` rejects a file path (not a directory)**
+
 - **Given** the user invokes `scripts/check-story-frontmatter.sh --scan /path/to/SHY-0001-foo.md` (a file, not a directory)
 - **When** the script runs
 - **Then** exit code is 2 (usage error — `--scan` requires a directory argument)
 - **And** stderr contains `--scan requires a directory argument; got a file path`
 
 **Scenario: Validator is stateless under concurrent invocations**
+
 - **Given** two CI jobs simultaneously invoke `scripts/check-story-frontmatter.sh --scan .project/stories` against the same directory at the same time
 - **When** both scripts run
 - **Then** neither writes a PID file or any shared-state file
@@ -341,6 +382,7 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 - **And** there is no race condition (no shared mutable state to race on)
 
 **Scenario: Validator handles a very-long frontmatter line without truncation or hang**
+
 - **Given** a story file whose `owner:` value is 10,000 characters of `aaaa…aaaa`
 - **When** I run the validator
 - **Then** the field-presence check passes (owner is present)
@@ -348,6 +390,7 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 - **And** the script completes in <500ms (no quadratic-time regex catastrophe)
 
 **Scenario: Validator handles filenames with shell metacharacters safely**
+
 - **Given** a story file named `SHY-0042-foo&bar.md` (legal POSIX, contains `&`)
 - **When** I run the validator
 - **Then** the script quotes the filename in all variable expansions
@@ -356,9 +399,11 @@ These Gherkin-style scenarios are Markdown-native (bold `Scenario:` + bold `Give
 ## Test Plan (TDD)
 
 ### Red — write failing tests FIRST
+
 Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it()` per BDD scenario above plus the additional implementation tests below. Initial run fails because `scripts/check-story-frontmatter.sh` doesn't exist yet.
 
 **Frontmatter field presence (9 fields × 1 test each = 9 tests):**
+
 - `it('exits 10 when frontmatter missing id')`
 - `it('exits 10 when frontmatter missing status')`
 - `it('exits 10 when frontmatter missing owner')`
@@ -370,6 +415,7 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 - `it('does NOT require pr field (advisory only)')`
 
 **Frontmatter field value validation (6 tests):**
+
 - `it('exits 11 when id does not match SHY-NNNN pattern')`
 - `it('exits 11 when status is not in the 5-value enum')`
 - `it('exits 11 when priority is not in {P0,P1,P2,P3}')`
@@ -378,11 +424,13 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 - `it('exits 11 when roadmap_ids is in scalar form')`
 
 **Frontmatter happy variants (3 tests):**
+
 - `it('exits 0 with empty roadmap_ids ([])')`
 - `it('exits 0 with single-item roadmap_ids ([G001])')`
 - `it('exits 0 with multi-item roadmap_ids ([G001, G024, G053])')`
 
 **Body section presence (10 `##` missing-section tests — the h1 `# Title` is not a `## ` section and is not validator-enforced as a presence check):**
+
 - `it('exits 12 when body missing ## User Story')`
 - `it('exits 12 when body missing ## Why')`
 - `it('exits 12 when body missing ## Acceptance Criteria')`
@@ -395,6 +443,7 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 - `it('exits 12 when body missing ## Notes')`
 
 **AC sub-heading presence (8 missing-dimension tests — exit 14):**
+
 - `it('exits 14 when AC missing ### Happy path')`
 - `it('exits 14 when AC missing ### Error paths')`
 - `it('exits 14 when AC missing ### Edge cases')`
@@ -406,18 +455,21 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 - `it('exits 0 when an AC sub-heading body is "N/A — <rationale>" on a single line (validator does not parse rationale; architect/reviewer gate)')`
 
 **Section prefix-match tolerance (2 tests):**
+
 - `it('exits 0 with ## Test Plan (TDD) header (prefix match)')`
 - `it('exits 0 with ## Notes (running log) header (prefix match)')`
 
 **BDD coverage (6 tests — sectional counting):**
+
 - `it('exits 13 when AC has bullets but BDD has zero scenarios')` (presence-based rule)
 - `it('exits 0 when scenarios < AC bullets — architect Important #6: 1 scenario can cover many AC bullets')`
 - `it('exits 0 when scenario count equals AC checkbox count')`
 - `it('exits 0 when scenario count exceeds AC checkbox count')`
 - `it('does NOT count `- [ ]` checkboxes in DoD section toward AC count')`
-- `it('does NOT count `**Scenario:` strings inside body prose as scenarios')`
+- `it('does NOT count `\*\*Scenario:` strings inside body prose as scenarios')`
 
 **Edge cases (8 tests):**
+
 - `it('exits 10 against a 0-byte file')`
 - `it('exits 0 against a story file with CRLF line endings')`
 - `it('exits 0 against a story file with UTF-8 BOM at start')`
@@ -428,6 +480,7 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 - `it('exits 0 under LC_ALL=ja_JP.UTF-8')`
 
 **`--scan` mode (8 tests):**
+
 - `it('--scan exits 0 against an empty directory')`
 - `it('--scan exits 0 against a directory with only SHY-INDEX.md')`
 - `it('--scan exits 0 against a directory of 5 valid stories')`
@@ -438,6 +491,7 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 - `it('--scan completes safely against a cyclic-symlink directory (does not recurse; does not hang)')`
 
 **Security (5 tests):**
+
 - `it('does not execute frontmatter values (shell injection sample)')`
 - `it('does not follow symlinks during --scan (excludes via ! -type l)')`
 - `it('quotes all variable expansions safely')`
@@ -445,6 +499,7 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 - `it('handles a 10,000-char frontmatter value without truncation or hang (completes in <500ms)')`
 
 **UX / observability (5 tests):**
+
 - `it('--help exits 0 and lists all 8 exit codes (0/2/10/11/12/13/14/20)')`
 - `it('stderr lines fit within 80 chars on every failure')`
 - `it('stderr always includes the absolute file path')`
@@ -452,12 +507,14 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 - `it('--verbose prints [check] lines to stderr')`
 
 **Performance (2 tests):**
+
 - `it('single-file validation completes in under 500ms')` (CI ubuntu)
 - `it('--scan over 20-file fixture directory completes in under 5s')` (target holds on both CI ubuntu and macOS dev — see Performance AC for the rationale on why 100 files is a follow-up optimisation pass)
 
 **Fixtures** live at `express-api/tests/scripts/fixtures/story-frontmatter/` — one minimal valid story + one mutation per failure mode (~40 fixtures total). The `--scan` directory tests use 4 small directory fixtures (`empty/`, `only-index/`, `all-valid/`, `one-bad/`).
 
 ### Green — implement until red flips
+
 1. **Create `scripts/check-story-frontmatter.sh`** — bash 3.2-compatible (no `declare -A`, no `${var^^}`; `[[ ... ]]` is fine), shellcheck-clean, `set -euo pipefail`, leading shebang `#!/usr/bin/env bash`. Structure:
    - `usage()` function for `--help` (prints all 8 exit codes + an example invocation)
    - `validate_file()` function: reads file, strips `\r` and UTF-8 BOM, parses frontmatter between first `---/---` pair, runs presence + value checks (using `grep -qE … || FAILED=1` pattern under `set -e`), runs body-section prefix-match checks via `grep -qE '^## <Section>'`, runs AC sub-heading presence check (8 `### ` headings within `## Acceptance Criteria` range), runs BDD-coverage count check (sectional algorithm — see next bullet)
@@ -485,6 +542,7 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 5. Run `shellcheck scripts/check-story-frontmatter.sh` and `actionlint .github/workflows/lint.yml` — both exit 0 with no warnings.
 
 ## Out of Scope
+
 - Converting existing roadmap items (G001–G053 open subset) to SHYs — that is SHY-0003's job (after SHY-0002's GitHub integration ships, so converted stories can auto-create issues)
 - GitHub Issues + Projects v2 integration — that is SHY-0002
 - Implementing the gh-pages-deploy serialization (the session's original goal) — slotted as G054 + its own SHY in SHY-0003
@@ -497,11 +555,13 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 - Sprint / iteration concept (continuous flow; no time-boxed sprints)
 
 ## Dependencies
+
 - **Blocks:** SHY-0002 (GitHub Issues + Projects integration requires the template + validator) and every SHY-XXXX after that.
 - **Blocked by:** none.
 - **Tool-version assumptions (no upgrade required):** Jest version as declared in `express-api/package.json` (existing test pattern at `express-api/tests/scripts/reusable-workflow-concurrency.test.js` already uses modern Jest features). Bash 3.2+ (macOS default; CI ubuntu has bash 5.x — strict superset). `shellcheck` and `actionlint` versions as currently invoked from `lint.yml`. `find` with `-P` flag (BSD + GNU both support it). POSIX `wc`, `grep`, `tr`, `sed` — all standard.
 
 ## Risks & Mitigations
+
 - **Risk:** Frontmatter regex too strict — blocks legitimate edge-case story files. **Mitigation:** Test fixtures cover empty array, single-item, and multi-item `roadmap_ids`; enum on `status` / `priority` / `effort` / `type` is explicit; `id` regex is anchored.
 - **Risk:** `lint.yml` gate breaks CI for in-flight PRs that don't touch stories. **Mitigation:** The validator only runs on `.project/stories/SHY-*.md`. Non-story PRs are unaffected. The step takes <5s for a directory of <100 stories.
 - **Risk:** `lint.yml` step ordering — if the story validator runs BEFORE `actionlint` / `shellcheck`, a story failure would short-circuit CI before earlier lint steps report. **Mitigation:** Pin validator step as the LAST step in the lint job (AC + Test Plan + this Risk). Reviewer agent flags any reordering in the YAML diff.
@@ -521,6 +581,7 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 - **Risk:** `.gitignore` change to un-ignore `.project/stories/` accidentally exposes other internal docs (plans/specs/test-plans/test-reports — totalling ~43MB locally). **Mitigation:** Use per-subdir exclude lines for each non-stories internal-doc directory (`.project/plans/`, `.project/specs/`, `.project/test-plans/`, `.project/test-reports/`, `.project/audit-findings-*.md`, `.project/ios-build-warnings-debt.md`). A blanket `.project/` + `!.project/stories/` negation does NOT work (Git refuses to re-include under a fully-excluded parent). The per-subdir approach is verified via `git check-ignore` probes in the Jest suite — see the `gitignore` describe block in `check-story-frontmatter.test.js`.
 
 ## Definition of Done
+
 - [ ] All Acceptance Criteria boxes across the 8 dimensions are checked
 - [ ] `cd express-api && npm test -- check-story-frontmatter` green locally (every red `it()` from above flips green)
 - [ ] `actionlint .github/workflows/lint.yml` exits 0 (no warnings)
@@ -544,6 +605,7 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 - [ ] `SHY-INDEX.md` updated: SHY-0001 row moved from Active to Done table; SHY-0002 (planned) row updated to indicate it's next-up
 
 ## Notes (running log)
+
 - 2026-06-06 10:25 BST — Draft v1 created. Operator confirmed in conversation: 4-digit ID, rich template, in-place lifecycle, draft→operator→architect flow, 1 PR-bundle = 1 SHY, skip retro stories for shipped roadmap items, gh-pages becomes G054 + a SHY. Memory `feedback-agile-user-stories.md` saved to `~/.claude/projects/-Users-shyden/memory/` and indexed in `MEMORY.md`.
 - 2026-06-06 10:35 BST — Operator approved scope. Dispatched `feature-dev:code-architect`.
 - 2026-06-06 10:47 BST — Architect returned **APPROVE-WITH-CHANGES** (round 1): 4 Critical + 7 Important + 6 Polish. Applied all findings (zero deferred): `pr:` advisory-only annotation; section-header prefix-match; `--scan` pinned to stop-on-first; `roadmap_ids` scalar rejection AC; CRLF tolerance; BDD-coverage `--scan` exclusion; lint.yml LAST-step pin; `set -e` + grep-absence pattern documented; SHY-INDEX.md human-maintained note; Jest/bash version deps; "seven" → "eight" sub-headings.
@@ -562,5 +624,14 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
   - **Adversarial gaps added as BDD scenarios:** cyclic-symlink directory; `--scan` against a file path; concurrent invocations; very-long frontmatter line. Each scenario also has its own Jest test.
   - **Exit code 14** added to Observability AC + `--help` AC + tests; total exit codes: 8 (0/2/10/11/12/13/14/20).
 - 2026-06-06 12:10 BST — v3 ready for TDD red phase. Test count: ~70 cases; BDD scenarios: ~50; fixtures: ~45. Architect verdict captured here per Notes-log-only audit rule.
+- 2026-06-06 13:31 BST — TDD red phase complete (103 cases failing). Validator script implemented; TDD green achieved (115 cases). CLAUDE.md § "Agile Way of Working" added. lint.yml `Validate SHY story frontmatter` step pinned LAST.
+- 2026-06-06 13:50 BST — Code-reviewer cycle 1: 11 findings (1 Critical + 4 Important + 6 Trivial). All fixed.
+- 2026-06-06 13:55 BST — Code-reviewer cycle 2: 7 findings + 2 cycle-1 partials. All fixed.
+- 2026-06-06 14:00 BST — Code-reviewer cycle 3: 7 findings. All fixed.
+- 2026-06-06 14:05 BST — Code-reviewer cycle 4: 4 findings. All fixed.
+- 2026-06-06 14:10 BST — Code-reviewer cycle 5: 1 finding. Fixed.
+- 2026-06-06 14:30 BST — Code-reviewer cycle 6: 2 findings (operator: "not careful enough" — missed 5 sibling exit-11 tests on cycle 5). All fixed. PR #1034 pushed, auto-merge armed. Final test count 143 (was ~70 planned).
+- 2026-06-06 14:55 BST — PR #1034 SonarCloud failed first time on prettier-format of valid.md fixture (not covered by my local check). Auto-fixed; 3 test regexes adjusted for the new blank-line-between-scenario-header-and-bullets format. Re-pushed.
+- 2026-06-06 15:56 BST — PR #1034 MERGED via auto-merge. Status flipped Draft → In Review → Done. SHY-0001 LIVE in main; the workflow now self-enforces on every future PR via lint.yml. Reviewer cycle count for the audit: 6.
 - 2026-06-06 12:15 BST — **Implementation paused per operator directive: repo migration to company GitHub org first; no execution until then.** Drafting SHY-0002 + SHY-0003 in parallel as planning work.
 - 2026-06-06 12:50 BST — Discovered `.project/` is gitignored at `.gitignore:109` ("Internal project docs (plans, specs)"). Added new Happy-path AC + Risk: SHY-0001 must include a `!.project/stories/` negation immediately after the `.project/` line so story files become git-tracked while keeping sibling internal-doc directories (plans/specs/test-plans/test-reports — ~43MB local) ignored as the operator originally designed. Added a probe test that asserts a sibling fixture remains ignored.

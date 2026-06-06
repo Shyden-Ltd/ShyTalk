@@ -8,15 +8,16 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 ## Active
 
-| ID | Pri | Effort | Type | Title | Status | Roadmap IDs | PR |
-|----|-----|--------|------|-------|--------|-------------|----|
-| [SHY-0001](SHY-0001-establish-agile-workflow.md) | P1 | M | infra | Establish Agile user-story way of working | 📝 Draft | — | — |
-| _SHY-0002 (planned next, draft staged)_ | P1 | M | infra | Wire GitHub Issues + Projects v2 integration | — | — | — |
-| _SHY-0003 (planned, draft staged)_ | P1 | L | chore | Convert zero-gap roadmap to user stories + cross-label | — | G055 (new — gh-pages) | — |
+| ID                                              | Pri | Effort | Type  | Title                                                  | Status   | Roadmap IDs           | PR  |
+| ----------------------------------------------- | --- | ------ | ----- | ------------------------------------------------------ | -------- | --------------------- | --- |
+| [SHY-0002](SHY-0002-wire-github-integration.md) | P1  | M      | infra | Wire GitHub Issues + Projects v2 integration           | 📝 Draft | —                     | —   |
+| _SHY-0003 (planned, draft staged)_              | P1  | L      | chore | Convert zero-gap roadmap to user stories + cross-label | —        | G055 (new — gh-pages) | —   |
 
 ## Done
 
-_None yet._
+| ID                                               | Pri | Effort | Type  | Title                                     | Status  | Roadmap IDs | PR                                                       |
+| ------------------------------------------------ | --- | ------ | ----- | ----------------------------------------- | ------- | ----------- | -------------------------------------------------------- |
+| [SHY-0001](SHY-0001-establish-agile-workflow.md) | P1  | M      | infra | Establish Agile user-story way of working | ✅ Done | —           | [#1034](https://github.com/Shyden-Ltd/ShyTalk/pull/1034) |
 
 ## Cancelled
 
@@ -25,6 +26,7 @@ _None yet._
 ---
 
 ## Conventions
+
 - **ID:** `SHY-XXXX` (4-digit zero-padded, sequential; no recycling).
 - **File path:** `.project/stories/SHY-XXXX-kebab-slug.md`.
 - **Granularity:** 1 PR-bundle = 1 SHY (multi-G bundles list every G-ID in `roadmap_ids` frontmatter).
