@@ -210,6 +210,8 @@ describe('scripts/check-story-frontmatter.sh', () => {
       const { code, stderr } = runScript([f]);
       expect(code).toBe(11);
       expect(stderr).toMatch(/id must match SHY-NNNN pattern/);
+      // UX AC: every failure message names the absolute file path.
+      expect(stderr).toMatch(/^\//m);
     });
 
     it('rejects status not in {Draft, In Progress, In Review, Done, Cancelled}', () => {
@@ -285,6 +287,9 @@ describe('scripts/check-story-frontmatter.sh', () => {
           new RegExp(`missing required body section:\\s*## ${escapeRegExp(section)}`),
         );
       });
+      it('stderr includes the absolute file path', () => {
+        expect(result.stderr).toMatch(/^\//m);
+      });
     });
 
     it('exits 0 with `## Test Plan (TDD)` (prefix-match tolerates suffix)', () => {
@@ -327,6 +332,9 @@ describe('scripts/check-story-frontmatter.sh', () => {
         expect(result.stderr).toMatch(
           new RegExp(`missing required AC sub-heading:\\s*### ${escapeRegExp(dim)}`),
         );
+      });
+      it('stderr includes the absolute file path', () => {
+        expect(result.stderr).toMatch(/^\//m);
       });
     });
 
@@ -371,6 +379,8 @@ describe('scripts/check-story-frontmatter.sh', () => {
       const { code, stderr } = runScript([f]);
       expect(code).toBe(13);
       expect(stderr).toMatch(/AC has 1 bullets but BDD has 0 scenarios/);
+      // UX AC: every failure message names the absolute file path.
+      expect(stderr).toMatch(/^\//m);
     });
 
     it('exits 0 when scenarios < AC bullets (architect Important #6: 1 scenario can cover many AC)', () => {
