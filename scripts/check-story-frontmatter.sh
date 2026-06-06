@@ -114,21 +114,31 @@ fail() {
   exit "$4"
 }
 
-# Strip CR, UTF-8 BOM, and trailing per-line whitespace from a file. Write the
+# Strip CR and UTF-8 BOM from a file (but NOT trailing whitespace). Write the
 # clean copy to a temp path and echo that path. Caller is responsible for
 # cleanup (we register a trap).
+#
+# Why we DON'T strip trailing whitespace: Markdown uses exactly 2 trailing
+# spaces on a line to denote a hard line break (rendered as `<br>`). A
+# blanket `s/[[:space:]]*$//` strip would silently mutate a legitimate
+# Markdown feature. Instead we tolerate trailing whitespace at every
+# checkpoint:
+#   - check_frontmatter_present uses a regex `^---[[:space:]]*$` for the
+#     delimiter line (not strict `==`)
+#   - check_field_values uses `[[:space:]]*$` in the per-field regexes
+#   - check_required_sections uses `($| )` so a section header followed
+#     by trailing space still matches
+#   - check_required_ac_dims same as above
+#   - awk patterns for AC/BDD counting match line PREFIXES, ignoring tails
+# So a trailing-whitespace-laden story file validates correctly without
+# our needing to mutate the content.
 normalize_file() {
   local src="$1"
   local tmp
   tmp="$(mktemp -t shy-frontmatter.XXXXXX)"
   TMP_FILES="${TMP_FILES} ${tmp}"
-  # Pipeline:
-  #   1. Strip leading 3-byte UTF-8 BOM (EF BB BF) from line 1, if present.
-  #   2. Strip all CRs (\r) from line endings (CRLF → LF).
-  #   3. Strip trailing whitespace from EVERY line (handles editors that
-  #      auto-pad lines with trailing spaces — common with some Markdown
-  #      tools — which would otherwise break our `==` / regex checks).
-  LC_ALL=C sed -e '1s/^\xef\xbb\xbf//' -e 's/[[:space:]]*$//' "$src" | tr -d '\r' >"$tmp"
+  # Strip leading 3-byte UTF-8 BOM (EF BB BF) from line 1, then strip CRs.
+  LC_ALL=C sed -e '1s/^\xef\xbb\xbf//' "$src" | tr -d '\r' >"$tmp"
   echo "$tmp"
 }
 
@@ -160,28 +170,30 @@ trap cleanup EXIT INT TERM
 # ============================================================== validation
 
 # Check that frontmatter delimiters exist. Returns 0 if found, 10 (with fail) otherwise.
+# Delimiters tolerate trailing whitespace (per Markdown norms) but must be exactly `---`
+# (optionally followed by whitespace) at the start of a line.
 check_frontmatter_present() {
   local file="$1" abs="$2"
-  # Frontmatter must start at line 1 with `---` and have a closing `---` later.
-  local opener
-  opener="$(head -n 1 "$file" 2>/dev/null || true)"
-  if [ "$opener" != "---" ]; then
+  # Line 1 must match `---` (with optional trailing whitespace).
+  if ! head -n 1 "$file" 2>/dev/null | grep -qE '^---[[:space:]]*$'; then
     fail "$abs" "missing" "no frontmatter found" "$E_MISSING_FIELD"
   fi
-  # Need at least one more `---` later in the file.
-  if [ "$(grep -c '^---$' "$file")" -lt 2 ]; then
+  # Need at least one more `---` (with optional trailing whitespace) later in the file.
+  if [ "$(grep -cE '^---[[:space:]]*$' "$file")" -lt 2 ]; then
     fail "$abs" "missing" "no frontmatter found" "$E_MISSING_FIELD"
   fi
 }
 
 # Extract the frontmatter block (between the first two `---` lines) to stdout.
+# Delimiter regex `^---[[:space:]]*$` tolerates trailing whitespace per the
+# I3 fix — preserves Markdown hard line-breaks across the file.
 extract_frontmatter() {
-  awk 'BEGIN{n=0} /^---$/{n++; if(n==2) exit; next} n==1{print}' "$1"
+  awk 'BEGIN{n=0} /^---[[:space:]]*$/{n++; if(n==2) exit; next} n==1{print}' "$1"
 }
 
 # Extract the body (everything after the second `---`) to stdout.
 extract_body() {
-  awk 'BEGIN{n=0} /^---$/{n++; next} n>=2{print}' "$1"
+  awk 'BEGIN{n=0} /^---[[:space:]]*$/{n++; next} n>=2{print}' "$1"
 }
 
 check_required_fields() {
