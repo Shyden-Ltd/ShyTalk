@@ -332,18 +332,31 @@ describe('scripts/check-story-frontmatter.sh', () => {
   });
 
   // ============================================================== BDD coverage → exit 13
-  describe('BDD coverage → exit 13', () => {
-    it('exits 13 when scenario count < AC checkbox count', () => {
-      // Bump AC checkbox count to 3 by adding more bullets under Happy path;
-      // BDD still has 1 scenario from the fixture.
+  describe('BDD coverage → exit 13 (presence-based, not strict 1:1)', () => {
+    it('exits 13 when AC has bullets but BDD has zero scenarios', () => {
+      // Remove the only Scenario block from the BDD section but keep the
+      // section header. AC retains its bullet → mismatch → exit 13.
+      const mutated = VALID_CONTENT.replace(
+        /\*\*Scenario: Validator accepts this canonical fixture\*\*\n(?:- .*\n)+/,
+        '',
+      );
+      const f = tempStoryFile(mutated);
+      const { code, stderr } = runScript([f]);
+      expect(code).toBe(13);
+      expect(stderr).toMatch(/AC has 1 bullets but BDD has 0 scenarios/);
+    });
+
+    it('exits 0 when scenarios < AC bullets (architect Important #6: 1 scenario can cover many AC)', () => {
+      // 3 AC bullets, still only 1 scenario from the fixture. Should pass
+      // under the relaxed rule — the architect explicitly warned against
+      // over-decomposition.
       const mutated = VALID_CONTENT.replace(
         /^- \[ \] Validator accepts this file$/m,
         '- [ ] Validator accepts this file\n- [ ] Extra AC bullet 1\n- [ ] Extra AC bullet 2',
       );
       const f = tempStoryFile(mutated);
-      const { code, stderr } = runScript([f]);
-      expect(code).toBe(13);
-      expect(stderr).toMatch(/BDD coverage gap.*3 AC bullets.*1 scenarios/);
+      const { code } = runScript([f]);
+      expect(code).toBe(0);
     });
 
     it('exits 0 when scenario count equals AC checkbox count', () => {

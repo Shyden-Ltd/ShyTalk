@@ -147,8 +147,12 @@ abspath() {
 
 # Register a cleanup trap so all temp files vanish on exit regardless of code path.
 TMP_FILES=""
+# cleanup() is invoked indirectly via the EXIT/INT/TERM trap below; shellcheck
+# can't see trap-mediated invocations and reports SC2329 ("never invoked").
+# shellcheck disable=SC2329
 cleanup() {
-  # shellcheck disable=SC2086 -- we want word-splitting on whitespace-separated paths.
+  # Intentional word-splitting on whitespace-separated paths in TMP_FILES.
+  # shellcheck disable=SC2086
   rm -f ${TMP_FILES}
 }
 trap cleanup EXIT INT TERM
@@ -239,7 +243,8 @@ check_required_sections() {
   # Split REQ_SECTIONS on '|'.
   local oldifs="$IFS"
   IFS='|'
-  # shellcheck disable=SC2086 -- intentional word-splitting via IFS.
+  # Intentional word-splitting via IFS for parameterised list iteration.
+  # shellcheck disable=SC2086
   set -- $REQ_SECTIONS
   IFS="$oldifs"
   local section
@@ -272,7 +277,13 @@ check_required_ac_dims() {
 }
 
 # Sectional BDD coverage check: count `- [ ]` lines inside ## Acceptance Criteria,
-# count `**Scenario:` blocks inside ## BDD Scenarios. Fail if scenarios < ac_bullets.
+# count `**Scenario:` blocks inside ## BDD Scenarios.
+#
+# Rule: presence-based, not strict 1:1. Per the architect round-2 Important
+# finding, a single scenario can validly cover multiple closely-related AC
+# bullets (the Then-clauses bind them). So we only fail when AC has
+# expectations to verify (≥1 checkbox) AND BDD has zero scenarios. Depth /
+# per-bullet coverage is the reviewer agent's job, not the validator's.
 check_bdd_coverage() {
   local body="$1" abs="$2"
   local ac_count bdd_count
@@ -293,14 +304,18 @@ check_bdd_coverage() {
     END {print c+0}
   ' "$body")
 
-  if [ "$bdd_count" -lt "$ac_count" ]; then
+  if [ "$ac_count" -gt 0 ] && [ "$bdd_count" -eq 0 ]; then
     fail "$abs" "bdd gap" \
-      "BDD coverage gap: ${ac_count} AC bullets, ${bdd_count} scenarios (${bdd_count} < ${ac_count})" \
+      "AC has ${ac_count} bullets but BDD has 0 scenarios — add at least one" \
       "$E_BDD_GAP"
   fi
 }
 
 # Escape a string for use in a basic-extended regex character class.
+# The sed expression intentionally uses single quotes — `\\&` is a literal
+# backslash-then-sed-replacement-backref that escapes any regex metachar
+# the input contains. Shell expansion inside the pattern would be a bug.
+# shellcheck disable=SC2016
 escape_re() {
   printf '%s' "$1" | sed 's/[.[\*^$(){}+?|]/\\&/g'
 }

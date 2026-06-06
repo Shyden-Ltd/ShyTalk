@@ -6,6 +6,68 @@ Social chat app with voice rooms. Kotlin Multiplatform (Android + iOS), Firebase
 ## Tri-Platform Policy
 **ALL work must ship on desktop (web), iOS, and Android simultaneously.** No platform can fall behind. Every feature implemented in shared/commonMain must compile for both Android and iOS. Verify with `./gradlew :shared:compileKotlinIosArm64` after any shared code change.
 
+## Agile Way of Working
+
+Every piece of work is captured as ONE detailed user-story `.md` file at `.project/stories/SHY-XXXX-slug.md` and ships as ONE PR. The story IS the spec — operator and reviewer score against the AC + BDD scenarios; architect validates the spec before code starts. Source-of-truth lives in this repo; GitHub Issues + Projects v2 are an automatically-synced mirror (delivered by SHY-0002 after SHY-0001 ships).
+
+### Story ID + file layout
+- **ID format:** `SHY-XXXX` (4-digit zero-padded, sequential; never recycle gaps left by Cancelled stories).
+- **File path:** `.project/stories/SHY-XXXX-kebab-slug.md`.
+- **Index:** `.project/stories/SHY-INDEX.md` is the live backlog. Sorted `priority asc, created asc`. Active / Done / Cancelled tables. Index is human-maintained — the `SHY-[0-9][0-9][0-9][0-9]-*.md` glob in the validator naturally excludes it.
+
+### Frontmatter (9 required fields)
+- `id` — matches `^SHY-[0-9]{4}$`
+- `status` — one of `Draft` / `In Progress` / `In Review` / `Done` / `Cancelled`
+- `owner` — string (`claude` or operator GitHub handle)
+- `created` — `YYYY-MM-DD`
+- `priority` — `P0` / `P1` / `P2` / `P3` (P0 = drop everything)
+- `effort` — `XS` / `S` / `M` / `L` / `XL` (matches the roadmap convention)
+- `type` — `feature` / `bug` / `refactor` / `docs` / `infra` / `spike` / `chore`
+- `roadmap_ids` — array form only (`[]` if ad-hoc; `[G001, G024]` if multiple)
+- `pr` — URL once pushed (advisory; NOT enforced by the validator)
+
+### Body sections (10 required `## ` headings + 8 required `### ` AC sub-headings)
+`## User Story` (As/I want/So that) · `## Why` · `## Acceptance Criteria` · `## BDD Scenarios` · `## Test Plan` · `## Out of Scope` · `## Dependencies` · `## Risks & Mitigations` · `## Definition of Done` · `## Notes`.
+
+The `## Acceptance Criteria` section MUST contain 8 sub-headings — one per QA dimension:
+`### Happy path` · `### Error paths` · `### Edge cases` · `### Performance` · `### Security` · `### UX` · `### i18n` · `### Observability`.
+
+A dimension may carry `N/A — <one-line rationale>` if it genuinely doesn't apply; an empty sub-heading body is rejected by the architect/reviewer (not the validator). Every AC checkbox (`- [ ]` line inside the AC section) has ≥1 corresponding `**Scenario:** ...` block inside `## BDD Scenarios`. The validator enforces the count sectionally.
+
+### BDD scenario format (Markdown-native)
+```
+**Scenario: <short description>**
+- **Given** <preconditions>
+- **When** <action>
+- **Then** <observable outcome — exact exit code, stderr substring, etc>
+- **And** <additional observable>
+```
+
+### Lifecycle (no backward transitions; Cancelled is terminal)
+- `Draft` → architect APPROVE / APPROVE-WITH-CHANGES + concerns applied → `In Progress`
+- `In Progress` → code-reviewer agent dispatched → `In Review`
+- `In Review` → PR auto-merges → `Done` (for `infra` / `docs` / `chore` / `refactor`)
+- `In Review` → for `feature` / `bug`: auto-merge + deploy-to-dev + dev smoke test → `Done`
+- `In Review` → for `spike`: Notes-recorded decision + follow-up SHYs filed → `Done`
+- any active → operator decides not to do → `Cancelled` (Notes captures why)
+
+### Granularity + naming convention (strict)
+- 1 PR-bundle = 1 SHY (multi-G roadmap bundles list every G-ID in `roadmap_ids`).
+- Branch: `story/SHY-NNNN-kebab-slug`.
+- Commit subject: `[SHY-NNNN] <verb-led summary>`.
+- PR title: `SHY-NNNN: <Title>`.
+- PR body opens with `Implements SHY-NNNN — see .project/stories/SHY-NNNN-slug.md for full spec, AC, BDD scenarios, and DoD.` plus `Closes #<github-issue-number>` once SHY-0002's sync is live.
+
+### Cross-labelling the roadmap
+The zero-gap roadmap at `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md` gets a `SHY` column per row — OPEN G-items get `SHY-XXXX`; SHIPPED items get `✅ PR #N`; CANCELLED get `❌ Won't do — <reason>`. Don't create retro stories for shipped/cancelled rows.
+
+### Audit trail
+All audit signals — architect verdict, code-reviewer cycle count + verbatim findings, rework reasons, dev-verify outcomes — land as timestamped entries in the story's `## Notes (running log)` section. No parallel frontmatter audit fields.
+
+### Tooling
+- `scripts/check-story-frontmatter.sh` validates every `SHY-[0-9][0-9][0-9][0-9]-*.md` in CI (`lint.yml`, last step). Run `--help` for usage + the 8 documented exit codes. Add `--verbose` for per-check tracing.
+- `.project/stories/SHY-0001-establish-agile-workflow.md` is the canonical seed — copy it as the starting template for new stories.
+
 ## Build & Test Commands
 - **Build (Android)**: `./gradlew assembleDevDebug`
 - **Build (iOS shared)**: `./gradlew :shared:compileKotlinIosArm64`
