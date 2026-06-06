@@ -55,6 +55,14 @@ Feature: Push permission denial UX
   # `shared/src/androidHostTest/.../AndroidPushPermissionTest`; this layer
   # adds the integration assertion that the banner UX reflects the mapping
   # result correctly across SDK paths.
+  #
+  # NOT covered at the BDD layer: `enabled=true + SDK>=33 + hasAsked=false`.
+  # At the banner layer the outcome is identical to the next scenario
+  # (Pre-Tiramisu enabled → AUTHORIZED → no banner). The unique side
+  # effect of this tuple is `shouldBackfillSentinel→true→markAsked()`,
+  # which `seedPushPermissionStateForTesting` deliberately passes as a
+  # no-op (its `markAsked` callback is empty). Backfill behaviour is
+  # covered by `AndroidPushPermissionTest` at the unit layer.
 
   Scenario: Pre-Tiramisu Android with notifications disabled → banner visible
     Given OS notifications enabled is "false" on Android SDK 32 with hasAsked "true"
