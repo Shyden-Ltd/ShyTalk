@@ -44,8 +44,8 @@ Operator-confirmed earlier (2026-06-06 ~11:50 BST):
 - [ ] Each created issue has labels applied: `story`, `status:<status>`, `priority:<priority>`, `effort:<effort>`, `type:<type>`, and one `roadmap:<G-ID>` label per roadmap entry (empty `roadmap_ids: []` produces no roadmap labels)
 - [ ] Each created issue is added to a Project v2 named `ShyTalk Stories` (the operator provisions the project once; the script adds items + sets status field)
 - [ ] Project v2 has custom fields `Pri` (single-select P0/P1/P2/P3), `Effort` (single-select XS/S/M/L/XL), `Type` (single-select feature/bug/refactor/docs/infra/spike/chore), `Roadmap IDs` (text), `SHY ID` (text); script sets each from the .md frontmatter
-- [ ] On subsequent runs, if a story's status / priority / effort / type / title / AC has changed since the last sync, the issue is UPDATED (title/body/labels reconciled); unchanged stories are skipped with stderr log `SHY-NNNN: unchanged - skipping`
-- [ ] On story status change to `Done`, the script closes the issue with comment `Closed by sync from SHY-NNNN (status: Done)` — but PRIORITIZES the natural close via the PR's `Closes #N` (the script only closes if the issue is still open after a 5-minute grace window post-status-flip)
+- [ ] On subsequent runs, the script detects change via SHA-256 of the file body, stored in the issue footer as `_Last synced: <UTC> from commit <sha> body-hash: <hex>_`. If the current SHA-256 differs from the stored hash, the issue is UPDATED (title/body/labels reconciled); unchanged stories are skipped with stderr log `SHY-NNNN: unchanged - skipping`. The commit-SHA alone is insufficient (mid-PR edits share the same commit) — body-hash is the canonical change-detection signal.
+- [ ] On story status change to `Done`, the script closes the issue with comment `Closed by sync from SHY-NNNN (status: Done)` — but PRIORITIZES the natural close via the PR's `Closes #N`. Force-close only fires if the issue is still open after a configurable grace window (env var `SYNC_GRACE_WINDOW_SECS`, default 300). Tests inject `SYNC_GRACE_WINDOW_SECS=0` to exercise the close-decision without a real sleep.
 - [ ] On story status change to `Cancelled`, the script closes the issue with reason `not_planned` and comment `Cancelled via sync from SHY-NNNN`
 - [ ] A GitHub Action `.github/workflows/sync-stories-to-issues.yml` runs on push to main and invokes `scripts/sync-stories-to-issues.sh --all`; runs on PR merge so labels reconcile within seconds
 - [ ] A GitHub Action `.github/workflows/inject-pr-closes.yml` runs on PR open / edit and, if the branch matches `story/SHY-NNNN-*` AND the PR body does NOT already contain `Closes #<issue-number>` for the corresponding issue, appends it
@@ -67,17 +67,17 @@ Operator-confirmed earlier (2026-06-06 ~11:50 BST):
 ### Edge cases
 
 - [ ] Story renamed (`SHY-0042-old-slug.md` → `SHY-0042-new-slug.md`): existing issue updated (title/body refreshed); no new issue created (SHY-ID is the key, not the filename)
-- [ ] Story moved to `status: Done` but no PR has merged yet (rare — should only happen via direct frontmatter edit): script logs warning but still closes after grace window (5 min)
+- [ ] Story moved to `status: Done` but no PR has merged yet (rare — should only happen via direct frontmatter edit): script logs warning but still closes after the configurable grace window (`SYNC_GRACE_WINDOW_SECS`, default 300s)
 - [ ] Story moved to `status: Cancelled`: issue closes with reason `not_planned`
 - [ ] Story moved back from `Cancelled` to `Draft` (rare reactivation): issue reopened + labels reconciled
 - [ ] Story with 0 `roadmap_ids` → no roadmap labels applied (no error)
 - [ ] Story with 10+ `roadmap_ids` → all 10+ labels applied; sync time stays within performance bounds
 - [ ] Existing issue created MANUALLY before sync (operator created `Issue #5: SHY-0001: ...` by hand): script DETECTS the existing issue by parsing the `SHY-NNNN:` prefix in the title; idempotent — does not duplicate; reconciles labels and body
 - [ ] Issue MANUALLY edited (operator added a comment / changed a label by hand): comments preserved; labels reconciled (sync IS authoritative for labels managed by sync — `status:*`, `priority:*`, `effort:*`, `type:*`, `roadmap:*`, `story`); other labels (operator-added `wontfix`, `help-wanted`) preserved
-- [ ] AC checkbox state divergence: story `.md` AC shows `- [ ]` (unchecked) but issue's mirrored task list shows `- [x]` (operator checked it on GitHub UI). Sync OVERWRITES with .md state. Operator instructed to check boxes in the .md, not on GitHub (documented in CLAUDE.md). Architect round 2 will confirm.
+- [ ] AC checkbox state divergence: story `.md` AC shows `- [ ]` but issue's mirrored task list shows `- [x]`. Sync OVERWRITES with .md state (one-way sync; .md is source of truth). Operator MUST check boxes in the .md file, not on the GitHub UI. Documented in CLAUDE.md § "Agile Way of Working" under "GitHub Issues mirror".
 - [ ] Story file deleted from `.project/stories/`: existing issue is NOT auto-closed (story might be temporarily missing on a feature branch); script logs `SHY-NNNN: story file missing; issue left untouched`
 - [ ] Duplicate SHY ID across two files (operator collision): script exits 39 with `duplicate SHY ID detected at <path1> and <path2>`; no sync proceeds
-- [ ] Concurrent sync runs (two CI jobs simultaneously): both runs detect via a transient lock label `sync:in-progress` on a sentinel issue; second run waits or skips with `concurrent sync detected; skipping`
+- [ ] Concurrent sync runs (two CI jobs simultaneously) are prevented by the workflow-level `concurrency:` group `sync-stories-${{ github.ref }}` with `cancel-in-progress: false` — GitHub Actions guarantees only one workflow run per group at a time. No application-level lock label is used (a label-based lock has a TOCTOU race — workflow `concurrency:` is the only race-free mechanism).
 
 ### Performance
 
@@ -90,7 +90,7 @@ Operator-confirmed earlier (2026-06-06 ~11:50 BST):
 
 ### Security
 
-- [ ] `GITHUB_TOKEN` scope is minimal: `issues:write`, `pull-requests:write` (for the `Closes #N` injection), and `project:write` (Projects v2 mutations). Documented in the action YAML.
+- [ ] A dedicated PAT (secret name: `GH_PAT_PROJECT`) with scopes `issues:write`, `pull-requests:write`, and `project:write` is required. GitHub Actions' automatic `GITHUB_TOKEN` cannot carry `project:write` — the auto-token is provisioned at job-start and does NOT include Projects v2 scopes. Operator action: create a fine-grained PAT at https://github.com/settings/tokens scoped to `Shyden-Ltd/ShyTalk` with the three permissions above, then register it as repository secret `GH_PAT_PROJECT` before first sync run. All workflow YAML references `${{ secrets.GH_PAT_PROJECT }}`, NOT `GITHUB_TOKEN`, for Issues + Projects v2 API calls.
 - [ ] No secrets logged to stdout or stderr (mask via `echo "::add-mask::"` in GitHub Actions; sed-strip in local CLI)
 - [ ] Story content mirrored to issue is already public-repo content; no new exfiltration surface
 - [ ] Script does NOT execute story file content (no `eval` of mirrored body)
@@ -178,7 +178,7 @@ Operator-confirmed earlier (2026-06-06 ~11:50 BST):
 - **And** a PR titled `SHY-0001: Establish Agile workflow` exists with body containing `Closes #5`
 - **When** the PR auto-merges
 - **Then** GitHub closes issue #5 automatically (native `Closes` behavior)
-- **And** the next sync run detects the closed issue, updates the story frontmatter status to `Done` (operator-confirmed: bidirectional for the close event only) OR leaves the story to be manually flipped — operator chooses in SHY-0002 implementation
+- **And** the next sync run detects the closed issue and logs `SHY-NNNN: issue #N already closed (natural close via PR)`. No `.md` write-back (bidirectional sync is Out of Scope). Operator manually flips `status: Done` in the frontmatter via their normal lifecycle update.
 - **And** the Project v2 card moves to the `Done` column
 
 **Scenario: PR-body `Closes #N` injection fires on PR open**
@@ -266,13 +266,14 @@ Operator-confirmed earlier (2026-06-06 ~11:50 BST):
 - **And** continues with other stories
 - **And** the final exit code reflects partial success (exit 0 if other stories synced; otherwise 33)
 
-**Scenario: Concurrent sync runs use lock to avoid races**
+**Scenario: Concurrent sync runs serialise via workflow `concurrency:` group**
 
-- **Given** two CI jobs simultaneously invoke `scripts/sync-stories-to-issues.sh --all`
-- **When** both scripts start
-- **Then** the first acquires a transient lock (e.g. a label `sync:in-progress` on a sentinel issue, or a workflow-concurrency group)
-- **And** the second detects the lock and exits 0 with stderr `concurrent sync detected; skipping`
-- **And** the first completes normally and removes the lock
+- **Given** two CI jobs would trigger `sync-stories-to-issues.yml` against the same ref at the same time
+- **When** both jobs queue
+- **Then** GitHub Actions' workflow-level `concurrency:` group `sync-stories-${{ github.ref }}` queues the second job (per GitHub's documented behavior: only one run per concurrency group at a time)
+- **And** the second job stays in `queued` state until the first completes
+- **And** the first completes normally; the second then runs against the now-current state (idempotent — finds no changes if first already synced everything)
+- **And** no application-level lock label is used (label-based locks have a TOCTOU race; workflow `concurrency:` is the only race-free mechanism)
 
 ### CI / GitHub Action scenarios
 
@@ -290,7 +291,7 @@ Operator-confirmed earlier (2026-06-06 ~11:50 BST):
 - **When** the `inject-pr-closes.yml` workflow runs
 - **Then** the workflow detects the fork origin
 - **And** skips the body mutation (security — prevents fork PR exfiltrating data via crafted issue references)
-- **And** posts a comment `Fork PRs: please manually add 'Closes #N' to the PR body`
+- **And** exits 0 with workflow log entry `SKIP: fork PR detected; no API mutations possible on fork PRs under pull_request trigger (token is read-only)`. The contributor must add `Closes #N` manually. (Note: we cannot post a comment on fork PRs either — GitHub provisions a read-only token for `pull_request` events from forks.)
 
 ## Test Plan (TDD)
 
@@ -422,4 +423,5 @@ Fixtures: ~25 story files for variations, mocked API responses for each scenario
 
 ## Notes (running log)
 
-- 2026-06-06 12:25 BST — Draft v1 created. Scope confirmed in operator Q&A rounds 1–5: one-way sync (.md → issue), Project v2 board, label automation, PR-body `Closes #N` injection, per-type Done bar (infra → auto-merge). Blocked by repo migration to company GitHub org (2026-06-06 ~12:15 BST directive). Will proceed to operator approval + architect validation once migration completes. Ready for operator review of the draft in the meantime.
+- 2026-06-06 12:25 BST — Draft v1 created. Scope confirmed in operator Q&A rounds 1–5: one-way sync (.md → issue), Project v2 board, label automation, PR-body `Closes #N` injection, per-type Done bar (infra → auto-merge). Initially blocked by repo migration.
+- 2026-06-06 ~16:30 BST — Migration RESOLVED (repo transferred to Shyden-Ltd 2026-06-06 ~12:00 BST). SHY-0001 ALSO RESOLVED (PR #1034 merged 15:56 BST; validator now live on main). Architect cycle 1 returned APPROVE-WITH-CHANGES: 5 Critical (C1 PAT scope, C2 idempotency body-hash, C3 fork-PR security model, C4 grace-window testability, C5 concurrency lock TOCTOU) + 8 Important + 6 polish. All Critical findings applied to spec. Operator-side prerequisite (cannot be done autonomously): provision `GH_PAT_PROJECT` secret + create `ShyTalk Stories` Project v2 board with the documented field schema. The implementation can SHIP structurally without these (dry-run smoke verifies parser + labels logic); live sync activates post-merge once operator finishes setup.
