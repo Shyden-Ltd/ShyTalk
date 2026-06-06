@@ -19,7 +19,7 @@
 #   10  missing required frontmatter field
 #   11  invalid frontmatter field value (regex / enum / array form)
 #   12  missing required ##  body section
-#   13  BDD coverage gap (scenarios < AC checkboxes within sections)
+#   13  BDD coverage gap (AC has bullets but BDD has 0 scenarios — presence-based)
 #   14  missing required ### AC sub-heading (one of the 8 dimensions)
 #   20  --scan mode: at least one file failed (inner category in stderr)
 #
@@ -68,6 +68,9 @@ usage() {
   cat <<EOF
 check-story-frontmatter.sh ${VERSION}
 
+SYNOPSIS
+  check-story-frontmatter.sh [--scan <dir>] | <file>
+
 USAGE
   check-story-frontmatter.sh [--verbose] <file>
   check-story-frontmatter.sh --scan <dir>
@@ -87,7 +90,7 @@ EXIT CODES
   10  missing required frontmatter field
   11  invalid frontmatter field value (regex / enum / array form)
   12  missing required ## body section
-  13  BDD coverage gap (scenarios < AC checkboxes, counted sectionally)
+  13  BDD coverage gap (AC has bullets but BDD has 0 scenarios; presence-based, sectionally counted)
   14  missing required ### AC sub-heading (one of the 8 dimensions)
   20  --scan mode: at least one file failed (inner category in stderr)
 

@@ -410,7 +410,8 @@ Create `express-api/tests/scripts/check-story-frontmatter.test.js` with one `it(
 - `it('exits 0 with ## Notes (running log) header (prefix match)')`
 
 **BDD coverage (5 tests — sectional counting):**
-- `it('exits 13 when scenario count < AC checkbox count')`
+- `it('exits 13 when AC has bullets but BDD has zero scenarios')` (presence-based rule)
+- `it('exits 0 when scenarios < AC bullets — architect Important #6: 1 scenario can cover many AC bullets')`
 - `it('exits 0 when scenario count equals AC checkbox count')`
 - `it('exits 0 when scenario count exceeds AC checkbox count')`
 - `it('does NOT count `- [ ]` checkboxes in DoD section toward AC count')`

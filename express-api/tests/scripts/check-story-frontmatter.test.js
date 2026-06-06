@@ -330,14 +330,30 @@ describe('scripts/check-story-frontmatter.sh', () => {
       });
     });
 
-    it('exits 0 when an AC sub-heading body is "N/A — <rationale>" (validator does not parse rationale)', () => {
-      // The canonical fixture already uses `N/A — ...` for 7 of the 8 AC
-      // dimensions; this test makes the spec's commitment explicit (test
-      // plan line for N/A coverage) — a story author marking a dimension
-      // N/A with a single-line rationale passes validation. The validator
-      // delegates rationale-meaningfulness to the architect / reviewer
-      // gate.
-      const { code } = runScript([FIXTURE_VALID]);
+    it('exits 0 with mixed AC: 4 dimensions have real bullets, 4 are N/A with rationale (distinct from happy path)', () => {
+      // Constructs a fixture where Happy/Errors/Edges/Performance have a
+      // real `- [ ]` bullet AND BDD has a matching scenario, while the
+      // other 4 dimensions are `N/A — <rationale>`. The validator must
+      // accept this MIXED case — proving N/A rationale tolerance is a
+      // distinct path from the all-N/A canonical fixture.
+      const mutated = VALID_CONTENT.replace(
+        /### Error paths\nN\/A — fixture covers happy path only.*\./,
+        '### Error paths\n- [ ] Validator rejects malformed input',
+      )
+        .replace(
+          /### Edge cases\nN\/A — covered by dedicated edge-case fixtures.*\./,
+          '### Edge cases\n- [ ] Validator tolerates CRLF line endings',
+        )
+        .replace(
+          /### Performance\nN\/A — fixture file is <1KB\./,
+          '### Performance\n- [ ] Validator completes in <500ms on this fixture',
+        )
+        .replace(
+          /(\*\*Scenario: Validator accepts this canonical fixture\*\*\n(?:- .*\n)+)/,
+          '$1\n**Scenario: Validator rejects malformed input**\n- **Given** X\n- **When** Y\n- **Then** Z\n\n**Scenario: Validator tolerates CRLF**\n- **Given** A\n- **When** B\n- **Then** C\n\n**Scenario: Validator completes fast**\n- **Given** I\n- **When** J\n- **Then** K\n',
+        );
+      const f = tempStoryFile(mutated);
+      const { code } = runScript([f]);
       expect(code).toBe(0);
     });
   });
@@ -555,7 +571,7 @@ describe('scripts/check-story-frontmatter.sh', () => {
       expect(code).toBe(0);
     });
 
-    it('exits 20 on the FIRST failing file in lexicographical order', () => {
+    it('exits 20 on the FIRST failing file in lexicographical order; stderr names the file AND inner reason', () => {
       const dir = tempScanDir();
       fs.writeFileSync(path.join(dir, 'SHY-0001-good.md'), VALID_CONTENT);
       fs.writeFileSync(
@@ -569,6 +585,9 @@ describe('scripts/check-story-frontmatter.sh', () => {
       const { code, stderr } = runScript(['--scan', dir]);
       expect(code).toBe(20);
       expect(stderr).toMatch(/SHY-0002-bad\.md/);
+      // BDD scenario requires the inner failure category + details too,
+      // not just the file path.
+      expect(stderr).toMatch(/missing required frontmatter field:\s*id/);
       // SHY-0003 must NOT be reported (stop-on-first).
       expect(stderr).not.toMatch(/SHY-0003/);
     });
@@ -663,13 +682,14 @@ describe('scripts/check-story-frontmatter.sh', () => {
       expect(code).toBe(0);
     });
 
-    it('concurrent invocations produce identical exit codes + stderr (stateless via mktemp uniqueness)', () => {
-      // Spawn two validators against the same file in parallel via spawnSync's
-      // sync nature — Node's spawnSync blocks but we can race-check by
-      // capturing both result objects in tight succession. The real
-      // concurrency guarantee is structural: mktemp() guarantees unique
-      // temp file names by construction (XXXXXX suffix randomised), so
-      // two parallel invocations cannot collide on shared state.
+    it('sequential invocations produce identical exit codes + stderr (stateless by construction — mktemp uniqueness guarantees no shared state)', () => {
+      // Cycle-3 rename: the test is sequential (spawnSync blocks), not
+      // truly concurrent. The structural concurrency guarantee — that
+      // `mktemp` produces unique XXXXXX-suffixed names per invocation —
+      // means even genuinely-parallel invocations cannot collide on
+      // shared state. Asserting deterministic output across two
+      // back-to-back runs is the strongest practical proof of statelessness
+      // we can offer without an OS-level fork harness.
       const r1 = runScript([FIXTURE_VALID]);
       const r2 = runScript([FIXTURE_VALID]);
       expect(r1.code).toBe(0);
@@ -707,6 +727,8 @@ describe('scripts/check-story-frontmatter.sh', () => {
       expect(code).toBe(0);
       // Synopsis with script name.
       expect(stdout).toMatch(/check-story-frontmatter\.sh/);
+      // BDD-specified synopsis line `[--scan <dir>] | <file>`.
+      expect(stdout).toMatch(/check-story-frontmatter\.sh\s+\[--scan <dir>\]\s+\|\s+<file>/);
       // All 3 flags documented.
       expect(stdout).toMatch(/--scan/);
       expect(stdout).toMatch(/--verbose/);
@@ -784,6 +806,10 @@ describe('scripts/check-story-frontmatter.sh', () => {
 
     it('.project/stories/SHY-INDEX.md is TRACKED (not ignored)', () => {
       expect(checkIgnored('.project/stories/SHY-INDEX.md')).toBe(false);
+    });
+
+    it('.project/plans/<any>.md stays IGNORED', () => {
+      expect(checkIgnored('.project/plans/probe.md')).toBe(true);
     });
 
     it('.project/specs/<any>.md stays IGNORED', () => {
