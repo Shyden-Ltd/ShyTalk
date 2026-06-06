@@ -363,7 +363,7 @@ describe('scripts/check-story-frontmatter.sh', () => {
           '### Performance\n- [ ] Validator completes in <500ms on this fixture',
         )
         .replace(
-          /(\*\*Scenario: Validator accepts this canonical fixture\*\*\n(?:- .*\n)+)/,
+          /(\*\*Scenario: Validator accepts this canonical fixture\*\*\n+(?:- .*\n)+)/,
           '$1\n**Scenario: Validator rejects malformed input**\n- **Given** X\n- **When** Y\n- **Then** Z\n\n**Scenario: Validator tolerates CRLF**\n- **Given** A\n- **When** B\n- **Then** C\n\n**Scenario: Validator completes fast**\n- **Given** I\n- **When** J\n- **Then** K\n',
         );
       const f = tempStoryFile(mutated);
@@ -378,7 +378,7 @@ describe('scripts/check-story-frontmatter.sh', () => {
       // Remove the only Scenario block from the BDD section but keep the
       // section header. AC retains its bullet → mismatch → exit 13.
       const mutated = VALID_CONTENT.replace(
-        /\*\*Scenario: Validator accepts this canonical fixture\*\*\n(?:- .*\n)+/,
+        /\*\*Scenario: Validator accepts this canonical fixture\*\*\n+(?:- .*\n)+/,
         '',
       );
       const f = tempStoryFile(mutated);
@@ -410,7 +410,7 @@ describe('scripts/check-story-frontmatter.sh', () => {
 
     it('exits 0 when scenario count exceeds AC checkbox count', () => {
       const mutated = VALID_CONTENT.replace(
-        /(\*\*Scenario: Validator accepts this canonical fixture\*\*\n(?:.+\n)+)/,
+        /(\*\*Scenario: Validator accepts this canonical fixture\*\*\n+(?:.+\n)+)/,
         '$1\n**Scenario: Extra scenario 1**\n- **Given** X\n- **When** Y\n- **Then** Z\n',
       );
       const f = tempStoryFile(mutated);
