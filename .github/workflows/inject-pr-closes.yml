@@ -1,0 +1,77 @@
+name: Inject Closes #N into SHY PR bodies
+
+# When a PR is opened on a branch matching `story/SHY-NNNN-*`, look up the
+# corresponding GitHub Issue (titled `SHY-NNNN: ...`) and append `Closes #N`
+# to the PR body if not already present. So merging the PR auto-closes the
+# tracking issue.
+#
+# Architect C3 finding: fork PR builds run under `pull_request` trigger with a
+# READ-ONLY token. We CANNOT mutate the PR body NOR post a comment on fork PRs.
+# The workflow detects the fork condition and exits 0 silently with a log
+# entry; the fork contributor must add `Closes #N` manually.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+    branches: [main]
+
+concurrency:
+  group: inject-pr-closes-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: write
+  issues: read
+
+jobs:
+  inject:
+    name: Append Closes #N if missing
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    # Skip on fork PRs — the auto GITHUB_TOKEN is read-only there.
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - name: Parse SHY-NNNN from branch name
+        id: parse
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          # Branch convention is story/SHY-NNNN-<slug>. Anything else: skip.
+          if [[ ! "$HEAD_REF" =~ ^story/(SHY-[0-9]{4})- ]]; then
+            echo "SKIP: branch does not match story/SHY-NNNN-* pattern: $HEAD_REF" >&2
+            echo "shy_id=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          SHY_ID="${BASH_REMATCH[1]}"
+          echo "shy_id=$SHY_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Look up issue + inject Closes #N
+        if: ${{ steps.parse.outputs.shy_id != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHY_ID: ${{ steps.parse.outputs.shy_id }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          ISSUE_NUM="$(gh issue list \
+            --state open \
+            --search "in:title \"${SHY_ID}:\"" \
+            --json number,title \
+            --jq ".[] | select(.title | startswith(\"${SHY_ID}:\")) | .number" \
+            | head -n 1)"
+          if [ -z "$ISSUE_NUM" ]; then
+            echo "SKIP: no open issue found for ${SHY_ID}" >&2
+            exit 0
+          fi
+          # Already has Closes #N?
+          if printf '%s\n' "$PR_BODY" | grep -qE "Closes\s+#${ISSUE_NUM}\b"; then
+            echo "SKIP: PR body already contains Closes #${ISSUE_NUM}" >&2
+            exit 0
+          fi
+          NEW_BODY="${PR_BODY}
+
+          Closes #${ISSUE_NUM}"
+          gh pr edit "$PR_NUMBER" --body "$NEW_BODY"
+          echo "Injected Closes #${ISSUE_NUM} into PR #${PR_NUMBER}" >&2

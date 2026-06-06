@@ -67,6 +67,16 @@ All audit signals — architect verdict, code-reviewer cycle count + verbatim fi
 ### Tooling
 - `scripts/check-story-frontmatter.sh` validates every `SHY-[0-9][0-9][0-9][0-9]-*.md` in CI (`lint.yml`, last step). Run `--help` for usage + the 8 documented exit codes. Add `--verbose` for per-check tracing.
 - `.project/stories/SHY-0001-establish-agile-workflow.md` is the canonical seed — copy it as the starting template for new stories.
+- `scripts/sync-stories-to-issues.sh` (delivered by SHY-0002) mirrors each story `.md` to a GitHub Issue + Projects v2 card. One-way sync — `.md` is the source of truth, the Issue is a derived view.
+
+### GitHub Issues mirror (delivered by SHY-0002)
+
+- **Source of truth:** the `.md` file. Issues are a mirror, not an editable surface for spec content. The script OVERWRITES the issue body with the `.md`-derived content on every change-detected sync. Operator MUST edit AC checkboxes in the `.md` file (not on GitHub) — checkbox edits on the issue UI are stomped on the next sync.
+- **Change detection:** SHA-256 of the file body, stored in the issue footer as `_Last synced: <UTC> from commit <sha> body-hash: <hex>_`. Commit-SHA alone is insufficient (mid-PR edits share the same commit) — body-hash is the canonical signal.
+- **PR `Closes #N` injection:** the `inject-pr-closes.yml` workflow appends `Closes #<issue-number>` to a PR body when the branch matches `story/SHY-NNNN-*` and the body doesn't already contain the close ref. Auto-merge then closes the issue. Fork PRs skip with a log entry (their `pull_request` trigger token is read-only).
+- **Concurrency:** the sync workflow uses `concurrency: sync-stories-${{ github.ref }}` with `cancel-in-progress: false`. Only one sync runs per ref at a time — a label-based lock would have a TOCTOU race.
+- **Auth:** requires `GH_PAT_PROJECT` repository secret — a fine-grained PAT with `issues:write`, `pull-requests:write`, and `project:write`. The automatic `GITHUB_TOKEN` cannot carry `project:write` (it's provisioned at job-start without project scopes). Operator provisions this PAT once at https://github.com/settings/tokens. The workflows skip with a `::warning::` if the secret is unset (no-op until provisioned).
+- **Project v2 board:** operator manually provisions a Project v2 named `ShyTalk Stories` with custom fields `Pri` / `Effort` / `Type` (single-select) and `Roadmap IDs` / `SHY ID` (text). Script exits 35 if not provisioned, 36 on schema mismatch.
 
 ## Build & Test Commands
 - **Build (Android)**: `./gradlew assembleDevDebug`
