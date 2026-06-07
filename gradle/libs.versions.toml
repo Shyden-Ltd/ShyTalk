@@ -1,6 +1,6 @@
 [versions]
 agp = "9.2.1"
-kotlin = "2.4.0-RC2" # Beta required: K/N 2.3.x has AutoboxingTransformer crash blocking iOS linking. Upgrade to stable when 2.4.0 releases.
+kotlin = "2.4.0"
 composeMultiplatform = "1.10.3"
 composeBom = "2026.05.01"
 coreKtx = "1.18.0"
@@ -14,7 +14,7 @@ coroutines = "1.11.0"
 coil3 = "3.4.0"
 ktor = "3.5.0"
 imageCropper = "4.7.0"
-livekit = "2.25.3"
+livekit = "2.26.0"
 credentials = "1.6.0"
 googleid = "1.2.0"
 koin = "4.2.1"
@@ -32,7 +32,7 @@ cucumberAndroid = "7.18.1"
 securityCrypto = "1.1.0"
 biometric = "1.1.0"
 ktlint = "14.2.0"
-detekt = "1.23.8"
+detekt = "2.0.0-alpha.3"
 gitliveFirebase = "2.4.0"
 
 [libraries]
@@ -141,4 +141,4 @@ compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMu
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 play-publisher = { id = "com.github.triplet.play", version = "4.0.0" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
-detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+detekt = { id = "dev.detekt", version.ref = "detekt" }

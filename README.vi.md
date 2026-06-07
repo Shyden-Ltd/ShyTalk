@@ -203,7 +203,7 @@ Cách nhanh nhất để bắt đầu. Một lệnh khởi động tất cả --
 
 1. **Sao chép và cài đặt**
    ```bash
-   git clone https://github.com/ShydenMcM/ShyTalk.git
+   git clone https://github.com/Shyden-Ltd/ShyTalk.git
    cd ShyTalk
    cd express-api && npm install && cd ..
    ```

@@ -65,6 +65,12 @@ kotlin {
             implementation(libs.koin.test)
         }
 
+        val androidHostTest by getting {
+            dependencies {
+                implementation(libs.mockk)
+            }
+        }
+
         @Suppress("DEPRECATION")
         commonMain.dependencies {
             implementation(compose.runtime)

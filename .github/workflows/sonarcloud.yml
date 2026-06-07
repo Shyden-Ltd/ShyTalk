@@ -58,9 +58,15 @@ jobs:
         # callbacks (data-export-builder.js uses `import('archiver')` since
         # archiver v8 is ESM-only). Mirrors the `test` script in
         # express-api/package.json + test-backend.yml + .husky/pre-push.
+        #
+        # No `|| true` fallback — the step previously swallowed Jest
+        # failures and Sonar then uploaded partial coverage as if all
+        # tests passed. Per feedback-warnings-are-failures, a failing
+        # test must fail the gate. If this surfaces a real regression
+        # the right fix is to repair the test, not restore the bypass.
         run: |
           cd express-api && npm ci
-          node --experimental-vm-modules node_modules/.bin/jest --coverage --coverageReporters=lcov || true
+          node --experimental-vm-modules node_modules/.bin/jest --coverage --coverageReporters=lcov
 
       - name: Download build outputs
         if: inputs.app_changed
