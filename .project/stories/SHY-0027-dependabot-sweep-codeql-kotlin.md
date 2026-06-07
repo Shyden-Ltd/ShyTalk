@@ -124,8 +124,11 @@ P2 Tier-5 chore. Together close two housekeeping gaps.
 
 ### Red
 
-1. List current Dependabot PRs; count > 0 → there's work to do.
-2. Check `vars.ENABLE_CODEQL_KOTLIN` value via `gh variable list`; currently false → RED.
+This is a process chore — TDD's "Red" state is procedural confirmation of the pre-condition (work-to-do exists), not a failing test file. No test file is expected for the sweep itself.
+
+1. List current Dependabot PRs via `gh pr list --search "label:dependencies" --limit 30`; count > 0 → there's work to do (RED state confirmed).
+2. Check `vars.ENABLE_CODEQL_KOTLIN` value via `gh variable list`; currently false → CodeQL Kotlin gap confirmed (RED state confirmed).
+3. (Optional, if scope expands) Add an actual test in `express-api/tests/workflows/codeql-config.test.js` asserting that when `ENABLE_CODEQL_KOTLIN` is `true`, the CodeQL workflow includes Kotlin in its language matrix.
 
 ### Green
 

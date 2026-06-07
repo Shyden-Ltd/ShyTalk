@@ -93,6 +93,7 @@ P1 Tier-3 coverage. Closes the iOS data-layer + push-platform-bridge coverage ga
 
 ### Security
 
+- [ ] Request-ID for each mutating call (IosMessage.send, IosSeatRequest, IosEconomyGift) is cryptographically random (UUID v4 or `SecureRandom`-backed); verified by asserting 100 consecutive IDs differ AND don't share a common timestamp-derived prefix. Matches the pattern established in SHY-0010 / SHY-0011 / SHY-0017 for parity across all mutation-bearing client surfaces.
 - [ ] FCM token never logged with full value (only token-presence indicator).
 - [ ] Deep-link extraction validates the route is in the allowed-list (no arbitrary URL → arbitrary nav).
 - [ ] Message content never logged.

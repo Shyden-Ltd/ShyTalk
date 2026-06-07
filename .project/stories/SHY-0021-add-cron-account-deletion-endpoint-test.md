@@ -210,7 +210,7 @@ Bumped to Tier 1 P0 under SHY-0032 because:
 - [ ] Env-var name cross-check passes.
 - [ ] Sonar coverage on route handler ≥90%.
 - [ ] Reviewer reports ZERO findings.
-- [ ] Per-type Done gate satisfied (`infra` → auto-merge once green; no dev verify needed for server-side test addition).
+- [ ] Per-type Done gate satisfied (`infra` → auto-merge once green per CLAUDE.md lifecycle rules; server-side test addition has no user-visible behaviour change).
 - [ ] PR merged via auto-merge.
 - [ ] `status: Done`; `pr:` populated; coverage delta logged in Notes.
 

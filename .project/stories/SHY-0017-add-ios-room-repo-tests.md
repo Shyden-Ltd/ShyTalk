@@ -72,6 +72,7 @@ P1 Tier-3 coverage. Cross-platform parity with Android's existing tests.
 
 ### Security
 
+- [ ] Request-ID for each mutation call (takeSeat, kick, transferOwnership, etc.) is cryptographically random (UUID v4 or platform-provided `SecureRandom`-backed equivalent); verified by asserting 100 consecutive IDs differ AND that no ID shares a common timestamp-derived prefix. Matches the pattern established in SHY-0010 (GachaVM) + SHY-0011 (GiftingVM) for parity across all mutation-bearing client surfaces.
 - [ ] Auth tokens never logged.
 - [ ] Request bodies don't include client-only data (e.g. cached session info that shouldn't be sent).
 - [ ] Response parsing rejects unexpected fields (don't trust unknown fields to be benign).

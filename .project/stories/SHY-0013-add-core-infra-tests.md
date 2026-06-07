@@ -5,7 +5,7 @@ owner: claude
 created: 2026-06-07
 priority: P0
 effort: M
-type: bug
+type: infra
 roadmap_ids: [G004, G020]
 pr:
 ---
@@ -230,7 +230,7 @@ Bumped to Tier 2 P0 under SHY-0032 because:
 - [ ] Sonar coverage ≥85% on the 3 production files.
 - [ ] No new compile warnings.
 - [ ] Reviewer reports ZERO findings.
-- [ ] Per-type Done gate satisfied (`bug` → auto-merge once green; no dev verify needed for substrate test additions).
+- [ ] Per-type Done gate satisfied (`infra` → auto-merge once green; substrate test additions have no user-visible behaviour change, so no dev-smoke required per the CLAUDE.md lifecycle rules for `infra`).
 - [ ] PR merged via auto-merge.
 - [ ] `status: Done`; `pr:` populated; bug catalogue + fix summary in Notes.
 

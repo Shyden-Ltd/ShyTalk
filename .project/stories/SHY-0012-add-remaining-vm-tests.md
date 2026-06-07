@@ -31,7 +31,14 @@ Roadmap row G003-D3 (line 56 of `.project/test-plans/exhaustive/2026-06-05-zero-
 
 P0 confirmed under SHY-0032's Tier 2 reliability tier. This SHY is intentionally the LAST of the 3 VM batches (SHY-0010, 0011, 0012) so that the foundational FakeRepository pattern is already established by the earlier two before tackling this larger batch.
 
-**Likely-needs-splitting note**: 10 VMs in one PR is large. The pickup-time architect may split this into 2-3 sub-PRs (e.g. SHY-0012-A messaging cluster, SHY-0012-B profile+settings, SHY-0012-C daily+splash). The AC below is written so the split is mechanical (each VM is independently AC'd).
+**Pickup-time split protocol**: 10 VMs in one PR is large. SHY IDs cannot be suffixed with `A/B/C` (the validator rejects non-`SHY-NNNN` formats). If the pickup engineer determines the diff exceeds review tolerance (>800 LOC), they MUST:
+
+1. File 3 new SHY IDs by claiming the next sequential numbers (e.g. SHY-NNNN, SHY-NNNN+1, SHY-NNNN+2 — the next free IDs in the index at pickup time), each fully refined per [[feedback-no-skeleton-stories-fully-refined]] using the per-VM AC bullets in this story as the seed.
+2. Suggested split: cluster A = messaging (Conversation/GroupSetup/PrivateChat/ReportReview); cluster B = profile + settings (GiftWall/RequiredDOB/AppSettings/RoomSettings); cluster C = daily + splash (DailyReward/FunFactSplash).
+3. Mark SHY-0012 `status: Cancelled` with a Notes entry pointing at the three replacement SHY IDs.
+4. The architect agent must validate each new SHY before any TDD code is written.
+
+If the pickup engineer determines the full 10-VM scope fits in one PR (≤800 LOC and reviewer agent doesn't force a split), then SHY-0012 ships as one PR and the split protocol is unused.
 
 ## Acceptance Criteria
 
@@ -230,7 +237,7 @@ For each VM:
 
 ## Risks & Mitigations
 
-- **Risk:** 10 VMs in one PR balloons review surface. **Mitigation:** pickup-time architect may split into SHY-0012-A/B/C clusters; each VM's AC is independently complete so splitting is mechanical.
+- **Risk:** 10 VMs in one PR balloons review surface. **Mitigation:** pickup-time split protocol documented in Why section above — pickup engineer files new SHY IDs (next free in index) for each cluster + cancels SHY-0012; each VM's AC is independently complete so splitting is mechanical.
 - **Risk:** ReportReviewVM may not exist as a separate VM (just a screen with inline state). **Mitigation:** verify at pickup; if no VM, either extract one or document why the screen handles it inline.
 - **Risk:** Several VMs surface real production bugs simultaneously → fix scope > test scope. **Mitigation:** reviewer agent may force a split; acceptable.
 - **Risk:** FakeRepositories needed for some VMs don't exist yet; setup overhead high. **Mitigation:** SHY-0010/0011 ship first; their FakeRepositories establish the pattern.

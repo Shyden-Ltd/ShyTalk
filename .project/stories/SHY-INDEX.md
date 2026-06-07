@@ -10,8 +10,8 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 | ID                                                              | Pri | Effort | Type     | Title                                                                                     | Status         | Roadmap IDs      | PR  |
 | --------------------------------------------------------------- | --- | ------ | -------- | ----------------------------------------------------------------------------------------- | -------------- | ---------------- | --- |
-| [SHY-0032](SHY-0032-refine-skeleton-acs.md)                     | P0  | L      | chore    | Refine the 28 skeleton SHYs + codify no-skeleton rule                                     | 🚧 In Progress | —                | —   |
 | [SHY-0024](SHY-0024-resolve-navgraph-coexistence.md)            | P0  | L      | refactor | Migrate Android to SharedNavGraph + delete NavGraph.kt                                    | 📝 Draft       | G028             | —   |
+| [SHY-0032](SHY-0032-refine-skeleton-acs.md)                     | P0  | L      | chore    | Refine the 28 skeleton SHYs + codify no-skeleton rule                                     | 🚧 In Progress | —                | —   |
 | [SHY-0004](SHY-0004-verify-room-mutation-p3-deploy.md)          | P0  | S      | bug      | Verify Room mutation P3 deploy status + reconcile                                         | 📝 Draft       | G009, G027       | —   |
 | [SHY-0029](SHY-0029-tighten-ownerfirebaseuid-rule.md)           | P0  | S      | bug      | Tighten ownerFirebaseUid rule (strict equality, no legacy fallback)                       | 📝 Draft       | G026             | —   |
 | [SHY-0015](SHY-0015-add-secure-storage-contract-tests.md)       | P0  | S      | bug      | SecureStorage + CryptoKeyPair contract tests                                              | 📝 Draft       | G019             | —   |
@@ -51,6 +51,17 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 ## Cancelled
 
 _None yet._
+
+## Reserved (planned, not yet filed)
+
+These IDs are reserved by the SHY-0032 multi-PR plan. Files don't exist yet; they'll be created as fully-refined SHYs (per [[feedback-no-skeleton-stories-fully-refined]]) when each predecessor lands.
+
+| Reserved ID | Title (planned)                                                                                                                                                | Trigger               |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| SHY-0033    | Fill 18 missing G-IDs as fully-refined SHYs (G001, G003, G006, G011, G018, G024, G025, G031, G032, G034, G035, G036, G037, G040, G041, G048, G050, G051, G053) | After SHY-0032 merges |
+| SHY-0034    | Introduce EPICs + `epic:` frontmatter field + CLAUDE.md spec updates                                                                                           | After SHY-0033 merges |
+| SHY-0035    | Refactor public roadmap webpage + add GitHub project board link                                                                                                | After SHY-0034 merges |
+| SHY-0036    | CI workflow for SHY → roadmap-data.json auto-sync                                                                                                              | After SHY-0035 merges |
 
 ---
 

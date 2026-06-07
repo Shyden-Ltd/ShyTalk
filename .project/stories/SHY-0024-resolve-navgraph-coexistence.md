@@ -239,7 +239,7 @@ The operator's decision elevates this from M-scope-with-checkpoint to L-scope-de
 - [ ] Sonar coverage on the adapter ≥80%.
 - [ ] Architect agent reports no port-expansion smell.
 - [ ] Code-reviewer reports ZERO findings.
-- [ ] Per-type Done gate satisfied (`refactor` → auto-merge once green; manual smoke on dev device for the Gacha→AgeVerificationSubmit path required by operator before marking Done).
+- [ ] Per-type Done gate satisfied: auto-merge arms once CI is green (per CLAUDE.md `refactor` lifecycle). Post-merge, operator verifies the Gacha→AgeVerificationSubmit path on a dev device (not a merge blocker; it's a post-merge confirmation step). `status: Done` is set only after that post-merge smoke confirms the previously-impossible Android navigation now works.
 - [ ] PR merged via auto-merge.
 - [ ] `status: Done` set; `pr:` populated; merge timestamp + dev smoke outcome in Notes log.
 

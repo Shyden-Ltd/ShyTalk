@@ -145,7 +145,7 @@ The operator's "quality + reliability + pre-public" priority weighting means thi
 
 1. Add `firestore-rules-tests/rooms.test.js` (or extend if it exists):
    - Test 1: `assertFails(adminApp.firestore().doc('rooms/x').update({foo: 'bar'}))` — should pass (rule is `if false`); confirms rule is in place.
-   - Test 2: a request to `https://api.shytalk.shyden.co.uk/api/rooms/x/takeSeat` with a valid owner auth token returns 200. Currently FAILS if State B (route not deployed) OR if State A (route deployed but lacks integration test coverage).
+   - Test 2: a request to `https://dev-api.shytalk.shyden.co.uk/api/rooms/x/takeSeat` (DEV, not prod — prod is verified via the SSH git-log step, not via test traffic) with a valid owner auth token returns 200. Currently FAILS if dev lacks the route OR lacks integration test coverage.
 2. Run `cd express-api && npm test -- --testPathPattern=rooms`.
 3. RED state confirmed: at least one of the assertions fails.
 

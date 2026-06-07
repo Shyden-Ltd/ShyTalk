@@ -119,7 +119,7 @@ P1 Tier-3 coverage. Note: `gacha.feature` is covered by SHY-0007 (G007+G008 — 
 
 ## BDD Scenarios
 
-(Embedded examples below — actual scenarios live in the .feature files; these are illustrative.)
+The scenarios below ARE the story-level behavioural contract. The `.feature` files (subscription_management.feature + gifting.feature + backpack.feature) expand these for machine-execution under Cucumber-Android. The story-level scenarios constrain the feature files; if a feature-file scenario doesn't trace back to one below, it's out-of-scope for this SHY.
 
 **Scenario: Subscribe to monthly plan — happy path**
 
