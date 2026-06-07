@@ -1,13 +1,13 @@
 ---
 id: SHY-0002
-status: Draft
+status: Done
 owner: claude
 created: 2026-06-06
 priority: P1
 effort: M
 type: infra
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1035
 ---
 
 # SHY-0002: Wire GitHub Issues + Projects v2 integration

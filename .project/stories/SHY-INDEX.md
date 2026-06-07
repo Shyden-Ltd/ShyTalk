@@ -8,16 +8,16 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 ## Active
 
-| ID                                              | Pri | Effort | Type  | Title                                                  | Status   | Roadmap IDs           | PR  |
-| ----------------------------------------------- | --- | ------ | ----- | ------------------------------------------------------ | -------- | --------------------- | --- |
-| [SHY-0002](SHY-0002-wire-github-integration.md) | P1  | M      | infra | Wire GitHub Issues + Projects v2 integration           | 📝 Draft | —                     | —   |
-| _SHY-0003 (planned, draft staged)_              | P1  | L      | chore | Convert zero-gap roadmap to user stories + cross-label | —        | G055 (new — gh-pages) | —   |
+| ID                                                 | Pri | Effort | Type  | Title                                                  | Status   | Roadmap IDs           | PR  |
+| -------------------------------------------------- | --- | ------ | ----- | ------------------------------------------------------ | -------- | --------------------- | --- |
+| [SHY-0003](SHY-0003-convert-roadmap-to-stories.md) | P1  | L      | chore | Convert zero-gap roadmap to user stories + cross-label | 📝 Draft | G055 (new — gh-pages) | —   |
 
 ## Done
 
-| ID                                               | Pri | Effort | Type  | Title                                     | Status  | Roadmap IDs | PR                                                       |
-| ------------------------------------------------ | --- | ------ | ----- | ----------------------------------------- | ------- | ----------- | -------------------------------------------------------- |
-| [SHY-0001](SHY-0001-establish-agile-workflow.md) | P1  | M      | infra | Establish Agile user-story way of working | ✅ Done | —           | [#1034](https://github.com/Shyden-Ltd/ShyTalk/pull/1034) |
+| ID                                               | Pri | Effort | Type  | Title                                        | Status  | Roadmap IDs | PR                                                       |
+| ------------------------------------------------ | --- | ------ | ----- | -------------------------------------------- | ------- | ----------- | -------------------------------------------------------- |
+| [SHY-0001](SHY-0001-establish-agile-workflow.md) | P1  | M      | infra | Establish Agile user-story way of working    | ✅ Done | —           | [#1034](https://github.com/Shyden-Ltd/ShyTalk/pull/1034) |
+| [SHY-0002](SHY-0002-wire-github-integration.md)  | P1  | M      | infra | Wire GitHub Issues + Projects v2 integration | ✅ Done | —           | [#1035](https://github.com/Shyden-Ltd/ShyTalk/pull/1035) |
 
 ## Cancelled
 

@@ -55,12 +55,15 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           set -euo pipefail
+          # `gh issue list` can fail (e.g. before GH_PAT_PROJECT is provisioned
+          # and the issue mirror is populated). Make non-fatal so the workflow
+          # SKIPs cleanly rather than failing CI on every PR pre-PAT-setup.
           ISSUE_NUM="$(gh issue list \
             --state open \
             --search "in:title \"${SHY_ID}:\"" \
             --json number,title \
             --jq ".[] | select(.title | startswith(\"${SHY_ID}:\")) | .number" \
-            | head -n 1)"
+            2>/dev/null | head -n 1 || echo "")"
           if [ -z "$ISSUE_NUM" ]; then
             echo "SKIP: no open issue found for ${SHY_ID}" >&2
             exit 0
