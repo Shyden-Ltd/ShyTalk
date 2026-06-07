@@ -106,3 +106,11 @@ jobs:
 
       - name: Release workflow contract (PR-flow + signed commits)
         run: bash scripts/check-release-trigger.sh
+
+      # SHY user-story frontmatter validator — pinned LAST so a story-
+      # validation failure cannot mask earlier actionlint / shellcheck /
+      # SHA-pin / i18n / release-contract findings on the same PR.
+      # See CLAUDE.md § "Agile Way of Working" for the spec the validator
+      # enforces, and SHY-0001 for the rationale + DoD.
+      - name: Validate SHY story frontmatter
+        run: bash scripts/check-story-frontmatter.sh --scan .project/stories
