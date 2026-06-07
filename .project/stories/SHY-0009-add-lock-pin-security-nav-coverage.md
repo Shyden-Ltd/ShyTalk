@@ -10,91 +10,200 @@ roadmap_ids: [G010]
 pr:
 ---
 
-# SHY-0009: Lock/PinSetup/SecuritySettings nav coverage
+# SHY-0009: Lock/PinSetup/SecuritySettings navigation coverage
 
 ## User Story
 
-As the ShyTalk operator, I want **Lock/PinSetup/SecuritySettings nav coverage** delivered per the roadmap row(s) for G010, so that the corresponding gap in the zero-gap remediation roadmap closes.
+As the ShyTalk operator, I want **the Lock / PinSetup / SecuritySettings screens to either be wired into `SharedNavGraph` (preferred post-SHY-0024) OR have their MainActivity-intercept pattern documented + tested via instrumented test**, so that the security-adjacent navigation paths have CI-verifiable behavioural coverage rather than relying on manual smoke.
 
 ## Why
 
-This SHY mirrors PR-bundle `PR-C3` from the architect's recommended PR sequencing (lines 122–173 of `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md`). The deeper rationale — including the Gap / Fix / Scope columns for each G-ID — lives in the roadmap row(s) for G010. Refinement on pickup will copy the relevant content into this section.
+Per `shared/src/commonMain/kotlin/com/shyden/shytalk/navigation/Screen.kt:75-80`, the Screen sealed class declares `Lock`, `PinSetup`, and `SecuritySettings` routes — but per the roadmap, these are NOT routed through `NavGraph.kt` or `SharedNavGraph.kt`. Instead they're intercepted at `MainActivity` level by `AppLockRepository` (when the app needs to gate a sensitive flow).
+
+This intercept pattern means:
+
+- The nav graph's tests don't exercise these routes.
+- The intercept logic is invisible to journey BDD tests.
+- A regression to `AppLockRepository`'s intercept could silently bypass the security gate.
+
+Roadmap row G010 (line 46 of `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md`):
+
+> Sev: 🟠 Important. Nav — Lock/PinSetup/SecuritySettings not in SharedNavGraph. Location: `shared/src/commonMain/kotlin/com/shyden/shytalk/navigation/Screen.kt:75-80` + `SharedNavGraph.kt`. Gap: Declared in Screen.kt but routed outside NavGraph (via MainActivity AppLockRepository intercept). Nav-level untested. Fix: Wire into SharedNavGraph OR document intercept pattern + add MainActivity-level instrumented test. Scope: S.
+
+P1 Tier-3 coverage. **Sequenced after SHY-0024** (Android→SharedNavGraph migration) — once that lands, this SHY decides whether the Lock/PinSetup routes also migrate into SharedNavGraph (cleaner) or keep the MainActivity intercept (with full doc + test).
 
 ## Acceptance Criteria
 
 ### Happy path
 
-N/A — TBD refinement on pickup.
+**Path A (preferred — wire into SharedNavGraph):**
+
+- [ ] `SharedNavGraph.kt` gains `composable(Screen.Lock.route)`, `composable(Screen.PinSetup.route)`, `composable(Screen.SecuritySettings.route)` blocks wiring the respective screens.
+- [ ] `AppLockRepository`'s intercept logic is refactored to use a `NavController.navigate(Screen.Lock.route)` call instead of MainActivity-level activity-replacement.
+- [ ] Android + iOS both reach Lock via `navController.navigate(Screen.Lock.route)`.
+- [ ] Existing biometric / PIN authentication flow on Lock screen unchanged (only routing migrated).
+
+**Path B (fall-back — document the intercept):**
+
+- [ ] If Path A is impractical (e.g. intercept must happen before NavGraph initializes), the MainActivity intercept pattern is documented in CLAUDE.md § Architecture with a clear "why":
+  - When the intercept fires (app foreground after lock-timeout).
+  - How it bypasses NavGraph (`AppLockRepository.shouldShowLock()` → `setContent { LockScreen(...) }` replacement).
+  - Why nav-graph routing doesn't work here (e.g. nav-state has restoration concerns).
+- [ ] An instrumented test `app/src/androidTest/java/com/shyden/shytalk/security/AppLockInterceptTest.kt` covers:
+  - App backgrounded → re-foregrounded after lock-timeout → Lock screen appears (not Home).
+  - Lock auth succeeds → original destination restored.
+  - Lock auth via biometric vs PIN both paths work.
+  - PinSetup screen reachable from SecuritySettings (within the intercept-flow).
+
+**Both paths share:**
+
+- [ ] BDD scenarios in `app/src/androidTest/assets/features/security_settings.feature` (new file or extension of existing) covering:
+  - Navigate Settings → SecuritySettings.
+  - SetUp PIN flow (PinSetup).
+  - Toggle biometric on/off.
+  - Lock-timeout configuration.
+  - Trigger lock via "Lock now" action.
+- [ ] All tests pass on dev Android device against local stack.
 
 ### Error paths
 
-N/A — TBD refinement on pickup.
+- [ ] **Path A**: `Screen.Lock.route` navigated-to without prior auth state → screen shows "auth required" gate.
+- [ ] **Path B**: MainActivity intercept fails (e.g. AppLockRepository throws) → app falls back to showing Home (NOT crash); error logged Crashlytics non-fatal.
+- [ ] **Both**: PinSetup save failure → form retains input; clear error message.
+- [ ] **Both**: Biometric not available on device → SecuritySettings hides the toggle; PIN-only path works.
+- [ ] **Both**: SecuritySettings reached without sign-in (regression) → redirect to SignIn.
 
 ### Edge cases
 
-N/A — TBD refinement on pickup.
+- [ ] **Path A**: deep-link directly to `Screen.Lock.route` → unauthenticated handling consistent.
+- [ ] **Path A**: nav-state restoration after process death → Lock screen shows correctly if intercept was active pre-death.
+- [ ] **Path B**: intercept races with deep-link from notification → intercept wins; deep-link queued for post-auth.
+- [ ] **Both**: PIN entry mid-rotation → input preserved.
+- [ ] **Both**: Backgrounding mid-PIN-setup → setup state preserved on return.
+- [ ] **Both**: Multiple lock-timeout triggers in rapid succession → only one Lock screen shown (idempotent).
 
 ### Performance
 
-N/A — TBD refinement on pickup.
+- [ ] Lock screen appears within 100ms of intercept trigger.
+- [ ] PinSetup save completes within 500ms.
+- [ ] No perceptible cold-start delay added by either path.
 
 ### Security
 
-N/A — TBD refinement on pickup.
+- [ ] Lock screen is non-bypassable (no back-button escape; no hidden home-button override).
+- [ ] PIN entry uses SecureStorage (SHY-0015 dependency); PIN never logged.
+- [ ] Biometric session token via SecureStorage too.
+- [ ] SecuritySettings cannot be reached without prior auth in the same session.
+- [ ] If Path B chosen: the intercept logic is reviewed for any auth-bypass class of bug (e.g. timing-window where Home renders before intercept fires).
 
 ### UX
 
-N/A — TBD refinement on pickup.
+- [ ] Lock screen UI consistent across both paths.
+- [ ] Failed PIN entries handled with clear error + counter (3 wrong → cool-down).
+- [ ] Biometric prompt uses the system biometric UI (not custom).
+- [ ] SecuritySettings is a sub-screen of AppSettings; back-nav returns to AppSettings.
 
 ### i18n
 
-N/A — TBD refinement on pickup.
+- [ ] Lock + PinSetup + SecuritySettings strings localized in all 20 locales.
 
 ### Observability
 
-N/A — TBD refinement on pickup.
+- [ ] Lock intercept fired logged at INFO.
+- [ ] PIN auth success/failure logged at INFO (without value).
+- [ ] Biometric auth result logged at INFO.
+- [ ] Coverage of `AppLockRepository` ≥85%.
 
 ## BDD Scenarios
 
-**Scenario: Refined behaviour for G010 (TBD on pickup)**
+**Scenario: Path A — Lock route navigates via SharedNavGraph**
 
-- **Given** the spec for G010's gap as documented in the roadmap row
-- **When** the implementation lands per the Fix column guidance
-- **Then** the AC bullets pinned at pickup pass
-- **And** the validator + reviewer agents return ZERO findings
+- **Given** the app is migrated to SharedNavGraph (SHY-0024 done)
+- **And** a sensitive action triggers lock
+- **When** `navController.navigate(Screen.Lock.route)` runs
+- **Then** the Lock screen renders
+- **And** the back-stack records the prior destination
+
+**Scenario: Path B — MainActivity intercept replaces content with Lock**
+
+- **Given** the app is backgrounded for >lock-timeout
+- **When** brought back to foreground
+- **Then** `AppLockRepository.shouldShowLock()` returns true
+- **And** MainActivity replaces content with the Lock screen
+- **And** the original destination (e.g. Home) is preserved for post-auth restore
+
+**Scenario: PIN auth success restores original destination**
+
+- **Given** Lock screen visible
+- **And** the original destination was Home
+- **When** user enters correct PIN
+- **Then** Lock screen dismisses
+- **And** Home is shown (not SignIn)
+
+**Scenario: 3 wrong PINs trigger cool-down**
+
+- **Given** Lock screen visible
+- **When** user enters wrong PIN 3 times
+- **Then** Lock screen shows cool-down message
+- **And** PIN input disabled for the cool-down period
+
+**Scenario: SecuritySettings reachable from AppSettings**
+
+- **Given** user signed in on AppSettings
+- **When** they tap "Security" entry
+- **Then** SecuritySettings renders
+- **And** back-nav returns to AppSettings (not Home)
+
+**Scenario: Biometric not available — SecuritySettings hides toggle**
+
+- **Given** test device without biometric hardware (or biometric disabled)
+- **When** SecuritySettings renders
+- **Then** the biometric toggle is hidden
+- **And** PIN-only configuration is the only auth method shown
 
 ## Test Plan (TDD)
 
 ### Red
 
-(TBD on pickup — write failing tests per the refined Acceptance Criteria.)
+1. Locate `AppLockRepository` (verify path; likely `app/src/main/.../AppLockRepository.kt`).
+2. Decide Path A vs B based on architectural feasibility (consult operator if ambiguous).
+3. Add tests per chosen path.
+4. Run `./gradlew connectedDevDebugAndroidTest --tests "*AppLock*"` → RED.
 
 ### Green
 
-(TBD on pickup — implement the minimum needed to flip red → green.)
+1. Implement chosen path; if Path A, migrate intercept logic to nav-graph routing; if Path B, ensure documentation + instrumented test cover all flows.
+2. Re-run until GREEN.
+3. Sonar coverage ≥85% on AppLockRepository.
 
 ## Out of Scope
 
-- Refinement of this skeleton's AC + BDD + Test Plan is the FIRST step of picking it up (the skeleton is intentionally TBD-shaped per SHY-0003 spec).
+- **Refactoring SecureStorage** — SHY-0015 covers.
+- **Adding new auth methods** — only existing.
+- **Changing lock-timeout default** — out of scope.
 
 ## Dependencies
 
-- Roadmap row(s) for G010 in `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md` (gitignored — local only).
-- SHY-0001 (workflow) and SHY-0002 (GitHub Issues integration) both shipped.
+- **SHY-0024** — NavGraph migration (Path A requires this).
+- **SHY-0015** — SecureStorage (PIN storage).
+- **SHY-0005** — Biometric stable version.
 
 ## Risks & Mitigations
 
-- **Risk:** Skeleton refinement on pickup misinterprets the roadmap row's intent. **Mitigation:** Quote the roadmap's Gap + Fix columns verbatim into the Why section during refinement; architect-validate before TDD.
+- **Risk:** Path A reveals nav-state-restoration complications that justify Path B. **Mitigation:** decide after architect review; both paths have AC.
+- **Risk:** Path B's instrumented test is hard to write (lifecycle simulation). **Mitigation:** Robolectric for unit-level + true instrumented test for the lifecycle simulation.
 
 ## Definition of Done
 
-- [ ] Refinement on pickup: AC dimensions populated with verifiable bullets, BDD scenarios deepened, Test Plan red/green concrete
-- [ ] Architect agent dispatched against the refined spec; findings applied
-- [ ] Code-reviewer agent reports ZERO findings
-- [ ] Per-type Done gate satisfied (`feature`)
-- [ ] PR merged via auto-merge
-- [ ] `status: Done` set; `pr:` populated; merge timestamp in Notes log
+- [ ] Chosen path implemented + tested.
+- [ ] BDD scenarios pass.
+- [ ] Sonar coverage ≥85%.
+- [ ] Reviewer ZERO findings.
+- [ ] Per-type Done gate (`feature` → auto-merge + dev smoke).
+- [ ] PR merged.
+- [ ] `status: Done`; `pr:` populated; chosen-path rationale in Notes.
 
 ## Notes (running log)
 
-- 2026-06-07 — Skeleton generated by `scripts/convert-roadmap-to-stories.sh` from PR-bundle `PR-C3` (roadmap_ids: G010). Status: Draft; AC dimensions are `N/A — TBD refinement on pickup` per SHY-0003 spec. Pickup must refine before TDD.
+- 2026-06-07 ~21:18 BST — Refined under SHY-0032. Tier 3; sequenced after SHY-0024.
+- 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-C3` (G010).

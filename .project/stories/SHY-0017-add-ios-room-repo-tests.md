@@ -10,91 +10,177 @@ roadmap_ids: [G014]
 pr:
 ---
 
-# SHY-0017: IosRoomRepositoryImpl tests
+# SHY-0017: IosRoomRepositoryImpl tests (P2 client migration coverage)
 
 ## User Story
 
-As the ShyTalk operator, I want **IosRoomRepositoryImpl tests** delivered per the roadmap row(s) for G014, so that the corresponding gap in the zero-gap remediation roadmap closes.
+As the ShyTalk operator, I want **`IosRoomRepositoryImpl` to have unit-test coverage in jvmTest (with iOS-specific fakes) covering endpoint dispatch, request building, response parsing, error mapping (net fail / 409 / 403), and offline-queue behaviour**, so that iOS parity with the existing Android RoomRepositoryImpl test coverage is restored and the P2 client migration becomes verifiable in CI.
 
 ## Why
 
-This SHY mirrors PR-bundle `PR-F1` from the architect's recommended PR sequencing (lines 122–173 of `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md`). The deeper rationale — including the Gap / Fix / Scope columns for each G-ID — lives in the roadmap row(s) for G014. Refinement on pickup will copy the relevant content into this section.
+The room-mutations P2 client migration moved room mutations from direct Firestore calls to Express API endpoints. The Android implementation has test coverage; the iOS implementation (`shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosRoomRepositoryImpl.kt`) does NOT.
+
+Without coverage:
+
+- Refactors to the Express endpoint contract could silently break iOS while Android tests pass.
+- Network-error mapping is invisible (a 500 might surface as a generic UX message OR as a typed retry).
+- Offline-queue behaviour (if any) is undocumented.
+
+Roadmap row G014 (line 71):
+
+> Sev: 🟠 Important. Test — IosRoomRepositoryImpl P2. Location: `shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosRoomRepositoryImpl.kt`. Gap: P2 client migration; endpoint calls + error mapping untested. Fix: iosMain or jvmTest with fakes; cover net fail, 409, 403. Scope: M.
+
+P1 Tier-3 coverage. Cross-platform parity with Android's existing tests.
 
 ## Acceptance Criteria
 
 ### Happy path
 
-N/A — TBD refinement on pickup.
+- [ ] Test file `shared/src/iosTest/kotlin/com/shyden/shytalk/data/repository/IosRoomRepositoryImplTest.kt` exists (OR `shared/src/commonTest/.../IosRoomRepositoryImplTest.kt` if iOS-specific source set isn't set up).
+- [ ] ≥20 test cases covering:
+  - Each repository method has happy-path coverage (join, leave, takeSeat, acceptInvite, kick, transferOwnership, mute, etc. — enumerate by reading the production interface).
+  - Each method's request body shape verified (correct URL, method, headers, body JSON).
+  - Each method's response parsing verified (success path returns expected domain object).
+- [ ] All tests pass via `./gradlew :shared:jvmTest --tests "*IosRoomRepository*"` (or iosX64Test equivalent).
+- [ ] Sonar coverage on `IosRoomRepositoryImpl.kt` ≥85%.
 
 ### Error paths
 
-N/A — TBD refinement on pickup.
+- [ ] Network failure (no connectivity) → returns `Result.Failure(NetworkException)`; doesn't crash.
+- [ ] 401 unauthorized → returns `Result.Failure(NotAuthenticated)`; caller can react.
+- [ ] 403 forbidden (e.g. user lacks owner role for the mutation) → returns `Result.Failure(Forbidden(reason))`.
+- [ ] 404 not found (room deleted between client read + write) → returns `Result.Failure(NotFound)`.
+- [ ] 409 conflict (race with another mutation, e.g. seat taken by someone else) → returns `Result.Failure(Conflict(reason))`; caller can retry.
+- [ ] 429 rate-limited → returns `Result.Failure(RateLimited(retryAfter))`.
+- [ ] 5xx server error → returns `Result.Failure(ServerError(retryable=true))`.
+- [ ] Malformed response (non-JSON body, missing required field) → returns `Result.Failure(InvalidResponse)`; logs Crashlytics non-fatal.
+- [ ] Request timeout → returns `Result.Failure(Timeout)`.
 
 ### Edge cases
 
-N/A — TBD refinement on pickup.
+- [ ] Concurrent calls to the same method (race) → each call is independent; backend dedup via request-ID.
+- [ ] Method called with null/empty room ID → returns `Result.Failure(InvalidArgument)` BEFORE dispatching network call.
+- [ ] Auth token expires mid-request → automatic refresh attempted; if refresh fails, returns NotAuthenticated.
+- [ ] Server returns redirect (3xx) → handled per HTTP semantics OR rejected as unexpected.
+- [ ] Server returns success status but partial data → treated as InvalidResponse.
 
 ### Performance
 
-N/A — TBD refinement on pickup.
+- [ ] Each test runs within 100ms with FakeHttpClient.
+- [ ] Full suite (~20 tests) within 5s.
+- [ ] No leaked coroutines after scope cancellation.
 
 ### Security
 
-N/A — TBD refinement on pickup.
+- [ ] Auth tokens never logged.
+- [ ] Request bodies don't include client-only data (e.g. cached session info that shouldn't be sent).
+- [ ] Response parsing rejects unexpected fields (don't trust unknown fields to be benign).
+- [ ] HTTPS-only — http:// requests rejected.
 
 ### UX
 
-N/A — TBD refinement on pickup.
+- [ ] N/A — repository is internal; user-facing UX in the calling VM/screen.
 
 ### i18n
 
-N/A — TBD refinement on pickup.
+- [ ] Error messages from server are passed through as-is; localization at the VM/UI layer.
 
 ### Observability
 
-N/A — TBD refinement on pickup.
+- [ ] Each request logged at DEBUG (method + URL, no auth header).
+- [ ] Each error logged at WARN with status code (no PII).
+- [ ] Sonar coverage ≥85%.
 
 ## BDD Scenarios
 
-**Scenario: Refined behaviour for G014 (TBD on pickup)**
+**Scenario: takeSeat happy path**
 
-- **Given** the spec for G014's gap as documented in the roadmap row
-- **When** the implementation lands per the Fix column guidance
-- **Then** the AC bullets pinned at pickup pass
-- **And** the validator + reviewer agents return ZERO findings
+- **Given** an authenticated iOS user
+- **And** a room exists with seat 2 empty
+- **When** `iosRoomRepository.takeSeat(roomId="R", seat=2)` is called
+- **Then** the HTTP call goes to `POST /api/rooms/R/takeSeat` with body `{seat: 2}`
+- **And** the response 200 is parsed into `Result.Success(SeatTaken(roomId="R", seat=2))`
+
+**Scenario: takeSeat — 409 conflict (seat taken)**
+
+- **Given** the same setup but the server returns 409 with body `{error: "seat_already_taken"}`
+- **When** the call is made
+- **Then** the result is `Result.Failure(Conflict(reason="seat_already_taken"))`
+
+**Scenario: leave — network failure**
+
+- **Given** no connectivity
+- **When** `leave(roomId="R")` is called
+- **Then** result is `Result.Failure(NetworkException)`
+- **And** no partial state mutation
+
+**Scenario: kick — 403 forbidden (non-owner)**
+
+- **Given** a non-owner user
+- **When** they call `kick(roomId="R", targetUid="U")`
+- **Then** server returns 403 with body `{error: "not_owner"}`
+- **And** result is `Result.Failure(Forbidden(reason="not_owner"))`
+
+**Scenario: Auth token expiry triggers refresh**
+
+- **Given** an expired auth token
+- **When** any mutation is called
+- **Then** the implementation attempts token refresh
+- **And** on successful refresh, the original call is retried
+- **And** the final result reflects the original call's outcome
+
+**Scenario: Malformed response logged + non-fatal**
+
+- **Given** server returns 200 with body that's missing required `roomId` field
+- **When** the response is parsed
+- **Then** result is `Result.Failure(InvalidResponse)`
+- **And** Crashlytics non-fatal logged
 
 ## Test Plan (TDD)
 
 ### Red
 
-(TBD on pickup — write failing tests per the refined Acceptance Criteria.)
+1. Locate `IosRoomRepositoryImpl.kt`; verify production methods.
+2. Create FakeHttpClient (shared with Android tests if possible) or use Ktor's `MockEngine`.
+3. Add test file; ~20 cases per AC.
+4. Run `./gradlew :shared:jvmTest --tests "*IosRoomRepository*"` → RED on uncovered error paths.
 
 ### Green
 
-(TBD on pickup — implement the minimum needed to flip red → green.)
+1. Add minimum production fixes for any surfaced bugs (typically error-mapping gaps).
+2. Re-run → GREEN.
+3. Sonar coverage ≥85%.
 
 ## Out of Scope
 
-- Refinement of this skeleton's AC + BDD + Test Plan is the FIRST step of picking it up (the skeleton is intentionally TBD-shaped per SHY-0003 spec).
+- **Refactoring the repository interface** — only iOS impl tests.
+- **Server-side endpoint tests** — backend scope.
+- **End-to-end voice-room flow** — journey-test scope.
 
 ## Dependencies
 
-- Roadmap row(s) for G014 in `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md` (gitignored — local only).
-- SHY-0001 (workflow) and SHY-0002 (GitHub Issues integration) both shipped.
+- **SHY-0001** + **SHY-0032** — process.
+- **SHY-0004** — room mutation P3 deploy verify (ensures the Express endpoints these tests assume exist actually exist).
+- **SHY-0014** — RoomServiceController tests (consumer of the repository).
+- Ktor MockEngine or shared FakeHttpClient.
 
 ## Risks & Mitigations
 
-- **Risk:** Skeleton refinement on pickup misinterprets the roadmap row's intent. **Mitigation:** Quote the roadmap's Gap + Fix columns verbatim into the Why section during refinement; architect-validate before TDD.
+- **Risk:** Android RoomRepositoryImpl tests don't fully establish the FakeHttpClient pattern; iOS may need extras. **Mitigation:** reuse what exists; extend as needed.
+- **Risk:** iosTest source set not configured; tests live in jvmTest as proxy. **Mitigation:** acceptable per roadmap fix description ("iosMain or jvmTest with fakes"); document the choice.
+- **Risk:** Surfaced error-mapping bug means iOS users currently see different error UX than Android. **Mitigation:** fix in this PR; document parity contract.
 
 ## Definition of Done
 
-- [ ] Refinement on pickup: AC dimensions populated with verifiable bullets, BDD scenarios deepened, Test Plan red/green concrete
-- [ ] Architect agent dispatched against the refined spec; findings applied
-- [ ] Code-reviewer agent reports ZERO findings
-- [ ] Per-type Done gate satisfied (`bug`)
-- [ ] PR merged via auto-merge
-- [ ] `status: Done` set; `pr:` populated; merge timestamp in Notes log
+- [ ] Test file exists; ≥20 cases pass.
+- [ ] Any surfaced bugs fixed.
+- [ ] Sonar coverage ≥85%.
+- [ ] Reviewer ZERO findings.
+- [ ] Per-type Done gate (`bug` → auto-merge + dev smoke on iOS simulator).
+- [ ] PR merged.
+- [ ] `status: Done`; `pr:` populated; bug catalogue in Notes.
 
 ## Notes (running log)
 
-- 2026-06-07 — Skeleton generated by `scripts/convert-roadmap-to-stories.sh` from PR-bundle `PR-F1` (roadmap_ids: G014). Status: Draft; AC dimensions are `N/A — TBD refinement on pickup` per SHY-0003 spec. Pickup must refine before TDD.
+- 2026-06-07 ~21:18 BST — Refined under SHY-0032. Tier 3 iOS parity coverage.
+- 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-F1` (G014).

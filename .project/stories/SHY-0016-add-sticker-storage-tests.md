@@ -10,91 +10,159 @@ roadmap_ids: [G038]
 pr:
 ---
 
-# SHY-0016: StickerStorage platform tests
+# SHY-0016: StickerStorage platform tests (file I/O lifecycle)
 
 ## User Story
 
-As the ShyTalk operator, I want **StickerStorage platform tests** delivered per the roadmap row(s) for G038, so that the corresponding gap in the zero-gap remediation roadmap closes.
+As the ShyTalk operator, I want **`StickerStorage` to have platform-specific tests in `androidHostTest` + `iosMain` covering file I/O lifecycle (put / get / delete / list / disk-full / corruption)**, so that the sticker-cache layer has explicit coverage rather than relying on indirect coverage from feature tests.
 
 ## Why
 
-This SHY mirrors PR-bundle `PR-E4` from the architect's recommended PR sequencing (lines 122–173 of `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md`). The deeper rationale — including the Gap / Fix / Scope columns for each G-ID — lives in the roadmap row(s) for G038. Refinement on pickup will copy the relevant content into this section.
+`shared/src/androidMain/.../StickerStorage.android.kt` + `shared/src/iosMain/.../StickerStorage.ios.kt` implement an `expect/actual` contract for sticker file I/O — used to cache animated sticker assets locally for room/gift use.
+
+Roadmap row G038 (line 65 of `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md`):
+
+> Sev: 🟡 Polish. Test — StickerStorage platform impls. Location: `shared/src/{androidMain,iosMain}/.../StickerStorage.{android,ios}.kt`. Gap: File I/O for stickers uncovered. Fix: androidHostTest + iosMain lifecycle tests. Scope: S.
+
+P2 Tier-4 polish. Same contract-test pattern as SHY-0015 (SecureStorage), smaller surface.
 
 ## Acceptance Criteria
 
 ### Happy path
 
-N/A — TBD refinement on pickup.
+- [ ] `shared/src/commonTest/kotlin/com/shyden/shytalk/core/sticker/StickerStorageContractTest.kt` defines the shared contract: an abstract test class with ≥12 cases.
+- [ ] `shared/src/androidUnitTest/kotlin/.../AndroidStickerStorageTest.kt` extends the contract (or `androidInstrumentedTest` if file I/O requires Context).
+- [ ] `shared/src/iosTest/kotlin/.../IosStickerStorageTest.kt` extends the contract.
+- [ ] Contract covers:
+  - put(stickerId, bytes) → file written to expected location.
+  - get(stickerId) returns the bytes.
+  - get(stickerId) for non-existent → null.
+  - delete(stickerId) → file removed; subsequent get → null.
+  - list() returns all stored sticker IDs.
+  - put with same ID overwrites existing.
+  - large file (1 MB) handled.
+- [ ] All tests pass on both platforms.
+- [ ] Sonar coverage on both actual files ≥85%.
 
 ### Error paths
 
-N/A — TBD refinement on pickup.
+- [ ] Disk full → `Result.Failure(DiskFull)` with platform-appropriate exception class.
+- [ ] Permission denied (file system inaccessible) → `Result.Failure(IOException)`.
+- [ ] Corrupted file (partial write detected on read) → `Result.Failure(Corrupted)`; entry wiped.
+- [ ] Concurrent write/read on same ID → atomic per platform; no torn writes.
 
 ### Edge cases
 
-N/A — TBD refinement on pickup.
+- [ ] Empty bytes (0-byte file) → distinguishes "stored empty" from "not stored".
+- [ ] Very large file (10 MB) → handled or throws `PayloadTooLarge`.
+- [ ] Special characters in sticker ID (UUID, hash) → safe filesystem path (no path traversal).
+- [ ] App reinstall → cache cleared on both platforms (per platform conventions).
+- [ ] Cache eviction (if implemented) → LRU or size-based; verify policy with test.
 
 ### Performance
 
-N/A — TBD refinement on pickup.
+- [ ] put(1 KB) < 50ms p99.
+- [ ] get(1 KB) < 20ms p99.
+- [ ] Test suite < 15s.
 
 ### Security
 
-N/A — TBD refinement on pickup.
+- [ ] Sticker ID sanitised before use as file path (no `../` traversal).
+- [ ] Files stored in app-private directory (not world-readable on Android; not iCloud-backed on iOS).
+- [ ] No PII in file paths or contents.
 
 ### UX
 
-N/A — TBD refinement on pickup.
+- [ ] N/A — internal cache.
 
 ### i18n
 
-N/A — TBD refinement on pickup.
+- [ ] N/A.
 
 ### Observability
 
-N/A — TBD refinement on pickup.
+- [ ] put/get/delete logged at DEBUG with sticker ID (not bytes).
+- [ ] Corruption events logged at WARN.
+- [ ] Sonar coverage ≥85%.
 
 ## BDD Scenarios
 
-**Scenario: Refined behaviour for G038 (TBD on pickup)**
+**Scenario: Android round-trip**
 
-- **Given** the spec for G038's gap as documented in the roadmap row
-- **When** the implementation lands per the Fix column guidance
-- **Then** the AC bullets pinned at pickup pass
-- **And** the validator + reviewer agents return ZERO findings
+- **Given** Android StickerStorage with a writable cache dir
+- **When** put("sticker-A", bytes) followed by get("sticker-A")
+- **Then** the get returns identical bytes
+
+**Scenario: iOS round-trip**
+
+- Same as Android but on iOS.
+
+**Scenario: Non-existent get returns null**
+
+- **Given** empty storage
+- **When** get("missing") is called
+- **Then** result is null
+
+**Scenario: Delete removes file**
+
+- **Given** put("X", bytes); confirm file exists
+- **When** delete("X") is called
+- **Then** file no longer exists on disk
+
+**Scenario: Path traversal sanitised**
+
+- **Given** put("../../etc/passwd", bytes) attempted
+- **When** the implementation processes the ID
+- **Then** the file is written to a sanitised path within app-private dir (not /etc/)
+- **OR** the call rejects with `Result.Failure(InvalidId)`
+
+**Scenario: Large file boundary**
+
+- **Given** a 10 MB byte array
+- **When** put(...) is called
+- **Then** either succeeds OR throws `PayloadTooLarge` with documented limit
 
 ## Test Plan (TDD)
 
 ### Red
 
-(TBD on pickup — write failing tests per the refined Acceptance Criteria.)
+1. Locate `StickerStorage.android.kt` + `StickerStorage.ios.kt`.
+2. Add contract test + 2 platform tests.
+3. Run platform test suites → RED on undertested paths (likely path-sanitisation + corruption).
 
 ### Green
 
-(TBD on pickup — implement the minimum needed to flip red → green.)
+1. Add minimum fixes for surfaced bugs.
+2. Sonar coverage ≥85%.
 
 ## Out of Scope
 
-- Refinement of this skeleton's AC + BDD + Test Plan is the FIRST step of picking it up (the skeleton is intentionally TBD-shaped per SHY-0003 spec).
+- **Refactoring StickerStorage interface** — only tests.
+- **Adding new sticker features** — only coverage.
+- **Cache eviction policy redesign** — only verify current policy.
 
 ## Dependencies
 
-- Roadmap row(s) for G038 in `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md` (gitignored — local only).
-- SHY-0001 (workflow) and SHY-0002 (GitHub Issues integration) both shipped.
+- **SHY-0001** + **SHY-0032** — process.
+- **SHY-0015** — pattern template (contract test + platform extensions).
+- Platform test source set wiring (verify).
 
 ## Risks & Mitigations
 
-- **Risk:** Skeleton refinement on pickup misinterprets the roadmap row's intent. **Mitigation:** Quote the roadmap's Gap + Fix columns verbatim into the Why section during refinement; architect-validate before TDD.
+- **Risk:** Android needs Context for file I/O; pure `androidUnitTest` may be insufficient. **Mitigation:** use Robolectric OR move to `androidInstrumentedTest`.
+- **Risk:** Path-traversal test surfaces a real vulnerability. **Mitigation:** GOOD outcome; fix in this PR.
 
 ## Definition of Done
 
-- [ ] Refinement on pickup: AC dimensions populated with verifiable bullets, BDD scenarios deepened, Test Plan red/green concrete
-- [ ] Architect agent dispatched against the refined spec; findings applied
-- [ ] Code-reviewer agent reports ZERO findings
-- [ ] Per-type Done gate satisfied (`bug`)
-- [ ] PR merged via auto-merge
-- [ ] `status: Done` set; `pr:` populated; merge timestamp in Notes log
+- [ ] 3 test files exist; ≥12 cases pass per platform.
+- [ ] Any surfaced bugs fixed.
+- [ ] Sonar coverage ≥85%.
+- [ ] Reviewer ZERO findings.
+- [ ] Per-type Done gate (`bug` → auto-merge + dev smoke).
+- [ ] PR merged.
+- [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
-- 2026-06-07 — Skeleton generated by `scripts/convert-roadmap-to-stories.sh` from PR-bundle `PR-E4` (roadmap_ids: G038). Status: Draft; AC dimensions are `N/A — TBD refinement on pickup` per SHY-0003 spec. Pickup must refine before TDD.
+- 2026-06-07 ~21:31 BST — Refined under SHY-0032. Tier 4 polish.
+- 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-E4` (G038).

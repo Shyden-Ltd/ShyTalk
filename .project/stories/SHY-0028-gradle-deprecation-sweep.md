@@ -14,87 +14,126 @@ pr:
 
 ## User Story
 
-As the ShyTalk operator, I want **Gradle deprecation sweep (--warning-mode all)** delivered per the roadmap row(s) for G046, so that the corresponding gap in the zero-gap remediation roadmap closes.
+As the ShyTalk operator who treats every warning as a failure ([[feedback-warnings-are-failures]]), I want **`./gradlew testDevDebugUnitTest --warning-mode all` to run clean with zero deprecation warnings**, so that we have a deterministic baseline before the next Gradle major upgrade (where unfixed deprecations become hard errors).
 
 ## Why
 
-This SHY mirrors PR-bundle `PR-I6` from the architect's recommended PR sequencing (lines 122–173 of `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md`). The deeper rationale — including the Gap / Fix / Scope columns for each G-ID — lives in the roadmap row(s) for G046. Refinement on pickup will copy the relevant content into this section.
+Gradle prints deprecation warnings only when `--warning-mode=all` (or `summary`); the default `none` hides them. Accumulating deprecations means future major upgrades break suddenly.
+
+Roadmap row G046 (line 115):
+
+> Sev: 🟡 Polish. Dep — Kotlin `@Deprecated` usages scan. Location: (codebase-wide). Gap: Static scan not done. Fix: `./gradlew testDevDebugUnitTest --warning-mode all 2>&1 | grep -i deprecat`; enumerate hits. Scope: S.
+
+P2 Tier-5 chore. Per [[feedback-never-suppress-fix-or-upgrade]]: fix root cause OR upgrade dep; never suppress.
 
 ## Acceptance Criteria
 
 ### Happy path
 
-N/A — TBD refinement on pickup.
+- [ ] Run `./gradlew testDevDebugUnitTest --warning-mode all 2>&1 | grep -iE "deprecat|warning" > /tmp/gradle-deprecations.txt` to enumerate hits.
+- [ ] For each hit, identify root cause (our code vs transitive dep).
+- [ ] Fix in our code where applicable; upgrade dep where applicable; document the chosen fix per finding.
+- [ ] After fixes, `./gradlew testDevDebugUnitTest --warning-mode all` runs clean (zero deprecation warnings).
+- [ ] Add a CI step that runs `./gradlew detekt --warning-mode all` and fails on new deprecations introduced post-merge.
 
 ### Error paths
 
-N/A — TBD refinement on pickup.
+- [ ] If a deprecation is from a dep we can't upgrade (e.g. Kotlin's `@kotlin.RequiresOptIn` vs `@OptIn` migration), document why; pin to a wrapper if possible; do NOT suppress.
+- [ ] If a fix breaks other code, scope expands; reviewer agent decides whether to split into follow-up SHY.
 
 ### Edge cases
 
-N/A — TBD refinement on pickup.
+- [ ] Some deprecations are platform-specific (Android-only or iOS-only); document per-platform impact.
+- [ ] Deprecations in test-only code still fix (don't accept tech debt in tests per [[feedback-fix-pre-existing-and-new-same]]).
+- [ ] Detekt's own deprecations vs Gradle's own deprecations — both fix.
 
 ### Performance
 
-N/A — TBD refinement on pickup.
+- [ ] No regression in build time after fixes.
+- [ ] CI deprecation-check step adds <30s to lint workflow.
 
 ### Security
 
-N/A — TBD refinement on pickup.
+- [ ] No suppression mechanism (e.g. `-Werror=no-deprecation`) added.
+- [ ] No dep downgrade introducing CVEs.
 
 ### UX
 
-N/A — TBD refinement on pickup.
+- [ ] N/A — build-system change.
 
 ### i18n
 
-N/A — TBD refinement on pickup.
+- [ ] N/A.
 
 ### Observability
 
-N/A — TBD refinement on pickup.
+- [ ] PR description enumerates every deprecation found + chosen fix per finding.
+- [ ] CI lint step prints number of deprecations on every push.
+- [ ] Job summary lists count.
 
 ## BDD Scenarios
 
-**Scenario: Refined behaviour for G046 (TBD on pickup)**
+**Scenario: Clean run after fixes**
 
-- **Given** the spec for G046's gap as documented in the roadmap row
-- **When** the implementation lands per the Fix column guidance
-- **Then** the AC bullets pinned at pickup pass
-- **And** the validator + reviewer agents return ZERO findings
+- **Given** all surfaced deprecations fixed
+- **When** `./gradlew testDevDebugUnitTest --warning-mode all` runs
+- **Then** stdout contains zero lines matching `Deprecated Gradle features|Method ... deprecated|API ... deprecated`
+
+**Scenario: CI catches new deprecation in PR**
+
+- **Given** the CI lint step running deprecation check
+- **When** a PR introduces new deprecated API usage
+- **Then** the check fails
+- **And** the failure message names the file + line
+
+**Scenario: Documented dep upgrades vs in-code fixes**
+
+- **Given** the PR description
+- **When** reviewer reads it
+- **Then** every finding has a chosen fix labeled `[upgrade-dep]`, `[fix-code]`, or `[wait-upstream]` (with rationale)
 
 ## Test Plan (TDD)
 
 ### Red
 
-(TBD on pickup — write failing tests per the refined Acceptance Criteria.)
+1. Run `./gradlew testDevDebugUnitTest --warning-mode all 2>&1 | grep -i deprecat | wc -l` → baseline count > 0 (RED).
+2. (Add CI lint check that asserts count == 0.)
 
 ### Green
 
-(TBD on pickup — implement the minimum needed to flip red → green.)
+1. Walk findings; fix per choice.
+2. Re-run baseline check → count == 0 (GREEN).
+3. CI step in `lint.yml` running the check.
 
 ## Out of Scope
 
-- Refinement of this skeleton's AC + BDD + Test Plan is the FIRST step of picking it up (the skeleton is intentionally TBD-shaped per SHY-0003 spec).
+- **Upgrading Gradle major version** — that's a separate SHY.
+- **Refactoring beyond minimum fix** for each deprecation.
+- **Suppressing deprecation warnings via flag** — explicitly forbidden.
 
 ## Dependencies
 
-- Roadmap row(s) for G046 in `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md` (gitignored — local only).
-- SHY-0001 (workflow) and SHY-0002 (GitHub Issues integration) both shipped.
+- **SHY-0001** + **SHY-0032** — process.
+- Gradle version (verify in `gradle/wrapper/gradle-wrapper.properties`).
+- Kotlin version (verify in `gradle/libs.versions.toml`).
 
 ## Risks & Mitigations
 
-- **Risk:** Skeleton refinement on pickup misinterprets the roadmap row's intent. **Mitigation:** Quote the roadmap's Gap + Fix columns verbatim into the Why section during refinement; architect-validate before TDD.
+- **Risk:** A deprecation requires upstream dep version we don't have yet. **Mitigation:** document; wait-upstream label; revisit when version available.
+- **Risk:** Fix introduces test regression. **Mitigation:** existing test suite is the regression net.
+- **Risk:** Number of deprecations is very large; scope balloons. **Mitigation:** if >20 distinct, split into batches (SHY-0028-A/B/C); reviewer agent decides at PR time.
 
 ## Definition of Done
 
-- [ ] Refinement on pickup: AC dimensions populated with verifiable bullets, BDD scenarios deepened, Test Plan red/green concrete
-- [ ] Architect agent dispatched against the refined spec; findings applied
-- [ ] Code-reviewer agent reports ZERO findings
-- [ ] Per-type Done gate satisfied (`chore`)
-- [ ] PR merged via auto-merge
-- [ ] `status: Done` set; `pr:` populated; merge timestamp in Notes log
+- [ ] Zero deprecations on `--warning-mode all` run.
+- [ ] CI step added; passes.
+- [ ] PR description enumerates findings + fixes.
+- [ ] Reviewer ZERO findings.
+- [ ] Per-type Done gate (`chore` → auto-merge once green).
+- [ ] PR merged.
+- [ ] `status: Done`; `pr:` populated; finding count + fix breakdown in Notes.
 
 ## Notes (running log)
 
-- 2026-06-07 — Skeleton generated by `scripts/convert-roadmap-to-stories.sh` from PR-bundle `PR-I6` (roadmap_ids: G046). Status: Draft; AC dimensions are `N/A — TBD refinement on pickup` per SHY-0003 spec. Pickup must refine before TDD.
+- 2026-06-07 ~21:37 BST — Refined under SHY-0032. Tier 5 chore.
+- 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-I6` (G046).

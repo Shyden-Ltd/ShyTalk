@@ -43,6 +43,23 @@ A dimension may carry `N/A — <one-line rationale>` if it genuinely doesn't app
 - **And** <additional observable>
 ```
 
+### Stories born fully refined (NO skeletons) — HARD RULE
+
+Every new SHY `.md` file is created **fully refined** at the moment of creation. No skeleton placeholders are allowed. Specifically:
+
+- Every `### <dimension>` AC heading must have either ≥1 verifiable `- [ ]` bullet OR `N/A — <specific reason>` (e.g. `N/A — server-side rule; no user-facing strings`). `N/A — TBD refinement on pickup` is FORBIDDEN.
+- `## BDD Scenarios` must contain ≥1 `**Scenario:**` block per AC bullet category (presence-based per validator exit 13).
+- `## Test Plan` Red + Green sections must name real files + test names, not `(TBD on pickup ...)`.
+- `## Dependencies`, `## Risks & Mitigations`, `## Out of Scope`, `## Definition of Done` must contain concrete content, not boilerplate.
+
+**Why:** operator works AFK most of the time; resuming Claude sessions must be able to pick up the next SHY in priority order and start TDD work without needing operator input to do upstream planning. Skeletons break this by forcing planning before code, which collides with the architect-validates-spec-before-implementation gate.
+
+**Anti-patterns:** writing `N/A — TBD refinement on pickup` under any dimension; leaving `## BDD Scenarios` empty when AC has bullets; saying "I'll refine this later" or "I'll skeleton-out now and fill on pickup."
+
+**Reference:** `[[feedback-no-skeleton-stories-fully-refined]]` memory pointer.
+
+**Historical exception:** `scripts/convert-roadmap-to-stories.sh` was a one-time skeleton generator (SHY-0003); its output was refined under SHY-0032 as a one-time cleanup. The script is now historic; do not re-invoke unprompted.
+
 ### Lifecycle (no backward transitions; Cancelled is terminal)
 - `Draft` → architect APPROVE / APPROVE-WITH-CHANGES + concerns applied → `In Progress`
 - `In Progress` → code-reviewer agent dispatched → `In Review`

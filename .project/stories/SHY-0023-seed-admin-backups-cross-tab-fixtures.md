@@ -14,87 +14,130 @@ pr:
 
 ## User Story
 
-As the ShyTalk operator, I want **admin-backups + admin-cross-tab data fixture gaps** delivered per the roadmap row(s) for G033, so that the corresponding gap in the zero-gap remediation roadmap closes.
+As the ShyTalk operator, I want **the 4 `test.skip(true, ...)` calls in `tests/web/admin-backups.spec.ts:150,187` and `tests/web/admin-cross-tab.spec.ts:361,384` removed by seeding the required backup + trace-link data in Playwright global-setup or per-test fixtures**, so that 4 more admin tests cover their intended behaviour rather than silently skip.
 
 ## Why
 
-This SHY mirrors PR-bundle `PR-H2a` from the architect's recommended PR sequencing (lines 122–173 of `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md`). The deeper rationale — including the Gap / Fix / Scope columns for each G-ID — lives in the roadmap row(s) for G033. Refinement on pickup will copy the relevant content into this section.
+Roadmap row G033 (line 93 of `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md`):
+
+> Sev: 🟡 Polish. `test.skip(true, ...)` — admin-backups, admin-cross-tab. Location: `tests/web/admin-backups.spec.ts:150,187`, `admin-cross-tab.spec.ts:361,384`. Gap: Data-fixture gaps not intentional skips. Fix: Seed backup + trace-link data in global-setup. Scope: S.
+
+Same pattern as SHY-0022 but smaller scope (4 skips across 2 files). P2 Tier-4. Companion to SHY-0022.
 
 ## Acceptance Criteria
 
 ### Happy path
 
-N/A — TBD refinement on pickup.
+- [ ] `tests/web/admin-backups.spec.ts:150` skip removed; test seeds backup data; passes.
+- [ ] `tests/web/admin-backups.spec.ts:187` skip removed; test seeds backup data; passes.
+- [ ] `tests/web/admin-cross-tab.spec.ts:361` skip removed; test seeds trace-link data; passes.
+- [ ] `tests/web/admin-cross-tab.spec.ts:384` skip removed; test seeds trace-link data; passes.
+- [ ] Shared seed helpers in `tests/web/fixtures/admin-data.ts` (reuse from SHY-0022 where overlap exists; extend with `seedBackups()` + `seedTraceLinks()`).
+- [ ] `npx playwright test tests/web/admin-backups.spec.ts tests/web/admin-cross-tab.spec.ts` passes ALL tests (was N-4 → now N, 0 skipped).
+- [ ] CI run matches local pass count.
 
 ### Error paths
 
-N/A — TBD refinement on pickup.
+- [ ] Seed failure surfaces test failure with clear "seed step failed" message.
+- [ ] Cleanup failure does not affect next test (per-test isolation per [[feedback-test-isolation-no-leaks]]).
 
 ### Edge cases
 
-N/A — TBD refinement on pickup.
+- [ ] Seeded backup data tagged with test-run-ID (provenance) so concurrent tests don't conflict.
+- [ ] Cross-tab tests verify trace-link behaviour ACROSS browser contexts; fixture seeds must be visible to both contexts.
+- [ ] Backup-restore tests don't accidentally restore prod data — verify test-only namespace.
 
 ### Performance
 
-N/A — TBD refinement on pickup.
+- [ ] Each test <30s incl seed/cleanup.
+- [ ] Full file <3 minutes.
 
 ### Security
 
-N/A — TBD refinement on pickup.
+- [ ] Test backups use test-only personas; never production data.
+- [ ] Trace-link data uses test-only IDs.
+- [ ] No admin credentials leaked in fixture code.
 
 ### UX
 
-N/A — TBD refinement on pickup.
+- [ ] N/A — admin tool; backend verification.
 
 ### i18n
 
-N/A — TBD refinement on pickup.
+- [ ] Tests use `en` default.
 
 ### Observability
 
-N/A — TBD refinement on pickup.
+- [ ] Playwright reporter shows the +4 pass-count delta.
+- [ ] Traces preserved on failure.
 
 ## BDD Scenarios
 
-**Scenario: Refined behaviour for G033 (TBD on pickup)**
+**Scenario: admin-backups:150 — backup-list display**
 
-- **Given** the spec for G033's gap as documented in the roadmap row
-- **When** the implementation lands per the Fix column guidance
-- **Then** the AC bullets pinned at pickup pass
-- **And** the validator + reviewer agents return ZERO findings
+- **Given** seed creates 3 backups via `seedBackups(page, 3)`
+- **And** the admin backups screen is loaded
+- **When** the page renders
+- **Then** all 3 backups appear in the list
+- **And** original assertion passes
+
+**Scenario: admin-cross-tab:361 — trace-link follows across tabs**
+
+- **Given** seed creates a trace-link between test entities
+- **And** two browser contexts (tabs) are open
+- **When** the trace-link is clicked in tab A
+- **Then** tab B navigates to the linked target within 2s
+- **And** original assertion passes
+
+**Scenario: Seed cleanup leaves no test debt**
+
+- **Given** the file's `test.afterAll` (or per-test)
+- **When** all 4 tests complete
+- **Then** seeded backups + trace-links are deleted
+- **And** the dev backend has no orphaned test data
 
 ## Test Plan (TDD)
 
 ### Red
 
-(TBD on pickup — write failing tests per the refined Acceptance Criteria.)
+1. Read lines `admin-backups.spec.ts:150,187` + `admin-cross-tab.spec.ts:361,384`.
+2. Identify required seed state per test.
+3. Remove skips → RED.
 
 ### Green
 
-(TBD on pickup — implement the minimum needed to flip red → green.)
+1. Extend `tests/web/fixtures/admin-data.ts` with `seedBackups()` + `seedTraceLinks()`.
+2. Wire into `test.beforeEach`.
+3. Add cleanup.
+4. Re-run → GREEN.
 
 ## Out of Scope
 
-- Refinement of this skeleton's AC + BDD + Test Plan is the FIRST step of picking it up (the skeleton is intentionally TBD-shaped per SHY-0003 spec).
+- **admin-keyboard skips** — SHY-0022 covers.
+- **Other Playwright skips** — SHY-0033 covers.
+- **Refactoring admin backups/cross-tab logic** — only fixtures.
 
 ## Dependencies
 
-- Roadmap row(s) for G033 in `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md` (gitignored — local only).
-- SHY-0001 (workflow) and SHY-0002 (GitHub Issues integration) both shipped.
+- **SHY-0022** — admin-data fixture extracted in this earlier SHY; reused here.
+- **SHY-0032** — process.
+- Admin API endpoints for backups + trace-links.
 
 ## Risks & Mitigations
 
-- **Risk:** Skeleton refinement on pickup misinterprets the roadmap row's intent. **Mitigation:** Quote the roadmap's Gap + Fix columns verbatim into the Why section during refinement; architect-validate before TDD.
+- **Risk:** Cross-tab seeding requires shared state across contexts (Playwright contexts are isolated). **Mitigation:** seed via admin API (server-side state) so both contexts see it.
+- **Risk:** Seeded backup data balloons the backend. **Mitigation:** small fixtures; cleanup verified.
 
 ## Definition of Done
 
-- [ ] Refinement on pickup: AC dimensions populated with verifiable bullets, BDD scenarios deepened, Test Plan red/green concrete
-- [ ] Architect agent dispatched against the refined spec; findings applied
-- [ ] Code-reviewer agent reports ZERO findings
-- [ ] Per-type Done gate satisfied (`bug`)
-- [ ] PR merged via auto-merge
-- [ ] `status: Done` set; `pr:` populated; merge timestamp in Notes log
+- [ ] 4 skips removed; 4 tests pass.
+- [ ] Helpers extracted to fixture file.
+- [ ] Reviewer ZERO findings.
+- [ ] Per-type Done gate (`bug` → auto-merge + CI green).
+- [ ] PR merged.
+- [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
-- 2026-06-07 — Skeleton generated by `scripts/convert-roadmap-to-stories.sh` from PR-bundle `PR-H2a` (roadmap_ids: G033). Status: Draft; AC dimensions are `N/A — TBD refinement on pickup` per SHY-0003 spec. Pickup must refine before TDD.
+- 2026-06-07 ~21:31 BST — Refined under SHY-0032. Tier 4 polish-with-real-value.
+- 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-H2` (G033).
