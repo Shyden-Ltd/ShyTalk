@@ -48,6 +48,7 @@ import com.google.firebase.messaging.FirebaseMessaging
 import com.shyden.shytalk.BuildConfig
 import com.shyden.shytalk.core.crop.CropContract
 import com.shyden.shytalk.core.crop.CropInput
+import com.shyden.shytalk.core.push.notifyPushPermissionPrompted
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
@@ -270,7 +271,11 @@ fun NavGraph(
                 val permissionLauncher =
                     rememberLauncherForActivityResult(
                         ActivityResultContracts.RequestMultiplePermissions(),
-                    ) { /* granted or denied — no action needed */ }
+                    ) { results ->
+                        if (Manifest.permission.POST_NOTIFICATIONS in results) {
+                            notifyPushPermissionPrompted(context)
+                        }
+                    }
 
                 // Save FCM token on login
                 LaunchedEffect(Unit) {

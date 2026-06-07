@@ -1,0 +1,59 @@
+name: Sync SHY Stories to GitHub Issues
+
+# One-way mirror of .project/stories/SHY-NNNN-*.md → GitHub Issues + Projects v2.
+# Spec: .project/stories/SHY-0002-wire-github-integration.md
+# Operator-side prerequisite: provision GH_PAT_PROJECT secret (fine-grained PAT
+# with issues:write + pull-requests:write + project:write — the auto
+# GITHUB_TOKEN cannot carry project:write).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".project/stories/SHY-*.md"
+      - "scripts/sync-stories-to-issues.sh"
+      - ".github/workflows/sync-stories-to-issues.yml"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry-run (print actions; no API mutations)"
+        type: boolean
+        default: false
+
+# Workflow-level concurrency guarantees only one sync runs at a time per ref.
+# cancel-in-progress: false because we never want to cancel an in-flight sync
+# mid-API-call — that would leave issues in inconsistent state.
+concurrency:
+  group: sync-stories-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Mirror stories to Issues
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 1
+
+      - name: Validate all stories before sync
+        run: bash scripts/check-story-frontmatter.sh --scan .project/stories
+
+      - name: Sync stories to GitHub Issues
+        env:
+          GH_PAT_PROJECT: ${{ secrets.GH_PAT_PROJECT }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: |
+          if [ -z "${GH_PAT_PROJECT:-}" ]; then
+            echo "::warning::GH_PAT_PROJECT secret not set — sync will be a no-op until operator provisions it." >&2
+            exit 0
+          fi
+          if [ "${DRY_RUN:-}" = "true" ]; then
+            bash scripts/sync-stories-to-issues.sh --all --dry-run --verbose
+          else
+            bash scripts/sync-stories-to-issues.sh --all
+          fi

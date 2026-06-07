@@ -68,10 +68,10 @@ jobs:
         # qa-runner workflow family beats partial SHA-pinning that
         # locks down only checkout while setup-node/cache/upload-artifact
         # stay on floating tags (per reviewer C3).
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Setup Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '24'
           cache: npm
@@ -92,7 +92,7 @@ jobs:
         working-directory: express-api
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v5
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
@@ -177,7 +177,7 @@ jobs:
         # diagnosis. The report itself records per-cell pass/fail/skip/
         # timeout so the operator can see exactly which cells broke.
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: qa-matrix-report-${{ inputs.target }}-${{ github.run_id }}
           path: express-api/qa-matrix-report.*

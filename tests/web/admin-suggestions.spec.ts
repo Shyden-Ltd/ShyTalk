@@ -1345,9 +1345,12 @@ test.describe('Admin Identity Graph Visualization (11.65)', () => {
     await expect(c).toBeVisible();
   });
 
-  test('graph scrollable on mobile', async ({ browser, browserName }) => {
-    test.skip(browserName === 'firefox', 'Firefox does not support isMobile context option');
-    const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true });
+  test('graph scrollable on mobile', async ({ browser }) => {
+    // G035: dropped isMobile flag + Firefox skip — the assertion is
+    // about layout at a mobile viewport size, not touch events.
+    // CSS media queries respond to viewport size regardless of
+    // isMobile. Coverage extended to Firefox + WebKit.
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
     const page = await ctx.newPage();
     await setupApiMocks(page);
     await adminLogin(page); await navigateToTab(page, 'Users');
@@ -1398,9 +1401,9 @@ test.describe('Admin Panel Responsive Design (11.86)', () => {
     await ctx.close();
   });
 
-  test('identity graph scrollable on mobile', async ({ browser, browserName, testData }) => {
-    test.skip(browserName === 'firefox', 'Firefox does not support isMobile context option');
-    const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true });
+  test('identity graph scrollable on mobile', async ({ browser, testData }) => {
+    // G035: see "graph scrollable on mobile" above for rationale.
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
     const page = await ctx.newPage();
     await setupApiMocks(page);
     await adminLogin(page); await navigateToIdentityGraph(page, String(testData.user.uniqueId));
@@ -1410,9 +1413,9 @@ test.describe('Admin Panel Responsive Design (11.86)', () => {
     await ctx.close();
   });
 
-  test('audit log table horizontally scrollable on mobile', async ({ browser, browserName }) => {
-    test.skip(browserName === 'firefox', 'Firefox does not support isMobile context option');
-    const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true });
+  test('audit log table horizontally scrollable on mobile', async ({ browser }) => {
+    // G035: see "graph scrollable on mobile" above for rationale.
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
     const page = await ctx.newPage();
     await setupApiMocks(page);
     await adminLogin(page); await navigateToAuditLog(page);
@@ -1422,9 +1425,9 @@ test.describe('Admin Panel Responsive Design (11.86)', () => {
     await ctx.close();
   });
 
-  test('moderation action buttons accessible on mobile', async ({ browser, browserName }) => {
-    test.skip(browserName === 'firefox', 'Firefox does not support isMobile context option');
-    const ctx = await browser.newContext({ viewport: { width: 375, height: 812 }, isMobile: true });
+  test('moderation action buttons accessible on mobile', async ({ browser }) => {
+    // G035: see "graph scrollable on mobile" above for rationale.
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
     const page = await ctx.newPage();
     await setupApiMocks(page);
     await adminLogin(page); await navigateToSuggestions(page);

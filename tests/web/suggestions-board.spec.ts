@@ -1249,10 +1249,26 @@ test.describe('Mobile-Specific Interactions', () => {
   });
 
   test('touch: tap vote arrow registers vote', async ({ page, browserName }) => {
-    test.skip(browserName === 'firefox' || browserName === 'webkit', 'Firefox/WebKit do not support touch/tap events reliably');
     const upvoteBtn = page.locator('[data-testid^="vote-up"]').first();
     await upvoteBtn.waitFor({ timeout: 10_000 });
-    await upvoteBtn.tap();
+    // Firefox/WebKit do not dispatch reliable touchstart/touchend
+    // through Playwright's `.tap()` API. The vote arrow binds via a
+    // standard `click` handler (no touch-specific gesture), so a
+    // bounding-box mouse click is functionally equivalent for what
+    // this scenario actually verifies — the registration code path.
+    // Trade-off: lost coverage of any touch-only listener if one is
+    // added in the future on those two browsers. Closes G034.
+    if (browserName === 'firefox' || browserName === 'webkit') {
+      const box = await upvoteBtn.boundingBox();
+      // Hard-fail rather than silently no-op when the element has no
+      // bounding box (off-screen, zero dimensions, detached layout). A
+      // missing box on the previously-skipped browsers would have
+      // masked a real rendering regression as a vacuous pass.
+      expect(box, 'vote-up button must be laid out for the mouse-click fallback').not.toBeNull();
+      await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    } else {
+      await upvoteBtn.tap();
+    }
     // Vote should register (or login prompt appears if unauthenticated)
   });
 
@@ -1262,12 +1278,15 @@ test.describe('Mobile-Specific Interactions', () => {
 
     // Long press should not open browser context menu
     const box = await card.boundingBox();
-    if (box) {
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await page.mouse.down();
-      await page.waitForTimeout(1000);
-      await page.mouse.up();
-    }
+    // Hard-fail rather than silently no-op the entire mouse sequence.
+    // Without the box, the test would vacuously pass the "no context
+    // menu visible" assertion (no press happened, so of course no menu).
+    // Same silent-no-op pattern PR-G034 fixed for the vote-arrow site.
+    expect(box, 'suggestion card must be laid out for long-press to test anything').not.toBeNull();
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(1000);
+    await page.mouse.up();
     // No context menu should be visible
     const contextMenu = page.locator('[data-testid="context-menu"]');
     expect(await contextMenu.count()).toBe(0);
@@ -1309,11 +1328,14 @@ test.describe('Mobile-Specific Interactions', () => {
       await descInput.focus();
       await page.waitForTimeout(500);
       const box = await descInput.boundingBox();
-      if (box) {
-        // Element should be within the viewport
-        expect(box.y).toBeGreaterThanOrEqual(0);
-        expect(box.y + box.height).toBeLessThanOrEqual(812);
-      }
+      // Outer count() > 0 guard already gates on the element existing.
+      // The inner null-box guard previously silently no-op'd if the
+      // focused element was still in a transient unlaid-out state,
+      // hiding any real viewport-clipping bug. Hard-fail instead.
+      expect(box, 'desc input must be laid out after focus + 500ms wait').not.toBeNull();
+      // Element should be within the viewport
+      expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(812);
     }
   });
 

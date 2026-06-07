@@ -203,7 +203,7 @@ Najszybszy sposob na rozpoczecie. Jedno polecenie uruchamia wszystko -- emulator
 
 1. **Klonowanie i instalacja**
    ```bash
-   git clone https://github.com/ShydenMcM/ShyTalk.git
+   git clone https://github.com/Shyden-Ltd/ShyTalk.git
    cd ShyTalk
    cd express-api && npm install && cd ..
    ```
