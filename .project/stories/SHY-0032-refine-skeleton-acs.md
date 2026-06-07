@@ -69,7 +69,7 @@ This SHY also slots SHY-0024 (NavGraph coexistence) into Tier 1 priority (P0) pe
 
 ### Observability
 
-- [ ] The refinement PR's commit history contains exactly one commit per tier batch (5 commits: SHY-0032 spec + Tier-1 + Tier-2 + Tier-3 + Tier-4-6 + SHY-INDEX/CLAUDE.md combined), making the diff bisectable by tier.
+- [ ] The refinement PR's commit history is bisectable by logical chunk. Original plan was 5 commits (① SHY-0032 spec, ② Tier-1, ③ Tier-2, ④ Tier-3, ⑤ Tier-4-6 + SHY-INDEX + CLAUDE.md bundled as one commit). Actual commits may differ (e.g. one commit for the bulk refinement + one commit per architect/reviewer fix delta); Notes log records the final commit count + structure.
 - [ ] Each refined story's `## Notes (running log)` gains a `2026-06-07 — Refined under SHY-0032 ...` entry recording the refinement date + author (claude) + the architect/reviewer cycle outcome once those agents have run.
 - [ ] `.project/stories/SHY-INDEX.md` after this PR reflects every priority change in a way `git diff` can show line-by-line (no whole-table rewrite that loses traceability).
 

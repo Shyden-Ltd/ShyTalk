@@ -72,7 +72,7 @@ The operator's decision elevates this from M-scope-with-checkpoint to L-scope-de
 - [ ] If `SharedNavGraph` is launched on Android with `platformCallbacks = null` (regression scenario), the app crashes at startup with a NullPointerException naming the missing parameter — verified by a unit test in `app/src/test/.../SharedNavGraphLaunchTest.kt` that constructs the graph without callbacks.
 - [ ] If the migration accidentally drops a route (e.g. typo in the adapter for `PlatformScreens.profileSetupScreen`), Android startup hits the missing route and surfaces a `NavController` "route not found" error — verified by an instrumented test that navigates to every route in `Screen.kt`.
 - [ ] If the migration breaks the existing FCM token registration (was inlined at `NavGraph.kt:120-145`), the registration moves to the Android adapter; an integration test asserts `FirebaseMessaging.getInstance().token` is fetched on first launch.
-- [ ] If the migration breaks the image-picker `PickVisualMedia` launcher, the relevant Profile/Conversation screens fail-loudly with a logged `IllegalStateException` rather than silently silently no-oping.
+- [ ] If the migration breaks the image-picker `PickVisualMedia` launcher, the relevant Profile/Conversation screens fail-loudly with a logged `IllegalStateException` rather than silently no-oping.
 
 ### Edge cases
 

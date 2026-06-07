@@ -200,7 +200,7 @@ P1 Tier-3 coverage. Closes the iOS data-layer + push-platform-bridge coverage ga
 - **SHY-0001** + **SHY-0032** — process.
 - **SHY-0013** — ModerationFilter (used by IosMessage).
 - **SHY-0015** — SecureStorage (may be used for token caching).
-- **SHY-0017** — Iios room repo pattern (template).
+- **SHY-0017** — iOS room repo pattern (template).
 - **SHY-0006** — PushPermissionStore (consumer).
 - Ktor MockEngine / FakeFirestore.
 
