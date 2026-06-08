@@ -1,13 +1,13 @@
 ---
 id: SHY-0035
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-08
 priority: P0
 effort: M
 type: chore
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1041
 ---
 
 # SHY-0035: Investigate >1GB repo size + audit large committed files + prevent recurrence
@@ -232,6 +232,8 @@ Investigation findings (gathered 2026-06-08 11:24–11:30 BST via `git rev-list 
 
 ## Notes (running log)
 
+- 2026-06-08 12:54 BST — **MERGED** as PR #1041 (auto-merge fired at `2026-06-08T11:54:59Z` — ~10 min after arming). Squash-merge subject landed CLEAN: `SHY-0035: Investigate >1GB repo size + audit + add >5MB lint (#1041)` — no `[DRAFT]` prefix, no exploratory parentheticals. Confirms [[feedback-update-pr-title-before-promote]] lesson (from PR #1040 close-out) is now baked in. Final cycle counts: 1 architect dispatch (4 findings), 4 reviewer dispatches (8 → 2 → 1 → 0 findings; total 11), all 15 applied. Status flipped `In Progress → Done`. Status flip lands in SHY-0036's branch (per [[feedback-one-active-branch-close-on-finish]] — admin work piggybacks on the next active branch).
+- 2026-06-08 ~12:35 BST — Code-reviewer cycle 4 returned **ZERO FINDINGS** — clear to auto-merge. Verified cross-doc consistency one final time: AC bullet at line 57 now reads `/express/` `/kotlin/` (synced with audit doc + .gitignore + CLAUDE.md). Remaining stale-form hits in the audit doc are in the "Sample paths confirmed" block describing actual historical blob paths (correct as-is, evidence not rules) and in Notes log entries (correct as-is, historical record).
 - 2026-06-08 ~12:25 BST — Code-reviewer cycle 3 returned 1 Important, applied. AC Happy-path bullet at line 57 still listed pre-architect-widening forms `/express/pr/` and `/kotlin/pr/`; cycle 1 fixed the audit-doc Prevention section (where reviewer pointed) but missed the AC bullet — two surfaces, one update, easy to miss. Now both surfaces synced to `/express/` and `/kotlin/`. Cycle counts: 3 reviewer dispatches, 11 findings total, all applied. Convergence shape 8→2→1; expect cycle 4 to confirm ZERO.
 - 2026-06-08 ~12:15 BST — Code-reviewer agent cycle 2 returned 1 Important + 1 Suggestion, both applied. (1) **Important**: audit doc Diff-from-baseline table `>5MB tracked: 1 → 6` (forgot to sync the baseline-comparison table when fixing the Headline in cycle 1; future re-audit would have falsely reported `Δ = +5` from a static baseline). (2) **Suggestion**: audit doc Prevention-mechanisms test count `15 → 17` (the cycle-1 fix added 2 equals-form tests; Notes recorded 28/28 across two files but the Prevention section still said 15). Both fixes are doc-only — no code, script, test, or workflow affected. Cycle 2 confirmed: cycle-1 fixes are correct (`--against=*)` strips prefix safely since git refs can't contain `=`; `*.zip` rule doesn't shadow any currently-tracked file; pin-test `indexOf` ordering tests have no false-positive risk because the search strings are unique step names; BDD scenarios match implementation). Cycle counts so far: 2 reviewer dispatches, 10 findings total, all applied.
 - 2026-06-08 ~12:00 BST — Code-reviewer agent (`feature-dev:code-reviewer`) cycle 1 returned 4 Important + 3 Suggestions + 1 Nit, all 8 applied. (1) **Important**: created `express-api/tests/scripts/large-file-guard-pin.test.js` (11 tests pinning lint.yml + pr-checks.yml wiring — step name, run line, fetch command, ALLOW_LARGE_FILE_BODY from inputs.pr_body, ordering before story-validator). (2) **Important**: added `*.zip` to `.gitignore` (verbatim AC item that I dropped during initial impl). (3) **Important**: audit-doc Headline `1 file` → `6 files` (room_background.gif + 5× police_duck.png). (4) **Important**: BDD "Lint warns on shallow clone but still scans" rewritten to "Lint exits 4 when --against ref is unreachable (no silent fallback)" — matches the actual implementation that the architect cycle ALSO baked in. (5) **Suggestion**: `--against=ref` equals-form supported (case `--against=*)`); added 2 new tests covering the form + empty-value rejection. (6) **Suggestion**: AC Edge-cases "exit 127" → "exit 3" (matches the documented exit-code table). (7) **Suggestion**: audit-doc Prevention-mechanisms `/express/pr/`+`/kotlin/pr/` → `/express/`+`/kotlin/` (matches the architect-widened `.gitignore`). (8) **Nit**: test-file path references `tests/scripts/...` → `express-api/tests/scripts/...` in the SHY spec. Test count after this round: 28/28 across two files; shellcheck + actionlint + frontmatter validator all clean. Cycle counts: 1 reviewer dispatch, 8 findings, all applied.
