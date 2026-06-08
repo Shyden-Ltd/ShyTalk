@@ -4,7 +4,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 **Status legend:** 📝 Draft · 🚧 In Progress · 👀 In Review · ✅ Done · ❌ Cancelled
 
-**Sort order (Active section):** `priority` ascending, then `created` ascending, then `id` ascending. P0 always tops.
+**Sort order (Active section):** `priority` ascending, then `created` ascending (matches CLAUDE.md § Story ID + file layout). Within the same `priority` + `created`, the row order is operator-curated to reflect the **tier prioritisation** (Tier 1 unblocker → Tier 1 security → Tier 2 reliability → ...) — this is operator-validated signal beyond strict mechanical sort. P0 always tops; in-progress SHYs surface at the top of their priority band for immediate visibility.
 
 ## Active
 
