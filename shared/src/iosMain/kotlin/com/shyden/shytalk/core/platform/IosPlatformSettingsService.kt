@@ -9,7 +9,6 @@ import platform.Foundation.NSURL
 import platform.Foundation.dateWithTimeIntervalSince1970
 import platform.UIKit.UIApplication
 import platform.UIKit.UIApplicationOpenSettingsURLString
-import platform.UserNotifications.UNUserNotificationCenter
 
 private const val LOG_TAG = "IosPlatformSettings"
 

@@ -917,7 +917,7 @@
             "<p>" +
             escapeHtml(t("loadFail")) +
             "</p>" +
-            '<p style="margin-top:12px"><a href="https://github.com/ShydenMcM/ShyTalk" data-log="github-fallback">' +
+            '<p style="margin-top:12px"><a href="https://github.com/Shyden-Ltd/ShyTalk" data-log="github-fallback">' +
             "Visit our GitHub</a></p></div>";
         }
       });

@@ -10,7 +10,6 @@ import kotlinx.coroutines.launch
 import org.koin.mp.KoinPlatformTools
 import platform.Foundation.NSCharacterSet
 import platform.Foundation.NSString
-import platform.Foundation.NSURL
 import platform.Foundation.URLQueryAllowedCharacterSet
 import platform.Foundation.stringByAddingPercentEncodingWithAllowedCharacters
 import platform.Foundation.stringByRemovingPercentEncoding

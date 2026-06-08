@@ -1,6 +1,5 @@
 package com.shyden.shytalk.navigation
 
-import android.net.Uri
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

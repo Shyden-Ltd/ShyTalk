@@ -13,7 +13,15 @@ indent_size = 4
 max_line_length = 140
 ktlint_function_naming_ignore_when_annotated_with = Composable
 ktlint_standard_no-wildcard-imports = disabled
+# Rules promoted experimental → standard in ktlint 1.8.0 (now run by default):
+#   blank-line-between-when-conditions, kdoc, mixed-condition-operators,
+#   square-brackets-spacing, when-entry-bracing.
+# Codebase is clean under all five; when-entry-bracing is intentionally disabled
+# because the project uses brace-free when entries.
 ktlint_standard_when-entry-bracing = disabled
+# Re-enable no-unused-imports — ktlint disabled it by default in 1.7.0 (cite: pinterest/ktlint#3039).
+# TODO(ktlint-2.0): remove this line when upgrading to ktlint 2.0 — the rule is removed there and this entry becomes inert.
+ktlint_standard_no-unused-imports = enabled
 
 [**/build/generated/**/*.{kt,kts}]
 ktlint = disabled

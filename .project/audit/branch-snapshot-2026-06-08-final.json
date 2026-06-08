@@ -1,0 +1,85 @@
+[
+  {
+    "name": "dependabot/gradle/androidx.core-core-ktx-1.19.0",
+    "head_sha": "bf15bcbac0f48b97bacaf8efcec1d06ad7e12c58",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/bf15bcbac0f48b97bacaf8efcec1d06ad7e12c58",
+    "protected": true,
+    "open_pr": {
+      "headRefName": "dependabot/gradle/androidx.core-core-ktx-1.19.0",
+      "number": 1030,
+      "title": "chore(deps): Bump androidx.core:core-ktx from 1.18.0 to 1.19.0"
+    },
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  },
+  {
+    "name": "dependabot/npm_and_yarn/express-api/aws-sdk/client-s3-3.1063.0",
+    "head_sha": "8848ac7f5326e76ffd5dc7fa5cb7e7046089f7f8",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/8848ac7f5326e76ffd5dc7fa5cb7e7046089f7f8",
+    "protected": true,
+    "open_pr": {
+      "headRefName": "dependabot/npm_and_yarn/express-api/aws-sdk/client-s3-3.1063.0",
+      "number": 1027,
+      "title": "chore(deps): Bump @aws-sdk/client-s3 from 3.1059.0 to 3.1063.0 in /express-api"
+    },
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  },
+  {
+    "name": "dependabot/npm_and_yarn/express-api/aws-sdk/s3-request-presigner-3.1063.0",
+    "head_sha": "85d1a18c3fa9e8a86c108b28a2a22ce0b8d33cfe",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/85d1a18c3fa9e8a86c108b28a2a22ce0b8d33cfe",
+    "protected": true,
+    "open_pr": {
+      "headRefName": "dependabot/npm_and_yarn/express-api/aws-sdk/s3-request-presigner-3.1063.0",
+      "number": 1028,
+      "title": "chore(deps): Bump @aws-sdk/s3-request-presigner from 3.1059.0 to 3.1063.0 in /express-api"
+    },
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  },
+  {
+    "name": "feat/biometric-stable-downgrade-g002",
+    "head_sha": "3e9629f2e7a8eea11edd3862352232c83d87895f",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/3e9629f2e7a8eea11edd3862352232c83d87895f",
+    "protected": true,
+    "open_pr": {
+      "headRefName": "feat/biometric-stable-downgrade-g002",
+      "number": 1014,
+      "title": "chore(deps): downgrade androidx.biometric 1.4.0-alpha07 → 1.1.0 stable (G002)"
+    },
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  },
+  {
+    "name": "gh-pages",
+    "head_sha": "a6b879ba89125fd5a4975bd6c12a75b8a276a436",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/a6b879ba89125fd5a4975bd6c12a75b8a276a436",
+    "protected": true,
+    "open_pr": null,
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  },
+  {
+    "name": "main",
+    "head_sha": "54487ea936022cada535cc8273e2767799a7e343",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/54487ea936022cada535cc8273e2767799a7e343",
+    "protected": true,
+    "open_pr": null,
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  },
+  {
+    "name": "story/SHY-0033-investigate-stale-branches",
+    "head_sha": "41ea61a962a64f239f5ada1e81cf0845c1f5a2aa",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/41ea61a962a64f239f5ada1e81cf0845c1f5a2aa",
+    "protected": true,
+    "open_pr": {
+      "headRefName": "story/SHY-0033-investigate-stale-branches",
+      "number": 1038,
+      "title": "[DRAFT] SHY-0033: Investigate 506-branch sprawl + close stale + enforce 1-active-branch (BLOCKED on 2 operator decisions)"
+    },
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  }
+]
