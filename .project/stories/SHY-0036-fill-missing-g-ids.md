@@ -1,13 +1,13 @@
 ---
 id: SHY-0036
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-08
 priority: P0
 effort: XL
 type: chore
 roadmap_ids: [G001, G003, G006, G011, G018, G024, G025, G031, G032, G034, G035, G036, G037, G040, G041, G048, G050, G051, G053]
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1042
 ---
 
 # SHY-0036: Fill 19 missing G-IDs as fully-refined SHYs (close the roadmap-to-SHY gap)

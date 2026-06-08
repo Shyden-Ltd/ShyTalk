@@ -10,7 +10,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 | ID                                                              | Pri | Effort | Type     | Title                                                                                               | Status         | Roadmap IDs      | PR  |
 | --------------------------------------------------------------- | --- | ------ | -------- | --------------------------------------------------------------------------------------------------- | -------------- | ---------------- | --- |
-| [SHY-0036](SHY-0036-fill-missing-g-ids.md)                      | P0  | XL     | chore    | Fill 19 missing G-IDs as fully-refined SHYs (G001/003/006/011/018/024/025/031/032/034-037/040/041/048/050/051/053)  | 🚧 In Progress | (19 G-IDs)       | —   |
+| [SHY-0037](SHY-0037-introduce-epics.md)                         | P0  | M      | infra    | Introduce EPICs concept + `epic:` frontmatter field + CLAUDE.md spec updates                        | 🚧 In Progress | —                | —   |
 | [SHY-0024](SHY-0024-resolve-navgraph-coexistence.md)            | P0  | L      | refactor | Migrate Android to SharedNavGraph + delete NavGraph.kt                                              | 📝 Draft       | G028             | —   |
 | [SHY-0004](SHY-0004-verify-room-mutation-p3-deploy.md)          | P0  | S      | bug      | Verify Room mutation P3 deploy status + reconcile                                                   | 📝 Draft       | G009, G027       | —   |
 | [SHY-0029](SHY-0029-tighten-ownerfirebaseuid-rule.md)           | P0  | S      | bug      | Tighten ownerFirebaseUid rule (strict equality, no legacy fallback)                                 | 📝 Draft       | G026             | —   |
@@ -70,6 +70,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0033](SHY-0033-investigate-stale-branches.md) | P0  | M      | chore | Investigate 506-branch sprawl + close stale + 1-active-branch | ✅ Done | —           | [#1038](https://github.com/Shyden-Ltd/ShyTalk/pull/1038) |
 | [SHY-0034](SHY-0034-tag-only-release-flow.md) | P0 | L | refactor | Re-architect release.yml to tag-only signed-commit flow (eliminate ephemeral `release/v*` branches) | ✅ Done | — | [#1040](https://github.com/Shyden-Ltd/ShyTalk/pull/1040) |
 | [SHY-0035](SHY-0035-investigate-repo-size.md) | P0 | M | chore | Investigate >1GB repo size + audit + add >5MB lint | ✅ Done | — | [#1041](https://github.com/Shyden-Ltd/ShyTalk/pull/1041) |
+| [SHY-0036](SHY-0036-fill-missing-g-ids.md) | P0 | XL | chore | Fill 19 missing G-IDs as fully-refined SHYs + roadmap-to-SHY mapping table | ✅ Done | (19 G-IDs) | [#1042](https://github.com/Shyden-Ltd/ShyTalk/pull/1042) |
 
 ## Cancelled
 
@@ -81,7 +82,6 @@ These IDs are reserved by the SHY-0032 + SHY-0033 multi-PR plan (operator 2026-0
 
 | Reserved ID | Title (planned)                                                                                                                                                | Trigger               |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| SHY-0037    | Introduce EPICs + `epic:` frontmatter field + CLAUDE.md spec updates                                                                                           | After SHY-0036 merges |
 | SHY-0038    | Refactor public roadmap webpage + add GitHub project board link                                                                                                | After SHY-0037 merges |
 | SHY-0039    | CI workflow for SHY → roadmap-data.json auto-sync                                                                                                              | After SHY-0038 merges |
 | SHY-0040    | Optimise `sync-stories-to-issues.sh` per-file overhead (currently ~620ms/file, 34 files = 21s; bottleneck is jq+awk subprocess churn)                          | When SHY corpus hits ~50 files or sync timeout escalates |
