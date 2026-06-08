@@ -116,6 +116,10 @@ All audit signals — architect verdict, code-reviewer cycle count + verbatim fi
 - **NEVER commit directly to main** — always create a branch and PR
 - Before starting work, check for unfinished branches (`git branch -a`)
 - Commit AND push per task, with task name in message
+- **One active branch** at a time per contributor — finish (merge or cancel) the current branch before opening a new one (per [[feedback-one-active-branch-close-on-finish]] HARD rule). Soft-fail enforced by `.github/workflows/branch-discipline-check.yml`.
+- **Close finished branches** — repo has `delete_branch_on_merge: true`; closed-not-merged PRs leave branches behind that should be manually deleted via `gh api -X DELETE /repos/Shyden-Ltd/ShyTalk/git/refs/heads/<name>`.
+- **No release branches** — releases are git tags ONLY (per [[feedback-no-release-branches-use-tags.md]]). `release/v*` branches are forbidden; `release.yml` no longer creates them.
+- **No large files (>5MB)** without explicit operator authorisation. Use Git LFS or external CDN for legitimate large assets. `.gitignore` discipline: never commit `node_modules/`, `build/`, `target/`, `*.apk`, `*.aab`, `*.ipa`, generated screenshots, test recordings, derived caches.
 
 ## Architecture
 - KMP: `shared/` module (commonMain/androidMain/iosMain) + `app/` (Android) + `iosApp/` (iOS)

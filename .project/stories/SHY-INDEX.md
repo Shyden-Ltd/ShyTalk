@@ -10,8 +10,8 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 | ID                                                              | Pri | Effort | Type     | Title                                                                                     | Status         | Roadmap IDs      | PR  |
 | --------------------------------------------------------------- | --- | ------ | -------- | ----------------------------------------------------------------------------------------- | -------------- | ---------------- | --- |
+| [SHY-0033](SHY-0033-investigate-stale-branches.md)              | P0  | M      | chore    | Investigate 506-branch sprawl + close stale + enforce 1-active-branch invariant           | 🚧 In Progress | —                | —   |
 | [SHY-0024](SHY-0024-resolve-navgraph-coexistence.md)            | P0  | L      | refactor | Migrate Android to SharedNavGraph + delete NavGraph.kt                                    | 📝 Draft       | G028             | —   |
-| [SHY-0032](SHY-0032-refine-skeleton-acs.md)                     | P0  | L      | chore    | Refine the 28 skeleton SHYs + codify no-skeleton rule                                     | 🚧 In Progress | —                | —   |
 | [SHY-0004](SHY-0004-verify-room-mutation-p3-deploy.md)          | P0  | S      | bug      | Verify Room mutation P3 deploy status + reconcile                                         | 📝 Draft       | G009, G027       | —   |
 | [SHY-0029](SHY-0029-tighten-ownerfirebaseuid-rule.md)           | P0  | S      | bug      | Tighten ownerFirebaseUid rule (strict equality, no legacy fallback)                       | 📝 Draft       | G026             | —   |
 | [SHY-0015](SHY-0015-add-secure-storage-contract-tests.md)       | P0  | S      | bug      | SecureStorage + CryptoKeyPair contract tests                                              | 📝 Draft       | G019             | —   |
@@ -47,6 +47,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0001](SHY-0001-establish-agile-workflow.md)   | P1  | M      | infra | Establish Agile user-story way of working              | ✅ Done | —           | [#1034](https://github.com/Shyden-Ltd/ShyTalk/pull/1034) |
 | [SHY-0002](SHY-0002-wire-github-integration.md)    | P1  | M      | infra | Wire GitHub Issues + Projects v2 integration           | ✅ Done | —           | [#1035](https://github.com/Shyden-Ltd/ShyTalk/pull/1035) |
 | [SHY-0003](SHY-0003-convert-roadmap-to-stories.md) | P1  | L      | chore | Convert zero-gap roadmap to user stories + cross-label | ✅ Done | G054        | [#1036](https://github.com/Shyden-Ltd/ShyTalk/pull/1036) |
+| [SHY-0032](SHY-0032-refine-skeleton-acs.md)        | P0  | L      | chore | Refine the 28 skeleton SHYs + codify no-skeleton rule  | ✅ Done | —           | [#1037](https://github.com/Shyden-Ltd/ShyTalk/pull/1037) |
 
 ## Cancelled
 
@@ -54,14 +55,15 @@ _None yet._
 
 ## Reserved (planned, not yet filed)
 
-These IDs are reserved by the SHY-0032 multi-PR plan. Files don't exist yet; they'll be created as fully-refined SHYs (per [[feedback-no-skeleton-stories-fully-refined]]) when each predecessor lands.
+These IDs are reserved by the SHY-0032 + SHY-0033 multi-PR plan (operator 2026-06-07). Files don't exist yet; they'll be created as fully-refined SHYs (per [[feedback-no-skeleton-stories-fully-refined]]) when each predecessor lands. Per [[feedback-one-active-branch-close-on-finish]]: only one of these may have an active branch at a time.
 
 | Reserved ID | Title (planned)                                                                                                                                                | Trigger               |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| SHY-0033    | Fill 18 missing G-IDs as fully-refined SHYs (G001, G003, G006, G011, G018, G024, G025, G031, G032, G034, G035, G036, G037, G040, G041, G048, G050, G051, G053) | After SHY-0032 merges |
-| SHY-0034    | Introduce EPICs + `epic:` frontmatter field + CLAUDE.md spec updates                                                                                           | After SHY-0033 merges |
-| SHY-0035    | Refactor public roadmap webpage + add GitHub project board link                                                                                                | After SHY-0034 merges |
-| SHY-0036    | CI workflow for SHY → roadmap-data.json auto-sync                                                                                                              | After SHY-0035 merges |
+| SHY-0034    | Investigate >1GB repo size + audit large committed files + history rewrite                                                                                     | After SHY-0033 merges |
+| SHY-0035    | Fill 18 missing G-IDs as fully-refined SHYs (G001, G003, G006, G011, G018, G024, G025, G031, G032, G034, G035, G036, G037, G040, G041, G048, G050, G051, G053) | After SHY-0034 merges |
+| SHY-0036    | Introduce EPICs + `epic:` frontmatter field + CLAUDE.md spec updates                                                                                           | After SHY-0035 merges |
+| SHY-0037    | Refactor public roadmap webpage + add GitHub project board link                                                                                                | After SHY-0036 merges |
+| SHY-0038    | CI workflow for SHY → roadmap-data.json auto-sync                                                                                                              | After SHY-0037 merges |
 
 ---
 
