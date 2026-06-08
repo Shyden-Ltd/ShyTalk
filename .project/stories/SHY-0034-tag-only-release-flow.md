@@ -1,13 +1,13 @@
 ---
 id: SHY-0034
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-08
 priority: P0
 effort: L
 type: refactor
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1040
 ---
 
 # SHY-0034: Re-architect release.yml to tag-only signed-commit flow
@@ -349,5 +349,7 @@ The architect agent (feature-dev:code-architect) reviewed all 3 options against 
 
 ## Notes (running log)
 
-- 2026-06-08 ~09:50 BST — SHY-0034 created. Status: In Progress. Branch `story/SHY-0034-tag-only-release-flow` opened off main (post-SHY-0033-merge HEAD `62cb12039fd`). Investigation phase: 3 alternatives spec'd (A: bypass actor; B: bot+GPG; C: tag-only/git describe). Recommendation: Option C per operator's "quality+reliability over speed" framing, but architect validation required before implementation.
+- 2026-06-08 11:23 BST — **MERGED** as PR #1040 (auto-merge fired at `2026-06-08T10:23:42Z`). Final cycle counts: architect ran once (9 findings, all applied including the Option-A-vs-C correction); code-reviewer ran 3 dispatches (3 → 4 → ZERO findings); pin tests 17/17 ✓; SonarCloud quality gate green at every pre-push. Status flipped `In Progress` → `Done`. Status flip lands in SHY-0035's branch (per [[feedback-one-active-branch-close-on-finish]] — admin work piggybacks on the next active branch to satisfy the PR-required-for-main rule without opening a separate doc-only PR).
+- 2026-06-08 11:24 BST — *Lesson captured*: PR #1040 squash-merge subject retained the stale `[DRAFT] ... (3 alternatives — architect to choose)` prefix because the PR title was never updated when promoting DRAFT → ready. Future SHY closes: also run `gh pr edit <n> --title 'SHY-NNNN: <Title>'` (drop the `[DRAFT]` and any stale exploratory text) BEFORE `gh pr ready` + `gh pr merge --auto`. Squash subject = PR title at merge time. Filed as a self-discovered feedback memory.
+- 2026-06-08 ~09:50 BST — SHY-0034 created. Status: In Progress. Branch `story/SHY-0034-tag-only-release-flow` opened off main (post-SHY-0033-merge HEAD `62cb12039fd`). Investigation phase: 3 alternatives spec'd (A: bypass actor; B: bot+GPG; C: tag-only/git describe). Recommendation: Option C per operator's "quality+reliability over speed" framing, but architect validation required before implementation. **Architect overruled C → A** with corrections: (1) release-tag.yml already exists; (2) Option C blast radius crosses ≥5 files including `app/build.gradle.kts` versionCode/versionName literals; (3) release notes already auto-generated; (4) bypass-actor security risk is minimal because the Release App is already trusted.
 - 2026-06-08 ~09:48 BST — SHY-0033 merged as PR #1038. Operator's "no release branches" directive now blocking only because release.yml still creates them — this SHY closes that gap.

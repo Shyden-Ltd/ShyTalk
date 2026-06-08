@@ -107,10 +107,24 @@ jobs:
       - name: Release workflow contract (PR-flow + signed commits)
         run: bash scripts/check-release-trigger.sh
 
+      # SHY-0035: reject any file >5MB added in the diff vs main. Fetch
+      # origin/main explicitly because actions/checkout above checks out
+      # a single ref (no main reference). The fetch is cheap (commit graph
+      # only via filter, plus blob promise-on-demand for cat-file).
+      # PR body is passed through ALLOW_LARGE_FILE_BODY so [allow-large-file:
+      # <path> reason: ...] markers can exempt legitimate large assets per PR.
+      - name: Fetch origin/main for diff base
+        run: git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main
+
+      - name: Large-file guard (>5MB threshold)
+        env:
+          ALLOW_LARGE_FILE_BODY: ${{ github.event.pull_request.body }}
+        run: bash scripts/check-large-files.sh --against origin/main
+
       # SHY user-story frontmatter validator — pinned LAST so a story-
       # validation failure cannot mask earlier actionlint / shellcheck /
-      # SHA-pin / i18n / release-contract findings on the same PR.
-      # See CLAUDE.md § "Agile Way of Working" for the spec the validator
-      # enforces, and SHY-0001 for the rationale + DoD.
+      # SHA-pin / i18n / release-contract / large-file findings on the
+      # same PR. See CLAUDE.md § "Agile Way of Working" for the spec the
+      # validator enforces, and SHY-0001 for the rationale + DoD.
       - name: Validate SHY story frontmatter
         run: bash scripts/check-story-frontmatter.sh --scan .project/stories

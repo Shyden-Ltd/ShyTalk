@@ -64,6 +64,24 @@ if ! bash scripts/check-release-trigger.sh; then
   exit 1
 fi
 
+# Block any file >5MB from being added in this push's diff vs origin/main.
+# See SHY-0035 (.project/audit/repo-size-audit-2026-06-08.md). Pre-existing
+# tracked >5MB files are out-of-scope here (diff-only mode); CI's lint job
+# uses the same script with the same flag for the authoritative gate.
+# Skip if origin/main isn't fetched locally (e.g. first push of a fresh
+# clone) — CI will still catch large additions even if this local hook
+# can't.
+if git rev-parse --verify origin/main >/dev/null 2>&1; then
+  if ! bash scripts/check-large-files.sh --against origin/main; then
+    echo ""
+    echo "✗ check-large-files.sh tripped — push blocked"
+    echo "  Either remove the offending file, move it to a CDN / Git LFS,"
+    echo "  or add an [allow-large-file: <path> reason: ...] marker to the"
+    echo "  PR description (CI will read it via ALLOW_LARGE_FILE_BODY)."
+    exit 1
+  fi
+fi
+
 # Run actionlint on workflow changes BEFORE the SonarCloud check (so workflow
 # regressions don't slip through when nothing else changes). This catches
 # unquoted globs, missing `set -euo pipefail`, and other silent-failure
