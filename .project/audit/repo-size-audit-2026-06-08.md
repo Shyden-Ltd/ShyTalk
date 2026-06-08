@@ -184,7 +184,7 @@ Total local-only: ~10 GiB. All confirmed gitignored.
 1. **`.gitignore` hardening** — explicit ignores for `/data/`, `/playwright/pr/`, `/playwright/deploy/`, `/playwright/latest/`, `/express/`, `/history/`, `/kotlin/`, `/android-e2e/` (the six confirmed Allure-pattern dirs; `/express/` and `/kotlin/` were widened from `/express/pr/` and `/kotlin/pr/` per architect Suggestion 2026-06-08 to also catch the `deploy/`/`latest/` Allure variants — `express-api/` is the actual tracked source dir, distinct path). Plus reinforced extension blocks: `*.apk`, `*.aab`, `*.ipa`, `*.zip`.
 2. **`scripts/check-large-files.sh`** — pre-push + CI lint that rejects any file >5MB on the diff. Threshold matches operator's "never commit files >5MB without explicit authorisation" directive.
 3. **PR-description escape hatch** — `[allow-large-file: <path> reason: <reason>]` marker in PR body grants per-PR exemption for legitimate large assets.
-4. **Pin tests** — `express-api/tests/scripts/check-large-files.test.js` (15 tests, script behaviour) + `express-api/tests/scripts/large-file-guard-pin.test.js` (workflow wiring regression net).
+4. **Pin tests** — `express-api/tests/scripts/check-large-files.test.js` (17 tests, script behaviour — includes `--against=ref` equals-form added in reviewer cycle 1) + `express-api/tests/scripts/large-file-guard-pin.test.js` (11 tests, workflow wiring regression net).
 
 See [SHY-0035](../stories/SHY-0035-investigate-repo-size.md) AC + BDD for full spec.
 
@@ -210,7 +210,7 @@ A future re-audit doc should be named `repo-size-audit-YYYY-MM-DD.md` (date-stam
 | ------------------ | ------------------- | ------------- | -------- |
 | Pack size          | 12.74 GiB           | ...           | ...      |
 | In-pack objects    | 2,046,881           | ...           | ...      |
-| `>5MB tracked`     | 1                   | ...           | ...      |
+| `>5MB tracked`     | 6                   | ...           | ...      |
 
 If the pack size INCREASED, investigate via the same commands used here (`git rev-list --objects --all | git cat-file --batch-check`); the lint should have prevented per-file additions but aggregate growth from legitimate small commits is expected over time.
 
