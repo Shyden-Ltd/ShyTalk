@@ -24,6 +24,11 @@ on:
         description: 'Whether backend files changed'
         type: boolean
         required: true
+      pr_body:
+        description: 'PR body, used to detect [allow-large-file] markers'
+        type: string
+        required: false
+        default: ''
 
   workflow_dispatch:
     inputs:
@@ -107,10 +112,31 @@ jobs:
       - name: Release workflow contract (PR-flow + signed commits)
         run: bash scripts/check-release-trigger.sh
 
+      # SHY-0035: reject any file >5MB added in the diff vs main. Fetch
+      # origin/main explicitly because actions/checkout above checks out
+      # a single ref (no main reference). The fetch is cheap (commit graph
+      # only via filter, plus blob promise-on-demand for cat-file).
+      # PR body is passed through ALLOW_LARGE_FILE_BODY so [allow-large-file:
+      # <path> reason: ...] markers can exempt legitimate large assets per PR.
+      - name: Fetch origin/main for diff base
+        run: git fetch --no-tags --depth=1 origin main:refs/remotes/origin/main
+
+      - name: Large-file guard (>5MB threshold)
+        # Source PR body via the explicit `pr_body` workflow_call input
+        # rather than `github.event.pull_request.body`. The latter would
+        # work in the `pull_request`-triggered top-level event (workflow_call
+        # inherits the caller's event context), but the explicit input is
+        # robust against future caller-workflow refactors (e.g. if lint.yml
+        # were ever called from a non-pull_request event such as a manual
+        # workflow_dispatch). Empty input → no exemptions → safe default.
+        env:
+          ALLOW_LARGE_FILE_BODY: ${{ inputs.pr_body }}
+        run: bash scripts/check-large-files.sh --against origin/main
+
       # SHY user-story frontmatter validator — pinned LAST so a story-
       # validation failure cannot mask earlier actionlint / shellcheck /
-      # SHA-pin / i18n / release-contract findings on the same PR.
-      # See CLAUDE.md § "Agile Way of Working" for the spec the validator
-      # enforces, and SHY-0001 for the rationale + DoD.
+      # SHA-pin / i18n / release-contract / large-file findings on the
+      # same PR. See CLAUDE.md § "Agile Way of Working" for the spec the
+      # validator enforces, and SHY-0001 for the rationale + DoD.
       - name: Validate SHY story frontmatter
         run: bash scripts/check-story-frontmatter.sh --scan .project/stories

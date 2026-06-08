@@ -135,3 +135,40 @@ database-debug.log
 # Deployed git SHA marker — written by deploy workflow on the server
 express-api/.deployed-sha
 journey-results/
+
+# ─── SHY-0035 (2026-06-08): prevent re-commit of Allure-pattern CI artefacts ───
+# Historical audit (`.project/audit/repo-size-audit-2026-06-08.md`) found 6
+# top-level directories totalling ~42 GiB ever-committed (12.74 GiB pack)
+# matching the Allure-report tree (`<dir>/pr/<n>/`, `<dir>/deploy/`,
+# `<dir>/latest/`, `data/attachments/<hex>.zip`, `history/*-trend.json`).
+# All currently have 0 files tracked but blobs persist in `.git/`. These
+# rules prevent any future regression. Each entry is `/`-anchored at repo
+# root so it doesn't shadow legitimate nested directories with the same
+# name.
+/data/
+/playwright/pr/
+/playwright/deploy/
+/playwright/latest/
+# Widened from `/express/pr/` (architect Suggestion 2026-06-08) — the
+# Allure variant could emit `express/deploy/` or `express/latest/` too;
+# `/express-api/` is the actual tracked source dir, distinct path.
+/express/
+/history/
+# Same widening rationale — block all `kotlin/` subpaths at root.
+/kotlin/
+/android-e2e/
+
+# Compiled mobile bundles — never commit; use the deploy workflow for
+# Play Store / TestFlight uploads. The existing `**/build` entry covers
+# generated `.apk`/`.aab` under `app/build/`, but explicit extension
+# blocks catch any rogue copy made outside the build dir.
+*.apk
+*.aab
+*.ipa
+
+# Reject `.zip` blanket-style — every large historical blob in the
+# 2026-06-08 audit was an Allure attachment `.zip`. If a future
+# legitimate small `.zip` needs to be tracked (e.g. a font bundle),
+# add an explicit `!path/to/legit.zip` negation here. Verify nothing
+# legitimate is currently tracked via `git ls-files '*.zip'`.
+*.zip
