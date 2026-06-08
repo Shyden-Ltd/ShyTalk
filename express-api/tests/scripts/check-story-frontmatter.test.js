@@ -797,6 +797,25 @@ describe('scripts/check-story-frontmatter.sh', () => {
       expect(stderr).toMatch(/\[check\] bdd:count-ac-bullets/);
       expect(stderr).toMatch(/\[check\] bdd:count-scenarios/);
     });
+
+    it('--verbose --scan prints [check] scan: lines to stderr; stdout silent (C2)', () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shy-verbose-scan-'));
+      fs.copyFileSync(FIXTURE_VALID, path.join(dir, 'SHY-0001-fixture.md'));
+      const { code, stdout, stderr } = runScript(['--verbose', '--scan', dir]);
+      expect(code).toBe(0);
+      expect(stdout).toBe('');
+      expect(stderr).toMatch(/\[check\] scan:/);
+      expect(stderr).toMatch(/\[check\] frontmatter:id/);
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    it('--scan --verbose (flag AFTER --scan) → exit 2 with ordering hint (C1 guard)', () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shy-scan-flag-order-'));
+      const { code, stderr } = runScript(['--scan', '--verbose', dir]);
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/flags.*must precede --scan/);
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
   });
 
   // ============================================================== gitignore probes

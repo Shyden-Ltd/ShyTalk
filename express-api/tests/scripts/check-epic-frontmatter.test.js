@@ -126,11 +126,28 @@ describe('scripts/check-epic-frontmatter.sh', () => {
       expect(stderr).toBe('');
     });
 
-    test('--verbose with valid file prints [check] lines to stderr', () => {
+    test('--verbose prints [check] lines to stderr with specific check names; exit 0 (I6)', () => {
+      // I6: previous version only asserted /^\[check\] /m — any [check] line passed,
+      // so renames/drops of specific check names would be invisible. Now asserts the
+      // documented check-name vocabulary so refactors that change verbose tokens fail.
       const file = tempEpicFile(VALID_CONTENT);
       const { code, stderr } = runScript(['--verbose', file]);
       expect(code).toBe(0);
-      expect(stderr).toMatch(/^\[check\] /m);
+      expect(stderr).toMatch(/\[check\] frontmatter:id/);
+      expect(stderr).toMatch(/\[check\] value:id/);
+      expect(stderr).toMatch(/\[check\] value:id-matches-filename/);
+      expect(stderr).toMatch(/\[check\] value:title/);
+      expect(stderr).toMatch(/\[check\] value:child_shys/);
+      expect(stderr).toMatch(/\[check\] section:## Vision/);
+    });
+
+    test('stdout is silent on success without --verbose (I4 regression guard)', () => {
+      // I4: a stray `echo` left in the script would be invisible without an explicit
+      // stdout-emptiness assertion.
+      const file = tempEpicFile(VALID_CONTENT);
+      const { code, stdout } = runScript([file]);
+      expect(code).toBe(0);
+      expect(stdout).toBe('');
     });
   });
 
@@ -289,17 +306,54 @@ describe('scripts/check-epic-frontmatter.sh', () => {
       expect(code).toBe(2);
     });
 
-    test('--scan iterates lexicographically and stops on first failure', () => {
+    test('--scan: valid EPIC precedes invalid one — scan reports the invalid one (I3 fix)', () => {
+      // I3 fix: prior version wrote `EPIC-0002-good.md` with VALID_CONTENT whose id is
+      // EPIC-0099 — that "good" file would ALSO fail id-mismatch. Now we write a genuinely
+      // valid EPIC-0001 first, then an invalid EPIC-0099, proving the scan processes
+      // the valid one cleanly before halting on the bad one.
       const dir = tempScanDir();
-      // First (alphabetically) is broken; second is valid. Scan should fail and name the first.
-      fs.writeFileSync(
-        path.join(dir, 'EPIC-0001-bad.md'),
-        removeBodySection(VALID_CONTENT, 'Vision'),
-      );
-      fs.writeFileSync(path.join(dir, 'EPIC-0002-good.md'), VALID_CONTENT);
+      const goodContent = setFrontmatterField(VALID_CONTENT, 'id', 'EPIC-0001');
+      fs.writeFileSync(path.join(dir, 'EPIC-0001-good.md'), goodContent);
+      const badContent = removeBodySection(VALID_CONTENT, 'Vision'); // id stays EPIC-0099
+      fs.writeFileSync(path.join(dir, 'EPIC-0099-bad.md'), badContent);
       const { code, stderr } = runScript(['--scan', dir]);
       expect(code).toBe(40);
-      expect(stderr).toMatch(/EPIC-0001-bad\.md/);
+      expect(stderr).toMatch(/EPIC-0099-bad\.md/);
+    });
+
+    test('--scan with multi-entry child_shys: first known, second unknown → exit 40 names the second (I8)', () => {
+      const dir = tempScanDir();
+      fs.writeFileSync(
+        path.join(dir, 'SHY-0001-exists.md'),
+        '---\nid: SHY-0001\nstatus: Draft\n---\n# SHY\n',
+      );
+      fs.writeFileSync(
+        path.join(dir, 'EPIC-0099-fixture.md'),
+        setFrontmatterField(VALID_CONTENT, 'child_shys', '[SHY-0001, SHY-9999]'),
+      );
+      const { code, stderr } = runScript(['--scan', dir]);
+      expect(code).toBe(40);
+      expect(stderr).toMatch(/SHY-9999/);
+    });
+
+    test('--verbose --scan prints [check] scan: lines to stderr; stdout silent (C2)', () => {
+      const dir = tempScanDir();
+      fs.writeFileSync(path.join(dir, 'EPIC-0099-fixture.md'), VALID_CONTENT);
+      const { code, stdout, stderr } = runScript(['--verbose', '--scan', dir]);
+      expect(code).toBe(0);
+      expect(stdout).toBe('');
+      expect(stderr).toMatch(/\[check\] scan:/);
+      expect(stderr).toMatch(/\[check\] frontmatter:id/);
+    });
+
+    test('--scan --verbose (flag AFTER --scan) → exit 2 with ordering hint (C1 guard)', () => {
+      // C1: --scan does not shift before consuming its arg, so flag-after-scan would
+      // silently be misinterpreted as the dir path. The bash guard rejects this with
+      // an actionable error instead.
+      const dir = tempScanDir();
+      const { code, stderr } = runScript(['--scan', '--verbose', dir]);
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/flags.*must precede --scan/);
     });
   });
 
@@ -349,6 +403,33 @@ describe('scripts/check-epic-frontmatter.sh', () => {
       const { code } = runScript([file]);
       expect(code).toBe(0);
     });
+
+    test('child_shys: [   ] (whitespace-only between brackets) accepted (I5)', () => {
+      // Distinct code path from `[]`: raw after sed extraction is "   ", non-empty,
+      // so the inner `for entry in $(...)` is entered but word-splitting on pure
+      // whitespace produces zero iterations. Must accept silently.
+      const file = tempEpicFile(setFrontmatterField(VALID_CONTENT, 'child_shys', '[   ]'));
+      const { code } = runScript([file]);
+      expect(code).toBe(0);
+    });
+
+    test('CRLF-encoded EPIC in --scan mode with child_shys cross-check exits 0 (I7)', () => {
+      // Pass 4 of validate_scan reads the ORIGINAL (non-normalised) file.
+      // The [[:space:]] tolerance in grep patterns must handle \r without
+      // false-positive on the cross-corpus child-SHY lookup.
+      const dir = tempScanDir();
+      fs.writeFileSync(
+        path.join(dir, 'SHY-0001-target.md'),
+        '---\nid: SHY-0001\nstatus: Draft\n---\n# SHY\n',
+      );
+      const crlf = setFrontmatterField(VALID_CONTENT, 'child_shys', '[SHY-0001]').replace(
+        /\n/g,
+        '\r\n',
+      );
+      fs.writeFileSync(path.join(dir, 'EPIC-0099-crlf.md'), crlf);
+      const { code } = runScript(['--scan', dir]);
+      expect(code).toBe(0);
+    });
   });
 
   describe('security', () => {
@@ -388,6 +469,31 @@ describe('scripts/check-epic-frontmatter.sh', () => {
       // None of these names match EPIC-[0-9][0-9][0-9][0-9]-*.md → scan finds 0 files → exit 0.
       expect(code).toBe(0);
     });
+
+    test('does NOT execute shell metacharacters in frontmatter values (C3)', () => {
+      // Verifies the "all user-controlled strings quoted in shell pipelines" contract.
+      // Target field: `title` — loosest regex (`non-empty, non-whitespace-only`), so the
+      // payload reaches the grep/sed/awk pipelines (unlike `owner` which fails its
+      // strict regex earlier). Sentinel file must NOT be created regardless of exit code.
+      const sentinel = path.join(
+        os.tmpdir(),
+        `epic-shell-injection-sentinel-${Date.now()}-${process.pid}`,
+      );
+      try {
+        fs.unlinkSync(sentinel);
+      } catch {
+        /* ignore: sentinel may not exist yet */
+      }
+      const mutated = setFrontmatterField(VALID_CONTENT, 'title', `Pwn $(touch ${sentinel})`);
+      const file = tempEpicFile(mutated);
+      runScript([file]);
+      expect(fs.existsSync(sentinel)).toBe(false);
+      try {
+        fs.unlinkSync(sentinel);
+      } catch {
+        /* ignore: cleanup best-effort */
+      }
+    });
   });
 
   describe('UX/observability', () => {
@@ -425,6 +531,35 @@ describe('scripts/check-epic-frontmatter.sh', () => {
       const { stderr } = runScript([file]);
       // Format: <absolute-path>: <category>: <details>
       expect(stderr).toMatch(/^\/.*\.md: [a-z][a-z ]*: .+/m);
+    });
+  });
+
+  describe('performance (C4)', () => {
+    test('single-file validation completes in under 500ms', () => {
+      const file = tempEpicFile(VALID_CONTENT);
+      const start = Date.now();
+      const { code } = runScript([file]);
+      const elapsed = Date.now() - start;
+      expect(code).toBe(0);
+      // Budget mirrors the SHY validator's per-file perf budget.
+      expect(elapsed).toBeLessThan(500);
+    });
+
+    test('--scan over 20 EPIC files completes in under 5s', () => {
+      // Spec Performance AC budget: <2s for 60 SHYs + 1 EPIC + cross-checks.
+      // This is the EPIC-only stress (20 files) at <5s — a looser budget
+      // for the more I/O-bound scan loop.
+      const dir = tempScanDir();
+      for (let i = 1; i <= 20; i += 1) {
+        const n = String(i).padStart(4, '0');
+        const content = setFrontmatterField(VALID_CONTENT, 'id', `EPIC-${n}`);
+        fs.writeFileSync(path.join(dir, `EPIC-${n}-perf.md`), content);
+      }
+      const start = Date.now();
+      const { code } = runScript(['--scan', dir]);
+      const elapsed = Date.now() - start;
+      expect(code).toBe(0);
+      expect(elapsed).toBeLessThan(5000);
     });
   });
 });

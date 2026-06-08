@@ -77,8 +77,10 @@ SYNOPSIS
 
 USAGE
   check-epic-frontmatter.sh [--verbose] <file>
-  check-epic-frontmatter.sh --scan <dir>
+  check-epic-frontmatter.sh [--verbose] --scan <dir>
   check-epic-frontmatter.sh --help
+
+  NOTE: --verbose MUST precede --scan; flag order matters.
 
 FLAGS
   --scan <dir>   Validate every EPIC-NNNN-*.md file in <dir> (sorted; stop-on-first failure).
@@ -433,6 +435,12 @@ main() {
           printf 'check-epic-frontmatter.sh: usage error: --scan requires a directory argument\n' >&2
           exit "$E_USAGE"
         fi
+        case "$2" in
+          --*)
+            printf 'check-epic-frontmatter.sh: usage error: flags (e.g. --verbose) must precede --scan; got %s after --scan\n' "$2" >&2
+            exit "$E_USAGE"
+            ;;
+        esac
         validate_scan "$2"
         exit "$E_OK"
         ;;

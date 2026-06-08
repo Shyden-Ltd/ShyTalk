@@ -80,8 +80,10 @@ SYNOPSIS
 
 USAGE
   check-story-frontmatter.sh [--verbose] <file>
-  check-story-frontmatter.sh --scan <dir>
+  check-story-frontmatter.sh [--verbose] --scan <dir>
   check-story-frontmatter.sh --help
+
+  NOTE: --verbose MUST precede --scan; flag order matters.
 
 FLAGS
   --scan <dir>   Validate every SHY-NNNN-*.md file in <dir> (sorted; stop-on-first failure).
@@ -479,6 +481,12 @@ main() {
           printf 'check-story-frontmatter.sh: usage error: --scan requires a directory argument\n' >&2
           exit "$E_USAGE"
         fi
+        case "$2" in
+          --*)
+            printf 'check-story-frontmatter.sh: usage error: flags (e.g. --verbose) must precede --scan; got %s after --scan\n' "$2" >&2
+            exit "$E_USAGE"
+            ;;
+        esac
         validate_scan "$2"
         exit "$E_OK"
         ;;
