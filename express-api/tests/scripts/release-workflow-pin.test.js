@@ -194,16 +194,32 @@ describe('release.yml — Release App token + tag-only (SHY-0034) contract', () 
       expect(yamlText).not.toMatch(/POST.*git\/refs.*release/);
       expect(yamlText).not.toMatch(/ref=refs\/heads\/release/);
     });
+
+    test('no OPEN_RELEASE_PRS guard variable (R2 reviewer test-gap)', () => {
+      // The OPEN_RELEASE_PRS guard block was removed in SHY-0034
+      // because no PRs are opened in the new flow. This pin catches
+      // a regression where the variable name (or the surrounding
+      // guard logic) is reintroduced by accident.
+      expect(yamlText).not.toMatch(/OPEN_RELEASE_PRS/);
+    });
+
+    test('no pull-requests: write permission (R2 reviewer test-gap)', () => {
+      // The `pull-requests: write` permission was needed for the
+      // removed Open release PR step. With no PR opened, the
+      // permission is dead. Least-privilege regression check.
+      expect(yamlText).not.toMatch(/pull-requests:\s*write/);
+    });
   });
 
   describe('Guard against double-fired releases step (R1 I-3)', () => {
     test('uses the App token (NOT GITHUB_TOKEN)', () => {
-      // The guard step calls `gh api` and `gh pr list` to detect
-      // orphan release branches and open release PRs. Both need to
-      // see the repo as the App identity for consistency with the
-      // PR-open step's view. Using GITHUB_TOKEN here would also
-      // hit the loop-prevention rule for any future branch-creation
-      // side effects.
+      // Post SHY-0034: the guard step's only API call is `git log -1`
+      // (no `gh api` or `gh pr list` — the OPEN_RELEASE_PRS check was
+      // removed since no PRs are opened in the tag-only flow). The
+      // GH_TOKEN env var is preserved on the step so any future `gh`
+      // call inherits the App identity from the same job's token —
+      // GITHUB_TOKEN would lose App signing + trigger the loop-
+      // prevention rule on downstream workflows.
       expect(guardStep).toContain('GH_TOKEN: ${{ steps.app-token.outputs.token }}');
       expect(guardStep).not.toContain('GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}');
     });

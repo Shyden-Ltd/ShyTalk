@@ -1,10 +1,14 @@
 name: Release Tag
 
-# Fires when a release-bump PR (opened by release.yml) auto-merges to
-# main. Creates the git tag and GitHub Release in response. Splits the
-# work from release.yml because branch protection requires PRs for all
-# changes to main — release.yml can't push to main directly, so the
-# tag-and-release work has to happen AFTER the PR merges.
+# Fires when a signed `chore: release vX.Y.Z` commit lands on main.
+# Creates the git tag and GitHub Release in response.
+#
+# Architecture (SHY-0034, 2026-06-08): release.yml writes the signed
+# release commit DIRECTLY to main via GraphQL `createCommitOnBranch`
+# (using the Release App's `bypass_actors` entry on main's branch-
+# protection ruleset id 12613584). The push event fires this workflow,
+# which then handles tag + GitHub Release creation. No release PR is
+# opened; no `release/v*` branch is created.
 #
 # Trigger: any push to main. The first step short-circuits unless the
 # pushed commit's subject matches `chore: release vX.Y.Z`. This makes
@@ -20,11 +24,12 @@ on:
 permissions:
   contents: write
 
-# Share concurrency with release.yml. release.yml exits ~3min after
-# starting (it just opens the PR; auto-merge handles the rest), and
-# release-tag.yml only fires once the PR's squashed commit hits main —
-# typically 30+min later. So queueing is rare but the slot is reserved
-# correctly when it does happen.
+# Share concurrency with release.yml so the two workflows never race.
+# Post SHY-0034: release.yml writes the signed commit to main directly
+# (~few seconds for the createCommitOnBranch mutation) which fires the
+# push event that triggers this workflow — typically with no queueing
+# gap. The shared group still matters for the rare case of two release
+# runs queued back-to-back.
 concurrency:
   group: release-main
   cancel-in-progress: false
@@ -104,7 +109,7 @@ jobs:
           EXPECTED="${{ steps.inspect.outputs.version }}"
           ACTUAL=$(awk -F'"' '/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"/ {print $2; exit}' app/build.gradle.kts || true)
           if [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo "::error::HEAD versionName is '$ACTUAL' but commit subject promises '$EXPECTED'. Refusing to tag a mismatched commit. Investigate: did someone amend the version-bump commit, or land a non-release commit between the release PR opening and merging?"
+            echo "::error::HEAD versionName is '$ACTUAL' but commit subject promises '$EXPECTED'. Refusing to tag a mismatched commit. Investigate: did someone amend the release commit, or did a non-release commit land between the createCommitOnBranch mutation and this workflow firing?"
             exit 1
           fi
           echo "Verified: HEAD versionName '$ACTUAL' matches commit subject 'v${EXPECTED}'"
@@ -118,14 +123,13 @@ jobs:
           NOTES_FILE=$(mktemp)
 
           # Walk back to the previous release tag. Mirror the logic in
-          # release.yml so behaviour is consistent — release.yml's PR
-          # body and this workflow's release notes use the same source.
-          # Subtle difference: release.yml computed notes BEFORE the
-          # release-bump commit existed, while this workflow runs AFTER.
-          # That means the changelog from this workflow may include
-          # additional PRs that merged between the release PR opening
-          # and merging. That's correct — the release notes reflect
-          # what's actually in the released code.
+          # release.yml so behaviour is consistent — release.yml's
+          # GITHUB_STEP_SUMMARY snapshot and this workflow's release
+          # notes use the same source. release.yml computes notes
+          # BEFORE the release commit lands; this workflow runs AFTER.
+          # Post-SHY-0034 the gap between the two is now seconds (no
+          # PR-merge wait), so the two outputs converge unless an
+          # operator-driven commit lands directly to main in between.
           LAST_TAG=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo "")
           if [ -n "$LAST_TAG" ]; then
             RANGE="${LAST_TAG}..HEAD"
