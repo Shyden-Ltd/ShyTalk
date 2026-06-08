@@ -91,12 +91,17 @@ skipped=0
 errors=0
 start_ts=$(date +%s)
 
-printf '%s\n' "$ALL_TO_DELETE" | while IFS= read -r branch; do
+# Use process substitution (NOT a pipe) so counter mutations propagate
+# out of the loop. Pipe-while loses variables on subshell exit per
+# bash 3.2 semantics; process substitution keeps the loop in the
+# parent shell.
+while IFS= read -r branch; do
   [ -z "$branch" ] && continue
 
   # Safety: never delete current local branch
   if [ "$branch" = "$CURRENT_BRANCH" ]; then
     echo "  SKIP $branch (current local branch)" >&2
+    skipped=$((skipped + 1))
     continue
   fi
 
@@ -107,41 +112,63 @@ printf '%s\n' "$ALL_TO_DELETE" | while IFS= read -r branch; do
   case "$branch" in
     main|master|gh-pages|develop)
       echo "  SKIP $branch (reserved)" >&2
+      skipped=$((skipped + 1))
       continue
       ;;
   esac
 
   if [ "$DRY_RUN" -eq 1 ]; then
     echo "  WOULD DELETE $branch"
-  else
-    # Live delete with retry on 429
-    attempt=1
-    max_attempts=3
-    while [ "$attempt" -le "$max_attempts" ]; do
-      if gh api -X DELETE "/repos/${REPO}/git/refs/heads/${branch}" 2>/dev/null; then
-        echo "  DELETED $branch"
-        break
-      else
-        rc=$?
-        # 404 = already deleted (idempotent success)
-        # 422 = ref doesn't exist (also idempotent success)
-        if [ "$rc" -eq 22 ] || [ "$rc" -eq 0 ]; then
-          echo "  ALREADY-GONE $branch"
-          break
-        fi
-        sleep_secs=$((attempt * 5))
-        echo "  RETRY $branch (attempt $attempt/$max_attempts, sleep ${sleep_secs}s)" >&2
-        sleep "$sleep_secs"
-        attempt=$((attempt + 1))
-      fi
-    done
-    if [ "$attempt" -gt "$max_attempts" ]; then
-      echo "  ERROR $branch (gave up after $max_attempts retries)" >&2
-    fi
-    # Throttle requests
-    sleep 0.2
+    continue
   fi
-done
+
+  # Live delete with idempotency on already-gone + Retry-After-aware
+  # backoff on 429. gh CLI exits 1 on ANY HTTP error (NOT curl's per-code
+  # convention), so we capture stderr and inspect for the canonical
+  # "Reference does not exist" / "Not Found" responses to recognise
+  # idempotent success.
+  attempt=1
+  max_attempts=3
+  resolved=0
+  while [ "$attempt" -le "$max_attempts" ]; do
+    err_msg="$(gh api --include -X DELETE "/repos/${REPO}/git/refs/heads/${branch}" 2>&1)"
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+      echo "  DELETED $branch"
+      deleted=$((deleted + 1))
+      resolved=1
+      break
+    fi
+    # Idempotent success: ref already gone.
+    if printf '%s\n' "$err_msg" | grep -qiE "Reference does not exist|Not Found|HTTP/[12]\.?[01]? 404|HTTP/2 404"; then
+      echo "  ALREADY-GONE $branch"
+      skipped=$((skipped + 1))
+      resolved=1
+      break
+    fi
+    # Rate-limit: prefer Retry-After header if present; else fall back
+    # to attempt-scaled (capped 60s) backoff.
+    retry_after=""
+    if printf '%s\n' "$err_msg" | grep -qiE "(HTTP/[12]\.?[01]? 429|HTTP/2 429|rate.?limit|secondary rate)"; then
+      retry_after="$(printf '%s\n' "$err_msg" | awk 'BEGIN{IGNORECASE=1} /^Retry-After:/{print $2; exit}' | tr -d '\r ')"
+    fi
+    if [ -n "$retry_after" ] && printf '%s\n' "$retry_after" | grep -qE '^[0-9]+$'; then
+      sleep_secs="$retry_after"
+    else
+      sleep_secs=$((attempt * 10))
+      [ "$sleep_secs" -gt 60 ] && sleep_secs=60
+    fi
+    echo "  RETRY $branch (attempt $attempt/$max_attempts, sleep ${sleep_secs}s, rc=$rc)" >&2
+    sleep "$sleep_secs"
+    attempt=$((attempt + 1))
+  done
+  if [ "$resolved" -eq 0 ]; then
+    echo "  ERROR $branch (gave up after $max_attempts retries)" >&2
+    errors=$((errors + 1))
+  fi
+  # Throttle requests under normal flow
+  sleep 0.2
+done < <(printf '%s\n' "$ALL_TO_DELETE")
 
 end_ts=$(date +%s)
 elapsed=$((end_ts - start_ts))
@@ -149,5 +176,6 @@ elapsed=$((end_ts - start_ts))
 if [ "$DRY_RUN" -eq 1 ]; then
   echo "[cleanup] DRY-RUN complete. ${TOTAL} branches would be deleted. Re-run with --execute to perform deletions." >&2
 else
+  echo "[branch-cleanup] deleted: ${deleted}, skipped: ${skipped}, errors: ${errors}, duration: ${elapsed} seconds" >&2
   echo "[cleanup] LIVE complete. Elapsed: ${elapsed}s. Re-run snapshot+classify to verify final count." >&2
 fi

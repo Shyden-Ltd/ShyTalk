@@ -82,6 +82,8 @@ echo "$BRANCHES_RAW" | jq --slurpfile open <(echo "$OPEN_PRS") --slurpfile close
       name: .name,
       head_sha: .commit.sha,
       head_url: .commit.url,
+      head_date: null,
+      head_message: null,
       protected: .protected,
       open_pr: ($openMap[.name] // null),
       closed_pr_unmerged: ($closedUnmergedMap[.name] // null),
@@ -90,11 +92,17 @@ echo "$BRANCHES_RAW" | jq --slurpfile open <(echo "$OPEN_PRS") --slurpfile close
 ' > "$OUT.partial"
 
 COUNT="$(jq 'length' "$OUT.partial")"
-echo "[snapshot] $COUNT branches captured (head_date pending fetch)" >&2
+echo "[snapshot] $COUNT branches captured" >&2
 
-# Augment each branch with head-commit date + first message line.
-# Skipping per-commit fetch to stay under rate-limit; head_url is enough
-# for downstream tools that need the date.
+# NOTE: head_date + head_message are emitted as null in the schema for
+# coherence with the documented record shape. Per-commit fetch (one
+# `gh api repos/.../commits/<sha>` call per branch) is intentionally
+# omitted from this version to stay under the API rate-limit budget.
+# Downstream classifiers MUST NOT rely on head_date for staleness
+# decisions — use PR association (open_pr / closed_pr_unmerged /
+# merged_pr) as the canonical staleness signal. If date-based
+# staleness is needed in future, add an opt-in --with-commit-meta flag
+# that fetches per-commit data with backoff.
 mv "$OUT.partial" "$OUT"
 
 echo "[snapshot] wrote $OUT ($COUNT branches)" >&2
