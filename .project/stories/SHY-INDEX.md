@@ -59,11 +59,12 @@ These IDs are reserved by the SHY-0032 + SHY-0033 multi-PR plan (operator 2026-0
 
 | Reserved ID | Title (planned)                                                                                                                                                | Trigger               |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| SHY-0034    | Investigate >1GB repo size + audit large committed files + history rewrite                                                                                     | After SHY-0033 merges |
-| SHY-0035    | Fill 18 missing G-IDs as fully-refined SHYs (G001, G003, G006, G011, G018, G024, G025, G031, G032, G034, G035, G036, G037, G040, G041, G048, G050, G051, G053) | After SHY-0034 merges |
-| SHY-0036    | Introduce EPICs + `epic:` frontmatter field + CLAUDE.md spec updates                                                                                           | After SHY-0035 merges |
-| SHY-0037    | Refactor public roadmap webpage + add GitHub project board link                                                                                                | After SHY-0036 merges |
-| SHY-0038    | CI workflow for SHY → roadmap-data.json auto-sync                                                                                                              | After SHY-0037 merges |
+| SHY-0034    | Re-architect release.yml to tag-only signed-commit flow (eliminate ephemeral `release/v*` branches per [[feedback-no-release-branches-use-tags]])              | After SHY-0033 merges |
+| SHY-0035    | Investigate >1GB repo size + audit large committed files (investigation only; no force-push per operator directive)                                            | After SHY-0034 merges |
+| SHY-0036    | Fill 18 missing G-IDs as fully-refined SHYs (G001, G003, G006, G011, G018, G024, G025, G031, G032, G034, G035, G036, G037, G040, G041, G048, G050, G051, G053) | After SHY-0035 merges |
+| SHY-0037    | Introduce EPICs + `epic:` frontmatter field + CLAUDE.md spec updates                                                                                           | After SHY-0036 merges |
+| SHY-0038    | Refactor public roadmap webpage + add GitHub project board link                                                                                                | After SHY-0037 merges |
+| SHY-0039    | CI workflow for SHY → roadmap-data.json auto-sync                                                                                                              | After SHY-0038 merges |
 
 ---
 

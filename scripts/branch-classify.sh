@@ -59,7 +59,7 @@ mkdir -p "$(dirname "$OUT")"
 # the repo has a `no-force-push-anywhere` ruleset that applies to ALL
 # branches, so every branch reports protected:true. That ruleset is a
 # no-force-push rule, not a no-delete rule. We classify by name only.
-EXCLUDE_REGEX='^(main|master|gh-pages|develop|release/.*)$'
+EXCLUDE_REGEX='^(main|master|gh-pages|develop)$'
 
 # Classify with jq
 KEEP_LIST="$(jq -r --arg ex "$EXCLUDE_REGEX" '

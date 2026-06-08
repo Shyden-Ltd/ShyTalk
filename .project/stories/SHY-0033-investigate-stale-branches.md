@@ -1,13 +1,13 @@
 ---
 id: SHY-0033
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-06-07
 priority: P0
 effort: M
 type: chore
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1038
 ---
 
 # SHY-0033: Investigate 506-branch sprawl + close stale + enforce 1-active-branch invariant
@@ -238,6 +238,10 @@ This SHY closes the historical mess + adds a CI hook that catches the rule viola
 
 ## Notes (running log)
 
+- 2026-06-08 ~08:25 BST — CLEANUP COMPLETE. Final state: 506 → 7 branches (499 deleted total). Remaining 7: 3 open Dependabot PRs + 1 open feat PR (biometric-stable-g002) + main + gh-pages + this SHY's own branch. Cleanup ran in 2 passes (primary 447s + release/\* second pass 131s = ~10 min total). Final snapshot: `.project/audit/branch-snapshot-2026-06-08-final.json`. Status flipped Draft → In Review (pending architect + reviewer agents).
+- 2026-06-08 ~00:40 BST — BOTH BLOCKERS RESOLVED:
+  - **Blocker 1 (ruleset edit)**: operator authorised PATCH after Q&A confirming `main`'s own ruleset (id 12613584) independently protects main from deletion (scoped to `~DEFAULT_BRANCH`, 1 bypass actor); the deletion rule in `no-force-push-anywhere` (id 16058327) was redundant for main + harmful for everything else. PATCH executed; ruleset now has only `non_fast_forward`; cleanup re-running.
+  - **Blocker 2 (release-branch architecture)**: operator chose B (re-architect to tag-only). Scoped out of SHY-0033 into a new SHY-0034. Previous SHY-0034 (>1GB investigation) shifts to SHY-0035; all downstream IDs shift +1 (SHY-0035..0038 → SHY-0036..0039). Re-architecture needs architect validation per [[feedback-quality-explore-alternatives-validate]] before any code lands. release.yml refactor explicitly OUT of SHY-0033's scope.
 - 2026-06-08 ~00:30 BST — TWO BLOCKERS surfaced for operator decision; SHY-0033 parked as DRAFT pending:
   1. **Ruleset edit needed.** The `no-force-push-anywhere` ruleset (id 16058327) contains a `deletion` rule (not just `non_fast_forward`); zero bypass actors. Live cleanup ran 4.3h and got 491 errors (`Repository rule violations found`). Fix requires removing the `deletion` rule from the ruleset OR adding a bypass actor for repo admins. Auto-mode classifier blocked the PATCH; needs explicit operator authorisation.
   2. **Release-branch architecture decision.** Operator directive 2026-06-07 ~22:30 BST: "don't make release branches anymore." BUT the existing release.yml uses `release/v*-r<run-id>` branches as a REQUIRED artefact of the signed-commit flow (lines 372-385 document: GitHub's GraphQL `createCommitOnBranch` mutation needs a branch to commit signed commits to; can't push signed commits directly to main via the App token because git's local signing infra doesn't exist in CI; signed commits are required by branch-protection's `required_signatures` rule). Two interpretations: (A) keep ephemeral branches during release runs (delete on success or failure); (B) re-architect the signed-commit flow entirely. Operator needed to clarify intent.

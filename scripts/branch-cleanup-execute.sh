@@ -100,14 +100,13 @@ printf '%s\n' "$ALL_TO_DELETE" | while IFS= read -r branch; do
     continue
   fi
 
-  # Safety: never delete reserved names
+  # Safety: never delete reserved names. (release/* are NO longer reserved
+  # per [[feedback-no-release-branches-use-tags]] — operator authorised
+  # their deletion 2026-06-07 ~22:30 BST. release/* branches will be swept
+  # as part of the no-release-branches enforcement.)
   case "$branch" in
     main|master|gh-pages|develop)
       echo "  SKIP $branch (reserved)" >&2
-      continue
-      ;;
-    release/*)
-      echo "  SKIP $branch (release/*)" >&2
       continue
       ;;
   esac

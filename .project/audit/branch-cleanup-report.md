@@ -6,13 +6,13 @@
 
 ## Summary
 
-| Bucket | Count | Disposition |
-|---|---|---|
-| KEEP | 15 | Open PR / main / gh-pages / protected |
-| DELETE-MERGED-PR | 475 | PR already merged; branch should have been auto-deleted (pre-setting era). Safe to delete. |
-| DELETE-CLOSED-PR | 15 | PR closed without merge; abandoned work. Safe to delete (GitHub auto-restore covers 90 days). |
-| DELETE-NO-PR | 1 | No PR ever associated; ad-hoc experimentation. Safe to delete (commits remain in reflog). |
-| OPERATOR-REVIEW | 0 | Ambiguous; operator must decide. |
+| Bucket           | Count | Disposition                                                                                   |
+| ---------------- | ----- | --------------------------------------------------------------------------------------------- |
+| KEEP             | 15    | Open PR / main / gh-pages / protected                                                         |
+| DELETE-MERGED-PR | 475   | PR already merged; branch should have been auto-deleted (pre-setting era). Safe to delete.    |
+| DELETE-CLOSED-PR | 15    | PR closed without merge; abandoned work. Safe to delete (GitHub auto-restore covers 90 days). |
+| DELETE-NO-PR     | 1     | No PR ever associated; ad-hoc experimentation. Safe to delete (commits remain in reflog).     |
+| OPERATOR-REVIEW  | 0     | Ambiguous; operator must decide.                                                              |
 
 ## KEEP (15 branches)
 
