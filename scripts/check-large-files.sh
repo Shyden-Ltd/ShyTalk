@@ -101,7 +101,15 @@ fi
 
 is_exempt() {
   local candidate="$1"
-  for p in "${EXEMPT_PATHS[@]:-}"; do
+  # Explicit array-length guard for portability under `set -u` on
+  # bash 3.2 (macOS default shell). `${arr[@]:-}` is technically safe
+  # when arr was declared `arr=()` (set, not unset), but the explicit
+  # length check is unambiguous and survives any future refactor that
+  # might leave EXEMPT_PATHS undeclared in a code path.
+  if [ "${#EXEMPT_PATHS[@]}" -eq 0 ]; then
+    return 1
+  fi
+  for p in "${EXEMPT_PATHS[@]}"; do
     [ "$p" = "$candidate" ] && return 0
   done
   return 1
@@ -167,8 +175,8 @@ while IFS= read -r path; do
   fi
 done < <(list_paths)
 
-printf '[check-large-files] scanned: %d files, large: %d, errors: %d\n' \
-  "$scanned" "$large" "$errors" >&2
+printf '[check-large-files] mode: %s, scanned: %d files, large: %d, errors: %d\n' \
+  "$MODE" "$scanned" "$large" "$errors" >&2
 
 if [ "$large" -gt 0 ]; then
   echo "::error::Found $large file(s) >5 MiB that are not exempted. See SHY-0035 audit (.project/audit/repo-size-audit-2026-06-08.md) for the 5 MiB threshold rationale." >&2

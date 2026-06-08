@@ -149,9 +149,13 @@ journey-results/
 /playwright/pr/
 /playwright/deploy/
 /playwright/latest/
-/express/pr/
+# Widened from `/express/pr/` (architect Suggestion 2026-06-08) — the
+# Allure variant could emit `express/deploy/` or `express/latest/` too;
+# `/express-api/` is the actual tracked source dir, distinct path.
+/express/
 /history/
-/kotlin/pr/
+# Same widening rationale — block all `kotlin/` subpaths at root.
+/kotlin/
 /android-e2e/
 
 # Compiled mobile bundles — never commit; use the deploy workflow for
