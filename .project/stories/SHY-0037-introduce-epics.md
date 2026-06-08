@@ -1,6 +1,6 @@
 ---
 id: SHY-0037
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-08
 priority: P0
@@ -8,7 +8,7 @@ effort: M
 type: infra
 roadmap_ids: []
 epic: EPIC-0001
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1043
 ---
 
 # SHY-0037: Introduce EPICs concept + `epic:` frontmatter field + CLAUDE.md spec updates
@@ -135,10 +135,12 @@ Option B balances [[feedback-quality-explore-alternatives-validate]] (validate t
 ## Test Plan
 
 **Red:**
+
 - Add a Jest test file `express-api/tests/scripts/check-epic-frontmatter.test.js` covering EPIC validator's required fields, body sections, child-SHY existence check, glob safety. Expected fail before script exists.
 - Add Jest test cases to `express-api/tests/scripts/check-story-frontmatter.test.js` for the new `epic:` optional field — present/valid passes, present/malformed fails 11, absent passes. Expected fail before script modification.
 
 **Green:**
+
 - Author `scripts/check-epic-frontmatter.sh` mirroring the SHY validator structure (635 lines is overkill for the EPIC scope; aim ~200 lines).
 - Modify `scripts/check-story-frontmatter.sh` — add `OPTIONAL_FIELDS` list, add `VALID_EPIC="^EPIC-[0-9]{4}$"` constant, add `validate_optional_epic_field()` check function.
 - Wire `.github/workflows/lint.yml` to run the EPIC validator scan after the SHY validator.
