@@ -10,7 +10,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 | ID                                                              | Pri | Effort | Type     | Title                                                                                               | Status         | Roadmap IDs      | PR  |
 | --------------------------------------------------------------- | --- | ------ | -------- | --------------------------------------------------------------------------------------------------- | -------------- | ---------------- | --- |
-| [SHY-0036](SHY-0036-fill-missing-g-ids.md)                      | P0  | XL     | chore    | Fill 18 missing G-IDs as fully-refined SHYs (G001/003/006/011/018/024/025/031-037/040/041/048-053)  | 🚧 In Progress | (18 G-IDs)       | —   |
+| [SHY-0036](SHY-0036-fill-missing-g-ids.md)                      | P0  | XL     | chore    | Fill 19 missing G-IDs as fully-refined SHYs (G001/003/006/011/018/024/025/031/032/034-037/040/041/048/050/051/053)  | 🚧 In Progress | (19 G-IDs)       | —   |
 | [SHY-0024](SHY-0024-resolve-navgraph-coexistence.md)            | P0  | L      | refactor | Migrate Android to SharedNavGraph + delete NavGraph.kt                                              | 📝 Draft       | G028             | —   |
 | [SHY-0004](SHY-0004-verify-room-mutation-p3-deploy.md)          | P0  | S      | bug      | Verify Room mutation P3 deploy status + reconcile                                                   | 📝 Draft       | G009, G027       | —   |
 | [SHY-0029](SHY-0029-tighten-ownerfirebaseuid-rule.md)           | P0  | S      | bug      | Tighten ownerFirebaseUid rule (strict equality, no legacy fallback)                                 | 📝 Draft       | G026             | —   |
@@ -22,6 +22,10 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0014](SHY-0014-add-room-service-controller-tests.md)       | P0  | M      | bug      | Android/Ios RoomServiceController tests + FakeRoomLifecycleManager extraction                       | 📝 Draft       | G016             | —   |
 | [SHY-0010](SHY-0010-add-home-gacha-vm-tests.md)                 | P0  | M      | bug      | HomeViewModel + GachaViewModel tests                                                                | 📝 Draft       | G003-D1          | —   |
 | [SHY-0012](SHY-0012-add-remaining-vm-tests.md)                  | P0  | L      | bug      | 10 remaining ViewModel test files (Messaging + Profile + Settings + Daily + Splash)                 | 📝 Draft       | G003-D3          | —   |
+| [SHY-0041](SHY-0041-upgrade-kotlin-stable.md)                   | P0  | XS     | chore    | Upgrade Kotlin 2.4.0-RC2 → 2.4.0 stable (or block-comment + CI gate via SHY-0049)                   | 📝 Draft       | G001             | —   |
+| [SHY-0042](SHY-0042-viewmodel-coverage-tracker.md)              | P0  | XS     | docs     | G003 ViewModel-coverage tracker (meta — links SHY-0010/0011/0012)                                   | 📝 Draft       | G003             | —   |
+| [SHY-0043](SHY-0043-add-push-permission-feature.md)             | P0  | S      | feature  | Add push_permission.feature BDD coverage (4 scenarios for PR #1010 denial UX)                       | 📝 Draft       | G006             | —   |
+| [SHY-0044](SHY-0044-fix-admin-claim-throw.md)                   | P0  | XS     | bug      | firestore.rules: use isAdmin() helper at line 140 (fix admin-claim throws-on-absent)                | 📝 Draft       | G025             | —   |
 | [SHY-0019](SHY-0019-fix-qa-runner-smoke-true.md)                | P1  | S      | infra    | qa-runner --smoke `\|\| true` → targeted exit-code handling                                         | 📝 Draft       | G012             | —   |
 | [SHY-0031](SHY-0031-serialise-gh-pages-deploys.md)              | P1  | S      | infra    | Serialise gh-pages cross-workflow deploys (split-job + shared concurrency)                          | 📝 Draft       | G055             | —   |
 | [SHY-0006](SHY-0006-add-push-permission-vm-tests.md)            | P1  | S      | bug      | PushPermissionDeniedBanner + HomeScreen + HomeViewModel push tests                                  | 📝 Draft       | G005, G013, G029 | —   |
@@ -31,6 +35,10 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0017](SHY-0017-add-ios-room-repo-tests.md)                 | P1  | M      | bug      | IosRoomRepositoryImpl tests (P2 client migration coverage)                                          | 📝 Draft       | G014             | —   |
 | [SHY-0018](SHY-0018-add-ios-message-bridge-tests.md)            | P1  | M      | bug      | IosMessage + IosSeatRequest + IosEconomyGift + IosSmallRepositories + IosPushBridge tests           | 📝 Draft       | G015, G030       | —   |
 | [SHY-0022](SHY-0022-seed-admin-keyboard-data-fixtures.md)       | P1  | M      | bug      | admin-keyboard data-dependent skip remediation                                                      | 📝 Draft       | G023             | —   |
+| [SHY-0045](SHY-0045-sha-pin-floating-action-tags.md)            | P1  | XS     | infra    | SHA-pin floating Action tags in manual-qa-matrix + qa-runner-driver-checks workflows                | 📝 Draft       | G011             | —   |
+| [SHY-0046](SHY-0046-verify-gift-wall-feature-e2e.md)            | P1  | XS     | chore    | Verify gift_wall.feature covers 3 UI states (loading/populated/empty) + GiftWallScreen test tags     | 📝 Draft       | G018             | —   |
+| [SHY-0047](SHY-0047-fix-admin-core-modules-skip.md)             | P1  | XS     | bug      | Fix bare test.skip() at admin-core-modules.spec.ts:133 (implement or remove)                        | 📝 Draft       | G024             | —   |
+| [SHY-0048](SHY-0048-track-detekt-2-stable.md)                   | P1  | S      | chore    | Track detekt 2.0 stable release on Gradle Plugin Portal + migrate config when stable lands          | 📝 Draft       | G053             | —   |
 | [SHY-0030](SHY-0030-refresh-ios-parity-navigation-feature.md)   | P2  | XS     | feature  | ios_parity_navigation.feature freshness check + update                                              | 📝 Draft       | G039             | —   |
 | [SHY-0023](SHY-0023-seed-admin-backups-cross-tab-fixtures.md)   | P2  | S      | bug      | admin-backups + admin-cross-tab data fixture gaps                                                   | 📝 Draft       | G033             | —   |
 | [SHY-0016](SHY-0016-add-sticker-storage-tests.md)               | P2  | S      | bug      | StickerStorage platform tests (file I/O lifecycle)                                                  | 📝 Draft       | G038             | —   |
@@ -39,6 +47,17 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0020](SHY-0020-add-release-to-qa-matrix-workflow-call.md)  | P2  | S      | infra    | release.yml → manual-qa-matrix.yml workflow_call (event-driven E2 matrix)                           | 📝 Draft       | G022, G049       | —   |
 | [SHY-0028](SHY-0028-gradle-deprecation-sweep.md)                | P2  | S      | chore    | Gradle deprecation sweep (`--warning-mode all`)                                                     | 📝 Draft       | G046             | —   |
 | [SHY-0027](SHY-0027-dependabot-sweep-codeql-kotlin.md)          | P2  | XS     | chore    | Dependabot open-PR sweep + CodeQL Kotlin enable                                                     | 📝 Draft       | G045, G047       | —   |
+| [SHY-0049](SHY-0049-add-kotlin-prerelease-ci-gate.md)           | P2  | XS     | infra    | Add check-kotlin-prerelease.sh CI gate (fires when Kotlin stable lands)                             | 📝 Draft       | G031             | —   |
+| [SHY-0050](SHY-0050-add-biometric-alpha-rationale-comment.md)   | P2  | XS     | docs     | Add rationale comment to biometric = "1.4.0-alpha07" (companion to SHY-0005)                        | 📝 Draft       | G032             | —   |
+| [SHY-0051](SHY-0051-fix-touch-drag-skip-mouse-event.md)         | P2  | XS     | bug      | Convert Firefox/WebKit touch-skip in suggestions-board to mouse-event drag                          | 📝 Draft       | G034             | —   |
+| [SHY-0052](SHY-0052-fix-mobile-isMobile-skip-viewport.md)       | P2  | S      | bug      | Rewrite admin-suggestions.spec.ts mobile-context skips using viewport sizing                        | 📝 Draft       | G035             | —   |
+| [SHY-0053](SHY-0053-fix-sonarcloud-yml-true-swallow.md)         | P2  | XS     | bug      | Remove `\|\| true` from sonarcloud.yml coverage step (was silently swallowing Jest failures)         | 📝 Draft       | G036             | —   |
+| [SHY-0054](SHY-0054-audit-allure-report-continue-on-error.md)   | P2  | XS     | chore    | Audit allure-report.yml continue-on-error: true (intentional or remove)                             | 📝 Draft       | G037             | —   |
+| [SHY-0055](SHY-0055-update-claude-md-feature-count.md)          | P2  | XS     | docs     | Update CLAUDE.md stale feature-file count (33 → 47)                                                 | 📝 Draft       | G040             | —   |
+| [SHY-0056](SHY-0056-document-app-lock-nav-pattern.md)           | P2  | XS     | docs     | Document App Lock navigation intercept pattern in CLAUDE.md Architecture                            | 📝 Draft       | G041             | —   |
+| [SHY-0057](SHY-0057-split-admin-keyboard-mobile-skip.md)        | P2  | XS     | bug      | Split admin-keyboard.spec.ts:61 mobile-viewport skip (keyboard-only vs general)                     | 📝 Draft       | G048             | —   |
+| [SHY-0058](SHY-0058-fix-dev-sanity-api-skip.md)                 | P2  | XS     | bug      | Convert dev-sanity.spec.ts:66-72 API-not-running skip to CI-aware assertion                         | 📝 Draft       | G050             | —   |
+| [SHY-0059](SHY-0059-fix-admin-users-moderation-skip.md)         | P2  | XS     | bug      | Audit admin-users-moderation.spec.ts:149 conditional skip + seed required data                      | 📝 Draft       | G051             | —   |
 
 ## Done
 
@@ -66,7 +85,6 @@ These IDs are reserved by the SHY-0032 + SHY-0033 multi-PR plan (operator 2026-0
 | SHY-0038    | Refactor public roadmap webpage + add GitHub project board link                                                                                                | After SHY-0037 merges |
 | SHY-0039    | CI workflow for SHY → roadmap-data.json auto-sync                                                                                                              | After SHY-0038 merges |
 | SHY-0040    | Optimise `sync-stories-to-issues.sh` per-file overhead (currently ~620ms/file, 34 files = 21s; bottleneck is jq+awk subprocess churn)                          | When SHY corpus hits ~50 files or sync timeout escalates |
-| SHY-0041..0058 | Generated by SHY-0036 — one SHY per missing G-ID (filled inside SHY-0036's PR; this row is a forward-reference for the reserved ID block)                  | Created in SHY-0036's branch (not as separate PRs) |
 
 ---
 
