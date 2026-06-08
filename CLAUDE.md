@@ -18,7 +18,7 @@ Every piece of work is captured as ONE detailed user-story `.md` file at `.proje
 - **File path:** `.project/stories/SHY-XXXX-kebab-slug.md`.
 - **Index:** `.project/stories/SHY-INDEX.md` is the live backlog. Sorted `priority asc, created asc`. Active / Done / Cancelled tables. Index is human-maintained — the `SHY-[0-9][0-9][0-9][0-9]-*.md` glob in the validator naturally excludes it.
 
-### Frontmatter (9 required fields)
+### Frontmatter (9 required fields + 1 optional)
 
 - `id` — matches `^SHY-[0-9]{4}$`
 - `status` — one of `Draft` / `In Progress` / `In Review` / `Done` / `Cancelled`
@@ -29,6 +29,7 @@ Every piece of work is captured as ONE detailed user-story `.md` file at `.proje
 - `type` — `feature` / `bug` / `refactor` / `docs` / `infra` / `spike` / `chore`
 - `roadmap_ids` — array form only (`[]` if ad-hoc; `[G001, G024]` if multiple)
 - `pr` — URL once pushed (advisory; NOT enforced by the validator)
+- `epic` *(optional)* — matches `^EPIC-[0-9]{4}$` (e.g. `EPIC-0001`); when present, the referenced EPIC file MUST exist in `.project/stories/` (cross-checked in `--scan` mode only). See `### EPICs` below.
 
 ### Body sections (10 required `## ` headings + 8 required `### ` AC sub-headings)
 
@@ -87,14 +88,51 @@ Every new SHY `.md` file is created **fully refined** at the moment of creation.
 
 The zero-gap roadmap at `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md` gets a `SHY` column per row — OPEN G-items get `SHY-XXXX`; SHIPPED items get `✅ PR #N`; CANCELLED get `❌ Won't do — <reason>`. Don't create retro stories for shipped/cancelled rows.
 
+### EPICs
+
+EPICs group related SHYs under a coherent theme for prioritisation + roadmap surfacing. An EPIC is *meta*: it does not have its own implementation; it documents the *vision* of a cluster of work and tracks which SHYs roll up under it.
+
+**ID + file format:**
+
+- ID matches `^EPIC-[0-9]{4}$` (e.g. `EPIC-0001`). 4-digit zero-padded.
+- File at `.project/stories/EPIC-NNNN-slug.md`. Filename slug is kebab-case.
+- ID in frontmatter MUST match filename prefix (validator-enforced, per-file).
+
+**Frontmatter (6 required + 1 optional):**
+
+- `id` — `^EPIC-[0-9]{4}$`
+- `status` — same lifecycle as SHY (`Draft` / `In Progress` / `In Review` / `Done` / `Cancelled`)
+- `owner` — string
+- `created` — `YYYY-MM-DD`
+- `priority` — `P0` / `P1` / `P2` / `P3`
+- `title` — non-empty string (shown on roadmap webpage; do NOT duplicate the `# H1` here — keep it succinct)
+- `child_shys` *(optional)* — array form `[SHY-0001, SHY-0002]`; when present, each entry must match `^SHY-[0-9]{4}$` AND the SHY file must exist in `.project/stories/` (cross-checked in `--scan` mode only)
+
+**Required body sections (5):** `## Vision` · `## Scope` · `## Child SHYs` · `## DoD at Epic Level` · `## Notes`.
+
+**Cross-linking from SHYs:** any SHY may set `epic: EPIC-NNNN` in its frontmatter. The field is optional — most SHYs need not belong to an EPIC. When set, the `--scan` validators cross-check existence symmetrically: the SHY validator confirms the EPIC file exists; the EPIC validator confirms each `child_shys` entry exists. Per-file validation skips both cross-checks.
+
+**Cross-corpus rules enforced in `--scan` only** (avoids forward-reference flakes during multi-PR rollouts):
+
+- No two EPIC files may share the same `EPIC-NNNN` prefix (EPIC validator exit 40; stderr category `duplicate epic id`).
+- An EPIC's `child_shys` MUST NOT reference an unknown SHY (EPIC validator exit 40; stderr category `unknown SHY reference`).
+- A SHY MUST NOT be claimed by more than one EPIC (EPIC validator exit 40; stderr category `duplicate epic claim`).
+- A SHY's `epic:` MUST NOT reference an unknown EPIC (SHY validator exit 20; stderr category `invalid optional field`).
+
+**Concise format:** EPIC files are intentionally short (~80-150 lines). The vision + child-SHY list + epic-level DoD is the meat. Don't replicate SHY-level detail.
+
+**Reference:** EPIC-0001-shy-framework.md (the proof-of-concept; describes the framework that defines EPICs themselves).
+
 ### Audit trail
 
 All audit signals — architect verdict, code-reviewer cycle count + verbatim findings, rework reasons, dev-verify outcomes — land as timestamped entries in the story's `## Notes (running log)` section. No parallel frontmatter audit fields.
 
 ### Tooling
 
-- `scripts/check-story-frontmatter.sh` validates every `SHY-[0-9][0-9][0-9][0-9]-*.md` in CI (`lint.yml`, last step). Run `--help` for usage + the 8 documented exit codes. Add `--verbose` for per-check tracing.
-- `.project/stories/SHY-0001-establish-agile-workflow.md` is the canonical seed — copy it as the starting template for new stories.
+- `scripts/check-story-frontmatter.sh` validates every `SHY-[0-9][0-9][0-9][0-9]-*.md` in CI (`lint.yml`). Run `--help` for usage + the 8 documented exit codes (0/2/10/11/12/13/14/20). Add `--verbose` for per-check tracing. In `--scan` mode it additionally cross-checks any `epic:` references against EPIC files in the same directory (exit 11 inner / 20 outer if the referenced EPIC is absent).
+- `scripts/check-epic-frontmatter.sh` validates every `EPIC-[0-9][0-9][0-9][0-9]-*.md` in CI (`lint.yml`, separate step from the SHY validator). Run `--help` for usage + the 6 documented exit codes (0/2/30/31/32/40). In `--scan` mode it cross-checks `child_shys` references + detects EPIC-ID collisions + duplicate child claims. Per-file mode runs structural checks only (architect-locked asymmetry); cross-corpus checks require `--scan` and surface as exit 40 with the specific cause in the stderr category (`duplicate epic id`, `unknown SHY reference`, `duplicate epic claim`).
+- `.project/stories/SHY-0001-establish-agile-workflow.md` is the canonical SHY seed — copy it as the starting template for new SHYs.
+- `.project/stories/EPIC-0001-shy-framework.md` is the canonical EPIC seed — copy it as the starting template for new EPICs.
 - `scripts/sync-stories-to-issues.sh` (delivered by SHY-0002) mirrors each story `.md` to a GitHub Issue + Projects v2 card. One-way sync — `.md` is the source of truth, the Issue is a derived view.
 
 ### GitHub Issues mirror (delivered by SHY-0002)

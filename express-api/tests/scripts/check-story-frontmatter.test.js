@@ -878,4 +878,117 @@ describe('scripts/check-story-frontmatter.sh', () => {
       expect(ms).toBeLessThan(5000);
     });
   });
+
+  describe('optional `epic:` field (SHY-0037)', () => {
+    // Per SHY-0037 spec: `epic:` is an optional frontmatter field that, when
+    // present, must match `^EPIC-[0-9]{4}$`. Cross-corpus check (the referenced
+    // EPIC file must exist) runs in `--scan` mode only; per-file mode skips it.
+    // Architect Finding 2 resolution: forward-reference protection in --scan.
+
+    test('epic field absent → exit 0 (optional, baseline)', () => {
+      const file = tempStoryFile(VALID_CONTENT);
+      const { code } = runScript([file]);
+      expect(code).toBe(0);
+    });
+
+    test('epic: EPIC-0001 valid format → exit 0 (per-file, no cross-check)', () => {
+      const content = VALID_CONTENT.replace(
+        /^roadmap_ids: \[\]$/m,
+        'roadmap_ids: []\nepic: EPIC-0001',
+      );
+      const file = tempStoryFile(content);
+      const { code } = runScript([file]);
+      expect(code).toBe(0);
+    });
+
+    test('epic: EPIC-0001 with trailing whitespace → exit 0 (markdown norm)', () => {
+      const content = VALID_CONTENT.replace(
+        /^roadmap_ids: \[\]$/m,
+        'roadmap_ids: []\nepic: EPIC-0001  ',
+      );
+      const file = tempStoryFile(content);
+      const { code } = runScript([file]);
+      expect(code).toBe(0);
+    });
+
+    test.each([
+      ['foo', /epic.*EPIC-/i],
+      ['EPIC-1', /epic.*EPIC-/i],
+      ['EPIC-12345', /epic.*EPIC-/i],
+      ['epic-0001', /epic.*EPIC-/i],
+      ['EPIC-0001a', /epic.*EPIC-/i],
+      ['SHY-0001', /epic.*EPIC-/i],
+      ['EPIC_0001', /epic.*EPIC-/i],
+    ])('malformed epic=%s → exit 11', (badValue, msgRe) => {
+      const content = VALID_CONTENT.replace(
+        /^roadmap_ids: \[\]$/m,
+        `roadmap_ids: []\nepic: ${badValue}`,
+      );
+      const file = tempStoryFile(content);
+      const { code, stderr } = runScript([file]);
+      expect(code).toBe(11);
+      expect(stderr).toMatch(msgRe);
+    });
+
+    test('per-file mode with epic: EPIC-9999 (unknown EPIC) → exit 0 (cross-check deferred)', () => {
+      const content = VALID_CONTENT.replace(
+        /^roadmap_ids: \[\]$/m,
+        'roadmap_ids: []\nepic: EPIC-9999',
+      );
+      const file = tempStoryFile(content);
+      const { code } = runScript([file]);
+      expect(code).toBe(0);
+    });
+
+    test('--scan with SHY referencing existing EPIC → exit 0', () => {
+      const dir = tempScanDir();
+      // EPIC file present in the same scan dir.
+      fs.writeFileSync(
+        path.join(dir, 'EPIC-0001-target.md'),
+        '---\nid: EPIC-0001\nstatus: In Progress\nowner: claude\ncreated: 2026-06-08\npriority: P1\ntitle: Target epic\nchild_shys: []\n---\n# EPIC-0001\n## Vision\nx\n## Scope\nx\n## Child SHYs\nx\n## DoD at Epic Level\nx\n## Notes\nx\n',
+      );
+      // SHY references EPIC-0001.
+      const content = VALID_CONTENT.replace(
+        /^roadmap_ids: \[\]$/m,
+        'roadmap_ids: []\nepic: EPIC-0001',
+      );
+      fs.writeFileSync(path.join(dir, 'SHY-0099-fixture.md'), content);
+      const { code } = runScript(['--scan', dir]);
+      expect(code).toBe(0);
+    });
+
+    test('--scan with SHY referencing UNKNOWN EPIC → exit 20 (inner 11, forward-ref protection)', () => {
+      const dir = tempScanDir();
+      // EPIC file NOT present; SHY claims it exists.
+      const content = VALID_CONTENT.replace(
+        /^roadmap_ids: \[\]$/m,
+        'roadmap_ids: []\nepic: EPIC-9999',
+      );
+      fs.writeFileSync(path.join(dir, 'SHY-0099-fixture.md'), content);
+      const { code, stderr } = runScript(['--scan', dir]);
+      expect(code).toBe(20);
+      expect(stderr).toMatch(/EPIC-9999|unknown epic|invalid optional field/i);
+    });
+
+    test('--scan with multiple SHYs all referencing same valid EPIC → exit 0', () => {
+      const dir = tempScanDir();
+      fs.writeFileSync(
+        path.join(dir, 'EPIC-0001-target.md'),
+        '---\nid: EPIC-0001\nstatus: In Progress\nowner: claude\ncreated: 2026-06-08\npriority: P1\ntitle: Target epic\nchild_shys: []\n---\n# EPIC-0001\n## Vision\nx\n## Scope\nx\n## Child SHYs\nx\n## DoD at Epic Level\nx\n## Notes\nx\n',
+      );
+      const withEpic = VALID_CONTENT.replace(
+        /^roadmap_ids: \[\]$/m,
+        'roadmap_ids: []\nepic: EPIC-0001',
+      );
+      for (let i = 1; i <= 5; i++) {
+        const slug = String(i).padStart(4, '0');
+        fs.writeFileSync(
+          path.join(dir, `SHY-${slug}-fixture.md`),
+          withEpic.replace(/^id: SHY-\d{4}$/m, `id: SHY-${slug}`),
+        );
+      }
+      const { code } = runScript(['--scan', dir]);
+      expect(code).toBe(0);
+    });
+  });
 });

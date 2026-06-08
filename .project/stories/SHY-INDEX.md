@@ -88,6 +88,16 @@ These IDs are reserved by the SHY-0032 + SHY-0033 multi-PR plan (operator 2026-0
 
 ---
 
+## EPICs
+
+| EPIC        | Title                                                                | Status      | Child SHYs                                          |
+| ----------- | -------------------------------------------------------------------- | ----------- | --------------------------------------------------- |
+| EPIC-0001   | ShyTalk SHY framework (stories, validator, GH sync, EPICs)           | In Progress | SHY-0001, SHY-0002, SHY-0003, SHY-0037 (4 SHYs)     |
+
+EPICs are validated by `scripts/check-epic-frontmatter.sh` (separate from the SHY validator). The `epic:` field on SHY frontmatter is optional — most SHYs need not belong to an EPIC. See `CLAUDE.md` § "Agile Way of Working" → "### EPICs" for the full spec.
+
+---
+
 ## Conventions
 
 - **ID:** `SHY-XXXX` (4-digit zero-padded, sequential; no recycling).

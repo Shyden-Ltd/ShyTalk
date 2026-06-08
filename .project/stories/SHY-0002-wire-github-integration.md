@@ -7,6 +7,7 @@ priority: P1
 effort: M
 type: infra
 roadmap_ids: []
+epic: EPIC-0001
 pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1035
 ---
 

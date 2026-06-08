@@ -44,6 +44,13 @@ VALID_PRIORITY="P0|P1|P2|P3"
 VALID_EFFORT="XS|S|M|L|XL"
 VALID_TYPE="feature|bug|refactor|docs|infra|spike|chore"
 
+# Optional frontmatter field regexes (validated only when field is present).
+# `epic:` added by SHY-0037 — when present, must match `^EPIC-[0-9]{4}$`.
+# Cross-check that the referenced EPIC file actually exists runs in --scan mode
+# only (forward-reference protection); per-file mode skips it per architect
+# Finding 2 resolution.
+VALID_EPIC="^epic:[[:space:]]*EPIC-[0-9]{4}[[:space:]]*$"
+
 # Required `##` body sections (10 — h1 `# Title` is NOT a `## ` section).
 REQ_SECTIONS="User Story|Why|Acceptance Criteria|BDD Scenarios|Test Plan|Out of Scope|Dependencies|Risks & Mitigations|Definition of Done|Notes"
 
@@ -253,6 +260,20 @@ check_field_values() {
   fi
 }
 
+# Validate optional frontmatter fields (presence not required, but when present
+# the value must match the expected format). Added by SHY-0037.
+check_optional_fields() {
+  local fm="$1" abs="$2"
+
+  # epic: when present, must match ^EPIC-[0-9]{4}$ (e.g. EPIC-0001)
+  if grep -qE '^epic:' "$fm"; then
+    verbose "optional:epic"
+    if ! grep -qE "$VALID_EPIC" "$fm"; then
+      fail "$abs" "invalid optional field" "epic must match EPIC-NNNN pattern (4-digit zero-padded), e.g. EPIC-0001" "$E_INVALID_VALUE"
+    fi
+  fi
+}
+
 check_required_sections() {
   local body="$1" abs="$2"
   # Split REQ_SECTIONS on '|'.
@@ -364,12 +385,20 @@ validate_file() {
 
   check_required_fields "$fm" "$abs"
   check_field_values "$fm" "$abs"
+  check_optional_fields "$fm" "$abs"
   check_required_sections "$body" "$abs"
   check_required_ac_dims "$body" "$abs"
   check_bdd_coverage "$body" "$abs"
 }
 
 # --scan: iterate SHY-NNNN-*.md files in a directory, stop-on-first failure.
+#
+# Two-pass design (SHY-0037):
+#   Pass 1: per-file structural validation (presence + values + sections + AC dims + BDD).
+#   Pass 2: build EPIC ID set from EPIC-NNNN-*.md files in dir (in-memory index).
+#   Pass 3: for each SHY with an `epic:` field, cross-check the reference against
+#           the EPIC set. Failure here = forward-reference protection.
+# Per-file mode skips passes 2-3 (architect Finding 2 — structural checks only).
 validate_scan() {
   local dir="$1"
   if [ ! -d "$dir" ]; then
@@ -389,6 +418,38 @@ validate_scan() {
       # validate_file already printed its specific failure to stderr; we just
       # need to set the scan-level exit code.
       exit "$E_SCAN_FAIL"
+    fi
+  done < <(find -P "$dir" -maxdepth 1 -type f ! -type l \
+             -name 'SHY-[0-9][0-9][0-9][0-9]-*.md' | LC_ALL=C sort)
+
+  # ---- Pass 2: build EPIC ID set from EPIC-NNNN-*.md files in dir.
+  local epic_set
+  epic_set="$(mktemp -t shy-scan-epics.XXXXXX)"; TMP_FILES="${TMP_FILES} ${epic_set}"
+  : >"$epic_set"
+  local efile ebase eid
+  while IFS= read -r efile; do
+    [ -z "$efile" ] && continue
+    ebase=$(basename "$efile")
+    eid=$(printf '%s' "$ebase" | sed -E 's/^(EPIC-[0-9]{4})-.*$/\1/')
+    printf '%s\n' "$eid" >>"$epic_set"
+  done < <(find -P "$dir" -maxdepth 1 -type f ! -type l \
+             -name 'EPIC-[0-9][0-9][0-9][0-9]-*.md' | LC_ALL=C sort)
+
+  # ---- Pass 3: cross-check each SHY's `epic:` reference against EPIC set.
+  # Most SHYs do NOT have an `epic:` field (it's optional). Guard the grep
+  # in a boolean context so `set -euo pipefail` doesn't fire when there's
+  # no match — `if grep -q` is the safe idiom.
+  local sfile epic_ref abs
+  while IFS= read -r sfile; do
+    [ -z "$sfile" ] && continue
+    if ! grep -qE '^epic:' "$sfile"; then
+      continue
+    fi
+    epic_ref=$(grep -E '^epic:' "$sfile" | head -n 1 | sed -E 's/^epic:[[:space:]]*([^[:space:]]+).*$/\1/')
+    [ -z "$epic_ref" ] && continue
+    if ! grep -qE "^${epic_ref}\$" "$epic_set"; then
+      abs="$(abspath "$sfile")"
+      fail "$abs" "invalid optional field" "epic field references unknown ${epic_ref}; no such EPIC-*.md in scan dir" "$E_SCAN_FAIL"
     fi
   done < <(find -P "$dir" -maxdepth 1 -type f ! -type l \
              -name 'SHY-[0-9][0-9][0-9][0-9]-*.md' | LC_ALL=C sort)

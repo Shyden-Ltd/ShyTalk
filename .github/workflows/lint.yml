@@ -140,3 +140,11 @@ jobs:
       # validator enforces, and SHY-0001 for the rationale + DoD.
       - name: Validate SHY story frontmatter
         run: bash scripts/check-story-frontmatter.sh --scan .project/stories
+
+      # EPIC frontmatter validator — separate step from the SHY validator
+      # per SHY-0037 AC line 44 ("two `--scan` calls, not one combined").
+      # Runs structural + cross-corpus checks: EPIC ID collisions, unknown
+      # child SHY refs, duplicate child claims. See CLAUDE.md § "Agile Way
+      # of Working" → "### EPICs" for the spec.
+      - name: Validate EPIC frontmatter
+        run: bash scripts/check-epic-frontmatter.sh --scan .project/stories
