@@ -203,7 +203,7 @@ Le moyen le plus rapide de commencer. Une seule commande demarre tout -- emulate
 
 1. **Cloner et installer**
    ```bash
-   git clone https://github.com/ShydenMcM/ShyTalk.git
+   git clone https://github.com/Shyden-Ltd/ShyTalk.git
    cd ShyTalk
    cd express-api && npm install && cd ..
    ```

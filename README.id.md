@@ -203,7 +203,7 @@ Cara tercepat untuk memulai. Satu perintah memulai semuanya -- Firebase Emulator
 
 1. **Clone dan instal**
    ```bash
-   git clone https://github.com/ShydenMcM/ShyTalk.git
+   git clone https://github.com/Shyden-Ltd/ShyTalk.git
    cd ShyTalk
    cd express-api && npm install && cd ..
    ```

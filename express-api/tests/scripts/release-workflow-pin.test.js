@@ -1,60 +1,46 @@
 /**
- * release.yml token + PR-open contract pin.
+ * release.yml token + tag-only contract pin.
  *
- * Triggered by: release v0.97.6 (PR #835) bumped versionName + versionCode
- * on main but `release-tag.yml` never fired, so no `v0.97.6` git tag
- * + GitHub Release was published — leaving the latest published
- * release stuck at `v0.97.5` from 2026-05-03.
+ * Two historical incidents this file guards against:
  *
- * Root cause: my prior fix in PR #818 (2026-05-24) switched the
- * `Open release PR` step's `GH_TOKEN` from the Release App token
- * (`steps.app-token.outputs.token`) to the workflow's built-in
- * `secrets.GITHUB_TOKEN`, because the App's installation didn't yet
- * grant `pull_requests: write`. That fix made the PR-open step succeed,
- * but introduced a NEW bug: GitHub's documented loop-prevention rule
- * says any action performed using `GITHUB_TOKEN` does NOT trigger
- * downstream workflows. Two consequences:
- *   1. The release PR's `pull_request: opened` event did NOT fire
- *      pr-checks.yml — observed on PR #835 (no CI ran until we pushed
- *      an empty commit at 10:54 BST on 2026-05-25).
- *   2. The auto-merge (also performed by `GITHUB_TOKEN` via the
- *      enabled auto-merge bot) means the squash-merge commit on main
- *      is authored by `GITHUB_TOKEN`, so the `push: branches: main`
- *      trigger on release-tag.yml does NOT fire. Every release since
- *      v0.97.5 has hit this trap.
+ * 1. v0.97.6 GITHUB_TOKEN trap (2026-05-25): PR #818's fix switched
+ *    the release-PR step from the App token to GITHUB_TOKEN; PR opened
+ *    but pr-checks.yml didn't fire (loop-prevention rule), and after
+ *    auto-merge the release-tag.yml `push: main` trigger didn't fire
+ *    either. v0.97.6 was bumped on main but no tag/Release was
+ *    published. Fix: grant App `pull_requests: write` + switch back to
+ *    App token.
  *
- * Fix: grant the Release App `pull_requests: write` in the GitHub App
- * settings UI (a one-time manual step performed by the operator), then
- * switch BOTH the PR-open step AND the auto-merge enable step back to
- * using the App token. With the permission in place, the App's identity
- * is what opens the PR and enables auto-merge, so downstream workflows
- * see a non-GITHUB_TOKEN event and fire normally.
+ * 2. SHY-0033 506-branch sprawl (2026-06-07): release.yml created
+ *    `release/v${VERSION}-r${{ github.run_id }}` ephemeral branches
+ *    that orphaned on every failed/cancelled run, contributing 6 to
+ *    the 506-branch repo state. SHY-0034 (this PR) refactored
+ *    release.yml to eliminate the ephemeral branch entirely — the
+ *    GraphQL `createCommitOnBranch` mutation now targets `main`
+ *    DIRECTLY via a `bypass_actors` entry on main's branch-protection
+ *    ruleset (id 12613584) for the Release App. No PR is opened; no
+ *    branch is created.
  *
- * This test pins the post-fix contract so a future "simplification"
- * that switches back to `secrets.GITHUB_TOKEN` (because it looks
- * simpler / removes the App dependency) fails CI loudly with a clear
- * explanation, instead of silently re-introducing the publishing
- * outage we just experienced.
+ * This file pins the post-fix contract for BOTH incidents so a future
+ * "simplification" — either switching back to GITHUB_TOKEN OR re-
+ * introducing the release-branch ceremony — fails CI loudly.
  *
- * Coverage (13 tests across 5 describe blocks):
+ * Coverage (across describe blocks):
  *   - `Generate app token` step (3 tests): pins actions/create-
  *     github-app-token@v3.2.0 SHA, uses `client-id` not deprecated
  *     `app-id`, references RELEASE_APP_ID + RELEASE_APP_PRIVATE_KEY
  *     secrets
- *   - `Create release branch and signed commit via GraphQL` step
- *     (1 test): uses App token, NOT GITHUB_TOKEN
- *   - `Open release PR` step (4 tests): uses App token NOT
- *     GITHUB_TOKEN; invokes `gh pr create`; invokes `gh pr merge
- *     --auto --squash` (the `--squash` flag is load-bearing —
- *     release-tag.yml matches `chore: release vX.Y.Z` against the
- *     squash-merge's PR-title-as-commit-subject; `--merge` would
- *     produce `Merge pull request #N ...` which never matches);
- *     GH_TOKEN is declared in step-level `env:` block (not inline
- *     export inside `run:`) and env: precedes run:
+ *   - `Create signed commit on main via GraphQL` step (3 tests):
+ *     uses App token NOT GITHUB_TOKEN; targets `BRANCH="main"`;
+ *     the GraphQL payload references `$branch` (which the bash sets
+ *     to `main`)
+ *   - SHY-0034 no-release-branches invariants (4 tests):
+ *     no `BRANCH="release/v` literal anywhere in release.yml;
+ *     no `gh pr create` for the release flow (the PR step was
+ *     removed entirely); no `gh pr merge --auto --squash` for the
+ *     release flow; no `git refs heads/release` ref-create call
  *   - `Guard against double-fired releases` step (1 test): uses
- *     App token, NOT GITHUB_TOKEN (the orphan-branch detection
- *     calls `gh api` + `gh pr list` and must see the repo as the
- *     App identity)
+ *     App token, NOT GITHUB_TOKEN
  *   - `extractStep` helper error branches (4 tests): unknown step
  *     name throws, non-6-space step indent throws, ambiguous step
  *     name throws with all matched line numbers, CRLF line endings
@@ -105,23 +91,24 @@ function extractStep(yamlText, stepName) {
   return lines.slice(startIdx, endIdx).join('\n');
 }
 
-describe('release.yml — Release App token + PR-open contract', () => {
+describe('release.yml — Release App token + tag-only (SHY-0034) contract', () => {
   let yamlText;
-  // The actual step names in the workflow today (verified 2026-05-25):
+  // The actual step names in the workflow today (verified 2026-06-08
+  // post SHY-0034 refactor):
   //   "Generate app token"
-  //   "Create release branch and signed commit via GraphQL"
-  //   "Open release PR"
+  //   "Create signed commit on main via GraphQL"
+  //   "Guard against double-fired releases"
+  // NOTE: "Open release PR" step was REMOVED in SHY-0034 (createCommitOnBranch
+  // now targets main directly via App bypass actor; no PR is opened).
   let appTokenStep;
   let guardStep;
   let createCommitStep;
-  let openPrStep;
 
   beforeAll(() => {
     yamlText = fs.readFileSync(RELEASE_YAML_PATH, 'utf8');
     appTokenStep = extractStep(yamlText, 'Generate app token');
     guardStep = extractStep(yamlText, 'Guard against double-fired releases');
-    createCommitStep = extractStep(yamlText, 'Create release branch and signed commit via GraphQL');
-    openPrStep = extractStep(yamlText, 'Open release PR');
+    createCommitStep = extractStep(yamlText, 'Create signed commit on main via GraphQL');
   });
 
   describe('Generate app token step', () => {
@@ -146,74 +133,93 @@ describe('release.yml — Release App token + PR-open contract', () => {
     });
   });
 
-  describe('Create release branch and signed commit via GraphQL step', () => {
+  describe('Create signed commit on main via GraphQL step', () => {
     test('uses the App token (NOT GITHUB_TOKEN)', () => {
       // The commit itself must be App-signed so it carries the App's
       // identity (visible in git log as the bot user). Using
       // GITHUB_TOKEN here would: (a) lose App signing, (b) trigger
-      // the loop-prevention rule on any downstream workflows that
-      // listen for the branch push.
+      // the loop-prevention rule on release-tag.yml's push-to-main
+      // trigger.
       expect(createCommitStep).toContain('GH_TOKEN: ${{ steps.app-token.outputs.token }}');
       expect(createCommitStep).not.toContain('GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}');
     });
+
+    test('targets `BRANCH="main"` (SHY-0034: tag-only flow)', () => {
+      // The mutation now targets main directly via the App's
+      // bypass_actors entry on ruleset 12613584. NOT a release/v*
+      // branch, NOT a per-run-ID branch. This is the load-bearing
+      // assertion that catches a regression back to the ephemeral-
+      // branch pattern from prior to SHY-0034.
+      expect(createCommitStep).toContain('BRANCH="main"');
+      expect(createCommitStep).not.toMatch(/BRANCH="release\/v/);
+    });
+
+    test('GraphQL payload references the BRANCH variable', () => {
+      // Defensive: ensure the mutation actually USES the BRANCH var
+      // we set above (i.e. someone didn't hard-code a different
+      // branch name in the GraphQL query).
+      expect(createCommitStep).toMatch(/branchName: \$branch/);
+    });
   });
 
-  describe('Open release PR step', () => {
-    test('uses the App token (NOT GITHUB_TOKEN) — load-bearing for downstream workflows', () => {
-      // Per the file-level docstring above: GITHUB_TOKEN-opened PRs
-      // do not fire pr-checks.yml on `opened`, and GITHUB_TOKEN-merged
-      // commits do not fire release-tag.yml on `push: main`. The App
-      // token avoids both traps because the App's installation
-      // identity is distinct from GITHUB_TOKEN.
-      //
-      // This assertion is the one that catches a "switch back to
-      // GITHUB_TOKEN for convenience" regression.
-      expect(openPrStep).toContain('GH_TOKEN: ${{ steps.app-token.outputs.token }}');
-      expect(openPrStep).not.toContain('GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}');
+  describe('SHY-0034 no-release-branches invariants (file-level)', () => {
+    test('no BRANCH="release/v literal anywhere in release.yml', () => {
+      // Catches a regression where someone re-introduces the
+      // ephemeral-branch pattern (e.g. via copy-paste from an old
+      // version, or by reverting SHY-0034). The previous flow used
+      // `BRANCH="release/v${VERSION}-r${{ github.run_id }}"` — this
+      // pin asserts that literal pattern is gone.
+      expect(yamlText).not.toMatch(/BRANCH="release\/v/);
     });
 
-    test('invokes `gh pr create` (the PR-opening primitive)', () => {
-      expect(openPrStep).toContain('gh pr create');
+    test('no `gh pr create` in release.yml (PR-open step was removed)', () => {
+      // The previous Open release PR step is gone entirely per
+      // SHY-0034. createCommitOnBranch targets main directly, so no
+      // PR is needed in the release flow.
+      expect(yamlText).not.toMatch(/gh pr create/);
     });
 
-    test('invokes `gh pr merge --auto --squash` (R1 I-1: squash strategy is load-bearing)', () => {
-      // Auto-merge MUST be enabled by the App, not GITHUB_TOKEN, so
-      // the eventual squash-merge commit on main is authored by the
-      // App and triggers release-tag.yml. The `--squash` flag is
-      // load-bearing: release-tag.yml's `Inspect commit subject`
-      // step matches `chore: release vX.Y.Z` against the squash-
-      // merge's commit subject (which is the PR title). A merge
-      // commit (default `--merge`) would produce a subject like
-      // `Merge pull request #N from release/v...` — release-tag.yml
-      // would skip it. So both `--auto` AND `--squash` are required.
-      expect(openPrStep).toContain('gh pr merge --auto --squash');
+    test('no `gh pr merge --auto --squash` in release.yml', () => {
+      // The auto-merge invocation lived in the now-removed Open
+      // release PR step. With no PR opened, no auto-merge needed.
+      expect(yamlText).not.toMatch(/gh pr merge --auto --squash/);
     });
 
-    test('GH_TOKEN is declared in step-level `env:` block (R1 I-2)', () => {
-      // GH_TOKEN must be set at the step level so EVERY `gh` sub-
-      // command in the step's `run:` block inherits the App token.
-      // Setting it via `export GH_TOKEN=...` inside `run:` instead
-      // would leak ordering bugs — any `gh` call before the export
-      // would silently fall through to the default GITHUB_TOKEN.
-      expect(openPrStep).toContain('env:');
-      const envIdx = openPrStep.indexOf('env:');
-      const runIdx = openPrStep.indexOf('run:');
-      // Ordering guard: `-1` slipping through would still satisfy a
-      // naive `envIdx < runIdx` check if env is absent (-1 < positive).
-      expect(envIdx).toBeGreaterThanOrEqual(0);
-      expect(runIdx).toBeGreaterThanOrEqual(0);
-      expect(envIdx).toBeLessThan(runIdx);
+    test('no `git/refs` ref-create call for a release branch', () => {
+      // The previous flow's branch-creation step was:
+      //   gh api -X POST repos/.../git/refs -f ref=refs/heads/${BRANCH} ...
+      // With BRANCH=main, that pattern is gone — main already exists.
+      // This assertion catches a regression where someone re-adds
+      // the ref-create step (e.g. for a different branch).
+      expect(yamlText).not.toMatch(/POST.*git\/refs.*release/);
+      expect(yamlText).not.toMatch(/ref=refs\/heads\/release/);
+    });
+
+    test('no OPEN_RELEASE_PRS guard variable (R2 reviewer test-gap)', () => {
+      // The OPEN_RELEASE_PRS guard block was removed in SHY-0034
+      // because no PRs are opened in the new flow. This pin catches
+      // a regression where the variable name (or the surrounding
+      // guard logic) is reintroduced by accident.
+      expect(yamlText).not.toMatch(/OPEN_RELEASE_PRS/);
+    });
+
+    test('no pull-requests: write permission (R2 reviewer test-gap)', () => {
+      // The `pull-requests: write` permission was needed for the
+      // removed Open release PR step. With no PR opened, the
+      // permission is dead. Least-privilege regression check.
+      expect(yamlText).not.toMatch(/pull-requests:\s*write/);
     });
   });
 
   describe('Guard against double-fired releases step (R1 I-3)', () => {
     test('uses the App token (NOT GITHUB_TOKEN)', () => {
-      // The guard step calls `gh api` and `gh pr list` to detect
-      // orphan release branches and open release PRs. Both need to
-      // see the repo as the App identity for consistency with the
-      // PR-open step's view. Using GITHUB_TOKEN here would also
-      // hit the loop-prevention rule for any future branch-creation
-      // side effects.
+      // Post SHY-0034: the guard step's only API call is `git log -1`
+      // (no `gh api` or `gh pr list` — the OPEN_RELEASE_PRS check was
+      // removed since no PRs are opened in the tag-only flow). The
+      // GH_TOKEN env var is preserved on the step so any future `gh`
+      // call inherits the App identity from the same job's token —
+      // GITHUB_TOKEN would lose App signing + trigger the loop-
+      // prevention rule on downstream workflows.
       expect(guardStep).toContain('GH_TOKEN: ${{ steps.app-token.outputs.token }}');
       expect(guardStep).not.toContain('GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}');
     });
