@@ -35,34 +35,35 @@ Option B balances [[feedback-quality-explore-alternatives-validate]] (validate t
 ### Happy path
 
 - [ ] `scripts/check-story-frontmatter.sh` accepts an optional `epic:` frontmatter field; when present, validates `^EPIC-[0-9]{4}$`; when absent, no failure.
-- [ ] `scripts/check-epic-frontmatter.sh` is created and validates EPIC files at `.project/stories/EPIC-NNNN-slug.md`; required frontmatter (id/status/owner/created/priority/title) + required body sections (Vision/Scope/Child SHYs/DoD at Epic Level/Notes) + child SHY existence check.
-- [ ] `.project/stories/EPIC-0001-shy-framework.md` is authored as proof-of-concept; lists SHY-0001/0002/0003/0032/0036/0037 as child SHYs.
-- [ ] SHY-0001/0002/0003/0032/0036/0037 each gain `epic: EPIC-0001` frontmatter (6 SHYs cross-linked).
-- [ ] `CLAUDE.md` § Agile Way of Working gains: (a) `epic` as 10th optional frontmatter field row; (b) new `### EPICs` subsection documenting the `EPIC-NNNN` ID format, the EPIC file structure, and the optional-field rule.
+- [ ] `scripts/check-epic-frontmatter.sh` is created and validates EPIC files at `.project/stories/EPIC-NNNN-slug.md`; required frontmatter (id/status/owner/created/priority/title) + required body sections (Vision/Scope/Child SHYs/DoD at Epic Level/Notes) + child SHY existence check in `--scan` mode.
+- [ ] **Per-file vs `--scan` asymmetry**: per-file invocation runs ONLY structural checks (frontmatter regex + body section presence); cross-corpus checks (unknown EPIC reference, unknown child SHY, duplicate child claims, forward-reference protection) run ONLY in `--scan` mode after building an in-memory index. `--help` documents this explicitly.
+- [ ] `.project/stories/EPIC-0001-shy-framework.md` is authored as proof-of-concept; lists SHY-0001/0002/0003/0037 as child SHYs (4 SHYs — the genuine framework set; per architect Finding 6, SHY-0032/0036 are dropped as framework-adjacent).
+- [ ] SHY-0001/0002/0003/0037 each gain `epic: EPIC-0001` frontmatter (4 SHYs cross-linked).
+- [ ] `CLAUDE.md` § Agile Way of Working gains: (a) `epic` as 10th optional frontmatter field row; (b) new `### EPICs` subsection documenting the `EPIC-NNNN` ID format, the EPIC file structure, and the optional-field rule; (c) `### Tooling` subsection updated to document `check-epic-frontmatter.sh` (usage + `--help` flag + exit codes 31/32/33).
 - [ ] `SHY-INDEX.md` gains a new `## EPICs` section listing existing EPICs with their child SHY counts.
-- [ ] `.github/workflows/lint.yml` (or equivalent) calls the new EPIC validator alongside the SHY validator.
-- [ ] Validator scan over the entire `.project/stories/` directory exits 0.
+- [ ] `.github/workflows/lint.yml` calls BOTH validators in SEPARATE steps: `bash scripts/check-story-frontmatter.sh --scan .project/stories` AND `bash scripts/check-epic-frontmatter.sh --scan .project/stories`. Each exits 0 independently. NOT a single combined call.
+- [ ] Both `--scan` invocations exit 0 over the full `.project/stories/` directory (60+ SHYs + 1 EPIC).
 
 ### Error paths
 
-- [ ] **`epic:` field present but malformed** (e.g. `epic: foo` or `epic: EPIC-1` or `epic: EPIC-12345`) — validator exits 11 with category `invalid optional field`.
-- [ ] **EPIC file missing required body section** — validator exits 32 with category `missing required ## body section`.
-- [ ] **EPIC file `child_shys` array references nonexistent SHY** — validator exits 33 with category `unknown SHY reference`.
-- [ ] **EPIC file frontmatter `id:` mismatches filename** — validator exits 31 with category `invalid frontmatter field value`.
-- [ ] **SHY references unknown EPIC** (e.g. `epic: EPIC-9999` but no such file) — validator exits 11 (cross-check after EPIC discovery; or exit 16 if a separate code is preferred — architect to validate the choice).
+- [ ] **`epic:` field present but malformed** (e.g. `epic: foo` or `epic: EPIC-1` or `epic: EPIC-12345`) — SHY validator exits 11 with category `invalid optional field` (per-file or `--scan`).
+- [ ] **EPIC file missing required body section** — EPIC validator exits 32 with category `missing required ## body section` (per-file or `--scan`).
+- [ ] **EPIC file `child_shys` array references nonexistent SHY** — EPIC validator exits 33 with category `unknown SHY reference` (`--scan` only; per-file skips).
+- [ ] **EPIC file frontmatter `id:` mismatches filename** — EPIC validator exits 31 with category `invalid frontmatter field value` (per-file or `--scan`).
+- [ ] **SHY references unknown EPIC** (e.g. `epic: EPIC-9999` but no such file) — SHY validator exits 11 with category `invalid optional field` (`--scan` only; per-file skips). Resolved exit-code choice per architect: reuse 11 (same class as `roadmap_ids: [BOGUS]` — value passes regex but fails its semantic constraint).
 
 ### Edge cases
 
 - [ ] **EPIC file with zero child SHYs** — validator accepts (epic may pre-date its first child SHY); body section `## Child SHYs` may say `(none yet — pre-creation)`.
-- [ ] **SHY with `epic:` field but EPIC file not yet created** — validator FAILS (forward-reference protection); architect to confirm vs allow with warning.
-- [ ] **Two EPICs claiming the same child SHY** — validator FAILS with category `duplicate epic claim`; child SHY must belong to ≤1 EPIC at a time.
+- [ ] **SHY with `epic:` field but EPIC file not yet created** — `--scan` FAILS (forward-reference protection: exit 11, category `invalid optional field`); per-file mode SKIPS the cross-check (consistent with finding 2: per-file mode runs structural checks only).
+- [ ] **Two EPICs claiming the same child SHY** — `--scan` FAILS with exit 33, category `duplicate epic claim`; per-file mode SKIPS (corpus-level fact).
 - [ ] **`epic:` field on a Cancelled SHY** — accepted (audit trail preservation); the EPIC file may or may not still list it.
-- [ ] **EPIC ID collision** (two `EPIC-0001-*.md` files with different slugs) — validator FAILS; one EPIC per ID.
+- [ ] **EPIC ID collision** (two `EPIC-0001-*.md` files with different slugs) — `--scan` FAILS with exit 31; per-file mode SKIPS.
 
 ### Performance
 
-- [ ] Validator scan over 60 SHYs + 1 EPIC takes <2s on the standard CI runner (current baseline ~1.5s for 60 SHYs alone).
-- [ ] No quadratic blowups: child-SHY existence check is `O(SHY × EPIC)` worst case — for 60×9 the limit is 540 path checks which is bounded.
+- [ ] **Time complexity must be O(N) in corpus size** (`N` = SHYs + EPICs), NOT a fixed budget tied to today's file count. Two-pass `--scan` design enforces this: pass 1 builds an in-memory index (O(N)); pass 2 cross-checks each file against the pre-built index in O(1) per file (still O(N) total). No O(N²) globbing inside the per-file loop.
+- [ ] Current baseline (60 SHYs alone, no EPIC validator): ~1.5s on the standard CI runner. Post-PR (60 SHYs + 1 EPIC + cross-checks): <2s. Post-SHY-0060 backfill (~114 SHYs + ~9 EPICs): re-benchmark and update the budget; do NOT silently break this AC.
 
 ### Security
 
@@ -116,12 +117,19 @@ Option B balances [[feedback-quality-explore-alternatives-validate]] (validate t
 - **Then** exit code is 32
 - **And** stderr names `missing required ## body section: Vision`
 
-**Scenario: EPIC validator catches duplicate child SHY claim**
+**Scenario: EPIC validator catches duplicate child SHY claim (scan-mode only)**
 
 - **Given** two EPIC files both listing `SHY-0001` in `child_shys`
-- **When** the EPIC validator scans the directory
+- **When** `scripts/check-epic-frontmatter.sh --scan .project/stories` runs
 - **Then** exit code is 33
 - **And** stderr names both EPIC files + the contested SHY ID
+
+**Scenario: per-file invocation skips cross-corpus checks**
+
+- **Given** an EPIC file `EPIC-0001-foo.md` whose `child_shys: [SHY-9999]` references a SHY that does not exist
+- **When** `scripts/check-epic-frontmatter.sh .project/stories/EPIC-0001-foo.md` runs (per-file mode)
+- **Then** exit code is 0 (structural checks pass; cross-checks deferred)
+- **And** the same file in `--scan` mode exits 33
 
 ## Test Plan
 
@@ -140,8 +148,10 @@ Option B balances [[feedback-quality-explore-alternatives-validate]] (validate t
 
 ## Out of Scope
 
-- **Backfilling `epic:` across the other ~54 existing SHYs** — filed as SHY-0060 (reserved); this PR only cross-links 6 SHYs as proof-of-concept (SHY-0001/0002/0003/0032/0036/0037).
+- **Backfilling `epic:` across the other ~56 existing SHYs** — filed as SHY-0060 (reserved); this PR only cross-links 4 SHYs as proof-of-concept (SHY-0001/0002/0003/0037 — the genuine SHY-framework set per architect Finding 6).
 - **Authoring EPICs 0002-0009** — filed as SHY-0061..0068 (reserved when this PR merges); each EPIC is its own SHY to keep PRs reviewable.
+- **Frontmatter↔body consistency check** (validator enforcing that every SHY listed in EPIC frontmatter `child_shys:` also appears in the body's `## Child SHYs` section, and vice versa) — explicitly OUT of scope for the 1.0 validator. Risk of drift is acceptable at ~9 EPIC scale; revisit if drift bugs surface in practice. Filed as a future SHY if needed.
+- **Shared validator helper extraction** to `scripts/lib/frontmatter-utils.sh` (DRY for `normalize_file` / `abspath` / `escape_re` / `cleanup` across both validators) — out of scope; both scripts duplicate these helpers in v1.0. File a refactor SHY if maintenance burden grows.
 - **Public roadmap webpage refactor to surface EPICs** — SHY-0038 territory.
 - **CI auto-sync from SHY .md to roadmap-data.json / GitHub Project board** — SHY-0039 territory.
 - **Migrating GitHub Project board to add an `Epic` custom-field column** — operator manual provision (task #34); not blocking this PR.
@@ -167,16 +177,17 @@ Option B balances [[feedback-quality-explore-alternatives-validate]] (validate t
 
 - [ ] SHY-0037 spec passes the SHY frontmatter validator.
 - [ ] `scripts/check-epic-frontmatter.sh` exists + is executable.
-- [ ] `scripts/check-story-frontmatter.sh` accepts optional `epic:` field with regex validation.
+- [ ] `scripts/check-story-frontmatter.sh` accepts optional `epic:` field with regex validation + `--scan`-only cross-check for unknown EPIC references.
 - [ ] Jest tests for both validators pass; coverage ≥95% on touched files.
 - [ ] `EPIC-0001-shy-framework.md` exists + passes EPIC validator.
-- [ ] 6 SHYs cross-linked to EPIC-0001 in frontmatter.
-- [ ] CLAUDE.md § Agile Way of Working updated with `epic` field row + `### EPICs` subsection.
+- [ ] 4 SHYs cross-linked to EPIC-0001 in frontmatter (SHY-0001/0002/0003/0037).
+- [ ] CLAUDE.md § Agile Way of Working updated with: `epic` field row + `### EPICs` subsection + `### Tooling` subsection extended to document `check-epic-frontmatter.sh` (usage/help/exit codes).
 - [ ] SHY-INDEX.md gains `## EPICs` section.
-- [ ] `.github/workflows/lint.yml` invokes EPIC validator.
+- [ ] `.github/workflows/lint.yml` invokes EPIC validator as a SEPARATE step alongside the SHY validator (two `--scan` calls, not one combined).
 - [ ] CI green; reviewer ZERO findings.
 - [ ] PR squash-merged; SHY-0037 status flipped Done with PR link.
 
 ## Notes (running log)
 
 - 2026-06-08 ~14:56 BST — Spec authored on `story/SHY-0037-introduce-epics` branch (HEAD `0ad76aba61b` — SHY-0036 close-out commit). Scope locked to Option B per design exploration above. Architect-review pending per [[feedback-quality-explore-alternatives-validate]].
+- 2026-06-08 ~15:30 BST — Architect (feature-dev:code-architect) returned 6 findings. Resolutions applied in this commit: (1) Critical Finding 1 — AC line 43 split into two separate `--scan` invocations; (2) Critical Finding 2 — forward-reference rule resolved (FAIL in `--scan`, SKIP in per-file); (3) Important Finding 3 — duplicate-claim BDD scenario `When` clause now shows `--scan`; (4) Important Finding 4 — frontmatter↔body consistency check explicitly Out of Scope; (5) Important Tooling Finding — CLAUDE.md `### Tooling` update added to AC + DoD; (6) Nit Finding 5 — Performance AC restated as O(N) corpus-size; (7) Nit Finding 6 — proof-of-concept set slimmed to SHY-0001/0002/0003/0037 (4 SHYs, all genuine framework). Three open questions resolved: separate validator scripts (confirmed); two-pass `--scan` with index (confirmed); exit 11 for unknown EPIC reference (confirmed). Architect agent ID `aafa2055bc6456896` if follow-up needed.
