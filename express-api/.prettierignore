@@ -2,3 +2,7 @@ node_modules/
 coverage/
 package-lock.json
 test-results/
+
+
+# Deliberately single-line per locale (compressed format for review-readability across 20 langs)
+../public/js/legal-translations.js

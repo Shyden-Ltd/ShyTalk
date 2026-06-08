@@ -1,0 +1,72 @@
+name: Sync roadmap-data.json from SHY corpus
+
+# Authoritative regeneration of public/roadmap-data.json from .project/stories/SHY-NNNN-*.md.
+# Spec: .project/stories/SHY-0038-public-roadmap-gh-project-link.md
+#
+# Trigger: every push to main that touches .project/stories/** (or this
+# workflow / the sync script themselves). Also workflow_dispatch for
+# on-demand re-sync + pre-merge testing.
+#
+# Loop guard: `if: github.actor != 'github-actions[bot]'` prevents the
+# workflow re-firing on its own commit-back. Per operator decision
+# 2026-06-08 ~18:40 BST — actor-check beats [skip ci] (no commit-message
+# magic, intact audit trail).
+#
+# Branch-protection note: the commit-back step pushes directly to main.
+# Requires `github-actions[bot]` in the main branch ruleset's bypass-actor
+# list (or a write-scoped PAT). Operator-managed prerequisite.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".project/stories/**"
+      - "scripts/sync-shy-to-roadmap-data.mjs"
+      - ".github/workflows/sync-roadmap-data.yml"
+  workflow_dispatch: {}
+
+concurrency:
+  group: sync-roadmap-data-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Regenerate roadmap-data.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Guard: skip when the bot's own commit-back is the trigger.
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: "20"
+
+      - name: Regenerate roadmap-data.json
+        run: node scripts/sync-shy-to-roadmap-data.mjs
+
+      - name: Commit + push if changed
+        run: |
+          if git diff --quiet public/roadmap-data.json; then
+            echo "[sync] no changes — public/roadmap-data.json is up to date"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/roadmap-data.json
+          git commit -m 'chore(roadmap): sync roadmap-data.json from SHY corpus'
+          # C1 from reviewer: bring local branch forward before push. concurrency
+          # group serialises runs per ref but does not prevent OTHER workflows
+          # (Dependabot, release.yml, lint.yml) from advancing main between this
+          # checkout and this push. `git pull --rebase` replays our regen commit on
+          # top of whatever has landed; the regen is by construction idempotent so
+          # rebase will never produce conflicts.
+          git pull --rebase --no-edit origin main
+          git push origin HEAD:main

@@ -10,7 +10,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 | ID                                                              | Pri | Effort | Type     | Title                                                                                            | Status         | Roadmap IDs      | PR  |
 | --------------------------------------------------------------- | --- | ------ | -------- | ------------------------------------------------------------------------------------------------ | -------------- | ---------------- | --- |
-| [SHY-0038](SHY-0038-public-roadmap-gh-project-link.md)          | P0  | L      | infra    | Full bidirectional sync: SHY .md → roadmap-data.json auto-regen + GH Project board link          | 📝 Draft       | —                | —   |
+| [SHY-0038](SHY-0038-public-roadmap-gh-project-link.md)          | P0  | L      | infra    | Full bidirectional sync: SHY .md → roadmap-data.json auto-regen + GH Project board link          | 🚧 In Progress | —                | —   |
 | [SHY-0060](SHY-0060-age-gating-per-feature.md)                  | P0  | XL     | feature  | Age-gating per feature: tiered per-feature age thresholds replacing single 13+ signup gate       | 🚧 In Progress | —                | —   |
 | [SHY-0024](SHY-0024-resolve-navgraph-coexistence.md)            | P0  | L      | refactor | Migrate Android to SharedNavGraph + delete NavGraph.kt                                           | 📝 Draft       | G028             | —   |
 | [SHY-0004](SHY-0004-verify-room-mutation-p3-deploy.md)          | P0  | S      | bug      | Verify Room mutation P3 deploy status + reconcile                                                | 📝 Draft       | G009, G027       | —   |
@@ -82,10 +82,12 @@ _None yet._
 
 These IDs are reserved by the SHY-0032 + SHY-0033 multi-PR plan (operator 2026-06-07). Files don't exist yet; they'll be created as fully-refined SHYs (per [[feedback-no-skeleton-stories-fully-refined]]) when each predecessor lands. Per [[feedback-one-active-branch-close-on-finish]]: only one of these may have an active branch at a time.
 
-| Reserved ID  | Title (planned)                                                                                                                                                                             | Trigger                                                  |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| ~~SHY-0039~~ | ~~CI workflow for SHY → roadmap-data.json auto-sync~~ — **ABSORBED into SHY-0038 (Option D)** per operator quality-over-speed reframe (2026-06-08 ~18:38 BST). Slot freed for next concern. | —                                                        |
-| SHY-0040     | Optimise `sync-stories-to-issues.sh` per-file overhead (currently ~620ms/file, 34 files = 21s; bottleneck is jq+awk subprocess churn)                                                       | When SHY corpus hits ~50 files or sync timeout escalates |
+| Reserved ID  | Title (planned)                                                                                                                                                                                                       | Trigger                                                  |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| ~~SHY-0039~~ | ~~CI workflow for SHY → roadmap-data.json auto-sync~~ — **ABSORBED into SHY-0038 (Option D)** per operator quality-over-speed reframe (2026-06-08 ~18:38 BST). Slot freed for next concern.                           | —                                                        |
+| SHY-0040     | Optimise `sync-stories-to-issues.sh` per-file overhead (currently ~620ms/file, 34 files = 21s; bottleneck is jq+awk subprocess churn)                                                                                 | When SHY corpus hits ~50 files or sync timeout escalates |
+| SHY-0061     | Public roadmap renderer reads SHY-derived `phases[].items[]` (currently consumes only `phases[].features[]`); adds per-phase SHY section with shyId badges                                                            | After SHY-0038 merges (sync infra in place)              |
+| SHY-0062     | Staged migration of ~95 legacy `phases[].features[]` entries into fully-refined SHYs with `public: true`. Batched by phase (~8 follow-up SHYs at ~12 features each); preserves user-visible content during transition | After SHY-0061 merges (renderer reads `items[]`)         |
 
 ---
 

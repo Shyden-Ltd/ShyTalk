@@ -18,7 +18,7 @@ Every piece of work is captured as ONE detailed user-story `.md` file at `.proje
 - **File path:** `.project/stories/SHY-XXXX-kebab-slug.md`.
 - **Index:** `.project/stories/SHY-INDEX.md` is the live backlog. Sorted `priority asc, created asc`. Active / Done / Cancelled tables. Index is human-maintained — the `SHY-[0-9][0-9][0-9][0-9]-*.md` glob in the validator naturally excludes it.
 
-### Frontmatter (9 required fields + 1 optional)
+### Frontmatter (9 required fields + 3 optional)
 
 - `id` — matches `^SHY-[0-9]{4}$`
 - `status` — one of `Draft` / `In Progress` / `In Review` / `Done` / `Cancelled`
@@ -29,7 +29,9 @@ Every piece of work is captured as ONE detailed user-story `.md` file at `.proje
 - `type` — `feature` / `bug` / `refactor` / `docs` / `infra` / `spike` / `chore`
 - `roadmap_ids` — array form only (`[]` if ad-hoc; `[G001, G024]` if multiple)
 - `pr` — URL once pushed (advisory; NOT enforced by the validator)
-- `epic` *(optional)* — matches `^EPIC-[0-9]{4}$` (e.g. `EPIC-0001`); when present, the referenced EPIC file MUST exist in `.project/stories/` (cross-checked in `--scan` mode only). See `### EPICs` below.
+- `epic` _(optional)_ — matches `^EPIC-[0-9]{4}$` (e.g. `EPIC-0001`); when present, the referenced EPIC file MUST exist in `.project/stories/` (cross-checked in `--scan` mode only). See `### EPICs` below.
+- `public` _(optional, default `false`)_ — `true` opts the SHY into surfacing on `shytalk.com/roadmap`. See `### Public-surfacing` below.
+- `phase` _(optional, REQUIRED when `public: true`)_ — string matching one of the phase titles in `public/roadmap-data.json` (e.g. `Safety & Compliance`, `Website & Presence`). See `### Public-surfacing` below.
 
 ### Body sections (10 required `## ` headings + 8 required `### ` AC sub-headings)
 
@@ -90,7 +92,7 @@ The zero-gap roadmap at `.project/test-plans/exhaustive/2026-06-05-zero-gap-road
 
 ### EPICs
 
-EPICs group related SHYs under a coherent theme for prioritisation + roadmap surfacing. An EPIC is *meta*: it does not have its own implementation; it documents the *vision* of a cluster of work and tracks which SHYs roll up under it.
+EPICs group related SHYs under a coherent theme for prioritisation + roadmap surfacing. An EPIC is _meta_: it does not have its own implementation; it documents the _vision_ of a cluster of work and tracks which SHYs roll up under it.
 
 **ID + file format:**
 
@@ -106,7 +108,7 @@ EPICs group related SHYs under a coherent theme for prioritisation + roadmap sur
 - `created` — `YYYY-MM-DD`
 - `priority` — `P0` / `P1` / `P2` / `P3`
 - `title` — non-empty string (shown on roadmap webpage; do NOT duplicate the `# H1` here — keep it succinct)
-- `child_shys` *(optional)* — array form `[SHY-0001, SHY-0002]`; when present, each entry must match `^SHY-[0-9]{4}$` AND the SHY file must exist in `.project/stories/` (cross-checked in `--scan` mode only)
+- `child_shys` _(optional)_ — array form `[SHY-0001, SHY-0002]`; when present, each entry must match `^SHY-[0-9]{4}$` AND the SHY file must exist in `.project/stories/` (cross-checked in `--scan` mode only)
 
 **Required body sections (5):** `## Vision` · `## Scope` · `## Child SHYs` · `## DoD at Epic Level` · `## Notes`.
 
@@ -134,6 +136,16 @@ All audit signals — architect verdict, code-reviewer cycle count + verbatim fi
 - `.project/stories/SHY-0001-establish-agile-workflow.md` is the canonical SHY seed — copy it as the starting template for new SHYs.
 - `.project/stories/EPIC-0001-shy-framework.md` is the canonical EPIC seed — copy it as the starting template for new EPICs.
 - `scripts/sync-stories-to-issues.sh` (delivered by SHY-0002) mirrors each story `.md` to a GitHub Issue + Projects v2 card. One-way sync — `.md` is the source of truth, the Issue is a derived view.
+- `scripts/sync-shy-to-roadmap-data.mjs` (delivered by SHY-0038) regenerates `public/roadmap-data.json` from SHY `.md` frontmatter. Authoritative for `phases[].items` + `currentlyWorkingOn` (any manual edit gets stomped on next sync); preserves the phase shell (`title`, `titleI18n`, `status`, `progress`, and the legacy `features` array). Triggered automatically by `.github/workflows/sync-roadmap-data.yml` on push to main when `.project/stories/**` changes; also runnable locally and via `workflow_dispatch`. Loop guard: workflow's `if: github.actor != 'github-actions[bot]'` skips re-runs on its own commit-back.
+
+### Public-surfacing (`public: true` opt-in convention)
+
+- **Opt-in default.** A SHY surfaces on the public roadmap webpage (`shytalk.com/roadmap`) only when its frontmatter sets `public: true`. Absent or `public: false` → SHY stays internal-only. Safer failure mode than opt-out: an accidentally-private SHY is a missing-info bug; an accidentally-leaked SHY is a content leak.
+- **Required co-fields when `public: true` is set:** `phase` (must match one of the phase titles in `public/roadmap-data.json`'s phases shell, e.g. `Safety & Compliance`, `Website & Presence`) + a `# SHY-NNNN: <title>` H1 in the body (already required by [[feedback-no-skeleton-stories-fully-refined]]). Sync script exits non-zero (code 10) if either is missing.
+- **`currentlyWorkingOn` derivation:** SHYs with `public: true` AND `status: In Progress` appear in `roadmap-data.json`'s `currentlyWorkingOn` array. Any other status only appears under `phases[].items`.
+- **Lag expectation:** a SHY status flip propagates to the public webpage within ~90s of the PR squash-merge (CI workflow wall-clock budget). Typical ~30s.
+- **Don't manually edit the surfaces.** `public/roadmap-data.json`'s `_meta`, `currentlyWorkingOn`, and `phases[].items` are derived — any local edit gets stomped on the next sync run. `phases[].features` (legacy curated content) is still hand-edited until SHY-0061 lands the renderer change + SHY-0062+ stages the migration into SHYs.
+- **GH Project board link:** the public roadmap webpage footer carries a permanent link to `https://github.com/orgs/Shyden-Ltd/projects/1` (the public ShyTalk Stories Project board). Closes the [[feedback-stories-epics-and-two-surface-sync]] rule's cross-surface visibility gap.
 
 ### GitHub Issues mirror (delivered by SHY-0002)
 
