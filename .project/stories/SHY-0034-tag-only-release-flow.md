@@ -154,24 +154,88 @@ The operator explicitly chose Option B (re-architect) over Option A (keep epheme
 - Existing release.yml is ~589 lines; this rewrites a large portion.
 - Pre-tag steps that modify the working tree (release notes generation, version bump) need to be re-imagined as "build-time" rather than "commit-time."
 
-### Recommendation (subject to architect review)
+### Architect verdict: **CHOOSE OPTION A** (2026-06-08 ~10:15 BST)
 
-**Option C** is the cleanest match for operator's "tags only" directive and the [[feedback-no-release-branches-use-tags]] HARD rule. It's also the biggest refactor — but the operator explicitly chose B-over-A on the basis of "quality + reliability over speed" reasoning, which favours the more complete fix over the simpler patch.
+The architect agent (feature-dev:code-architect) reviewed all 3 options against 7 criteria (operator-fit, security, maintenance, implementation risk, recovery, release-notes, existing `release-tag.yml`). Verdict: **Option A**, with critical context that corrects my spec:
 
-**Decision required from architect/operator before implementation begins.** This SHY's spec is in place; the implementation choice between A/B/C is the next gate.
+1. **`release-tag.yml` already does tag-and-GitHub-Release creation** on push-to-main when it detects a `chore: release vX.Y.Z` commit subject. Option A naturally produces such a signed commit directly on main; release-tag.yml fires unchanged. **The "two-workflow split" survives intact** — only release.yml's branch+PR ceremony goes away.
 
-## BDD Scenarios
+2. **Option C's blast radius is larger than my spec acknowledged**: `app/build.gradle.kts` (versionCode + versionName are committed literals at lines 29-30, not derived); `deploy-prod.yml` awk parse of versionName at lines 109, 126, 505; `deploy-dev.yml` at lines 647, 657; iOS `Info.plist` MARKETING_VERSION injection chain; release-tag.yml cross-check at lines 100-110. That's a 5-file cascade requiring a separate SHY — Option C is the wrong choice for THIS SHY.
 
-**Scenario: Option C — release triggered by tag push, no branches created**
+3. **Release notes are ALREADY auto-generated** from conventional commits (release.yml lines 203-354: `git log --first-parent`, feat/fix/perf allowlist, UTF-8-safe truncation for Google Play). The committed `internal.txt`/`default.txt` files are the **Play Store delivery vehicle** (consumed by `r0adkll/upload-google-play`), not hand-written content. Option C would have to rebuild that delivery path — regression risk.
 
-- **Given** the new release.yml is in place
-- **And** the operator (or a CI gate) pushes a new tag `v0.97.8` to main
-- **When** release.yml's `on: push: tags: ['v*']` trigger fires
-- **Then** the workflow runs
-- **And** NO `release/v*` branch is created (verified by `gh api repos/.../branches` having no `release/` entries after the run)
-- **And** a GitHub Release for `v0.97.8` is created with auto-generated notes
-- **And** the build artifacts (APK, IPA, etc.) are deployed
-- **And** logcat / job summary shows the build version is `v0.97.8` (derived from `git describe`)
+4. **Option A's security weakening is minimal in practice**: the Release GitHub App is already trusted to write release commits via the current PR-flow. The bypass actor just removes the ceremonial PR wrapper around the same machine-generated content (version bump + 2 release-notes files). Compromised App credentials are dangerous either way; the marginal risk delta is small.
+
+5. **Option A is the smallest change**: ~10 implementation steps, removes ~120 lines from release.yml (PR-create + auto-merge steps), no new infrastructure, no GPG key management.
+
+**Chosen: Option A.** Implementation gated on operator authorisation to add the Release App as a `bypass_actors` entry on main's branch-protection ruleset (id `12613584`) — equivalent shape to the earlier `no-force-push-anywhere` ruleset edit operator authorised in SHY-0033.
+
+## BDD Scenarios (rewritten for Option A per architect verdict 2026-06-08)
+
+**Scenario: Option A — `createCommitOnBranch` targets main directly, no release branch created**
+
+- **Given** the refactored release.yml is in place
+- **And** the Release App has been added as a `bypass_actors` entry on ruleset `12613584`
+- **And** the operator triggers a release via `workflow_dispatch` for `v0.97.8`
+- **When** release.yml's `create_commit` step runs
+- **Then** the GraphQL `createCommitOnBranch` mutation targets `branchName: "main"` (NOT `release/v0.97.8-r<run-id>`)
+- **And** the mutation succeeds (the App's bypass actor permits direct-to-main signed commits)
+- **And** the signed commit `chore: release v0.97.8` appears on main (verified by `gh api repos/.../pulls/N/commits | jq '.[].commit.verification.verified' == true`)
+- **And** NO `release/v0.97.8-*` branch exists in `gh api repos/.../branches`
+- **And** the `Open release PR` step has been removed from release.yml entirely (no PR is opened)
+
+**Scenario: release-tag.yml fires unchanged on the new commit**
+
+- **Given** Option A's signed commit `chore: release v0.97.8` lands on main
+- **When** the `push: branches: main` trigger of `release-tag.yml` fires
+- **Then** release-tag.yml detects the `chore: release v` subject pattern (its existing logic, unchanged)
+- **And** creates the `v0.97.8` git tag pointing at the release commit
+- **And** creates the GitHub Release with regenerated release notes
+- **And** the version cross-check (release-tag.yml lines 100-110) confirms `versionName` in `build.gradle.kts` matches the commit subject
+
+**Scenario: `expectedHeadOid` conflict on concurrent push (architect risk #2)**
+
+- **Given** another commit lands on main between the workflow's `git rev-parse HEAD` and the `createCommitOnBranch` mutation
+- **When** the mutation submits with the now-stale `expectedHeadOid`
+- **Then** the mutation fails LOUDLY with a clear concurrency-conflict error (no partial state)
+- **And** the operator can simply re-trigger the workflow
+- **And** the workflow's step comment documents this expected failure mode
+
+**Scenario: signed-commit guarantee preserved**
+
+- **Given** the new flow has produced a `chore: release v0.97.8` commit on main
+- **When** `gh api repos/.../commits/<sha>` is inspected
+- **Then** `verification.verified == true`
+- **And** `verification.reason == "valid"`
+- **And** the signer identity is the Release GitHub App (as today)
+
+**Scenario: post-merge — no orphan release branches ever**
+
+- **Given** the new release.yml has run multiple times (success + failure paths)
+- **When** `gh api repos/.../branches --paginate --jq '.[].name | select(startswith("release/"))'` runs at any time
+- **Then** the output is empty
+- **And** the SHY-0033 cleanup pattern never needs to re-execute on release branches
+
+**Scenario: bypass-actor persistence (architect risk #3)**
+
+- **Given** the bypass actor for the Release App is added to ruleset `12613584`
+- **When** `gh api repos/.../rulesets/12613584 --jq '.bypass_actors'` runs
+- **Then** the App ID is listed
+- **And** CLAUDE.md documents the App ID + the command to verify/restore
+- **And** if the ruleset is ever regenerated (Terraform/UI), the bypass-actor entry must be restored manually (documented in CLAUDE.md as a one-time setup step)
+
+**Scenario: PR-as-audit-trail compensation (architect risk #5)**
+
+- **Given** Option A removes the release PR
+- **When** release.yml runs successfully
+- **Then** a structured `GITHUB_STEP_SUMMARY` entry records: version, signed commit SHA, release URL, App identity, duration — serving as the audit trail in place of the PR
+
+**Scenario: pin test catches a regression**
+
+- **Given** `release-workflow-pin.test.js` updated for the new flow
+- **When** a future change adds back a `release/v` branch-creation line OR a `gh pr create` for the release flow
+- **Then** the pin test fails with a clear message naming the offending pattern
+- **And** the PR cannot merge
 
 **Scenario: Concurrent release attempt rejected**
 

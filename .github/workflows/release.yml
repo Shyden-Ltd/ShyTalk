@@ -99,49 +99,11 @@ jobs:
             echo "::error::An open release PR already exists. Wait for it to merge (or close it) before opening another. Run 'gh pr list --state open --search \"in:title chore: release v\"' to find it."
             exit 1
           fi
-          # Handle orphan release branches left by a failed previous
-          # run. The "no-force-push-anywhere" ruleset blocks branch
-          # deletion for most actors, so an aborted run leaves
-          # release/vX.Y.Z behind.
-          #
-          # Strategy: opportunistic best-effort cleanup. If the orphan
-          # has no open PR, attempt API deletion. If deletion succeeds
-          # (e.g. App on ruleset bypass list), the branch is gone. If
-          # it fails (ruleset blocks deletion), WARN and proceed —
-          # the per-run-id branch suffix in the `create_commit` step
-          # below (BRANCH includes ${{ github.run_id }}) guarantees
-          # this run will not collide with the orphan, so the
-          # inability to delete is non-fatal.
-          #
-          # If an open PR DOES reference the orphan branch, the prior
-          # run got far enough to open the PR but it hasn't merged.
-          # Refuse to delete — that's operator state — and bail with
-          # a clear instruction. (The earlier `OPEN_RELEASE_PRS`
-          # guard already covers PRs with `chore: release v` titles,
-          # but a residual orphan with a closed-and-not-deleted PR
-          # could still trip us here.)
-          ORPHAN_RELEASE_BRANCHES=$(gh api repos/${{ github.repository }}/branches --paginate --jq '.[].name | select(startswith("release/v"))')
-          if [ -n "$ORPHAN_RELEASE_BRANCHES" ]; then
-            echo "Orphan release branch(es) detected — attempting opportunistic cleanup."
-            # `for x in $var` does NOT create a subshell, so `exit 1`
-            # inside the loop actually aborts the outer script. We
-            # deliberately avoid `... | while read` here for that
-            # reason.
-            for branch in $ORPHAN_RELEASE_BRANCHES; do
-              OPEN_PR_COUNT=$(gh pr list --state open --head "$branch" --json number --jq 'length')
-              if [ "${OPEN_PR_COUNT:-0}" -gt 0 ]; then
-                echo "::error::Orphan release branch '$branch' has an open PR — refusing to auto-delete (operator state). Close or merge the PR first, then re-trigger."
-                exit 1
-              fi
-              if gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$branch" 2>/tmp/delete-err; then
-                echo "Auto-deleted orphan release branch: $branch"
-              else
-                echo "::warning::Could not auto-delete orphan branch '$branch' (likely ruleset-blocked). Proceeding — this run uses a unique per-run-id branch name and won't collide. To clean up the orphan later, delete via GitHub UI (Branches page (github.com/${{ github.repository }}/branches) > find $branch > trash icon) or add the Release app to the no-force-push-anywhere ruleset's bypass list."
-                echo "API error output (informational):"
-                cat /tmp/delete-err
-              fi
-            done
-          fi
+          # Per SHY-0034 + [[feedback-no-release-branches-use-tags]]:
+          # release/v* branches are no longer created. The
+          # createCommitOnBranch mutation now targets `main` directly
+          # via the App's bypass-actor entry on ruleset 12613584. No
+          # orphan cleanup is needed because no branches are spawned.
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
@@ -353,20 +315,23 @@ jobs:
           cat "$NOTES_FILE"
           echo "-----------------------------------"
 
-      - name: Create release branch and signed commit via GraphQL
+      - name: Create signed commit on main via GraphQL
         id: create_commit
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
-          # Branch name includes the workflow run-id so each run gets a
-          # uniquely-named branch. This prevents collision with any
-          # orphan release/vX.Y.Z branch left by a prior failed run that
-          # the ruleset wouldn't let us delete. Squash-merge into main
-          # discards the branch name entirely, so the per-run suffix
-          # never appears in main's history — only in the transient PR.
-          BRANCH="release/v${VERSION}-r${{ github.run_id }}"
+          # Per SHY-0034 + [[feedback-no-release-branches-use-tags]]:
+          # the GraphQL createCommitOnBranch mutation now targets `main`
+          # DIRECTLY, no intermediate release/v* branch. The Release
+          # GitHub App is registered as a `bypass_actors` entry on
+          # main's branch-protection ruleset (id 12613584) so the
+          # App can write signed commits without going through a PR.
+          # This eliminates the source of orphan release/v* branches
+          # that prior failed/cancelled runs left behind (swept in
+          # SHY-0033).
+          BRANCH="main"
           PARENT_SHA=$(git rev-parse HEAD)
 
           # We deliberately do NOT use `git commit` + `git push` here.
@@ -375,60 +340,24 @@ jobs:
           # local GPG/SSH key configuration that doesn't exist in CI.
           # Branch protection ruleset 12613584 has `required_signatures`
           # enabled, so unsigned release commits get blocked from being
-          # squash-merged into main — exactly the failure mode we hit
-          # with PR #608 (the v0.97.6 release). The PR appears as
-          # MERGEABLE/BLOCKED with all checks green and no clear reason
-          # in the GitHub UI; only `gh api repos/X/pulls/N/commits`
-          # reveals `verified: false, reason: "unsigned"`.
+          # written to main.
           #
           # GitHub's GraphQL `createCommitOnBranch` mutation creates
           # commits server-side that are automatically signed as the
           # authenticated GitHub App identity. That's the only path
           # to signed commits from a workflow without a configured
           # GPG/SSH key in CI.
-
-          # Step 1: Create the release branch (empty, points at main's
-          # current HEAD). createCommitOnBranch requires the branch to
-          # exist before adding commits to it.
           #
-          # Idempotency: if the branch already exists at PARENT_SHA
-          # (e.g. operator clicked "Re-run jobs" after a prior attempt
-          # of this same run created the branch), accept it and move
-          # on. If it exists at a DIFFERENT sha, error out — that's
-          # unexpected state that the operator should investigate.
-          #
-          # IMPORTANT: gh api with `--jq` on a 404 response prints the
-          # raw error JSON body to stdout (the --jq filter is bypassed
-          # when gh detects an HTTP error). That's why we split the
-          # exit-code check from the body parse — checking the exit
-          # code via `if gh api ...` is the only reliable way to
-          # distinguish "branch exists (200)" from "branch missing
-          # (404)". Both write to stdout; only the exit code is
-          # diagnostic.
-          if gh api "repos/${{ github.repository }}/git/ref/heads/${BRANCH}" \
-                > /tmp/ref-response.json 2>/dev/null; then
-            # 200 — branch exists. Parse sha from the response body.
-            # `// empty` covers a hypothetical 200-but-missing-key case.
-            EXISTING_SHA=$(jq -r '.object.sha // empty' /tmp/ref-response.json)
-            if [ "${EXISTING_SHA}" = "${PARENT_SHA}" ]; then
-              echo "Branch ${BRANCH} already exists at ${PARENT_SHA} (idempotent re-run); skipping creation."
-            else
-              echo "::error::Branch ${BRANCH} already exists but points at ${EXISTING_SHA} (expected ${PARENT_SHA}). This usually means a prior attempt of this run advanced the branch before failing. Delete the branch via the Branches page (github.com/${{ github.repository }}/branches > find ${BRANCH} > trash icon) and re-trigger."
-              exit 1
-            fi
-          else
-            # 404 — branch doesn't exist. Create it.
-            if ! gh api -X POST "repos/${{ github.repository }}/git/refs" \
-                  -f "ref=refs/heads/${BRANCH}" \
-                  -f "sha=${PARENT_SHA}" > /tmp/refs-response.json 2>&1; then
-              echo "::error::Failed to create branch ${BRANCH} via REST API."
-              cat /tmp/refs-response.json
-              exit 1
-            fi
-            echo "Created branch ${BRANCH} at ${PARENT_SHA}"
-          fi
+          # Concurrency note: `expectedHeadOid: $PARENT_SHA` provides
+          # optimistic concurrency protection. If any commit lands on
+          # main between `git rev-parse HEAD` above and the mutation
+          # below, the mutation fails with a clear conflict error and
+          # this workflow run exits non-zero with no partial state.
+          # The operator simply re-triggers. This is acceptable since
+          # release runs are rare and concurrent commits on main during
+          # a release window are even rarer.
 
-          # Step 2: Build the GraphQL mutation payload. Use jq to
+          # Step 1 (commit payload). Use jq to
           # safely encode file contents (base64) and construct the
           # JSON. --rawfile reads the file verbatim; @base64 in jq
           # produces RFC-4648-compliant output that GraphQL accepts
@@ -467,123 +396,20 @@ jobs:
           echo "Created signed commit ${COMMIT_OID} on ${BRANCH}"
           echo "commit_oid=${COMMIT_OID}" >> "$GITHUB_OUTPUT"
 
-      - name: Open release PR
-        env:
-          # Use the Release App token (NOT the workflow's built-in
-          # GITHUB_TOKEN) for both `gh pr create` and `gh pr merge
-          # --auto`. The App's installation was granted
-          # `pull_requests: write` on 2026-05-25, so the original PR
-          # #818 workaround that fell back to GITHUB_TOKEN here is no
-          # longer required.
-          #
-          # CRITICAL: this MUST stay as the App token. Using
-          # GITHUB_TOKEN here triggers GitHub's documented loop-
-          # prevention rule — any action performed by GITHUB_TOKEN
-          # does NOT fire downstream workflows. Two consequences:
-          #   1. The release PR's `pull_request: opened` event does
-          #      not fire pr-checks.yml — release PR sits without CI
-          #      until something else triggers a `synchronize` event.
-          #   2. The auto-merge (enabled by GITHUB_TOKEN) results in
-          #      a squash-merge commit authored by GITHUB_TOKEN, so
-          #      the `push: branches: main` trigger on release-tag.yml
-          #      does not fire — no git tag, no GitHub Release.
-          # Both observed on PR #835 (v0.97.6 release attempt on
-          # 2026-05-25): had to push an empty commit to trigger CI
-          # AND manually re-cut v0.97.6 because the tag never
-          # appeared. See release-workflow-pin.test.js for the
-          # structural pin that catches a regression.
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
-          # Same per-run branch name as create_commit step above.
-          BRANCH="release/v${VERSION}-r${{ github.run_id }}"
-          NOTES_FILE="${{ steps.notes.outputs.notes_file }}"
-
-          # PR body uses the same release notes that will eventually go
-          # to the GitHub Release. release-tag.yml will REGENERATE notes
-          # against the post-merge HEAD (which may include other PRs
-          # that landed between this PR opening and merging), so the
-          # body here is informational rather than authoritative — but
-          # it lets reviewers see what's expected.
-          PR_BODY_FILE=$(mktemp)
+          # Job summary records the audit trail (replacing the
+          # PR-as-audit-trail that the previous flow provided). Per
+          # SHY-0034 architect risk #5: this step output is the
+          # canonical record of who-released-what-when.
           {
-            echo "## Release v${VERSION}"
-            echo ""
-            echo "**Bump type**: ${{ steps.bump.outputs.type }}"
-            echo ""
-            echo "Auto-generated release PR. CI will run the full required-check pipeline; once green, this PR auto-merges and \`release-tag.yml\` creates the GitHub Release + tag in response."
-            echo ""
-            echo "---"
-            echo ""
-            cat "$NOTES_FILE"
-            echo ""
-            echo "---"
-            echo ""
-            echo "_If this PR fails CI: investigate the failure, push fixes to \`${BRANCH}\` (NOT \`main\`), and re-trigger auto-merge. To abandon this release entirely, close the PR and delete the branch._"
-          } > "$PR_BODY_FILE"
-
-          # Create PR. We deliberately do NOT pass --label here:
-          # gh pr create requires the label to pre-exist in the repo
-          # and aborts with "could not add label" on miss, which would
-          # leave us with a pushed branch but no PR (the failure mode
-          # we hit on 2026-05-10 with a `release-bump` label that had
-          # never been created). Plain unlabelled PRs are robust and
-          # the release-tag.yml trigger keys off the commit subject,
-          # not a label.
-          # Capture combined stdout+stderr so on failure we can echo
-          # the actual gh error (the tail typically contains the GH
-          # API's reason: branch protection, permissions, label miss,
-          # etc.) — without this echo the operator sees only the
-          # generic "::error::gh pr create failed" annotation.
-          PR_URL=$(gh pr create \
-            --base main \
-            --head "$BRANCH" \
-            --title "chore: release v${VERSION}" \
-            --body-file "$PR_BODY_FILE" 2>&1) || PR_CREATE_FAILED=$?
-          if [ "${PR_CREATE_FAILED:-0}" -ne 0 ]; then
-            echo "::error::gh pr create failed for ${BRANCH}. See gh output below + manual recovery command."
-            echo "----- gh pr create output -----"
-            echo "$PR_URL"
-            echo "-------------------------------"
-            # Dump the body inline so the operator can copy-paste — the
-            # temp file ($PR_BODY_FILE) is destroyed when the runner
-            # terminates, so a path reference would be useless.
-            echo "Manual recovery: re-run with the body below."
-            echo "----- PR body (from $PR_BODY_FILE) -----"
-            cat "$PR_BODY_FILE"
-            echo "----------------------------------------"
-            # Recovery via --body-file rather than --body to avoid the
-            # quoting trap (the body contains literal " in markdown
-            # footnotes, which would break a shell --body argument).
-            echo "Recovery: save the body above to /tmp/pr-body.md, then run:"
-            echo "  gh pr create --base main --head ${BRANCH} --title 'chore: release v${VERSION}' --body-file /tmp/pr-body.md"
-            exit 1
-          fi
-          PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
-          echo "Opened PR #${PR_NUMBER}: ${PR_URL}"
-
-          # Enable auto-merge with squash strategy. The squashed commit
-          # message defaults to the PR title (`chore: release vX.Y.Z`),
-          # which is exactly what release-tag.yml's trigger pattern
-          # matches. Auto-merge fires once all required checks pass.
-          if ! gh pr merge "$PR_NUMBER" --auto --squash; then
-            echo "::error::gh pr merge --auto --squash failed for PR #${PR_NUMBER}. The PR is open but auto-merge is not enabled — enable it manually via the PR UI."
-            exit 1
-          fi
-          echo "Auto-merge (squash) enabled on PR #${PR_NUMBER}"
-
-          # Job summary for easy copy-paste / status visibility.
-          {
-            echo "## Release PR Opened: v${VERSION}"
+            echo "## Release Commit Created: v${VERSION}"
             echo ""
             echo "| | |"
             echo "|---|---|"
             echo "| **Version** | \`v${VERSION}\` |"
             echo "| **Bump** | ${{ steps.bump.outputs.type }} |"
-            echo "| **Branch** | \`${BRANCH}\` |"
-            echo "| **PR** | [#${PR_NUMBER}](${PR_URL}) |"
-            echo "| **Auto-merge** | enabled (squash) |"
+            echo "| **Target branch** | \`main\` (direct via App bypass actor) |"
+            echo "| **Commit OID** | \`${COMMIT_OID}\` |"
+            echo "| **Signed by** | Release GitHub App (via \`createCommitOnBranch\`) |"
             echo ""
-            echo "Once CI passes, the PR will auto-merge and \`release-tag.yml\` will create the GitHub Release + tag."
+            echo "The signed commit \`chore: release v${VERSION}\` is now on \`main\`. \`release-tag.yml\` will fire on the resulting push event and create the GitHub Release + git tag."
           } >> "$GITHUB_STEP_SUMMARY"
