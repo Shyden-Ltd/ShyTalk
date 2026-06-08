@@ -9,13 +9,10 @@ import kotlinx.cinterop.ptr
 import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
 import platform.CoreFoundation.CFDictionaryCreateMutable
-import platform.CoreFoundation.CFDictionaryRef
 import platform.CoreFoundation.CFDictionarySetValue
 import platform.CoreFoundation.CFMutableDictionaryRef
 import platform.CoreFoundation.CFTypeRef
 import platform.CoreFoundation.kCFBooleanTrue
-import platform.CoreFoundation.kCFTypeDictionaryKeyCallBacks
-import platform.CoreFoundation.kCFTypeDictionaryValueCallBacks
 import platform.Foundation.CFBridgingRetain
 import platform.Foundation.NSData
 import platform.Foundation.NSString

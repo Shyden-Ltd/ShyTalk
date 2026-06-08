@@ -1,0 +1,215 @@
+[
+  {
+    "name": "dependabot/github_actions/patch-updates-6a98abd9ac",
+    "head_sha": "dd10c37c720b9fa59c930212e4fd9e8c6b4d8cba",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/dd10c37c720b9fa59c930212e4fd9e8c6b4d8cba",
+    "protected": true,
+    "open_pr": null,
+    "closed_pr_unmerged": null,
+    "merged_pr": {
+      "headRefName": "dependabot/github_actions/patch-updates-6a98abd9ac",
+      "mergedAt": "2026-06-08T06:12:32Z",
+      "number": 1039,
+      "title": "chore(deps): Bump actions/checkout from 6.0.2 to 6.0.3 in the patch-updates group"
+    }
+  },
+  {
+    "name": "dependabot/github_actions/patch-updates-882fedbe01",
+    "head_sha": "96145ab0d3108a146b53af20b0b0df049fe696d4",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/96145ab0d3108a146b53af20b0b0df049fe696d4",
+    "protected": true,
+    "open_pr": null,
+    "closed_pr_unmerged": null,
+    "merged_pr": {
+      "headRefName": "dependabot/github_actions/patch-updates-882fedbe01",
+      "mergedAt": "2026-06-07T22:42:33Z",
+      "number": 1031,
+      "title": "chore(deps): Bump the patch-updates group with 2 updates"
+    }
+  },
+  {
+    "name": "dependabot/gradle/androidx.core-core-ktx-1.19.0",
+    "head_sha": "bf15bcbac0f48b97bacaf8efcec1d06ad7e12c58",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/bf15bcbac0f48b97bacaf8efcec1d06ad7e12c58",
+    "protected": true,
+    "open_pr": {
+      "headRefName": "dependabot/gradle/androidx.core-core-ktx-1.19.0",
+      "number": 1030,
+      "title": "chore(deps): Bump androidx.core:core-ktx from 1.18.0 to 1.19.0"
+    },
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  },
+  {
+    "name": "dependabot/gradle/patch-updates-d29c699888",
+    "head_sha": "99d60b466122de33d57a76ea7fc8aed7f5edebf6",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/99d60b466122de33d57a76ea7fc8aed7f5edebf6",
+    "protected": true,
+    "open_pr": null,
+    "closed_pr_unmerged": null,
+    "merged_pr": {
+      "headRefName": "dependabot/gradle/patch-updates-d29c699888",
+      "mergedAt": "2026-06-08T00:12:02Z",
+      "number": 1029,
+      "title": "chore(deps): Bump org.sonarqube from 7.3.0.8198 to 7.3.1.8318 in the patch-updates group"
+    }
+  },
+  {
+    "name": "dependabot/npm_and_yarn/express-api/aws-sdk/client-s3-3.1063.0",
+    "head_sha": "8848ac7f5326e76ffd5dc7fa5cb7e7046089f7f8",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/8848ac7f5326e76ffd5dc7fa5cb7e7046089f7f8",
+    "protected": true,
+    "open_pr": {
+      "headRefName": "dependabot/npm_and_yarn/express-api/aws-sdk/client-s3-3.1063.0",
+      "number": 1027,
+      "title": "chore(deps): Bump @aws-sdk/client-s3 from 3.1059.0 to 3.1063.0 in /express-api"
+    },
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  },
+  {
+    "name": "dependabot/npm_and_yarn/express-api/aws-sdk/s3-request-presigner-3.1063.0",
+    "head_sha": "85d1a18c3fa9e8a86c108b28a2a22ce0b8d33cfe",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/85d1a18c3fa9e8a86c108b28a2a22ce0b8d33cfe",
+    "protected": true,
+    "open_pr": {
+      "headRefName": "dependabot/npm_and_yarn/express-api/aws-sdk/s3-request-presigner-3.1063.0",
+      "number": 1028,
+      "title": "chore(deps): Bump @aws-sdk/s3-request-presigner from 3.1059.0 to 3.1063.0 in /express-api"
+    },
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  },
+  {
+    "name": "feat/biometric-stable-downgrade-g002",
+    "head_sha": "3e9629f2e7a8eea11edd3862352232c83d87895f",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/3e9629f2e7a8eea11edd3862352232c83d87895f",
+    "protected": true,
+    "open_pr": {
+      "headRefName": "feat/biometric-stable-downgrade-g002",
+      "number": 1014,
+      "title": "chore(deps): downgrade androidx.biometric 1.4.0-alpha07 → 1.1.0 stable (G002)"
+    },
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  },
+  {
+    "name": "feat/ktlint-version-reconciliation-g054",
+    "head_sha": "e32812f217ae0df6174f6694a0bbd825f4bf1688",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/e32812f217ae0df6174f6694a0bbd825f4bf1688",
+    "protected": true,
+    "open_pr": null,
+    "closed_pr_unmerged": null,
+    "merged_pr": {
+      "headRefName": "feat/ktlint-version-reconciliation-g054",
+      "mergedAt": "2026-06-08T00:04:35Z",
+      "number": 1012,
+      "title": "chore(deps): align ktlint Gradle plugin internal binary to CI version (G054)"
+    }
+  },
+  {
+    "name": "gh-pages",
+    "head_sha": "a6b879ba89125fd5a4975bd6c12a75b8a276a436",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/a6b879ba89125fd5a4975bd6c12a75b8a276a436",
+    "protected": true,
+    "open_pr": null,
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  },
+  {
+    "name": "main",
+    "head_sha": "54487ea936022cada535cc8273e2767799a7e343",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/54487ea936022cada535cc8273e2767799a7e343",
+    "protected": true,
+    "open_pr": null,
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  },
+  {
+    "name": "release/v0.97.6-r26364598123",
+    "head_sha": "64db6009671d79a7c2066d68d80a9c6d529ba5d5",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/64db6009671d79a7c2066d68d80a9c6d529ba5d5",
+    "protected": true,
+    "open_pr": null,
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  },
+  {
+    "name": "release/v0.97.6-r26364799589",
+    "head_sha": "f64cc7a0831d3aed1548175e96fafb55b1b9072a",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/f64cc7a0831d3aed1548175e96fafb55b1b9072a",
+    "protected": true,
+    "open_pr": null,
+    "closed_pr_unmerged": {
+      "headRefName": "release/v0.97.6-r26364799589",
+      "mergedAt": null,
+      "number": 819,
+      "title": "chore: release v0.97.6"
+    },
+    "merged_pr": null
+  },
+  {
+    "name": "release/v0.97.6-r26391899247",
+    "head_sha": "e37b69a81a2d53c4a7e351fb69b072477f100ca3",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/e37b69a81a2d53c4a7e351fb69b072477f100ca3",
+    "protected": true,
+    "open_pr": null,
+    "closed_pr_unmerged": null,
+    "merged_pr": {
+      "headRefName": "release/v0.97.6-r26391899247",
+      "mergedAt": "2026-05-25T13:16:36Z",
+      "number": 835,
+      "title": "chore: release v0.97.6"
+    }
+  },
+  {
+    "name": "release/v0.97.6",
+    "head_sha": "74f06d4bc2c7809612896fa9d997198961d2ad5e",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/74f06d4bc2c7809612896fa9d997198961d2ad5e",
+    "protected": true,
+    "open_pr": null,
+    "closed_pr_unmerged": {
+      "headRefName": "release/v0.97.6",
+      "mergedAt": null,
+      "number": 608,
+      "title": "chore: release v0.97.6"
+    },
+    "merged_pr": null
+  },
+  {
+    "name": "release/v0.97.7-r26404810976",
+    "head_sha": "5c24f9bbd10bf8719d25d3cac33f8c37fb05f3dc",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/5c24f9bbd10bf8719d25d3cac33f8c37fb05f3dc",
+    "protected": true,
+    "open_pr": null,
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  },
+  {
+    "name": "release/v0.97.7-r26406824591",
+    "head_sha": "283289a6f9d3c64b4180c254e5b0d6e0d13349fe",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/283289a6f9d3c64b4180c254e5b0d6e0d13349fe",
+    "protected": true,
+    "open_pr": null,
+    "closed_pr_unmerged": null,
+    "merged_pr": {
+      "headRefName": "release/v0.97.7-r26406824591",
+      "mergedAt": "2026-05-25T16:22:16Z",
+      "number": 837,
+      "title": "chore: release v0.97.7"
+    }
+  },
+  {
+    "name": "story/SHY-0033-investigate-stale-branches",
+    "head_sha": "41ea61a962a64f239f5ada1e81cf0845c1f5a2aa",
+    "head_url": "https://api.github.com/repos/Shyden-Ltd/ShyTalk/commits/41ea61a962a64f239f5ada1e81cf0845c1f5a2aa",
+    "protected": true,
+    "open_pr": {
+      "headRefName": "story/SHY-0033-investigate-stale-branches",
+      "number": 1038,
+      "title": "[DRAFT] SHY-0033: Investigate 506-branch sprawl + close stale + enforce 1-active-branch (BLOCKED on 2 operator decisions)"
+    },
+    "closed_pr_unmerged": null,
+    "merged_pr": null
+  }
+]

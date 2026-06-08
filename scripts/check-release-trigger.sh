@@ -121,38 +121,62 @@ if [ -f "$DEPLOY_DEV_YML" ]; then
   fi
 fi
 
-# Verify the PR-based release shape (Option A from 2026-05-10's
-# release-bug fix). Direct push from CI to main is blocked by classic
-# branch protection's `PR Gate` required check (a `pull_request`-only
-# aggregator that no direct push can ever satisfy). release.yml must
-# instead:
-#   1. Open a PR with the version-bump commit on a release/* branch
-#   2. Enable auto-merge so the PR squashes into main once CI passes
-#   3. release-tag.yml then reacts to the squashed commit and creates
-#      the tag + GitHub Release
+# Verify the tag-only release shape (SHY-0034, 2026-06-08).
 #
-# Without these, the next manual Release dispatch would rediscover the
-# 2026-05-10 GH013 failure.
+# History: the prior 2026-05-10 fix established a PR-based flow
+# (Option A from that era): open a release/v* branch PR, auto-merge to
+# main, then release-tag.yml creates the tag + Release. That fix solved
+# the 2026-05-10 GH013 failure (direct push to main blocked by `PR Gate`
+# aggregator) but introduced a different problem: every failed/cancelled
+# release run left an orphan release/v* branch, contributing 6 of the
+# 506 branches SHY-0033 cleaned up.
+#
+# SHY-0034 (2026-06-08) refactored release.yml to eliminate the
+# ephemeral branch entirely. The new shape:
+#   1. createCommitOnBranch GraphQL mutation targets `main` DIRECTLY
+#      via the Release App's `bypass_actors` entry on ruleset 12613584
+#   2. release-tag.yml then reacts to the push event on main and
+#      creates the tag + GitHub Release (unchanged from prior flow)
+#
+# This guard enforces the new shape so a future regression to the
+# PR-based flow OR the original direct-git-push flow trips loudly.
 
-# Reject any `git push` line in release.yml that pushes to main. We
-# match `git push` followed by anything that includes `main` either as
-# a direct refspec or `HEAD:main`. Pushes to `release/v*` branches are
-# the only allowed shape — those don't trip branch protection.
-# `grep -P` for a Perl-compatible negative-match pattern would be
-# cleaner but isn't portable; use a two-step grep instead.
+# Reject any `git push` to main from release.yml (still applies — even
+# with the bypass actor, push-from-git produces UNSIGNED commits which
+# required_signatures rule blocks). createCommitOnBranch is the only
+# allowed write path to main from release.yml.
 if grep -nE 'git push' "$RELEASE_YML" | grep -qE '\bmain\b|HEAD:main'; then
-  echo "::error::release.yml contains a 'git push' targeting main. Direct pushes to main from CI are blocked by branch protection's PR Gate aggregator. Push to release/* branches only and let auto-merge handle the merge."
+  echo "::error::release.yml contains a 'git push' targeting main. SHY-0034 mandates that release commits be written via GraphQL createCommitOnBranch (which produces signed commits), NOT via 'git push' (which would produce unsigned commits that required_signatures blocks)."
   grep -nE 'git push' "$RELEASE_YML"
   exit 1
 fi
 
-# Verify release.yml uses the PR-based flow.
-if ! grep -qE 'gh pr create' "$RELEASE_YML"; then
-  echo "::error::release.yml does not contain 'gh pr create' — it should open a release PR rather than push directly."
+# SHY-0034: release.yml must NOT create release/v* branches anywhere.
+# This catches any regression to the prior ephemeral-branch flow.
+if grep -qE 'BRANCH="release/v' "$RELEASE_YML"; then
+  echo "::error::release.yml contains 'BRANCH=\"release/v...' — SHY-0034 eliminated ephemeral release/v* branches. createCommitOnBranch now targets main directly via the App bypass actor. See [[feedback-no-release-branches-use-tags]]."
+  grep -nE 'BRANCH="release/v' "$RELEASE_YML"
   exit 1
 fi
-if ! grep -qE 'gh pr merge.*--auto' "$RELEASE_YML"; then
-  echo "::error::release.yml does not enable auto-merge ('gh pr merge --auto'). Without auto-merge the release PR would sit indefinitely waiting for human action."
+
+# SHY-0034: release.yml must NOT contain `gh pr create` (no release PR
+# is opened in the new flow; the signed commit lands on main directly).
+if grep -qE 'gh pr create' "$RELEASE_YML"; then
+  echo "::error::release.yml contains 'gh pr create' — SHY-0034 removed the release-PR ceremony. createCommitOnBranch targets main directly via the App bypass actor; no PR is opened."
+  exit 1
+fi
+
+# SHY-0034: release.yml must NOT contain `gh pr merge --auto` (no PR
+# to auto-merge in the new flow).
+if grep -qE 'gh pr merge.*--auto' "$RELEASE_YML"; then
+  echo "::error::release.yml contains 'gh pr merge --auto' — SHY-0034 removed the release-PR + auto-merge ceremony. The signed commit lands on main directly via createCommitOnBranch."
+  exit 1
+fi
+
+# SHY-0034: positive assertion that createCommitOnBranch targets main.
+# The variable assignment `BRANCH="main"` is the canonical anchor.
+if ! grep -qE 'BRANCH="main"' "$RELEASE_YML"; then
+  echo "::error::release.yml is missing the SHY-0034 canonical anchor 'BRANCH=\"main\"' in the create-commit step. The createCommitOnBranch mutation must target main directly via the Release App's bypass_actors entry on ruleset 12613584."
   exit 1
 fi
 
@@ -178,7 +202,7 @@ fi
 # Verify the companion workflow exists and is wired correctly.
 RELEASE_TAG_YML=".github/workflows/release-tag.yml"
 if [ ! -f "$RELEASE_TAG_YML" ]; then
-  echo "::error::$RELEASE_TAG_YML not found. The PR-based release flow needs a separate workflow that fires AFTER the release PR merges to create the tag + GitHub Release. Without it, releases would land on main but no tag/release would ever be created."
+  echo "::error::$RELEASE_TAG_YML not found. The tag-only release flow (SHY-0034) requires this companion workflow to fire on push to main when the signed 'chore: release vX.Y.Z' commit lands directly via createCommitOnBranch. Without it, releases would land on main but no tag + GitHub Release would ever be created."
   exit 1
 fi
 # release-tag.yml must trigger on push to main.
@@ -199,4 +223,4 @@ if ! grep -qE 'gh release create' "$RELEASE_TAG_YML"; then
   exit 1
 fi
 
-echo "✓ release.yml is workflow_dispatch-only and uses PR-based flow; release-tag.yml fires on release commits; deploy-dev.yml injects unique iOS build number."
+echo "✓ release.yml is workflow_dispatch-only and uses tag-only flow (SHY-0034: createCommitOnBranch targets main directly); release-tag.yml fires on release commits; deploy-dev.yml injects unique iOS build number."

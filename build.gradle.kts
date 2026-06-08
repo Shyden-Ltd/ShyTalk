@@ -9,14 +9,14 @@ plugins {
     alias(libs.plugins.play.publisher) apply false
     alias(libs.plugins.ktlint) apply false
     alias(libs.plugins.detekt)
-    id("org.sonarqube") version "7.3.0.8198"
+    id("org.sonarqube") version "7.3.1.8318"
 }
 
 subprojects {
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
 
     configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
-        version.set("1.5.0")
+        version.set("1.8.0")
         android.set(true)
         outputToConsole.set(true)
         ignoreFailures.set(false)

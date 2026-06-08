@@ -26,10 +26,17 @@ const SCRIPT = path.join(REPO_ROOT, 'scripts', 'sync-stories-to-issues.sh');
 
 /** Spawn the sync script with the given args + return { code, stdout, stderr }. */
 function runScript(args, opts = {}) {
+  // Timeout: was 15s when the test was authored against ~10 SHY files.
+  // As the SHY corpus grew past 30 files, --all dry-run started taking
+  // ~21s wall-clock locally (bash + awk + jq subprocess overhead per
+  // file). Bumped to 60s for ~3× headroom. The slow per-file overhead
+  // is a real perf issue tracked as a follow-up SHY (sync-stories
+  // optimisation); not in scope for SHY-0034. See [[feedback-fix-pre-
+  // existing-and-new-same]] — perf SHY filed in the same session.
   const res = spawnSync('bash', [SCRIPT, ...args], {
     encoding: 'utf-8',
     cwd: REPO_ROOT,
-    timeout: 15_000,
+    timeout: 60_000,
     ...opts,
   });
   return {

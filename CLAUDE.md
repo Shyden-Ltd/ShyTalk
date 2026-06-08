@@ -1,9 +1,11 @@
 # ShyTalk - Claude Code Instructions
 
 ## Project Overview
+
 Social chat app with voice rooms. Kotlin Multiplatform (Android + iOS), Firebase backend, LiveKit voice, $0 hosting cost.
 
 ## Tri-Platform Policy
+
 **ALL work must ship on desktop (web), iOS, and Android simultaneously.** No platform can fall behind. Every feature implemented in shared/commonMain must compile for both Android and iOS. Verify with `./gradlew :shared:compileKotlinIosArm64` after any shared code change.
 
 ## Agile Way of Working
@@ -11,11 +13,13 @@ Social chat app with voice rooms. Kotlin Multiplatform (Android + iOS), Firebase
 Every piece of work is captured as ONE detailed user-story `.md` file at `.project/stories/SHY-XXXX-slug.md` and ships as ONE PR. The story IS the spec — operator and reviewer score against the AC + BDD scenarios; architect validates the spec before code starts. Source-of-truth lives in this repo; GitHub Issues + Projects v2 are an automatically-synced mirror (delivered by SHY-0002 after SHY-0001 ships).
 
 ### Story ID + file layout
+
 - **ID format:** `SHY-XXXX` (4-digit zero-padded, sequential; never recycle gaps left by Cancelled stories).
 - **File path:** `.project/stories/SHY-XXXX-kebab-slug.md`.
 - **Index:** `.project/stories/SHY-INDEX.md` is the live backlog. Sorted `priority asc, created asc`. Active / Done / Cancelled tables. Index is human-maintained — the `SHY-[0-9][0-9][0-9][0-9]-*.md` glob in the validator naturally excludes it.
 
 ### Frontmatter (9 required fields)
+
 - `id` — matches `^SHY-[0-9]{4}$`
 - `status` — one of `Draft` / `In Progress` / `In Review` / `Done` / `Cancelled`
 - `owner` — string (`claude` or operator GitHub handle)
@@ -27,6 +31,7 @@ Every piece of work is captured as ONE detailed user-story `.md` file at `.proje
 - `pr` — URL once pushed (advisory; NOT enforced by the validator)
 
 ### Body sections (10 required `## ` headings + 8 required `### ` AC sub-headings)
+
 `## User Story` (As/I want/So that) · `## Why` · `## Acceptance Criteria` · `## BDD Scenarios` · `## Test Plan` · `## Out of Scope` · `## Dependencies` · `## Risks & Mitigations` · `## Definition of Done` · `## Notes`.
 
 The `## Acceptance Criteria` section MUST contain 8 sub-headings — one per QA dimension:
@@ -35,6 +40,7 @@ The `## Acceptance Criteria` section MUST contain 8 sub-headings — one per QA 
 A dimension may carry `N/A — <one-line rationale>` if it genuinely doesn't apply; an empty sub-heading body is rejected by the architect/reviewer (not the validator). The validator enforces BDD coverage presence-based and sectionally — it fails (exit 13) only when `## BDD Scenarios` has zero `**Scenario:**` blocks while `## Acceptance Criteria` has at least one `- [ ]` checkbox. One scenario may validly cover many AC bullets; per-bullet depth and correctness are the reviewer's responsibility, not the validator's.
 
 ### BDD scenario format (Markdown-native)
+
 ```
 **Scenario: <short description>**
 - **Given** <preconditions>
@@ -61,6 +67,7 @@ Every new SHY `.md` file is created **fully refined** at the moment of creation.
 **Historical exception:** `scripts/convert-roadmap-to-stories.sh` was a one-time skeleton generator (SHY-0003); its output was refined under SHY-0032 as a one-time cleanup. The script is now historic; do not re-invoke unprompted.
 
 ### Lifecycle (no backward transitions; Cancelled is terminal)
+
 - `Draft` → architect APPROVE / APPROVE-WITH-CHANGES + concerns applied → `In Progress`
 - `In Progress` → code-reviewer agent dispatched → `In Review`
 - `In Review` → PR auto-merges → `Done` (for `infra` / `docs` / `chore` / `refactor`)
@@ -69,6 +76,7 @@ Every new SHY `.md` file is created **fully refined** at the moment of creation.
 - any active → operator decides not to do → `Cancelled` (Notes captures why)
 
 ### Granularity + naming convention (strict)
+
 - 1 PR-bundle = 1 SHY (multi-G roadmap bundles list every G-ID in `roadmap_ids`).
 - Branch: `story/SHY-NNNN-kebab-slug`.
 - Commit subject: `[SHY-NNNN] <verb-led summary>`.
@@ -76,12 +84,15 @@ Every new SHY `.md` file is created **fully refined** at the moment of creation.
 - PR body opens with `Implements SHY-NNNN — see .project/stories/SHY-NNNN-slug.md for full spec, AC, BDD scenarios, and DoD.` plus `Closes #<github-issue-number>` once SHY-0002's sync is live.
 
 ### Cross-labelling the roadmap
+
 The zero-gap roadmap at `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md` gets a `SHY` column per row — OPEN G-items get `SHY-XXXX`; SHIPPED items get `✅ PR #N`; CANCELLED get `❌ Won't do — <reason>`. Don't create retro stories for shipped/cancelled rows.
 
 ### Audit trail
+
 All audit signals — architect verdict, code-reviewer cycle count + verbatim findings, rework reasons, dev-verify outcomes — land as timestamped entries in the story's `## Notes (running log)` section. No parallel frontmatter audit fields.
 
 ### Tooling
+
 - `scripts/check-story-frontmatter.sh` validates every `SHY-[0-9][0-9][0-9][0-9]-*.md` in CI (`lint.yml`, last step). Run `--help` for usage + the 8 documented exit codes. Add `--verbose` for per-check tracing.
 - `.project/stories/SHY-0001-establish-agile-workflow.md` is the canonical seed — copy it as the starting template for new stories.
 - `scripts/sync-stories-to-issues.sh` (delivered by SHY-0002) mirrors each story `.md` to a GitHub Issue + Projects v2 card. One-way sync — `.md` is the source of truth, the Issue is a derived view.
@@ -96,6 +107,7 @@ All audit signals — architect verdict, code-reviewer cycle count + verbatim fi
 - **Project v2 board:** operator manually provisions a Project v2 named `ShyTalk Stories` with custom fields `Pri` / `Effort` / `Type` (single-select) and `Roadmap IDs` / `SHY ID` (text). Script exits 35 if not provisioned, 36 on schema mismatch.
 
 ## Build & Test Commands
+
 - **Build (Android)**: `./gradlew assembleDevDebug`
 - **Build (iOS shared)**: `./gradlew :shared:compileKotlinIosArm64`
 - **Unit tests**: `./gradlew test`
@@ -104,6 +116,7 @@ All audit signals — architect verdict, code-reviewer cycle count + verbatim fi
 - **Deploy Firestore rules**: `npx firebase deploy --only firestore:rules`
 
 ## E2E Test Framework (BDD/Gherkin)
+
 - **Feature files**: `app/src/androidTest/assets/features/*.feature` (48 files, ~235 scenarios)
 - **Step definitions**: `app/src/androidTest/java/com/shyden/shytalk/steps/` — CommonSteps, AuthSteps, SystemScreenSteps, ModerationSteps, PinSteps, AgeSegregationSteps, StartingScreenSteps, PushPermissionSteps
 - **Test infrastructure**: ComposeTestRuleHolder (singleton), ScreenshotRule (Allure failure screenshots), ResetFakesRule
@@ -112,12 +125,18 @@ All audit signals — architect verdict, code-reviewer cycle count + verbatim fi
 - **Plans**: `.project/plans/` (NOT `docs/` — internal docs go in `.project/`); test plans in `.project/test-plans/`
 
 ## Git Rules
+
 - Default branch: `main` (NOT `master`)
 - **NEVER commit directly to main** — always create a branch and PR
 - Before starting work, check for unfinished branches (`git branch -a`)
 - Commit AND push per task, with task name in message
+- **One active branch** at a time per contributor — finish (merge or cancel) the current branch before opening a new one (per [[feedback-one-active-branch-close-on-finish]] HARD rule). Soft-fail enforced by `.github/workflows/branch-discipline-check.yml`.
+- **Close finished branches** — repo has `delete_branch_on_merge: true`; closed-not-merged PRs leave branches behind that should be manually deleted via `gh api -X DELETE /repos/Shyden-Ltd/ShyTalk/git/refs/heads/<name>`.
+- **No release branches** — releases are git tags ONLY (per [[feedback-no-release-branches-use-tags]]). `release/v*` branches are forbidden. `release.yml` (post SHY-0034 refactor) uses GitHub's GraphQL `createCommitOnBranch` mutation targeting `main` directly via the Release App's `bypass_actors` entry on ruleset 12613584. The release commit lands on main signed-by-App; `release-tag.yml` fires on the push event and creates the tag + GitHub Release. No intermediate branch, no PR, no orphans.
+- **No large files (>5MB)** without explicit operator authorisation. Use Git LFS or external CDN for legitimate large assets. `.gitignore` discipline: never commit `node_modules/`, `build/`, `target/`, `*.apk`, `*.aab`, `*.ipa`, generated screenshots, test recordings, derived caches.
 
 ## Architecture
+
 - KMP: `shared/` module (commonMain/androidMain/iosMain) + `app/` (Android) + `iosApp/` (iOS)
 - MVVM + Koin DI + Compose Multiplatform + Navigation
 - Repository pattern: interface + impl, bound via Koin
@@ -131,7 +150,9 @@ All audit signals — architect verdict, code-reviewer cycle count + verbatim fi
 - 20 locales: ar, de, es, fr, hi, id, it, ja, km, ko, nl, pl, pt, ru, sv, th, tr, uk, vi, zh
 
 ### Cron-elimination architecture (closed 2026-06-04/05)
+
 Five scheduled crons removed in the cron-elim cluster — replaced with event-driven or lazy-on-access patterns to stay $0 on the Firebase free tier:
+
 - **expireBans** → server-side `Filter.or(expiresAt==null, expiresAt>now)` in `checkBans` (no separate cron)
 - **dispatchNotifications** → inline `dispatchNotificationInline` + `Promise.allSettled` in `roadmap-notify.js`
 - **staleRooms** → RTDB `onDisconnect` + lazy-reap at mutation chokepoint (`inRoomTransaction`); reaper in `express-api/src/utils/stale-room-reap.js`
@@ -141,7 +162,9 @@ Five scheduled crons removed in the cron-elim cluster — replaced with event-dr
 When adding new background work: prefer event-driven (RTDB `onDisconnect`, write-time triggers, on-access reaping) over `setInterval`/cron. Crons cost free-tier quota.
 
 ## KMP iOS Compatibility (commonMain)
+
 **NEVER use JVM-only APIs in commonMain** — they compile on Android but break iOS:
+
 - `System.currentTimeMillis()` -> `currentTimeMillis()` from `core.util.PlatformTime`
 - `Math.PI/sin()` -> `kotlin.math.PI/sin()`
 - `String.format()` -> `padStart()` or manual formatting
@@ -149,6 +172,7 @@ When adding new background work: prefer event-driven (RTDB `onDisconnect`, write
 - `@Volatile` -> `@kotlin.concurrent.Volatile`
 
 ## Key Constraints
+
 - **$0 hosting** — never introduce paid services (no Firebase Blaze, no paid Cloudflare)
 - **Google Play release notes** max 500 chars, non-technical, in `app/src/main/play/release-notes/en-US/internal.txt`
 - **Translations** — user-facing strings must go in ALL 20 locale files (`shared/src/commonMain/composeResources/values-{locale}/strings.xml`)
@@ -156,15 +180,18 @@ When adding new background work: prefer event-driven (RTDB `onDisconnect`, write
 - **No rarity-colored borders** on gifts/backpack — neutral theme colors only
 
 ## Testing Policy
+
 - Run ALL tests after every code change
 - When fixing a bug, always write tests for it
 - Fix all failures before committing
 - JVM test gotcha: `org.json.JSONObject` is stubbed — add `testImplementation("org.json:json:20231013")` if needed
 
 ## PR Quality Gate (Pre-Push Checklist)
+
 **Run ALL tests locally before pushing.** CI should be a safety net, not the first time tests run.
 
 ### Local test sequence (run before every push):
+
 1. **Kotlin lint**: `ktlint --relative` (~1s, requires standalone ktlint 1.8.0)
 2. **Express tests**: `cd express-api && npm test` (~10s)
 3. **Kotlin tests + detekt**: `./gradlew testDevDebugUnitTest :shared:jvmTest detekt` (~2min)
@@ -173,12 +200,14 @@ When adding new background work: prefer event-driven (RTDB `onDisconnect`, write
 6. **E2E smoke tests**: `./gradlew connectedDevDebugAndroidTest` (requires emulator + local stack)
 
 ### Local stack prerequisite (for steps 5-6):
+
 - Start Docker Desktop
 - Run `bash local/start.sh` (Firebase Emulators + LiveKit + MinIO + Mailpit)
 - Run `cd express-api && npm run local` (Express API against emulators)
 - Android emulator for step 6
 
 ### Additional checks:
+
 - Code review agent on the diff
 - Security review agent on the changes
 - i18n checker for all 20 locales (if user-facing strings changed)
@@ -189,17 +218,20 @@ When adding new background work: prefer event-driven (RTDB `onDisconnect`, write
 - Workflow-only changes (`.github/`, `.claude/`, `*.md`) don't need app testing
 
 ### Workflow / Actions hygiene (enforced by `lint.yml`):
+
 - **No paid runners** — `scripts/check-no-paid-runners.sh` rejects `*-xlarge`, `*-cores`, `*-large`, `large-*` runs-on specs (free for orgs, paid for personal repos; PR #370 incident)
 - **Scoped concurrency groups** — `scripts/check-workflow-concurrency-scoping.sh`
 - **SHA-pinned third-party actions** (added in PR #1016, pending merge at time of writing) — `scripts/check-action-shas.sh` rejects `uses: foo/bar@vN` for any third-party action; only 40-hex SHAs and local (`./...`) refs pass. Supply-chain hardening. Get the SHA via `gh api repos/<owner>/<repo>/git/refs/tags/<tag> --jq '.object.sha'`. Once #1016 lands, drop the "pending merge" caveat from this bullet.
 - **actionlint** + embedded shellcheck — runs in pre-push hook + CI lint job
 
 ## Debugging
+
 - **Check Firestore security rules first** for read/write failures — pull logcat for `PERMISSION_DENIED`
 - Rules file: `firestore.rules` — must include rules for ALL collections AND subcollections
 - Firestore rules don't cascade into subcollections
 
 ## Environments
+
 - **Local**: Firebase Emulators + LiveKit Docker, zero cloud usage
   - LiveKit: `ws://localhost:7880` (Docker container)
 - **Dev**: Firebase `shytalk-dev`, API `dev-api.shytalk.shyden.co.uk` (London)
@@ -212,6 +244,7 @@ When adding new background work: prefer event-driven (RTDB `onDisconnect`, write
 - `google-services.json` in `app/src/dev/`, `app/src/prod/`, and `app/src/local/`
 
 ## Local Development (Zero Cloud)
+
 - **Start:** `bash local/start.sh` (starts Firebase Emulators + LiveKit Docker)
 - **API:** `cd express-api && npm run local`
 - **Android on emulator:** `./gradlew installLocalDebug` (uses `10.0.2.2` as host alias)
@@ -223,6 +256,7 @@ When adding new background work: prefer event-driven (RTDB `onDisconnect`, write
 - **No cloud quota consumed** — all Firestore/Auth/RTDB traffic goes to emulators
 
 ## Express API (Oracle Cloud)
+
 - Source: `express-api/src/` — routes, utils, middleware
 - Stack: Express.js + Firebase Admin SDK + PM2 + Caddy
 - Dev SSH: `ssh -i ~/.ssh/shytalk-oci ubuntu@145.241.224.13`
@@ -250,7 +284,7 @@ These were previously in the global `~/.claude/projects/-Users-shyden/memory/MEM
 - **Android driver helper coverage gaps** — Phase 4.5 housekeeping cluster: `androidTap` / `androidTapByTag` error / `androidOpenScreen` / `selectSerial` need direct tests (surfaced from PR #732 R2).
 - **Null/undefined pins for string args** — Phase 4 driver methods must pin all 4 input-rejection cases (`''`/`'   '`/`null`/`undefined`) from Round 0; reviewer flags missing null/undefined as Important across 5+ PRs.
 - **adb() shell-escape pattern for user text** — driver methods passing free-form user text to `adb()` must POSIX-escape `'` first (PR #741 fix); applies to JoinEventRoom, SubmitStarFeedback, future action methods.
-- **escTag on all *_TAGS scaffolds** — every NEW *_TAGS scaffold in android-adb-driver.js must regex-escape its tag value before `new RegExp(...)`; apply preemptively to avoid burning an R1 review cycle.
+- **escTag on all \*\_TAGS scaffolds** — every NEW \*\_TAGS scaffold in android-adb-driver.js must regex-escape its tag value before `new RegExp(...)`; apply preemptively to avoid burning an R1 review cycle.
 - **Runner-branch tests with driver method** — every new driver-method PR must ALSO add manual-qa-runner.test.js tests for the matcher's Android + iOS Sim branches (3 each).
 - **Cluster preemptive checklist** — complete pre-flight list to reach ZERO-findings one-round merges on Phase-4 PRs (driver tests, prod code, runner-routing, commit/PR); PR #764 hit all items and achieved cluster's first 10-min merge.
 - **Input-rejection isolation via throwing fetcher** — for guard-then-fetch methods, the 4 input-rejection tests must use a throwing iosUiDump so a future reorder regresses.
@@ -284,4 +318,3 @@ These were previously in the global `~/.claude/projects/-Users-shyden/memory/MEM
 ## In-Flight Initiatives
 
 - **Room mutations → server-side authz plan** (IN PROGRESS, operator 2026-05-27) — harden room write path (verified bugs: rules let any participant write any room field = client-only role gates; takeSeat/acceptInvite non-race-safe). Chosen: route all room-doc mutations through Express+AdminSDK (role-checked, transactional seat-claims) then lock firestore.rules. Phased P1 Express→P2 client migrate(Android+iOS)→P3 rules lockdown→P4 prod; rules/prod phases CHECKPOINT operator.
-

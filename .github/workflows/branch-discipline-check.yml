@@ -1,0 +1,64 @@
+name: Branch discipline check
+
+# Soft-fail check per SHY-0033 + [[feedback-one-active-branch-close-on-finish]].
+#
+# When a contributor pushes a branch matching `story/SHY-NNNN-*` or
+# `chore/<slug>` etc, this workflow checks whether the same contributor
+# already has another open PR. If so, it emits a `::warning::` reminding
+# them of the 1-active-branch rule.
+#
+# Soft-fail mode (warning, not failure) until a follow-up SHY promotes to
+# hard-fail after observing how the warning behaves in practice.
+
+on:
+  pull_request:
+    types: [opened, reopened]
+    branches: [main]
+
+concurrency:
+  group: branch-discipline-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check:
+    name: Check single-active-branch invariant
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    # Skip on fork PRs (the auto-deleted GITHUB_TOKEN is read-only there
+    # but we don't write anyway; skipping avoids edge-case noise).
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    steps:
+      - name: Check contributor's other open PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # Count this contributor's OTHER open PRs (excluding the current one).
+          OTHER_COUNT="$(gh pr list \
+            --author "${AUTHOR}" \
+            --state open \
+            --json number \
+            --jq "[.[] | select(.number != ${PR_NUMBER})] | length" \
+            2>/dev/null || echo 0)"
+
+          if [ "${OTHER_COUNT}" -gt 0 ]; then
+            echo "::warning::Contributor @${AUTHOR} has ${OTHER_COUNT} other open PR(s). Per [[feedback-one-active-branch-close-on-finish]] HARD rule, only ONE active branch at a time. Close the previous PR(s) before opening a new one. (Soft-fail; this warning will be promoted to hard-fail in a follow-up SHY.)" >&2
+            echo "## ⚠️ Branch discipline warning" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Contributor \`@${AUTHOR}\` has **${OTHER_COUNT}** other open PR(s)." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Per [[feedback-one-active-branch-close-on-finish]] HARD rule: only ONE active branch at a time." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Close the previous PR(s) before opening a new one. Currently soft-fail; a follow-up SHY will promote this to hard-fail." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::notice::Contributor @${AUTHOR} has no other open PRs. Branch discipline ✓" >&2
+            echo "## ✓ Branch discipline check passed" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Contributor \`@${AUTHOR}\` has no other open PRs." >> "$GITHUB_STEP_SUMMARY"
+          fi

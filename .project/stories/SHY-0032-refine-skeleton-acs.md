@@ -1,13 +1,13 @@
 ---
 id: SHY-0032
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-07
 priority: P0
 effort: L
 type: chore
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1037
 ---
 
 # SHY-0032: Refine the 28 skeleton SHYs + codify no-skeleton rule
@@ -186,6 +186,7 @@ This SHY is a documentation + planning refactor, so the "tests" are validator + 
 
 ## Notes (running log)
 
+- 2026-06-07 ~22:00 BST — Merged as PR #1037 (https://github.com/Shyden-Ltd/ShyTalk/pull/1037). Squashed 3 commits → 1. Architect cycle: 1 dispatch, APPROVE-WITH-CHANGES, 9 findings (1 Critical + 5 Important + 3 Trivial) — all applied. Reviewer cycle: 1 dispatch returned 4 findings (1 Important + 3 Wording) — all applied; 2nd dispatch returned ZERO findings. Auto-merge fired after final CI green. Status: Done.
 - 2026-06-07 ~20:30 BST — SHY-0032 created. Status: In Progress. Refinement work begins on branch `story/SHY-0032-refine-skeleton-acs` off main (commit `3e9e4ea92cc` — SHY-0003 PR #1036 merged).
 - 2026-06-07 ~20:25 BST — Operator approved (a) Option 1 for SHY-0024 nav-graph (migrate Android → SharedNavGraph), (b) SHY-0024 bumped to Tier 1 P0, (c) refinement-then-reprioritise sequencing, (d) one-PR-for-all-28 shape.
 - 2026-06-07 ~20:15 BST — Operator stated new HARD GLOBAL rule: stories must be born fully refined; no skeletons. Memory saved as `feedback-no-skeleton-stories-fully-refined.md`.
