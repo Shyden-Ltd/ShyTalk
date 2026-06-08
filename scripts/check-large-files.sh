@@ -66,6 +66,17 @@ while [ $# -gt 0 ]; do
       MODE="diff"
       shift
       ;;
+    --against=*)
+      # `--against=foo` equals-form, common shell convention. Reject
+      # empty value so `--against=` is still a usage error.
+      AGAINST_REF="${1#--against=}"
+      if [ -z "$AGAINST_REF" ]; then
+        echo "::error::--against requires a ref argument" >&2
+        exit 2
+      fi
+      MODE="diff"
+      shift
+      ;;
     --help|-h)
       usage
       exit 0

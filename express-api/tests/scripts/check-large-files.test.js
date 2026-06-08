@@ -129,6 +129,26 @@ describe('scripts/check-large-files.sh', () => {
       expect(code).toBe(2);
       expect(stderr).toMatch(/--against requires/);
     });
+
+    it('exits 2 when --against=<empty> is given (equals-form rejects empty value)', () => {
+      const { code, stderr } = runScript(['--against=']);
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/--against requires/);
+    });
+  });
+
+  describe('--against=<ref> equals-form (common shell convention)', () => {
+    it('accepts equals-form and behaves identically to space-form', () => {
+      const repo = tempRepo();
+      writeFileOfSize(repo, 'a.txt', 100);
+      commit(repo, 'base');
+      execFileSync('git', ['checkout', '-q', '-b', 'feature'], { cwd: repo });
+      writeFileOfSize(repo, 'b.txt', 100);
+      commit(repo, 'feature small add');
+      const { code, stderr } = runScript(['--against=main'], { cwd: repo });
+      expect(code).toBe(0);
+      expect(stderr).toMatch(/mode: diff/);
+    });
   });
 
   describe('--against unreachable ref → exit 4', () => {

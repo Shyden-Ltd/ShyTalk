@@ -165,3 +165,10 @@ journey-results/
 *.apk
 *.aab
 *.ipa
+
+# Reject `.zip` blanket-style — every large historical blob in the
+# 2026-06-08 audit was an Allure attachment `.zip`. If a future
+# legitimate small `.zip` needs to be tracked (e.g. a font bundle),
+# add an explicit `!path/to/legit.zip` negation here. Verify nothing
+# legitimate is currently tracked via `git ls-files '*.zip'`.
+*.zip

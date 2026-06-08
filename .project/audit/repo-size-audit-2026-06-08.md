@@ -18,7 +18,7 @@
 | Pack file count                           | 8             | Normal range; not a fragmentation issue.                                                 |
 | `.git/` on-disk                           | 13 GiB        | Pack + loose + reflog + refs.                                                            |
 | Working-tree on-disk (excl. `.git/`)      | 22 GiB        | Almost all build artefacts (gRPC.framework, Firestore framework, dev APK, KMP `.dylib`). |
-| Currently-tracked files >5MB              | **1 file**    | `app/src/main/res/raw/room_background.gif` (52MB, legitimate app resource).              |
+| Currently-tracked files >5MB              | **6 files**   | 1× `room_background.gif` (52 MB) + 5× `police_duck.png` (5.81 MB each — cross-platform mascot asset, copied to Android `res/drawable/`, iOS `.xcassets/`, web `public/admin/assets/`, Compose `composeResources/drawable/`, and root `assets/`). All legitimate. See the detailed table below. |
 
 The operator's "1GB" was conservative by an order of magnitude. The actual remote pack is **12.74 GiB** — every clone of the repo pulls this.
 
@@ -181,9 +181,10 @@ Total local-only: ~10 GiB. All confirmed gitignored.
 
 ## Prevention mechanisms shipped in SHY-0035
 
-1. **`.gitignore` hardening** — explicit ignores for `/data/`, `/playwright/pr/`, `/playwright/deploy/`, `/playwright/latest/`, `/express/pr/`, `/history/`, `/kotlin/pr/`, `/android-e2e/` (the six confirmed Allure-pattern dirs). Plus reinforced extension blocks: `*.apk`, `*.aab`, `*.ipa`.
+1. **`.gitignore` hardening** — explicit ignores for `/data/`, `/playwright/pr/`, `/playwright/deploy/`, `/playwright/latest/`, `/express/`, `/history/`, `/kotlin/`, `/android-e2e/` (the six confirmed Allure-pattern dirs; `/express/` and `/kotlin/` were widened from `/express/pr/` and `/kotlin/pr/` per architect Suggestion 2026-06-08 to also catch the `deploy/`/`latest/` Allure variants — `express-api/` is the actual tracked source dir, distinct path). Plus reinforced extension blocks: `*.apk`, `*.aab`, `*.ipa`, `*.zip`.
 2. **`scripts/check-large-files.sh`** — pre-push + CI lint that rejects any file >5MB on the diff. Threshold matches operator's "never commit files >5MB without explicit authorisation" directive.
 3. **PR-description escape hatch** — `[allow-large-file: <path> reason: <reason>]` marker in PR body grants per-PR exemption for legitimate large assets.
+4. **Pin tests** — `express-api/tests/scripts/check-large-files.test.js` (15 tests, script behaviour) + `express-api/tests/scripts/large-file-guard-pin.test.js` (workflow wiring regression net).
 
 See [SHY-0035](../stories/SHY-0035-investigate-repo-size.md) AC + BDD for full spec.
 

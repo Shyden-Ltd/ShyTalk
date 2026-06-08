@@ -59,7 +59,7 @@ Investigation findings (gathered 2026-06-08 11:24–11:30 BST via `git rev-list 
 - [ ] `scripts/check-large-files.sh` wired into pre-push hook via `.husky/pre-push` (add a step after the existing Sonar/checks).
 - [ ] `.github/workflows/lint.yml` runs `scripts/check-large-files.sh --against origin/main` as a required step on every PR; hard-fail if any file >5MB landed in the diff.
 - [ ] `CLAUDE.md` § "Git Rules" expanded with a "Large files" subsection pointing at the lint script + the 5MB threshold + the escape hatch (operator authorisation via PR description containing `[allow-large-file: <path> reason: <reason>]`).
-- [ ] Unit tests for `scripts/check-large-files.sh` in `tests/scripts/check-large-files.test.js` covering: happy-path (no large files → exit 0), large-file-detected (exit non-zero + lists files), `--against <ref>` diff-only mode, escape-hatch marker recognition, missing-script error, malformed file-size handling.
+- [ ] Unit tests for `scripts/check-large-files.sh` in `express-api/tests/scripts/check-large-files.test.js` covering: happy-path (no large files → exit 0), large-file-detected (exit non-zero + lists files), `--against <ref>` diff-only mode, escape-hatch marker recognition, missing-script error, malformed file-size handling.
 - [ ] Housekeeping bundled in this PR (acceptable because trivial + operationally adjacent): SHY-0034's `status:` flipped `In Progress → Done` + `pr:` populated + Notes appended (already done in this branch's first commit); SHY-INDEX.md SHY-0034 moves Active → Done + SHY-0035 promoted from Reserved → Active; SHY-INDEX Reserved table: SHY-0040 (sync-stories perf) added.
 
 ### Error paths
@@ -78,7 +78,7 @@ Investigation findings (gathered 2026-06-08 11:24–11:30 BST via `git rev-list 
 - [ ] **A future PR legitimately needs a >5MB asset** (e.g. high-res illustration): operator adds `[allow-large-file: path/to/asset.png reason: hi-res hero image]` marker to PR description; CI lint reads PR body via `gh pr view --json body`, finds marker, exempts that specific path. Marker is per-PR, not per-repo.
 - [ ] **Repo size grows because of legitimate code/docs additions** (not large binaries): NOT in scope — `check-large-files.sh` only checks per-file size, not aggregate repo size. Aggregate growth is monitored by the operator manually via `du -sh .git`.
 - [ ] **Cross-platform path separators**: script uses POSIX `find` / `git ls-files` (forward slashes); ShyTalk has no Windows contributors. Documented.
-- [ ] **CI runner without `git`**: impossible (every GH-hosted ubuntu runner has git); script asserts `command -v git` at startup and exits 127 with clear message if missing.
+- [ ] **CI runner without `git`**: impossible (every GH-hosted ubuntu runner has git); script asserts `command -v git` at startup and exits 3 with clear message if missing (matches the documented exit-code table in the script header).
 - [ ] **Pre-push hook bypass via `--no-verify`**: NOT prevented at the local level (NEVER prevented per [[feedback-never-no-verify-without-permission]] policy is about ASKING, not about HARD-blocking the user's escape hatch). The PR-level CI lint catches anything that escaped the local hook.
 
 ### Performance
@@ -155,17 +155,18 @@ Investigation findings (gathered 2026-06-08 11:24–11:30 BST via `git rev-list 
 - **Then** the step exits 0
 - **And** the summary line reads `[check-large-files] scanned: 1 files, large: 0, errors: 0`
 
-**Scenario: Lint warns on shallow clone but still scans**
+**Scenario: Lint exits 4 when --against ref is unreachable (no silent fallback)**
 
-- **Given** CI uses `actions/checkout@v6` without `fetch-depth: 0` (shallow)
-- **When** the lint runs
-- **Then** a warning `shallow clone detected; fetch unshallow for accurate diff` is emitted
-- **And** the script still scans HEAD's tracked files (HEAD-mode fallback)
-- **And** exits 0 if no >5MB tracked files exist
+- **Given** CI did not explicitly fetch `origin/main` (e.g. shallow clone with no extra fetch step)
+- **When** the lint runs `scripts/check-large-files.sh --against origin/main`
+- **Then** the script exits with code 4
+- **And** stderr contains the literal substring `not found locally`
+- **And** stderr instructs the operator to `git fetch --depth=1 origin main` first
+- **And** the script does NOT silently promote to HEAD-mode (which would false-positive on the 6 pre-existing >5MB tracked files documented in the audit)
 
 **Scenario: Unit tests cover the diff-only mode**
 
-- **Given** the test suite at `tests/scripts/check-large-files.test.js`
+- **Given** the test suite at `express-api/tests/scripts/check-large-files.test.js`
 - **When** Jest runs `runScript(['--against', 'origin/main'])`
 - **Then** the test asserts the script honours the `--against` flag
 - **And** does not report pre-existing large files like `room_background.gif`
@@ -173,7 +174,7 @@ Investigation findings (gathered 2026-06-08 11:24–11:30 BST via `git rev-list 
 ## Test Plan
 
 **Red:**
-- New file `tests/scripts/check-large-files.test.js` — assert script exists + is executable (preconditions), HEAD-mode happy-path → exit 0, HEAD-mode with synthetic >5MB blob fixture → exit non-zero + correct file listed, `--against <ref>` mode → exit 0 (no diff additions), `--against <ref>` with synthetic large addition → exit non-zero, escape-hatch marker recognition (mock `gh pr view --json body` via env-var or stdin pipe), missing-script handler, malformed `git ls-tree` output (corrupted index simulation) → exit non-zero with clear error.
+- New file `express-api/tests/scripts/check-large-files.test.js` — assert script exists + is executable (preconditions), HEAD-mode happy-path → exit 0, HEAD-mode with synthetic >5MB blob fixture → exit non-zero + correct file listed, `--against <ref>` mode → exit 0 (no diff additions), `--against <ref>` with synthetic large addition → exit non-zero, escape-hatch marker recognition (mock `gh pr view --json body` via env-var or stdin pipe), missing-script handler, malformed `git ls-tree` output (corrupted index simulation) → exit non-zero with clear error.
 - `tests/workflows/lint-pin.test.js` — assert `lint.yml` includes the `check-large-files` job step name + run line matching `scripts/check-large-files.sh --against origin/main`.
 
 **Green:**
@@ -184,7 +185,7 @@ Investigation findings (gathered 2026-06-08 11:24–11:30 BST via `git rev-list 
 - Update `CLAUDE.md § Git Rules` with the "Large files" subsection.
 - Write `.project/audit/repo-size-audit-2026-06-08.md` with all findings.
 
-**Coverage gate:** `npx jest tests/scripts/check-large-files.test.js tests/workflows/lint-pin.test.js` → all green (≥7 tests per file).
+**Coverage gate:** `npx jest express-api/tests/scripts/check-large-files.test.js tests/workflows/lint-pin.test.js` → all green (≥7 tests per file).
 
 **Validation pre-push:** run `bash scripts/check-large-files.sh` against current HEAD; expected output: `[check-large-files] scanned: ~22000 files, large: 1, errors: 0` with `app/src/main/res/raw/room_background.gif` listed (acknowledged pre-existing). Diff-mode against `origin/main` should report 0 new >5MB files (this PR only adds docs + scripts + lint).
 
@@ -203,7 +204,7 @@ Investigation findings (gathered 2026-06-08 11:24–11:30 BST via `git rev-list 
 - **SHY-0034 (merged)** — release flow tag-only confirmed; release-tag CI lint integration pattern available as reference.
 - `.husky/pre-push` — must exist (it does; currently runs Sonar + check-no-paid-runners + check-release-trigger + check-action-shas).
 - `.github/workflows/lint.yml` — must exist (it does; currently runs ktlint + detekt + prettier + actionlint + check-no-paid-runners + check-workflow-concurrency-scoping + check-action-shas + check-story-frontmatter).
-- Node + Jest test runner — for the unit tests at `tests/scripts/check-large-files.test.js`.
+- Node + Jest test runner — for the unit tests at `express-api/tests/scripts/check-large-files.test.js`.
 
 ## Risks & Mitigations
 
@@ -219,7 +220,7 @@ Investigation findings (gathered 2026-06-08 11:24–11:30 BST via `git rev-list 
 - [ ] `.project/audit/repo-size-audit-2026-06-08.md` committed with all findings tables.
 - [ ] `.gitignore` updated with new ignored paths; `git check-ignore` verification documented.
 - [ ] `scripts/check-large-files.sh` created, executable, shellcheck-clean.
-- [ ] `tests/scripts/check-large-files.test.js` created with ≥7 tests; all green.
+- [ ] `express-api/tests/scripts/check-large-files.test.js` created with ≥7 tests; all green.
 - [ ] `.husky/pre-push` updated to call the new lint.
 - [ ] `.github/workflows/lint.yml` updated with new step.
 - [ ] `CLAUDE.md § Git Rules` updated with "Large files" subsection.
@@ -231,6 +232,7 @@ Investigation findings (gathered 2026-06-08 11:24–11:30 BST via `git rev-list 
 
 ## Notes (running log)
 
+- 2026-06-08 ~12:00 BST — Code-reviewer agent (`feature-dev:code-reviewer`) cycle 1 returned 4 Important + 3 Suggestions + 1 Nit, all 8 applied. (1) **Important**: created `express-api/tests/scripts/large-file-guard-pin.test.js` (11 tests pinning lint.yml + pr-checks.yml wiring — step name, run line, fetch command, ALLOW_LARGE_FILE_BODY from inputs.pr_body, ordering before story-validator). (2) **Important**: added `*.zip` to `.gitignore` (verbatim AC item that I dropped during initial impl). (3) **Important**: audit-doc Headline `1 file` → `6 files` (room_background.gif + 5× police_duck.png). (4) **Important**: BDD "Lint warns on shallow clone but still scans" rewritten to "Lint exits 4 when --against ref is unreachable (no silent fallback)" — matches the actual implementation that the architect cycle ALSO baked in. (5) **Suggestion**: `--against=ref` equals-form supported (case `--against=*)`); added 2 new tests covering the form + empty-value rejection. (6) **Suggestion**: AC Edge-cases "exit 127" → "exit 3" (matches the documented exit-code table). (7) **Suggestion**: audit-doc Prevention-mechanisms `/express/pr/`+`/kotlin/pr/` → `/express/`+`/kotlin/` (matches the architect-widened `.gitignore`). (8) **Nit**: test-file path references `tests/scripts/...` → `express-api/tests/scripts/...` in the SHY spec. Test count after this round: 28/28 across two files; shellcheck + actionlint + frontmatter validator all clean. Cycle counts: 1 reviewer dispatch, 8 findings, all applied.
 - 2026-06-08 ~11:50 BST — Architect agent (`feature-dev:code-architect`) returned APPROVE-WITH-CHANGES: 2 Important + 2 Suggestions, all applied. (1) `is_exempt` fn — replaced `"${EXEMPT_PATHS[@]:-}"` with explicit `[ "${#EXEMPT_PATHS[@]}" -eq 0 ]` length-guard for bash 3.2 defensiveness; (2) lint.yml `pr_body` — added explicit `workflow_call` input (default `''`) + threaded from `pr-checks.yml` via `with: pr_body: ${{ github.event.pull_request.body }}` (rather than relying on implicit `github.event` propagation from caller); (3) summary line — prefixed mode label `[check-large-files] mode: head|diff, scanned: N, ...`; (4) `.gitignore` — widened `/express/pr/` → `/express/` and `/kotlin/pr/` → `/kotlin/` to cover `deploy/` + `latest/` Allure variants. Architect also affirmed: 5 MiB threshold correct, PR-body marker shape is the best of 3 alternatives, mode split is clean, fetch-depth=1 vs fetch-depth=0 chosen correctly, scope split (no force-push) is correct given operator directive. Cycle count: 1 architect dispatch, 4 findings, all applied.
 - 2026-06-08 11:24–11:30 BST — Investigation conducted on `story/SHY-0035-investigate-repo-size`. Findings: pack 12.74 GiB; 6 Allure-pattern directories ever-committed totalling ~42 GiB uncompressed (delta-compressed to 12.74 GiB pack). Currently tracked >5MB: `app/src/main/res/raw/room_background.gif` (52MB) + `police_duck.png` × 5 (5.81 MB each, cross-platform asset). No `data/` / `playwright/pr/` / `express/` / `history/` / `kotlin/` / `android-e2e/` paths currently exist in HEAD — bloat is purely historical. Force-push deferred per operator directive; prevention-only scope confirmed.
 - 2026-06-08 11:23 BST — SHY-0034 (release.yml tag-only refactor) merged via PR #1040. Branch `story/SHY-0035-investigate-repo-size` opened off post-merge main HEAD `0704dd5ef99`. Per [[feedback-one-active-branch-close-on-finish]]: SHY-0034 status flip ride-along bundled in first commit of this branch.
