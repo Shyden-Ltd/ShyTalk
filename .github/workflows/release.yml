@@ -15,7 +15,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
 
 concurrency:
   group: release-main
@@ -24,19 +23,25 @@ concurrency:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-# Releases are now manual: merge small PRs to main freely; cut a Release
+# Releases are manual: merge small PRs to main freely; cut a Release
 # only when a stable batch is ready by triggering this workflow from the
 # Actions tab.
 #
-# This workflow used to push the version-bump commit DIRECTLY to main.
-# That broke 2026-05-10 once classic branch protection started requiring
-# the PR Gate aggregator (`Detect Changes`, `Analyze JavaScript`,
-# `PR Gate`) on every commit landing on main — direct pushes can never
-# satisfy `PR Gate` because that's a `pull_request`-only aggregator. Now
-# we open a release PR with auto-merge enabled instead. The PR runs the
-# full required-check pipeline, auto-merges when green, and the
-# release-tag.yml workflow then creates the tag + GitHub Release in
-# response to the merged commit on main.
+# Architecture (SHY-0034, 2026-06-08): the signed release commit
+# (`chore: release vX.Y.Z`) is written DIRECTLY to main via GitHub's
+# GraphQL `createCommitOnBranch` mutation. The Release GitHub App
+# (App ID 29110) is registered as a `bypass_actors` Integration entry
+# on main's branch-protection ruleset (id 12613584), permitting the
+# App to bypass the `pull_request` requirement for THIS one path while
+# preserving signed-commit enforcement (`required_signatures` rule).
+# Once the commit lands, `release-tag.yml` fires on the push event and
+# creates the git tag + GitHub Release. No release branch is created;
+# no PR is opened; no auto-merge ceremony.
+#
+# History: the previous flow opened a `release/v*-r<run-id>` branch +
+# PR + enabled auto-merge. That worked but every failed/cancelled run
+# left an orphan release branch (6 swept in SHY-0033 contributing to
+# the 506-branch repo state). SHY-0034 eliminates the orphan source.
 #
 # Dev-build distribution stays automatic — deploy-dev.yml injects a
 # unique iOS CFBundleVersion from GITHUB_RUN_NUMBER so TestFlight uploads
@@ -44,8 +49,8 @@ env:
 # from the same run number for the same reason.
 
 jobs:
-  open-release-pr:
-    name: Open Release PR
+  create-release-commit:
+    name: Create Release Commit
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -91,19 +96,14 @@ jobs:
             echo "::error::HEAD is already a release commit ('$LATEST_SUBJECT'). Refusing to bump on top of an existing release. If this was intentional (e.g. publishing a same-content re-tag), do it manually."
             exit 1
           fi
-          # Also guard against an open release PR. Two open release PRs
-          # would race each other through CI; whichever auto-merges
-          # second would carry an outdated version bump.
-          OPEN_RELEASE_PRS=$(gh pr list --state open --search 'in:title chore: release v' --json number --jq 'length')
-          if [ "${OPEN_RELEASE_PRS:-0}" -gt 0 ]; then
-            echo "::error::An open release PR already exists. Wait for it to merge (or close it) before opening another. Run 'gh pr list --state open --search \"in:title chore: release v\"' to find it."
-            exit 1
-          fi
-          # Per SHY-0034 + [[feedback-no-release-branches-use-tags]]:
-          # release/v* branches are no longer created. The
-          # createCommitOnBranch mutation now targets `main` directly
-          # via the App's bypass-actor entry on ruleset 12613584. No
-          # orphan cleanup is needed because no branches are spawned.
+          # Per SHY-0034 (2026-06-08): no release PRs are opened in the
+          # new flow, so no "open release PR" guard is needed. The
+          # HEAD-is-already-a-release-commit guard above + the workflow's
+          # `concurrency: release-main` group at file-top + the
+          # `expectedHeadOid` optimistic-concurrency check in the
+          # createCommitOnBranch mutation provide complete double-fire
+          # protection. release/v* branches are no longer created so no
+          # orphan cleanup is needed either.
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
 

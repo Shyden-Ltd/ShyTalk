@@ -202,7 +202,7 @@ fi
 # Verify the companion workflow exists and is wired correctly.
 RELEASE_TAG_YML=".github/workflows/release-tag.yml"
 if [ ! -f "$RELEASE_TAG_YML" ]; then
-  echo "::error::$RELEASE_TAG_YML not found. The PR-based release flow needs a separate workflow that fires AFTER the release PR merges to create the tag + GitHub Release. Without it, releases would land on main but no tag/release would ever be created."
+  echo "::error::$RELEASE_TAG_YML not found. The tag-only release flow (SHY-0034) requires this companion workflow to fire on push to main when the signed 'chore: release vX.Y.Z' commit lands directly via createCommitOnBranch. Without it, releases would land on main but no tag + GitHub Release would ever be created."
   exit 1
 fi
 # release-tag.yml must trigger on push to main.
