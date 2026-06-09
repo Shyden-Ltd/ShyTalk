@@ -158,7 +158,24 @@ describe('.github/workflows/sync-roadmap-data.yml', () => {
     // Matches release.yml:365-373 pattern — avoids JSON-escape pitfalls for
     // file content containing quotes/newlines/control chars. @base64 is
     // RFC-4648 standard which GraphQL accepts without padding/newline issues.
-    expect(content).toMatch(/jq -n[\s\S]*--rawfile[\s\S]*@base64/);
+    expect(content).toMatch(/jq -n[\s\S]{0,800}--rawfile[\s\S]{0,900}@base64/);
+  });
+
+  test('SHY-0064: payload built in a single jq -n invocation (no --argjson additions chaining)', () => {
+    // Reason: at the current SHY-corpus size (~177KB JSON → ~237KB base64),
+    // the prior two-step pattern `ADDITIONS=$(jq -n ...) ; PAYLOAD=$(jq -n
+    // --argjson additions "$ADDITIONS" ...)` exceeded Linux's effective
+    // ARG_MAX when the second jq received $ADDITIONS as argv. Fix:
+    // construct additions inline within ONE jq filter via `($c1|@base64)`
+    // so only the final PAYLOAD bash variable holds the large content,
+    // and PAYLOAD is piped to gh via stdin (no argv limit).
+    expect(content).not.toMatch(/--argjson\s+additions/);
+    expect(content).not.toMatch(/ADDITIONS=\$\(jq/);
+    // Confirm exactly one `jq -n` in the commit-back step's run block.
+    // Other jq calls (like the `jq -r '.data...'` response parser) use
+    // `jq -r`, not `jq -n`, so this count is unambiguous.
+    const jqNullInputMatches = content.match(/jq -n\b/g) || [];
+    expect(jqNullInputMatches.length).toBe(1);
   });
 
   test('SHY-0063: payload commits exactly one file path: public/roadmap-data.json', () => {

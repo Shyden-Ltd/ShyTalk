@@ -118,28 +118,33 @@ jobs:
           # workflow against the new HEAD, where the idempotent regen
           # succeeds. No manual recovery needed.
 
-          # Step 1: build the JSON additions array. jq --rawfile reads
-          # the file verbatim; @base64 produces RFC-4648 output that the
-          # GraphQL FileAddition input accepts cleanly.
-          ADDITIONS=$(jq -n \
-            --rawfile c1 public/roadmap-data.json \
-            '[{path: "public/roadmap-data.json", contents: ($c1|@base64)}]')
-
-          # Step 2: build the full GraphQL request body.
+          # SHY-0064: build the entire GraphQL request body in ONE jq
+          # null-input invocation. The prior two-step pattern (mirrored from
+          # release.yml) used a second jq with `argjson`-style additions
+          # passing — that base64-encoded file content, at 177KB+ of
+          # unencoded JSON (~237KB base64), exceeded the Linux runner's
+          # effective ARG_MAX when passed as a single jq argv. The fix is
+          # structural: --rawfile reads the file inside this single jq, and
+          # the additions array is constructed inline within the jq filter
+          # via ($c1|@base64). The only large value is the final PAYLOAD
+          # bash variable, which is piped to `gh api graphql --input -` via
+          # stdin — kernel argv limits don't apply to bash variables, only
+          # to execve(argv).
           PAYLOAD=$(jq -n \
             --arg repo "${{ github.repository }}" \
             --arg branch "${BRANCH}" \
             --arg oid "${PARENT_SHA}" \
             --arg msg "chore(roadmap): sync roadmap-data.json from SHY corpus" \
-            --argjson additions "$ADDITIONS" \
+            --rawfile c1 public/roadmap-data.json \
             '{
               query: "mutation($repo: String!, $branch: String!, $oid: GitObjectID!, $msg: String!, $additions: [FileAddition!]!) { createCommitOnBranch(input: { branch: { repositoryNameWithOwner: $repo, branchName: $branch }, expectedHeadOid: $oid, fileChanges: { additions: $additions }, message: { headline: $msg } }) { commit { oid url } } }",
-              variables: {repo: $repo, branch: $branch, oid: $oid, msg: $msg, additions: $additions}
+              variables: {repo: $repo, branch: $branch, oid: $oid, msg: $msg, additions: [{path: "public/roadmap-data.json", contents: ($c1|@base64)}]}
             }')
 
-          # Step 3: submit the mutation. `gh api graphql --input -` reads
-          # the full request body from stdin (query + variables together)
-          # which handles complex variable types (FileAddition[]) cleanly.
+          # Submit the mutation. `gh api graphql --input -` reads the full
+          # request body from stdin (query + variables together) which
+          # handles complex variable types (FileAddition[]) cleanly + has no
+          # argv size limit (the entire point of SHY-0064's refactor).
           RESPONSE=$(echo "$PAYLOAD" | gh api graphql --input -)
           COMMIT_OID=$(echo "$RESPONSE" | jq -r '.data.createCommitOnBranch.commit.oid // empty')
           if [ -z "$COMMIT_OID" ]; then
