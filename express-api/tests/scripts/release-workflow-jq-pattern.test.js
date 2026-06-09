@@ -157,9 +157,10 @@ describe('.github/workflows/release.yml — SHY-0065 single-jq commit-back patte
     // Window is the full step body — measured ~6200 bytes today (lines 318-
     // 423); 8000 gives comfortable headroom for future audit-trail / comment
     // additions but stays small enough that two separate steps couldn't both
-    // be swept inside.
+    // be swept inside. No lazy `?` needed: only one `GITHUB_STEP_SUMMARY` in
+    // the file, so greedy/lazy are equivalent — keep the regex simple.
     const commitStepRegex =
-      /Create signed commit on main via GraphQL[\s\S]{0,8000}?GITHUB_STEP_SUMMARY/;
+      /Create signed commit on main via GraphQL[\s\S]{0,8000}GITHUB_STEP_SUMMARY/;
     const commitStepMatch = content.match(commitStepRegex);
     expect(commitStepMatch).not.toBeNull();
     if (commitStepMatch) {
