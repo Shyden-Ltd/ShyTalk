@@ -1,13 +1,14 @@
 ---
 id: SHY-0063
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-09
 priority: P0
 effort: S
 type: bug
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1045
+released_in: v0.97.8
 ---
 
 # SHY-0063: Fix SHY-0038 sync-roadmap-data workflow — push to main was rejected by branch-protection (signed-commit + bypass-actor missing)
@@ -286,3 +287,5 @@ Jest count: 28 (was 26; +2 new cases for C1 + I1). All green. Workflow checkers 
 **2026-06-09 ~10:15 BST — Live-function gate finally GREEN** (post-SHY-0066). SHY-0063's `createCommitOnBranch` design works end-to-end. Confirmation: workflow run `27199389798` succeeded; commit `ce53436a6b0` landed on main signed by `shytalk-release-bot[bot]`. The SHY-0063 PR-#1045 spec's DoD "LIVE DISPATCH VERIFICATION" gate (deferred at merge time per SHY-0063's own escalation rule) now reads GREEN. No-op fast-path also verified (run `27199521183`).
 
 — EOF for now; release-cut Done flip lands on next operator-triggered release.yml run.
+
+**2026-06-09 ~22:57 BST — Released in v0.97.8.** PR #1045 squash-merged 2026-06-09 09:08Z (1ed6fc8e). v0.97.8 cut by release.yml run 27238174189; exits merged-awaiting-release → Done.

@@ -1,6 +1,6 @@
 ---
 id: SHY-0065
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-09
 priority: P1
@@ -8,6 +8,7 @@ effort: XS
 type: refactor
 roadmap_ids: []
 pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1048
+released_in: v0.97.8
 ---
 
 # SHY-0065: Apply single-jq inline-additions pattern to `release.yml` (preventive — mirror SHY-0064's sync fix)
@@ -192,3 +193,5 @@ Apply the SHY-0064 fix preventively: ONE `jq -n` invocation, additions array con
 **Test file naming:** `express-api/tests/scripts/release-workflow-jq-pattern.test.js` — parallel to `sync-roadmap-data-workflow.test.js`. Assertion bodies cite SHY-0065 + (where copied verbatim) SHY-0064 for traceability.
 
 **Dry-run strategy:** local-only; no live `release.yml` dispatch. Sync's SHY-0064 fix already proved the single-jq shape works against the GraphQL API end-to-end (runs `27199389798`, `27199521183`, `27200545889`). release.yml's only differences from sync are file count (3 vs 1) and total payload size (smaller), which a local dry-run with decode-roundtrip fully covers.
+
+**2026-06-09 ~22:57 BST — Released in v0.97.8.** PR #1048 squash-merged 2026-06-09 11:34Z. v0.97.8 cut by release.yml run 27238174189; flipped Done.

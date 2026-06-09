@@ -1,6 +1,6 @@
 ---
 id: SHY-0038
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-08
 priority: P0
@@ -11,6 +11,7 @@ epic: EPIC-0001
 phase: Website & Presence
 public: true
 pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1044
+released_in: v0.97.8
 ---
 
 # SHY-0038: Full bidirectional sync — SHY `.md` files → `public/roadmap-data.json` auto-regen + GitHub Project board link on the public roadmap page
@@ -235,3 +236,5 @@ Operator decision (2026-06-08 ~18:38 BST): Option D, optimising for quality + re
 - 2026-06-09 01:58 BST — Merged as PR #1044 (squash sha `5f45dcc470e3a9a1b3f500ee5ed03721f6f1d91c`). status flip to Done deferred to next PR per established pattern (handoff line "Pending status flips").
 - 2026-06-09 02:00 BST — **Post-merge sync workflow run 27176921623 FAILED.** Regen step succeeded (2 public SHYs, 1 EPIC); commit-back step rejected by branch-protection `GH013: Repository rule violations`: `pull_request` required, 3-of-3 status checks expected, **`required_signatures`** rule blocked the bot's unsigned commit. Root cause: SHY-0038's `workflow_dispatch` trigger (AC line 60: "for pre-merge testing") was added but never executed → live push-to-main step never exercised. Local `test-sync-e2e.sh` only exercised the Node script half of the workflow, not the push half. Codified as second incident in `[[feedback-workflow-verify-by-running]]` (now STRENGTHENED 2x). Filed **SHY-0063** (type: bug) to fix the workflow via the Release App `createCommitOnBranch` pattern (the same `bypass_actors`-on-ruleset-12613584 path that `release.yml` uses post-SHY-0034) — see `.project/stories/SHY-0063-fix-sync-roadmap-signed-commits.md`.
 - 2026-06-09 ~09:45 BST — **New lifecycle rule landed mid-SHY-0063 work.** Operator: "tickets should only be marked as 'done' when a release has been cut. therefore creating the release should be the final piece where the story ends." Scope (chosen via plain-English options): **Unified release tag** — every SHY waits for next `release.yml` v.X.Y.Z run, regardless of SHY type. Codified as `[[feedback-done-equals-release-cut]]`. **Impact on SHY-0038:** status stays at `In Progress` until the next operator-triggered `release.yml` succeeds; at that point SHY-0038 + SHY-0063 + any other merged-since-v0.97.7 SHYs flip Done together via a `chore/tag-release-vX.Y.Z` follow-up PR. The administrative `pr: #1044` field IS set in this SHY-0063 PR (administrative metadata, not state change). The actual public-surfacing function of SHY-0038 stays separately gated on SHY-0063's live-verify gate.
+
+**2026-06-09 ~22:57 BST — Released in v0.97.8.** PR #1044 squash-merged 2026-06-09 02:00Z. release.yml run 27238174189 (bump=patch) cut v0.97.8; flipped Done per done-equals-release-cut.

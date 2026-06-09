@@ -1,13 +1,14 @@
 ---
 id: SHY-0064
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-09
 priority: P0
 effort: XS
 type: bug
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1046
+released_in: v0.97.8
 ---
 
 # SHY-0064: Fix SHY-0063 sync workflow — `jq: Argument list too long` when payload exceeds Linux ARG_MAX
@@ -234,3 +235,5 @@ Reviewer agent declared all of the following Verified Clean: jq filter syntax (`
 **2026-06-09 ~10:15 BST — SHY-0066 migration completed + verified.** SHY-0064's fix is now live end-to-end. Sync workflow ran `27199389798` (post-migration) → `conclusion: success` → committed `ce53436a6b0` to main, App-signed, as `shytalk-release-bot[bot]`. Subsequent no-op fast-path run `27199521183` succeeded with `[sync] no changes — public/roadmap-data.json is up to date`. The SHY-0038 → SHY-0063 → SHY-0064 → SHY-0066 chain delivers the original SHY-0038 promise: every SHY status flip auto-propagates to the public roadmap webpage.
 
 — EOF for now; SHY-0065 (release.yml preventive jq refactor) entries land elsewhere; release-cut Done flip lands on next operator-triggered release.yml run.
+
+**2026-06-09 ~22:57 BST — Released in v0.97.8.** PR #1046 squash-merged 2026-06-09. v0.97.8 cut by release.yml run 27238174189; flipped Done.

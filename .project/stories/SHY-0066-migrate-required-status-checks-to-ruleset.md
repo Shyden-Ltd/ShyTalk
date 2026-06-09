@@ -1,6 +1,6 @@
 ---
 id: SHY-0066
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-09
 priority: P0
@@ -8,6 +8,7 @@ effort: XS
 type: infra
 roadmap_ids: []
 pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1047
+released_in: v0.97.8
 ---
 
 # SHY-0066: Migrate `required_status_checks` from classic branch protection to ruleset 12613584 (unblock sync + release main-mutating workflows)
@@ -244,3 +245,5 @@ Operator authorised (AskUserQuestion ~11:30 BST) bundling the hook fix into SHY-
 **Lifecycle posture per `[[feedback-done-equals-release-cut]]`:** status flipped `In Progress → In Review` (NOT `Done`). Will flip to `Done` + add `released_in: vX.Y.Z` field only on the next operator-triggered `release.yml` run that ships these changes to prod. Same posture applies to SHY-0063 + SHY-0064 (also merged-awaiting-release). Formalisation of a dedicated "Merged, awaiting release" enum state + validator support is a follow-up SHY (not filed yet).
 
 — EOF.
+
+**2026-06-09 ~22:57 BST — Released in v0.97.8.** PR #1047 squash-merged 2026-06-09 10:38Z. v0.97.8 cut by release.yml run 27238174189; flipped Done.

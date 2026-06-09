@@ -1,13 +1,14 @@
 ---
 id: SHY-0067
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-09
 priority: P0
 effort: L
 type: bug
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1049
+released_in: v0.97.8
 ---
 
 # SHY-0067: Fix SHY-0002 issue/board mirror — 4 stacked defects + self-healing label/field provisioning
@@ -284,3 +285,5 @@ actionlint clean.
 **Live-verify gate is mandatory + non-negotiable** per `[[feedback-workflow-verify-by-running]]` STRENGTHENED 5x in this session. SHY-0002 was the FIRST SHY in the framework that flipped Done without a live-verify gate — SHY-0067 is the lesson cost (a P0 bug-fix SHY 24 hours later). The validator should be updated in the formalisation SHY (next session) to require a live-verify Notes entry before allowing Done.
 
 **2026-06-09 ~20:30 BST — Reviewer cycle 3 (post C1-C4 + I1-I5 fix) → 1 Important finding (I-A1 / I6).** Code-reviewer agent re-dispatched on commit b136af6 (the "Address all reviewer findings" pass). Found `add_to_project_board` failures swallowed by `|| true` at lines 847 (create path) + 903 (update path), plus 5 `set_project_field_*` swallows inside `populate_project_fields` (lines 581/586/591/595/599). All 7 sites reintroduced Defect-C-class silent success on the Defect-D code path that this PR was meant to harden — AC line 79 explicitly requires `N_FAILED++` + non-zero exit on board-add failure. **Fix:** new failing test `reviewer-I6` (mock-gh returns `addProjectV2ItemById: null` → drives empty-id branch → asserts exit 40), tightened all 7 swallow sites to propagate via N_FAILED + emit, made `populate_project_fields` return non-zero on any field-set failure so the caller can count it. 30/30 comprehensive tests passing, 13/13 sibling tests passing, shellcheck clean.
+
+**2026-06-09 ~22:57 BST — Released in v0.97.8.** PR #1049 squash-merged 2026-06-09 21:50:19Z as 294d6a028ca (auto-merge after node-26-hang root-cause fix unblocked the final push). v0.97.8 cut by release.yml run 27238174189; flipped Done.
