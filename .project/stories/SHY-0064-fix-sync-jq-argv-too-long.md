@@ -229,4 +229,8 @@ N/A — no user-facing strings introduced.
 
 Reviewer agent declared all of the following Verified Clean: jq filter syntax (`($c1|@base64)`), `--rawfile` bytes-verbatim behaviour (BOM/trailing whitespace safe), shell variable substitution (`${BRANCH}`/`${PARENT_SHA}` short strings — no ARG_MAX surface from those), `@base64` flat output (no line-wrapping), the doubled-jq-counting regex with the "ONE jq null-input invocation" rephrased comment, bounded-character-class `--rawfile[\s\S]{0,900}@base64` (finite + linear, no slow-regex risk), and the four workflow checkers.
 
-— EOF for now; post-merge + SHY-0065 entries will land in this section as they happen.
+**2026-06-09 ~10:00 BST — Post-SHY-0064-merge sync workflow run `27198217568` FAILED with a different error**: `gh: Repository rule violations found / 3 of 3 required status checks are expected`. SHY-0064's jq ARG_MAX fix WORKED (no more "Argument list too long") but a deeper layered-protection issue surfaced: classic branch protection on `main` enforced `required_status_checks` with no bypass mechanism, blocking the Release App's mutation. Filed **SHY-0066** to migrate that rule into ruleset 12613584 (where the App's `bypass_actors` entry already applies).
+
+**2026-06-09 ~10:15 BST — SHY-0066 migration completed + verified.** SHY-0064's fix is now live end-to-end. Sync workflow ran `27199389798` (post-migration) → `conclusion: success` → committed `ce53436a6b0` to main, App-signed, as `shytalk-release-bot[bot]`. Subsequent no-op fast-path run `27199521183` succeeded with `[sync] no changes — public/roadmap-data.json is up to date`. The SHY-0038 → SHY-0063 → SHY-0064 → SHY-0066 chain delivers the original SHY-0038 promise: every SHY status flip auto-propagates to the public roadmap webpage.
+
+— EOF for now; SHY-0065 (release.yml preventive jq refactor) entries land elsewhere; release-cut Done flip lands on next operator-triggered release.yml run.

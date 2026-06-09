@@ -283,4 +283,6 @@ N/A — no user-facing strings introduced. The sync produces no localised conten
 
 Jest count: 28 (was 26; +2 new cases for C1 + I1). All green. Workflow checkers all clean. The new commit (this one) is the local push candidate.
 
-— EOF for now; post-merge + release-tag entries will land in this section as they happen.
+**2026-06-09 ~10:15 BST — Live-function gate finally GREEN** (post-SHY-0066). SHY-0063's `createCommitOnBranch` design works end-to-end. Confirmation: workflow run `27199389798` succeeded; commit `ce53436a6b0` landed on main signed by `shytalk-release-bot[bot]`. The SHY-0063 PR-#1045 spec's DoD "LIVE DISPATCH VERIFICATION" gate (deferred at merge time per SHY-0063's own escalation rule) now reads GREEN. No-op fast-path also verified (run `27199521183`).
+
+— EOF for now; release-cut Done flip lands on next operator-triggered release.yml run.
