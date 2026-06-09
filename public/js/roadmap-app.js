@@ -20,6 +20,7 @@
   // ── i18n labels (minimal set used by this script) ──
   var LABELS = {
     en: {
+      storyBadge: "Story {id}",
       inProgress: "In Progress",
       comingSoon: "Coming Soon",
       planned: "Planned",
@@ -35,6 +36,7 @@
       copyright: "© Shyden Ltd",
     },
     ar: {
+      storyBadge: "قصة {id}",
       inProgress:
         "\u0642\u064A\u062F \u0627\u0644\u062A\u0646\u0641\u064A\u0630",
       comingSoon: "\u0642\u0631\u064A\u0628\u064B\u0627",
@@ -52,6 +54,7 @@
         "\u0633\u062C\u0651\u0644 \u0627\u0644\u062F\u062E\u0648\u0644 \u0644\u064A\u0635\u0644\u0643 \u0625\u0634\u0639\u0627\u0631.",
     },
     de: {
+      storyBadge: "Story {id}",
       inProgress: "In Arbeit",
       comingSoon: "Kommt bald",
       planned: "Geplant",
@@ -65,6 +68,7 @@
       notifyPrompt: "Melde dich in der App an, um benachrichtigt zu werden.",
     },
     es: {
+      storyBadge: "Historia {id}",
       inProgress: "En progreso",
       comingSoon: "Pr\u00F3ximamente",
       planned: "Planificado",
@@ -78,6 +82,7 @@
       notifyPrompt: "Inicia sesi\u00F3n en la app para recibir notificaciones.",
     },
     fr: {
+      storyBadge: "Story {id}",
       inProgress: "En cours",
       comingSoon: "Bient\u00F4t",
       planned: "Planifi\u00E9",
@@ -92,6 +97,7 @@
         "Connectez-vous \u00E0 l\u2019appli pour \u00EAtre notifi\u00E9.",
     },
     hi: {
+      storyBadge: "स्टोरी {id}",
       inProgress: "\u091C\u093E\u0930\u0940 \u0939\u0948",
       comingSoon:
         "\u091C\u0932\u094D\u0926 \u0906 \u0930\u0939\u093E \u0939\u0948",
@@ -110,6 +116,7 @@
         "\u0938\u0942\u091A\u0928\u093E \u092A\u093E\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F \u0910\u092A \u092E\u0947\u0902 \u0932\u0949\u0917 \u0907\u0928 \u0915\u0930\u0947\u0902\u0964",
     },
     id: {
+      storyBadge: "Story {id}",
       inProgress: "Sedang berjalan",
       comingSoon: "Segera hadir",
       planned: "Direncanakan",
@@ -123,6 +130,7 @@
       notifyPrompt: "Masuk ke aplikasi untuk mendapat notifikasi.",
     },
     it: {
+      storyBadge: "Storia {id}",
       inProgress: "In corso",
       comingSoon: "Prossimamente",
       planned: "Pianificato",
@@ -136,6 +144,7 @@
       notifyPrompt: "Accedi all\u2019app per ricevere notifiche.",
     },
     ja: {
+      storyBadge: "ストーリー {id}",
       inProgress: "\u9032\u884C\u4E2D",
       comingSoon: "\u8FD1\u65E5\u516C\u958B",
       planned: "\u8A08\u753B\u4E2D",
@@ -151,6 +160,7 @@
         "\u901A\u77E5\u3092\u53D7\u3051\u53D6\u308B\u306B\u306F\u30A2\u30D7\u30EA\u306B\u30ED\u30B0\u30A4\u30F3\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
     },
     km: {
+      storyBadge: "រឿង {id}",
       inProgress: "\u1780\u17C6\u1796\u17BB\u1784\u178A\u17C6\u178E\u17BE\u179A\u1780\u17B6\u179A",
       comingSoon: "\u1798\u1780\u178A\u179B\u17CB\u17A2\u17CA\u17B8\u1785\u17B7\u179A\u17C9\u17C2",
       planned: "\u1794\u17B6\u1793\u1782\u17D2\u179A\u17C4\u1784\u1791\u17BB\u1780",
@@ -165,6 +175,7 @@
         "\u1785\u17BC\u179B\u1780\u17D2\u1793\u17BB\u1784\u1780\u1798\u17D2\u1798\u179C\u17B7\u1792\u17B8\u178A\u17BE\u1798\u17D2\u1794\u17B8\u1791\u1791\u17BD\u179B\u1780\u17B6\u179A\u1787\u17BC\u1793\u178A\u17C6\u178E\u17B9\u1784\u17D4",
     },
     ko: {
+      storyBadge: "스토리 {id}",
       inProgress: "\uC9C4\uD589 \uC911",
       comingSoon: "\uACE7 \uCD9C\uC2DC",
       planned: "\uACC4\uD68D\uB428",
@@ -180,6 +191,7 @@
         "\uC54C\uB9BC\uC744 \uBC1B\uC73C\uB824\uBA74 \uC571\uC5D0 \uB85C\uADF8\uC778\uD558\uC138\uC694.",
     },
     nl: {
+      storyBadge: "Story {id}",
       inProgress: "Bezig",
       comingSoon: "Binnenkort",
       planned: "Gepland",
@@ -193,6 +205,7 @@
       notifyPrompt: "Log in de app om meldingen te ontvangen.",
     },
     pl: {
+      storyBadge: "Historia {id}",
       inProgress: "W toku",
       comingSoon: "Wkr\u00F3tce",
       planned: "Zaplanowano",
@@ -207,6 +220,7 @@
         "Zaloguj si\u0119 w aplikacji, aby otrzymywa\u0107 powiadomienia.",
     },
     pt: {
+      storyBadge: "História {id}",
       inProgress: "Em andamento",
       comingSoon: "Em breve",
       planned: "Planejado",
@@ -220,6 +234,7 @@
       notifyPrompt: "Entre no app para receber notifica\u00E7\u00F5es.",
     },
     ru: {
+      storyBadge: "История {id}",
       inProgress: "\u0412 \u0440\u0430\u0431\u043E\u0442\u0435",
       comingSoon: "\u0421\u043A\u043E\u0440\u043E",
       planned:
@@ -238,6 +253,7 @@
         "\u0412\u043E\u0439\u0434\u0438\u0442\u0435 \u0432 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435, \u0447\u0442\u043E\u0431\u044B \u043F\u043E\u043B\u0443\u0447\u0430\u0442\u044C \u0443\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F.",
     },
     sv: {
+      storyBadge: "Story {id}",
       inProgress: "P\u00E5g\u00E5r",
       comingSoon: "Kommer snart",
       planned: "Planerat",
@@ -251,6 +267,7 @@
       notifyPrompt: "Logga in i appen f\u00F6r att f\u00E5 aviseringar.",
     },
     th: {
+      storyBadge: "สตอรี่ {id}",
       inProgress:
         "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E14\u0E33\u0E40\u0E19\u0E34\u0E19\u0E01\u0E32\u0E23",
       comingSoon: "\u0E40\u0E23\u0E47\u0E27\u0E46 \u0E19\u0E35\u0E49",
@@ -269,6 +286,7 @@
         "\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E41\u0E2D\u0E1B\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E23\u0E31\u0E1A\u0E01\u0E32\u0E23\u0E41\u0E08\u0E49\u0E07\u0E40\u0E15\u0E37\u0E2D\u0E19",
     },
     tr: {
+      storyBadge: "Hikâye {id}",
       inProgress: "Devam ediyor",
       comingSoon: "Yak\u0131nda",
       planned: "Planland\u0131",
@@ -283,6 +301,7 @@
         "Bildirim almak i\u00E7in uygulamaya giri\u015F yap\u0131n.",
     },
     uk: {
+      storyBadge: "Історія {id}",
       inProgress: "\u0412 \u0440\u043E\u0431\u043E\u0442\u0456",
       comingSoon: "\u041D\u0435\u0437\u0430\u0431\u0430\u0440\u043E\u043C",
       planned:
@@ -301,6 +320,7 @@
         "\u0423\u0432\u0456\u0439\u0434\u0456\u0442\u044C \u0443 \u0434\u043E\u0434\u0430\u0442\u043E\u043A, \u0449\u043E\u0431 \u043E\u0442\u0440\u0438\u043C\u0443\u0432\u0430\u0442\u0438 \u0441\u043F\u043E\u0432\u0456\u0449\u0435\u043D\u043D\u044F.",
     },
     vi: {
+      storyBadge: "Câu chuyện {id}",
       inProgress: "\u0110ang ti\u1EBFn h\u00E0nh",
       comingSoon: "S\u1EAFp ra m\u1EAFt",
       planned: "\u0110\u00E3 l\u00EAn k\u1EBF ho\u1EA1ch",
@@ -315,6 +335,7 @@
         "\u0110\u0103ng nh\u1EADp v\u00E0o \u1EE9ng d\u1EE5ng \u0111\u1EC3 nh\u1EADn th\u00F4ng b\u00E1o.",
     },
     zh: {
+      storyBadge: "故事 {id}",
       inProgress: "\u8FDB\u884C\u4E2D",
       comingSoon: "\u5373\u5C06\u63A8\u51FA",
       planned: "\u5DF2\u8BA1\u5212",
@@ -475,6 +496,47 @@
     }
   }
 
+  // SHY-0061: `items[]` entries come from the story sync (SHY-0038), which
+  // emits title-case statuses ("In Progress", "Done") while getStatusIcon
+  // and the in-progress lift expect lowercase-hyphenated ("in-progress").
+  // Normalise at the item boundary only \u2014 legacy features keep their values.
+  function normalizeItemStatus(status) {
+    return String(status || "")
+      .toLowerCase()
+      .replace(/\s+/g, "-");
+  }
+
+  // Map a phase's SHY items to the feature row shape, tagged with shyId.
+  // Malformed entries (missing shyId or name) are dropped defensively so
+  // one bad sync row can't blank the page.
+  function phaseItemsAsFeatures(phase) {
+    var items = phase.items || [];
+    var out = [];
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i];
+      if (!it || !it.shyId || !it.name) continue;
+      out.push({
+        name: it.name,
+        description: it.description,
+        i18n: it.i18n,
+        status: normalizeItemStatus(it.status),
+        shyId: it.shyId,
+      });
+    }
+    return out;
+  }
+
+  function shyBadgeHtml(shyId) {
+    var label = (t("storyBadge") || "Story {id}").replace("{id}", shyId);
+    return (
+      '<span class="shy-badge" aria-label="' +
+      escapeHtml(label) +
+      '">' +
+      escapeHtml(shyId) +
+      "</span>"
+    );
+  }
+
   function getPhaseStatusLabel(status) {
     switch (status) {
       case "active":
@@ -523,7 +585,11 @@
     // Collect all in-progress items from all phases into a top section
     var inProgressItems = [];
     for (var ip = 0; ip < phases.length; ip++) {
-      var ipFeatures = phases[ip].features || [];
+      // SHY items are appended after legacy features (SHY-0061); both go
+      // through the same lift predicate since item statuses are normalised.
+      var ipFeatures = (phases[ip].features || []).concat(
+        phaseItemsAsFeatures(phases[ip]),
+      );
       for (var ifi = 0; ifi < ipFeatures.length; ifi++) {
         var ipStatus = ipFeatures[ifi].status;
         if (ipStatus === "in-progress" || ipStatus === "next") {
@@ -559,7 +625,9 @@
         html += '<li class="feature-item">';
         html += '<span class="feature-status-icon ' + ipStatusInfo.cls + '" aria-hidden="true">' + ipStatusInfo.icon + '</span>';
         html += '<div class="feature-info">';
-        html += '<div class="feature-name">' + escapeHtml(ipFeatName) + '</div>';
+        html += '<div class="feature-name">' + escapeHtml(ipFeatName) +
+          (ipItem.feature.shyId ? " " + shyBadgeHtml(ipItem.feature.shyId) : "") +
+          '</div>';
         if (ipFeatDesc) html += '<div class="feature-desc">' + escapeHtml(ipFeatDesc) + '</div>';
         html += '<div class="feature-desc" style="font-size:0.75rem;opacity:0.6;margin-top:2px;">' + escapeHtml(ipPhaseLabel) + '</div>';
         html += '</div>';
@@ -571,7 +639,10 @@
 
     for (var p = 0; p < phases.length; p++) {
       var phase = phases[p];
-      var features = phase.features || [];
+      // SHY-0061: phase entries = legacy curated features + synced SHY
+      // items (already status-normalised + shyId-tagged). The empty-phase
+      // skip considers BOTH lists so an all-items phase still renders.
+      var features = (phase.features || []).concat(phaseItemsAsFeatures(phase));
       if (features.length === 0) continue;
 
       var phaseDone = 0;
@@ -658,7 +729,11 @@
           statusInfo.icon +
           "</span>";
         html += '<div class="feature-info">';
-        html += '<div class="feature-name">' + escapeHtml(featName) + "</div>";
+        html +=
+          '<div class="feature-name">' +
+          escapeHtml(featName) +
+          (feat.shyId ? " " + shyBadgeHtml(feat.shyId) : "") +
+          "</div>";
         if (featDesc) {
           html +=
             '<div class="feature-desc">' + escapeHtml(featDesc) + "</div>";

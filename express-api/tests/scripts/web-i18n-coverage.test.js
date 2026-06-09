@@ -195,4 +195,18 @@ describe('roadmap-app.js LABELS', () => {
       expect(content).toMatch(regex);
     }
   });
+
+  // SHY-0061: the shyId badge aria-label template must exist INSIDE every
+  // locale's brace block (per-locale-block assertion — a file-wide substring
+  // match would silently pass with locales missing). `en` is asserted too:
+  // 21 blocks total. The DISCLAIMER-style late-merge pattern would NOT
+  // satisfy this regex by design — storyBadge belongs in the blocks.
+  test.each([...ALL_LANGUAGES, 'en'])(
+    'locale block %s contains storyBadge inside its braces',
+    (lang) => {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const regex = new RegExp(`^\\s+${lang}:\\s*\\{[^}]*storyBadge`, 'm');
+      expect(content).toMatch(regex);
+    },
+  );
 });

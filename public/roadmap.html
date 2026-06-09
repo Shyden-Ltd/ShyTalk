@@ -436,6 +436,22 @@
         color: var(--text-secondary);
         white-space: nowrap;
       }
+      /* SHY-0061: story-ID badge chip on synced roadmap items.
+         Neutral theme tokens only (no rarity colors per repo constraint). */
+      .shy-badge {
+        display: inline-block;
+        margin-left: 4px;
+        padding: 0 6px;
+        font-size: 0.68rem;
+        font-weight: 600;
+        line-height: 1.5;
+        border: 1px solid var(--border);
+        border-radius: var(--radius, 8px);
+        color: var(--text-secondary);
+        background: var(--surface);
+        vertical-align: middle;
+        white-space: nowrap;
+      }
       .phase-body {
         overflow: hidden;
         transition:
