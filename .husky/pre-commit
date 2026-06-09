@@ -1,11 +1,14 @@
 #!/usr/bin/env sh
 
-# Generate public roadmap JSON from internal roadmap (if source exists)
-ROADMAP_SRC=".project/plans/2026-03-29-feature-roadmap.md"
-if [ -f "$ROADMAP_SRC" ]; then
-  node scripts/generate-roadmap-json.js
-  git add public/roadmap-data.json 2>/dev/null
-fi
+# SHY-0066: removed the pre-commit call to `scripts/generate-roadmap-json.js`
+# for the same reason as the matching pre-push removal: the deprecated
+# pre-SHY-0038 generator silently rewrites `public/roadmap-data.json` to an
+# obsolete shape (no `_meta`, no `items[]`) on every commit. SHY-0038's
+# `scripts/sync-shy-to-roadmap-data.mjs` is now the canonical regenerator,
+# running in CI via `.github/workflows/sync-roadmap-data.yml` under
+# App-signed commits gated by ruleset 12613584 bypass_actors. Operator-
+# authorised in SHY-0066 AskUserQuestion at 2026-06-09 ~11:30 BST (same
+# scope as the pre-push fix — same deprecated script, sibling hook).
 
 # Secret scanning — block commits containing API keys, tokens, or credentials
 # Only scan ADDED lines (starting with +) to avoid false positives on removals
