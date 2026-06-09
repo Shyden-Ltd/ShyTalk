@@ -1,6 +1,9 @@
 {
   "name": "shytalk-api",
   "version": "2.0.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
   "description": "ShyTalk API server (Express.js + Firebase Admin SDK)",
   "main": "src/index.js",
   "scripts": {

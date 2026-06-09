@@ -66,6 +66,13 @@ if ! bash scripts/check-release-trigger.sh; then
   exit 1
 fi
 
+# Node-major guard (SHY-0069): abort fast, unconditionally on every push,
+# if the local node major drifted from .nvmrc. brew's floating `node`
+# formula upgraded to 26.3.0 on 2026-06-09 and wedged every full Jest run.
+# Runs before the HAS_CODE path filter so even a config-only push (e.g.
+# someone editing .nvmrc itself) gets the drift check.
+bash scripts/check-node-version.sh || exit 1
+
 # Block any file >5MB from being added in this push's diff vs origin/main.
 # See SHY-0035 (.project/audit/repo-size-audit-2026-06-08.md). Pre-existing
 # tracked >5MB files are out-of-scope here (diff-only mode); CI's lint job
@@ -133,8 +140,10 @@ echo "Running SonarCloud pre-push scan..."
 # `import('archiver')` (archiver v8 is ESM-only); Jest's default CJS VM
 # rejects `import()` callbacks without that flag. Mirrors the npm `test`
 # script in express-api/package.json so both call sites stay in sync.
+# stderr is intentionally NOT discarded (SHY-0069): a wedged/failing run
+# must be visible — `2>/dev/null` here cost hours of blind diagnosis.
 echo "  → Express tests with coverage..."
-cd express-api && node --experimental-vm-modules node_modules/.bin/jest --coverage --coverageReporters=lcov --forceExit --silent 2>/dev/null
+cd express-api && node --experimental-vm-modules node_modules/.bin/jest --coverage --coverageReporters=lcov --forceExit --silent
 cd ..
 
 # Kotlin JVM tests (for coverage reports)

@@ -1,0 +1,10 @@
+{
+  "ignore_dirs": [
+    ".gradle",
+    "build",
+    "shared/build",
+    "androidApp/build",
+    "iosApp/build",
+    "express-api/coverage"
+  ]
+}
