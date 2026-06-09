@@ -34,7 +34,11 @@ jobs:
   sync:
     name: Mirror stories to Issues
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # SHY-0067: bumped from 10 to 15 to give first-run headroom for label auto-
+    # creation (~33 labels × ~200ms) + project board field provisioning + per-
+    # issue project-item-add + 6 field-sets per SHY. Rough first-run budget:
+    # 53 SHYs × ~14 API calls each ≈ 740 calls ≈ ~150 sec. 15 min = 5× headroom.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -45,6 +49,13 @@ jobs:
 
       - name: Sync stories to GitHub Issues
         env:
+          # SHY-0067: `gh` CLI authenticates via GH_TOKEN (highest priority) or
+          # GITHUB_TOKEN (fallback) — NOT via GH_PAT_PROJECT. Pre-SHY-0067 we
+          # only set GH_PAT_PROJECT here, so every `gh` call ran with the read-
+          # only auto GITHUB_TOKEN and failed silently. Setting GH_TOKEN here
+          # is defense-in-depth: the script also re-exports it internally in
+          # check_auth(), but workflow-level setup catches non-script gh calls.
+          GH_TOKEN: ${{ secrets.GH_PAT_PROJECT }}
           GH_PAT_PROJECT: ${{ secrets.GH_PAT_PROJECT }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
         run: |
