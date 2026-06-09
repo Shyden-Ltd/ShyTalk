@@ -555,6 +555,68 @@ describe('SHY-0067: runtime — find_issue_for failure path (mock-gh, reviewer-I
   });
 });
 
+// SHY-0067 reviewer-I6: `add_to_project_board` failure is silently swallowed
+// by `|| true` on the create path (line 847) and the update path (line 903),
+// AND on every `set_project_field_*` call inside `populate_project_fields`
+// (lines 581/586/591/595/599). AC line 79 of the story explicitly requires
+// `N_FAILED++` + non-zero exit on board-add failure (Defect-C-class silent
+// success otherwise leaks through the Defect-D code path). This test
+// simulates the addProjectV2ItemById mutation returning a null item by
+// shaping the gh api graphql response payload — load_project_cache still
+// succeeds (project lookup is unaffected) but the mutation returns no item id,
+// driving add_to_project_board to its empty-id branch (line 491-494).
+describe('SHY-0067: runtime — board-add failure → N_FAILED (mock-gh, reviewer-I6)', () => {
+  test('addProjectV2ItemById returning null item drives N_FAILED++ + exit 40', () => {
+    const { ghPath, recording, dir } = makeMockGh();
+    fs.writeFileSync(path.join(dir, 'gh-responses-issue-list'), '');
+    fs.writeFileSync(path.join(dir, 'gh-responses-label-list'), '[]');
+    fs.writeFileSync(
+      path.join(dir, 'gh-responses-issue-create'),
+      'https://github.com/Shyden-Ltd/ShyTalk/issues/100\n',
+    );
+    fs.writeFileSync(path.join(dir, 'gh-responses-issue-view'), 'I_test_node_id\n');
+    // Project lookup succeeds (so load_project_cache passes) BUT
+    // addProjectV2ItemById returns null (simulates PAT missing project:write,
+    // or upstream board id changing). Field-set keys are present so any
+    // post-add path that incorrectly proceeds would still appear consistent.
+    fs.writeFileSync(
+      path.join(dir, 'gh-responses-api-graphql'),
+      JSON.stringify({
+        data: {
+          organization: {
+            projectV2: { id: 'PVT_kwDOC_test', fields: { nodes: [] } },
+          },
+          addProjectV2ItemById: null,
+        },
+      }),
+    );
+
+    const { code, stderr } = runScript(['--story', 'SHY-0001'], {
+      env: {
+        ...process.env,
+        GH: ghPath,
+        GH_TOKEN: 'fake-pat-for-test',
+        GH_PAT_PROJECT: 'fake-pat-for-test',
+      },
+    });
+
+    // Pre-fix: `|| true` at line 847 swallows the return-1 from
+    // add_to_project_board, script exits 0. Post-fix: failure increments
+    // N_FAILED and the Defect-C exit-40 gate fires.
+    expect(code).toBe(40);
+    // The board-add error must surface in stderr (no `>/dev/null` silencing,
+    // matches the Defect-C contract). emit() route OR explicit failure marker.
+    expect(stderr).toMatch(/addProjectV2ItemById|item-add|project board|N_FAILED/i);
+    // Sanity check: the addProjectV2ItemById mutation was actually invoked
+    // (otherwise we'd be testing the wrong silent-failure path).
+    const calls = readRecording(recording);
+    const projectAdd = calls.find(
+      (c) => c.startsWith('api graphql') && c.includes('addProjectV2ItemById'),
+    );
+    expect(projectAdd).toBeDefined();
+  });
+});
+
 describe('SHY-0067: existing test compatibility', () => {
   // Existing sync-stories-to-issues.test.js covers the structural script
   // behaviour (help, exit codes, body-hash detection). Those tests must still

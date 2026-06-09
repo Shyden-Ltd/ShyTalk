@@ -575,29 +575,40 @@ populate_project_fields() {
   shyid_field="$(get_field_id "SHY ID")"
   roadmap_field="$(get_field_id "Roadmap IDs")"
 
-  # Pri (single-select)
+  # Pri (single-select) — reviewer-I6: failure must bubble up (N_FAILED++ at
+  # the call site of populate_project_fields). The setter already emits a
+  # `[gh-error]` log + returns 1; we just propagate that here instead of
+  # masking it. Empty option-id is a config gap (not a runtime error), so
+  # the `[ -n "$pri_opt" ]` no-op path still returns 0.
   if [ -n "$pri" ] && [ -n "$pri_field" ]; then
     pri_opt="$(get_option_id "Pri" "$pri")"
-    [ -n "$pri_opt" ] && set_project_field_select "$item_id" "$pri_field" "$pri_opt" || true
+    if [ -n "$pri_opt" ]; then
+      set_project_field_select "$item_id" "$pri_field" "$pri_opt" || return 1
+    fi
   fi
   # Effort (single-select)
   if [ -n "$effort" ] && [ -n "$effort_field" ]; then
     effort_opt="$(get_option_id "Effort" "$effort")"
-    [ -n "$effort_opt" ] && set_project_field_select "$item_id" "$effort_field" "$effort_opt" || true
+    if [ -n "$effort_opt" ]; then
+      set_project_field_select "$item_id" "$effort_field" "$effort_opt" || return 1
+    fi
   fi
   # Type (single-select; relies on ensure_project_type_field having run)
   if [ -n "$type" ] && [ -n "$type_field" ]; then
     type_opt="$(get_option_id "Type" "$type")"
-    [ -n "$type_opt" ] && set_project_field_select "$item_id" "$type_field" "$type_opt" || true
+    if [ -n "$type_opt" ]; then
+      set_project_field_select "$item_id" "$type_field" "$type_opt" || return 1
+    fi
   fi
   # SHY ID (text)
   if [ -n "$shyid_field" ]; then
-    set_project_field_text "$item_id" "$shyid_field" "$id" || true
+    set_project_field_text "$item_id" "$shyid_field" "$id" || return 1
   fi
   # Roadmap IDs (text)
   if [ -n "$roadmaps" ] && [ -n "$roadmap_field" ]; then
-    set_project_field_text "$item_id" "$roadmap_field" "$roadmaps" || true
+    set_project_field_text "$item_id" "$roadmap_field" "$roadmaps" || return 1
   fi
+  return 0
 }
 
 # ============================================================== issue create/update
@@ -844,9 +855,21 @@ sync_one() {
         node_id="$(extract_issue_node_id "$create_response" 2>/dev/null || true)"
       fi
       if [ -n "$node_id" ] && [ "$node_id" != "DRY_RUN_NODE_ID" ]; then
-        item_id="$(add_to_project_board "$node_id" || true)"
-        if [ -n "$item_id" ]; then
-          populate_project_fields "$item_id" "$file" "$id"
+        # SHY-0067 reviewer-I6: tighten silent-failure on board-add (AC line 79).
+        # `add_to_project_board` already emits `[gh-error]` on failure; we just
+        # need to count it + propagate to the Defect-C exit-40 gate. Same for
+        # the field-set step that follows. The previous `|| true` swallow
+        # reintroduced Defect-C-class silent success on the Defect-D path.
+        if item_id="$(add_to_project_board "$node_id")"; then
+          if [ -n "$item_id" ]; then
+            if ! populate_project_fields "$item_id" "$file" "$id"; then
+              emit "$id" "project" "failed to populate fields for item ${item_id}"
+              N_FAILED=$((N_FAILED + 1))
+            fi
+          fi
+        else
+          emit "$id" "project" "failed to add issue node ${node_id} to project board"
+          N_FAILED=$((N_FAILED + 1))
         fi
       else
         verbose "${id}: no node_id available (likely test fixture without view response); skipping board add"
@@ -900,9 +923,20 @@ sync_one() {
     update_node_id="$(issue_node_id_for "$issue_num")"
     set -e
     if [ -n "$update_node_id" ]; then
-      update_item_id="$(add_to_project_board "$update_node_id" || true)"
-      if [ -n "$update_item_id" ]; then
-        populate_project_fields "$update_item_id" "$file" "$id"
+      # SHY-0067 reviewer-I6: same silent-failure tightening as the create
+      # path. `addProjectV2ItemById` is idempotent (returns existing item id
+      # if already mirrored), so this path's failure modes are genuine —
+      # auth/scope regressions, board id stale, etc — and must hit N_FAILED.
+      if update_item_id="$(add_to_project_board "$update_node_id")"; then
+        if [ -n "$update_item_id" ]; then
+          if ! populate_project_fields "$update_item_id" "$file" "$id"; then
+            emit "$id" "project" "failed to refresh fields for item ${update_item_id}"
+            N_FAILED=$((N_FAILED + 1))
+          fi
+        fi
+      else
+        emit "$id" "project" "failed to re-add issue node ${update_node_id} to project board"
+        N_FAILED=$((N_FAILED + 1))
       fi
     fi
   fi
