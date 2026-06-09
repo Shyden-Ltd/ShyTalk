@@ -26,13 +26,15 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 done
 
-# Regenerate public roadmap JSON if the internal roadmap has changed
-node scripts/generate-roadmap-json.js 2>/dev/null
-if ! git diff --quiet public/roadmap-data.json 2>/dev/null; then
-  echo "Roadmap JSON updated — staging and amending commit..."
-  git add public/roadmap-data.json
-  git commit --amend --no-edit --no-verify
-fi
+# SHY-0066: removed the pre-push call to `scripts/generate-roadmap-json.js`
+# (deprecated by SHY-0038's `scripts/sync-shy-to-roadmap-data.mjs`). The new
+# generator is SHY-corpus-driven + runs in CI via
+# `.github/workflows/sync-roadmap-data.yml` on every push to main. The old
+# script's output had no `_meta` block + no `items[]` shape; its pre-push
+# amend silently OVERWROTE the SHY-derived JSON every push, corrupting PR
+# diffs. Removed cleanly; the workflow handles regen server-side under
+# App-signed commits (ruleset 12613584 bypass_actors). Operator-authorised
+# in SHY-0066 AskUserQuestion at 2026-06-09 ~11:30 BST.
 
 # Load .env if SONAR_TOKEN not already set
 if [ -z "$SONAR_TOKEN" ] && [ -f ".env" ]; then

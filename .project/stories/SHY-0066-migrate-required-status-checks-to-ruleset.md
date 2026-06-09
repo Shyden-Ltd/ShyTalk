@@ -231,4 +231,8 @@ Both DoD live-verify gates GREEN. Migration complete + operational.
 
 CLAUDE.md `## Git Rules` updated with a new bullet codifying ruleset 12613584 as the canonical protection layer + the lesson that classic protection lacks bypass_actors.
 
+**2026-06-09 ~11:30 BST — Stale `.husky/pre-push` hook block surfaced** during SHY-0066 commit. The hook still ran the deprecated `scripts/generate-roadmap-json.js` (pre-SHY-0038 generator) which produced old-format JSON (no `_meta`, no `items[]`) + silently amended every push, OVERWRITING the SHY-derived JSON in the working tree. Confirmed via diff: commit `b987d74ed47` accidentally rewrote `public/roadmap-data.json` to old-format shape (`currentlyWorkingOn: ['Age-gating per feature']` instead of `[SHY-0038, SHY-0060]`; no `_meta`). The post-merge workflow would have self-healed via the new sync, but the PR squash commit would have looked weird.
+
+Operator authorised (AskUserQuestion ~11:30 BST) bundling the hook fix into SHY-0066 since: (a) the stale hook corrupted THIS very PR's diff, (b) fixing it is a 7-line surgical removal, (c) without the fix every future SHY-touching PR has the same noise. Removed the deprecated block from `.husky/pre-push` + restored `public/roadmap-data.json` to the workflow-generated SHY-derived state (origin/main's `ce53436a6b0`). Force-push not required since the restore is just a normal commit on top of the original SHY-0066 commit; squash-merge will collapse both.
+
 — EOF.
