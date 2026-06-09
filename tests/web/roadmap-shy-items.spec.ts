@@ -78,8 +78,22 @@ const FIXTURE = {
 
 async function gotoWithFixture(page: Page, fixture: unknown = FIXTURE) {
   const consoleErrors: string[] = [];
+  // Network-layer noise from the page's Express-API calls (localhost:3000)
+  // when running against a bare static server is environment health, not
+  // renderer health — these tests own the latter. Each engine phrases the
+  // failure differently; all three signatures are strictly network-layer.
+  // A renderer crash logs an uncaught exception, which matches none of
+  // these and still fails the assertion.
+  const NETWORK_NOISE = [
+    'Failed to load resource', // chromium / mobile-chrome
+    'Could not connect to the server.', // webkit / mobile-safari
+    'Cross-Origin Request Blocked', // firefox
+  ];
   page.on('console', (msg) => {
-    if (msg.type() === 'error') consoleErrors.push(msg.text());
+    const text = msg.text();
+    if (msg.type() === 'error' && !NETWORK_NOISE.some((sig) => text.includes(sig))) {
+      consoleErrors.push(text);
+    }
   });
   await page.route('**/roadmap-data.json', (route) =>
     route.fulfill({
@@ -96,7 +110,7 @@ async function gotoWithFixture(page: Page, fixture: unknown = FIXTURE) {
 test.describe('roadmap renders SHY-derived items', () => {
   test('non-in-progress item renders inside its phase with a shyId badge chip', async ({ page }) => {
     await gotoWithFixture(page);
-    const phase = page.locator('.phase-card', { hasText: 'Safety & Compliance' });
+    const phase = page.locator('[data-testid="phase-card"]', { hasText: 'Safety & Compliance' });
     const itemRow = phase.locator('.feature-item', { hasText: 'Imaginary shipped story' });
     await expect(itemRow).toHaveCount(1);
     await expect(itemRow.locator('.shy-badge')).toHaveText('SHY-0099');
@@ -109,7 +123,7 @@ test.describe('roadmap renders SHY-derived items', () => {
 
   test('title-case item statuses are normalised to the renderer icon classes', async ({ page }) => {
     await gotoWithFixture(page);
-    const phase = page.locator('.phase-card', { hasText: 'Safety & Compliance' });
+    const phase = page.locator('[data-testid="phase-card"]', { hasText: 'Safety & Compliance' });
     const doneItem = phase.locator('.feature-item', { hasText: 'Imaginary shipped story' });
     await expect(doneItem.locator('.feature-status-icon--done')).toHaveCount(1);
     // "In Progress" (title case from sync) must normalise to the lift
@@ -131,7 +145,7 @@ test.describe('roadmap renders SHY-derived items', () => {
   test('phase progress counts include items in numerator and denominator', async ({ page }) => {
     await gotoWithFixture(page);
     // Safety & Compliance: 1 done feature + 1 done item of 4 total = (2/4)
-    const phase = page.locator('.phase-card', { hasText: 'Safety & Compliance' });
+    const phase = page.locator('[data-testid="phase-card"]', { hasText: 'Safety & Compliance' });
     await expect(phase.locator('.phase-progress-text')).toContainText('(2/4)');
   });
 
@@ -148,7 +162,7 @@ test.describe('roadmap renders SHY-derived items', () => {
 
   test('a phase with only items renders with correct count', async ({ page }) => {
     await gotoWithFixture(page);
-    const phase = page.locator('.phase-card', { hasText: 'Items Only Phase' });
+    const phase = page.locator('[data-testid="phase-card"]', { hasText: 'Items Only Phase' });
     await expect(phase).toHaveCount(1);
     await expect(phase.locator('.feature-item', { hasText: 'All items phase entry' })).toHaveCount(1);
     await expect(phase.locator('.phase-progress-text')).toContainText('(1/1)');
@@ -156,7 +170,7 @@ test.describe('roadmap renders SHY-derived items', () => {
 
   test('a phases entry without an items key renders unchanged with zero console errors', async ({ page }) => {
     const errors = await gotoWithFixture(page);
-    const phase = page.locator('.phase-card', { hasText: 'Legacy Only Phase' });
+    const phase = page.locator('[data-testid="phase-card"]', { hasText: 'Legacy Only Phase' });
     await expect(phase).toHaveCount(1);
     await expect(phase.locator('.feature-item', { hasText: 'Old style feature' })).toHaveCount(1);
     await expect(phase.locator('.shy-badge')).toHaveCount(0);
