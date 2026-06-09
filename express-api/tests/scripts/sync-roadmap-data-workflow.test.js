@@ -1,12 +1,16 @@
 /**
  * Static assertions on .github/workflows/sync-roadmap-data.yml.
  *
- * Spec: .project/stories/SHY-0038-public-roadmap-gh-project-link.md AC.
+ * Spec: .project/stories/SHY-0038-public-roadmap-gh-project-link.md (original)
+ *       .project/stories/SHY-0063-fix-sync-roadmap-signed-commits.md (this refactor)
  *
  * Why static rather than dispatch-and-observe: actionlint catches YAML syntax;
- * dispatch happens in CI on the post-merge push. These assertions cover the
- * specific contract bits that would silently regress (loop guard, path filter,
- * permissions scope, SHA-pinning).
+ * these assertions cover the specific contract bits that would silently regress
+ * (loop guard, App-token shape, GraphQL mutation, no plain `git push`).
+ *
+ * Dispatch verification is the *separate* gate that blocks SHY-0063 from Done
+ * per [[feedback-workflow-verify-by-running]] STRENGTHENED rule — neither this
+ * file nor any static checker substitutes for that.
  */
 
 const fs = require('node:fs');
@@ -38,19 +42,25 @@ describe('.github/workflows/sync-roadmap-data.yml', () => {
     expect(content).toMatch(/workflow_dispatch:/);
   });
 
-  test('loop-guard: if: github.actor != github-actions[bot]', () => {
-    // C1-equivalent: actor-check prevents the bot from triggering itself.
-    expect(content).toMatch(/if:\s*github\.actor\s*!=\s*['"]github-actions\[bot\]['"]/);
+  test('loop-guard skips re-fire by either the default bot OR the Release App bot (SHY-0063)', () => {
+    // SHY-0063: createCommitOnBranch records github.actor as the Release App
+    // (shytalk-release-bot[bot]) — NOT github-actions[bot]. Without this dual
+    // guard the App's own commit-back would re-trigger this workflow on push.
+    expect(content).toMatch(/if:[ \t]+github\.actor[ \t]*!=[ \t]*['"]github-actions\[bot\]['"]/);
+    expect(content).toMatch(/github\.actor[ \t]*!=[ \t]*['"]shytalk-release-bot\[bot\]['"]/);
+    // Both conditions joined by `&&` (AND) — either bot alone must short-circuit.
+    // Bounded character class (no [\s\S]* greedy wildcard — avoids sonarjs/slow-regex
+    // catastrophic-backtracking risk while still asserting the `&&` joiner is present
+    // immediately between the two actor-name string literals).
+    expect(content).toMatch(
+      /github-actions\[bot\]['"][ \t]+&&[ \t]+github\.actor[ \t]*!=[ \t]*['"]shytalk-release-bot\[bot\]/,
+    );
   });
 
   test('permissions: contents: write (scoped, not full repo write)', () => {
-    // Bounded-width character classes ([ \t]) avoid sonarjs/slow-regex (\s* can backtrack).
     expect(content).toMatch(/permissions:[ \t]*\n[ \t]+contents:[ \t]+write/);
-    // Must NOT have broader permissions like `actions: write` or `pages: write`.
-    // (Whitelisting `contents: write` only is what this PR's threat-model needs.)
     expect(content).not.toMatch(/actions:[ \t]+write/);
     expect(content).not.toMatch(/pages:[ \t]+write/);
-    // Linear scan: count distinct ': write' permission keys; only `contents: write` is allowed.
     const writePerms = content.match(/^[ \t]+[a-z-]+:[ \t]+write\b/gm) || [];
     const nonContents = writePerms.filter((line) => !/contents:[ \t]+write/.test(line));
     expect(nonContents).toEqual([]);
@@ -69,28 +79,94 @@ describe('.github/workflows/sync-roadmap-data.yml', () => {
     expect(content).toMatch(/uses:\s*actions\/setup-node@[0-9a-f]{40}\s*#\s*v\d+/);
   });
 
+  test('SHY-0063: mints a Release App token via actions/create-github-app-token (SHA-pinned)', () => {
+    // Same App-token action SHA as release.yml (post-SHY-0034) — single source
+    // of provenance across both workflows. If the pin drifts, both fail
+    // together rather than only one silently regressing.
+    expect(content).toMatch(
+      /uses:\s*actions\/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1\s*#\s*v3\.2\.0/,
+    );
+  });
+
+  test('SHY-0063: App-token step references RELEASE_APP_ID + RELEASE_APP_PRIVATE_KEY secrets', () => {
+    expect(content).toMatch(/client-id:\s*\$\{\{\s*secrets\.RELEASE_APP_ID\s*\}\}/);
+    expect(content).toMatch(/private-key:\s*\$\{\{\s*secrets\.RELEASE_APP_PRIVATE_KEY\s*\}\}/);
+  });
+
+  test('SHY-0063: checkout uses App token (not default GITHUB_TOKEN) so blame attribution stays coherent', () => {
+    // The App identity should own the entire checkout-regen-commit chain.
+    // Mixing GITHUB_TOKEN for checkout + App token for commit would make
+    // any git operation between them attribute to the bot, not the App.
+    expect(content).toMatch(/token:\s*\$\{\{\s*steps\.app-token\.outputs\.token\s*\}\}/);
+    expect(content).not.toMatch(/token:\s*\$\{\{\s*secrets\.GITHUB_TOKEN\s*\}\}/);
+  });
+
+  test('SHY-0063: commit-back uses createCommitOnBranch GraphQL mutation (not git push)', () => {
+    // The whole point of SHY-0063: the previous `git push origin HEAD:main`
+    // is rejected by branch protection's required_signatures rule. GraphQL
+    // createCommitOnBranch produces a server-side App-signed commit that
+    // satisfies the signature requirement.
+    expect(content).toMatch(/createCommitOnBranch/);
+    expect(content).toMatch(/gh api graphql/);
+  });
+
+  test('SHY-0063: NO plain git push origin HEAD:main remains anywhere', () => {
+    // Belt-and-braces alongside the createCommitOnBranch assertion above:
+    // the broken commit-back form must be FULLY excised, not coexist.
+    expect(content).not.toMatch(/git push origin HEAD:main/);
+    expect(content).not.toMatch(/git push origin main/);
+  });
+
+  test('SHY-0063: NO local git commit step (signed commits come from the mutation, not local config)', () => {
+    // git commit locally would produce an UNSIGNED commit. Even if a later
+    // push step were rule-bypassed, the required_signatures rule would still
+    // reject it. The mutation is the ONLY signed-commit path from CI.
+    expect(content).not.toMatch(/git config user\.name 'github-actions\[bot\]'/);
+    expect(content).not.toMatch(/^[ \t]*git commit -m/m);
+  });
+
+  test('SHY-0063: mutation uses expectedHeadOid for optimistic concurrency', () => {
+    // If main advances between checkout and mutation, expectedHeadOid makes
+    // the mutation fail LOUD rather than overwriting the concurrent commit.
+    // The next `push: main` event re-triggers the workflow against new HEAD.
+    expect(content).toMatch(/expectedHeadOid/);
+    expect(content).toMatch(/git rev-parse HEAD|PARENT_SHA/);
+  });
+
+  test('SHY-0063: mutation payload uses jq --rawfile + @base64 for safe content encoding', () => {
+    // Matches release.yml:365-373 pattern — avoids JSON-escape pitfalls for
+    // file content containing quotes/newlines/control chars. @base64 is
+    // RFC-4648 standard which GraphQL accepts without padding/newline issues.
+    expect(content).toMatch(/jq -n[\s\S]*--rawfile[\s\S]*@base64/);
+  });
+
+  test('SHY-0063: payload commits exactly one file path: public/roadmap-data.json', () => {
+    // Sync's contract is ONLY public/roadmap-data.json. Any other path in the
+    // additions array would be a contract violation (workflow secretly editing
+    // other files). The Node regen script only writes this one file.
+    const additionsMatch = content.match(/additions[\s\S]{0,600}?roadmap-data\.json/);
+    expect(additionsMatch).not.toBeNull();
+    // No other file path should appear within the same additions construction.
+    if (additionsMatch) {
+      const block = additionsMatch[0];
+      expect(block).not.toMatch(/build\.gradle/);
+      expect(block).not.toMatch(/internal\.txt/);
+      expect(block).not.toMatch(/default\.txt/);
+    }
+  });
+
   test('runs the sync script via node (not bash) with no shell interpolation of untrusted input', () => {
     expect(content).toMatch(/run:[ \t]+node scripts\/sync-shy-to-roadmap-data\.mjs/);
-    // No ${{ github.event.* }} or ${{ github.head_ref }} anywhere — these are the documented
-    // command-injection vectors per the security-guidance hook. Whole-file linear scan
-    // (avoids sonarjs/slow-regex backtracking risk from the previous run-block grouping regex).
     expect(content).not.toMatch(/\$\{\{[ \t]*github\.event\./);
     expect(content).not.toMatch(/\$\{\{[ \t]*github\.head_ref/);
   });
 
-  test('commit-back uses bot identity (github-actions[bot] noreply email)', () => {
-    expect(content).toMatch(/user\.name 'github-actions\[bot\]'/);
-    expect(content).toMatch(/41898282\+github-actions\[bot\]@users\.noreply\.github\.com/);
-  });
-
-  test('commit message is the documented chore(roadmap) form', () => {
+  test('SHY-0063: commit message is the documented chore(roadmap) form', () => {
     expect(content).toMatch(/chore\(roadmap\): sync roadmap-data\.json from SHY corpus/);
   });
 
   test('concurrency group is per-ref (no cross-PR serialisation)', () => {
     expect(content).toMatch(/group:\s*sync-roadmap-data-\$\{\{\s*github\.ref\s*\}\}/);
-    // Sync must NOT cancel-in-progress mid-commit (would leave repo in
-    // inconsistent state mid-push).
     expect(content).toMatch(/cancel-in-progress:\s*false/);
   });
 
@@ -102,16 +178,33 @@ describe('.github/workflows/sync-roadmap-data.yml', () => {
     expect(content).not.toMatch(/shell:[ \t]*['"]?true['"]?/);
   });
 
-  test('commit-back step has `git diff --quiet` no-op guard (I4 from review)', () => {
-    // Without this, every workflow run would commit even when nothing changed,
-    // triggering every downstream workflow that reacts to main pushes.
+  test('commit-back step has `git diff --quiet` no-op guard (I4 from SHY-0038 review preserved)', () => {
+    // Without this, every workflow run would invoke createCommitOnBranch
+    // unnecessarily (mutation latency + audit-log noise for empty diffs).
     expect(content).toMatch(/git diff --quiet public\/roadmap-data\.json/);
     expect(content).toMatch(/no changes/);
   });
 
-  test('commit-back step rebases on main before push (C1 from review — concurrent-push safety)', () => {
-    // Concurrent push from Dependabot / release.yml / lint.yml between this
-    // workflow's checkout and its push would otherwise fail with non-fast-forward.
-    expect(content).toMatch(/git pull --rebase[^\n]*origin main/);
+  test('SHY-0063: no echo / set -x near the App token env (secret hygiene)', () => {
+    // Defensive: ensure the App token isn't trivially leaked in logs.
+    // Search for any line containing GH_TOKEN env block followed by echo $GH_TOKEN.
+    expect(content).not.toMatch(/echo\s+["']?\$\{?GH_TOKEN/);
+    expect(content).not.toMatch(/echo\s+["']?\$\{?\{\s*steps\.app-token\.outputs\.token/);
+    expect(content).not.toMatch(/^[ \t]*set -x/m);
+  });
+
+  test('SHY-0063: response sanity-check guards against null commit OID', () => {
+    // Matches release.yml:391-395 — if the mutation succeeds at the HTTP layer
+    // but returns no commit (anomalous; defensively guarded), exit 1 with the
+    // response printed via jq.
+    expect(content).toMatch(/COMMIT_OID/);
+    expect(content).toMatch(/if\s*\[\s*-z\s*"?\$\{?COMMIT_OID\}?"?\s*\]/);
+  });
+
+  test('SHY-0063: writes a step-summary audit record (replaces former git-log audit trail)', () => {
+    // Per release.yml's SHY-0034 architect risk #5 pattern: the workflow's
+    // $GITHUB_STEP_SUMMARY block is the canonical record of who-synced-what-when
+    // when the commit lands directly on main without a PR.
+    expect(content).toMatch(/GITHUB_STEP_SUMMARY/);
   });
 });

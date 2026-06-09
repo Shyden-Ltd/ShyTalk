@@ -10,6 +10,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 | ID                                                              | Pri | Effort | Type     | Title                                                                                            | Status         | Roadmap IDs      | PR  |
 | --------------------------------------------------------------- | --- | ------ | -------- | ------------------------------------------------------------------------------------------------ | -------------- | ---------------- | --- |
+| [SHY-0063](SHY-0063-fix-sync-roadmap-signed-commits.md)         | P0  | S      | bug      | Fix SHY-0038 sync workflow — signed commits via Release App createCommitOnBranch                 | 🚧 In Progress | —                | —   |
 | [SHY-0038](SHY-0038-public-roadmap-gh-project-link.md)          | P0  | L      | infra    | Full bidirectional sync: SHY .md → roadmap-data.json auto-regen + GH Project board link          | 🚧 In Progress | —                | —   |
 | [SHY-0060](SHY-0060-age-gating-per-feature.md)                  | P0  | XL     | feature  | Age-gating per feature: tiered per-feature age thresholds replacing single 13+ signup gate       | 🚧 In Progress | —                | —   |
 | [SHY-0024](SHY-0024-resolve-navgraph-coexistence.md)            | P0  | L      | refactor | Migrate Android to SharedNavGraph + delete NavGraph.kt                                           | 📝 Draft       | G028             | —   |
