@@ -322,13 +322,26 @@ build_labels() {
   fi
 }
 
-# Ensure every label for a SHY exists, creating any missing ones.
+# Ensure every label for a SHY exists, creating any missing ones, and echo
+# the CSV of *verified* labels (those that exist post-call). Labels whose
+# create failed are DROPPED from the result so the caller's `gh issue create
+# --label <csv>` doesn't fail with "label not found" — addresses reviewer C1.
 ensure_labels_for_story() {
   local file="$1"
+  local verified_csv="" label
   while IFS= read -r label; do
     [ -z "$label" ] && continue
-    ensure_label "$label" || true
+    if ensure_label "$label"; then
+      if [ -z "$verified_csv" ]; then
+        verified_csv="$label"
+      else
+        verified_csv="${verified_csv},${label}"
+      fi
+    else
+      verbose "ensure_labels_for_story: dropping '${label}' (ensure failed) from --label CSV"
+    fi
   done < <(build_labels "$file")
+  printf '%s\n' "$verified_csv"
 }
 
 # ============================================================== project v2 (Defects D + E)
@@ -592,8 +605,16 @@ populate_project_fields() {
 # Look up existing issue by SHY-NNNN: title prefix. Echo issue number or empty.
 # Uses PIPESTATUS to capture gh's exit code (not head's) so genuine failures
 # get logged. bash 3.2+ supports PIPESTATUS.
+# SHY-0067 reviewer-I1: return gh's exit code so callers can distinguish
+# "lookup failed (transient gh error)" from "no existing issue found". The
+# difference matters because the former should NOT trigger a duplicate create.
 find_issue_for() {
   local id="$1"
+  # Dry-run: don't hit gh (no auth); pretend no issue exists so the create-
+  # path preview fires + sync_one's `if [ -z "$issue_num" ]` branch hits.
+  if [ "$DRY_RUN" = "1" ]; then
+    return 0
+  fi
   local stderr_file
   stderr_file="$(mktemp)"
   set +e
@@ -611,6 +632,30 @@ find_issue_for() {
       "$id" "$gh_rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
   fi
   rm -f "$stderr_file"
+  return "$gh_rc"
+}
+
+# Look up the node ID for an existing issue number. Echoes node ID on stdout
+# or empty on failure; returns gh's exit code so callers can branch.
+issue_node_id_for() {
+  local issue_num="$1"
+  if [ "$DRY_RUN" = "1" ]; then
+    printf 'dry-run-issue-node-id\n'
+    return 0
+  fi
+  local stderr_file node_id rc
+  stderr_file="$(mktemp)"
+  set +e
+  node_id="$("$GH" issue view "$issue_num" --json id --jq '.id' 2>"$stderr_file")"
+  rc=$?
+  set -e
+  if [ "$rc" -ne 0 ]; then
+    printf '[gh-error] issue view %s for node id (exit %d): %s\n' \
+      "$issue_num" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
+  fi
+  rm -f "$stderr_file"
+  printf '%s\n' "$node_id"
+  return "$rc"
 }
 
 # Build the issue body for a story file.
@@ -746,23 +791,39 @@ sync_one() {
     return 0
   fi
 
-  # SHY-0067: ensure labels exist before issue create (Defect B fix).
-  ensure_labels_for_story "$file"
+  # SHY-0067: ensure labels exist before issue create (Defect B fix). The
+  # function echoes the CSV of *verified* labels (reviewer C1) so the gh
+  # issue create --label flag won't be rejected on a label that failed to
+  # create.
+  local verified_labels
+  verified_labels="$(ensure_labels_for_story "$file")"
 
   local hash
   hash="$(body_hash "$file")"
 
-  local issue_num
+  # SHY-0067 reviewer-I1: distinguish "no issue found" (rc=0, stdout empty)
+  # from "lookup failed" (rc!=0). Skip without creating a duplicate on
+  # transient gh errors.
+  local issue_num find_rc
+  set +e
   issue_num="$(find_issue_for "$id")"
+  find_rc=$?
+  set -e
+  if [ "$find_rc" -ne 0 ]; then
+    emit "$id" "api" "failed to look up existing issue (gh issue list error)"
+    N_FAILED=$((N_FAILED + 1))
+    return 0
+  fi
 
   if [ -z "$issue_num" ]; then
-    local title body labels create_response
+    local title body create_response
     title="${id}: $(extract_title "$file" | sed "s/^${id}: //")"
     body="$(build_issue_body "$file" "$hash")"
-    labels="$(build_labels "$file" | paste -sd, -)"
     # SHY-0067: capture create stdout (URL) so the caller can derive node_id.
+    # Pass the *verified* label CSV (reviewer C1) — any label whose create
+    # failed is already dropped so gh issue create won't reject the create.
     set +e
-    create_response="$(create_issue "$title" "$body" "$labels")"
+    create_response="$(create_issue "$title" "$body" "$verified_labels")"
     local create_rc=$?
     set -e
     if [ "$create_rc" -ne 0 ]; then
@@ -826,6 +887,25 @@ sync_one() {
   fi
   N_UPDATED=$((N_UPDATED + 1))
   emit "$id" "updated" "issue #${issue_num} body refreshed"
+
+  # SHY-0067 reviewer-C4: also re-sync project board fields when the body
+  # refreshes. addProjectV2ItemById is idempotent — returns the existing
+  # item ID if the issue is already in the project. Without this, a SHY
+  # whose priority/effort/type frontmatter changes would have a stale board
+  # entry even after the body update succeeds. AC line 90-91 (Edge cases:
+  # only updates Project v2 field values if frontmatter changed).
+  if [ "$DRY_RUN" != "1" ]; then
+    local update_node_id update_item_id
+    set +e
+    update_node_id="$(issue_node_id_for "$issue_num")"
+    set -e
+    if [ -n "$update_node_id" ]; then
+      update_item_id="$(add_to_project_board "$update_node_id" || true)"
+      if [ -n "$update_item_id" ]; then
+        populate_project_fields "$update_item_id" "$file" "$id"
+      fi
+    fi
+  fi
 }
 
 sync_all() {
@@ -852,6 +932,24 @@ sync_all() {
     "$N_CREATED" "$N_UPDATED" "$N_SKIPPED" "$N_FAILED" >&2
   printf ' (labels created: %d; project items added: %d; project fields updated: %d; type-field auto-created: %s)\n' \
     "$N_LABELS_CREATED" "$N_PROJECT_ITEMS_ADDED" "$N_PROJECT_FIELDS_UPDATED" "$TYPE_FIELD_AUTO_CREATED" >&2
+
+  # SHY-0067 reviewer-I2: emit a GITHUB_STEP_SUMMARY audit trail when running
+  # under GitHub Actions. Local + test runs skip silently (env var unset).
+  if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+    {
+      printf '## Roadmap sync — Issues + Project v2 mirror\n\n'
+      printf '| Metric | Count |\n'
+      printf '|---|---|\n'
+      printf '| Created | %d |\n' "$N_CREATED"
+      printf '| Updated | %d |\n' "$N_UPDATED"
+      printf '| Skipped (unchanged) | %d |\n' "$N_SKIPPED"
+      printf '| Failed | %d |\n' "$N_FAILED"
+      printf '| Labels auto-created | %d |\n' "$N_LABELS_CREATED"
+      printf '| Project items added | %d |\n' "$N_PROJECT_ITEMS_ADDED"
+      printf '| Project fields updated | %d |\n' "$N_PROJECT_FIELDS_UPDATED"
+      printf '| Type-field auto-created | %s |\n' "$TYPE_FIELD_AUTO_CREATED"
+    } >> "$GITHUB_STEP_SUMMARY"
+  fi
 }
 
 sync_story() {

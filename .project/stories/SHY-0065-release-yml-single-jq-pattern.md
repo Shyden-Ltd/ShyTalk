@@ -1,13 +1,13 @@
 ---
 id: SHY-0065
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-06-09
 priority: P1
 effort: XS
 type: refactor
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1048
 ---
 
 # SHY-0065: Apply single-jq inline-additions pattern to `release.yml` (preventive — mirror SHY-0064's sync fix)

@@ -412,6 +412,149 @@ describe('SHY-0067: runtime — Project v2 board addition (mock-gh)', () => {
   });
 });
 
+// SHY-0067 reviewer-I3: runtime coverage gap — the project-board addition
+// test (above) verifies `addProjectV2ItemById` is invoked but not that the
+// per-field updateProjectV2ItemFieldValue mutations follow. populate_project_
+// fields requires the project lookup response to include SOME fields the
+// SHY frontmatter populates; with `fields: { nodes: [] }` the script has
+// nothing to set. This test seeds the project-lookup response with Pri +
+// SHY ID fields so populate_project_fields has something to drive.
+describe('SHY-0067: runtime — Project v2 field population (mock-gh, reviewer-I3)', () => {
+  test('script invokes updateProjectV2ItemFieldValue for at least one field after item-add', () => {
+    const { ghPath, recording, dir } = makeMockGh();
+    fs.writeFileSync(path.join(dir, 'gh-responses-issue-list'), '');
+    fs.writeFileSync(path.join(dir, 'gh-responses-label-list'), '[]');
+    fs.writeFileSync(
+      path.join(dir, 'gh-responses-issue-create'),
+      'https://github.com/Shyden-Ltd/ShyTalk/issues/100\n',
+    );
+    fs.writeFileSync(path.join(dir, 'gh-responses-issue-view'), 'I_test_node_id\n');
+    // Project lookup returns Pri + SHY ID + Type fields so populate_project_
+    // fields has targets to update.
+    fs.writeFileSync(
+      path.join(dir, 'gh-responses-api-graphql'),
+      JSON.stringify({
+        data: {
+          organization: {
+            projectV2: {
+              id: 'PVT_kwDOC_test',
+              fields: {
+                nodes: [
+                  {
+                    __typename: 'ProjectV2SingleSelectField',
+                    id: 'PVTSSF_pri',
+                    name: 'Pri',
+                    dataType: 'SINGLE_SELECT',
+                    options: [
+                      { id: 'OPT_P0', name: 'P0' },
+                      { id: 'OPT_P1', name: 'P1' },
+                    ],
+                  },
+                  {
+                    __typename: 'ProjectV2Field',
+                    id: 'PVTF_shyid',
+                    name: 'SHY ID',
+                    dataType: 'TEXT',
+                  },
+                  {
+                    __typename: 'ProjectV2SingleSelectField',
+                    id: 'PVTSSF_type',
+                    name: 'Type',
+                    dataType: 'SINGLE_SELECT',
+                    options: [{ id: 'OPT_infra', name: 'infra' }],
+                  },
+                ],
+              },
+            },
+          },
+          addProjectV2ItemById: { item: { id: 'PVTI_lADO_test' } },
+          updateProjectV2ItemFieldValue: { projectV2Item: { id: 'PVTI_lADO_test' } },
+        },
+      }),
+    );
+
+    const { code } = runScript(['--story', 'SHY-0001'], {
+      env: {
+        ...process.env,
+        GH: ghPath,
+        GH_TOKEN: 'fake-pat-for-test',
+        GH_PAT_PROJECT: 'fake-pat-for-test',
+      },
+    });
+    expect(code).toBe(0);
+
+    const calls = readRecording(recording);
+    // At least one updateProjectV2ItemFieldValue call must appear AFTER the
+    // addProjectV2ItemById call — the field-set step depends on the item ID
+    // returned by the add step.
+    const addIdx = calls.findIndex(
+      (c) => c.startsWith('api graphql') && c.includes('addProjectV2ItemById'),
+    );
+    const fieldSetIdx = calls.findIndex(
+      (c) => c.startsWith('api graphql') && c.includes('updateProjectV2ItemFieldValue'),
+    );
+    expect(addIdx).toBeGreaterThanOrEqual(0);
+    expect(fieldSetIdx).toBeGreaterThan(addIdx);
+  });
+});
+
+// SHY-0067 reviewer-I4: extended summary format introduced by the fix is
+// not covered by either test file. Assert it explicitly so a future
+// regression to the original "Sync result: N created..." short form is
+// caught.
+describe('SHY-0067: extended summary format (mock-gh, reviewer-I4)', () => {
+  test('--all --dry-run summary line contains the extended SHY-0067 counters', () => {
+    const repoRoot = REPO_ROOT;
+    const SYNC_SCRIPT = path.join(repoRoot, 'scripts', 'sync-stories-to-issues.sh');
+    const res = require('node:child_process').spawnSync(
+      'bash',
+      [SYNC_SCRIPT, '--all', '--dry-run'],
+      { encoding: 'utf-8', cwd: repoRoot, timeout: 90_000 },
+    );
+    expect(res.status ?? 1).toBe(0);
+    const stderr = res.stderr ?? '';
+    // Original short form still present.
+    expect(stderr).toMatch(/Sync result: \d+ created, \d+ updated, \d+ skipped, \d+ failed/);
+    // Extended form (SHY-0067) — counters that didn't exist pre-fix.
+    expect(stderr).toMatch(/labels created: \d+/);
+    expect(stderr).toMatch(/project items added: \d+/);
+    expect(stderr).toMatch(/project fields updated: \d+/);
+    expect(stderr).toMatch(/type-field auto-created: (yes|no)/);
+  });
+});
+
+// SHY-0067 reviewer-I5: PIPESTATUS fix for find_issue_for has zero runtime
+// coverage. The per-cmd exit override in mock-gh lets us simulate a
+// transient gh issue list failure + assert the script logs the error AND
+// does NOT silently create a duplicate issue.
+describe('SHY-0067: runtime — find_issue_for failure path (mock-gh, reviewer-I5)', () => {
+  test('gh issue list non-zero exit → N_FAILED++ + no spurious issue create', () => {
+    const { ghPath, recording, dir } = makeMockGh();
+    fs.writeFileSync(path.join(dir, 'gh-responses-label-list'), '[]');
+    // Simulate transient gh issue list failure (network/auth/rate-limit).
+    fs.writeFileSync(path.join(dir, 'gh-exit-cmd-issue-list'), '1');
+
+    const { code, stderr } = runScript(['--story', 'SHY-0001'], {
+      env: {
+        ...process.env,
+        GH: ghPath,
+        GH_TOKEN: 'fake-pat-for-test',
+        GH_PAT_PROJECT: 'fake-pat-for-test',
+      },
+    });
+    // N_FAILED > 0 → script exits 40 (Defect C gate). Pre-fix this would
+    // have silently exited 0 + tried to create a duplicate issue.
+    expect(code).toBe(40);
+    // No `issue create` call should have been recorded (the lookup-failed
+    // branch returns before reaching create).
+    const calls = readRecording(recording);
+    const hasCreate = calls.some((c) => c.startsWith('issue create'));
+    expect(hasCreate).toBe(false);
+    // The error context should be visible in stderr (no >/dev/null silencing).
+    expect(stderr).toMatch(/failed to look up existing issue|issue list/i);
+  });
+});
+
 describe('SHY-0067: existing test compatibility', () => {
   // Existing sync-stories-to-issues.test.js covers the structural script
   // behaviour (help, exit codes, body-hash detection). Those tests must still
