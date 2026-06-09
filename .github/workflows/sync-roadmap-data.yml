@@ -78,6 +78,16 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
+          # I1 from reviewer (a0530c52e4032cb9a): file-absent guard before
+          # `git diff` to avoid a cryptic early-exit under set -euo pipefail.
+          # `git diff --quiet <path>` exits non-zero when the path is missing
+          # from the working tree (e.g. regen script silently failed without
+          # producing output). Without this guard the run aborts at the diff
+          # with no useful error. Surface the real problem instead.
+          if [ ! -f public/roadmap-data.json ]; then
+            echo "::error::public/roadmap-data.json was not produced by the sync script — aborting."
+            exit 1
+          fi
           # Fast path: no diff means the regen output matches main exactly
           # (SHY-0038's smart-timestamp logic reused `generatedAt` on no-ops).
           # Skip the mutation entirely to keep audit-log noise + latency down.

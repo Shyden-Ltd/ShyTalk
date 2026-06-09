@@ -80,12 +80,33 @@ describe('.github/workflows/sync-roadmap-data.yml', () => {
   });
 
   test('SHY-0063: mints a Release App token via actions/create-github-app-token (SHA-pinned)', () => {
-    // Same App-token action SHA as release.yml (post-SHY-0034) — single source
-    // of provenance across both workflows. If the pin drifts, both fail
-    // together rather than only one silently regressing.
+    // Locks the specific known-good SHA. Paired with the cross-workflow
+    // parity test below so a unilateral bump (e.g. Dependabot on only one
+    // file) fails fast in CI rather than silently desynchronising the two
+    // main-mutating workflows.
     expect(content).toMatch(
       /uses:\s*actions\/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1\s*#\s*v3\.2\.0/,
     );
+  });
+
+  test('SHY-0063: create-github-app-token SHA matches release.yml exactly (cross-workflow parity)', () => {
+    // C1 from reviewer (a0530c52e4032cb9a): the single-workflow assertion
+    // above doesn't catch a future drift where only one of the two
+    // workflows gets its App-token action bumped. This test reads BOTH
+    // workflow YAMLs + asserts identical SHAs. If release.yml moves to a
+    // newer SHA without sync-roadmap-data.yml getting the same bump (or
+    // vice-versa), this test fails — forcing the bump to be atomic.
+    const releaseYmlPath = path.join(REPO_ROOT, '.github/workflows/release.yml');
+    const releaseContent = fs.readFileSync(releaseYmlPath, 'utf8');
+    const extract = (src) => {
+      const m = src.match(/actions\/create-github-app-token@([0-9a-f]{40})/);
+      return m ? m[1] : null;
+    };
+    const syncSha = extract(content);
+    const releaseSha = extract(releaseContent);
+    expect(syncSha).not.toBeNull();
+    expect(releaseSha).not.toBeNull();
+    expect(syncSha).toBe(releaseSha);
   });
 
   test('SHY-0063: App-token step references RELEASE_APP_ID + RELEASE_APP_PRIVATE_KEY secrets', () => {
@@ -183,6 +204,15 @@ describe('.github/workflows/sync-roadmap-data.yml', () => {
     // unnecessarily (mutation latency + audit-log noise for empty diffs).
     expect(content).toMatch(/git diff --quiet public\/roadmap-data\.json/);
     expect(content).toMatch(/no changes/);
+  });
+
+  test('SHY-0063 (I1 from reviewer): file-absent guard precedes the diff (avoids cryptic set -euo exit)', () => {
+    // If the regen script silently fails without producing the file, the
+    // subsequent `git diff --quiet <path>` exits non-zero on a missing path
+    // and set -euo pipefail kills the run with no useful diagnostic. The
+    // existence check produces an actionable ::error:: log instead.
+    expect(content).toMatch(/if\s*\[\s*!\s*-f\s+public\/roadmap-data\.json\s*\]/);
+    expect(content).toMatch(/was not produced by the sync script/);
   });
 
   test('SHY-0063: no echo / set -x near the App token env (secret hygiene)', () => {
