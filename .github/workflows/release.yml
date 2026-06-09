@@ -357,30 +357,38 @@ jobs:
           # release runs are rare and concurrent commits on main during
           # a release window are even rarer.
 
-          # Step 1 (commit payload). Use jq to
-          # safely encode file contents (base64) and construct the
-          # JSON. --rawfile reads the file verbatim; @base64 in jq
-          # produces RFC-4648-compliant output that GraphQL accepts
-          # without padding/newline issues.
-          ADDITIONS=$(jq -n \
-            --rawfile c1 app/build.gradle.kts \
-            --rawfile c2 app/src/main/play/release-notes/en-US/internal.txt \
-            --rawfile c3 app/src/main/play/release-notes/en-US/default.txt \
-            '[
-              {path: "app/build.gradle.kts", contents: ($c1|@base64)},
-              {path: "app/src/main/play/release-notes/en-US/internal.txt", contents: ($c2|@base64)},
-              {path: "app/src/main/play/release-notes/en-US/default.txt", contents: ($c3|@base64)}
-            ]')
-
+          # SHY-0065: build the entire GraphQL request body in ONE jq
+          # null-input invocation. The prior two-step pattern (mirrored on
+          # sync-roadmap-data.yml until SHY-0064 fixed it) used a second jq
+          # to pass a base64-encoded additions array via argjson — once
+          # payload exceeds Linux's effective ARG_MAX (typically ~1.5MB on
+          # GitHub-hosted runners), that path dies with `Argument list too
+          # long`. release.yml's current payload (~24KB base64) is well below
+          # that limit, but Play Store release-notes can grow + future builds
+          # may add files, so we apply the SHY-0064 fix preventively. Pattern:
+          # --rawfile reads each file inside this single jq, and the additions
+          # array is constructed inline within the jq filter via ($cN|@base64).
+          # The only large value is the final PAYLOAD bash variable, which is
+          # piped to `gh api graphql --input -` via stdin — kernel argv limits
+          # don't apply to bash variables, only to execve(argv).
           PAYLOAD=$(jq -n \
             --arg repo "${{ github.repository }}" \
             --arg branch "${BRANCH}" \
             --arg oid "${PARENT_SHA}" \
             --arg msg "chore: release v${VERSION}" \
-            --argjson additions "$ADDITIONS" \
+            --rawfile c1 app/build.gradle.kts \
+            --rawfile c2 app/src/main/play/release-notes/en-US/internal.txt \
+            --rawfile c3 app/src/main/play/release-notes/en-US/default.txt \
             '{
               query: "mutation($repo: String!, $branch: String!, $oid: GitObjectID!, $msg: String!, $additions: [FileAddition!]!) { createCommitOnBranch(input: { branch: { repositoryNameWithOwner: $repo, branchName: $branch }, expectedHeadOid: $oid, fileChanges: { additions: $additions }, message: { headline: $msg } }) { commit { oid url } } }",
-              variables: {repo: $repo, branch: $branch, oid: $oid, msg: $msg, additions: $additions}
+              variables: {
+                repo: $repo, branch: $branch, oid: $oid, msg: $msg,
+                additions: [
+                  {path: "app/build.gradle.kts", contents: ($c1|@base64)},
+                  {path: "app/src/main/play/release-notes/en-US/internal.txt", contents: ($c2|@base64)},
+                  {path: "app/src/main/play/release-notes/en-US/default.txt", contents: ($c3|@base64)}
+                ]
+              }
             }')
 
           # Step 3: Submit the mutation. gh api graphql --input - reads
