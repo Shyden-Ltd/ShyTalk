@@ -1711,10 +1711,15 @@ describe('SHY-0078: idempotency guard against Projects v2 stale-empty reads (moc
     expect(r.code).toBe(0);
     const lines = readRecording(mock.recording);
     expect(lines.filter((l) => l.startsWith('issue create'))).toEqual([]);
-    expect(lines.find((l) => l.startsWith('issue list') && l.includes('SHY-8901:'))).toBeDefined();
+    // The dedup search fired EXACTLY once for this story (not zero — guard
+    // reached; not twice — no spurious re-check).
+    expect(lines.filter((l) => l.startsWith('issue list') && l.includes('SHY-8901:'))).toHaveLength(
+      1,
+    );
     expect(r.stderr).toMatch(/dedup-guard hits: 1/);
     expect(r.stderr).toMatch(/existing issue #900 found/);
-    expect(r.stderr).toMatch(/1 skipped/);
+    // Skipped, NOT created or updated (the next fresh-map sync refreshes it).
+    expect(r.stderr).toMatch(/0 created \(0 drafts, 0 issues\), 0 updated, 1 skipped/);
   });
 
   test('empty-read is retried once: two items(first:100) queries before the board is accepted empty', () => {
@@ -1785,6 +1790,21 @@ describe('SHY-0078: idempotency guard against Projects v2 stale-empty reads (moc
     expect(
       lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes('title=SHY-8906:')),
     ).toBeDefined();
+  });
+
+  test('jq startswith filter is value-level prefix-exact: a SHY-0070 response does not match a SHY-0007 query', () => {
+    // The mock cats fixed responses (it never runs --jq), so the mock-based
+    // prefix test above only proves the SEARCH STRING is per-id. This proves
+    // the actual --jq filter the script passes is prefix-exact against real
+    // data: a SHY-0070 row must NOT satisfy startswith("SHY-0007:").
+    const input = JSON.stringify([
+      { title: 'SHY-0070: unrelated', number: 70 },
+      { title: 'SHY-0007: the real one', number: 7 },
+    ]);
+    const filter = '.[] | select(.title | startswith("SHY-0007:")) | .number';
+    const res = spawnSync('jq', ['-r', filter], { input, encoding: 'utf-8' });
+    expect(res.status).toBe(0);
+    expect(res.stdout.trim()).toBe('7'); // only the exact SHY-0007 match, never 70
   });
 
   test('structural: dedup search is prefix-exact (startswith with the colon) + items-map retry present', () => {
