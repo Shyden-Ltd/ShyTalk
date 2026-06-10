@@ -178,22 +178,49 @@ body_hash() {
     | awk '{print $1}'
 }
 
-# Extract a frontmatter field value (echoes empty if absent).
-fm_get() {
-  awk -v F="$2" '
-    BEGIN{n=0}
-    /^---[[:space:]]*$/{n++; if(n==2) exit; next}
-    n==1 && $0 ~ "^"F":" {
-      sub("^"F":[[:space:]]*","")
-      print
-      exit
-    }
-  ' "$1"
-}
+# ── Single-pass story parser (SHY-0040) ──────────────────────────
+# One awk invocation per file extracts EVERY field the sync needs,
+# replacing the previous per-field fm_get/extract_title fan-out
+# (~15 subprocess forks per story; ~565ms/file → the whole corpus
+# took 37s). Values are emitted \x1f-separated (ASCII Unit Separator
+# — cannot appear in valid UTF-8 YAML frontmatter and no editor or
+# serializer produces it) and consumed into PS_* globals via `read`.
+# All values are whitespace-trimmed (fixes the padded-frontmatter
+# label-corruption bug: `priority:   P1   ` used to leak its spaces
+# into the GitHub label).
+PS_ID="" PS_TITLE="" PS_PRIORITY="" PS_EFFORT="" PS_TYPE="" PS_ROADMAPS=""
+PS_STATUS_LC="" PS_PRIORITY_LC="" PS_EFFORT_LC="" PS_ROADMAPS_LC=""
 
-# Extract the `# <Title>` h1 line text (without the leading `# `).
-extract_title() {
-  awk 'NR>1 && /^# /{sub(/^# /,""); print; exit}' "$1"
+parse_story_fields() {
+  local rec
+  rec="$(awk '
+    function trim(s){ gsub(/^[[:space:]]+/,"",s); gsub(/[[:space:]]+$/,"",s); gsub(US,"",s); return s }
+    BEGIN{ n=0; title=""; US=sprintf("%c",31) }
+    /^---[[:space:]]*$/ { n++; next }
+    n==1 {
+      line=$0
+      if (line !~ /^[A-Za-z_]+:/) next
+      key=line; sub(/:.*$/,"",key)
+      val=line; sub(/^[^:]*:/,"",val); val=trim(val)
+      if      (key=="id")          id=val
+      else if (key=="status")      status=val
+      else if (key=="priority")    priority=val
+      else if (key=="effort")      effort=val
+      else if (key=="type")        type=val
+      else if (key=="roadmap_ids") roadmaps=val
+      next
+    }
+    n>=2 && title=="" && /^# / { t=$0; sub(/^# /,"",t); title=trim(t) }
+    END{
+      gsub(/^\[/,"",roadmaps); gsub(/\]$/,"",roadmaps); gsub(/[[:space:]]/,"",roadmaps)
+      status_lc=tolower(status); gsub(/ /,"-",status_lc)
+      printf "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s", \
+        id, US, title, US, priority, US, effort, US, type, US, roadmaps, US, \
+        status_lc, US, tolower(priority), US, tolower(effort), US, tolower(roadmaps)
+    }
+  ' "$1")"
+  IFS=$'\x1f' read -r PS_ID PS_TITLE PS_PRIORITY PS_EFFORT PS_TYPE PS_ROADMAPS \
+    PS_STATUS_LC PS_PRIORITY_LC PS_EFFORT_LC PS_ROADMAPS_LC <<<"$rec"
 }
 
 # Pre-flight: required env vars. Skipped in --dry-run mode.
@@ -300,24 +327,19 @@ ensure_label() {
   return 0
 }
 
-# Build label set from frontmatter (one per line).
+# Build label set (one per line) from the PS_* globals populated by
+# parse_story_fields — pure bash, zero subprocesses (SHY-0040).
 build_labels() {
-  local file="$1"
-  local status priority effort type
-  status="$(fm_get "$file" status | tr ' ' '-' | tr '[:upper:]' '[:lower:]')"
-  priority="$(fm_get "$file" priority | tr '[:upper:]' '[:lower:]')"
-  effort="$(fm_get "$file" effort | tr '[:upper:]' '[:lower:]')"
-  type="$(fm_get "$file" type)"
   printf 'story\n'
-  printf 'status:%s\n' "$status"
-  printf 'priority:%s\n' "$priority"
-  printf 'effort:%s\n' "$effort"
-  printf 'type:%s\n' "$type"
-  local roadmaps
-  roadmaps="$(fm_get "$file" roadmap_ids | sed 's/^\[//; s/\]$//' | tr -d ' ')"
-  if [ -n "$roadmaps" ]; then
-    printf '%s\n' "$roadmaps" | tr ',' '\n' | while IFS= read -r r; do
-      [ -n "$r" ] && printf 'roadmap:%s\n' "$(printf '%s' "$r" | tr '[:upper:]' '[:lower:]')"
+  printf 'status:%s\n' "$PS_STATUS_LC"
+  printf 'priority:%s\n' "$PS_PRIORITY_LC"
+  printf 'effort:%s\n' "$PS_EFFORT_LC"
+  printf 'type:%s\n' "$PS_TYPE"
+  if [ -n "$PS_ROADMAPS_LC" ]; then
+    local r
+    local IFS=','
+    for r in $PS_ROADMAPS_LC; do
+      [ -n "$r" ] && printf 'roadmap:%s\n' "$r"
     done
   fi
 }
@@ -340,7 +362,7 @@ ensure_labels_for_story() {
     else
       verbose "ensure_labels_for_story: dropping '${label}' (ensure failed) from --label CSV"
     fi
-  done < <(build_labels "$file")
+  done < <(build_labels)
   printf '%s\n' "$verified_csv"
 }
 
@@ -558,11 +580,13 @@ set_project_field_text() {
 # Populate every applicable Project v2 field for the given item from frontmatter.
 populate_project_fields() {
   local item_id="$1" file="$2" id="$3"
+  # SHY-0040: fields come from the PS_* globals (parse_story_fields ran
+  # in sync_one) — the story file is read exactly once per sync_one.
   local pri effort type roadmaps
-  pri="$(fm_get "$file" priority)"
-  effort="$(fm_get "$file" effort)"
-  type="$(fm_get "$file" type)"
-  roadmaps="$(fm_get "$file" roadmap_ids | sed 's/^\[//; s/\]$//; s/, */, /g')"
+  pri="$PS_PRIORITY"
+  effort="$PS_EFFORT"
+  type="$PS_TYPE"
+  roadmaps="${PS_ROADMAPS//,/, }"
   # Epic field is deferred to a follow-up SHY (the board currently has 3-digit
   # option names like "EPIC-001" but SHY frontmatter uses 4-digit "EPIC-0001";
   # the operator-side schema fix + option-name reconciliation is tracked
@@ -675,7 +699,7 @@ build_issue_body() {
   local slug
   slug="$(basename "$file" .md)"
   local title
-  title="$(extract_title "$file")"
+  title="$PS_TITLE"
   local now
   now="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
   local sha
@@ -787,7 +811,8 @@ update_issue_body() {
 sync_one() {
   local file="$1"
   local id
-  id="$(fm_get "$file" id)"
+  parse_story_fields "$file"
+  id="$PS_ID"
   if [ -z "$id" ]; then
     emit "$file" "validate" "no id frontmatter; skipping"
     N_FAILED=$((N_FAILED + 1))
@@ -828,7 +853,9 @@ sync_one() {
 
   if [ -z "$issue_num" ]; then
     local title body create_response
-    title="${id}: $(extract_title "$file" | sed "s/^${id}: //")"
+    local raw_title="$PS_TITLE"
+    raw_title="${raw_title#"${id}": }"
+    title="${id}: ${raw_title}"
     body="$(build_issue_body "$file" "$hash")"
     # SHY-0067: capture create stdout (URL) so the caller can derive node_id.
     # Pass the *verified* label CSV (reviewer C1) — any label whose create
