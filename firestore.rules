@@ -253,6 +253,10 @@ service cloud.firestore {
       // setting/clearing it client-side after their corresponding endpoint
       // call. Subcollections (messages, seat-requests, etc.) keep their
       // existing rules — only the room DOC's update verb is locked down here.
+      // Deploy evidence (SHY-0004, 2026-06-10): the owning server path
+      // express-api/src/routes/room-mutations.js is live on prod
+      // (byte-match to commit 267d2af7e74 / PR #863), so this lockdown is
+      // safe — clients mutate rooms via the Express endpoints.
       allow update: if false;
       // Delete: only owner
       allow delete: if request.auth != null
