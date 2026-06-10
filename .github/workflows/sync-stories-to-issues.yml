@@ -1,7 +1,8 @@
 name: Sync SHY Stories to GitHub Issues
 
-# One-way mirror of .project/stories/SHY-NNNN-*.md → GitHub Issues + Projects v2.
-# Spec: .project/stories/SHY-0002-wire-github-integration.md
+# One-way mirror of .project/stories/SHY-NNNN-*.md → Projects v2 board
+# (draft items for non-bugs) + GitHub Issues (bug reports, bugs only).
+# Spec: .project/stories/SHY-0074-mirror-fidelity-board-body-labels.md
 # Operator-side prerequisite: provision GH_PAT_PROJECT secret (fine-grained PAT
 # with issues:write + pull-requests:write + project:write — the auto
 # GITHUB_TOKEN cannot carry project:write).
@@ -19,6 +20,10 @@ on:
         description: "Dry-run (print actions; no API mutations)"
         type: boolean
         default: false
+      rebuild:
+        description: "DESTRUCTIVE one-shot migration: delete every board item + story-labeled issue, then resync fresh (sets REBUILD_CONFIRM=yes). Combine with dry_run to preview."
+        type: boolean
+        default: false
 
 # Workflow-level concurrency guarantees only one sync runs at a time per ref.
 # cancel-in-progress: false because we never want to cancel an in-flight sync
@@ -34,10 +39,12 @@ jobs:
   sync:
     name: Mirror stories to Issues
     runs-on: ubuntu-latest
-    # SHY-0067: bumped from 10 to 15 to give first-run headroom for label auto-
-    # creation (~33 labels × ~200ms) + project board field provisioning + per-
-    # issue project-item-add + 6 field-sets per SHY. Rough first-run budget:
-    # 53 SHYs × ~14 API calls each ≈ 740 calls ≈ ~150 sec. 15 min = 5× headroom.
+    # SHY-0074 v2 call budget: ONE paginated items-map query (~1 call/100
+    # items) replaces ~75 per-story `gh issue list` searches. Steady-state
+    # no-change run ≈ 2-3 calls total. Full create run: ~75 stories ×
+    # ~8 calls (draft-or-issue create + 6 field-sets) ≈ ~600 calls.
+    # Full --rebuild: ≈75 item deletes + ≈10 issue deletes + the create run
+    # ≈ ~330-700 calls ≈ ~2-3 min. 15 min ≈ 5× headroom.
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -58,13 +65,20 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PAT_PROJECT }}
           GH_PAT_PROJECT: ${{ secrets.GH_PAT_PROJECT }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
+          REBUILD: ${{ github.event.inputs.rebuild }}
         run: |
           if [ -z "${GH_PAT_PROJECT:-}" ]; then
             echo "::warning::GH_PAT_PROJECT secret not set — sync will be a no-op until operator provisions it." >&2
             exit 0
           fi
-          if [ "${DRY_RUN:-}" = "true" ]; then
-            bash scripts/sync-stories-to-issues.sh --all --dry-run --verbose
-          else
-            bash scripts/sync-stories-to-issues.sh --all
+          args=(--all)
+          if [ "${REBUILD:-}" = "true" ]; then
+            # SHY-0074 one-shot migration: the dispatch boolean IS the
+            # operator sanction — it satisfies the script's confirm gate.
+            args=(--rebuild)
+            export REBUILD_CONFIRM=yes
           fi
+          if [ "${DRY_RUN:-}" = "true" ]; then
+            args+=(--dry-run --verbose)
+          fi
+          bash scripts/sync-stories-to-issues.sh "${args[@]}"

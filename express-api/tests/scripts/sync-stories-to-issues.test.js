@@ -82,6 +82,14 @@ function makeMockGh() {
   // for the (cmd, subcmd) pair if present, else echoes empty.
   const mockSource = `#!/usr/bin/env bash
 echo "$@" >>"${recording}"
+# SHY-0074 v2: the items-map query is also 'api graphql' but needs its own
+# response channel so it doesn't collide with mutation/lookup fixtures.
+case "$*" in
+  *"items(first: 100"*)
+    if [ -f "${dir}/gh-responses-items-query" ]; then cat "${dir}/gh-responses-items-query"; fi
+    exit 0
+    ;;
+esac
 key="$1-$2"
 respfile="${dir}/gh-responses-\${key}"
 if [ -f "\${respfile}" ]; then
@@ -95,6 +103,17 @@ exit 0
 `;
   fs.writeFileSync(ghPath, mockSource);
   fs.chmodSync(ghPath, 0o755);
+  // Default: an empty board — stories route down the create path.
+  fs.writeFileSync(
+    path.join(dir, 'gh-responses-items-query'),
+    JSON.stringify({
+      data: {
+        organization: {
+          projectV2: { items: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } },
+        },
+      },
+    }),
+  );
   return { ghPath, dir, recording };
 }
 
@@ -154,7 +173,7 @@ describe('scripts/sync-stories-to-issues.sh', () => {
     it('exits 2 when neither --all nor --story given', () => {
       const { code, stderr } = runScript(['--verbose']);
       expect(code).toBe(2);
-      expect(stderr).toMatch(/specify --all or --story/);
+      expect(stderr).toMatch(/specify --all, --story SHY-NNNN, or --rebuild/);
     });
 
     it('exits 2 when --story given without an argument', () => {
@@ -203,18 +222,28 @@ describe('scripts/sync-stories-to-issues.sh', () => {
       // Should mention each live story.
       expect(stderr).toMatch(/SHY-0001/);
       expect(stderr).toMatch(/SHY-0002/);
-      // Summary line.
-      expect(stderr).toMatch(/Sync result: \d+ created, \d+ updated, \d+ skipped, \d+ failed/);
+      // Summary line (SHY-0074 v2 form: created splits into drafts + issues).
+      expect(stderr).toMatch(
+        /Sync result: \d+ created \(\d+ drafts, \d+ issues\), \d+ updated, \d+ skipped, \d+ failed/,
+      );
       // DRY-RUN tag visible.
       expect(stderr).toMatch(/DRY-RUN/);
     });
   });
 
-  describe('mock-gh: create flow (no existing issue)', () => {
-    it('calls `gh issue create` with the constructed title + labels', () => {
+  describe('mock-gh: create flow (no existing board item)', () => {
+    it('SHY-0001 (type: infra) creates a board DRAFT item, not a GitHub issue (SHY-0074 v2 routing)', () => {
       const { ghPath, recording, dir } = makeMockGh();
-      // Mock `gh issue list` returns empty JSON array (no existing issue).
-      fs.writeFileSync(path.join(dir, 'gh-responses-issue-list'), '');
+      // Project lookup + draft-create mutations share the graphql channel.
+      fs.writeFileSync(
+        path.join(dir, 'gh-responses-api-graphql'),
+        JSON.stringify({
+          data: {
+            organization: { projectV2: { id: 'PVT_test', fields: { nodes: [] } } },
+            addProjectV2DraftIssue: { projectItem: { id: 'PVTI_draft' } },
+          },
+        }),
+      );
 
       const { code } = runScript(['--story', 'SHY-0001'], {
         env: {
@@ -226,14 +255,15 @@ describe('scripts/sync-stories-to-issues.sh', () => {
       expect(code).toBe(0);
 
       const calls = readRecording(recording);
-      // At least one `issue list` (lookup) and one `issue create`.
-      const hasList = calls.some((c) => c.startsWith('issue list'));
-      const hasCreate = calls.some((c) => c.startsWith('issue create'));
-      expect(hasList).toBe(true);
-      expect(hasCreate).toBe(true);
-      // Title includes SHY-0001:.
-      const createCall = calls.find((c) => c.startsWith('issue create'));
-      expect(createCall).toMatch(/SHY-0001:/);
+      // Non-bug stories never touch the Issues tab…
+      expect(calls.some((c) => c.startsWith('issue create'))).toBe(false);
+      // …and the items map replaced per-story `issue list` lookups.
+      expect(calls.some((c) => c.startsWith('issue list'))).toBe(false);
+      // The draft create carries the constructed title.
+      const draftCall = calls.find(
+        (c) => c.includes('addProjectV2DraftIssue') && c.includes('title=SHY-0001:'),
+      );
+      expect(draftCall).toBeDefined();
     });
   });
 
@@ -262,12 +292,34 @@ describe('scripts/sync-stories-to-issues.sh', () => {
       ).stdout.trim();
 
       const { ghPath, recording, dir } = makeMockGh();
-      // `issue list` returns one existing issue.
-      fs.writeFileSync(path.join(dir, 'gh-responses-issue-list'), '42\n');
-      // `issue view` returns a body containing the SAME body-hash.
+      // SHY-0074 v2: SHY-0001 (type: infra, status: Done) is DRAFT-backed.
+      // The items map carries the draft body whose footer stores the SAME
+      // hash + the matching status marker → full skip.
       fs.writeFileSync(
-        path.join(dir, 'gh-responses-issue-view'),
-        `Some body content\n\n_Last synced: 2026-01-01T00:00:00Z from commit abc body-hash: ${hash}_\n`,
+        path.join(dir, 'gh-responses-items-query'),
+        JSON.stringify({
+          data: {
+            organization: {
+              projectV2: {
+                items: {
+                  pageInfo: { hasNextPage: false, endCursor: null },
+                  nodes: [
+                    {
+                      id: 'PVTI_existing',
+                      content: {
+                        __typename: 'DraftIssue',
+                        id: 'DI_existing',
+                        title: 'SHY-0001: Establish agile workflow',
+                        body: `Some body content\n\n_Status: Done_\n_Last synced: 2026-01-01T00:00:00Z from commit abc body-hash: ${hash}_\n`,
+                      },
+                      fieldValueByName: { text: 'SHY-0001' },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        }),
       );
 
       const { code, stderr } = runScript(['--story', 'SHY-0001', '--verbose'], {
@@ -279,9 +331,9 @@ describe('scripts/sync-stories-to-issues.sh', () => {
       });
       expect(code).toBe(0);
       const calls = readRecording(recording);
-      // Should NOT have called `issue edit`.
-      const hasEdit = calls.some((c) => c.startsWith('issue edit'));
-      expect(hasEdit).toBe(false);
+      // No body refresh of either backing.
+      expect(calls.some((c) => c.startsWith('issue edit'))).toBe(false);
+      expect(calls.some((c) => c.includes('updateProjectV2DraftIssue'))).toBe(false);
       // Should mention skipping or unchanged.
       expect(stderr).toMatch(/unchanged|skipping|body-hash unchanged/);
     });

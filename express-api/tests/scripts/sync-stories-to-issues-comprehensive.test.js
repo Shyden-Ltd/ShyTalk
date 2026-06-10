@@ -82,6 +82,15 @@ function makeMockGh() {
   fs.writeFileSync(recording, '');
   const mockSource = `#!/usr/bin/env bash
 echo "$@" >>"${recording}"
+# SHY-0074 v2: the items-map query is also 'api graphql' but needs its own
+# response/exit-code channel — it must not collide with mutation fixtures.
+case "$*" in
+  *"items(first: 100"*)
+    if [ -f "${dir}/gh-exit-items-query" ]; then exit "$(cat "${dir}/gh-exit-items-query")"; fi
+    if [ -f "${dir}/gh-responses-items-query" ]; then cat "${dir}/gh-responses-items-query"; fi
+    exit 0
+    ;;
+esac
 key="$1-$2"
 respfile="${dir}/gh-responses-\${key}"
 if [ -f "\${respfile}" ]; then
@@ -99,7 +108,121 @@ exit 0
 `;
   fs.writeFileSync(ghPath, mockSource);
   fs.chmodSync(ghPath, 0o755);
+  // Default: an empty board — every story routes down the create path.
+  fs.writeFileSync(
+    path.join(dir, 'gh-responses-items-query'),
+    JSON.stringify({
+      data: {
+        organization: {
+          projectV2: { items: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } },
+        },
+      },
+    }),
+  );
   return { ghPath, dir, recording };
+}
+
+/**
+ * SHY-0074 v2 routes only `type: bug` stories to `gh issue create` — these
+ * runtime tests pin the ISSUE call sequence, so they need a bug fixture
+ * (the real SHY-0001 is infra → draft-routed). STORIES_DIR isolates the
+ * run from the live corpus.
+ */
+function makeBugStoryDir() {
+  const storiesDir = tempDir('stories67-');
+  fs.writeFileSync(
+    path.join(storiesDir, 'SHY-7001-runtime-fixture.md'),
+    `---
+id: SHY-7001
+status: Draft
+owner: claude
+created: 2026-06-10
+priority: P1
+effort: S
+type: bug
+roadmap_ids: [G001]
+pr:
+---
+
+# SHY-7001: Runtime fixture bug story
+
+## User Story
+
+As a test, I want a valid bug story, so that the sync script processes me.
+
+## Why
+
+Fixture.
+
+## Acceptance Criteria
+
+### Happy path
+- [ ] Fixture bullet.
+
+### Error paths
+N/A — fixture.
+
+### Edge cases
+N/A — fixture.
+
+### Performance
+N/A — fixture.
+
+### Security
+N/A — fixture.
+
+### UX
+N/A — fixture.
+
+### i18n
+N/A — fixture.
+
+### Observability
+N/A — fixture.
+
+## BDD Scenarios
+
+**Scenario: fixture**
+- **Given** a fixture
+- **When** synced
+- **Then** it works
+
+## Test Plan
+
+Covered by the harness.
+
+## Out of Scope
+
+Everything else.
+
+## Dependencies
+
+None.
+
+## Risks & Mitigations
+
+None.
+
+## Definition of Done
+
+- [ ] Synced.
+
+## Notes
+
+Fixture.
+`,
+  );
+  return storiesDir;
+}
+
+function mockEnv(ghPath, storiesDir) {
+  return {
+    ...process.env,
+    GH: ghPath,
+    GH_TOKEN: 'fake-pat-for-test',
+    GH_PAT_PROJECT: 'fake-pat-for-test',
+    STORIES_DIR: storiesDir,
+  };
 }
 
 function readRecording(recordingPath) {
@@ -311,20 +434,13 @@ describe('SHY-0067: script body — issue body passed via stdin (safe shell esca
 // the API call SEQUENCE matches the SHY-0067 contract.
 
 describe('SHY-0067: runtime — label auto-create flow (mock-gh)', () => {
-  test('first sync invokes `gh label list` then `gh label create` before `issue create`', () => {
+  test('first sync of a bug story invokes `gh label list` then `gh label create` before `issue create`', () => {
     const { ghPath, recording, dir } = makeMockGh();
-    // `issue list` returns empty (no existing issue).
-    fs.writeFileSync(path.join(dir, 'gh-responses-issue-list'), '');
     // `label list` returns empty array (no labels exist yet).
     fs.writeFileSync(path.join(dir, 'gh-responses-label-list'), '[]');
 
-    const { code } = runScript(['--story', 'SHY-0001'], {
-      env: {
-        ...process.env,
-        GH: ghPath,
-        GH_TOKEN: 'fake-pat-for-test',
-        GH_PAT_PROJECT: 'fake-pat-for-test',
-      },
+    const { code } = runScript(['--story', 'SHY-7001'], {
+      env: mockEnv(ghPath, makeBugStoryDir()),
     });
     expect(code).toBe(0);
 
@@ -342,18 +458,11 @@ describe('SHY-0067: runtime — label auto-create flow (mock-gh)', () => {
 describe('SHY-0067: runtime — silent-failure removal (mock-gh)', () => {
   test('script exits non-zero when `gh issue create` fails', () => {
     const { ghPath, dir } = makeMockGh();
-    // Mock issue list empty (so we go down the create path).
-    fs.writeFileSync(path.join(dir, 'gh-responses-issue-list'), '');
     // Per-call exit override: `issue create` returns non-zero.
     fs.writeFileSync(path.join(dir, 'gh-exit-cmd-issue-create'), '1');
 
-    const { code, stderr } = runScript(['--story', 'SHY-0001'], {
-      env: {
-        ...process.env,
-        GH: ghPath,
-        GH_TOKEN: 'fake-pat-for-test',
-        GH_PAT_PROJECT: 'fake-pat-for-test',
-      },
+    const { code, stderr } = runScript(['--story', 'SHY-7001'], {
+      env: mockEnv(ghPath, makeBugStoryDir()),
     });
     // Pre-SHY-0067: code would be 0 (silent success). Post-fix: code is 40.
     expect(code).toBe(40);
@@ -365,7 +474,6 @@ describe('SHY-0067: runtime — silent-failure removal (mock-gh)', () => {
 describe('SHY-0067: runtime — Project v2 board addition (mock-gh)', () => {
   test('script invokes `gh api graphql` with addProjectV2ItemById after `issue create`', () => {
     const { ghPath, recording, dir } = makeMockGh();
-    fs.writeFileSync(path.join(dir, 'gh-responses-issue-list'), '');
     fs.writeFileSync(path.join(dir, 'gh-responses-label-list'), '[]');
     // `issue create` returns the issue URL (gh issue create's default stdout).
     fs.writeFileSync(
@@ -393,110 +501,28 @@ describe('SHY-0067: runtime — Project v2 board addition (mock-gh)', () => {
       }),
     );
 
-    const { code } = runScript(['--story', 'SHY-0001'], {
-      env: {
-        ...process.env,
-        GH: ghPath,
-        GH_TOKEN: 'fake-pat-for-test',
-        GH_PAT_PROJECT: 'fake-pat-for-test',
-      },
+    const { code } = runScript(['--story', 'SHY-7001'], {
+      env: mockEnv(ghPath, makeBugStoryDir()),
     });
     expect(code).toBe(0);
 
     const calls = readRecording(recording);
-    // At least one `api graphql` call containing addProjectV2ItemById.
-    const projectAdd = calls.find(
+    // The board-add mutation must appear AFTER the issue create.
+    const createIdx = calls.findIndex((c) => c.startsWith('issue create'));
+    const projectAddIdx = calls.findIndex(
       (c) => c.startsWith('api graphql') && c.includes('addProjectV2ItemById'),
     );
-    expect(projectAdd).toBeDefined();
+    expect(createIdx).toBeGreaterThanOrEqual(0);
+    expect(projectAddIdx).toBeGreaterThan(createIdx);
   });
 });
 
-// SHY-0067 reviewer-I3: runtime coverage gap — the project-board addition
-// test (above) verifies `addProjectV2ItemById` is invoked but not that the
-// per-field updateProjectV2ItemFieldValue mutations follow. populate_project_
-// fields requires the project lookup response to include SOME fields the
-// SHY frontmatter populates; with `fields: { nodes: [] }` the script has
-// nothing to set. This test seeds the project-lookup response with Pri +
-// SHY ID fields so populate_project_fields has something to drive.
-describe('SHY-0067: runtime — Project v2 field population (mock-gh, reviewer-I3)', () => {
-  test('script invokes updateProjectV2ItemFieldValue for at least one field after item-add', () => {
-    const { ghPath, recording, dir } = makeMockGh();
-    fs.writeFileSync(path.join(dir, 'gh-responses-issue-list'), '');
-    fs.writeFileSync(path.join(dir, 'gh-responses-label-list'), '[]');
-    fs.writeFileSync(
-      path.join(dir, 'gh-responses-issue-create'),
-      'https://github.com/Shyden-Ltd/ShyTalk/issues/100\n',
-    );
-    fs.writeFileSync(path.join(dir, 'gh-responses-issue-view'), 'I_test_node_id\n');
-    // Project lookup returns Pri + SHY ID + Type fields so populate_project_
-    // fields has targets to update.
-    fs.writeFileSync(
-      path.join(dir, 'gh-responses-api-graphql'),
-      JSON.stringify({
-        data: {
-          organization: {
-            projectV2: {
-              id: 'PVT_kwDOC_test',
-              fields: {
-                nodes: [
-                  {
-                    __typename: 'ProjectV2SingleSelectField',
-                    id: 'PVTSSF_pri',
-                    name: 'Pri',
-                    dataType: 'SINGLE_SELECT',
-                    options: [
-                      { id: 'OPT_P0', name: 'P0' },
-                      { id: 'OPT_P1', name: 'P1' },
-                    ],
-                  },
-                  {
-                    __typename: 'ProjectV2Field',
-                    id: 'PVTF_shyid',
-                    name: 'SHY ID',
-                    dataType: 'TEXT',
-                  },
-                  {
-                    __typename: 'ProjectV2SingleSelectField',
-                    id: 'PVTSSF_type',
-                    name: 'Type',
-                    dataType: 'SINGLE_SELECT',
-                    options: [{ id: 'OPT_infra', name: 'infra' }],
-                  },
-                ],
-              },
-            },
-          },
-          addProjectV2ItemById: { item: { id: 'PVTI_lADO_test' } },
-          updateProjectV2ItemFieldValue: { projectV2Item: { id: 'PVTI_lADO_test' } },
-        },
-      }),
-    );
-
-    const { code } = runScript(['--story', 'SHY-0001'], {
-      env: {
-        ...process.env,
-        GH: ghPath,
-        GH_TOKEN: 'fake-pat-for-test',
-        GH_PAT_PROJECT: 'fake-pat-for-test',
-      },
-    });
-    expect(code).toBe(0);
-
-    const calls = readRecording(recording);
-    // At least one updateProjectV2ItemFieldValue call must appear AFTER the
-    // addProjectV2ItemById call — the field-set step depends on the item ID
-    // returned by the add step.
-    const addIdx = calls.findIndex(
-      (c) => c.startsWith('api graphql') && c.includes('addProjectV2ItemById'),
-    );
-    const fieldSetIdx = calls.findIndex(
-      (c) => c.startsWith('api graphql') && c.includes('updateProjectV2ItemFieldValue'),
-    );
-    expect(addIdx).toBeGreaterThanOrEqual(0);
-    expect(fieldSetIdx).toBeGreaterThan(addIdx);
-  });
-});
+// SHY-0067 reviewer-I3's "at least one field" runtime test used to live
+// here. SHY-0074 DELETED it: that assertion shape is banned (it let the
+// all-To-Do board defect ship), and its replacement is the per-value
+// create+update field matrix in sync-stories-to-issues-board-fields.test.js
+// (every Status/Pri/Effort/Type/SHY ID/Roadmap value asserted by exact
+// option-id/text on a per-item basis).
 
 // SHY-0067 reviewer-I4: extended summary format introduced by the fix is
 // not covered by either test file. Assert it explicitly so a future
@@ -513,45 +539,45 @@ describe('SHY-0067: extended summary format (mock-gh, reviewer-I4)', () => {
     );
     expect(res.status ?? 1).toBe(0);
     const stderr = res.stderr ?? '';
-    // Original short form still present.
-    expect(stderr).toMatch(/Sync result: \d+ created, \d+ updated, \d+ skipped, \d+ failed/);
-    // Extended form (SHY-0067) — counters that didn't exist pre-fix.
+    // SHY-0074 v2 form: created splits into drafts + issues.
+    expect(stderr).toMatch(
+      /Sync result: \d+ created \(\d+ drafts, \d+ issues\), \d+ updated, \d+ skipped, \d+ failed/,
+    );
+    // Extended counters (SHY-0067 + SHY-0074).
     expect(stderr).toMatch(/labels created: \d+/);
     expect(stderr).toMatch(/project items added: \d+/);
+    expect(stderr).toMatch(/project items deleted: \d+/);
+    expect(stderr).toMatch(/issues deleted: \d+/);
     expect(stderr).toMatch(/project fields updated: \d+/);
+    expect(stderr).toMatch(/comments posted: \d+/);
+    expect(stderr).toMatch(/issues closed: \d+/);
     expect(stderr).toMatch(/type-field auto-created: (yes|no)/);
   });
 });
 
-// SHY-0067 reviewer-I5: PIPESTATUS fix for find_issue_for has zero runtime
-// coverage. The per-cmd exit override in mock-gh lets us simulate a
-// transient gh issue list failure + assert the script logs the error AND
-// does NOT silently create a duplicate issue.
-describe('SHY-0067: runtime — find_issue_for failure path (mock-gh, reviewer-I5)', () => {
-  test('gh issue list non-zero exit → N_FAILED++ + no spurious issue create', () => {
+// SHY-0067 reviewer-I5 pinned the per-story lookup failure path. SHY-0074
+// v2 replaced per-story `gh issue list` searches with the single paginated
+// items-map query — the analogous failure mode is the map query failing,
+// which must abort the whole run BEFORE any mutations (a wrong map would
+// make every create-vs-update decision wrong → duplicate issues).
+describe('SHY-0074: runtime — items-map lookup failure path (mock-gh)', () => {
+  test('items query non-zero exit → exit 40 + no spurious issue create', () => {
     const { ghPath, recording, dir } = makeMockGh();
     fs.writeFileSync(path.join(dir, 'gh-responses-label-list'), '[]');
-    // Simulate transient gh issue list failure (network/auth/rate-limit).
-    fs.writeFileSync(path.join(dir, 'gh-exit-cmd-issue-list'), '1');
+    // Simulate transient items-query failure (network/auth/rate-limit).
+    fs.writeFileSync(path.join(dir, 'gh-exit-items-query'), '1');
 
-    const { code, stderr } = runScript(['--story', 'SHY-0001'], {
-      env: {
-        ...process.env,
-        GH: ghPath,
-        GH_TOKEN: 'fake-pat-for-test',
-        GH_PAT_PROJECT: 'fake-pat-for-test',
-      },
+    const { code, stderr } = runScript(['--story', 'SHY-7001'], {
+      env: mockEnv(ghPath, makeBugStoryDir()),
     });
-    // N_FAILED > 0 → script exits 40 (Defect C gate). Pre-fix this would
-    // have silently exited 0 + tried to create a duplicate issue.
     expect(code).toBe(40);
-    // No `issue create` call should have been recorded (the lookup-failed
-    // branch returns before reaching create).
+    // No `issue create` call should have been recorded — the run aborts
+    // before any mutation.
     const calls = readRecording(recording);
     const hasCreate = calls.some((c) => c.startsWith('issue create'));
     expect(hasCreate).toBe(false);
     // The error context should be visible in stderr (no >/dev/null silencing).
-    expect(stderr).toMatch(/failed to look up existing issue|issue list/i);
+    expect(stderr).toMatch(/items-map query failed|items query/i);
   });
 });
 
@@ -568,7 +594,6 @@ describe('SHY-0067: runtime — find_issue_for failure path (mock-gh, reviewer-I
 describe('SHY-0067: runtime — board-add failure → N_FAILED (mock-gh, reviewer-I6)', () => {
   test('addProjectV2ItemById returning null item drives N_FAILED++ + exit 40', () => {
     const { ghPath, recording, dir } = makeMockGh();
-    fs.writeFileSync(path.join(dir, 'gh-responses-issue-list'), '');
     fs.writeFileSync(path.join(dir, 'gh-responses-label-list'), '[]');
     fs.writeFileSync(
       path.join(dir, 'gh-responses-issue-create'),
@@ -579,6 +604,8 @@ describe('SHY-0067: runtime — board-add failure → N_FAILED (mock-gh, reviewe
     // addProjectV2ItemById returns null (simulates PAT missing project:write,
     // or upstream board id changing). Field-set keys are present so any
     // post-add path that incorrectly proceeds would still appear consistent.
+    // (The items-map query is served separately by the mock's dedicated
+    // channel — an empty board, so the create path runs.)
     fs.writeFileSync(
       path.join(dir, 'gh-responses-api-graphql'),
       JSON.stringify({
@@ -591,18 +618,13 @@ describe('SHY-0067: runtime — board-add failure → N_FAILED (mock-gh, reviewe
       }),
     );
 
-    const { code, stderr } = runScript(['--story', 'SHY-0001'], {
-      env: {
-        ...process.env,
-        GH: ghPath,
-        GH_TOKEN: 'fake-pat-for-test',
-        GH_PAT_PROJECT: 'fake-pat-for-test',
-      },
+    const { code, stderr } = runScript(['--story', 'SHY-7001'], {
+      env: mockEnv(ghPath, makeBugStoryDir()),
     });
 
-    // Pre-fix: `|| true` at line 847 swallows the return-1 from
-    // add_to_project_board, script exits 0. Post-fix: failure increments
-    // N_FAILED and the Defect-C exit-40 gate fires.
+    // Pre-fix: `|| true` swallowed the return-1 from add_to_project_board,
+    // script exited 0. Post-fix: failure increments N_FAILED and the
+    // Defect-C exit-40 gate fires.
     expect(code).toBe(40);
     // The board-add error must surface in stderr (no `>/dev/null` silencing,
     // matches the Defect-C contract). emit() route OR explicit failure marker.

@@ -11,7 +11,7 @@
  * adversarial story fixtures in a temp repo skeleton, so the
  * subprocess-fan-out → single-pass-awk refactor cannot drift:
  *   - title fidelity through shell metacharacters and \x1f
- *   - exact label derivation incl. multi-roadmap expansion
+ *   - label derivation (single-source `story` label post-SHY-0074)
  *   - malformed-frontmatter exit contract (40 + `validate` category)
  *
  * ONE test is CORRECTIVE, not characterization: probing found a live
@@ -68,7 +68,9 @@ function resetRecording() {
   fs.writeFileSync(path.join(mockGhDir, 'recording.log'), '');
 }
 
-/** Minimal story that passes check-story-frontmatter.sh. */
+/** Minimal story that passes check-story-frontmatter.sh. type: bug —
+ *  post-SHY-0074 v2 only bug stories reach `gh issue create`, and these
+ *  tests pin title/label fidelity on exactly that argv surface. */
 function storyTemplate({ id, title, frontmatterOverrides = '' }) {
   return `---
 id: ${id}
@@ -77,7 +79,7 @@ owner: claude
 created: 2026-06-10
 priority: P1
 effort: S
-type: infra
+type: bug
 roadmap_ids: [G001, G024]
 pr:
 ${frontmatterOverrides}---
@@ -175,13 +177,27 @@ beforeAll(() => {
     ghPath,
     `#!/usr/bin/env bash
 echo "$@" >>"${mockGhDir}/recording.log"
+case "$*" in
+  *"items(first: 100"*) cat "${mockGhDir}/resp-items.json"; exit 0 ;;
+esac
 key="$1-$2"
 if [ -f "${mockGhDir}/resp-\${key}" ]; then cat "${mockGhDir}/resp-\${key}"; fi
 exit 0
 `,
   );
   fs.chmodSync(ghPath, 0o755);
-  fs.writeFileSync(path.join(mockGhDir, 'resp-issue-list'), '');
+  // SHY-0074 v2: every run opens with the paginated items-map query; an
+  // empty board routes every fixture down the create path.
+  fs.writeFileSync(
+    path.join(mockGhDir, 'resp-items.json'),
+    JSON.stringify({
+      data: {
+        organization: {
+          projectV2: { items: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } },
+        },
+      },
+    }),
+  );
   fs.writeFileSync(path.join(mockGhDir, 'recording.log'), '');
 
   // One commit so the script's `git rev-parse HEAD` footer works.
@@ -222,9 +238,7 @@ describe('title fidelity through the parse phase', () => {
     expect(create).toContain(
       '--title SHY-9999: Title with "quotes" and $dollar and `backticks` and unit-sep end',
     );
-    expect(create).toContain(
-      '--label story,status:draft,priority:p1,effort:s,type:infra,roadmap:g001,roadmap:g024',
-    );
+    expect(create).toContain('--label story');
   });
 
   test('a 1000-char title survives byte-for-byte', () => {
@@ -237,18 +251,16 @@ describe('title fidelity through the parse phase', () => {
   });
 });
 
-describe('label derivation', () => {
-  test('clean frontmatter derives the exact label string incl. multi-roadmap expansion', () => {
+describe('label derivation (single-source post-SHY-0074)', () => {
+  test('clean frontmatter derives exactly the story marker label (SHY-0074: board columns are the single home for status/pri/effort/type/roadmap facts)', () => {
     writeStory('SHY-9999', 'Clean fixture');
     const { code } = runSync(['--story', 'SHY-9999']);
     expect(code).toBe(0);
     const create = recordedCalls().find((c) => c.startsWith('issue create'));
-    expect(create).toContain(
-      '--label story,status:draft,priority:p1,effort:s,type:infra,roadmap:g001,roadmap:g024',
-    );
+    expect(create).toContain('--label story');
   });
 
-  test('CORRECTIVE (red pre-refactor): padded frontmatter values trim — no whitespace inside labels', () => {
+  test('CORRECTIVE (red pre-refactor): padded frontmatter values trim — title stays clean', () => {
     // Live bug in the pre-refactor parser: `priority:   P1   ` leaks its
     // trailing spaces into the label (`priority:p1   ,`). The validator
     // accepts padded files, so the corruption is production-reachable.
@@ -261,9 +273,7 @@ describe('label derivation', () => {
     const { code } = runSync(['--story', 'SHY-9999']);
     expect(code).toBe(0);
     const create = recordedCalls().find((c) => c.startsWith('issue create'));
-    expect(create).toContain(
-      '--label story,status:draft,priority:p1,effort:s,type:infra,roadmap:g001,roadmap:g024',
-    );
+    expect(create).toContain('--label story');
   });
 });
 
