@@ -1,6 +1,6 @@
 ---
 id: SHY-0021
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-06-07
 priority: P0
@@ -44,9 +44,10 @@ Bumped to Tier 1 P0 under SHY-0032 because:
 ### Happy path
 
 - [ ] A new test file `express-api/tests/routes/cron-account-deletion.test.js` exercises the endpoint via the existing Express test harness (likely supertest or equivalent).
-- [ ] Test case A: **no Authorization header** → endpoint returns HTTP 401 with a body that does NOT leak the expected secret or schema (just `{error: "unauthorized"}` or similar).
-- [ ] Test case B: **wrong shared-secret header** → endpoint returns HTTP 401 with the same body shape as case A (no timing-side-channel via response body).
-- [ ] Test case C: **correct shared-secret header** → endpoint returns HTTP 200 with a body confirming sweep ran (e.g. `{swept: N, errors: M}`).
+- [ ] Test case A: **no Authorization header** → HTTP 401 `{error: "Missing bearer token"}` (actual middleware body, system-auth.js — verified 2026-06-10; bodies do not leak the secret or schema).
+- [ ] Test case B: **wrong shared-secret header** → HTTP 401 `{error: "Invalid bearer token"}` (distinct from case A by design in the current middleware — reveals only Bearer-prefix parseability, not secret correctness; acceptable, documented).
+- [ ] Test case D: **SYSTEM_SHARED_SECRET env missing** → HTTP 503 `{error: "System authentication not configured"}` (fail-closed, never fail-open).
+- [ ] Test case C: **correct shared-secret header** → endpoint returns HTTP 200 with a body confirming sweep ran (e.g. `{ status: 'ok' }`).
 - [ ] Test case C uses a mock/stub for the Firestore Admin SDK call (no real deletions in the test).
 - [ ] All three tests pass via `cd express-api && npm test -- cron-account-deletion`.
 - [ ] The test file is referenced from the existing `npm test` script (automatic via the test pattern).
@@ -67,22 +68,22 @@ Bumped to Tier 1 P0 under SHY-0032 because:
 - [ ] **Constant-time comparison**: the secret comparison must use `crypto.timingSafeEqual` (or equivalent), not `===`. Verified by:
   - Reading the route handler source.
   - A separate unit test that exercises two distinct wrong-secrets and asserts response times are within ±10ms of each other (best-effort timing-side-channel check; informational, not a strict assertion).
-- [ ] **Concurrent requests**: 10 simultaneous requests with the correct secret all return 200; the sweep is idempotent OR explicitly serialized via a single in-flight guard.
+- [ ] **Concurrent requests**: 10 simultaneous correct-secret requests — exactly ONE returns 200, the rest 409 (serialized via the handler's `inFlight` guard, system.js:85-91). Teardown calls `_resetInFlightForTesting()` so state never leaks between tests.
 - [ ] **Replay attack**: a captured correct-secret request CAN be replayed (no nonce in the protocol); document in the test file as a known limitation. Mitigation: short-lived secret rotation policy (out of scope).
 - [ ] **Cron-only invocation** (no public exposure): the route should ideally be on a `/api/system/*` path that's mounted only when invoked from a known IP range OR the workflow's runner. Verify the route registration in `express-api/src/server.js` (or equivalent) and document the trust model.
 
 ### Performance
 
-- [ ] Each test case completes within 200ms p99 (mocked Firestore).
-- [ ] Test suite completes within 5s total.
+- [x] Per-test latency: environment-bound; the contractual bound is jest.config testTimeout (10s). Observed warm-runner suite total ~1.4s for 13 tests (2026-06-10).
+- [x] Suite budget: ≤10s on a warm runner — accounts for the concurrency test's deterministic settle-wait (bounded 8s worst-case); the original 5s claim contradicted that design and was corrected at review.
 - [ ] No test-environment leakage: tests don't touch real Firestore even in error cases.
 
 ### Security
 
 - [ ] The shared-secret env var name is the same name the cron workflow uses (cross-check `.github/workflows/cron-account-deletion.yml:48` vs the route handler's env var read). A drift would mean the workflow sends one secret while the route validates another — both halves working but together broken.
-- [ ] No test logs the actual secret value to console (use environment variable indirection: `process.env.CRON_ACCOUNT_DELETION_SECRET` in test; never inline literal).
+- [ ] No test logs the actual secret value to console (use environment variable indirection: `process.env.SYSTEM_SHARED_SECRET` in test; never inline literal).
 - [ ] No test fixture commits the production secret to git (use a test-only synthetic secret).
-- [ ] Response bodies on 401 don't reveal whether the endpoint exists vs is mis-authed (uniform `{error: "unauthorized"}` for all 401 cases).
+- [ ] Response bodies on 401 never include the expected or attempted secret (asserted). Body uniformity across 401 variants is NOT current behaviour (two distinct messages) — accepted; only prefix-parseability is revealed.
 - [ ] Response bodies on 200 don't leak personally-identifiable info about deleted accounts (no user IDs, emails — only counts).
 - [ ] The test exercises the rate-limiting behaviour IF the route has rate-limiting middleware; documents if not.
 
@@ -96,9 +97,8 @@ Bumped to Tier 1 P0 under SHY-0032 because:
 
 ### Observability
 
-- [ ] The route handler logs each invocation with: timestamp, auth result (success/failure), and (on success) the swept count + error count. Verified by spying on the logger in the test.
-- [ ] 401 invocations are logged at WARN level with the requester IP (for ops visibility) but never with the attempted secret value.
-- [ ] 200 invocations are logged at INFO level with structured fields (`{event: "sweep_run", swept: N, errors: M, duration_ms: T}`).
+- [ ] Error-path logging asserted: when the sweep throws, the handler's existing `log.error` fires (spy assertion) and the response is 500 with a generic body.
+- [ ] Per-invocation INFO/WARN auth-result logging + requester-IP + structured `sweep_run` counts: **Out of Scope — the handler has no such logging today** (architect-verified 2026-06-10). Deferred to the reserved system-routes observability story in SHY-INDEX (with the `{swept,errors}` count-plumbing it depends on).
 - [ ] Sonar coverage on the route handler ≥90% (small surface, easy to cover).
 - [ ] The cron workflow's job summary (in `.github/workflows/cron-account-deletion.yml`) annotates the run with the sweep counts.
 
@@ -109,7 +109,7 @@ Bumped to Tier 1 P0 under SHY-0032 because:
 - **Given** the Express API is running with the cron-account-deletion route mounted
 - **When** a POST to `/api/system/sweep-account-deletions` is sent with no Authorization header
 - **Then** the response status is 401
-- **And** the response body is `{"error": "unauthorized"}`
+- **And** the response body is `{"error": "Missing bearer token"}`
 - **And** the response time is within p99 budget
 
 **Scenario: Wrong shared-secret → 401**
@@ -117,7 +117,7 @@ Bumped to Tier 1 P0 under SHY-0032 because:
 - **Given** the route is configured with a known shared secret
 - **When** a POST is sent with header `Authorization: Bearer wrong-secret-value`
 - **Then** the response status is 401
-- **And** the response body matches the no-auth case byte-for-byte (no timing or content side-channel)
+- **And** the response body is `{"error": "Invalid bearer token"}` — distinct from the no-auth case BY DESIGN (reveals Bearer-prefix parseability only, never secret correctness)
 
 **Scenario: Correct shared-secret → 200 + sweep runs**
 
@@ -125,8 +125,8 @@ Bumped to Tier 1 P0 under SHY-0032 because:
 - **And** the route is configured with secret `test-secret-abc`
 - **When** a POST is sent with header `Authorization: Bearer test-secret-abc`
 - **Then** the response status is 200
-- **And** the response body is `{"swept": 3, "errors": 0}`
-- **And** the Firestore mock recorded 3 delete calls
+- **And** the response body is `{"status": "ok"}`
+- **And** the mocked accountDeletion() sweep function was invoked exactly once
 
 **Scenario: Malformed header → 401**
 
@@ -143,7 +143,7 @@ Bumped to Tier 1 P0 under SHY-0032 because:
 
 **Scenario: Workflow secret name matches route env var**
 
-- **Given** `.github/workflows/cron-account-deletion.yml:48` references `${{ secrets.CRON_ACCOUNT_DELETION_SECRET }}`
+- **Given** `.github/workflows/cron-account-deletion.yml:48` references `${{ secrets.SYSTEM_SHARED_SECRET }}`
 - **When** the route handler is grep'd for `process.env.<NAME>`
 - **Then** the env var name read by the handler matches the workflow's secret name exactly
 
@@ -206,7 +206,7 @@ Bumped to Tier 1 P0 under SHY-0032 because:
 - [ ] `express-api/tests/routes/cron-account-deletion.test.js` exists.
 - [ ] All 401/401/200 cases pass.
 - [ ] All error-path cases pass.
-- [ ] Constant-time comparison verified (or fix landed in this PR if `===` was found).
+- [ ] Constant-time comparison verified by reading system-auth.js (HMAC-of-HMAC + timingSafeEqual — already present); the ±10ms timing scenario is INFORMATIONAL ONLY, never a CI assertion.
 - [ ] Env-var name cross-check passes.
 - [ ] Sonar coverage on route handler ≥90%.
 - [ ] Reviewer reports ZERO findings.
@@ -215,6 +215,10 @@ Bumped to Tier 1 P0 under SHY-0032 because:
 - [ ] `status: Done`; `pr:` populated; coverage delta logged in Notes.
 
 ## Notes (running log)
+
+- 2026-06-10 ~04:05 BST — **Reviewer cycle 1 (feature-dev:code-reviewer): 0 Critical, 5 Important, all applied.** (1) stale BDD 401-body literals fixed to actual middleware bodies; (2) redundant afterEach clearAllMocks removed (jest.config clearMocks:true already handles call-counts; beforeEach mockReset+default documented as the implementation contract); (3) concurrency settle-wait hardened to 5ms×1600 (8s budget vs 10s testTimeout); (4) startup fail-loud guard added for NODE_ENV≠test (missing _resetInFlightForTesting would otherwise poison every afterEach with a misleading TypeError); (5) Performance AC corrected — original 5s suite budget contradicted the concurrency design. Reviewer verified clean: empty-Bearer branch routing, serverHealth mock non-bleed, workflow-contract path resolution, env teardown, factory-mock reset indirection.
+
+- 2026-06-10 ~03:35 BST — **Architect verdict: APPROVE-WITH-CHANGES** (4 blocking + 2 advisory, all applied; key claims spot-verified against code). Spec was authored 2026-06-07 and the code evolved past it: auth extracted to middleware/system-auth.js (SYSTEM_SHARED_SECRET + HMAC timingSafeEqual, 11 unit tests already exist) — story premise narrowed to the REAL remaining gap: route-level integration (mounted route + middleware wiring + sweep mock + inFlight 409 + 503 fail-closed). 200 body corrected to `{status:'ok'}` (Path A; count-plumbing deferred); 401 bodies corrected to actual two-variant shapes; observability logging AC deferred (no such logging exists — reserved follow-up row added to SHY-INDEX); concurrency AC corrected to 1×200 + 9×409 with `_resetInFlightForTesting()` teardown. Canonical pattern: tests/routes/admin-account-deletion.test.js. Story flipped Draft → In Progress.
 
 - 2026-06-07 ~20:44 BST — Refined under SHY-0032. Bumped P1 → P0 (account-deletion is irreversible; auth coverage is Tier 1).
 - 2026-06-07 — Skeleton generated by `scripts/convert-roadmap-to-stories.sh` from PR-bundle `PR-G4` (roadmap_ids: G021).
