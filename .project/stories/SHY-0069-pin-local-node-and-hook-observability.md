@@ -1,13 +1,14 @@
 ---
 id: SHY-0069
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-09
 priority: P0
 effort: S
 type: infra
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1114
+released_in: v0.97.9
 ---
 
 # SHY-0069: Pin local Node to CI version + pre-push hook observability + watchman config
@@ -125,3 +126,5 @@ On 2026-06-09 19:38 brew silently upgraded `node` to 26.3.0 during an unrelated 
 
 - 2026-06-09 ~23:10 BST — **Architect verdict: APPROVE-WITH-CHANGES** (feature-dev:code-architect, 7 concerns). Applied: #1 exit-code split (2=.nvmrc unreadable, 3=node missing) + new BDD scenario; #3 CWD claim narrowed to work-tree; #4 corrected node-version claim (sync-roadmap-data.yml uses 20); #5 PATH-shim isolation via spawnSync env; #6 observability AC made machine-verifiable (no-2>/dev/null assertion); #7 engines advisory note. **Rejected #2 ("watchmanconfig already committed") with evidence:** `git status -s` shows `?? .watchmanconfig` — file exists on disk but is UNTRACKED; committing it stays in scope. Story flipped Draft → In Progress.
 - 2026-06-09 ~23:00 BST — Authored fully-refined during overnight autonomous run (operator pre-authorized 22:42 BST; architect agent validates in lieu of operator draft-approval). Root-cause evidence in memory `feedback-pin-node-to-ci-version-brew-drift`.
+
+**2026-06-10 ~09:35 BST — Released in v0.97.9.** PR #1114 squash-merged; release.yml run 27263490415 (bump=patch) cut v0.97.9; flipped Done per done-equals-release-cut.

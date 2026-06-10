@@ -1,13 +1,14 @@
 ---
 id: SHY-0068
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-09
 priority: P1
 effort: S
 type: infra
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1119
+released_in: v0.97.9
 ---
 
 # SHY-0068: Cache SonarCloud scanner-engine JAR in CI (eliminate WAF-flake download)
@@ -121,3 +122,5 @@ As the ShyTalk maintainer, I want CI's SonarCloud scanner-engine JAR served from
 - 2026-06-10 ~02:30 BST — **Architect verdict: APPROVE-WITH-CHANGES** (2 blocking + 4 must-fix applied, 1 rejected w/ evidence). Blocking-1: curl-to-version-endpoint key derivation was CIRCULAR (same WAF'd host) → replaced with SonarSource's documented `${{ runner.os }}-sonar` + restore-keys additive-cache pattern; BDD scenario 2 rewritten. Blocking-2: `SONAR_USER_HOME` must stay unset for CI/local path consistency → Dependencies + test assertion added. Also applied: SONAR_TOKEN-gating quirk → Out of Scope (deferred SHY); "early, parallel" wording fixed; test split into 6 explicit blocks incl. exact-SHA + file-absence + glob-no-rerun; **Rejected concern-7** ("release-tag.yml has no auto-retry reference — remove the claim"): the comment EXISTS at release-tag.yml:212-216 ("no auto-retry — the merged release commit is on main...") — verified first-hand 2026-06-10 ~00:14 BST via grep -B2 -A2; architect used narrower patterns. Claim stands as written.
 
 - 2026-06-09 ~23:00 BST — Authored fully-refined during overnight autonomous run from the V1–V4 verification evidence (18:03–18:31 BST session); operator chose Phase 1 scope earlier today. Filed as Draft alongside SHY-0069's PR; implementation queued after SHY-0061 unless prioritised.
+
+**2026-06-10 ~09:35 BST — Released in v0.97.9; post-merge verification evidence (DoD).** PR #1119 squash-merged. Verify-by-running pair completed 2026-06-10 ~03:00-03:18 BST: dispatch run 27247998500 = cold MISS ('Cache not found for input keys: Linux-sonar-27247998500, Linux-sonar') → engine downloaded → 'Cache saved with key: Linux-sonar-27247998500' (320,891,967 bytes, refs/heads/main); dispatch run 27248395379 = prefix-restore HIT ('Cache restored from key: Linux-sonar-27247998500'). MISS→save→HIT cycle proven live per feedback-workflow-verify-by-running. release.yml run 27263490415 cut v0.97.9; flipped Done.

@@ -1,13 +1,14 @@
 ---
 id: SHY-0040
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-10
 priority: P1
 effort: S
 type: refactor
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1121
+released_in: v0.97.9
 ---
 
 # SHY-0040: Cut sync-stories-to-issues.sh per-file subprocess overhead
@@ -112,3 +113,5 @@ Post-SHY-0062 (~150 stories) this becomes ~85s per CI sync run and unusable loca
 - 2026-06-10 ~04:30 BST — **Architect verdict: APPROVE-WITH-CHANGES** (3 concerns, all applied as story edits). (1) Subprocess inventory corrected to ~15/file with the validator sub-bash named + explicitly out-of-scoped (own exit-code contract; ≤2 target scoped to the field-extraction fan-out). (2) Single-pass result must feed populate_project_fields too (4 duplicate fm_get re-reads at ~562-565) — file-read-exactly-once AC added. (3) Separator pinned to \x1f with corrected rationale (editors/serializers can't produce it; the validator does NOT inspect values). Architect confirmed: tests are pure black-box spawnSync (refactor-safe), body_hash already single-pass, get_field_id/get_option_id operate on cached JSON (not per-file). Story flipped Draft → In Progress.
 
 - 2026-06-10 ~04:15 BST — Authored fully-refined during overnight autonomous run; trigger condition (corpus ≥50) verified met at 66 files; baseline measured 37.3s/--all vs 0.58s/--story (cost is per-file subprocess churn; 28 jq/awk/grep call sites). Alternatives weighed: A single-pass awk extractor (CHOSEN — smallest diff at the root cause), B Node rewrite (rejected: risk/size), C xargs -P (rejected: counter races + emit-order test breakage).
+
+**2026-06-10 ~09:35 BST — Released in v0.97.9.** PR #1121 squash-merged; release.yml run 27263490415 (bump=patch) cut v0.97.9; flipped Done per done-equals-release-cut.

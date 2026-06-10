@@ -1,13 +1,14 @@
 ---
 id: SHY-0061
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-09
 priority: P0
 effort: M
 type: feature
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1117
+released_in: v0.97.9
 public: true
 phase: Website & Presence
 ---
@@ -134,3 +135,5 @@ SHY-0038 made `phases[].items[]` + `currentlyWorkingOn` in `public/roadmap-data.
 - 2026-06-09 ~23:40 BST — **Architect verdict: APPROVE-WITH-CHANGES** (feature-dev:code-architect; 3 blocking + 2 advisory, all applied). Blocking: (1) status-casing schism between sync output (title case) and renderer switch (lowercase-hyphenated) — normalisation AC added, claim VERIFIED live against roadmap-data.json; (2) line-575 `features.length === 0` phase-skip guard would hide all-items phases — guard-extension AC + BDD scenario added; (3) i18n coverage assertion shape pinned to per-locale-block regex (file-wide substring forbidden). Advisory: storyBadge must live inside locale blocks (not DISCLAIMER-style merge) — codified in AC; "byte-identical" reworded to functional no-observable-difference assertion. One architect misread rejected: BDD scenario 1 already asserted the In Progress lift. Story flipped Draft → In Progress.
 
 - 2026-06-09 ~23:30 BST — Authored fully-refined during overnight autonomous run (operator selected SHY-0061 as next pickup this morning; pre-authorized architect-validation flow 22:42 BST). Renderer facts verified live: roadmap-app.js consumes only `features[]` (lines ~523-650), items shape `{shyId, name, status, i18n, description}` confirmed from live data, LABELS map at line ~21, 20-locale structural test exists.
+
+**2026-06-10 ~09:35 BST — Released in v0.97.9.** PR #1117 squash-merged; release.yml run 27263490415 (bump=patch) cut v0.97.9; flipped Done per done-equals-release-cut.
