@@ -198,6 +198,23 @@ exit 0
       },
     }),
   );
+  // Realistic create-sequence responses: post SHY-0074 reviewer-C1 the
+  // node-id resolution failure is counted (exit 40), so the bug fixtures
+  // must let create → view → board-add complete.
+  fs.writeFileSync(
+    path.join(mockGhDir, 'resp-issue-create'),
+    'https://github.com/Shyden-Ltd/ShyTalk/issues/100\n',
+  );
+  fs.writeFileSync(path.join(mockGhDir, 'resp-issue-view'), 'I_test_node_id\n');
+  fs.writeFileSync(
+    path.join(mockGhDir, 'resp-api-graphql'),
+    JSON.stringify({
+      data: {
+        organization: { projectV2: { id: 'PVT_test', fields: { nodes: [] } } },
+        addProjectV2ItemById: { item: { id: 'PVTI_test' } },
+      },
+    }),
+  );
   fs.writeFileSync(path.join(mockGhDir, 'recording.log'), '');
 
   // One commit so the script's `git rev-parse HEAD` footer works.

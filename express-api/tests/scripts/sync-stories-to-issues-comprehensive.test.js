@@ -438,6 +438,23 @@ describe('SHY-0067: runtime — label auto-create flow (mock-gh)', () => {
     const { ghPath, recording, dir } = makeMockGh();
     // `label list` returns empty array (no labels exist yet).
     fs.writeFileSync(path.join(dir, 'gh-responses-label-list'), '[]');
+    // Realistic create/view responses — post reviewer-C1 the node-id
+    // resolution failure is no longer silently swallowed, so the fixture
+    // must let the create sequence complete.
+    fs.writeFileSync(
+      path.join(dir, 'gh-responses-issue-create'),
+      'https://github.com/Shyden-Ltd/ShyTalk/issues/100\n',
+    );
+    fs.writeFileSync(path.join(dir, 'gh-responses-issue-view'), 'I_test_node_id\n');
+    fs.writeFileSync(
+      path.join(dir, 'gh-responses-api-graphql'),
+      JSON.stringify({
+        data: {
+          organization: { projectV2: { id: 'PVT_test', fields: { nodes: [] } } },
+          addProjectV2ItemById: { item: { id: 'PVTI_test' } },
+        },
+      }),
+    );
 
     const { code } = runScript(['--story', 'SHY-7001'], {
       env: mockEnv(ghPath, makeBugStoryDir()),

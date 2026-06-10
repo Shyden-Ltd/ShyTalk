@@ -1550,6 +1550,23 @@ describe('SHY-0074: per-component failure bubbles independently (mock-gh)', () =
     expect(r.code).toBe(40);
     expect(r.stderr).toContain('failed to update issue');
   });
+
+  test('gh issue view failure after create → [gh-error] + N_FAILED + exit 40, board add skipped (reviewer C1)', () => {
+    // The node-id resolution between `issue create` and the board add used
+    // to be `2>/dev/null || true`-swallowed: a created issue with NO board
+    // card and exit 0. The failure must surface + count.
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories74f7-');
+    makeStory(storiesDir, { id: 'SHY-8508', type: 'bug' });
+    const rules = createPathRules(mock.dir);
+    writeRules(mock.dir, [['^issue view 100 --json id', '', '1', 'not found'], ...rules]);
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(40);
+    expect(r.stderr).toMatch(/\[gh-error\] issue view 100/);
+    expect(r.stderr).toContain('1 failed');
+    const lines = readRecording(mock.recording);
+    expect(lines.filter((l) => l.includes('addProjectV2ItemById'))).toEqual([]);
+  });
 });
 
 // ============================================================== config gaps

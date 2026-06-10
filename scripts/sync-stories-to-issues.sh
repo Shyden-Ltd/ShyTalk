@@ -1305,10 +1305,19 @@ create_issue_path() {
   N_BODIES_EMBEDDED=$((N_BODIES_EMBEDDED + 1))
   emit "$id" "created" "bug issue created"
 
-  local issue_num node_id item_id
+  local issue_num node_id item_id view_rc
   issue_num="$(printf '%s' "$create_response" | tr -d '\n' | awk -F/ '{print $NF}')"
-  node_id="$(extract_issue_node_id "$create_response" 2>/dev/null || true)"
-  if [ -n "$node_id" ]; then
+  # SHY-0074 reviewer-C1: node-id resolution failure must surface ([gh-error]
+  # flows through) + count into the exit-40 gate — a `2>/dev/null || true`
+  # swallow here left a created issue with NO board card and exit 0.
+  set +e
+  node_id="$(extract_issue_node_id "$create_response")"
+  view_rc=$?
+  set -e
+  if [ "$view_rc" -ne 0 ] || [ -z "$node_id" ]; then
+    emit "$id" "project" "failed to resolve node_id for new issue — board add skipped"
+    N_FAILED=$((N_FAILED + 1))
+  else
     # SHY-0067 reviewer-I6: board-add / field-set failures must count into
     # the Defect-C exit-40 gate, never `|| true`-swallowed.
     if item_id="$(add_to_project_board "$node_id")"; then
@@ -1323,8 +1332,6 @@ create_issue_path() {
       emit "$id" "project" "failed to add issue node ${node_id} to project board"
       N_FAILED=$((N_FAILED + 1))
     fi
-  else
-    verbose "${id}: no node_id available (likely test fixture without view response); skipping board add"
   fi
 
   # A bug born terminal (e.g. rebuild recreating a Done story) closes
@@ -1536,8 +1543,12 @@ teardown_for_rebuild() {
   done <<<"$pairs"
 
   # The board is now empty: reset the map so the sync below creates fresh.
+  # SHY-0074 reviewer-I2: also reset the loaded flag so any future
+  # load_items_map caller re-queries instead of silently reusing the
+  # post-teardown empty state.
   ITEMS_MAP_JSON='{}'
   ITEMS_RAW_IDS=""
+  ITEMS_MAP_LOADED=0
   verbose "teardown_for_rebuild: done (items deleted: ${N_ITEMS_DELETED}; issues deleted: ${N_ISSUES_DELETED})"
 }
 
