@@ -252,6 +252,9 @@ function main() {
       id: fm.id,
       status: fm.status,
       title,
+      // SHY-0073: kebab slug from the filename — the renderer builds the
+      // GitHub story link (blob/main/.project/stories/<id>-<slug>.md) from it.
+      slug: file.replace(/^SHY-\d{4}-/, '').replace(/\.md$/, ''),
       // I1 from reviewer: `description` from optional `public_summary` frontmatter
       // (snake_case to match the hand-rolled parser's key regex). Auto-derivation
       // from the User Story body is deferred to SHY-0061 (renderer-side). Until
@@ -288,6 +291,7 @@ function main() {
       name: s.title,
       description: s.description,
       shyId: s.id,
+      slug: s.slug,
       status: s.status,
       i18n: {},
     };

@@ -209,4 +209,18 @@ describe('roadmap-app.js LABELS', () => {
       expect(content).toMatch(regex);
     },
   );
+
+  // SHY-0073: the English-only story-link confirm dialog's four keys must
+  // live inside every locale block (per-locale-block regex — a file-wide
+  // substring would pass with locales missing; see the pre-existing ar
+  // block gap for disclaimer/copyright as the cautionary tale).
+  const DIALOG_KEYS = ['storyEnglishOnlyTitle', 'storyEnglishOnlyBody', 'continueBtn', 'cancelBtn'];
+  test.each([...ALL_LANGUAGES, 'en'].flatMap((lang) => DIALOG_KEYS.map((key) => [lang, key])))(
+    'locale block %s contains dialog key %s inside its braces',
+    (lang, key) => {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const regex = new RegExp(`^\\s+${lang}:\\s*\\{[^}]*${key}`, 'm');
+      expect(content).toMatch(regex);
+    },
+  );
 });

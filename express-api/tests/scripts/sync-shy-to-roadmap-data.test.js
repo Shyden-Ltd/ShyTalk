@@ -190,6 +190,29 @@ describe('scripts/sync-shy-to-roadmap-data.mjs', () => {
       expect(phase.items[0].shyId).toBe('SHY-0099');
     });
 
+    test('additive slug field: item.slug equals the kebab filename suffix (SHY-0073)', () => {
+      const { storiesDir, dataFile } = setup({
+        shys: [
+          {
+            id: 'SHY-0101',
+            slug: 'lazy-i18n-links',
+            status: 'In Progress',
+            public: true,
+            phase: 'Safety & Compliance',
+            title: 'Slug fixture',
+          },
+        ],
+      });
+      const { code } = runScript(['--stories-dir', storiesDir, '--data-file', dataFile]);
+      expect(code).toBe(0);
+      const data = readJson(dataFile);
+      const phase = data.phases.find((p) => p.title === 'Safety & Compliance');
+      // slug = filename minus the SHY-NNNN- prefix and .md — the renderer
+      // builds the GitHub story link from it (SHY-0073).
+      expect(phase.items[0].slug).toBe('lazy-i18n-links');
+      expect(data.currentlyWorkingOn[0].slug).toBe('lazy-i18n-links');
+    });
+
     test('single public + Done SHY → in phase items[] but NOT currentlyWorkingOn', () => {
       const { storiesDir, dataFile } = setup({
         shys: [

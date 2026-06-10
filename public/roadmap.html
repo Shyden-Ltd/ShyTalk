@@ -436,6 +436,55 @@
         color: var(--text-secondary);
         white-space: nowrap;
       }
+      /* SHY-0073: English-only story-link confirm dialog. Visual tokens
+         shared with the language modal via palette values; new classes to
+         avoid coupling the two features. */
+      .shy-story-dialog-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+      .shy-story-dialog {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius, 8px);
+        padding: 20px 24px;
+        max-width: 360px;
+        width: calc(100% - 48px);
+        color: var(--text);
+      }
+      .shy-story-dialog h3 {
+        margin: 0 0 8px;
+        font-size: 1rem;
+      }
+      .shy-story-dialog p {
+        margin: 0 0 16px;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+      }
+      .shy-story-dialog-buttons {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+      }
+      .shy-story-dialog-buttons button {
+        padding: 6px 16px;
+        border-radius: var(--radius, 8px);
+        border: 1px solid var(--border);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+        font-size: 0.85rem;
+      }
+      .shy-story-dialog-confirm {
+        background: var(--primary);
+        color: #fff;
+        border-color: var(--primary);
+      }
       /* SHY-0061: story-ID badge chip on synced roadmap items.
          Neutral theme tokens only (no rarity colors per repo constraint). */
       .shy-badge {

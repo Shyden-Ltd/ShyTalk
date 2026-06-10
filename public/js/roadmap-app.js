@@ -20,6 +20,10 @@
   // ── i18n labels (minimal set used by this script) ──
   var LABELS = {
     en: {
+      storyEnglishOnlyTitle: "English only",
+      storyEnglishOnlyBody: "This story is available in English only — continue?",
+      continueBtn: "Continue",
+      cancelBtn: "Cancel",
       storyBadge: "Story {id}",
       inProgress: "In Progress",
       comingSoon: "Coming Soon",
@@ -36,6 +40,10 @@
       copyright: "© Shyden Ltd",
     },
     ar: {
+      storyEnglishOnlyTitle: "بالإنجليزية فقط",
+      storyEnglishOnlyBody: "هذه القصة متوفرة بالإنجليزية فقط — هل تريد المتابعة؟",
+      continueBtn: "متابعة",
+      cancelBtn: "إلغاء",
       storyBadge: "قصة {id}",
       inProgress:
         "\u0642\u064A\u062F \u0627\u0644\u062A\u0646\u0641\u064A\u0630",
@@ -54,6 +62,10 @@
         "\u0633\u062C\u0651\u0644 \u0627\u0644\u062F\u062E\u0648\u0644 \u0644\u064A\u0635\u0644\u0643 \u0625\u0634\u0639\u0627\u0631.",
     },
     de: {
+      storyEnglishOnlyTitle: "Nur auf Englisch",
+      storyEnglishOnlyBody: "Diese Story ist nur auf Englisch verfügbar – fortfahren?",
+      continueBtn: "Fortfahren",
+      cancelBtn: "Abbrechen",
       storyBadge: "Story {id}",
       inProgress: "In Arbeit",
       comingSoon: "Kommt bald",
@@ -68,6 +80,10 @@
       notifyPrompt: "Melde dich in der App an, um benachrichtigt zu werden.",
     },
     es: {
+      storyEnglishOnlyTitle: "Solo en inglés",
+      storyEnglishOnlyBody: "Esta historia solo está disponible en inglés. ¿Continuar?",
+      continueBtn: "Continuar",
+      cancelBtn: "Cancelar",
       storyBadge: "Historia {id}",
       inProgress: "En progreso",
       comingSoon: "Pr\u00F3ximamente",
@@ -82,6 +98,10 @@
       notifyPrompt: "Inicia sesi\u00F3n en la app para recibir notificaciones.",
     },
     fr: {
+      storyEnglishOnlyTitle: "En anglais uniquement",
+      storyEnglishOnlyBody: "Cette story n'est disponible qu'en anglais — continuer ?",
+      continueBtn: "Continuer",
+      cancelBtn: "Annuler",
       storyBadge: "Story {id}",
       inProgress: "En cours",
       comingSoon: "Bient\u00F4t",
@@ -97,6 +117,10 @@
         "Connectez-vous \u00E0 l\u2019appli pour \u00EAtre notifi\u00E9.",
     },
     hi: {
+      storyEnglishOnlyTitle: "केवल अंग्रेज़ी में",
+      storyEnglishOnlyBody: "यह स्टोरी केवल अंग्रेज़ी में उपलब्ध है — जारी रखें?",
+      continueBtn: "जारी रखें",
+      cancelBtn: "रद्द करें",
       storyBadge: "स्टोरी {id}",
       inProgress: "\u091C\u093E\u0930\u0940 \u0939\u0948",
       comingSoon:
@@ -116,6 +140,10 @@
         "\u0938\u0942\u091A\u0928\u093E \u092A\u093E\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F \u0910\u092A \u092E\u0947\u0902 \u0932\u0949\u0917 \u0907\u0928 \u0915\u0930\u0947\u0902\u0964",
     },
     id: {
+      storyEnglishOnlyTitle: "Hanya bahasa Inggris",
+      storyEnglishOnlyBody: "Story ini hanya tersedia dalam bahasa Inggris — lanjutkan?",
+      continueBtn: "Lanjutkan",
+      cancelBtn: "Batal",
       storyBadge: "Story {id}",
       inProgress: "Sedang berjalan",
       comingSoon: "Segera hadir",
@@ -130,6 +158,10 @@
       notifyPrompt: "Masuk ke aplikasi untuk mendapat notifikasi.",
     },
     it: {
+      storyEnglishOnlyTitle: "Solo in inglese",
+      storyEnglishOnlyBody: "Questa storia è disponibile solo in inglese: continuare?",
+      continueBtn: "Continua",
+      cancelBtn: "Annulla",
       storyBadge: "Storia {id}",
       inProgress: "In corso",
       comingSoon: "Prossimamente",
@@ -144,6 +176,10 @@
       notifyPrompt: "Accedi all\u2019app per ricevere notifiche.",
     },
     ja: {
+      storyEnglishOnlyTitle: "英語のみ",
+      storyEnglishOnlyBody: "このストーリーは英語のみです。続行しますか？",
+      continueBtn: "続行",
+      cancelBtn: "キャンセル",
       storyBadge: "ストーリー {id}",
       inProgress: "\u9032\u884C\u4E2D",
       comingSoon: "\u8FD1\u65E5\u516C\u958B",
@@ -160,6 +196,10 @@
         "\u901A\u77E5\u3092\u53D7\u3051\u53D6\u308B\u306B\u306F\u30A2\u30D7\u30EA\u306B\u30ED\u30B0\u30A4\u30F3\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
     },
     km: {
+      storyEnglishOnlyTitle: "ជាភាសាអង់គ្លេសប៉ុណ្ណោះ",
+      storyEnglishOnlyBody: "រឿងនេះមានជាភាសាអង់គ្លេសប៉ុណ្ណោះ — បន្តទេ?",
+      continueBtn: "បន្ត",
+      cancelBtn: "បោះបង់",
       storyBadge: "រឿង {id}",
       inProgress: "\u1780\u17C6\u1796\u17BB\u1784\u178A\u17C6\u178E\u17BE\u179A\u1780\u17B6\u179A",
       comingSoon: "\u1798\u1780\u178A\u179B\u17CB\u17A2\u17CA\u17B8\u1785\u17B7\u179A\u17C9\u17C2",
@@ -175,6 +215,10 @@
         "\u1785\u17BC\u179B\u1780\u17D2\u1793\u17BB\u1784\u1780\u1798\u17D2\u1798\u179C\u17B7\u1792\u17B8\u178A\u17BE\u1798\u17D2\u1794\u17B8\u1791\u1791\u17BD\u179B\u1780\u17B6\u179A\u1787\u17BC\u1793\u178A\u17C6\u178E\u17B9\u1784\u17D4",
     },
     ko: {
+      storyEnglishOnlyTitle: "영어만 제공",
+      storyEnglishOnlyBody: "이 스토리는 영어로만 제공됩니다. 계속할까요?",
+      continueBtn: "계속",
+      cancelBtn: "취소",
       storyBadge: "스토리 {id}",
       inProgress: "\uC9C4\uD589 \uC911",
       comingSoon: "\uACE7 \uCD9C\uC2DC",
@@ -191,6 +235,10 @@
         "\uC54C\uB9BC\uC744 \uBC1B\uC73C\uB824\uBA74 \uC571\uC5D0 \uB85C\uADF8\uC778\uD558\uC138\uC694.",
     },
     nl: {
+      storyEnglishOnlyTitle: "Alleen Engels",
+      storyEnglishOnlyBody: "Deze story is alleen in het Engels beschikbaar – doorgaan?",
+      continueBtn: "Doorgaan",
+      cancelBtn: "Annuleren",
       storyBadge: "Story {id}",
       inProgress: "Bezig",
       comingSoon: "Binnenkort",
@@ -205,6 +253,10 @@
       notifyPrompt: "Log in de app om meldingen te ontvangen.",
     },
     pl: {
+      storyEnglishOnlyTitle: "Tylko po angielsku",
+      storyEnglishOnlyBody: "Ta historia jest dostępna tylko po angielsku — kontynuować?",
+      continueBtn: "Kontynuuj",
+      cancelBtn: "Anuluj",
       storyBadge: "Historia {id}",
       inProgress: "W toku",
       comingSoon: "Wkr\u00F3tce",
@@ -220,6 +272,10 @@
         "Zaloguj si\u0119 w aplikacji, aby otrzymywa\u0107 powiadomienia.",
     },
     pt: {
+      storyEnglishOnlyTitle: "Apenas em inglês",
+      storyEnglishOnlyBody: "Esta história está disponível apenas em inglês — continuar?",
+      continueBtn: "Continuar",
+      cancelBtn: "Cancelar",
       storyBadge: "História {id}",
       inProgress: "Em andamento",
       comingSoon: "Em breve",
@@ -234,6 +290,10 @@
       notifyPrompt: "Entre no app para receber notifica\u00E7\u00F5es.",
     },
     ru: {
+      storyEnglishOnlyTitle: "Только на английском",
+      storyEnglishOnlyBody: "Эта история доступна только на английском — продолжить?",
+      continueBtn: "Продолжить",
+      cancelBtn: "Отмена",
       storyBadge: "История {id}",
       inProgress: "\u0412 \u0440\u0430\u0431\u043E\u0442\u0435",
       comingSoon: "\u0421\u043A\u043E\u0440\u043E",
@@ -253,6 +313,10 @@
         "\u0412\u043E\u0439\u0434\u0438\u0442\u0435 \u0432 \u043F\u0440\u0438\u043B\u043E\u0436\u0435\u043D\u0438\u0435, \u0447\u0442\u043E\u0431\u044B \u043F\u043E\u043B\u0443\u0447\u0430\u0442\u044C \u0443\u0432\u0435\u0434\u043E\u043C\u043B\u0435\u043D\u0438\u044F.",
     },
     sv: {
+      storyEnglishOnlyTitle: "Endast på engelska",
+      storyEnglishOnlyBody: "Den här storyn finns bara på engelska – fortsätta?",
+      continueBtn: "Fortsätt",
+      cancelBtn: "Avbryt",
       storyBadge: "Story {id}",
       inProgress: "P\u00E5g\u00E5r",
       comingSoon: "Kommer snart",
@@ -267,6 +331,10 @@
       notifyPrompt: "Logga in i appen f\u00F6r att f\u00E5 aviseringar.",
     },
     th: {
+      storyEnglishOnlyTitle: "ภาษาอังกฤษเท่านั้น",
+      storyEnglishOnlyBody: "สตอรี่นี้มีเฉพาะภาษาอังกฤษ — ดำเนินการต่อหรือไม่?",
+      continueBtn: "ดำเนินการต่อ",
+      cancelBtn: "ยกเลิก",
       storyBadge: "สตอรี่ {id}",
       inProgress:
         "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E14\u0E33\u0E40\u0E19\u0E34\u0E19\u0E01\u0E32\u0E23",
@@ -286,6 +354,10 @@
         "\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E41\u0E2D\u0E1B\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E23\u0E31\u0E1A\u0E01\u0E32\u0E23\u0E41\u0E08\u0E49\u0E07\u0E40\u0E15\u0E37\u0E2D\u0E19",
     },
     tr: {
+      storyEnglishOnlyTitle: "Yalnızca İngilizce",
+      storyEnglishOnlyBody: "Bu hikâye yalnızca İngilizce — devam edilsin mi?",
+      continueBtn: "Devam",
+      cancelBtn: "İptal",
       storyBadge: "Hikâye {id}",
       inProgress: "Devam ediyor",
       comingSoon: "Yak\u0131nda",
@@ -301,6 +373,10 @@
         "Bildirim almak i\u00E7in uygulamaya giri\u015F yap\u0131n.",
     },
     uk: {
+      storyEnglishOnlyTitle: "Лише англійською",
+      storyEnglishOnlyBody: "Ця історія доступна лише англійською — продовжити?",
+      continueBtn: "Продовжити",
+      cancelBtn: "Скасувати",
       storyBadge: "Історія {id}",
       inProgress: "\u0412 \u0440\u043E\u0431\u043E\u0442\u0456",
       comingSoon: "\u041D\u0435\u0437\u0430\u0431\u0430\u0440\u043E\u043C",
@@ -320,6 +396,10 @@
         "\u0423\u0432\u0456\u0439\u0434\u0456\u0442\u044C \u0443 \u0434\u043E\u0434\u0430\u0442\u043E\u043A, \u0449\u043E\u0431 \u043E\u0442\u0440\u0438\u043C\u0443\u0432\u0430\u0442\u0438 \u0441\u043F\u043E\u0432\u0456\u0449\u0435\u043D\u043D\u044F.",
     },
     vi: {
+      storyEnglishOnlyTitle: "Chỉ có tiếng Anh",
+      storyEnglishOnlyBody: "Câu chuyện này chỉ có bằng tiếng Anh — tiếp tục?",
+      continueBtn: "Tiếp tục",
+      cancelBtn: "Hủy",
       storyBadge: "Câu chuyện {id}",
       inProgress: "\u0110ang ti\u1EBFn h\u00E0nh",
       comingSoon: "S\u1EAFp ra m\u1EAFt",
@@ -335,6 +415,10 @@
         "\u0110\u0103ng nh\u1EADp v\u00E0o \u1EE9ng d\u1EE5ng \u0111\u1EC3 nh\u1EADn th\u00F4ng b\u00E1o.",
     },
     zh: {
+      storyEnglishOnlyTitle: "仅提供英文",
+      storyEnglishOnlyBody: "此故事仅提供英文版 — 继续吗？",
+      continueBtn: "继续",
+      cancelBtn: "取消",
       storyBadge: "故事 {id}",
       inProgress: "\u8FDB\u884C\u4E2D",
       comingSoon: "\u5373\u5C06\u63A8\u51FA",
@@ -388,9 +472,16 @@
 
   function escapeHtml(str) {
     if (!str) return "";
-    var div = document.createElement("div");
-    div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
+    // String replacement, not DOM round-trip: innerHTML on a text node
+    // leaves quotes unescaped, which breaks out of double-quoted HTML
+    // attributes (data-src/aria-label/data-log). Reviewer Critical,
+    // SHY-0073 — pre-existing gap fixed at the root.
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#x27;");
   }
 
   function $(sel) {
@@ -521,19 +612,41 @@
         i18n: it.i18n,
         status: normalizeItemStatus(it.status),
         shyId: it.shyId,
+        slug: it.slug,
       });
     }
     return out;
   }
 
-  function shyBadgeHtml(shyId) {
-    var label = (t("storyBadge") || "Story {id}").replace("{id}", shyId);
+  function storyHref(shyId, slug) {
     return (
-      '<span class="shy-badge" aria-label="' +
+      "https://github.com/Shyden-Ltd/ShyTalk/blob/main/.project/stories/" +
+      encodeURIComponent(shyId + "-" + slug + ".md")
+    );
+  }
+
+  function shyBadgeHtml(shyId, slug) {
+    var label = (t("storyBadge") || "Story {id}").replace("{id}", shyId);
+    if (!slug) {
+      return (
+        '<span class="shy-badge" aria-label="' +
+        escapeHtml(label) +
+        '">' +
+        escapeHtml(shyId) +
+        "</span>"
+      );
+    }
+    // SHY-0073: badge links to the story on GitHub. For non-English
+    // locales a delegated click handler gates this behind the
+    // English-only confirm dialog (once per session).
+    return (
+      '<a class="shy-badge" href="' +
+      storyHref(shyId, slug) +
+      '" target="_blank" rel="noopener noreferrer" aria-label="' +
       escapeHtml(label) +
       '">' +
       escapeHtml(shyId) +
-      "</span>"
+      "</a>"
     );
   }
 
@@ -625,8 +738,11 @@
         html += '<li class="feature-item">';
         html += '<span class="feature-status-icon ' + ipStatusInfo.cls + '" aria-hidden="true">' + ipStatusInfo.icon + '</span>';
         html += '<div class="feature-info">';
-        html += '<div class="feature-name">' + escapeHtml(ipFeatName) +
-          (ipItem.feature.shyId ? " " + shyBadgeHtml(ipItem.feature.shyId) : "") +
+        html += '<div class="feature-name">' +
+          (ipItem.feature.shyId
+            ? '<span class="shy-item-text" data-src="' + escapeHtml(ipItem.feature.name) + '">' + escapeHtml(ipFeatName) + '</span>'
+            : escapeHtml(ipFeatName)) +
+          (ipItem.feature.shyId ? " " + shyBadgeHtml(ipItem.feature.shyId, ipItem.feature.slug) : "") +
           '</div>';
         if (ipFeatDesc) html += '<div class="feature-desc">' + escapeHtml(ipFeatDesc) + '</div>';
         html += '<div class="feature-desc" style="font-size:0.75rem;opacity:0.6;margin-top:2px;">' + escapeHtml(ipPhaseLabel) + '</div>';
@@ -731,12 +847,15 @@
         html += '<div class="feature-info">';
         html +=
           '<div class="feature-name">' +
-          escapeHtml(featName) +
-          (feat.shyId ? " " + shyBadgeHtml(feat.shyId) : "") +
+          (feat.shyId
+            ? '<span class="shy-item-text" data-src="' + escapeHtml(feat.name) + '">' + escapeHtml(featName) + '</span>'
+            : escapeHtml(featName)) +
+          (feat.shyId ? " " + shyBadgeHtml(feat.shyId, feat.slug) : "") +
           "</div>";
         if (featDesc) {
-          html +=
-            '<div class="feature-desc">' + escapeHtml(featDesc) + "</div>";
+          html += feat.shyId
+            ? '<div class="feature-desc"><span class="shy-item-text" data-src="' + escapeHtml(feat.description || "") + '">' + escapeHtml(featDesc) + "</span></div>"
+            : '<div class="feature-desc">' + escapeHtml(featDesc) + "</div>";
         }
         html += "</div>";
         html +=
@@ -960,6 +1079,14 @@
       currentLang = lang;
       if (roadmapData) {
         renderPhases(roadmapData);
+        // SHY-0073: re-render wipes swapped texts — re-run the lazy
+        // translation round for the new language (always-translated
+        // rule) and rebuild the dialog so its strings match the locale.
+        translateItems(roadmapData);
+        if (storyDialogEl) {
+          storyDialogEl.overlay.remove();
+          storyDialogEl = null;
+        }
         setupScrollSpy();
       }
       if (typeof _prev === "function") _prev(lang);
@@ -967,6 +1094,196 @@
   })();
 
   // ── Fetch and init ──
+
+
+  // ── SHY-0073: lazy item translation + gated story links ─────────
+
+  // Collect story-derived strings (from DATA, not the DOM), chunk to the
+  // service's 50-text cap, fire all chunks in one Promise.all round, and
+  // swap text nodes in place (no re-render — collapse/bell listeners
+  // survive). Failures are fail-silent: English stays, exactly one
+  // console.error per round (the operator's dev-console surface).
+  var translateFailLogged = {};
+  function translateItems(data) {
+    if (currentLang === "en") return;
+    var texts = [];
+    var seen = {};
+    var phases = (data && data.phases) || [];
+    for (var p = 0; p < phases.length; p++) {
+      var items = phases[p].items || [];
+      for (var i = 0; i < items.length; i++) {
+        var n = items[i] && items[i].name;
+        var d = items[i] && items[i].description;
+        if (typeof n === "string" && n && !seen[n]) { seen[n] = 1; texts.push(n); }
+        if (typeof d === "string" && d && !seen[d]) { seen[d] = 1; texts.push(d); }
+      }
+    }
+    if (texts.length === 0) return;
+    var chunks = [];
+    for (var c = 0; c < texts.length; c += 50) chunks.push(texts.slice(c, c + 50));
+    var roundFailed = false;
+    var merged = {};
+    var missedTotal = 0;
+    var failLang = currentLang;
+    Promise.all(
+      chunks.map(function (chunk) {
+        return fetch("/api/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ texts: chunk, target: currentLang }),
+        })
+          .then(function (res) {
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            return res.json();
+          })
+          .then(function (body) {
+            var tr = (body && body.translations) || {};
+            for (var k in tr) merged[k] = tr[k];
+            missedTotal += ((body && body.missed) || []).length;
+          })
+          .catch(function () {
+            roundFailed = true;
+          });
+      }),
+    ).then(function () {
+      if (roundFailed && !translateFailLogged[failLang]) {
+        // At most ONE dev-console error per language per page lifetime —
+        // engines that re-fire the applyLanguage chain at init run a
+        // second legitimate round, and repeating the identical error is
+        // noise, not signal (webkit, reviewer-era finding).
+        translateFailLogged[failLang] = true;
+        console.error("[translate] item translation round failed — showing English");
+      }
+      if (missedTotal > 0) {
+        console.info("[translate] " + missedTotal + " string(s) not yet translated — shown in English");
+      }
+      var nodes = document.querySelectorAll(".shy-item-text");
+      for (var i = 0; i < nodes.length; i++) {
+        var src = nodes[i].getAttribute("data-src");
+        var translated = merged[src];
+        if (typeof translated === "string" && translated) nodes[i].textContent = translated;
+      }
+    });
+  }
+
+  // Once-per-session pass for the English-only confirm. sessionStorage
+  // can throw in privacy modes — fall back to once-per-page-load.
+  var storyGateMemoryPass = false;
+  function storyGatePassed() {
+    try {
+      return window.sessionStorage.getItem("shy_story_en_ok") === "1";
+    } catch (e) {
+      return storyGateMemoryPass;
+    }
+  }
+  function setStoryGatePass() {
+    storyGateMemoryPass = true;
+    try {
+      window.sessionStorage.setItem("shy_story_en_ok", "1");
+    } catch (e) {
+      // privacy mode: memory flag already set
+    }
+  }
+
+  var storyDialogEl = null;
+  function buildStoryDialog() {
+    if (storyDialogEl) return storyDialogEl;
+    var overlay = document.createElement("div");
+    overlay.className = "shy-story-dialog-overlay";
+    var dlg = document.createElement("div");
+    dlg.className = "shy-story-dialog";
+    dlg.setAttribute("role", "dialog");
+    dlg.setAttribute("aria-modal", "true");
+    dlg.setAttribute("aria-label", t("storyEnglishOnlyTitle") || "English only");
+    var title = document.createElement("h3");
+    title.textContent = t("storyEnglishOnlyTitle") || "English only";
+    var body = document.createElement("p");
+    body.textContent =
+      t("storyEnglishOnlyBody") || "This story is available in English only — continue?";
+    var row = document.createElement("div");
+    row.className = "shy-story-dialog-buttons";
+    var cancel = document.createElement("button");
+    cancel.setAttribute("data-testid", "story-dialog-cancel");
+    cancel.textContent = t("cancelBtn") || "Cancel";
+    var confirm = document.createElement("button");
+    confirm.setAttribute("data-testid", "story-dialog-confirm");
+    confirm.className = "shy-story-dialog-confirm";
+    confirm.textContent = t("continueBtn") || "Continue";
+    row.appendChild(cancel);
+    row.appendChild(confirm);
+    dlg.appendChild(title);
+    dlg.appendChild(body);
+    dlg.appendChild(row);
+    overlay.appendChild(dlg);
+    overlay.style.display = "none";
+    document.body.appendChild(overlay);
+    storyDialogEl = { overlay: overlay, dlg: dlg, cancel: cancel, confirm: confirm };
+    return storyDialogEl;
+  }
+
+  function openStoryDialog(href) {
+    var d = buildStoryDialog();
+    if (d.overlay.style.display === "flex") return; // reentrancy guard — no listener leak
+    d.overlay.style.display = "flex";
+    var previouslyFocused = document.activeElement;
+    function close() {
+      d.overlay.style.display = "none";
+      document.removeEventListener("keydown", onKey, true);
+      d.confirm.onclick = null;
+      d.cancel.onclick = null;
+      if (previouslyFocused && previouslyFocused.focus) previouslyFocused.focus();
+    }
+    function onKey(e) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+        return;
+      }
+      // Real focus trap (the language modal has none — new requirement):
+      // Tab cycles between the two buttons.
+      if (e.key === "Tab") {
+        e.preventDefault();
+        var next = document.activeElement === d.cancel ? d.confirm : d.cancel;
+        next.focus();
+      }
+    }
+    d.cancel.onclick = function () { close(); };
+    d.confirm.onclick = function () {
+      setStoryGatePass();
+      close();
+      window.open(href, "_blank", "noopener,noreferrer");
+    };
+    document.addEventListener("keydown", onKey, true);
+    d.confirm.focus();
+  }
+
+  // Delegated gate: non-English visitors confirm once per session before
+  // following a story link. English visitors use the anchors natively.
+  var storyGateWired = false;
+  function setupStoryLinkGate() {
+    // Wired once regardless of the INITIAL language: the handler checks
+    // currentLang per click, so en→de runtime switches gate correctly
+    // and de→en switches stop gating (reviewer findings 2+3).
+    if (storyGateWired) return;
+    storyGateWired = true;
+    document.addEventListener(
+      "click",
+      function (e) {
+        // Runtime guard: language can switch without a reload — gating is
+        // decided at CLICK time, so en never gates and non-en always does.
+        if (currentLang === "en") return;
+        // Modifier/middle clicks keep their native background-tab
+        // semantics (reviewer finding).
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
+        var a = e.target && e.target.closest ? e.target.closest("a.shy-badge") : null;
+        if (!a) return;
+        if (storyGatePassed()) return; // native navigation
+        e.preventDefault();
+        openStoryDialog(a.getAttribute("href"));
+      },
+      true,
+    );
+  }
 
   function loadRoadmap() {
     var container = document.getElementById("roadmap-container");
@@ -980,6 +1297,9 @@
         roadmapData = data;
         currentLang = resolveLanguage();
         renderPhases(data);
+        // SHY-0073: lazy item translations + gated GitHub story links.
+        translateItems(data);
+        setupStoryLinkGate();
         // Deep link FIRST — scrolls to target before scroll spy overwrites hash
         handleDeepLink();
         // Scroll spy last — runs updateActiveNav() which reads the now-scrolled position
