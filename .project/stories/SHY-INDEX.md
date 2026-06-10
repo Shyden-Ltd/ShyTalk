@@ -12,6 +12,9 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | --------------------------------------------------------------- | --- | ------ | -------- | ------------------------------------------------------------------------------------------------ | -------------- | ---------------- | --- |
 | [SHY-0060](SHY-0060-age-gating-per-feature.md)                  | P0  | XL     | feature  | Age-gating per feature: tiered per-feature age thresholds replacing single 13+ signup gate       | 🚧 In Progress | —                | —   |
 | [SHY-0071](SHY-0071-sync-wall-clock-batching.md)                | P1  | M      | refactor | Sync wall-clock: batch gh lookups (one upfront list → map) + scan-mode validation (36.2s→≤6s)      | 📝 Draft       | —                | —   |
+| [SHY-0062](SHY-0062-migrate-legacy-roadmap-features.md)         | P1  | XL     | chore    | Migrate ~95 legacy roadmap features into tracked stories (meta/tracker; EPIC-0002)                | 🚧 In Progress | —                | —   |
+| [SHY-0072](SHY-0072-lazy-translation-service.md)                | P1  | M      | feature  | Lazy translation service: translate-on-first-view + server cache + fail-silent + miss queue       | 📝 Draft       | —                | —   |
+| [SHY-0073](SHY-0073-renderer-lazy-i18n-and-gated-story-links.md) | P1 | M      | feature  | Renderer: lazy item translations + gated GitHub story links (once-per-session confirm)            | 📝 Draft       | —                | —   |
 | [SHY-0070](SHY-0070-system-routes-observability.md)             | P2  | S      | feature  | System-routes observability: structured sweep logging + {swept,errors} plumbing                   | 📝 Draft       | —                | —   |
 | [SHY-0024](SHY-0024-resolve-navgraph-coexistence.md)            | P0  | L      | refactor | Migrate Android to SharedNavGraph + delete NavGraph.kt                                           | 📝 Draft       | G028             | —   |
 | [SHY-0029](SHY-0029-tighten-ownerfirebaseuid-rule.md)           | P0  | S      | bug      | Tighten ownerFirebaseUid rule (strict equality, no legacy fallback)                              | 📝 Draft       | G026             | —   |
@@ -100,7 +103,7 @@ These IDs are reserved by the SHY-0032 + SHY-0033 multi-PR plan (operator 2026-0
 | ~~SHY-0071~~ | ~~Sync wall-clock batching~~ — **FILED 2026-06-10** (see Active table)                                                                                                                                                | —                                                        |
 | ~~SHY-0040~~ | ~~Optimise sync-stories-to-issues.sh per-file overhead~~ — **FILED 2026-06-10** (see Active table)                                                                                                                    | —                                                        |
 | ~~SHY-0061~~ | ~~Public roadmap renderer reads SHY-derived `phases[].items[]`~~ — **FILED 2026-06-09** (see Active table)                                                                                                           | —                                                        |
-| SHY-0062     | Staged migration of ~95 legacy `phases[].features[]` entries into fully-refined SHYs with `public: true`. Batched by phase (~8 follow-up SHYs at ~12 features each); preserves user-visible content during transition | After SHY-0061 merges (renderer reads `items[]`)         |
+| ~~SHY-0062~~ | ~~Staged migration of ~95 legacy features~~ — **FILED 2026-06-10** (see Active table; EPIC-0002)                                                                                                              | —                                                        |
 
 ---
 
@@ -109,6 +112,7 @@ These IDs are reserved by the SHY-0032 + SHY-0033 multi-PR plan (operator 2026-0
 | EPIC      | Title                                                      | Status      | Child SHYs                                      |
 | --------- | ---------------------------------------------------------- | ----------- | ----------------------------------------------- |
 | EPIC-0001 | ShyTalk SHY framework (stories, validator, GH sync, EPICs) | In Progress | SHY-0001, SHY-0002, SHY-0003, SHY-0037 (4 SHYs) |
+| EPIC-0002 | Public roadmap story-migration + lazy translation platform | In Progress | SHY-0062, SHY-0072, SHY-0073 (+batches as filed) |
 
 EPICs are validated by `scripts/check-epic-frontmatter.sh` (separate from the SHY validator). The `epic:` field on SHY frontmatter is optional — most SHYs need not belong to an EPIC. See `CLAUDE.md` § "Agile Way of Working" → "### EPICs" for the full spec.
 
