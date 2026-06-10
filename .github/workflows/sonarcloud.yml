@@ -49,6 +49,35 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
           fetch-depth: 0
 
+      # Cache the SonarCloud scanner engine (SHY-0068). AWS WAF
+      # intermittently blocks runner IPs on the engine download (PR #1049,
+      # PR #1001) — cache the artefact instead of retrying the flake
+      # (replaces the deleted sonarcloud-auto-retry.yml per
+      # feedback-no-auto-retry-workflows). ~/.sonar/cache is internally
+      # versioned + additive, so the key is OS-scoped with a run-unique
+      # suffix: GitHub cache entries are immutable per key, so a constant
+      # key would never re-save; run-unique keys always save fresh while
+      # restore-keys restores the newest entry. Do NOT set SONAR_USER_HOME
+      # — CI and local pre-push scans must share this default path.
+      - name: Cache SonarCloud scanner engine
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-sonar
+
+      # `cache-hit` is 'true' only on EXACT key match — never with a
+      # run-unique key — so the operationally meaningful signal is whether
+      # the restore actually produced content (reviewer finding, SHY-0068).
+      - name: Engine cache status
+        run: |
+          if [ -d "$HOME/.sonar/cache" ] && [ -n "$(ls -A "$HOME/.sonar/cache" 2>/dev/null)" ]; then
+            echo "engine-cache: HIT (restored via prefix-match; engine download skipped)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "engine-cache: MISS (cold cache; engine will download and be saved)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - uses: ./.github/actions/setup-jdk-gradle
 
       - uses: ./.github/actions/setup-node
