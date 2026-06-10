@@ -409,6 +409,8 @@ function baseEnv(ghPath, storiesDir, extra = {}) {
     GH_TOKEN: 'fake-pat-for-test',
     GH_PAT_PROJECT: 'fake-pat-for-test',
     STORIES_DIR: storiesDir,
+    // SHY-0078: zero backoff so the empty-read retry doesn't slow tests.
+    ITEMS_MAP_RETRY_BACKOFF: '0',
     ...extra,
   };
 }
@@ -432,6 +434,10 @@ function createPathRules(dir, { fields = fieldsResponse(), items = EMPTY_ITEMS }
     ['addProjectV2DraftIssue', 'resp-draft-add.json', ''],
     ['items\\(first: 100', 'resp-items.json', ''],
     ['ProjectV2SingleSelectField', 'resp-fields.json', ''],
+    // SHY-0078 dedup guard: the consistent-source issue search defaults to
+    // "no existing issue" (empty) so the create path proceeds. Tests that
+    // exercise a stale-map hit override this with a number-returning rule.
+    ['^issue list', '', ''],
     ['^issue create', 'resp-create-url.txt', ''],
     ['^issue view 100 --json id', 'resp-node-id.txt', ''],
     ['^label list', 'resp-labels.txt', ''],
@@ -565,12 +571,23 @@ describe('SHY-0074 v2: create path — draft/bug routing + per-value board-field
     ).toBeDefined();
   });
 
-  test('items-map replaces per-story issue search: zero `issue list` calls', () => {
-    expect(lines.filter((l) => l.startsWith('issue list'))).toEqual([]);
+  test('items-map replaces per-story RECONCILIATION search; the only `issue list` is the SHY-0078 dedup guard on the single bug create', () => {
+    // No per-story reconciliation lookups (the items map does that). The
+    // dedup guard (SHY-0078) does fire ONE consistent-source issue search —
+    // but only for the bug story routed to the create path, never for the 6
+    // draft stories.
+    const issueLists = lines.filter((l) => l.startsWith('issue list'));
+    expect(issueLists).toHaveLength(1);
+    expect(issueLists[0]).toContain('SHY-9002:');
+    for (const id of DRAFT_IDS) {
+      expect(lines.find((l) => l.startsWith('issue list') && l.includes(`${id}:`))).toBeUndefined();
+    }
   });
 
-  test('exactly one items-map query fired (single-page corpus)', () => {
-    expect(lines.filter((l) => l.includes('items(first: 100'))).toHaveLength(1);
+  test('items-map query fired twice — empty board triggers the SHY-0078 empty-read retry (single page each)', () => {
+    // The create-path matrix runs against an empty board; SHY-0078 retries a
+    // zero-item read once (Projects v2 lag guard), so two single-page reads.
+    expect(lines.filter((l) => l.includes('items(first: 100'))).toHaveLength(2);
   });
 
   // ---- Status ×5 (the headline defect: lifecycle → board column)
@@ -748,6 +765,8 @@ describe('SHY-0074 v2: create path — draft/bug routing + per-value board-field
     expect(result.stderr).toMatch(/bodies truncated: 0/);
     expect(result.stderr).toMatch(/comments posted: 0/);
     expect(result.stderr).toMatch(/issues closed: 0/);
+    // SHY-0078: no dedup hit on a genuine fresh create (no existing issues).
+    expect(result.stderr).toMatch(/dedup-guard hits: 0/);
   });
 
   test('CORRECTIVE (pre-existing SHY-0067 bug): project-items-added counter survives the command-substitution subshell', () => {
@@ -1672,6 +1691,108 @@ describe('SHY-0074: frontmatter validator pins the five-value status contract', 
     );
     const res = spawnSync('bash', [VALIDATOR, filePath], { encoding: 'utf-8' });
     expect(res.status).not.toBe(0);
+  });
+});
+
+// ============================================================== SHY-0078 dedup guard
+
+describe('SHY-0078: idempotency guard against Projects v2 stale-empty reads (mock-gh)', () => {
+  test('stale-empty items map + existing bug issue → ZERO issue create (dedup guard skips, counts the hit)', () => {
+    // The headline regression: the rebuild duplication came from a stale
+    // items query returning empty while the issue already existed. The
+    // consistent-source check must find it and refuse to re-create.
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories78a-');
+    makeStory(storiesDir, { id: 'SHY-8901', type: 'bug' });
+    const rules = createPathRules(mock.dir); // items map is EMPTY (stale)
+    writeResponse(mock.dir, 'resp-exists.txt', '900\n'); // dedup search finds #900
+    writeRules(mock.dir, [['^issue list .*SHY-8901:', 'resp-exists.txt', ''], ...rules]);
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const lines = readRecording(mock.recording);
+    expect(lines.filter((l) => l.startsWith('issue create'))).toEqual([]);
+    expect(lines.find((l) => l.startsWith('issue list') && l.includes('SHY-8901:'))).toBeDefined();
+    expect(r.stderr).toMatch(/dedup-guard hits: 1/);
+    expect(r.stderr).toMatch(/existing issue #900 found/);
+    expect(r.stderr).toMatch(/1 skipped/);
+  });
+
+  test('empty-read is retried once: two items(first:100) queries before the board is accepted empty', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories78b-');
+    makeStory(storiesDir, { id: 'SHY-8902', type: 'bug' });
+    writeRules(mock.dir, createPathRules(mock.dir)); // items empty both reads
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const lines = readRecording(mock.recording);
+    expect(lines.filter((l) => l.includes('items(first: 100'))).toHaveLength(2);
+  });
+
+  test('genuine first sync (empty board + no existing issue) still creates exactly once — no over-guarding', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories78c-');
+    makeStory(storiesDir, { id: 'SHY-8903', type: 'bug' });
+    writeRules(mock.dir, createPathRules(mock.dir)); // dedup search → empty
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const lines = readRecording(mock.recording);
+    expect(lines.filter((l) => l.startsWith('issue create'))).toHaveLength(1);
+    expect(r.stderr).toMatch(/dedup-guard hits: 0/);
+    expect(r.stderr).toMatch(/1 created \(0 drafts, 1 issues\)/);
+  });
+
+  test('prefix-exact: an existing SHY-0070 issue does not block creating SHY-0007', () => {
+    // The dedup search for SHY-0007 uses the exact "SHY-0007:" prefix, so a
+    // SHY-0070 issue is never a false hit. The mock only answers the
+    // SHY-0070 search; the SHY-0007 search falls through to empty → creates.
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories78d-');
+    makeStory(storiesDir, { id: 'SHY-0007', type: 'bug' });
+    const rules = createPathRules(mock.dir);
+    writeResponse(mock.dir, 'resp-70.txt', '70\n');
+    writeRules(mock.dir, [['^issue list .*SHY-0070:', 'resp-70.txt', ''], ...rules]);
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const lines = readRecording(mock.recording);
+    const createLine = lines.find((l) => l.startsWith('issue create'));
+    expect(createLine).toBeDefined();
+    expect(createLine).toContain('SHY-0007:');
+    expect(r.stderr).toMatch(/dedup-guard hits: 0/);
+  });
+
+  test('dedup existence check gh-error → exit 40, NO create (never create-on-uncertainty)', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories78e-');
+    makeStory(storiesDir, { id: 'SHY-8905', type: 'bug' });
+    const rules = createPathRules(mock.dir);
+    writeRules(mock.dir, [['^issue list .*SHY-8905:', '', '1'], ...rules]);
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(40);
+    expect(r.stderr).toMatch(/\[gh-error\] dedup issue search/);
+    const lines = readRecording(mock.recording);
+    expect(lines.filter((l) => l.startsWith('issue create'))).toEqual([]);
+  });
+
+  test('non-bug stories do NOT trigger the issue-search dedup (drafts are not issue-backed)', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories78f-');
+    makeStory(storiesDir, { id: 'SHY-8906', type: 'feature' });
+    writeRules(mock.dir, createPathRules(mock.dir));
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const lines = readRecording(mock.recording);
+    expect(lines.filter((l) => l.startsWith('issue list'))).toEqual([]);
+    expect(
+      lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes('title=SHY-8906:')),
+    ).toBeDefined();
+  });
+
+  test('structural: dedup search is prefix-exact (startswith with the colon) + items-map retry present', () => {
+    const src = fs.readFileSync(SCRIPT, 'utf-8');
+    expect(src).toMatch(/issue_exists_for\(\)/);
+    expect(src).toMatch(/startswith\(\\"\$\{id\}:\\"\)/);
+    expect(src).toMatch(/_items_map_pass/);
+    expect(src).toMatch(/ITEMS_MAP_RETRY_BACKOFF/);
   });
 });
 

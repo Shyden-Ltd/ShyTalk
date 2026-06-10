@@ -222,6 +222,8 @@ function mockEnv(ghPath, storiesDir) {
     GH_TOKEN: 'fake-pat-for-test',
     GH_PAT_PROJECT: 'fake-pat-for-test',
     STORIES_DIR: storiesDir,
+    // SHY-0078: zero backoff so the empty-read retry doesn't slow tests.
+    ITEMS_MAP_RETRY_BACKOFF: '0',
   };
 }
 

@@ -131,6 +131,7 @@ N_BODIES_EMBEDDED=0
 N_BODIES_TRUNCATED=0
 N_COMMENTS_POSTED=0
 N_ISSUES_CLOSED=0
+N_DEDUP_GUARD_HITS=0
 TYPE_FIELD_AUTO_CREATED="no"
 
 # Caches populated at runtime.
@@ -512,14 +513,15 @@ ITEMS_MAP_JSON='{}'
 ITEMS_RAW_IDS=""
 ITEMS_MAP_LOADED=0
 
-load_items_map() {
-  if [ "$ITEMS_MAP_LOADED" = "1" ]; then return 0; fi
-  if [ "$DRY_RUN" = "1" ]; then
-    # Dry-run makes no gh calls; an empty map previews every story as a create.
-    ITEMS_MAP_LOADED=1
-    return 0
-  fi
-  verbose "load_items_map: paginating projectV2 items (100/page)"
+# SHY-0078: backoff (seconds) before the empty-read retry. Tests inject 0.
+ITEMS_MAP_RETRY_BACKOFF="${ITEMS_MAP_RETRY_BACKOFF:-3}"
+
+# One full paginated read of the board into ITEMS_MAP_JSON + ITEMS_RAW_IDS
+# (both reset at entry). Returns 1 on any query/parse failure. Factored out
+# of load_items_map so the SHY-0078 empty-read retry can re-run a clean pass.
+_items_map_pass() {
+  ITEMS_MAP_JSON='{}'
+  ITEMS_RAW_IDS=""
   local cursor="" query response stderr_file rc page_map page_ids has_next
   # Single-line query: see note on the projectV2 lookup query above.
   # shellcheck disable=SC2016
@@ -580,8 +582,41 @@ load_items_map() {
       break
     fi
   done
+  return 0
+}
+
+# Count of keyed items currently in the map.
+_items_map_keyed_count() {
+  printf '%s' "$ITEMS_MAP_JSON" | jq 'length'
+}
+
+load_items_map() {
+  if [ "$ITEMS_MAP_LOADED" = "1" ]; then return 0; fi
+  if [ "$DRY_RUN" = "1" ]; then
+    # Dry-run makes no gh calls; an empty map previews every story as a create.
+    ITEMS_MAP_JSON='{}'
+    ITEMS_MAP_LOADED=1
+    return 0
+  fi
+  verbose "load_items_map: paginating projectV2 items (100/page)"
+  _items_map_pass || return 1
+  # SHY-0078: a zero-item result may be a STALE replica read (Projects v2
+  # items is eventually consistent — pronounced shortly after a large
+  # mutation) rather than a genuinely empty board. A stale-empty read would
+  # route every story to the create path and duplicate the whole board (the
+  # defect this story fixes). Retry once after a bounded backoff; if the
+  # board is truly empty the retry is a cheap no-op. The consistent-source
+  # issue_exists_for guard (create path) is the hard backstop for the
+  # harmful case (duplicate ISSUES) when even the retry reads stale.
+  if [ "$(_items_map_keyed_count)" -eq 0 ]; then
+    verbose "load_items_map: empty on first read; retrying once after ${ITEMS_MAP_RETRY_BACKOFF}s (Projects v2 lag guard)"
+    if [ "${ITEMS_MAP_RETRY_BACKOFF:-0}" -gt 0 ] 2>/dev/null; then
+      sleep "$ITEMS_MAP_RETRY_BACKOFF"
+    fi
+    _items_map_pass || return 1
+  fi
   ITEMS_MAP_LOADED=1
-  verbose "load_items_map: $(printf '%s' "$ITEMS_MAP_JSON" | jq 'length') keyed items"
+  verbose "load_items_map: $(_items_map_keyed_count) keyed items"
   return 0
 }
 
@@ -1269,9 +1304,66 @@ create_draft_path() {
   return 0
 }
 
+# SHY-0078: consistent-source existence check. The Issues SEARCH API is
+# strongly consistent (unlike the eventually-consistent Projects v2 items
+# query), so this is the hard backstop against creating a DUPLICATE issue
+# when a stale-empty items-map read routes an already-mirrored bug story to
+# the create path. Sets EXISTING_ISSUE_NUM on a prefix-exact hit. Returns:
+#   0 = an issue titled "SHY-NNNN: …" already exists
+#   1 = no such issue
+#   2 = the search itself failed (gh error) — caller must NOT create on this
+EXISTING_ISSUE_NUM=""
+issue_exists_for() {
+  local id="$1"
+  EXISTING_ISSUE_NUM=""
+  # Dry-run never calls gh: report "none" so the create-path preview fires.
+  if [ "$DRY_RUN" = "1" ]; then return 1; fi
+  local stderr_file out rc
+  stderr_file="$(mktemp)"
+  set +e
+  # The `startswith("${id}:")` --jq filter is PREFIX-EXACT (the trailing
+  # colon means SHY-0007 never matches SHY-0070), so GitHub's fuzzy title
+  # search can't cause a false dedup hit.
+  out="$("$GH" issue list --state all --search "in:title \"${id}:\"" --json number,title \
+    --jq ".[] | select(.title | startswith(\"${id}:\")) | .number" 2>"$stderr_file")"
+  rc=$?
+  set -e
+  if [ "$rc" -ne 0 ]; then
+    printf '[gh-error] dedup issue search for %s (exit %d): %s\n' \
+      "$id" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
+    rm -f "$stderr_file"
+    return 2
+  fi
+  rm -f "$stderr_file"
+  EXISTING_ISSUE_NUM="$(printf '%s\n' "$out" | head -n 1)"
+  [ -n "$EXISTING_ISSUE_NUM" ] && return 0 || return 1
+}
+
 # Create a bug-report ISSUE + its issue-backed board item (type: bug).
 create_issue_path() {
   local file="$1" id="$2" title="$3" hash="$4"
+  # SHY-0078: idempotency guard. We only reach create_issue_path because the
+  # (eventually-consistent) items map had no entry for this SHY. Before
+  # creating, confirm against the CONSISTENT Issues API that no issue already
+  # exists — otherwise a stale-empty map read would duplicate it. On a hit we
+  # skip the create (no duplicate); the next fresh-map sync refreshes its
+  # body/fields. On a search error we refuse to create (create-on-uncertainty
+  # is what produced the duplication defect).
+  # set-e-safe 3-way capture: issue_exists_for re-enables errexit internally
+  # (after its own gh call), so a bare call returning non-zero would trip
+  # set -e. `|| dedup_rc=$?` is exempt from errexit and captures all of 0/1/2.
+  local dedup_rc=0
+  issue_exists_for "$id" || dedup_rc=$?
+  if [ "$dedup_rc" -eq 2 ]; then
+    emit "$id" "api" "dedup existence check failed — not creating (avoids duplicate)"
+    N_FAILED=$((N_FAILED + 1))
+    return 0
+  elif [ "$dedup_rc" -eq 0 ]; then
+    emit "$id" "dedup" "existing issue #${EXISTING_ISSUE_NUM} found via consistent-source check; skipping create (stale items-map suspected — will refresh next sync)"
+    N_DEDUP_GUARD_HITS=$((N_DEDUP_GUARD_HITS + 1))
+    N_SKIPPED=$((N_SKIPPED + 1))
+    return 0
+  fi
   # SHY-0067: ensure labels exist before issue create (Defect B fix). The
   # function yields the CSV of *verified* labels (reviewer C1) so the gh
   # issue create --label flag won't be rejected on a label that failed to
@@ -1589,10 +1681,10 @@ sync_all() {
 
   printf 'Sync result: %d created (%d drafts, %d issues), %d updated, %d skipped, %d failed' \
     "$N_CREATED" "$N_DRAFTS_CREATED" "$N_ISSUES_CREATED" "$N_UPDATED" "$N_SKIPPED" "$N_FAILED" >&2
-  printf ' (labels created: %d; labels deleted: %d; project items added: %d; project items deleted: %d; issues deleted: %d; project fields updated: %d; status fields set: %d; bodies embedded: %d; bodies truncated: %d; comments posted: %d; issues closed: %d; type-field auto-created: %s)\n' \
+  printf ' (labels created: %d; labels deleted: %d; project items added: %d; project items deleted: %d; issues deleted: %d; project fields updated: %d; status fields set: %d; bodies embedded: %d; bodies truncated: %d; comments posted: %d; issues closed: %d; dedup-guard hits: %d; type-field auto-created: %s)\n' \
     "$N_LABELS_CREATED" "$N_LABELS_DELETED" "$N_PROJECT_ITEMS_ADDED" "$N_ITEMS_DELETED" \
     "$N_ISSUES_DELETED" "$N_PROJECT_FIELDS_UPDATED" "$N_STATUS_SET" "$N_BODIES_EMBEDDED" \
-    "$N_BODIES_TRUNCATED" "$N_COMMENTS_POSTED" "$N_ISSUES_CLOSED" "$TYPE_FIELD_AUTO_CREATED" >&2
+    "$N_BODIES_TRUNCATED" "$N_COMMENTS_POSTED" "$N_ISSUES_CLOSED" "$N_DEDUP_GUARD_HITS" "$TYPE_FIELD_AUTO_CREATED" >&2
 
   # SHY-0067 reviewer-I2: emit a GITHUB_STEP_SUMMARY audit trail when running
   # under GitHub Actions. Local + test runs skip silently (env var unset).
@@ -1618,6 +1710,7 @@ sync_all() {
       printf '| Bodies truncated | %d |\n' "$N_BODIES_TRUNCATED"
       printf '| Status comments posted | %d |\n' "$N_COMMENTS_POSTED"
       printf '| Issues closed | %d |\n' "$N_ISSUES_CLOSED"
+      printf '| Dedup-guard hits (stale-map duplicate prevented) | %d |\n' "$N_DEDUP_GUARD_HITS"
       printf '| Type-field auto-created | %s |\n' "$TYPE_FIELD_AUTO_CREATED"
     } >> "$GITHUB_STEP_SUMMARY"
   fi

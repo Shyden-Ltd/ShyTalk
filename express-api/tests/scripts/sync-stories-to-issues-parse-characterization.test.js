@@ -51,6 +51,8 @@ function runSync(args, extraEnv = {}) {
         GH: path.join(mockGhDir, 'gh'),
         GH_TOKEN: 'fake-pat-for-test',
         GH_PAT_PROJECT: 'fake-pat-for-test',
+        // SHY-0078: zero backoff so the empty-read retry doesn't slow tests.
+        ITEMS_MAP_RETRY_BACKOFF: '0',
         ...extraEnv,
       },
     },
