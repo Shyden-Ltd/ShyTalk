@@ -350,7 +350,7 @@ describe('POST /api/translate', () => {
     expect(res.body.cached).toBe(false);
   });
 
-  test('returns 502 when LibreTranslate is unavailable', async () => {
+  test('returns 502 when no translation provider is available', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: false,
       status: 503,
@@ -358,12 +358,38 @@ describe('POST /api/translate', () => {
     });
 
     const app = createApp();
+    // SHY-0072 intended contract change: the unified string cache serves
+    // same-process repeats of previously translated text, so this probe
+    // must be a string no earlier test has translated.
     const res = await request(app)
       .post('/api/translate')
-      .send({ text: 'Hello', targetLang: 'es' })
+      .send({ text: 'Hello-untranslated-502-probe', targetLang: 'es' })
       .expect(502);
 
     expect(res.body.error).toMatch(/unavailable/i);
+  });
+
+  test('fresh (non-cached) translation reports the provider-detected source language', async () => {
+    // SHY-0072 reviewer finding: the unified string cache reports
+    // detectedSourceLang 'unknown' on cache hits; this pins that a FRESH
+    // translation still carries the provider's real detection, so a
+    // regression in either direction is caught.
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () =>
+        Promise.resolve(
+          JSON.stringify({ translatedText: 'Frisch', detectedLanguage: { language: 'en' } }),
+        ),
+      json: () =>
+        Promise.resolve({ translatedText: 'Frisch', detectedLanguage: { language: 'en' } }),
+    });
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/translate')
+      .send({ text: 'Fresh-detect-probe', targetLang: 'de' })
+      .expect(200);
+    expect(res.body.detectedSourceLang).toMatch(/^[a-z]{2,3}$/);
   });
 
   test('skips participant verification for invalid messagePath', async () => {

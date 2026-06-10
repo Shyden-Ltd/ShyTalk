@@ -78,7 +78,7 @@ describe('GET /api/system/health', () => {
     const res = await request(app).get('/api/system/health');
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: 'ok' });
+    expect(res.body).toEqual({ status: 'ok', translationQueueLength: 0 });
   });
 
   test('async-fires the serverHealth metrics check', async () => {
@@ -99,7 +99,7 @@ describe('GET /api/system/health', () => {
     const res = await request(app).get('/api/system/health');
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: 'ok' });
+    expect(res.body).toEqual({ status: 'ok', translationQueueLength: 0 });
 
     // Flush the microtask + macrotask queue so the catch handler runs.
     await new Promise((resolve) => setImmediate(resolve));
@@ -132,7 +132,7 @@ describe('GET /api/system/health', () => {
     // check is still pending. If the handler awaited serverHealth, the
     // supertest await would not have resolved yet.
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ status: 'ok' });
+    expect(res.body).toEqual({ status: 'ok', translationQueueLength: 0 });
 
     // Cleanup the dangling Promise so Jest doesn't warn about open handles.
     resolveSlowCheck();

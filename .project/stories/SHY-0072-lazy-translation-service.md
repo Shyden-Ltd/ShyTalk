@@ -1,6 +1,6 @@
 ---
 id: SHY-0072
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-06-10
 priority: P1
@@ -24,14 +24,17 @@ Operator decision 2026-06-10 (memory `feedback-public-translations-lazy-architec
 ## Acceptance Criteria
 
 ### Happy path
-- [ ] `POST /api/translate` accepts `{ texts: string[], target: <locale> }` (target ∈ the 20 supported locales; `en` rejected as a no-op with 400 — callers must not burn a request translating English to English).
+- [ ] **MERGED ENDPOINT (operator decision 2026-06-10):** `POST /api/translate` serves BOTH caller classes. Anonymous (no `req.auth`): the new public-content flow below. Authenticated chat callers: the EXISTING chat-translation contract (per-user quota, Firestore message-cache behaviour) is preserved EXACTLY — its existing tests in `express-api/tests/routes/translate.test.js` stay green unchanged (characterization contract) — but its provider call is rerouted through the new unified chain + string cache underneath.
+- [ ] **Provider chain (operator decision): unofficial Google gtx FIRST → self-hosted LibreTranslate (`LIBRETRANSLATE_URL`, default `http://localhost:5000`) on gtx failure → English fail-silent + queue as final fallback.** Each provider attempt has its own 3s timeout; chain position is logged on fallback (WARN includes which provider served/failed).
+- [ ] Anonymous requests accept `{ texts: string[], target: <locale> }` (target ∈ the 20 supported locales; `en` rejected as a no-op with 400 — callers must not burn a request translating English to English).
 - [ ] Cache hit path: previously translated (text, target) pairs return from the server-side cache with NO provider call (asserted via provider-mock call counts).
-- [ ] Cache miss path: the unofficial Google endpoint (`translate.googleapis.com/translate_a/single` `client=gtx`) is called once per unique (text, target); the result is cached (durable across process restarts — disk-backed JSON/SQLite on the Express box, NOT Firestore: free-tier quota is a real constraint and this cache is hot) and returned.
+- [ ] Cache miss path: the provider chain is invoked once per unique (text, target); results cache durably to DISK (JSON — firmed over SQLite: zero new deps, ~2K entries; NOT Firestore — free-tier quota). **Two-layer cache (architect Concern 5):** boot loads the COMMITTED seed `express-api/src/data/translation-cache-seed.json` (read-only at runtime; Claude backfill PRs write here) then overlays the RUNTIME cache `express-api/data/translation-cache.json` (gitignored — `express-api/data/` added to `express-api/.gitignore`; created on first write; runtime wins on key collision). Keys are `sha256(text):target`. Atomic writes (write-temp `.tmp` suffix + rename) apply to the runtime file only.
+- [ ] **gtx reality (architect-verified live, Concern 2/3):** response is `text/plain` containing JSON shaped `[[["<translated>","<source>",null,null,10]],null,"<src-lang>",...]` — parse via `response.text()` + `JSON.parse`, translation at `body[0][0][0]`. gtx accepts ONE text per call: N misses = N calls via `Promise.allSettled` with per-call 3s timeouts (worst-case latency ~3s for any batch size, never N×3s).
 - [ ] Batch requests dedupe internally (same text twice in one request = one provider call) and partial-fill from cache (mixed hit/miss batches only fetch the misses).
 - [ ] Response shape `{ translations: { [text]: translated }, missed: string[] }` — `missed` lists texts served as English fallback this call.
 
 ### Error paths
-- [ ] Provider failure (non-200, timeout ≤3s, malformed body, rate-limit): the affected texts return AS ENGLISH in `translations` and appear in `missed`; HTTP status stays 200 (fail-silent contract — the PAGE must never break); the failure is logged at WARN with provider status (admin-visible per existing log conventions) and the (text, target) is appended to the miss-queue file.
+- [ ] Full-chain failure (gtx AND LibreTranslate each: non-200, 3s timeout, malformed body = JSON.parse failure on the response text, rate-limit): the affected texts return AS ENGLISH in `translations` and appear in `missed`; HTTP status stays 200 (fail-silent contract — the PAGE must never break); the failure is logged at WARN with provider status (admin-visible per existing log conventions) and the (text, target) is appended to the miss-queue file.
 - [ ] Miss-queue file (`express-api/data/translation-miss-queue.jsonl` or equivalent documented path) is append-only JSONL `{text, target, ts, reason}`, deduplicated on append (same text+target not re-queued), and survives restarts. Claude drains it via routine PRs that commit translations directly into the cache seed (the "fallback to claude" — build-time, $0).
 - [ ] Unsupported `target` (not in the 20) → 400 with a generic body; never forwarded to the provider.
 - [ ] Oversized input (text >2,000 chars or >50 texts/request) → 400 (the public roadmap needs name+description sizes; bounds prevent the endpoint becoming a free-translation proxy for abuse).
@@ -47,7 +50,7 @@ Operator decision 2026-06-10 (memory `feedback-public-translations-lazy-architec
 - [ ] Cache writes are atomic (write-temp + rename) so a crash mid-write can't corrupt the store.
 
 ### Security
-- [ ] No secrets involved (unofficial endpoint is keyless); the endpoint is PUBLIC but rate-limited per IP (reuse the repo's existing Express rate-limit middleware pattern) so it can't be farmed as a free translation proxy beyond the size bounds.
+- [ ] No secrets involved (gtx keyless; LibreTranslate is our own box). Rate limiting (architect-located): `writeLimiter` (30/min, keys `req.auth?.uid || req.ip` — IP for anonymous) is ALREADY mounted for `/api/translate` at `index.js:176`; no new wiring. Test asserts 429 after the budget from one IP. Size bounds remain the anti-proxy guard.
 - [ ] Inputs are never shell-interpolated/eval'd; provider URL is built via URLSearchParams (no string-concat injection).
 - [ ] Dev-console visibility AC lives in SHY-0073 (client side); the server contributes a `X-Translation-Missed: <n>` response header the client can read cheaply.
 
@@ -55,7 +58,7 @@ Operator decision 2026-06-10 (memory `feedback-public-translations-lazy-architec
 - [ ] N/A server-side — the fail-silent contract IS the UX guarantee (English, never errors).
 
 ### i18n
-- [ ] All 20 locale codes accepted exactly as the site's language selector emits them (single source: reuse the canonical locale list from the repo, not a hand-typed copy — pinned by a test importing/grepping the same list the web uses).
+- [ ] All 20 locale codes accepted exactly as the site's language selector emits them. Single source (architect Concern 4): new `express-api/src/utils/supported-locales.js` (CommonJS export), pinned by a GREP-based test against `public/js/language-selector.js` (browser IIFE — cannot be require()d) asserting every server entry appears there.
 
 ### Observability
 - [ ] WARN log per provider failure with `{event: 'translate_provider_fail', target, status, queued}`; INFO summary per process-hour is NOT required (avoid log spam — per-failure only).
@@ -88,7 +91,8 @@ Operator decision 2026-06-10 (memory `feedback-public-translations-lazy-architec
 ## Test Plan
 
 **Red first** (`express-api/tests/routes/translate.test.js`, supertest + provider mock via dependency-injected fetch/undici — mirror the route-test harness conventions; plus unit tests for the cache module `express-api/tests/utils/translation-cache.test.js`): every AC above has a named case — cache hit/miss/partial, dedupe, fail-silent 200 + WARN spy + queue append + queue dedupe, 400s (en/unsupported/oversize/too-many), atomic-write (simulate crash via temp-file inspection), corrupt-cache boot recovery, rate-limit pin, locale-list single-source pin, health-payload integer.
-**Green:** `express-api/src/routes/translate.js` + `express-api/src/utils/translation-cache.js` + provider client `translation-provider.js` (3s timeout, gtx endpoint) + health hook + miss-queue util.
+**Green:** rework `express-api/src/routes/translate.js` (merged: anonymous flow added; authenticated chat contract preserved, provider call rerouted through the chain) + `express-api/src/utils/translation-cache.js` (two-layer) + `translation-provider.js` (chain: gtx → LibreTranslate; gtx mock MUST replicate the real nested-array text/plain shape, NOT LibreTranslate's `{translatedText}`) + `supported-locales.js` + miss-queue util + health hook + seed file `express-api/src/data/translation-cache-seed.json` (`{}`) + `.gitignore` entry.
+**Additional red cases (architect Concerns 3/8 + merge):** Promise.allSettled partial failure (A,C fail; B succeeds → A,C missed, B translated, 200); chain fallback (gtx 503 → LibreTranslate serves → no miss-queue entry); both-fail (→ English + queue); EXISTING chat tests run UNCHANGED as the characterization gate before any route edit.
 **Verify-by-running:** local stack curl per BDD; one REAL unofficial-endpoint smoke locally (single word, documented in Notes — proves the gtx contract at implementation time; CI uses mocks only).
 
 ## Out of Scope
@@ -96,12 +100,12 @@ Operator decision 2026-06-10 (memory `feedback-public-translations-lazy-architec
 - Client-side consumption, the dev-console error surface, and the gated GitHub links (SHY-0073).
 - Translating anything beyond raw text strings (no HTML/markdown-aware segmentation yet).
 - Admin UI for the queue (the health integer + JSONL file suffice; UI is a future story if backlog grows).
-- Provider alternatives (LibreTranslate self-host etc.) — revisit only if the gtx endpoint dies (the cache + English-fallback + backfill make that a degradation, not an outage).
+- Standing up/relocating the LibreTranslate container itself (assumed at `LIBRETRANSLATE_URL`; if unreachable it's simply a dead chain link — the design degrades gracefully). Verifying it runs on prod is an operator-side check, noted in Dependencies.
 
 ## Dependencies
 
-- None hard. SHY-0073 depends on THIS. The Express rate-limit middleware pattern already exists in-repo (locate at pickup-review).
-- Pickup-review gate (per the new every-story rule) must verify: the gtx endpoint's CURRENT response shape (it drifts), the canonical locale-list location, and the existing rate-limiter to reuse.
+- SHY-0073 depends on THIS. Pickup-fitness-review COMPLETED 2026-06-10 (first formal run — found the route collision + live-verified gtx shape + located writeLimiter/locale-list/cache-layout). 
+- OPERATOR-SIDE (non-blocking, fail-silent covers it): confirm LibreTranslate is live on prod (`ssh ubuntu@213.35.98.160 'curl -s -m5 http://localhost:5000/languages'`) — my prod-read was correctly classifier-scoped out.
 
 ## Risks & Mitigations
 
@@ -115,5 +119,11 @@ Operator decision 2026-06-10 (memory `feedback-public-translations-lazy-architec
 - [ ] Real-endpoint smoke evidence in Notes; `status: Done` deferred to release cut; SHY-INDEX + EPIC-0002 synced.
 
 ## Notes (running log)
+
+- 2026-06-10 ~12:05 BST — **Reviewer cycle 1: 1 Critical + 3 Important, all applied (one with a twist).** (CRITICAL, verified via git check-ignore) the `.gitignore` `data/` pattern recursively matched `src/data/` — the committed seed (and every future Claude backfill commit) would have been silently ignored → scoped to `/data/`, verified both directions. (Imp-2's twist) the miss-queue separator was ALREADY NUL — but as a RAW \x00 BYTE in source (my earlier sed-style fixes wrote the byte, making the file binary-classified, which is exactly why the reviewer's grep misread it as a space) → rewritten as the proper `'\u0000'` escape, file back to UTF-8 text. (Imp-3) added a fresh-path pin that `detectedSourceLang` carries the provider's real detection (cache-hit 'unknown' degradation documented as in-spec). (Imp-4) added the route-level anonymous 429 test (NODE_ENV=production + fresh writeLimiter, wired exactly as index.js mounts it). Full suite re-verified green after all fixes.
+
+- 2026-06-10 ~11:30 BST — **TDD red→green complete; FULL express suite 11,881/11,881 (was 11,787 — +94 tonight).** New: provider chain (9 tests incl. fake-timer timeout + soft-fail-on-wrong-shape, the property keeping legacy chat mocks green), two-layer cache (10), public flow (18: batching/dedupe/partial-fill, fail-silent 200+WARN+queue+header, 7×400s, anonymous-chat-shape 401, wiring pins). Chat characterization: 32 tests green with exactly TWO documented intended adjustments — (1) the 502 probe text made unique (the unified cache now serves same-process repeats of translated strings: the upgrade, not a leak), (2) health body gains translationQueueLength (3 additive assertion updates; the sweep-body assertion untouched). Test-env default paths fall back to per-process tmpdirs (no repo data/ pollution, no cross-run leakage). **Live smoke (Verify-by-running):** real gtx call for 'roadmap'→de returned the documented nested-array shape; module end-to-end: {ok:true, provider:'gtx', translated:'Roadmap', detectedSourceLang:'en'}. Anonymous gate fixed mid-TDD: non-chat-shaped anonymous bodies route to public validation (400s), only explicit {text/targetLang} shapes 401.
+
+- 2026-06-10 ~10:45 BST — **Pickup-fitness-review (architect) — APPROVE-WITH-CHANGES, 8 concerns, all applied; rule vindicated on first formal run.** CRITICAL discovery: `POST /api/translate` already existed (authenticated chat translation via self-hosted LibreTranslate + Firestore quota) — unknown to the spec and all design rounds. Operator decisions on the two blockers: (1) provider = **gtx first → LibreTranslate fallback** ("3 but in reverse"); (2) **MERGE into one endpoint** (anonymous public flow + preserved chat contract; auth-bypass risk accepted with the characterization gate as the gate). Also applied: live-verified gtx shape (`text/plain`, `body[0][0][0]`, single-text-per-call → Promise.allSettled ≤3s); two-layer cache layout named (committed seed + gitignored runtime); writeLimiter pinned (index.js:176 mount, IP-keyed for anonymous); grep-based locale pin via new supported-locales.js. Story flipped Draft → In Progress.
 
 - 2026-06-10 ~10:15 BST — Authored fully-refined from the operator's three-round design (ask-freely session): lazy-on-first-view, server cache, fail-silent English + admin log + miss queue + Claude build-time backfill; unofficial Google endpoint accepted after the $0 pricing reality check. Architecture memory: feedback-public-translations-lazy-architecture.

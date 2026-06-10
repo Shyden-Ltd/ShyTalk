@@ -132,6 +132,11 @@ app.use('/api', (req, res, next) => {
       req.path !== '/suggestions/mine') ||
     // One-click email unsubscribe (token-based, no auth)
     (req.method === 'POST' && req.path === '/subscriptions/unsubscribe') ||
+    // Anonymous public-content translation (SHY-0072): header-less POSTs
+    // skip auth (the route serves the public flow and 401s chat-shaped
+    // bodies); callers presenting a token still flow through
+    // authMiddleware and keep the chat contract.
+    (req.method === 'POST' && req.path === '/translate' && !req.headers.authorization) ||
     // Apple App Store Server Notifications V2 webhook — auth is the JWS
     // signature verified inside the route, not a Bearer token (Apple does
     // not send one). Without this skip, every notification would 401.

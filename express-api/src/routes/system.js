@@ -27,13 +27,16 @@ const serverHealth = require('../cron/serverHealth');
 const accountDeletion = require('../cron/accountDeletion');
 const alertManager = require('../utils/alertManagerInstance');
 const { requireSystemAuth } = require('../middleware/system-auth');
+const { getDefaultMissQueue } = require('../utils/translation-miss-queue');
 
 router.get('/system/health', (req, res) => {
   // Respond immediately so the external monitor sees a fast 200. The
   // metrics check (memory threshold + PM2 restart detection) runs
   // fire-and-forget — a failure there is logged but doesn't affect
-  // the heartbeat response.
-  res.json({ status: 'ok' });
+  // the heartbeat response. translationQueueLength (SHY-0072) is the
+  // admin backlog signal for untranslated public strings — counted
+  // lazily from the queue file so the reader never races the writer.
+  res.json({ status: 'ok', translationQueueLength: getDefaultMissQueue().length() });
 
   serverHealth(alertManager).catch((err) => {
     log.error('system', 'serverHealth metrics check failed', { error: err.message });
