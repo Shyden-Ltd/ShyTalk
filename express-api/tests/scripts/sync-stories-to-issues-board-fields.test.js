@@ -226,6 +226,41 @@ const DRAFT_UPDATE_RESPONSE = JSON.stringify({
   data: { updateProjectV2DraftIssue: { draftIssue: { id: 'DI_X' } } },
 });
 
+// SHY-0082 v4: native issue-type ids returned by the repo-level bootstrap
+// query, keyed by the 3 org issue types. The 7 story types map to these:
+// bug→Bug; feature→Feature; refactor/docs/infra/spike/chore→Task.
+const ISSUE_TYPE_IDS = { Task: 'IT_TASK', Bug: 'IT_BUG', Feature: 'IT_FEATURE' };
+const STORY_LABEL_ID = 'LBL_story';
+function issueTypeIdFor(storyType) {
+  if (storyType === 'bug') return ISSUE_TYPE_IDS.Bug;
+  if (storyType === 'feature') return ISSUE_TYPE_IDS.Feature;
+  return ISSUE_TYPE_IDS.Task;
+}
+
+// v4 bootstrap_repo() response: repo node id + native issue-type ids + the
+// `story` marker label id, resolved in ONE repo-level GraphQL query.
+function issueTypesResponse() {
+  return JSON.stringify({
+    data: {
+      repository: {
+        id: 'REPO_1',
+        issueTypes: { nodes: Object.entries(ISSUE_TYPE_IDS).map(([name, id]) => ({ id, name })) },
+        label: { id: STORY_LABEL_ID },
+      },
+    },
+  });
+}
+
+// v4 createIssue() response: the new issue's node id + number.
+function issueCreateResponse(node = 'I_node_1', number = 1) {
+  return JSON.stringify({ data: { createIssue: { issue: { id: node, number } } } });
+}
+
+// v4 add_to_board() response (addProjectV2ItemById): the new board item id.
+function addItemResponse(itemId) {
+  return JSON.stringify({ data: { addProjectV2ItemById: { item: { id: itemId } } } });
+}
+
 /** Items-map query node for a draft-backed board item. */
 function draftNode(shyId, itemId, draftId, body, title = `${shyId}: Fixture story`) {
   return {
@@ -438,11 +473,18 @@ function createPathRules(dir, { fields = fieldsResponse(), items = EMPTY_ITEMS }
   writeResponse(dir, 'resp-create-url.txt', 'https://github.com/Shyden-Ltd/ShyTalk/issues/100\n');
   writeResponse(dir, 'resp-node-id.txt', 'I_node_100\n');
   writeResponse(dir, 'resp-labels.txt', 'story\ndependencies\n');
+  // SHY-0082 v4: bootstrap_repo (repo id + native type ids + story label id)
+  // and createIssue responses.
+  writeResponse(dir, 'resp-issuetypes.json', issueTypesResponse());
+  writeResponse(dir, 'resp-issue-create.json', issueCreateResponse());
   return [
     ['updateProjectV2ItemFieldValue', '', ''],
     ['updateProjectV2DraftIssue', 'resp-draft-update.json', ''],
     ['addProjectV2ItemById', 'resp-add.json', ''],
     ['addProjectV2DraftIssue', 'resp-draft-add.json', ''],
+    // v4: the repo-level bootstrap query + the typed-issue create.
+    ['repository\\(owner', 'resp-issuetypes.json', ''],
+    ['createIssue', 'resp-issue-create.json', ''],
     ['items\\(first: 100', 'resp-items.json', ''],
     ['ProjectV2SingleSelectField', 'resp-fields.json', ''],
     // SHY-0078 dedup guard: the consistent-source issue search defaults to
@@ -469,12 +511,16 @@ function fieldLine(lines, itemId, fieldId, valueExpr) {
 
 // ============================================================== SHY-0081 v3 uniform routing
 
-describe('SHY-0081 v3: every story type → a board DRAFT card; the Issues page is never written from the corpus (mock-gh)', () => {
-  // The model reversal: in v2 a `type: bug` story became a GitHub Issue. In
-  // v3 EVERY type (incl. bug) becomes a board draft; the Issues page is
-  // reserved for a future, separate bug-REPORT intake — never written here.
+describe('SHY-0082 v4: every story type → a real typed GitHub ISSUE on the board (mock-gh)', () => {
+  // The model: v3 made every card a DRAFT; v4 makes every card a REAL GitHub
+  // issue (createIssue + native Bug/Feature/Task type + the `story` label),
+  // added to the board (addProjectV2ItemById). Drafts can't carry a native
+  // type — typed "tickets" must be real issues. Issues also appear on the
+  // Issues tab (inherent), distinguished from user reports by the `story` label
+  // + terminal-status close.
   const ALL_TYPES = ['feature', 'bug', 'refactor', 'docs', 'infra', 'spike', 'chore'];
   const idFor = (i) => `SHY-81${String(i + 10)}`;
+  const nodeFor = (id) => `I_node_${id}`;
 
   let lines;
   let result;
@@ -482,80 +528,111 @@ describe('SHY-0081 v3: every story type → a board DRAFT card; the Issues page 
 
   beforeAll(() => {
     mock = makePatternMockGh();
-    const storiesDir = tempDir('stories81-');
+    const storiesDir = tempDir('stories82-');
     ALL_TYPES.forEach((type, i) => {
-      writeResponse(mock.dir, `resp-draft-${idFor(i)}.json`, draftAddResponse(`ITEM_${idFor(i)}`));
+      const id = idFor(i);
+      writeResponse(mock.dir, `resp-ic-${id}.json`, issueCreateResponse(nodeFor(id), 8100 + i));
+      writeResponse(mock.dir, `resp-add-${id}.json`, addItemResponse(`ITEM_${id}`));
+      makeStory(storiesDir, { id, status: 'In Progress', type });
     });
-    ALL_TYPES.forEach((type, i) =>
-      makeStory(storiesDir, { id: idFor(i), status: 'In Progress', type }),
-    );
     const rules = createPathRules(mock.dir);
-    const perStory = ALL_TYPES.map((_t, i) => [
-      `addProjectV2DraftIssue.*title=${idFor(i)}:`,
-      `resp-draft-${idFor(i)}.json`,
-      '',
-    ]);
+    // Per-story rules precede the generic createIssue / addProjectV2ItemById
+    // rules (first-match) so each story gets a unique issue node + board item.
+    const perStory = ALL_TYPES.flatMap((_t, i) => {
+      const id = idFor(i);
+      return [
+        [`createIssue.*title=${id}:`, `resp-ic-${id}.json`, ''],
+        [`addProjectV2ItemById.*contentId=${nodeFor(id)}`, `resp-add-${id}.json`, ''],
+      ];
+    });
     writeRules(mock.dir, [...perStory, ...rules]);
     result = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     lines = readRecording(mock.recording);
   });
 
-  test('run exits 0 and reports 7 created — no draft/issue split (there is only one kind of card)', () => {
+  test('run exits 0 and reports 7 created', () => {
     expect(result.code).toBe(0);
     expect(result.stderr).toMatch(/Sync result: 7 created, 0 updated, 0 skipped, 0 failed/);
-    // v2's "(N drafts, N issues)" split is gone — uniform routing means one kind.
-    expect(result.stderr).not.toMatch(/drafts,.*issues\)/);
   });
 
   test.each(ALL_TYPES.map((t, i) => [t, idFor(i)]))(
-    'type:%s story (%s) creates a board DRAFT item',
+    'type:%s story (%s) is created as a REAL issue via createIssue, never a draft',
     (_type, id) => {
       expect(
+        lines.find((l) => l.includes('createIssue') && l.includes(`title=${id}:`)),
+      ).toBeDefined();
+      expect(
         lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes(`title=${id}:`)),
+      ).toBeUndefined();
+    },
+  );
+
+  // Native issue-type VALUE matrix: bug→Bug, feature→Feature, rest→Task.
+  test.each(ALL_TYPES.map((t, i) => [t, idFor(i), issueTypeIdFor(t)]))(
+    'type:%s story (%s) sets native issueTypeId=%s on createIssue',
+    (_type, id, typeId) => {
+      expect(
+        lines.find(
+          (l) =>
+            l.includes('createIssue') &&
+            l.includes(`title=${id}:`) &&
+            l.includes(`issueTypeId=${typeId}`),
+        ),
       ).toBeDefined();
     },
   );
 
-  test('exactly 7 draft creates fired (one per story, none duplicated)', () => {
-    expect(lines.filter((l) => l.includes('addProjectV2DraftIssue'))).toHaveLength(7);
+  test('every createIssue carries exactly the single `story` marker label', () => {
+    const creates = lines.filter((l) => l.includes('createIssue') && l.includes('title=SHY-81'));
+    expect(creates).toHaveLength(7);
+    for (const l of creates) {
+      expect(l).toContain(`labelIds: ["${STORY_LABEL_ID}"]`);
+    }
   });
 
-  test('HEADLINE: NO gh issue create / edit / comment / close / list for ANY story type', () => {
+  test('exactly 7 createIssue fired (one per story, none duplicated)', () => {
+    expect(
+      lines.filter((l) => l.includes('createIssue') && l.includes('title=SHY-81')),
+    ).toHaveLength(7);
+  });
+
+  test('each issue is added to the board via addProjectV2ItemById (7 board adds)', () => {
+    expect(lines.filter((l) => l.includes('addProjectV2ItemById'))).toHaveLength(7);
+  });
+
+  test('HEADLINE: issues are created via GraphQL createIssue, NOT the gh issue CLI', () => {
     expect(lines.filter((l) => l.startsWith('issue create'))).toEqual([]);
     expect(lines.filter((l) => l.startsWith('issue edit'))).toEqual([]);
     expect(lines.filter((l) => l.startsWith('issue comment'))).toEqual([]);
-    expect(lines.filter((l) => l.startsWith('issue close'))).toEqual([]);
-    expect(lines.filter((l) => l.startsWith('issue list'))).toEqual([]);
   });
 
-  test('the bug-type story is a DRAFT, not an Issue (the v2→v3 reversal, asserted at the value level)', () => {
+  test('NO issue is closed — all 7 stories are In Progress (not terminal)', () => {
+    expect(lines.filter((l) => l.includes('closeIssue'))).toEqual([]);
+  });
+
+  test('the bug-type story is a typed Issue (issueTypeId=Bug), not a draft', () => {
     const id = idFor(ALL_TYPES.indexOf('bug'));
     expect(
-      lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes(`title=${id}:`)),
+      lines.find(
+        (l) =>
+          l.includes('createIssue') &&
+          l.includes(`title=${id}:`) &&
+          l.includes(`issueTypeId=${ISSUE_TYPE_IDS.Bug}`),
+      ),
     ).toBeDefined();
-    expect(lines.find((l) => l.startsWith('issue create') && l.includes(`${id}:`))).toBeUndefined();
   });
 
-  test('no addProjectV2ItemById — issue-backed board adds are retired', () => {
-    expect(lines.filter((l) => l.includes('addProjectV2ItemById'))).toEqual([]);
-  });
-
-  test('the bug-type draft still gets its Type=bug board field (kind of work, on the board)', () => {
+  test('the bug-type issue still gets its Type=bug board field (kind of work, on the board)', () => {
     const id = idFor(ALL_TYPES.indexOf('bug'));
     expect(fieldLine(lines, `ITEM_${id}`, 'field-type', 'optionId=opt-type-bug')).toBeDefined();
   });
 
-  test('summary drops the issue-specific counters entirely (no comments/closed/dedup/labels-created)', () => {
-    expect(result.stderr).not.toMatch(/comments posted/);
-    expect(result.stderr).not.toMatch(/issues closed/);
-    expect(result.stderr).not.toMatch(/dedup-guard hits/);
-    expect(result.stderr).not.toMatch(/labels created/);
-  });
-
-  test('summary still reports the retained draft + board counters', () => {
+  test('summary reports the v4 counters', () => {
     expect(result.stderr).toMatch(/status fields set: 7/);
     expect(result.stderr).toMatch(/bodies embedded: 7/);
     expect(result.stderr).toMatch(/project items added: 7/);
+    expect(result.stderr).toMatch(/issue types set: 7/);
+    expect(result.stderr).toMatch(/issues closed: 0/);
   });
 });
 

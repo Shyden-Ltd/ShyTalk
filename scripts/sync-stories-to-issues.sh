@@ -1481,6 +1481,14 @@ sync_all() {
   if [ "$DRY_RUN" != "1" ]; then
     load_project_cache || true
     ensure_project_type_field || true
+    # SHY-0082 v4: resolve repo node id + native issue-type ids + `story` label
+    # id BEFORE any per-story create/update. story_type_to_issue_type_id reads
+    # the type-id globals, so without this the FIRST story would be created with
+    # an empty issueTypeId. Idempotent guard means create_issue's own call is a
+    # no-op after this.
+    bootstrap_repo \
+      || fail_global "repo" "repo bootstrap (issue types / story label) failed — aborting before any mutations" "$E_API"
+    ensure_story_label || true
   fi
 
   # SHY-0074: one-shot v1→v2 migration (gated on REBUILD_CONFIRM in main).
