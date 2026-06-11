@@ -4,25 +4,32 @@
 # sync-stories-to-issues.sh
 #
 # One-way mirror of .project/stories/SHY-NNNN-*.md files to the GitHub
-# Projects v2 board, per the SHY-0081 architecture v3 spec at
-# .project/stories/SHY-0081-mirror-v3-uniform-board-drafts.md:
+# Projects v2 board, per the SHY-0082 architecture v4 spec at
+# .project/stories/SHY-0082-mirror-v4-typed-issues.md:
 #
-#   - EVERY story (any type, including `bug`) → a board DRAFT item
-#     (addProjectV2DraftIssue) carrying the full spec body + footer. The
-#     GitHub Issues page is NEVER written from the corpus — it is reserved
-#     for a future, separate bug-REPORT intake (v3 reverses the v2 model
-#     where `type: bug` stories became Issues).
-#   - Lifecycle drives the board only: hash-gated draft body refresh + the
-#     body-footer `_Status: X_` marker detects a pure status flip (status
-#     lives in frontmatter, outside the body hash) and moves the board
-#     Status column. No issue comments / closes — drafts have no timeline.
-#   - One paginated items-map query feeds every create-vs-update decision.
-#   - A legacy issue-backed item (a v2 leftover) is converted: the board
-#     item + its issue are deleted and the story is recreated as a draft
-#     (the incremental safety net; --rebuild does the bulk migration).
+#   - EVERY story (any type) → a REAL GitHub ISSUE (createIssue) carrying a
+#     native issue TYPE (Bug / Feature / Task — org-level issue types) + the
+#     full spec body + footer + the `story` marker label, added to the board
+#     (addProjectV2ItemById). v4 reverses v3 (which made every card a DRAFT):
+#     drafts cannot carry a native type, so typed "tickets" must be real issues.
+#     Type map (7 story types → 3 native): bug→Bug; feature→Feature;
+#     refactor/docs/infra/spike/chore→Task.
+#   - A real issue inherently ALSO appears on the repo's Issues *tab*. That tab
+#     stays usable for user bug reports (+ deploy alerts): story-issues carry
+#     the `story` label (filter them out) and terminal (Done/Cancelled) issues
+#     are CLOSED, so finished work leaves the default open view.
+#   - Lifecycle drives the board Status column AND the issue open/closed state:
+#     hash-gated body refresh + the body-footer `_Status: X_` marker detect a
+#     pure status flip (status lives in frontmatter, outside the body hash);
+#     terminal status → issue closed, otherwise open (reconciled on transition).
+#   - One paginated items-map query (now selecting the issue body too) feeds
+#     every create-vs-update decision.
+#   - A legacy DRAFT-backed item (a v3 leftover) is converted: the draft board
+#     item is deleted and the story is recreated as a typed issue (the
+#     incremental safety net; --rebuild does the bulk migration).
 #   - --rebuild (gated on REBUILD_CONFIRM=yes) tears down every board item
-#     + every story-labeled issue (delete_issue_node), then resyncs fresh —
-#     the one-shot migration that empties the Issues page of corpus entries.
+#     + every story-labeled issue (delete_issue_node), then resyncs fresh as
+#     typed issues — the one-shot migration that converts a v3 draft board to v4.
 #
 # Defect fixes carried forward from SHY-0067:
 #
@@ -31,9 +38,11 @@
 #     carry project:write).
 #   - Defect B (labels): the five duplicated families (status:/priority:/
 #     effort:/type:/roadmap:) are DELETED repo-wide on every run
-#     (remove_duplicated_label_families). v3 retired label CREATION entirely
-#     (the `story` marker is no longer applied — left inert for a future
-#     bug-report intake).
+#     (remove_duplicated_label_families). v4 applies exactly ONE marker label —
+#     `story` — to every story-issue (created on first run via
+#     ensure_story_label); it identifies corpus issues + lets --rebuild find
+#     them via `issue list --label story`. The native issue TYPE replaces the
+#     old `type:` label.
 #   - Defect C (silent failure): every `gh` invocation captures stderr to a
 #     tmpfile; failures log the captured context (no `>/dev/null 2>&1`);
 #     N_FAILED > 0 propagates to a non-zero E_API=40 exit at script end.
@@ -182,8 +191,8 @@ FLAGS
   --story SHY-NNNN   Process only the named story
   --rebuild          DESTRUCTIVE one-shot migration: delete every Project v2
                      board item + every story-labeled issue, then run a
-                     fresh --all sync (every story type as a board draft
-                     card). Refuses without REBUILD_CONFIRM=yes.
+                     fresh --all sync (every story type as a real typed
+                     GitHub issue). Refuses without REBUILD_CONFIRM=yes.
   --dry-run          Print actions; make no API mutations
   --verbose          Print API calls + payloads (token redacted) to stderr
   --help             Print this usage and exit 0
@@ -875,17 +884,6 @@ populate_project_fields() {
   return 0
 }
 
-# ============================================================== draft items + deletions (SHY-0074)
-
-# Create a board DRAFT item for a non-bug story. Echoes the new project
-# item id. The body travels via stdin (-F body=@-): 64K spec bodies in
-# argv would flirt with ARG_MAX and break line-oriented logging.
-# Callers capture the echo via $(...) — counter increments live at the
-# call sites (subshell rule).
-# Echoes "<projectItemId> <draftContentId>" — the caller needs BOTH: the
-# project item id (field mutations) and the DraftIssue content id (later
-# updateProjectV2DraftIssue + the SHY-0079 sidecar). Counter increments live
-# at the call sites (subshell rule).
 # ============================================================== v4 typed-issue path (SHY-0082)
 
 # Resolve repo node id + native issue-type ids (Bug/Feature/Task) + the
