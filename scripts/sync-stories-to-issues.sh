@@ -86,7 +86,7 @@
 
 set -euo pipefail
 
-VERSION="3.0.0"
+VERSION="4.0.0"
 
 # ============================================================== constants
 
@@ -105,17 +105,27 @@ REBUILD=0
 GH="${GH:-gh}"
 PROJECT_OWNER="${PROJECT_OWNER:-Shyden-Ltd}"
 PROJECT_NUMBER="${PROJECT_NUMBER:-1}"
+# SHY-0082 v4: every story → a REAL typed GitHub issue (not a draft). The
+# repo node id + native issue-type ids + `story` label id are resolved once
+# at run start via ONE repo-level GraphQL query (the PAT can read repo-level
+# issueTypes; the org-level query is 403 for fine-grained PATs).
+PROJECT_REPO="${PROJECT_REPO:-ShyTalk}"
+# v4 marker label — the single label every story-issue carries (lets the
+# rebuild teardown find them via `--label story` + distinguishes them from
+# future user-submitted bug reports). v3 retired the 5 label families; v4
+# keeps ONLY this marker.
+STORY_LABEL="story"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # SHY-0074: env-overridable so tests can run the full pipeline against a
 # fixture corpus instead of the live .project/stories tree.
 STORIES_DIR="${STORIES_DIR:-${REPO_ROOT}/.project/stories}"
 
-# SHY-0081 v3: every story is a board DRAFT card, so `created` needs no
-# draft/issue split. The issue-specific counters (issues created, drafts
-# created, labels created, comments posted, issues closed, dedup-guard hits)
-# are retired with the issue path. N_ISSUES_DELETED survives — `--rebuild`
-# still deletes the legacy story-labeled issues during the one-shot migration.
+# SHY-0082 v4: every story → a REAL typed GitHub issue added to the board.
+# N_CREATED/N_UPDATED are the headline create/update counts (now of issues,
+# not drafts). The v4-specific signals (native issue type set, issue
+# open/closed transitions, draft→issue migration) get their own counters so
+# the summary stays auditable. N_ISSUES_DELETED is used by `--rebuild`.
 N_CREATED=0
 N_UPDATED=0
 N_SKIPPED=0
@@ -128,6 +138,10 @@ N_PROJECT_FIELDS_UPDATED=0
 N_STATUS_SET=0
 N_BODIES_EMBEDDED=0
 N_BODIES_TRUNCATED=0
+N_ISSUE_TYPES_SET=0
+N_ISSUES_CLOSED=0
+N_ISSUES_REOPENED=0
+N_DRAFTS_MIGRATED=0
 TYPE_FIELD_AUTO_CREATED="no"
 
 # Caches populated at runtime.
@@ -142,6 +156,14 @@ PROJECT_NODE_ID=""
 TYPE_FIELD_ID=""
 PROJECT_FIELDS_JSON='{}'   # {fieldName: fieldId}
 PROJECT_OPTIONS_JSON='{}'  # {fieldName: {optionName: optionId}}
+# SHY-0082 v4: repo-level facts resolved once by bootstrap_repo().
+REPO_NODE_ID=""
+STORY_LABEL_ID=""
+# Native issue-type node ids, keyed by the 3 org types (Bug/Feature/Task).
+ISSUE_TYPE_BUG_ID=""
+ISSUE_TYPE_FEATURE_ID=""
+ISSUE_TYPE_TASK_ID=""
+REPO_BOOTSTRAPPED=0
 
 # ============================================================== helpers
 
@@ -862,58 +884,201 @@ populate_project_fields() {
 # project item id (field mutations) and the DraftIssue content id (later
 # updateProjectV2DraftIssue + the SHY-0079 sidecar). Counter increments live
 # at the call sites (subshell rule).
-create_draft_item() {
-  local title="$1" body="$2"
-  load_project_cache || return 1
+# ============================================================== v4 typed-issue path (SHY-0082)
+
+# Resolve repo node id + native issue-type ids (Bug/Feature/Task) + the
+# `story` label id in ONE repo-level GraphQL query. The org-level issueTypes
+# query is 403 for fine-grained PATs; the repository-scoped one is permitted.
+# Idempotent (guarded by REPO_BOOTSTRAPPED). Aborts if a native type is
+# missing — typing every issue is non-negotiable in v4.
+bootstrap_repo() {
+  [ "$REPO_BOOTSTRAPPED" = "1" ] && return 0
   local query response stderr_file rc
   stderr_file="$(mktemp)"
   # shellcheck disable=SC2016
-  # ^ GraphQL variables, NOT bash. SHY-0079: also fetch the DraftIssue
-  # content id so the sidecar can store it for the update path.
-  query='mutation($projectId: ID!, $title: String!, $body: String!) { addProjectV2DraftIssue(input: { projectId: $projectId, title: $title, body: $body }) { projectItem { id content { ... on DraftIssue { id } } } } }'
+  # ^ GraphQL variables, NOT bash; STORY_LABEL is interpolated (controlled).
+  query='query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { id issueTypes(first: 20) { nodes { id name } } label(name: "'"$STORY_LABEL"'") { id } } }'
   set +e
-  response="$(printf '%s' "$body" | "$GH" api graphql -f query="$query" -f projectId="$PROJECT_NODE_ID" -f title="$title" -F body=@- 2>"$stderr_file")"
+  response="$("$GH" api graphql -f query="$query" -f owner="$PROJECT_OWNER" -f name="$PROJECT_REPO" 2>"$stderr_file")"
   rc=$?
   set -e
   if [ "$rc" -ne 0 ]; then
-    printf '[gh-error] addProjectV2DraftIssue "%s" (exit %d): %s\n' \
-      "$title" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
+    printf '[gh-error] repo bootstrap query (exit %d): %s\n' "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
     rm -f "$stderr_file"
     return 1
   fi
   rm -f "$stderr_file"
-  local item_id content_id
-  item_id="$(printf '%s' "$response" | jq -r '.data.addProjectV2DraftIssue.projectItem.id // empty')"
-  content_id="$(printf '%s' "$response" | jq -r '.data.addProjectV2DraftIssue.projectItem.content.id // empty')"
-  if [ -z "$item_id" ]; then
-    emit "project" "draft-add" "addProjectV2DraftIssue returned empty id; response: $(printf '%s' "$response" | head -c 200)"
+  REPO_NODE_ID="$(printf '%s' "$response" | jq -r '.data.repository.id // empty')"
+  STORY_LABEL_ID="$(printf '%s' "$response" | jq -r '.data.repository.label.id // empty')"
+  ISSUE_TYPE_BUG_ID="$(printf '%s' "$response" | jq -r '.data.repository.issueTypes.nodes[] | select(.name=="Bug") | .id')"
+  ISSUE_TYPE_FEATURE_ID="$(printf '%s' "$response" | jq -r '.data.repository.issueTypes.nodes[] | select(.name=="Feature") | .id')"
+  ISSUE_TYPE_TASK_ID="$(printf '%s' "$response" | jq -r '.data.repository.issueTypes.nodes[] | select(.name=="Task") | .id')"
+  if [ -z "$REPO_NODE_ID" ]; then
+    emit "repo" "bootstrap" "repository query returned empty id; response: $(printf '%s' "$response" | head -c 200)"
     return 1
   fi
-  printf '%s %s\n' "$item_id" "$content_id"
+  if [ -z "$ISSUE_TYPE_BUG_ID" ] || [ -z "$ISSUE_TYPE_FEATURE_ID" ] || [ -z "$ISSUE_TYPE_TASK_ID" ]; then
+    fail_global "repo" "org is missing a native issue type (need Bug/Feature/Task; got Bug='${ISSUE_TYPE_BUG_ID}' Feature='${ISSUE_TYPE_FEATURE_ID}' Task='${ISSUE_TYPE_TASK_ID}')" "$E_API"
+  fi
+  REPO_BOOTSTRAPPED=1
   return 0
 }
 
-# Refresh an existing draft item's title + body. $1 is the DraftIssue
-# CONTENT id (content.id from the items map), not the project item id.
-update_draft_item() {
-  local draft_id="$1" title="$2" body="$3"
+# Ensure the `story` marker label exists + STORY_LABEL_ID is populated.
+# bootstrap_repo already tried to resolve it; create on first run if absent.
+ensure_story_label() {
+  [ -n "$STORY_LABEL_ID" ] && return 0
+  local stderr_file rc q
+  stderr_file="$(mktemp)"
+  set +e
+  "$GH" label create "$STORY_LABEL" --repo "${PROJECT_OWNER}/${PROJECT_REPO}" \
+    --color ededed --description "Tracked SHY story (mirrored from .project/stories)" \
+    --force >/dev/null 2>"$stderr_file"
+  rc=$?
+  set -e
+  if [ "$rc" -ne 0 ]; then
+    printf '[gh-error] label create %s (exit %d): %s\n' "$STORY_LABEL" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
+    rm -f "$stderr_file"
+    return 1
+  fi
+  rm -f "$stderr_file"
+  # shellcheck disable=SC2016
+  q='query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { label(name: "'"$STORY_LABEL"'") { id } } }'
+  STORY_LABEL_ID="$("$GH" api graphql -f query="$q" -f owner="$PROJECT_OWNER" -f name="$PROJECT_REPO" 2>/dev/null | jq -r '.data.repository.label.id // empty')"
+  [ -n "$STORY_LABEL_ID" ] && return 0
+  emit "repo" "label" "could not resolve ${STORY_LABEL} label id after create"
+  return 1
+}
+
+# Map a story `type` (7 values) → native issue-type node id (3 values):
+# bug→Bug; feature→Feature; refactor/docs/infra/spike/chore→Task.
+story_type_to_issue_type_id() {
+  case "$1" in
+    bug) printf '%s' "$ISSUE_TYPE_BUG_ID" ;;
+    feature) printf '%s' "$ISSUE_TYPE_FEATURE_ID" ;;
+    *) printf '%s' "$ISSUE_TYPE_TASK_ID" ;;
+  esac
+}
+
+# Add an existing issue (by content/node id) to the project board. Echoes the
+# new board item id; increments N_PROJECT_ITEMS_ADDED on success.
+add_to_board() {
+  local content_id="$1"
+  load_project_cache || return 1
+  local query response stderr_file rc item_id
+  stderr_file="$(mktemp)"
+  # shellcheck disable=SC2016
+  query='mutation($projectId: ID!, $contentId: ID!) { addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) { item { id } } }'
+  set +e
+  response="$("$GH" api graphql -f query="$query" -f projectId="$PROJECT_NODE_ID" -f contentId="$content_id" 2>"$stderr_file")"
+  rc=$?
+  set -e
+  if [ "$rc" -ne 0 ]; then
+    printf '[gh-error] addProjectV2ItemById %s (exit %d): %s\n' "$content_id" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
+    rm -f "$stderr_file"
+    return 1
+  fi
+  rm -f "$stderr_file"
+  item_id="$(printf '%s' "$response" | jq -r '.data.addProjectV2ItemById.item.id // empty')"
+  if [ -z "$item_id" ]; then
+    emit "project" "board-add" "addProjectV2ItemById returned empty id; response: $(printf '%s' "$response" | head -c 200)"
+    return 1
+  fi
+  N_PROJECT_ITEMS_ADDED=$((N_PROJECT_ITEMS_ADDED + 1))
+  printf '%s' "$item_id"
+  return 0
+}
+
+# Create a real typed issue + add it to the board. Echoes "ITEM_ID ISSUE_NODE_ID ISSUE_NUMBER".
+# $1 title, $2 body, $3 issue-type node id. Body via stdin (ARG_MAX-safe,
+# SHY-0080). The `story` label id is inlined into the mutation (gh api graphql
+# can't pass a list variable via -f; the id is a controlled value, not user input).
+create_issue() {
+  local title="$1" body="$2" type_id="$3"
+  bootstrap_repo || return 1
+  ensure_story_label || return 1
+  local query response stderr_file rc
+  stderr_file="$(mktemp)"
+  # shellcheck disable=SC2016
+  # ^ GraphQL variables, NOT bash; STORY_LABEL_ID inlined into labelIds.
+  query='mutation($repositoryId: ID!, $title: String!, $body: String!, $issueTypeId: ID!) { createIssue(input: { repositoryId: $repositoryId, title: $title, body: $body, issueTypeId: $issueTypeId, labelIds: ["'"$STORY_LABEL_ID"'"] }) { issue { id number } } }'
+  set +e
+  response="$(printf '%s' "$body" | "$GH" api graphql -f query="$query" -f repositoryId="$REPO_NODE_ID" -f title="$title" -F body=@- -f issueTypeId="$type_id" 2>"$stderr_file")"
+  rc=$?
+  set -e
+  if [ "$rc" -ne 0 ]; then
+    printf '[gh-error] createIssue "%s" (exit %d): %s\n' "$title" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
+    rm -f "$stderr_file"
+    return 1
+  fi
+  rm -f "$stderr_file"
+  local issue_node issue_num
+  issue_node="$(printf '%s' "$response" | jq -r '.data.createIssue.issue.id // empty')"
+  issue_num="$(printf '%s' "$response" | jq -r '.data.createIssue.issue.number // empty')"
+  if [ -z "$issue_node" ]; then
+    emit "issue" "create" "createIssue returned empty id; response: $(printf '%s' "$response" | head -c 200)"
+    return 1
+  fi
+  N_ISSUE_TYPES_SET=$((N_ISSUE_TYPES_SET + 1))
+  local item_id
+  item_id="$(add_to_board "$issue_node")" || return 1
+  printf '%s %s %s' "$item_id" "$issue_node" "$issue_num"
+  return 0
+}
+
+# Refresh an existing issue's title/body/native type. $1 = issue node id.
+update_issue() {
+  local issue_node="$1" title="$2" body="$3" type_id="$4"
   local query stderr_file rc
   stderr_file="$(mktemp)"
   # shellcheck disable=SC2016
-  # ^ GraphQL variables, NOT bash.
-  query='mutation($draftIssueId: ID!, $title: String!, $body: String!) { updateProjectV2DraftIssue(input: { draftIssueId: $draftIssueId, title: $title, body: $body }) { draftIssue { id } } }'
+  query='mutation($id: ID!, $title: String!, $body: String!, $issueTypeId: ID!) { updateIssue(input: { id: $id, title: $title, body: $body, issueTypeId: $issueTypeId }) { issue { id } } }'
   set +e
-  printf '%s' "$body" | "$GH" api graphql -f query="$query" -f draftIssueId="$draft_id" -f title="$title" -F body=@- \
+  printf '%s' "$body" | "$GH" api graphql -f query="$query" -f id="$issue_node" -f title="$title" -F body=@- -f issueTypeId="$type_id" \
     >/dev/null 2>"$stderr_file"
   rc=$?
   set -e
   if [ "$rc" -ne 0 ]; then
-    printf '[gh-error] updateProjectV2DraftIssue %s (exit %d): %s\n' \
-      "$draft_id" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
+    printf '[gh-error] updateIssue %s (exit %d): %s\n' "$issue_node" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
     rm -f "$stderr_file"
     return 1
   fi
   rm -f "$stderr_file"
+  N_ISSUE_TYPES_SET=$((N_ISSUE_TYPES_SET + 1))
+  return 0
+}
+
+# Reconcile an issue's open/closed state with its story lifecycle: terminal
+# (Done/Cancelled) → closed; else → open. $1 issue node, $2 = "1" to close
+# else reopen. Idempotent on GitHub's side (closing a closed issue is a no-op).
+set_issue_state() {
+  local issue_node="$1" want_closed="$2"
+  local query stderr_file rc verb
+  if [ "$want_closed" = "1" ]; then
+    verb="close"
+    # shellcheck disable=SC2016
+    query='mutation($id: ID!) { closeIssue(input: { issueId: $id }) { issue { id } } }'
+  else
+    verb="reopen"
+    # shellcheck disable=SC2016
+    query='mutation($id: ID!) { reopenIssue(input: { issueId: $id }) { issue { id } } }'
+  fi
+  stderr_file="$(mktemp)"
+  set +e
+  "$GH" api graphql -f query="$query" -f id="$issue_node" >/dev/null 2>"$stderr_file"
+  rc=$?
+  set -e
+  if [ "$rc" -ne 0 ]; then
+    printf '[gh-error] %sIssue %s (exit %d): %s\n' "$verb" "$issue_node" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
+    rm -f "$stderr_file"
+    return 1
+  fi
+  rm -f "$stderr_file"
+  if [ "$want_closed" = "1" ]; then
+    N_ISSUES_CLOSED=$((N_ISSUES_CLOSED + 1))
+  else
+    N_ISSUES_REOPENED=$((N_ISSUES_REOPENED + 1))
+  fi
   return 0
 }
 
