@@ -270,11 +270,20 @@ function draftNode(shyId, itemId, draftId, body, title = `${shyId}: Fixture stor
   };
 }
 
-/** Items-map query node for an issue-backed board item. */
-function issueNode(shyId, itemId, number, state = 'OPEN', title = `${shyId}: Fixture story`) {
+/** Items-map query node for an issue-backed board item. SHY-0082 v4: the
+ *  items query now selects `body` on Issue, so the node carries it for
+ *  change-detection (the footer body-hash). Content id is the issue node id. */
+function issueNode(
+  shyId,
+  itemId,
+  number,
+  state = 'OPEN',
+  title = `${shyId}: Fixture story`,
+  body = '',
+) {
   return {
     id: itemId,
-    content: { __typename: 'Issue', id: `I_node_${number}`, number, state, title },
+    content: { __typename: 'Issue', id: `I_node_${number}`, number, state, title, body },
     fieldValueByName: { text: shyId },
   };
 }
@@ -1024,9 +1033,9 @@ describe('SHY-0081 v3: create path — per-value board-field matrix (every type 
 
 // ============================================================== update path
 
-describe('SHY-0081 v3: update path — stale draft bodies refresh in place, fields re-asserted (mock-gh)', () => {
-  // SHY-9101: draft (chore). SHY-9102: draft (bug-type) — both update as
-  // draft cards in v3 (a bug story is a draft, never an issue edit).
+describe('SHY-0082 v4: update path — stale issue bodies refresh in place, fields re-asserted (mock-gh)', () => {
+  // SHY-9101: issue (chore→Task). SHY-9102: issue (bug→Bug) — both update via
+  // updateIssue against the existing issue node (the items map carries it).
   let lines;
   let result;
   let mock;
@@ -1034,7 +1043,7 @@ describe('SHY-0081 v3: update path — stale draft bodies refresh in place, fiel
 
   beforeAll(() => {
     mock = makePatternMockGh();
-    const storiesDir = tempDir('stories74u-');
+    const storiesDir = tempDir('stories82u-');
     s9101 = makeStory(storiesDir, {
       id: 'SHY-9101',
       status: 'Done',
@@ -1051,11 +1060,11 @@ describe('SHY-0081 v3: update path — stale draft bodies refresh in place, fiel
       type: 'bug',
       roadmaps: '[G012]',
     });
-    const staleDraftBody = `Old draft.\n\n${syncedFooter('SHY-9101-fixture-story', 'Done', STALE_HASH)}`;
-    const staleDraftBody2 = `Old draft 2.\n\n${syncedFooter('SHY-9102-fixture-story', 'In Review', STALE_HASH)}`;
+    const staleBody = `Old issue body.\n\n${syncedFooter('SHY-9101-fixture-story', 'Done', STALE_HASH)}`;
+    const staleBody2 = `Old issue body 2.\n\n${syncedFooter('SHY-9102-fixture-story', 'In Review', STALE_HASH)}`;
     const items = itemsResponse([
-      draftNode('SHY-9101', 'ITEM_D9101', 'DI_9101', staleDraftBody),
-      draftNode('SHY-9102', 'ITEM_D9102', 'DI_9102', staleDraftBody2),
+      issueNode('SHY-9101', 'ITEM_I9101', 9101, 'CLOSED', 'SHY-9101: Fixture story', staleBody),
+      issueNode('SHY-9102', 'ITEM_I9102', 9102, 'OPEN', 'SHY-9102: Fixture story', staleBody2),
     ]);
     writeRules(mock.dir, createPathRules(mock.dir, { items }));
     result = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
@@ -1067,10 +1076,9 @@ describe('SHY-0081 v3: update path — stale draft bodies refresh in place, fiel
     expect(result.stderr).toMatch(/0 created, 2 updated/);
   });
 
-  test('stale draft refreshes via updateProjectV2DraftIssue against its DraftIssue content id', () => {
-    const line = lines.find((l) => l.includes('updateProjectV2DraftIssue'));
+  test('stale issue refreshes via updateIssue against its issue node id', () => {
+    const line = lines.find((l) => l.includes('updateIssue') && l.includes('id=I_node_9101'));
     expect(line).toBeDefined();
-    expect(line).toContain('draftIssueId=DI_9101');
   });
 
   test('refreshed SHY-9101 draft body is the new full spec + footer (via stdin)', () => {
@@ -1082,11 +1090,9 @@ describe('SHY-0081 v3: update path — stale draft bodies refresh in place, fiel
     expect(body).toContain('_Status: Done_');
   });
 
-  test('the bug-type draft (SHY-9102) refreshes via updateProjectV2DraftIssue — never an issue edit', () => {
+  test('the bug-type issue (SHY-9102) refreshes via updateIssue — never the gh issue CLI', () => {
     expect(
-      lines.find(
-        (l) => l.includes('updateProjectV2DraftIssue') && l.includes('draftIssueId=DI_9102'),
-      ),
+      lines.find((l) => l.includes('updateIssue') && l.includes('id=I_node_9102')),
     ).toBeDefined();
     expect(lines.filter((l) => l.startsWith('issue edit'))).toEqual([]);
     const bodies = readCaptures(mock.dir, 'graphql');
@@ -1108,82 +1114,126 @@ describe('SHY-0081 v3: update path — stale draft bodies refresh in place, fiel
     ['Type', 'field-type', 'optionId=opt-type-chore'],
     ['SHY ID', 'field-shyid', 'text=SHY-9101'],
     ['Roadmap IDs', 'field-roadmap', 'text=G011'],
-  ])('update path re-asserts %s on the draft item', (_name, fieldId, valueExpr) => {
-    expect(fieldLine(lines, 'ITEM_D9101', fieldId, valueExpr)).toBeDefined();
+  ])('update path re-asserts %s on the issue item', (_name, fieldId, valueExpr) => {
+    expect(fieldLine(lines, 'ITEM_I9101', fieldId, valueExpr)).toBeDefined();
   });
 
-  test('the second draft item maps independently (In Review → opt-st-inrev on ITEM_D9102)', () => {
-    expect(fieldLine(lines, 'ITEM_D9102', 'field-status', 'optionId=opt-st-inrev')).toBeDefined();
+  test('the second issue item maps independently (In Review → opt-st-inrev on ITEM_I9102)', () => {
+    expect(fieldLine(lines, 'ITEM_I9102', 'field-status', 'optionId=opt-st-inrev')).toBeDefined();
   });
 });
 
 // ============================================================== status transitions
 
-describe('SHY-0081 v3: status transitions on draft cards — body marker + board column move, no comments (mock-gh)', () => {
-  test('pure status flip (hash current, stored marker differs) refreshes the draft body + moves the board column', () => {
+describe('SHY-0082 v4: status transitions on issues — body marker + board column + open/closed (mock-gh)', () => {
+  test('non-terminal flip (In Progress→In Review) refreshes the body marker + moves the column, NO close/reopen', () => {
     const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories74tr-');
+    const storiesDir = tempDir('stories82tr-');
     const { content } = makeStory(storiesDir, { id: 'SHY-9103', status: 'In Review', type: 'bug' });
     // Stored marker says In Progress; hash is CURRENT — a pure status flip
-    // (status lives in frontmatter, outside the body hash) must still be
-    // detected via the footer marker and refresh the draft. A bug-type story
-    // is a DRAFT in v3, so there is no issue timeline / comment.
+    // (status lives in frontmatter, outside the body hash) is detected via the
+    // footer marker. Both statuses are non-terminal → the issue stays open.
     const body = existingBody(content, 'SHY-9103-fixture-story', 'In Progress');
-    const items = itemsResponse([draftNode('SHY-9103', 'ITEM_D9103', 'DI_9103', body)]);
+    const items = itemsResponse([
+      issueNode('SHY-9103', 'ITEM_I9103', 9103, 'OPEN', 'SHY-9103: Fixture story', body),
+    ]);
     writeRules(mock.dir, createPathRules(mock.dir, { items }));
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(0);
     const lines = readRecording(mock.recording);
-    // No issue writes at all — drafts have no timeline.
-    expect(lines.filter((l) => l.startsWith('issue comment'))).toEqual([]);
-    expect(lines.filter((l) => l.startsWith('issue edit'))).toEqual([]);
-    // Draft body refreshed with the NEW marker.
+    // Issue body refreshed with the NEW marker via updateIssue.
     expect(
-      lines.find(
-        (l) => l.includes('updateProjectV2DraftIssue') && l.includes('draftIssueId=DI_9103'),
-      ),
+      lines.find((l) => l.includes('updateIssue') && l.includes('id=I_node_9103')),
     ).toBeDefined();
     expect(readCaptures(mock.dir, 'graphql')[0]).toContain('_Status: In Review_');
     // Board column moves too.
-    expect(fieldLine(lines, 'ITEM_D9103', 'field-status', 'optionId=opt-st-inrev')).toBeDefined();
+    expect(fieldLine(lines, 'ITEM_I9103', 'field-status', 'optionId=opt-st-inrev')).toBeDefined();
+    // Non-terminal → non-terminal: NO open/closed change.
+    expect(lines.filter((l) => l.includes('closeIssue'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('reopenIssue'))).toEqual([]);
     expect(r.stderr).toMatch(/1 updated/);
-    expect(r.stderr).not.toMatch(/comments posted/);
+    expect(r.stderr).toMatch(/issues closed: 0/);
   });
 
-  test('draft transition refreshes the body marker but posts NO comment (drafts have no timeline)', () => {
+  test('transition to a TERMINAL status (Done) CLOSES the issue + moves the column', () => {
     const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories74tr2-');
+    const storiesDir = tempDir('stories82tr2-');
+    const { content } = makeStory(storiesDir, { id: 'SHY-9104', status: 'Done', type: 'feature' });
+    // Stored In Review (open, non-terminal) → Done (terminal) crosses the boundary → close.
+    const body = existingBody(content, 'SHY-9104-fixture-story', 'In Review');
+    const items = itemsResponse([
+      issueNode('SHY-9104', 'ITEM_I9104', 9104, 'OPEN', 'SHY-9104: Fixture story', body),
+    ]);
+    writeRules(mock.dir, createPathRules(mock.dir, { items }));
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const lines = readRecording(mock.recording);
+    expect(
+      lines.find((l) => l.includes('closeIssue') && l.includes('id=I_node_9104')),
+    ).toBeDefined();
+    expect(lines.filter((l) => l.includes('reopenIssue'))).toEqual([]);
+    expect(fieldLine(lines, 'ITEM_I9104', 'field-status', 'optionId=opt-st-done')).toBeDefined();
+    expect(r.stderr).toMatch(/issues closed: 1/);
+  });
+
+  test('transition to Cancelled also CLOSES the issue', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories82tr3-');
     const { content } = makeStory(storiesDir, {
-      id: 'SHY-9104',
+      id: 'SHY-9107',
+      status: 'Cancelled',
+      type: 'chore',
+    });
+    const body = existingBody(content, 'SHY-9107-fixture-story', 'In Progress');
+    const items = itemsResponse([
+      issueNode('SHY-9107', 'ITEM_I9107', 9107, 'OPEN', 'SHY-9107: Fixture story', body),
+    ]);
+    writeRules(mock.dir, createPathRules(mock.dir, { items }));
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const lines = readRecording(mock.recording);
+    expect(
+      lines.find((l) => l.includes('closeIssue') && l.includes('id=I_node_9107')),
+    ).toBeDefined();
+    expect(r.stderr).toMatch(/issues closed: 1/);
+  });
+
+  test('issue transition (Draft→In Progress) refreshes the body marker; no close/reopen; no CLI comment', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories82tr5-');
+    const { content } = makeStory(storiesDir, {
+      id: 'SHY-9108',
       status: 'In Progress',
       type: 'feature',
     });
-    const body = existingBody(content, 'SHY-9104-fixture-story', 'Draft');
-    const items = itemsResponse([draftNode('SHY-9104', 'ITEM_D9104', 'DI_9104', body)]);
+    const body = existingBody(content, 'SHY-9108-fixture-story', 'Draft');
+    const items = itemsResponse([
+      issueNode('SHY-9108', 'ITEM_I9108', 9108, 'OPEN', 'SHY-9108: Fixture story', body),
+    ]);
     writeRules(mock.dir, createPathRules(mock.dir, { items }));
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(0);
     const lines = readRecording(mock.recording);
     expect(lines.filter((l) => l.startsWith('issue comment'))).toEqual([]);
     expect(
-      lines.find(
-        (l) => l.includes('updateProjectV2DraftIssue') && l.includes('draftIssueId=DI_9104'),
-      ),
+      lines.find((l) => l.includes('updateIssue') && l.includes('id=I_node_9108')),
     ).toBeDefined();
     expect(readCaptures(mock.dir, 'graphql')[0]).toContain('_Status: In Progress_');
-    expect(r.stderr).not.toMatch(/comments posted/);
+    // Draft→In Progress: both non-terminal, no open/closed change.
+    expect(lines.filter((l) => l.includes('closeIssue'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('reopenIssue'))).toEqual([]);
   });
 
-  test('unchanged stories (hash + status both match) are full no-ops: no edits, no comments, no field writes', () => {
+  test('unchanged stories (hash + status both match) are full no-ops: no updates, no close/reopen, no field writes', () => {
     const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories74tr3-');
+    const storiesDir = tempDir('stories82tr4-');
     const a = makeStory(storiesDir, { id: 'SHY-9105', status: 'In Progress', type: 'feature' });
     const b = makeStory(storiesDir, { id: 'SHY-9106', status: 'In Review', type: 'bug' });
     const aBody = existingBody(a.content, 'SHY-9105-fixture-story', 'In Progress');
     const bBody = existingBody(b.content, 'SHY-9106-fixture-story', 'In Review');
     const items = itemsResponse([
-      draftNode('SHY-9105', 'ITEM_D9105', 'DI_9105', aBody),
-      draftNode('SHY-9106', 'ITEM_D9106', 'DI_9106', bBody),
+      issueNode('SHY-9105', 'ITEM_I9105', 9105, 'OPEN', 'SHY-9105: Fixture story', aBody),
+      issueNode('SHY-9106', 'ITEM_I9106', 9106, 'OPEN', 'SHY-9106: Fixture story', bBody),
     ]);
     writeRules(mock.dir, createPathRules(mock.dir, { items }));
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
@@ -1191,9 +1241,9 @@ describe('SHY-0081 v3: status transitions on draft cards — body marker + board
     expect(r.stderr).toMatch(/2 skipped/);
     const lines = readRecording(mock.recording);
     expect(lines.filter((l) => l.includes('updateProjectV2ItemFieldValue'))).toEqual([]);
-    expect(lines.filter((l) => l.includes('updateProjectV2DraftIssue'))).toEqual([]);
-    expect(lines.filter((l) => l.startsWith('issue edit'))).toEqual([]);
-    expect(lines.filter((l) => l.startsWith('issue comment'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('updateIssue'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('closeIssue'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('reopenIssue'))).toEqual([]);
   });
 });
 

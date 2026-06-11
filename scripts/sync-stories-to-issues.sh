@@ -1377,15 +1377,19 @@ sync_one() {
   N_UPDATED=$((N_UPDATED + 1))
   N_BODIES_EMBEDDED=$((N_BODIES_EMBEDDED + 1))
 
-  # Reconcile open/closed on a status transition: terminal (Done/Cancelled) →
-  # closed; otherwise → open. Only on transition, so an unchanged story stays
-  # all-skip (no spurious close/reopen calls).
+  # Reconcile open/closed ONLY when the terminal-ness actually changes, so a
+  # non-terminal→non-terminal transition (e.g. In Progress→In Review) fires no
+  # spurious close/reopen, and an unchanged story stays all-skip. existing_status
+  # is the OLD lifecycle from the stored footer; PS_STATUS is the new one.
   if [ "$transition" = "1" ]; then
-    local want_closed=0
-    { [ "$PS_STATUS" = "Done" ] || [ "$PS_STATUS" = "Cancelled" ]; } && want_closed=1
-    if ! set_issue_state "$MAP_CONTENT_ID" "$want_closed"; then
-      emit "$id" "issue" "failed to reconcile state for issue #${MAP_ISSUE_NUMBER}"
-      N_FAILED=$((N_FAILED + 1))
+    local was_terminal=0 now_terminal=0
+    { [ "$existing_status" = "Done" ] || [ "$existing_status" = "Cancelled" ]; } && was_terminal=1
+    { [ "$PS_STATUS" = "Done" ] || [ "$PS_STATUS" = "Cancelled" ]; } && now_terminal=1
+    if [ "$was_terminal" != "$now_terminal" ]; then
+      if ! set_issue_state "$MAP_CONTENT_ID" "$now_terminal"; then
+        emit "$id" "issue" "failed to reconcile state for issue #${MAP_ISSUE_NUMBER}"
+        N_FAILED=$((N_FAILED + 1))
+      fi
     fi
   fi
 
