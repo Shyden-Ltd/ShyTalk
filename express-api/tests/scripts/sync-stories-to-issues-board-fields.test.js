@@ -1360,7 +1360,7 @@ describe('SHY-0074: items-map query (mock-gh)', () => {
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(40);
     const lines = readRecording(mock.recording);
-    expect(lines.filter((l) => l.includes('addProjectV2DraftIssue'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('createIssue'))).toEqual([]);
     expect(lines.filter((l) => l.startsWith('issue create'))).toEqual([]);
     expect(lines.filter((l) => l.includes('updateProjectV2ItemFieldValue'))).toEqual([]);
   });
@@ -1372,20 +1372,24 @@ describe('SHY-0074: items-map query (mock-gh)', () => {
     const b = makeStory(storiesDir, { id: 'SHY-8103', status: 'Draft', type: 'feature' });
     const page1 = itemsResponse(
       [
-        draftNode(
+        issueNode(
           'SHY-8102',
           'ITEM_DA',
-          'DI_A',
+          8102,
+          'OPEN',
+          'SHY-8102: Fixture story',
           existingBody(a.content, 'SHY-8102-fixture-story', 'Draft'),
         ),
       ],
       { hasNextPage: true, endCursor: 'CURSOR_1' },
     );
     const page2 = itemsResponse([
-      draftNode(
+      issueNode(
         'SHY-8103',
         'ITEM_DB',
-        'DI_B',
+        8103,
+        'OPEN',
+        'SHY-8103: Fixture story',
         existingBody(b.content, 'SHY-8103-fixture-story', 'Draft'),
       ),
     ]);
@@ -1401,7 +1405,7 @@ describe('SHY-0074: items-map query (mock-gh)', () => {
     expect(r.code).toBe(0);
     expect(r.stderr).toMatch(/2 skipped/);
     const lines = readRecording(mock.recording);
-    expect(lines.filter((l) => l.includes('addProjectV2DraftIssue'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('createIssue'))).toEqual([]);
     expect(lines.filter((l) => l.includes('items(first: 100'))).toHaveLength(2);
   });
 });
@@ -1409,8 +1413,8 @@ describe('SHY-0074: items-map query (mock-gh)', () => {
 // ============================================================== change detection
 
 describe('SHY-0074: body-hash anchoring + idempotent skip (mock-gh)', () => {
-  test('DRAFT: spec containing literal "body-hash:" text does not break change detection', () => {
-    // Run 1: create the draft; capture the body the script generated.
+  test('ISSUE: spec containing literal "body-hash:" text does not break change detection', () => {
+    // Run 1: create the issue; capture the body the script generated.
     const mock1 = makePatternMockGh();
     const storiesDir = tempDir('stories74h-');
     makeStory(storiesDir, {
@@ -1424,11 +1428,13 @@ describe('SHY-0074: body-hash anchoring + idempotent skip (mock-gh)', () => {
     const generatedBody = readCaptures(mock1.dir, 'graphql')[0];
     expect(generatedBody).toContain('body-hash: deadbeef');
 
-    // Run 2: the draft now "exists" with exactly that body. Unchanged file
+    // Run 2: the issue now "exists" with exactly that body. Unchanged file
     // ⇒ the script must extract the FOOTER hash (not the deadbeef in the
     // spec text) and skip.
     const mock2 = makePatternMockGh();
-    const items = itemsResponse([draftNode('SHY-8201', 'ITEM_D8201', 'DI_8201', generatedBody)]);
+    const items = itemsResponse([
+      issueNode('SHY-8201', 'ITEM_I8201', 8201, 'OPEN', 'SHY-8201: Fixture story', generatedBody),
+    ]);
     writeRules(mock2.dir, createPathRules(mock2.dir, { items }));
     const r2 = runScript(['--all'], baseEnv(mock2.ghPath, storiesDir));
     expect(r2.code).toBe(0);
@@ -1516,9 +1522,9 @@ describe('SHY-0074: duplicated label-family migration (mock-gh)', () => {
     expect(r.stderr).toMatch(/labels deleted: 0/);
   });
 
-  test('SHY-0081 v3: no `label create` fires at all (the story label is no longer applied)', () => {
-    // v3 retired the issue path, so ensure_labels_for_story / build_labels are
-    // gone — the run never creates the `story` label (or any other).
+  test('SHY-0082 v4: no `gh label create` fires when the story label already exists', () => {
+    // v4 applies the `story` label via createIssue labelIds; ensure_story_label
+    // creates the label only if absent — here bootstrap resolves it, so none.
     const { mock, storiesDir } = migrationSetup('dependencies\n');
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(0);
@@ -1534,11 +1540,9 @@ describe('SHY-0074: duplicated label-family migration (mock-gh)', () => {
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(40);
     expect(r.stderr).toMatch(/label delete/);
-    // The story itself still synced (as a draft) despite the migration failure.
-    const drafts = readRecording(mock.recording).filter((l) =>
-      l.includes('addProjectV2DraftIssue'),
-    );
-    expect(drafts).toHaveLength(1);
+    // The story itself still synced (as a typed issue) despite the migration failure.
+    const creates = readRecording(mock.recording).filter((l) => l.includes('createIssue'));
+    expect(creates).toHaveLength(1);
   });
 });
 
@@ -1569,56 +1573,60 @@ describe('SHY-0074: per-component failure bubbles independently (mock-gh)', () =
     expect(r.stderr).toContain('1 failed');
   });
 
-  test('a failing Pri does not mask the draft create from having happened', () => {
+  test('a failing Pri does not mask the issue create from having happened', () => {
     const { r, lines } = failingFieldRun('field-pri');
-    expect(lines.filter((l) => l.includes('addProjectV2DraftIssue'))).toHaveLength(1);
+    expect(lines.filter((l) => l.includes('createIssue'))).toHaveLength(1);
     expect(r.code).toBe(40);
   });
 
-  test('draft create failure on one story → exit 40; subsequent stories still sync', () => {
+  test('issue create failure on one story → exit 40; subsequent stories still sync', () => {
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories74f2-');
     makeStory(storiesDir, { id: 'SHY-8502', type: 'feature' });
     makeStory(storiesDir, { id: 'SHY-8503', type: 'bug' });
     const rules = createPathRules(mock.dir);
-    // Fail ONLY SHY-8502's draft create; SHY-8503's must still be attempted.
-    writeRules(mock.dir, [['addProjectV2DraftIssue.*title=SHY-8502:', '', '1'], ...rules]);
+    // Fail ONLY SHY-8502's issue create; SHY-8503's must still be attempted.
+    writeRules(mock.dir, [['createIssue.*title=SHY-8502:', '', '1'], ...rules]);
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(40);
-    expect(r.stderr).toMatch(/failed to create draft/);
+    expect(r.stderr).toMatch(/failed to create issue/);
     const lines = readRecording(mock.recording);
     expect(
-      lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes('title=SHY-8503:')),
+      lines.find((l) => l.includes('createIssue') && l.includes('title=SHY-8503:')),
     ).toBeDefined();
   });
 
-  test('draft update failure → exit 40', () => {
+  test('issue update failure → exit 40', () => {
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories74f3-');
     makeStory(storiesDir, { id: 'SHY-8504', type: 'feature' });
     const staleBody = `Old.\n\n${syncedFooter('SHY-8504-fixture-story', 'Draft', STALE_HASH)}`;
-    const items = itemsResponse([draftNode('SHY-8504', 'ITEM_D8504', 'DI_8504', staleBody)]);
+    const items = itemsResponse([
+      issueNode('SHY-8504', 'ITEM_I8504', 8504, 'OPEN', 'SHY-8504: Fixture story', staleBody),
+    ]);
     const rules = createPathRules(mock.dir, { items });
-    writeRules(mock.dir, [['updateProjectV2DraftIssue', '', '1'], ...rules]);
+    writeRules(mock.dir, [['updateIssue', '', '1'], ...rules]);
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(40);
-    expect(r.stderr).toMatch(/failed to update draft/);
+    expect(r.stderr).toMatch(/failed to update issue/);
   });
 
-  test('field-population failure on an EXISTING draft (update path) → exit 40', () => {
-    // A draft already on the board, body changed → update path runs
+  test('field-population failure on an EXISTING issue (update path) → exit 40', () => {
+    // An issue already on the board, body changed → update path runs
     // populate_project_fields; a field mutation 5xx must surface + exit 40.
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories74f4-');
     makeStory(storiesDir, { id: 'SHY-8505', status: 'In Review', type: 'bug' });
     const staleBody = `Old.\n\n${syncedFooter('SHY-8505-fixture-story', 'In Review', STALE_HASH)}`;
-    const items = itemsResponse([draftNode('SHY-8505', 'ITEM_D8505', 'DI_8505', staleBody)]);
+    const items = itemsResponse([
+      issueNode('SHY-8505', 'ITEM_I8505', 8505, 'OPEN', 'SHY-8505: Fixture story', staleBody),
+    ]);
     const rules = createPathRules(mock.dir, { items });
     writeRules(mock.dir, [['fieldId=field-status', '', '1'], ...rules]);
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(40);
     expect(r.stderr).toMatch(/\[gh-error\] updateProjectV2ItemFieldValue/);
-    // No Issues-tab writes were attempted at any point.
+    // No gh issue CLI writes (issues are created/updated via GraphQL).
     const lines = readRecording(mock.recording);
     expect(lines.filter((l) => l.startsWith('issue '))).toEqual([]);
   });
@@ -1744,41 +1752,51 @@ describe('SHY-0079: board-items.json sidecar overlay heals stale Projects v2 rea
     return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf-8')) : null;
   }
 
-  test('HEADLINE: stale-empty API + sidecar lists the draft → ZERO addProjectV2DraftIssue (the 2026-06-10 dup, fixed)', () => {
+  test('HEADLINE: stale-empty API + sidecar lists the issue → ZERO createIssue (the dup-create bug, fixed)', () => {
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories79a-');
-    makeStory(storiesDir, { id: 'SHY-8801', type: 'feature' }); // non-bug → draft
+    makeStory(storiesDir, { id: 'SHY-8801', type: 'feature' });
     writeRules(mock.dir, createPathRules(mock.dir)); // items API empty (stale)
     writeSidecar(mock, {
-      'SHY-8801': { backing: 'DRAFT', itemId: 'EXIST_ITEM', contentId: 'EXIST_DI', issueNumber: 0 },
+      'SHY-8801': {
+        backing: 'ISSUE',
+        itemId: 'EXIST_ITEM',
+        contentId: 'EXIST_NODE',
+        issueNumber: 881,
+      },
     });
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(0);
     const lines = readRecording(mock.recording);
-    // The exact failure mode — re-creating an existing draft — is prevented.
-    expect(lines.filter((l) => l.includes('addProjectV2DraftIssue'))).toEqual([]);
-    // It refreshed the existing draft via the sidecar's content id instead.
+    // The exact failure mode — re-creating an existing issue — is prevented.
+    expect(lines.filter((l) => l.includes('createIssue'))).toEqual([]);
+    // It refreshed the existing issue via the sidecar's node id instead.
     expect(
-      lines.find(
-        (l) => l.includes('updateProjectV2DraftIssue') && l.includes('draftIssueId=EXIST_DI'),
-      ),
+      lines.find((l) => l.includes('updateIssue') && l.includes('id=EXIST_NODE')),
     ).toBeDefined();
     expect(r.stderr).toMatch(/sidecar overlay fills: 1/);
     expect(r.stderr).toMatch(/0 created, 1 updated/);
   });
 
   test('overlay: API-present entry WINS over the sidecar (freshest live state)', () => {
-    // Sidecar says SHY-8802 is a DRAFT at OLD_ITEM; the API returns it as a
-    // DRAFT at a DIFFERENT item id with the current body. The merged map must
+    // Sidecar says SHY-8802 is an ISSUE at OLD_ITEM; the API returns it as an
+    // ISSUE at a DIFFERENT item id with the current body. The merged map must
     // use the API item id (fresh), not the stale sidecar one.
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories79b-');
     const s = makeStory(storiesDir, { id: 'SHY-8802', status: 'Draft', type: 'feature' });
     const body = existingBody(s.content, 'SHY-8802-fixture-story', 'Draft');
-    const items = itemsResponse([draftNode('SHY-8802', 'API_ITEM', 'API_DI', body)]);
+    const items = itemsResponse([
+      issueNode('SHY-8802', 'API_ITEM', 8802, 'OPEN', 'SHY-8802: Fixture story', body),
+    ]);
     writeRules(mock.dir, createPathRules(mock.dir, { items }));
     writeSidecar(mock, {
-      'SHY-8802': { backing: 'DRAFT', itemId: 'OLD_ITEM', contentId: 'OLD_DI', issueNumber: 0 },
+      'SHY-8802': {
+        backing: 'ISSUE',
+        itemId: 'OLD_ITEM',
+        contentId: 'OLD_NODE',
+        issueNumber: 8802,
+      },
     });
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(0);
@@ -1789,51 +1807,45 @@ describe('SHY-0079: board-items.json sidecar overlay heals stale Projects v2 rea
     expect(lines.find((l) => l.includes('itemId=OLD_ITEM'))).toBeUndefined();
   });
 
-  test('write-back: a new draft is recorded into board-items.json with item + content ids', () => {
+  test('write-back: a new issue is recorded into board-items.json with item + node + number', () => {
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories79c-');
     makeStory(storiesDir, { id: 'SHY-8803', type: 'feature' });
-    // createPathRules rewrites resp-draft-add.json, so build the rules FIRST,
-    // then override the draft-create response with distinct asserted ids.
+    // createPathRules writes resp-issue-create.json + resp-add.json; override
+    // them with distinct asserted ids.
     const rules = createPathRules(mock.dir); // no sidecar → bootstrap
-    writeResponse(
-      mock.dir,
-      'resp-draft-add.json',
-      JSON.stringify({
-        data: {
-          addProjectV2DraftIssue: { projectItem: { id: 'PI_8803', content: { id: 'DI_8803' } } },
-        },
-      }),
-    );
+    writeResponse(mock.dir, 'resp-issue-create.json', issueCreateResponse('NODE_8803', 8803));
+    writeResponse(mock.dir, 'resp-add.json', addItemResponse('PI_8803'));
     writeRules(mock.dir, rules);
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(0);
     const sidecar = readSidecar(mock);
     expect(sidecar).not.toBeNull();
     expect(sidecar['SHY-8803']).toEqual({
-      backing: 'DRAFT',
+      backing: 'ISSUE',
       itemId: 'PI_8803',
-      contentId: 'DI_8803',
-      issueNumber: 0,
+      contentId: 'NODE_8803',
+      issueNumber: 8803,
     });
   });
 
-  test('write-back: a legacy ISSUE-backed entry is converted + the sidecar reflects DRAFT (not the stale ISSUE)', () => {
-    // SHY-8804 is a v2 leftover backed by an ISSUE. The incremental migration
-    // deletes the item + issue and recreates a draft → the sidecar entry must
-    // reflect DRAFT at the new item id, not the stale ISSUE.
+  test('write-back: a legacy DRAFT-backed entry is converted + the sidecar reflects ISSUE (not the stale DRAFT)', () => {
+    // SHY-8804 is a v3 leftover backed by a DRAFT. The incremental migration
+    // deletes the draft item and recreates a typed issue → the sidecar entry
+    // must reflect ISSUE at the new item id, not the stale DRAFT.
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories79d-');
     makeStory(storiesDir, { id: 'SHY-8804', status: 'In Progress', type: 'bug' });
-    const items = itemsResponse([issueNode('SHY-8804', 'ISSUE_ITEM', 884)]);
+    const items = itemsResponse([draftNode('SHY-8804', 'DRAFT_ITEM', 'DRAFT_DI', '')]);
     const rules = createPathRules(mock.dir, { items });
-    writeResponse(mock.dir, 'resp-draft-add.json', draftAddResponse('NEW_DRAFT', 'NEW_DI'));
-    writeRules(mock.dir, [['deleteProjectV2Item', '', ''], ['deleteIssue', '', ''], ...rules]);
+    writeResponse(mock.dir, 'resp-issue-create.json', issueCreateResponse('NEW_NODE', 8804));
+    writeResponse(mock.dir, 'resp-add.json', addItemResponse('NEW_ITEM'));
+    writeRules(mock.dir, [['deleteProjectV2Item', '', ''], ...rules]);
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(0);
     const sidecar = readSidecar(mock);
-    expect(sidecar['SHY-8804'].backing).toBe('DRAFT'); // not the stale ISSUE
-    expect(sidecar['SHY-8804'].itemId).toBe('NEW_DRAFT');
+    expect(sidecar['SHY-8804'].backing).toBe('ISSUE'); // not the stale DRAFT
+    expect(sidecar['SHY-8804'].itemId).toBe('NEW_ITEM');
   });
 
   test('malformed sidecar → ::warning:: + API-only fallback, run completes, valid sidecar rewritten', () => {
@@ -1845,10 +1857,10 @@ describe('SHY-0079: board-items.json sidecar overlay heals stale Projects v2 rea
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(0);
     expect(r.stderr).toMatch(/::warning::.*board-items\.json is malformed/);
-    // Fell back to API-only (empty) → created the draft (no crash).
+    // Fell back to API-only (empty) → created the issue (no crash).
     const lines = readRecording(mock.recording);
     expect(
-      lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes('title=SHY-8805:')),
+      lines.find((l) => l.includes('createIssue') && l.includes('title=SHY-8805:')),
     ).toBeDefined();
     // And rewrote a valid sidecar.
     const sidecar = readSidecar(mock);
@@ -1861,14 +1873,14 @@ describe('SHY-0079: board-items.json sidecar overlay heals stale Projects v2 rea
     makeStory(storiesDir, { id: 'SHY-8806', type: 'feature' });
     writeRules(mock.dir, createPathRules(mock.dir));
     writeSidecar(mock, {
-      'SHY-8806': { backing: 'DRAFT', itemId: 'I8806', contentId: 'D8806', issueNumber: 0 },
+      'SHY-8806': { backing: 'ISSUE', itemId: 'I8806', contentId: 'N8806', issueNumber: 8806 },
     });
     const before = fs.readFileSync(path.join(mock.dir, 'board-items.json'), 'utf-8');
     const r = runScript(['--all', '--dry-run'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(0);
     const lines = readRecording(mock.recording);
-    expect(lines.filter((l) => l.includes('addProjectV2DraftIssue'))).toEqual([]);
-    expect(lines.filter((l) => l.includes('updateProjectV2DraftIssue'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('createIssue'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('updateIssue'))).toEqual([]);
     // dry-run does not rewrite the sidecar.
     expect(fs.readFileSync(path.join(mock.dir, 'board-items.json'), 'utf-8')).toBe(before);
   });
@@ -1910,7 +1922,7 @@ describe('SHY-0079: board-items.json sidecar overlay heals stale Projects v2 rea
     expect(r.code).toBe(0);
     const lines = readRecording(mock.recording);
     expect(
-      lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes('title=SHY-8807:')),
+      lines.find((l) => l.includes('createIssue') && l.includes('title=SHY-8807:')),
     ).toBeDefined();
     expect(readSidecar(mock)['SHY-8807']).toBeDefined();
     expect(r.stderr).toMatch(/sidecar overlay fills: 0/);
@@ -2073,35 +2085,36 @@ describe('SHY-0074: structural pins on the script source', () => {
     expect(src).toMatch(/sed -n 's\/\^_Status: /);
   });
 
-  test('SHY-0081 v3: the issue-path machinery is fully retired from the source', () => {
-    // No story-sync code creates/edits/comments/closes a GitHub issue, and the
-    // retired helpers are gone (no dead code).
-    for (const gone of [
-      'create_issue_path',
-      'issue_exists_for',
-      'build_bug_body',
-      'post_status_comment',
-      'close_if_terminal',
-      'extract_issue_node_id',
-      'update_issue_body',
-      'add_to_project_board',
-      'ensure_labels_for_story',
-      'build_labels',
-    ]) {
+  test('SHY-0082 v4: the v3 draft-path machinery is retired; the typed-issue path is present', () => {
+    // v4 removed the draft helpers and the draft-create mutation…
+    for (const gone of ['create_draft_item', 'update_draft_item', 'create_draft_path']) {
       expect(src).not.toContain(`${gone}()`);
     }
-    // gh issue create/edit/comment is never invoked from the script.
+    expect(src).not.toContain('addProjectV2DraftIssue');
+    expect(src).not.toContain('updateProjectV2DraftIssue');
+    // …and added the typed-issue path.
+    for (const present of [
+      'create_issue_path',
+      'create_issue',
+      'update_issue',
+      'bootstrap_repo',
+      'add_to_board',
+      'set_issue_state',
+    ]) {
+      expect(src).toContain(`${present}()`);
+    }
+    // Issues are created/updated via GraphQL createIssue/updateIssue, never the gh issue CLI.
+    expect(src).toMatch(/createIssue\(input:/);
     expect(src).not.toMatch(/"\$GH" issue create/);
     expect(src).not.toMatch(/"\$GH" issue edit/);
     expect(src).not.toMatch(/"\$GH" issue comment/);
   });
 
-  test('SHY-0081 v3: sync_one routes EVERY story to the draft path (no type==bug → issue branch)', () => {
+  test('SHY-0082 v4: sync_one routes every story to the typed-issue path (no draft fork)', () => {
     const fn = src.slice(src.indexOf('sync_one()'), src.indexOf('teardown_for_rebuild()'));
-    // The create path calls create_draft_path unconditionally — no desired/ISSUE fork.
-    expect(fn).toContain('create_draft_path "$file" "$id" "$title" "$hash"');
-    expect(fn).not.toContain('create_issue_path');
-    expect(fn).not.toMatch(/desired="ISSUE"/);
+    expect(fn).toContain('create_issue_path "$file" "$id" "$title" "$hash"');
+    expect(fn).not.toContain('create_draft_path');
+    expect(fn).not.toContain('addProjectV2DraftIssue');
   });
 
   test('--rebuild still deletes story-labeled issues (the legacy migration) via delete_issue_node', () => {
