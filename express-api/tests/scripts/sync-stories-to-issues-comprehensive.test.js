@@ -224,6 +224,8 @@ function mockEnv(ghPath, storiesDir) {
     STORIES_DIR: storiesDir,
     // SHY-0078: zero backoff so the empty-read retry doesn't slow tests.
     ITEMS_MAP_RETRY_BACKOFF: '0',
+    // SHY-0079: isolate the sidecar from the real repo file.
+    BOARD_ITEMS_FILE: path.join(storiesDir, 'board-items.json'),
   };
 }
 

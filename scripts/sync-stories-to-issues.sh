@@ -513,6 +513,88 @@ ITEMS_MAP_JSON='{}'
 ITEMS_RAW_IDS=""
 ITEMS_MAP_LOADED=0
 
+# ============================================================== sidecar (SHY-0079)
+# `.project/board-items.json` is a git-committed, strongly-consistent mirror
+# of the board keyed by SHY ID. It OVERLAYS the eventually-consistent
+# Projects v2 items query: any SHY present in the sidecar but missing from a
+# (possibly stale) API read is filled back in — healing the read-after-write
+# lag that otherwise re-creates draft cards (the SHY-0078 residual). The
+# script always rewrites the file locally from the post-run board state; the
+# WORKFLOW commits it via createCommitOnBranch (signed, SHY-0063 mechanism).
+SIDECAR_FILE="${BOARD_ITEMS_FILE:-${REPO_ROOT}/.project/board-items.json}"
+# BOARD_ITEMS_JSON is the run-scoped, mutation-tracked board state written
+# back to the sidecar at the end of the run. Seeded from the merged map,
+# then kept current by board_items_put / board_items_del on every
+# create/delete so the write-back reflects POST-run reality (re-querying the
+# laggy API would defeat the purpose).
+BOARD_ITEMS_JSON='{}'
+N_SIDECAR_FILLS=0
+
+# Upsert one SHY's board entry into the run-scoped sidecar state.
+board_items_put() {
+  local id="$1" backing="$2" item_id="$3" content_id="$4" issue_number="${5:-0}"
+  BOARD_ITEMS_JSON="$(printf '%s' "$BOARD_ITEMS_JSON" | jq -c \
+    --arg k "$id" --arg b "$backing" --arg i "$item_id" --arg c "$content_id" --argjson n "${issue_number:-0}" \
+    '.[$k] = {backing:$b, itemId:$i, contentId:$c, issueNumber:$n}')"
+}
+
+# Remove one SHY's board entry (item deleted / type-flipped away).
+board_items_del() {
+  local id="$1"
+  BOARD_ITEMS_JSON="$(printf '%s' "$BOARD_ITEMS_JSON" | jq -c --arg k "$id" 'del(.[$k])')"
+}
+
+# Overlay the committed sidecar onto ITEMS_MAP_JSON (API result). API entries
+# WIN (freshest live state); sidecar fills the API's gaps. Also seeds
+# BOARD_ITEMS_JSON from the merged result. Malformed sidecar → warn + API-only.
+overlay_board_items_sidecar() {
+  if [ ! -f "$SIDECAR_FILE" ]; then
+    # Bootstrap: no sidecar yet. Seed write-back state from the API map.
+    BOARD_ITEMS_JSON="$(printf '%s' "$ITEMS_MAP_JSON" | jq -c \
+      'with_entries(.value |= {backing, itemId, contentId, issueNumber})')"
+    return 0
+  fi
+  local sidecar
+  if ! sidecar="$(jq -c . "$SIDECAR_FILE" 2>/dev/null)"; then
+    printf '::warning::board-items.json is malformed — falling back to the API-only board map\n' >&2
+    BOARD_ITEMS_JSON="$(printf '%s' "$ITEMS_MAP_JSON" | jq -c \
+      'with_entries(.value |= {backing, itemId, contentId, issueNumber})')"
+    return 0
+  fi
+  # Count fills: sidecar keys absent from the API map (jq array subtraction).
+  N_SIDECAR_FILLS="$(jq -n --argjson api "$ITEMS_MAP_JSON" --argjson side "$sidecar" \
+    '(($side | keys) - ($api | keys)) | length')"
+  if [ "${N_SIDECAR_FILLS:-0}" -gt 0 ]; then
+    printf '[sidecar] API read missed %s item(s); filled from board-items.json\n' "$N_SIDECAR_FILLS" >&2
+  fi
+  # Merge: normalize sidecar entries to the full value shape, then API overlays.
+  ITEMS_MAP_JSON="$(jq -c -n --argjson api "$ITEMS_MAP_JSON" --argjson side "$sidecar" '
+    ($side | with_entries(.value |= {
+        itemId: .itemId,
+        backing: .backing,
+        contentId: .contentId,
+        issueNumber: (.issueNumber // 0),
+        issueState: "",
+        draftBody: ""
+      })) + $api')"
+  # Seed write-back state from the merged map (post-overlay, pre-mutation).
+  BOARD_ITEMS_JSON="$(printf '%s' "$ITEMS_MAP_JSON" | jq -c \
+    'with_entries(.value |= {backing, itemId, contentId, issueNumber})')"
+}
+
+# Write the run-scoped board state to the sidecar file (sorted keys for a
+# stable diff). The workflow commits it. Always called at run end so the
+# file tracks the board even when nothing changed (idempotent no-op diff).
+write_board_items_sidecar() {
+  if [ "$DRY_RUN" = "1" ]; then
+    printf 'DRY-RUN: would rewrite %s (%s entries)\n' \
+      "$SIDECAR_FILE" "$(printf '%s' "$BOARD_ITEMS_JSON" | jq 'length')" >&2
+    return 0
+  fi
+  printf '%s\n' "$BOARD_ITEMS_JSON" | jq -S --indent 2 . > "$SIDECAR_FILE"
+  verbose "write_board_items_sidecar: $(printf '%s' "$BOARD_ITEMS_JSON" | jq 'length') entries → ${SIDECAR_FILE}"
+}
+
 # SHY-0078: backoff (seconds) before the empty-read retry. Tests inject 0.
 ITEMS_MAP_RETRY_BACKOFF="${ITEMS_MAP_RETRY_BACKOFF:-3}"
 
@@ -593,8 +675,10 @@ _items_map_keyed_count() {
 load_items_map() {
   if [ "$ITEMS_MAP_LOADED" = "1" ]; then return 0; fi
   if [ "$DRY_RUN" = "1" ]; then
-    # Dry-run makes no gh calls; an empty map previews every story as a create.
+    # Dry-run makes no gh calls; the API map starts empty but the SHY-0079
+    # sidecar overlay still applies so the preview reflects existing items.
     ITEMS_MAP_JSON='{}'
+    overlay_board_items_sidecar
     ITEMS_MAP_LOADED=1
     return 0
   fi
@@ -615,8 +699,10 @@ load_items_map() {
     fi
     _items_map_pass || return 1
   fi
+  # SHY-0079: overlay the committed sidecar to heal any stale-API gaps.
+  overlay_board_items_sidecar
   ITEMS_MAP_LOADED=1
-  verbose "load_items_map: $(_items_map_keyed_count) keyed items"
+  verbose "load_items_map: $(_items_map_keyed_count) keyed items (sidecar fills: ${N_SIDECAR_FILLS})"
   return 0
 }
 
@@ -889,14 +975,19 @@ populate_project_fields() {
 # argv would flirt with ARG_MAX and break line-oriented logging.
 # Callers capture the echo via $(...) — counter increments live at the
 # call sites (subshell rule).
+# Echoes "<projectItemId> <draftContentId>" — the caller needs BOTH: the
+# project item id (field mutations) and the DraftIssue content id (later
+# updateProjectV2DraftIssue + the SHY-0079 sidecar). Counter increments live
+# at the call sites (subshell rule).
 create_draft_item() {
   local title="$1" body="$2"
   load_project_cache || return 1
   local query response stderr_file rc
   stderr_file="$(mktemp)"
   # shellcheck disable=SC2016
-  # ^ GraphQL variables, NOT bash.
-  query='mutation($projectId: ID!, $title: String!, $body: String!) { addProjectV2DraftIssue(input: { projectId: $projectId, title: $title, body: $body }) { projectItem { id } } }'
+  # ^ GraphQL variables, NOT bash. SHY-0079: also fetch the DraftIssue
+  # content id so the sidecar can store it for the update path.
+  query='mutation($projectId: ID!, $title: String!, $body: String!) { addProjectV2DraftIssue(input: { projectId: $projectId, title: $title, body: $body }) { projectItem { id content { ... on DraftIssue { id } } } } }'
   set +e
   response="$(printf '%s' "$body" | "$GH" api graphql -f query="$query" -f projectId="$PROJECT_NODE_ID" -f title="$title" -F body=@- 2>"$stderr_file")"
   rc=$?
@@ -908,13 +999,14 @@ create_draft_item() {
     return 1
   fi
   rm -f "$stderr_file"
-  local item_id
+  local item_id content_id
   item_id="$(printf '%s' "$response" | jq -r '.data.addProjectV2DraftIssue.projectItem.id // empty')"
+  content_id="$(printf '%s' "$response" | jq -r '.data.addProjectV2DraftIssue.projectItem.content.id // empty')"
   if [ -z "$item_id" ]; then
     emit "project" "draft-add" "addProjectV2DraftIssue returned empty id; response: $(printf '%s' "$response" | head -c 200)"
     return 1
   fi
-  printf '%s\n' "$item_id"
+  printf '%s %s\n' "$item_id" "$content_id"
   return 0
 }
 
@@ -1284,18 +1376,24 @@ create_draft_path() {
     N_DRAFTS_CREATED=$((N_DRAFTS_CREATED + 1))
     return 0
   fi
-  local item_id
+  local create_out item_id content_id
   # Counter increments live HERE, not in create_draft_item: the $(...)
   # capture runs the function in a subshell where increments are lost.
-  if ! item_id="$(create_draft_item "$title" "$body")"; then
+  # create_draft_item echoes "<projectItemId> <draftContentId>".
+  if ! create_out="$(create_draft_item "$title" "$body")"; then
     emit "$id" "api" "failed to create draft item"
     N_FAILED=$((N_FAILED + 1))
     return 0
   fi
+  item_id="${create_out%% *}"
+  content_id="${create_out#* }"
   N_CREATED=$((N_CREATED + 1))
   N_DRAFTS_CREATED=$((N_DRAFTS_CREATED + 1))
   N_BODIES_EMBEDDED=$((N_BODIES_EMBEDDED + 1))
   N_PROJECT_ITEMS_ADDED=$((N_PROJECT_ITEMS_ADDED + 1))
+  # SHY-0079: record the new draft in the sidecar write-back state so future
+  # syncs see it even if the Projects v2 API read is stale.
+  board_items_put "$id" "DRAFT" "$item_id" "$content_id" 0
   emit "$id" "created" "draft item created"
   if ! populate_project_fields "$item_id" "$file" "$id"; then
     emit "$id" "project" "failed to populate fields for item ${item_id}"
@@ -1415,6 +1513,10 @@ create_issue_path() {
     if item_id="$(add_to_project_board "$node_id")"; then
       N_PROJECT_ITEMS_ADDED=$((N_PROJECT_ITEMS_ADDED + 1))
       if [ -n "$item_id" ]; then
+        # SHY-0079: record the issue-backed item in the sidecar write-back
+        # state (issues are also guarded by issue_exists_for, but a complete
+        # sidecar keeps the board mirror accurate).
+        board_items_put "$id" "ISSUE" "$item_id" "$node_id" "${issue_num:-0}"
         if ! populate_project_fields "$item_id" "$file" "$id"; then
           emit "$id" "project" "failed to populate fields for item ${item_id}"
           N_FAILED=$((N_FAILED + 1))
@@ -1485,6 +1587,9 @@ sync_one() {
         return 0
       fi
       N_ITEMS_DELETED=$((N_ITEMS_DELETED + 1))
+      # SHY-0079: drop the stale backing from the sidecar; the recreate below
+      # re-adds the correct backing via board_items_put.
+      board_items_del "$id"
       if [ "$MAP_BACKING" = "ISSUE" ] && [ "$MAP_ISSUE_STATE" = "OPEN" ]; then
         # bug→non-bug: the issue is orphaned (story is no longer a bug).
         if ! close_issue "$MAP_ISSUE_NUMBER" "not planned" ""; then
@@ -1600,7 +1705,17 @@ teardown_for_rebuild() {
   fi
   emit "rebuild" "teardown" "deleting all board items + story-labeled issues (REBUILD_CONFIRM=yes)"
 
-  local item_id
+  # SHY-0079: delete the UNIQUE union of API-listed raw ids AND the sidecar's
+  # itemIds. If the API read was stale during this rebuild's load, the
+  # sidecar still names the items so the teardown stays complete (and the
+  # dedup avoids deleting the same id twice → no spurious N_FAILED).
+  local all_ids item_id
+  all_ids="$(
+    {
+      printf '%s\n' "$ITEMS_RAW_IDS"
+      printf '%s' "$BOARD_ITEMS_JSON" | jq -r '.[].itemId // empty'
+    } | grep -v '^$' | LC_ALL=C sort -u
+  )"
   while IFS= read -r item_id; do
     [ -z "$item_id" ] && continue
     if delete_project_item "$item_id"; then
@@ -1609,7 +1724,7 @@ teardown_for_rebuild() {
       emit "rebuild" "project" "failed to delete item ${item_id}"
       N_FAILED=$((N_FAILED + 1))
     fi
-  done <<<"$ITEMS_RAW_IDS"
+  done <<<"$all_ids"
 
   # Mirror-created issues all carry the `story` marker label.
   local stderr_file rc pairs num node
@@ -1637,10 +1752,13 @@ teardown_for_rebuild() {
   # The board is now empty: reset the map so the sync below creates fresh.
   # SHY-0074 reviewer-I2: also reset the loaded flag so any future
   # load_items_map caller re-queries instead of silently reusing the
-  # post-teardown empty state.
+  # post-teardown empty state. SHY-0079: clear the sidecar write-back state
+  # too — the recreate loop repopulates it, and the write-back then commits
+  # a board-items.json that matches the freshly-rebuilt board.
   ITEMS_MAP_JSON='{}'
   ITEMS_RAW_IDS=""
   ITEMS_MAP_LOADED=0
+  BOARD_ITEMS_JSON='{}'
   verbose "teardown_for_rebuild: done (items deleted: ${N_ITEMS_DELETED}; issues deleted: ${N_ISSUES_DELETED})"
 }
 
@@ -1679,12 +1797,16 @@ sync_all() {
   done < <(find -P "$STORIES_DIR" -maxdepth 1 -type f ! -type l \
              -name 'SHY-[0-9][0-9][0-9][0-9]-*.md' | LC_ALL=C sort)
 
+  # SHY-0079: rewrite the sidecar from the post-run board state. Always
+  # written (idempotent no-op diff when unchanged); the workflow commits it.
+  write_board_items_sidecar
+
   printf 'Sync result: %d created (%d drafts, %d issues), %d updated, %d skipped, %d failed' \
     "$N_CREATED" "$N_DRAFTS_CREATED" "$N_ISSUES_CREATED" "$N_UPDATED" "$N_SKIPPED" "$N_FAILED" >&2
-  printf ' (labels created: %d; labels deleted: %d; project items added: %d; project items deleted: %d; issues deleted: %d; project fields updated: %d; status fields set: %d; bodies embedded: %d; bodies truncated: %d; comments posted: %d; issues closed: %d; dedup-guard hits: %d; type-field auto-created: %s)\n' \
+  printf ' (labels created: %d; labels deleted: %d; project items added: %d; project items deleted: %d; issues deleted: %d; project fields updated: %d; status fields set: %d; bodies embedded: %d; bodies truncated: %d; comments posted: %d; issues closed: %d; dedup-guard hits: %d; sidecar overlay fills: %d; type-field auto-created: %s)\n' \
     "$N_LABELS_CREATED" "$N_LABELS_DELETED" "$N_PROJECT_ITEMS_ADDED" "$N_ITEMS_DELETED" \
     "$N_ISSUES_DELETED" "$N_PROJECT_FIELDS_UPDATED" "$N_STATUS_SET" "$N_BODIES_EMBEDDED" \
-    "$N_BODIES_TRUNCATED" "$N_COMMENTS_POSTED" "$N_ISSUES_CLOSED" "$N_DEDUP_GUARD_HITS" "$TYPE_FIELD_AUTO_CREATED" >&2
+    "$N_BODIES_TRUNCATED" "$N_COMMENTS_POSTED" "$N_ISSUES_CLOSED" "$N_DEDUP_GUARD_HITS" "$N_SIDECAR_FILLS" "$TYPE_FIELD_AUTO_CREATED" >&2
 
   # SHY-0067 reviewer-I2: emit a GITHUB_STEP_SUMMARY audit trail when running
   # under GitHub Actions. Local + test runs skip silently (env var unset).
@@ -1710,6 +1832,7 @@ sync_all() {
       printf '| Bodies truncated | %d |\n' "$N_BODIES_TRUNCATED"
       printf '| Status comments posted | %d |\n' "$N_COMMENTS_POSTED"
       printf '| Issues closed | %d |\n' "$N_ISSUES_CLOSED"
+      printf '| Sidecar overlay fills (stale-API gaps healed) | %d |\n' "$N_SIDECAR_FILLS"
       printf '| Dedup-guard hits (stale-map duplicate prevented) | %d |\n' "$N_DEDUP_GUARD_HITS"
       printf '| Type-field auto-created | %s |\n' "$TYPE_FIELD_AUTO_CREATED"
     } >> "$GITHUB_STEP_SUMMARY"
@@ -1736,6 +1859,9 @@ sync_story() {
   # SHY-0074: single-source-label invariant (see sync_all).
   remove_duplicated_label_families
   sync_one "$match"
+  # SHY-0079: rewrite the sidecar (load_items_map loaded the FULL board, so
+  # BOARD_ITEMS_JSON is complete + reflects this story's mutation).
+  write_board_items_sidecar
 }
 
 # ============================================================== main

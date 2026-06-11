@@ -212,8 +212,12 @@ const ADD_ITEM_RESPONSE = JSON.stringify({
   data: { addProjectV2ItemById: { item: { id: 'ITEM_1' } } },
 });
 
-function draftAddResponse(itemId) {
-  return JSON.stringify({ data: { addProjectV2DraftIssue: { projectItem: { id: itemId } } } });
+function draftAddResponse(itemId, contentId = `${itemId}_DI`) {
+  // SHY-0079: addProjectV2DraftIssue now also returns the DraftIssue content
+  // id (projectItem.content.id) for the sidecar.
+  return JSON.stringify({
+    data: { addProjectV2DraftIssue: { projectItem: { id: itemId, content: { id: contentId } } } },
+  });
 }
 
 const DRAFT_UPDATE_RESPONSE = JSON.stringify({
@@ -411,6 +415,11 @@ function baseEnv(ghPath, storiesDir, extra = {}) {
     STORIES_DIR: storiesDir,
     // SHY-0078: zero backoff so the empty-read retry doesn't slow tests.
     ITEMS_MAP_RETRY_BACKOFF: '0',
+    // SHY-0079: isolate the sidecar to the mock dir so tests never read or
+    // clobber the real .project/board-items.json. Default points at a
+    // (usually absent) per-mock file → bootstrap/no-overlay; sidecar tests
+    // pre-write it.
+    BOARD_ITEMS_FILE: path.join(path.dirname(ghPath), 'board-items.json'),
     ...extra,
   };
 }
@@ -1816,6 +1825,175 @@ describe('SHY-0078: idempotency guard against Projects v2 stale-empty reads (moc
   });
 });
 
+// ============================================================== SHY-0079 sidecar
+
+describe('SHY-0079: board-items.json sidecar overlay heals stale Projects v2 reads (mock-gh)', () => {
+  /** Write a sidecar fixture at the isolated BOARD_ITEMS_FILE path the
+   *  baseEnv points at (mock dir / board-items.json). */
+  function writeSidecar(mock, obj) {
+    fs.writeFileSync(path.join(mock.dir, 'board-items.json'), JSON.stringify(obj, null, 2));
+  }
+  function readSidecar(mock) {
+    const p = path.join(mock.dir, 'board-items.json');
+    return fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf-8')) : null;
+  }
+
+  test('HEADLINE: stale-empty API + sidecar lists the draft → ZERO addProjectV2DraftIssue (the 2026-06-10 dup, fixed)', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories79a-');
+    makeStory(storiesDir, { id: 'SHY-8801', type: 'feature' }); // non-bug → draft
+    writeRules(mock.dir, createPathRules(mock.dir)); // items API empty (stale)
+    writeSidecar(mock, {
+      'SHY-8801': { backing: 'DRAFT', itemId: 'EXIST_ITEM', contentId: 'EXIST_DI', issueNumber: 0 },
+    });
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const lines = readRecording(mock.recording);
+    // The exact failure mode — re-creating an existing draft — is prevented.
+    expect(lines.filter((l) => l.includes('addProjectV2DraftIssue'))).toEqual([]);
+    // It refreshed the existing draft via the sidecar's content id instead.
+    expect(
+      lines.find(
+        (l) => l.includes('updateProjectV2DraftIssue') && l.includes('draftIssueId=EXIST_DI'),
+      ),
+    ).toBeDefined();
+    expect(r.stderr).toMatch(/sidecar overlay fills: 1/);
+    expect(r.stderr).toMatch(/0 created \(0 drafts, 0 issues\), 1 updated/);
+  });
+
+  test('overlay: API-present entry WINS over the sidecar (freshest live state)', () => {
+    // Sidecar says SHY-8802 is a DRAFT at OLD_ITEM; the API returns it as a
+    // DRAFT at a DIFFERENT item id with the current body. The merged map must
+    // use the API item id (fresh), not the stale sidecar one.
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories79b-');
+    const s = makeStory(storiesDir, { id: 'SHY-8802', status: 'Draft', type: 'feature' });
+    const body = existingBody(s.content, 'SHY-8802-fixture-story', 'Draft');
+    const items = itemsResponse([draftNode('SHY-8802', 'API_ITEM', 'API_DI', body)]);
+    writeRules(mock.dir, createPathRules(mock.dir, { items }));
+    writeSidecar(mock, {
+      'SHY-8802': { backing: 'DRAFT', itemId: 'OLD_ITEM', contentId: 'OLD_DI', issueNumber: 0 },
+    });
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    expect(r.stderr).toMatch(/sidecar overlay fills: 0/); // API had it → no fill
+    expect(r.stderr).toMatch(/1 skipped/); // hash+status match → no mutation
+    const lines = readRecording(mock.recording);
+    // No create; if any field write happened it would target API_ITEM, never OLD_ITEM.
+    expect(lines.find((l) => l.includes('itemId=OLD_ITEM'))).toBeUndefined();
+  });
+
+  test('write-back: a new draft is recorded into board-items.json with item + content ids', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories79c-');
+    makeStory(storiesDir, { id: 'SHY-8803', type: 'feature' });
+    // createPathRules rewrites resp-draft-add.json, so build the rules FIRST,
+    // then override the draft-create response with distinct asserted ids.
+    const rules = createPathRules(mock.dir); // no sidecar → bootstrap
+    writeResponse(
+      mock.dir,
+      'resp-draft-add.json',
+      JSON.stringify({
+        data: {
+          addProjectV2DraftIssue: { projectItem: { id: 'PI_8803', content: { id: 'DI_8803' } } },
+        },
+      }),
+    );
+    writeRules(mock.dir, rules);
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const sidecar = readSidecar(mock);
+    expect(sidecar).not.toBeNull();
+    expect(sidecar['SHY-8803']).toEqual({
+      backing: 'DRAFT',
+      itemId: 'PI_8803',
+      contentId: 'DI_8803',
+      issueNumber: 0,
+    });
+  });
+
+  test('write-back: a type-flipped-away draft is PURGED from the sidecar', () => {
+    // SHY-8804 was a draft; now it is type:bug. The draft item is deleted and
+    // recreated as an issue → the sidecar entry must reflect ISSUE, not the
+    // stale DRAFT id.
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories79d-');
+    makeStory(storiesDir, { id: 'SHY-8804', status: 'In Progress', type: 'bug' });
+    const items = itemsResponse([
+      draftNode('SHY-8804', 'DRAFT_ITEM', 'DRAFT_DI', 'old draft body'),
+    ]);
+    const rules = createPathRules(mock.dir, { items });
+    writeRules(mock.dir, [['deleteProjectV2Item', '', ''], ...rules]);
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const sidecar = readSidecar(mock);
+    expect(sidecar['SHY-8804'].backing).toBe('ISSUE'); // not the stale DRAFT
+    expect(sidecar['SHY-8804'].itemId).not.toBe('DRAFT_ITEM');
+  });
+
+  test('malformed sidecar → ::warning:: + API-only fallback, run completes, valid sidecar rewritten', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories79e-');
+    makeStory(storiesDir, { id: 'SHY-8805', type: 'feature' });
+    writeRules(mock.dir, createPathRules(mock.dir));
+    fs.writeFileSync(path.join(mock.dir, 'board-items.json'), '{ this is not valid json ');
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    expect(r.stderr).toMatch(/::warning::.*board-items\.json is malformed/);
+    // Fell back to API-only (empty) → created the draft (no crash).
+    const lines = readRecording(mock.recording);
+    expect(
+      lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes('title=SHY-8805:')),
+    ).toBeDefined();
+    // And rewrote a valid sidecar.
+    const sidecar = readSidecar(mock);
+    expect(sidecar['SHY-8805']).toBeDefined();
+  });
+
+  test('--dry-run: overlay still suppresses the create preview, ZERO mutations + ZERO write-back', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories79f-');
+    makeStory(storiesDir, { id: 'SHY-8806', type: 'feature' });
+    writeRules(mock.dir, createPathRules(mock.dir));
+    writeSidecar(mock, {
+      'SHY-8806': { backing: 'DRAFT', itemId: 'I8806', contentId: 'D8806', issueNumber: 0 },
+    });
+    const before = fs.readFileSync(path.join(mock.dir, 'board-items.json'), 'utf-8');
+    const r = runScript(['--all', '--dry-run'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const lines = readRecording(mock.recording);
+    expect(lines.filter((l) => l.includes('addProjectV2DraftIssue'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('updateProjectV2DraftIssue'))).toEqual([]);
+    // dry-run does not rewrite the sidecar.
+    expect(fs.readFileSync(path.join(mock.dir, 'board-items.json'), 'utf-8')).toBe(before);
+  });
+
+  test('bootstrap: absent sidecar behaves as SHY-0078 (creates) AND populates the sidecar', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories79g-');
+    makeStory(storiesDir, { id: 'SHY-8807', type: 'feature' });
+    writeRules(mock.dir, createPathRules(mock.dir)); // no sidecar file
+    expect(readSidecar(mock)).toBeNull();
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const lines = readRecording(mock.recording);
+    expect(
+      lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes('title=SHY-8807:')),
+    ).toBeDefined();
+    expect(readSidecar(mock)['SHY-8807']).toBeDefined();
+    expect(r.stderr).toMatch(/sidecar overlay fills: 0/);
+  });
+
+  test('structural: overlay + write-back + sidecar path are env-overridable', () => {
+    const src = fs.readFileSync(SCRIPT, 'utf-8');
+    expect(src).toMatch(/overlay_board_items_sidecar/);
+    expect(src).toMatch(/write_board_items_sidecar/);
+    expect(src).toMatch(/BOARD_ITEMS_FILE:-/);
+    expect(src).toMatch(/board_items_put/);
+    expect(src).toMatch(/board_items_del/);
+  });
+});
+
 // ============================================================== workflow YAML (Layer 2)
 
 describe('SHY-0074: workflow YAML pins', () => {
@@ -1850,6 +2028,30 @@ describe('SHY-0074: workflow YAML pins', () => {
     expect(injectYaml).toMatch(/SKIP: no open issue found/);
     const skipBlock = injectYaml.slice(injectYaml.indexOf('SKIP: no open issue found'));
     expect(skipBlock).toMatch(/exit 0/);
+  });
+
+  // ---- SHY-0079 sidecar write-back wiring
+  test('SHY-0079: board-items.json sidecar is committed via createCommitOnBranch with the Release App token', () => {
+    expect(syncYaml).toContain('createCommitOnBranch');
+    expect(syncYaml).toContain('actions/create-github-app-token');
+    expect(syncYaml).toContain('secrets.RELEASE_APP_ID');
+    expect(syncYaml).toContain('.project/board-items.json');
+  });
+
+  test('SHY-0079: board-items.json is NOT a push trigger path (committing it must not re-fire the sync)', () => {
+    // The real triggers are present…
+    expect(syncYaml).toContain('- ".project/stories/SHY-*.md"');
+    // …and there is NO trigger-path LIST ENTRY for the sidecar (a quoted
+    // `- "...board-items.json"` line). A comment mentioning it doesn't count.
+    // Line-based (no backtracking regex) per the sonarjs slow-regex rule.
+    const sidecarTriggerLine = syncYaml
+      .split('\n')
+      .some((l) => /^\s*- "/.test(l) && l.includes('board-items.json'));
+    expect(sidecarTriggerLine).toBe(false);
+  });
+
+  test('SHY-0079: loop guard skips the Release App bot actor (defense-in-depth)', () => {
+    expect(syncYaml).toMatch(/if:\s*github\.actor\s*!=\s*'shytalk-release-bot\[bot\]'/);
   });
 });
 

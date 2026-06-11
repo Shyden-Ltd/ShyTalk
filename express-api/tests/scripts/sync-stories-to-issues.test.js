@@ -33,11 +33,18 @@ function runScript(args, opts = {}) {
   // is a real perf issue tracked as a follow-up SHY (sync-stories
   // optimisation); not in scope for SHY-0034. See [[feedback-fix-pre-
   // existing-and-new-same]] — perf SHY filed in the same session.
+  // SHY-0079: isolate the board-items.json sidecar per run so no test reads
+  // or clobbers the real repo file. Caller-supplied BOARD_ITEMS_FILE wins.
+  const env = { ...(opts.env ?? process.env) };
+  if (!env.BOARD_ITEMS_FILE) {
+    env.BOARD_ITEMS_FILE = path.join(tempDir('sidecar-'), 'board-items.json');
+  }
   const res = spawnSync('bash', [SCRIPT, ...args], {
     encoding: 'utf-8',
     cwd: REPO_ROOT,
     timeout: 60_000,
     ...opts,
+    env,
   });
   return {
     code: res.status ?? 1,

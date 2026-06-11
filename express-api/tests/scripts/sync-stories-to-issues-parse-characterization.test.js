@@ -53,6 +53,8 @@ function runSync(args, extraEnv = {}) {
         GH_PAT_PROJECT: 'fake-pat-for-test',
         // SHY-0078: zero backoff so the empty-read retry doesn't slow tests.
         ITEMS_MAP_RETRY_BACKOFF: '0',
+        // SHY-0079: isolate the sidecar from the real repo file.
+        BOARD_ITEMS_FILE: path.join(mockGhDir, 'board-items.json'),
         ...extraEnv,
       },
     },
@@ -240,6 +242,10 @@ beforeEach(() => {
   // Fresh stories dir per test — no fixture bleed.
   const dir = path.join(fixtureRepo, '.project', 'stories');
   for (const f of fs.readdirSync(dir)) fs.rmSync(path.join(dir, f));
+  // SHY-0079: clear the sidecar between tests — these reuse SHY-9999, and a
+  // leftover board-items.json from the prior run would make the overlay
+  // treat it as already-existing (suppressing the create the test asserts).
+  fs.rmSync(path.join(mockGhDir, 'board-items.json'), { force: true });
 });
 
 describe('title fidelity through the parse phase', () => {

@@ -6,10 +6,20 @@ name: Sync SHY Stories to GitHub Issues
 # Operator-side prerequisite: provision GH_PAT_PROJECT secret (fine-grained PAT
 # with issues:write + pull-requests:write + project:write — the auto
 # GITHUB_TOKEN cannot carry project:write).
+#
+# SHY-0079: after a mutating run the script writes `.project/board-items.json`
+# (a consistent id-map that overlays the eventually-consistent Projects v2
+# items query, healing read-after-write lag that otherwise re-creates draft
+# cards). The final step commits that file to main via createCommitOnBranch
+# with the Release App token (signed; SHY-0063 mechanism). board-items.json is
+# deliberately ABSENT from the push `paths:` below, so committing it does NOT
+# re-fire this workflow (no loop); the actor guard on the job is belt-and-braces.
 
 on:
   push:
     branches: [main]
+    # NOTE (SHY-0079): board-items.json is intentionally NOT a trigger path —
+    # the sidecar commit-back must not re-fire the sync.
     paths:
       - ".project/stories/SHY-*.md"
       - "scripts/sync-stories-to-issues.sh"
@@ -39,6 +49,11 @@ jobs:
   sync:
     name: Mirror stories to Issues
     runs-on: ubuntu-latest
+    # SHY-0079 loop guard (defense-in-depth): the sidecar commit-back is
+    # authored by the Release App (shytalk-release-bot). board-items.json is
+    # not a trigger path so it cannot re-fire this workflow, but skipping the
+    # bot's own pushes makes that guarantee explicit.
+    if: github.actor != 'shytalk-release-bot[bot]'
     # SHY-0074 v2 call budget: ONE paginated items-map query (~1 call/100
     # items) replaces ~75 per-story `gh issue list` searches. Steady-state
     # no-change run ≈ 2-3 calls total. Full create run: ~75 stories ×
@@ -82,3 +97,65 @@ jobs:
             args+=(--dry-run --verbose)
           fi
           bash scripts/sync-stories-to-issues.sh "${args[@]}"
+
+      # SHY-0079: commit the regenerated sidecar id-map. `always()` so the
+      # sidecar persists even when the sync exits 40 (partial failure) — it
+      # reflects the post-run board state and the next run reconciles. The
+      # internal git-diff guard makes a no-change run a no-op.
+      - name: Generate Release App token (signed sidecar commit-back)
+        id: app-token
+        if: ${{ always() }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      - name: Commit board-items.json sidecar via createCommitOnBranch
+        if: ${{ always() && steps.app-token.outputs.token != '' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          SIDECAR=.project/board-items.json
+          if [ ! -f "$SIDECAR" ]; then
+            echo "[sidecar] no board-items.json produced (dry-run / secret unset) — nothing to commit."
+            exit 0
+          fi
+          # Reuse SHY-0063's signed-commit path: createCommitOnBranch with the
+          # Release App token is the only signed-commit route from CI that
+          # satisfies main's required_signatures (App is in bypass_actors on
+          # ruleset 12613584). board-items.json is not a trigger path, so this
+          # commit does not re-fire the sync.
+          if git diff --quiet "$SIDECAR" 2>/dev/null && git ls-files --error-unmatch "$SIDECAR" >/dev/null 2>&1; then
+            echo "[sidecar] board-items.json unchanged — no commit."
+            exit 0
+          fi
+          PARENT_SHA=$(git rev-parse HEAD)
+          # shellcheck disable=SC2016
+          PAYLOAD=$(jq -n \
+            --arg repo "${{ github.repository }}" \
+            --arg branch "main" \
+            --arg oid "${PARENT_SHA}" \
+            --arg msg "chore(board): sync board-items.json id-map [skip ci]" \
+            --rawfile c1 "$SIDECAR" \
+            '{
+              query: "mutation($repo: String!, $branch: String!, $oid: GitObjectID!, $msg: String!, $additions: [FileAddition!]!) { createCommitOnBranch(input: { branch: { repositoryNameWithOwner: $repo, branchName: $branch }, expectedHeadOid: $oid, fileChanges: { additions: $additions }, message: { headline: $msg } }) { commit { oid } } }",
+              variables: {repo: $repo, branch: $branch, oid: $oid, msg: $msg, additions: [{path: ".project/board-items.json", contents: ($c1|@base64)}]}
+            }')
+          RESPONSE=$(echo "$PAYLOAD" | gh api graphql --input -)
+          OID=$(echo "$RESPONSE" | jq -r '.data.createCommitOnBranch.commit.oid // empty')
+          if [ -z "$OID" ]; then
+            echo "::error::sidecar createCommitOnBranch failed — response below."
+            echo "$RESPONSE" | jq .
+            exit 1
+          fi
+          echo "[sidecar] signed commit ${OID} (.project/board-items.json)"
+          {
+            echo "## Board sidecar: signed commit on main"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Parent SHA** | \`${PARENT_SHA}\` |"
+            echo "| **New commit OID** | \`${OID}\` |"
+            echo "| **File** | \`.project/board-items.json\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
