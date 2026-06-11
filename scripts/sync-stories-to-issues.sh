@@ -985,14 +985,22 @@ add_to_board() {
     return 1
   fi
   N_PROJECT_ITEMS_ADDED=$((N_PROJECT_ITEMS_ADDED + 1))
-  printf '%s' "$item_id"
+  ADD_BOARD_ITEM_ID="$item_id"
   return 0
 }
 
-# Create a real typed issue + add it to the board. Echoes "ITEM_ID ISSUE_NODE_ID ISSUE_NUMBER".
-# $1 title, $2 body, $3 issue-type node id. Body via stdin (ARG_MAX-safe,
-# SHY-0080). The `story` label id is inlined into the mutation (gh api graphql
-# can't pass a list variable via -f; the id is a controlled value, not user input).
+# Create a real typed issue + add it to the board. Results land in globals
+# CREATE_ITEM_ID / CREATE_ISSUE_NODE / CREATE_ISSUE_NUM (NOT echoed) so the
+# caller can invoke create_issue directly — a `$(...)` capture would run it in
+# a subshell and silently discard the N_ISSUE_TYPES_SET / N_PROJECT_ITEMS_ADDED
+# increments. $1 title, $2 body, $3 issue-type node id. Body via stdin
+# (ARG_MAX-safe, SHY-0080). The `story` label id is inlined into the mutation
+# (gh api graphql can't pass a list variable via -f; the id is a controlled
+# value, not user input).
+CREATE_ITEM_ID=""
+CREATE_ISSUE_NODE=""
+CREATE_ISSUE_NUM=""
+ADD_BOARD_ITEM_ID=""
 create_issue() {
   local title="$1" body="$2" type_id="$3"
   bootstrap_repo || return 1
@@ -1020,9 +1028,10 @@ create_issue() {
     return 1
   fi
   N_ISSUE_TYPES_SET=$((N_ISSUE_TYPES_SET + 1))
-  local item_id
-  item_id="$(add_to_board "$issue_node")" || return 1
-  printf '%s %s %s' "$item_id" "$issue_node" "$issue_num"
+  add_to_board "$issue_node" || return 1
+  CREATE_ITEM_ID="$ADD_BOARD_ITEM_ID"
+  CREATE_ISSUE_NODE="$issue_node"
+  CREATE_ISSUE_NUM="$issue_num"
   return 0
 }
 
@@ -1219,35 +1228,44 @@ extract_stored_status() {
 
 # ---- create paths --------------------------------------------------------
 
-# Create a board DRAFT item for a story (SHY-0081 v3: every type routes here).
-create_draft_path() {
+# Create a real typed GitHub issue for a story + add it to the board
+# (SHY-0082 v4: every type routes here). Terminal status (Done/Cancelled) is
+# born closed so finished work leaves the Issues-tab default open view.
+create_issue_path() {
   local file="$1" id="$2" title="$3" hash="$4"
   # Result via global (subshell would lose the truncation counter).
   build_draft_body "$file" "$hash"
   local body="$BODY_RESULT"
+  local type_id terminal=0
+  type_id="$(story_type_to_issue_type_id "$PS_TYPE")"
+  { [ "$PS_STATUS" = "Done" ] || [ "$PS_STATUS" = "Cancelled" ]; } && terminal=1
   if [ "$DRY_RUN" = "1" ]; then
-    printf 'DRY-RUN: %s: would CREATE DRAFT item "%s" (full-spec body) + populate fields\n' "$id" "$title" >&2
+    printf 'DRY-RUN: %s: would CREATE typed ISSUE "%s" (type=%s) + add to board + populate fields%s\n' \
+      "$id" "$title" "$PS_TYPE" "$([ "$terminal" = "1" ] && printf ' + close (terminal)')" >&2
     N_CREATED=$((N_CREATED + 1))
     return 0
   fi
-  local create_out item_id content_id
-  # Counter increments live HERE, not in create_draft_item: the $(...)
-  # capture runs the function in a subshell where increments are lost.
-  # create_draft_item echoes "<projectItemId> <draftContentId>".
-  if ! create_out="$(create_draft_item "$title" "$body")"; then
-    emit "$id" "api" "failed to create draft item"
+  # create_issue sets CREATE_ITEM_ID / CREATE_ISSUE_NODE / CREATE_ISSUE_NUM and
+  # increments its own counters — called DIRECTLY (a $() capture would subshell
+  # away those increments).
+  if ! create_issue "$title" "$body" "$type_id"; then
+    emit "$id" "api" "failed to create issue"
     N_FAILED=$((N_FAILED + 1))
     return 0
   fi
-  item_id="${create_out%% *}"
-  content_id="${create_out#* }"
+  local item_id="$CREATE_ITEM_ID" issue_node="$CREATE_ISSUE_NODE" issue_num="$CREATE_ISSUE_NUM"
   N_CREATED=$((N_CREATED + 1))
   N_BODIES_EMBEDDED=$((N_BODIES_EMBEDDED + 1))
-  N_PROJECT_ITEMS_ADDED=$((N_PROJECT_ITEMS_ADDED + 1))
-  # SHY-0079: record the new draft in the sidecar write-back state so future
-  # syncs see it even if the Projects v2 API read is stale.
-  board_items_put "$id" "DRAFT" "$item_id" "$content_id" 0
-  emit "$id" "created" "draft item created"
+  if [ "$terminal" = "1" ]; then
+    if ! set_issue_state "$issue_node" 1; then
+      emit "$id" "issue" "failed to close terminal issue #${issue_num}"
+      N_FAILED=$((N_FAILED + 1))
+    fi
+  fi
+  # SHY-0079: record the new issue-backed item in the sidecar (backing=ISSUE)
+  # so future syncs see it even if the Projects v2 API read is stale.
+  board_items_put "$id" "ISSUE" "$item_id" "$issue_node" "$issue_num"
+  emit "$id" "created" "typed issue #${issue_num} created (type=${PS_TYPE})"
   if ! populate_project_fields "$item_id" "$file" "$id"; then
     emit "$id" "project" "failed to populate fields for item ${item_id}"
     N_FAILED=$((N_FAILED + 1))
@@ -1321,7 +1339,7 @@ sync_one() {
 
   # ---- create path
   if [ "$MAP_FOUND" != "1" ]; then
-    create_draft_path "$file" "$id" "$title" "$hash"
+    create_issue_path "$file" "$id" "$title" "$hash"
     return 0
   fi
 
