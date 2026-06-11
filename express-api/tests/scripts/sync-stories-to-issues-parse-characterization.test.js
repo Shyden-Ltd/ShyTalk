@@ -202,16 +202,28 @@ exit 0
       },
     }),
   );
-  // SHY-0081 v3: every story routes to a board DRAFT. The shared api-graphql
-  // response carries both the project-lookup id AND the addProjectV2DraftIssue
-  // result (projectItem id + DraftIssue content id) so the create path
-  // completes (item_id non-empty → no exit 40).
+  // SHY-0082 v4: every story routes to a typed ISSUE. The shared api-graphql
+  // response carries the project-lookup id, the repo bootstrap (repo id +
+  // native issue-type ids + story label id), the createIssue result, and the
+  // addProjectV2ItemById result so the create path completes (no exit 40).
   fs.writeFileSync(
     path.join(mockGhDir, 'resp-api-graphql'),
     JSON.stringify({
       data: {
         organization: { projectV2: { id: 'PVT_test', fields: { nodes: [] } } },
-        addProjectV2DraftIssue: { projectItem: { id: 'PVTI_test', content: { id: 'DI_test' } } },
+        repository: {
+          id: 'REPO_1',
+          issueTypes: {
+            nodes: [
+              { id: 'IT_TASK', name: 'Task' },
+              { id: 'IT_BUG', name: 'Bug' },
+              { id: 'IT_FEATURE', name: 'Feature' },
+            ],
+          },
+          label: { id: 'LBL_story' },
+        },
+        createIssue: { issue: { id: 'I_node_1', number: 1 } },
+        addProjectV2ItemById: { item: { id: 'ITEM_1' } },
       },
     }),
   );
@@ -244,9 +256,9 @@ beforeEach(() => {
   fs.rmSync(path.join(mockGhDir, 'board-items.json'), { force: true });
 });
 
-/** The draft-create call carries the title via `-f title=<id>: <title>`. */
-function draftCreateCall() {
-  return recordedCalls().find((c) => c.includes('addProjectV2DraftIssue'));
+/** The issue-create call carries the title via `-f title=<id>: <title>`. */
+function issueCreateCall() {
+  return recordedCalls().find((c) => c.includes('createIssue'));
 }
 
 describe('title fidelity through the parse phase', () => {
@@ -259,7 +271,7 @@ describe('title fidelity through the parse phase', () => {
     writeStory('SHY-9999', title);
     const { code } = runSync(['--story', 'SHY-9999']);
     expect(code).toBe(0);
-    const create = draftCreateCall();
+    const create = issueCreateCall();
     expect(create).toBeDefined();
     expect(create).toContain(
       'title=SHY-9999: Title with "quotes" and $dollar and `backticks` and unit-sep end',
@@ -273,7 +285,7 @@ describe('title fidelity through the parse phase', () => {
     writeStory('SHY-9999', title);
     const { code } = runSync(['--story', 'SHY-9999']);
     expect(code).toBe(0);
-    expect(draftCreateCall()).toContain(title);
+    expect(issueCreateCall()).toContain(title);
   });
 });
 
@@ -282,7 +294,7 @@ describe('routing + parse (single-source post-SHY-0081 v3)', () => {
     writeStory('SHY-9999', 'Clean fixture');
     const { code } = runSync(['--story', 'SHY-9999']);
     expect(code).toBe(0);
-    expect(draftCreateCall()).toBeDefined();
+    expect(issueCreateCall()).toBeDefined();
     expect(recordedCalls().some((c) => c.startsWith('label create'))).toBe(false);
     expect(recordedCalls().some((c) => c.startsWith('issue create'))).toBe(false);
   });
@@ -298,7 +310,7 @@ describe('routing + parse (single-source post-SHY-0081 v3)', () => {
     fs.writeFileSync(file, src);
     const { code } = runSync(['--story', 'SHY-9999']);
     expect(code).toBe(0);
-    expect(draftCreateCall()).toContain('title=SHY-9999: Padded fixture');
+    expect(issueCreateCall()).toContain('title=SHY-9999: Padded fixture');
   });
 });
 
@@ -312,6 +324,6 @@ describe('malformed frontmatter exit contract', () => {
     expect(code).toBe(40);
     expect(stderr).toMatch(/validate.*failed frontmatter validation/);
     expect(recordedCalls().some((c) => c.startsWith('issue create'))).toBe(false);
-    expect(recordedCalls().some((c) => c.includes('addProjectV2DraftIssue'))).toBe(false);
+    expect(recordedCalls().some((c) => c.includes('createIssue'))).toBe(false);
   });
 });

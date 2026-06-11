@@ -1578,10 +1578,15 @@ sync_story() {
   # SHY-0074: create-vs-update decisions need the items map (see sync_all).
   load_items_map \
     || fail_global "project" "items-map query failed — aborting before any mutations" "$E_API"
-  # SHY-0067: setup phase for single-story mode too.
+  # SHY-0067 + SHY-0082: setup phase for single-story mode too — bootstrap the
+  # repo node id + native issue-type ids + story label BEFORE sync_one (the
+  # create path needs the type-id globals; see sync_all).
   if [ "$DRY_RUN" != "1" ]; then
     load_project_cache || true
     ensure_project_type_field || true
+    bootstrap_repo \
+      || fail_global "repo" "repo bootstrap (issue types / story label) failed — aborting before any mutations" "$E_API"
+    ensure_story_label || true
   fi
   # SHY-0074: single-source-label invariant (see sync_all).
   remove_duplicated_label_families

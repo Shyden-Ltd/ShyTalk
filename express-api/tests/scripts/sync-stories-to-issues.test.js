@@ -243,15 +243,27 @@ describe('scripts/sync-stories-to-issues.sh', () => {
   });
 
   describe('mock-gh: create flow (no existing board item)', () => {
-    it('SHY-0001 (type: infra) creates a board DRAFT item, not a GitHub issue (SHY-0074 v2 routing)', () => {
+    it('SHY-0001 (type: infra) creates a typed GitHub issue (Task) on the board, not a draft', () => {
       const { ghPath, recording, dir } = makeMockGh();
-      // Project lookup + draft-create mutations share the graphql channel.
+      // Project lookup + bootstrap + createIssue + board-add share the graphql channel.
       fs.writeFileSync(
         path.join(dir, 'gh-responses-api-graphql'),
         JSON.stringify({
           data: {
             organization: { projectV2: { id: 'PVT_test', fields: { nodes: [] } } },
-            addProjectV2DraftIssue: { projectItem: { id: 'PVTI_draft' } },
+            repository: {
+              id: 'REPO_1',
+              issueTypes: {
+                nodes: [
+                  { id: 'IT_TASK', name: 'Task' },
+                  { id: 'IT_BUG', name: 'Bug' },
+                  { id: 'IT_FEATURE', name: 'Feature' },
+                ],
+              },
+              label: { id: 'LBL_story' },
+            },
+            createIssue: { issue: { id: 'I_node_1', number: 1 } },
+            addProjectV2ItemById: { item: { id: 'ITEM_1' } },
           },
         }),
       );
@@ -270,11 +282,11 @@ describe('scripts/sync-stories-to-issues.sh', () => {
       expect(calls.some((c) => c.startsWith('issue create'))).toBe(false);
       // …and the items map replaced per-story `issue list` lookups.
       expect(calls.some((c) => c.startsWith('issue list'))).toBe(false);
-      // The draft create carries the constructed title.
-      const draftCall = calls.find(
-        (c) => c.includes('addProjectV2DraftIssue') && c.includes('title=SHY-0001:'),
+      // The issue create carries the constructed title.
+      const issueCall = calls.find(
+        (c) => c.includes('createIssue') && c.includes('title=SHY-0001:'),
       );
-      expect(draftCall).toBeDefined();
+      expect(issueCall).toBeDefined();
     });
   });
 
@@ -303,8 +315,8 @@ describe('scripts/sync-stories-to-issues.sh', () => {
       ).stdout.trim();
 
       const { ghPath, recording, dir } = makeMockGh();
-      // SHY-0074 v2: SHY-0001 (type: infra, status: Done) is DRAFT-backed.
-      // The items map carries the draft body whose footer stores the SAME
+      // SHY-0082 v4: SHY-0001 (type: infra, status: Done) is ISSUE-backed.
+      // The items map carries the issue body whose footer stores the SAME
       // hash + the matching status marker → full skip.
       fs.writeFileSync(
         path.join(dir, 'gh-responses-items-query'),
@@ -318,8 +330,10 @@ describe('scripts/sync-stories-to-issues.sh', () => {
                     {
                       id: 'PVTI_existing',
                       content: {
-                        __typename: 'DraftIssue',
-                        id: 'DI_existing',
+                        __typename: 'Issue',
+                        id: 'I_node_1',
+                        number: 1,
+                        state: 'CLOSED',
                         title: 'SHY-0001: Establish agile workflow',
                         body: `Some body content\n\n_Status: Done_\n_Last synced: 2026-01-01T00:00:00Z from commit abc body-hash: ${hash}_\n`,
                       },
@@ -328,6 +342,28 @@ describe('scripts/sync-stories-to-issues.sh', () => {
                   ],
                 },
               },
+            },
+          },
+        }),
+      );
+
+      // v4: sync_story bootstraps the repo (issue types + label) before sync_one,
+      // so the api-graphql channel must answer the repository query.
+      fs.writeFileSync(
+        path.join(dir, 'gh-responses-api-graphql'),
+        JSON.stringify({
+          data: {
+            organization: { projectV2: { id: 'PVT_test', fields: { nodes: [] } } },
+            repository: {
+              id: 'REPO_1',
+              issueTypes: {
+                nodes: [
+                  { id: 'IT_TASK', name: 'Task' },
+                  { id: 'IT_BUG', name: 'Bug' },
+                  { id: 'IT_FEATURE', name: 'Feature' },
+                ],
+              },
+              label: { id: 'LBL_story' },
             },
           },
         }),

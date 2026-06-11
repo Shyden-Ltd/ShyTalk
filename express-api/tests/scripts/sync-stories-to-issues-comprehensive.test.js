@@ -347,28 +347,30 @@ describe('SHY-0081 v3: script body — label families deleted, NONE created', ()
     expect(scriptContent).toMatch(/gh\s+label\s+list|"\$GH"\s+label\s+list/);
   });
 
-  test('SHY-0081 v3: the label-CREATE helpers are retired (the `story` label is never applied)', () => {
-    // No function DEFINITIONS for the retired helpers (an explanatory comment
-    // mentioning them is fine — match line-start definitions only).
+  test('SHY-0082 v4: the v3 label-family helpers are retired; the single `story` label is applied', () => {
+    // The old per-family label helpers are gone…
     expect(scriptContent).not.toMatch(/^(ensure_label|ensure_labels_for_story|build_labels)\(\)/m);
-    expect(scriptContent).not.toMatch(/"\$GH"\s+label\s+create/);
+    // …but v4 has ensure_story_label() and applies the `story` label via createIssue labelIds.
+    expect(scriptContent).toMatch(/ensure_story_label\(\)/);
+    expect(scriptContent).toMatch(/labelIds:/);
   });
 });
 
-describe('SHY-0081 v3: script body — board draft creation + field population', () => {
+describe('SHY-0082 v4: script body — typed-issue creation + field population', () => {
   let scriptContent;
 
   beforeAll(() => {
     scriptContent = fs.readFileSync(SCRIPT, 'utf8');
   });
 
-  test('script creates board items via the addProjectV2DraftIssue mutation (every type is a draft)', () => {
-    expect(scriptContent).toMatch(/addProjectV2DraftIssue/);
+  test('script creates board items via createIssue + addProjectV2ItemById (typed issues, no drafts)', () => {
+    expect(scriptContent).toMatch(/createIssue\(input:/);
+    expect(scriptContent).not.toMatch(/addProjectV2DraftIssue/);
   });
 
-  test('the issue-backed board-add helper is retired (no add_to_project_board / addProjectV2ItemById)', () => {
+  test('v4 adds the created issue to the board via addProjectV2ItemById', () => {
     expect(scriptContent).not.toMatch(/add_to_project_board/);
-    expect(scriptContent).not.toMatch(/addProjectV2ItemById/);
+    expect(scriptContent).toMatch(/addProjectV2ItemById/);
   });
 
   test('script invokes the updateProjectV2ItemFieldValue mutation for field population', () => {
@@ -447,15 +449,27 @@ describe('SHY-0081 v3: runtime — draft-create failure surfaces (mock-gh)', () 
   });
 });
 
-describe('SHY-0081 v3: runtime — board draft creation (mock-gh)', () => {
-  test('script invokes addProjectV2DraftIssue (never issue create, never addProjectV2ItemById)', () => {
+describe('SHY-0082 v4: runtime — typed-issue creation (mock-gh)', () => {
+  test('script invokes createIssue + addProjectV2ItemById (never a draft, never the gh issue CLI)', () => {
     const { ghPath, recording, dir } = makeMockGh();
     fs.writeFileSync(
       path.join(dir, 'gh-responses-api-graphql'),
       JSON.stringify({
         data: {
           organization: { projectV2: { id: 'PVT_test', fields: { nodes: [] } } },
-          addProjectV2DraftIssue: { projectItem: { id: 'PVTI_test', content: { id: 'DI_test' } } },
+          repository: {
+            id: 'REPO_1',
+            issueTypes: {
+              nodes: [
+                { id: 'IT_TASK', name: 'Task' },
+                { id: 'IT_BUG', name: 'Bug' },
+                { id: 'IT_FEATURE', name: 'Feature' },
+              ],
+            },
+            label: { id: 'LBL_story' },
+          },
+          createIssue: { issue: { id: 'I_node_1', number: 1 } },
+          addProjectV2ItemById: { item: { id: 'ITEM_1' } },
         },
       }),
     );
@@ -466,11 +480,10 @@ describe('SHY-0081 v3: runtime — board draft creation (mock-gh)', () => {
     expect(code).toBe(0);
 
     const calls = readRecording(recording);
-    expect(
-      calls.some((c) => c.startsWith('api graphql') && c.includes('addProjectV2DraftIssue')),
-    ).toBe(true);
+    expect(calls.some((c) => c.startsWith('api graphql') && c.includes('createIssue'))).toBe(true);
+    expect(calls.some((c) => c.includes('addProjectV2ItemById'))).toBe(true);
+    expect(calls.some((c) => c.includes('addProjectV2DraftIssue'))).toBe(false);
     expect(calls.some((c) => c.startsWith('issue create'))).toBe(false);
-    expect(calls.some((c) => c.includes('addProjectV2ItemById'))).toBe(false);
   });
 });
 
@@ -496,18 +509,20 @@ describe('SHY-0067: extended summary format (mock-gh, reviewer-I4)', () => {
     );
     expect(res.status ?? 1).toBe(0);
     const stderr = res.stderr ?? '';
-    // SHY-0081 v3 form: every story is a draft — no draft/issue split.
     expect(stderr).toMatch(/Sync result: \d+ created, \d+ updated, \d+ skipped, \d+ failed/);
-    // Retained counters.
+    // Retained + v4 counters.
     expect(stderr).toMatch(/project items added: \d+/);
     expect(stderr).toMatch(/project items deleted: \d+/);
     expect(stderr).toMatch(/issues deleted: \d+/);
+    expect(stderr).toMatch(/issue types set: \d+/);
+    expect(stderr).toMatch(/issues closed: \d+/);
+    expect(stderr).toMatch(/drafts migrated: \d+/);
     expect(stderr).toMatch(/project fields updated: \d+/);
     expect(stderr).toMatch(/type-field auto-created: (yes|no)/);
-    // Retired issue-specific counters must NOT appear.
+    // Retired v2 counters must NOT appear.
     expect(stderr).not.toMatch(/labels created/);
     expect(stderr).not.toMatch(/comments posted/);
-    expect(stderr).not.toMatch(/issues closed/);
+    expect(stderr).not.toMatch(/dedup-guard hits/);
   });
 });
 
@@ -540,19 +555,29 @@ describe('SHY-0074: runtime — items-map lookup failure path (mock-gh)', () => 
 // SHY-0081 v3: the analogous Defect-C silent-failure guard for the DRAFT
 // path. A draft create whose response carries no projectItem id must not
 // silently succeed — it increments N_FAILED and drives the exit-40 gate.
-describe('SHY-0081 v3: runtime — draft-create returning a null item → N_FAILED + exit 40 (mock-gh)', () => {
-  test('addProjectV2DraftIssue with an empty projectItem id drives N_FAILED++ + exit 40', () => {
+describe('SHY-0082 v4: runtime — createIssue returning a null issue → N_FAILED + exit 40 (mock-gh)', () => {
+  test('createIssue with a null issue drives N_FAILED++ + exit 40', () => {
     const { ghPath, recording, dir } = makeMockGh();
-    // Project lookup succeeds (load_project_cache passes) BUT the draft
-    // mutation returns a null projectItem (simulates PAT missing project:write
-    // or an upstream board id change), so create_draft_item hits its empty-id
-    // branch. The items-map query is served on its own channel (empty board).
+    // bootstrap + project lookup succeed, BUT createIssue returns a null issue
+    // (simulates a PAT permission gap or upstream change), so create_issue hits
+    // its empty-id branch. The items-map query is served on its own channel.
     fs.writeFileSync(
       path.join(dir, 'gh-responses-api-graphql'),
       JSON.stringify({
         data: {
           organization: { projectV2: { id: 'PVT_kwDOC_test', fields: { nodes: [] } } },
-          addProjectV2DraftIssue: { projectItem: null },
+          repository: {
+            id: 'REPO_1',
+            issueTypes: {
+              nodes: [
+                { id: 'IT_TASK', name: 'Task' },
+                { id: 'IT_BUG', name: 'Bug' },
+                { id: 'IT_FEATURE', name: 'Feature' },
+              ],
+            },
+            label: { id: 'LBL_story' },
+          },
+          createIssue: { issue: null },
         },
       }),
     );
@@ -562,13 +587,11 @@ describe('SHY-0081 v3: runtime — draft-create returning a null item → N_FAIL
     });
 
     expect(code).toBe(40);
-    // The draft-add error must surface (no `>/dev/null` silencing).
-    expect(stderr).toMatch(/addProjectV2DraftIssue|draft-add|failed to create draft|N_FAILED/i);
-    // Sanity: the draft mutation was actually invoked.
+    // The create error must surface (no `>/dev/null` silencing).
+    expect(stderr).toMatch(/createIssue|failed to create issue|N_FAILED/i);
+    // Sanity: the create mutation was actually invoked.
     const calls = readRecording(recording);
-    expect(
-      calls.some((c) => c.startsWith('api graphql') && c.includes('addProjectV2DraftIssue')),
-    ).toBe(true);
+    expect(calls.some((c) => c.startsWith('api graphql') && c.includes('createIssue'))).toBe(true);
   });
 });
 
