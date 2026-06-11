@@ -561,22 +561,28 @@ overlay_board_items_sidecar() {
       'with_entries(.value |= {backing, itemId, contentId, issueNumber})')"
     return 0
   fi
+  # SHY-0080: pass both maps via STDIN (printf is a bash builtin → no
+  # ARG_MAX), NOT --argjson — ITEMS_MAP_JSON carries every draft's full spec
+  # body, so 47+ drafts blow past the argv limit and jq fails ("Argument
+  # list too long"), silently emptying the map and re-creating everything.
+  # `jq -s` slurps the two objects: .[0]=sidecar, .[1]=api.
   # Count fills: sidecar keys absent from the API map (jq array subtraction).
-  N_SIDECAR_FILLS="$(jq -n --argjson api "$ITEMS_MAP_JSON" --argjson side "$sidecar" \
-    '(($side | keys) - ($api | keys)) | length')"
+  N_SIDECAR_FILLS="$(printf '%s\n%s\n' "$sidecar" "$ITEMS_MAP_JSON" \
+    | jq -s '((.[0] | keys) - (.[1] | keys)) | length')"
   if [ "${N_SIDECAR_FILLS:-0}" -gt 0 ]; then
     printf '[sidecar] API read missed %s item(s); filled from board-items.json\n' "$N_SIDECAR_FILLS" >&2
   fi
-  # Merge: normalize sidecar entries to the full value shape, then API overlays.
-  ITEMS_MAP_JSON="$(jq -c -n --argjson api "$ITEMS_MAP_JSON" --argjson side "$sidecar" '
-    ($side | with_entries(.value |= {
+  # Merge: normalize sidecar entries to the full value shape, then API (.[1])
+  # overlays/wins.
+  ITEMS_MAP_JSON="$(printf '%s\n%s\n' "$sidecar" "$ITEMS_MAP_JSON" | jq -c -s '
+    (.[0] | with_entries(.value |= {
         itemId: .itemId,
         backing: .backing,
         contentId: .contentId,
         issueNumber: (.issueNumber // 0),
         issueState: "",
         draftBody: ""
-      })) + $api')"
+      })) + .[1]')"
   # Seed write-back state from the merged map (post-overlay, pre-mutation).
   BOARD_ITEMS_JSON="$(printf '%s' "$ITEMS_MAP_JSON" | jq -c \
     'with_entries(.value |= {backing, itemId, contentId, issueNumber})')"
@@ -653,7 +659,11 @@ _items_map_pass() {
         "$(printf '%s' "$response" | head -c 200)" >&2
       return 1
     fi
-    ITEMS_MAP_JSON="$(jq -c -n --argjson a "$ITEMS_MAP_JSON" --argjson b "$page_map" '$a + $b')"
+    # SHY-0080: merge via STDIN (printf builtin → no ARG_MAX), NOT --argjson.
+    # ITEMS_MAP_JSON + page_map carry full draft spec bodies; --argjson argv
+    # overflows past ~47 drafts ("Argument list too long"), which silently
+    # emptied the map and re-created the whole board. `jq -s`: .[0]+.[1].
+    ITEMS_MAP_JSON="$(printf '%s\n%s\n' "$ITEMS_MAP_JSON" "$page_map" | jq -c -s '.[0] + .[1]')"
     # Raw item ids (keyed or not) — the rebuild teardown deletes EVERY item.
     page_ids="$(printf '%s' "$response" | jq -r '.data.organization.projectV2.items.nodes[].id')"
     ITEMS_RAW_IDS="${ITEMS_RAW_IDS}${page_ids}"$'\n'
