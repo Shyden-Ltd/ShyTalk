@@ -3,23 +3,26 @@
    directories with controlled inputs (same pattern as the sibling
    sync-stories-to-issues test files). Not security-sensitive. */
 /**
- * SHY-0074: Mirror architecture v2 — bugs-only Issues, draft cards for
- * stories, faithful board columns.
+ * SHY-0081: Mirror architecture v3 — EVERY story type (incl. bug) becomes a
+ * board DRAFT card; the GitHub Issues page is never written from the corpus.
+ * (Supersedes the SHY-0074 v2 model where type:bug stories became Issues.)
  *
  * Value-level behavior matrix for scripts/sync-stories-to-issues.sh. Every
  * assertion names a concrete expected value landing on a concrete surface
- * (board field option id, draft/issue body text, comment text, close
- * reason, label set) — no "at least one X" shapes, per the strict-testing
- * standard codified 2026-06-10.
+ * (board field option id, draft body text, summary counter, item id) — no
+ * "at least one X" shapes, per the strict-testing standard codified
+ * 2026-06-10.
  *
- * Spec: .project/stories/SHY-0074-mirror-fidelity-board-body-labels.md
+ * Spec: .project/stories/SHY-0081-mirror-v3-uniform-board-drafts.md
  *
  * Harness: a pattern-matching mock `gh` (first-match rules file,
  * \x1f-delimited: pattern, stdout-response-file, exit-code, stderr-text)
- * that records every argv line AND captures stdin for `issue create`/
- * `issue edit` (--body-file -) and for GraphQL mutations passing a body
- * via `-F body=@-` (draft create/update), plus a STORIES_DIR override so
- * the matrix runs against generated fixture stories, never the live corpus.
+ * that records every argv line AND captures stdin for GraphQL mutations
+ * passing a body via `-F body=@-` (draft create/update), plus a STORIES_DIR
+ * override so the matrix runs against generated fixture stories, never the
+ * live corpus. (The mock retains issue-create/edit stdin capture for
+ * back-compat, but v3 never invokes those — asserted by the no-issue-writes
+ * tests.)
  */
 
 const { spawnSync } = require('node:child_process');
@@ -34,7 +37,6 @@ const VALIDATOR = path.join(REPO_ROOT, 'scripts', 'check-story-frontmatter.sh');
 
 const GITHUB_BODY_LIMIT = 65536;
 const SOURCE_URL_PREFIX = 'https://github.com/Shyden-Ltd/ShyTalk/blob/main/.project/stories';
-const BOARD_URL = 'https://github.com/orgs/Shyden-Ltd/projects/1';
 
 const TEMP_DIRS = [];
 function tempDir(prefix = 'sync74-') {
@@ -465,11 +467,233 @@ function fieldLine(lines, itemId, fieldId, valueExpr) {
   );
 }
 
+// ============================================================== SHY-0081 v3 uniform routing
+
+describe('SHY-0081 v3: every story type → a board DRAFT card; the Issues page is never written from the corpus (mock-gh)', () => {
+  // The model reversal: in v2 a `type: bug` story became a GitHub Issue. In
+  // v3 EVERY type (incl. bug) becomes a board draft; the Issues page is
+  // reserved for a future, separate bug-REPORT intake — never written here.
+  const ALL_TYPES = ['feature', 'bug', 'refactor', 'docs', 'infra', 'spike', 'chore'];
+  const idFor = (i) => `SHY-81${String(i + 10)}`;
+
+  let lines;
+  let result;
+  let mock;
+
+  beforeAll(() => {
+    mock = makePatternMockGh();
+    const storiesDir = tempDir('stories81-');
+    ALL_TYPES.forEach((type, i) => {
+      writeResponse(mock.dir, `resp-draft-${idFor(i)}.json`, draftAddResponse(`ITEM_${idFor(i)}`));
+    });
+    ALL_TYPES.forEach((type, i) =>
+      makeStory(storiesDir, { id: idFor(i), status: 'In Progress', type }),
+    );
+    const rules = createPathRules(mock.dir);
+    const perStory = ALL_TYPES.map((_t, i) => [
+      `addProjectV2DraftIssue.*title=${idFor(i)}:`,
+      `resp-draft-${idFor(i)}.json`,
+      '',
+    ]);
+    writeRules(mock.dir, [...perStory, ...rules]);
+    result = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    lines = readRecording(mock.recording);
+  });
+
+  test('run exits 0 and reports 7 created — no draft/issue split (there is only one kind of card)', () => {
+    expect(result.code).toBe(0);
+    expect(result.stderr).toMatch(/Sync result: 7 created, 0 updated, 0 skipped, 0 failed/);
+    // v2's "(N drafts, N issues)" split is gone — uniform routing means one kind.
+    expect(result.stderr).not.toMatch(/drafts,.*issues\)/);
+  });
+
+  test.each(ALL_TYPES.map((t, i) => [t, idFor(i)]))(
+    'type:%s story (%s) creates a board DRAFT item',
+    (_type, id) => {
+      expect(
+        lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes(`title=${id}:`)),
+      ).toBeDefined();
+    },
+  );
+
+  test('exactly 7 draft creates fired (one per story, none duplicated)', () => {
+    expect(lines.filter((l) => l.includes('addProjectV2DraftIssue'))).toHaveLength(7);
+  });
+
+  test('HEADLINE: NO gh issue create / edit / comment / close / list for ANY story type', () => {
+    expect(lines.filter((l) => l.startsWith('issue create'))).toEqual([]);
+    expect(lines.filter((l) => l.startsWith('issue edit'))).toEqual([]);
+    expect(lines.filter((l) => l.startsWith('issue comment'))).toEqual([]);
+    expect(lines.filter((l) => l.startsWith('issue close'))).toEqual([]);
+    expect(lines.filter((l) => l.startsWith('issue list'))).toEqual([]);
+  });
+
+  test('the bug-type story is a DRAFT, not an Issue (the v2→v3 reversal, asserted at the value level)', () => {
+    const id = idFor(ALL_TYPES.indexOf('bug'));
+    expect(
+      lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes(`title=${id}:`)),
+    ).toBeDefined();
+    expect(lines.find((l) => l.startsWith('issue create') && l.includes(`${id}:`))).toBeUndefined();
+  });
+
+  test('no addProjectV2ItemById — issue-backed board adds are retired', () => {
+    expect(lines.filter((l) => l.includes('addProjectV2ItemById'))).toEqual([]);
+  });
+
+  test('the bug-type draft still gets its Type=bug board field (kind of work, on the board)', () => {
+    const id = idFor(ALL_TYPES.indexOf('bug'));
+    expect(fieldLine(lines, `ITEM_${id}`, 'field-type', 'optionId=opt-type-bug')).toBeDefined();
+  });
+
+  test('summary drops the issue-specific counters entirely (no comments/closed/dedup/labels-created)', () => {
+    expect(result.stderr).not.toMatch(/comments posted/);
+    expect(result.stderr).not.toMatch(/issues closed/);
+    expect(result.stderr).not.toMatch(/dedup-guard hits/);
+    expect(result.stderr).not.toMatch(/labels created/);
+  });
+
+  test('summary still reports the retained draft + board counters', () => {
+    expect(result.stderr).toMatch(/status fields set: 7/);
+    expect(result.stderr).toMatch(/bodies embedded: 7/);
+    expect(result.stderr).toMatch(/project items added: 7/);
+  });
+});
+
+describe('SHY-0081 v3: legacy issue-backed board items are converted to drafts (incremental migration safety net)', () => {
+  test('an items-map entry still backed by an ISSUE → board item deleted, issue deleted, recreated as a draft', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories81m-');
+    makeStory(storiesDir, { id: 'SHY-8120', status: 'In Progress', type: 'bug' });
+    const items = itemsResponse([issueNode('SHY-8120', 'ITEM_I8120', 820)]);
+    const rules = createPathRules(mock.dir, { items });
+    writeRules(mock.dir, [['deleteProjectV2Item', '', ''], ['deleteIssue', '', ''], ...rules]);
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const lines = readRecording(mock.recording);
+    const delItemIdx = lines.findIndex(
+      (l) => l.includes('deleteProjectV2Item') && l.includes('itemId=ITEM_I8120'),
+    );
+    const delIssueIdx = lines.findIndex(
+      (l) => l.includes('deleteIssue') && l.includes('issueId=I_node_820'),
+    );
+    const createIdx = lines.findIndex(
+      (l) => l.includes('addProjectV2DraftIssue') && l.includes('title=SHY-8120:'),
+    );
+    expect(delItemIdx).toBeGreaterThanOrEqual(0);
+    expect(delIssueIdx).toBeGreaterThanOrEqual(0);
+    expect(createIdx).toBeGreaterThan(delItemIdx);
+    // The issue is only DELETED — never written (no create/edit/comment).
+    expect(lines.filter((l) => l.startsWith('issue create'))).toEqual([]);
+    expect(lines.filter((l) => l.startsWith('issue edit'))).toEqual([]);
+    expect(lines.filter((l) => l.startsWith('issue comment'))).toEqual([]);
+    expect(r.stderr).toMatch(/issues deleted: 1/);
+    expect(r.stderr).toMatch(/project items deleted: 1/);
+  });
+
+  test('the converted card lands in the sidecar as backing=DRAFT (not the stale ISSUE)', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories81m2-');
+    makeStory(storiesDir, { id: 'SHY-8121', status: 'In Progress', type: 'bug' });
+    const items = itemsResponse([issueNode('SHY-8121', 'ITEM_I8121', 821)]);
+    // createPathRules rewrites resp-draft-add.json, so build rules FIRST, then
+    // override the draft-create response with distinct asserted ids.
+    const rules = createPathRules(mock.dir, { items });
+    writeResponse(
+      mock.dir,
+      'resp-draft-add.json',
+      draftAddResponse('NEW_DRAFT_ITEM', 'NEW_DRAFT_DI'),
+    );
+    writeRules(mock.dir, [['deleteProjectV2Item', '', ''], ['deleteIssue', '', ''], ...rules]);
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const sidecar = JSON.parse(fs.readFileSync(path.join(mock.dir, 'board-items.json'), 'utf-8'));
+    expect(sidecar['SHY-8121'].backing).toBe('DRAFT');
+    expect(sidecar['SHY-8121'].itemId).toBe('NEW_DRAFT_ITEM');
+  });
+
+  test('--dry-run on a legacy ISSUE-backed item (known via the sidecar) previews BOTH the delete + the draft create, ZERO mutations', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories81m3-');
+    makeStory(storiesDir, { id: 'SHY-8122', status: 'In Progress', type: 'bug' });
+    writeRules(mock.dir, createPathRules(mock.dir));
+    // Dry-run makes NO gh calls — it never queries the live items API, so the
+    // only way it knows a story is ISSUE-backed is the committed sidecar.
+    fs.writeFileSync(
+      path.join(mock.dir, 'board-items.json'),
+      JSON.stringify({
+        'SHY-8122': {
+          backing: 'ISSUE',
+          itemId: 'ITEM_I8122',
+          contentId: 'I_node_822',
+          issueNumber: 822,
+        },
+      }),
+    );
+    const r = runScript(['--all', '--dry-run'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    // Both preview lines fire (delete the legacy item+issue, then create a draft).
+    expect(r.stderr).toMatch(
+      /DRY-RUN: SHY-8122: legacy issue-backed item.*would DELETE.*issue #822/,
+    );
+    expect(r.stderr).toMatch(/DRY-RUN: SHY-8122: would CREATE DRAFT item/);
+    // ZERO mutations actually fired.
+    const lines = readRecording(mock.recording);
+    expect(lines.filter((l) => l.includes('deleteProjectV2Item'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('deleteIssue'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('addProjectV2DraftIssue'))).toEqual([]);
+  });
+
+  test('delete-item FAILURE during conversion → exit 40, no issue delete, no draft create (no duplicate)', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories81m4-');
+    makeStory(storiesDir, { id: 'SHY-8123', status: 'In Progress', type: 'bug' });
+    const items = itemsResponse([issueNode('SHY-8123', 'ITEM_I8123', 823)]);
+    const rules = createPathRules(mock.dir, { items });
+    // The board-item delete fails → early return before issue-delete / recreate.
+    writeRules(mock.dir, [['deleteProjectV2Item', '', '1'], ['deleteIssue', '', ''], ...rules]);
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(40);
+    expect(r.stderr).toMatch(/failed to delete item ITEM_I8123 during issue→draft migration/);
+    const lines = readRecording(mock.recording);
+    // The issue was NOT deleted and NO draft was created — no duplicate left behind.
+    expect(lines.filter((l) => l.includes('deleteIssue'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('addProjectV2DraftIssue'))).toEqual([]);
+  });
+
+  test('deleteIssue permission gap during conversion → loud warning + exit 40, but the draft IS still created', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories81m5-');
+    makeStory(storiesDir, { id: 'SHY-8124', status: 'In Progress', type: 'bug' });
+    const items = itemsResponse([issueNode('SHY-8124', 'ITEM_I8124', 824)]);
+    const rules = createPathRules(mock.dir, { items });
+    // Item delete succeeds; issue delete is forbidden (PAT lacks issue-delete).
+    writeRules(mock.dir, [
+      ['deleteProjectV2Item', '', ''],
+      [
+        'deleteIssue',
+        '',
+        '1',
+        'GraphQL: Resource not accessible by personal access token (FORBIDDEN)',
+      ],
+      ...rules,
+    ]);
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(40); // delete_issue_node counted the failure
+    expect(r.stderr).toMatch(/::warning::.*deleteIssue.*GH_PAT_PROJECT/);
+    const lines = readRecording(mock.recording);
+    // The || true means the recreate is NOT blocked — the draft still lands.
+    expect(
+      lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes('title=SHY-8124:')),
+    ).toBeDefined();
+  });
+});
+
 // ============================================================== create-path matrix
 
-describe('SHY-0074 v2: create path — draft/bug routing + per-value board-field matrix (mock-gh)', () => {
-  // One bug (→ real issue) + six non-bugs (→ board draft items). Types
-  // cover all 7 values; statuses cover all 5 lifecycle values.
+describe('SHY-0081 v3: create path — per-value board-field matrix (every type is a draft card) (mock-gh)', () => {
+  // SHY-0081 v3: every type (incl. bug) → a board draft card. Types cover all
+  // 7 values; statuses cover all 5 lifecycle values; the per-value matrix
+  // below proves each frontmatter value lands on the correct board field.
   const MATRIX = [
     {
       id: 'SHY-9001',
@@ -522,8 +746,8 @@ describe('SHY-0074 v2: create path — draft/bug routing + per-value board-field
     },
   ];
   const IDS = MATRIX.map((m) => m.id);
-  const DRAFT_IDS = IDS.filter((id) => id !== 'SHY-9002');
-  const itemFor = (id) => (id === 'SHY-9002' ? 'ITEM_I100' : `ITEM_D${id.slice(4)}`);
+  const DRAFT_IDS = IDS; // SHY-0081 v3: every story is a draft, no bug→issue special case
+  const itemFor = (id) => `ITEM_D${id.slice(4)}`;
 
   let lines;
   let result;
@@ -541,56 +765,26 @@ describe('SHY-0074 v2: create path — draft/bug routing + per-value board-field
       writeResponse(mock.dir, `resp-draft-${id}.json`, draftAddResponse(itemFor(id)));
       perStory.push([`addProjectV2DraftIssue.*title=${id}:`, `resp-draft-${id}.json`, '']);
     }
-    writeResponse(
-      mock.dir,
-      'resp-add-100.json',
-      JSON.stringify({ data: { addProjectV2ItemById: { item: { id: 'ITEM_I100' } } } }),
-    );
-    perStory.push(['addProjectV2ItemById.*contentId=I_node_100', 'resp-add-100.json', '']);
     writeRules(mock.dir, [...perStory, ...rules]);
     result = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     lines = readRecording(mock.recording);
   });
 
-  test('run exits 0 and reports 7 created split as 6 drafts + 1 issue', () => {
+  test('run exits 0 and reports 7 created (every type is a draft card)', () => {
     expect(result.code).toBe(0);
-    expect(result.stderr).toMatch(/7 created \(6 drafts, 1 issues\)/);
+    expect(result.stderr).toMatch(/Sync result: 7 created, 0 updated, 0 skipped, 0 failed/);
   });
 
-  // ---- Routing: Issues tab is bugs-only
-  test('the bug story creates a real issue; NO draft item', () => {
-    const creates = lines.filter((l) => l.startsWith('issue create'));
-    expect(creates).toHaveLength(1);
-    expect(creates[0]).toContain('--title SHY-9002:');
-    expect(
-      lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes('SHY-9002')),
-    ).toBeUndefined();
-  });
-
-  test.each(DRAFT_IDS)('%s (non-bug) creates a board draft item; NO GitHub issue', (id) => {
+  // ---- Routing: every type → a draft, never the Issues tab
+  test.each(IDS)('%s creates a board draft item; NO GitHub issue', (id) => {
     expect(
       lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes(`title=${id}:`)),
     ).toBeDefined();
     expect(lines.find((l) => l.startsWith('issue create') && l.includes(`${id}:`))).toBeUndefined();
   });
 
-  test('the bug issue is added to the board via addProjectV2ItemById', () => {
-    expect(
-      lines.find((l) => l.includes('addProjectV2ItemById') && l.includes('contentId=I_node_100')),
-    ).toBeDefined();
-  });
-
-  test('items-map replaces per-story RECONCILIATION search; the only `issue list` is the SHY-0078 dedup guard on the single bug create', () => {
-    // No per-story reconciliation lookups (the items map does that). The
-    // dedup guard (SHY-0078) does fire ONE consistent-source issue search —
-    // but only for the bug story routed to the create path, never for the 6
-    // draft stories.
-    const issueLists = lines.filter((l) => l.startsWith('issue list'));
-    expect(issueLists).toHaveLength(1);
-    expect(issueLists[0]).toContain('SHY-9002:');
-    for (const id of DRAFT_IDS) {
-      expect(lines.find((l) => l.startsWith('issue list') && l.includes(`${id}:`))).toBeUndefined();
-    }
+  test('NO issue list reconciliation search for any story (the items map does that)', () => {
+    expect(lines.filter((l) => l.startsWith('issue list'))).toEqual([]);
   });
 
   test('items-map query fired twice — empty board triggers the SHY-0078 empty-read retry (single page each)', () => {
@@ -645,7 +839,7 @@ describe('SHY-0074 v2: create path — draft/bug routing + per-value board-field
   });
 
   // ---- Text fields
-  test('SHY ID text field carries the exact story id on every item (draft AND issue-backed)', () => {
+  test('SHY ID text field carries the exact story id on every draft item', () => {
     for (const id of IDS) {
       expect(fieldLine(lines, itemFor(id), 'field-shyid', `text=${id}`)).toBeDefined();
     }
@@ -666,14 +860,10 @@ describe('SHY-0074 v2: create path — draft/bug routing + per-value board-field
   });
 
   // ---- Ordering invariants
-  test('Status mutation fires AFTER the item-creating mutation (last-writer vs built-in automation)', () => {
+  test('Status mutation fires AFTER the draft-creating mutation (last-writer vs built-in automation)', () => {
     for (const id of IDS) {
       const createIdx = lines.findIndex(
-        (l) =>
-          (l.includes('addProjectV2DraftIssue') && l.includes(`title=${id}:`)) ||
-          (id === 'SHY-9002' &&
-            l.includes('addProjectV2ItemById') &&
-            l.includes('contentId=I_node_100')),
+        (l) => l.includes('addProjectV2DraftIssue') && l.includes(`title=${id}:`),
       );
       const statusIdx = lines.findIndex(
         (l) =>
@@ -696,12 +886,7 @@ describe('SHY-0074 v2: create path — draft/bug routing + per-value board-field
     }
   });
 
-  // ---- Labels (single-source)
-  test('the bug issue carries exactly one label: story', () => {
-    const createLine = lines.find((l) => l.startsWith('issue create'));
-    expect(createLine).toMatch(/--label story$/);
-  });
-
+  // ---- Labels (single-source): v3 creates no labels at all (no issues)
   test('no status:/priority:/effort:/type:/roadmap: label is ever created', () => {
     const familyCreates = lines.filter(
       (l) =>
@@ -711,10 +896,14 @@ describe('SHY-0074 v2: create path — draft/bug routing + per-value board-field
     expect(familyCreates).toEqual([]);
   });
 
-  // ---- Draft body (full spec verbatim + footer with status marker)
-  test('draft body is the story body verbatim followed by the v2 footer (Source + Status + Last synced)', () => {
+  test('NO gh label create at all — the story label is no longer applied (inert)', () => {
+    expect(lines.filter((l) => l.startsWith('label create'))).toEqual([]);
+  });
+
+  // ---- Draft body (full spec verbatim + footer with status marker), all 7
+  test('draft body is the story body verbatim followed by the footer (Source + Status + Last synced)', () => {
     const bodies = readCaptures(mock.dir, 'graphql');
-    expect(bodies).toHaveLength(6);
+    expect(bodies).toHaveLength(7); // every story is a draft create
     const body = bodies.find((b) => b.includes('# SHY-9001:'));
     expect(body).toBeDefined();
     const spec = expectedSpecBody(stories['SHY-9001'].content);
@@ -729,58 +918,35 @@ describe('SHY-0074 v2: create path — draft/bug routing + per-value board-field
     );
   });
 
-  // ---- Bug-report body
-  test('bug issue body is a bug report: ## Bug = the Why content verbatim', () => {
-    const bodies = readCaptures(mock.dir, 'issue-create');
-    expect(bodies).toHaveLength(1);
-    expect(bodies[0].startsWith('## Bug\n\nFixture.\n\n## Tracking\n')).toBe(true);
+  test('the bug-type story embeds the FULL spec in its draft (no bug-report stub)', () => {
+    const bodies = readCaptures(mock.dir, 'graphql');
+    const body = bodies.find((b) => b.includes('# SHY-9002:'));
+    expect(body).toBeDefined();
+    // It's the full spec body, not a "## Bug / ## Tracking" report.
+    expect(body).toContain('## Acceptance Criteria');
+    expect(body).not.toContain('## Tracking');
   });
 
-  test('bug issue ## Tracking section links the story file, the board, and states the status', () => {
-    const body = readCaptures(mock.dir, 'issue-create')[0];
-    expect(body).toContain(
-      `- Source: [.project/stories/SHY-9002-fixture-story.md](${SOURCE_URL_PREFIX}/SHY-9002-fixture-story.md)`,
-    );
-    expect(body).toContain(`- Tracked as SHY-9002 on the [ShyTalk Stories board](${BOARD_URL})`);
-    expect(body).toContain('- Status: In Progress');
+  // ---- No Issues-tab writes of any kind
+  test('zero issue create / edit / comment / close across the whole run', () => {
+    for (const verb of ['create', 'edit', 'comment', 'close']) {
+      expect(lines.filter((l) => l.startsWith(`issue ${verb}`))).toEqual([]);
+    }
   });
 
-  test('bug issue body footer carries Source + Status marker + Last synced', () => {
-    const body = readCaptures(mock.dir, 'issue-create')[0];
-    expect(body).toMatch(
-      new RegExp(
-        '---\\n\\n_Source: https:\\/\\/github\\.com\\/Shyden-Ltd\\/ShyTalk\\/blob\\/main\\/\\.project\\/stories\\/SHY-9002-fixture-story\\.md_\\n' +
-          '_Status: In Progress_\\n' +
-          '_Last synced: \\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z from commit [0-9a-f]+ body-hash: [0-9a-f]{64}_\\n$',
-      ),
-    );
-  });
-
-  test('bug issue body does NOT embed the full spec (the board card carries the work; the issue is the report)', () => {
-    const body = readCaptures(mock.dir, 'issue-create')[0];
-    expect(body).not.toContain('## Acceptance Criteria');
-    expect(body).not.toContain('## BDD Scenarios');
-  });
-
-  // ---- Terminal statuses on create: drafts never close anything
-  test('Done/Cancelled DRAFT stories cause no issue close (no issue exists)', () => {
-    expect(lines.filter((l) => l.startsWith('issue close'))).toEqual([]);
-  });
-
-  // ---- Run summary observability
-  test('summary line reports the v2 counters', () => {
+  // ---- Run summary observability (v3 counters)
+  test('summary line reports the v3 counters (no comments/closed/dedup)', () => {
     expect(result.stderr).toMatch(/status fields set: 7/);
     expect(result.stderr).toMatch(/bodies embedded: 7/);
     expect(result.stderr).toMatch(/bodies truncated: 0/);
-    expect(result.stderr).toMatch(/comments posted: 0/);
-    expect(result.stderr).toMatch(/issues closed: 0/);
-    // SHY-0078: no dedup hit on a genuine fresh create (no existing issues).
-    expect(result.stderr).toMatch(/dedup-guard hits: 0/);
+    expect(result.stderr).not.toMatch(/comments posted/);
+    expect(result.stderr).not.toMatch(/issues closed/);
+    expect(result.stderr).not.toMatch(/dedup-guard hits/);
   });
 
   test('CORRECTIVE (pre-existing SHY-0067 bug): project-items-added counter survives the command-substitution subshell', () => {
-    // add_to_project_board is $()-captured; its counter increment used to
-    // die in the subshell, reporting 0 forever. 6 drafts + 1 issue here.
+    // The draft create echo is $()-captured; the counter increment must live
+    // at the call site, not in the subshell. 7 draft items added here.
     expect(result.stderr).toMatch(/project items added: 7/);
   });
 
@@ -793,8 +959,9 @@ describe('SHY-0074 v2: create path — draft/bug routing + per-value board-field
 
 // ============================================================== update path
 
-describe('SHY-0074 v2: update path — stale bodies refresh in place, fields re-asserted (mock-gh)', () => {
-  // SHY-9101: draft-backed (chore). SHY-9102: issue-backed (bug).
+describe('SHY-0081 v3: update path — stale draft bodies refresh in place, fields re-asserted (mock-gh)', () => {
+  // SHY-9101: draft (chore). SHY-9102: draft (bug-type) — both update as
+  // draft cards in v3 (a bug story is a draft, never an issue edit).
   let lines;
   let result;
   let mock;
@@ -820,21 +987,19 @@ describe('SHY-0074 v2: update path — stale bodies refresh in place, fields re-
       roadmaps: '[G012]',
     });
     const staleDraftBody = `Old draft.\n\n${syncedFooter('SHY-9101-fixture-story', 'Done', STALE_HASH)}`;
-    const staleIssueBody = `Old issue.\n\n${syncedFooter('SHY-9102-fixture-story', 'In Review', STALE_HASH)}`;
+    const staleDraftBody2 = `Old draft 2.\n\n${syncedFooter('SHY-9102-fixture-story', 'In Review', STALE_HASH)}`;
     const items = itemsResponse([
       draftNode('SHY-9101', 'ITEM_D9101', 'DI_9101', staleDraftBody),
-      issueNode('SHY-9102', 'ITEM_I9102', 102),
+      draftNode('SHY-9102', 'ITEM_D9102', 'DI_9102', staleDraftBody2),
     ]);
-    const rules = createPathRules(mock.dir, { items });
-    writeResponse(mock.dir, 'resp-body-102.txt', staleIssueBody);
-    writeRules(mock.dir, [['^issue view 102 --json body', 'resp-body-102.txt', ''], ...rules]);
+    writeRules(mock.dir, createPathRules(mock.dir, { items }));
     result = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     lines = readRecording(mock.recording);
   });
 
   test('run exits 0 and reports 2 updated, 0 created', () => {
     expect(result.code).toBe(0);
-    expect(result.stderr).toMatch(/0 created \(0 drafts, 0 issues\), 2 updated/);
+    expect(result.stderr).toMatch(/0 created, 2 updated/);
   });
 
   test('stale draft refreshes via updateProjectV2DraftIssue against its DraftIssue content id', () => {
@@ -843,19 +1008,26 @@ describe('SHY-0074 v2: update path — stale bodies refresh in place, fields re-
     expect(line).toContain('draftIssueId=DI_9101');
   });
 
-  test('refreshed draft body is the new full spec + footer (via stdin)', () => {
+  test('refreshed SHY-9101 draft body is the new full spec + footer (via stdin)', () => {
     const bodies = readCaptures(mock.dir, 'graphql');
-    expect(bodies).toHaveLength(1);
-    expect(bodies[0].startsWith(expectedSpecBody(s9101.content))).toBe(true);
-    expect(bodies[0]).toContain('_Status: Done_');
+    expect(bodies).toHaveLength(2); // two draft updates
+    const body = bodies.find((b) => b.includes('# SHY-9101:'));
+    expect(body).toBeDefined();
+    expect(body.startsWith(expectedSpecBody(s9101.content))).toBe(true);
+    expect(body).toContain('_Status: Done_');
   });
 
-  test('stale issue refreshes via issue edit with the new bug-report body (via stdin)', () => {
-    expect(lines.find((l) => l.startsWith('issue edit 102 --body-file -'))).toBeDefined();
-    const bodies = readCaptures(mock.dir, 'issue-edit');
-    expect(bodies).toHaveLength(1);
-    expect(bodies[0].startsWith('## Bug\n')).toBe(true);
-    expect(bodies[0]).toContain('- Status: In Review');
+  test('the bug-type draft (SHY-9102) refreshes via updateProjectV2DraftIssue — never an issue edit', () => {
+    expect(
+      lines.find(
+        (l) => l.includes('updateProjectV2DraftIssue') && l.includes('draftIssueId=DI_9102'),
+      ),
+    ).toBeDefined();
+    expect(lines.filter((l) => l.startsWith('issue edit'))).toEqual([]);
+    const bodies = readCaptures(mock.dir, 'graphql');
+    expect(bodies.some((b) => b.includes('# SHY-9102:') && b.includes('_Status: In Review_'))).toBe(
+      true,
+    );
   });
 
   test('no item re-add on update: the existing board item is reused from the map', () => {
@@ -875,43 +1047,42 @@ describe('SHY-0074 v2: update path — stale bodies refresh in place, fields re-
     expect(fieldLine(lines, 'ITEM_D9101', fieldId, valueExpr)).toBeDefined();
   });
 
-  test('issue-backed item maps independently (In Review → opt-st-inrev on ITEM_I9102)', () => {
-    expect(fieldLine(lines, 'ITEM_I9102', 'field-status', 'optionId=opt-st-inrev')).toBeDefined();
+  test('the second draft item maps independently (In Review → opt-st-inrev on ITEM_D9102)', () => {
+    expect(fieldLine(lines, 'ITEM_D9102', 'field-status', 'optionId=opt-st-inrev')).toBeDefined();
   });
 });
 
 // ============================================================== status transitions
 
-describe('SHY-0074 v2: status transitions — comments on bug issues, silent refresh on drafts (mock-gh)', () => {
-  test('bug issue transition posts "Status: old → new" comment BEFORE the body refresh', () => {
+describe('SHY-0081 v3: status transitions on draft cards — body marker + board column move, no comments (mock-gh)', () => {
+  test('pure status flip (hash current, stored marker differs) refreshes the draft body + moves the board column', () => {
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories74tr-');
     const { content } = makeStory(storiesDir, { id: 'SHY-9103', status: 'In Review', type: 'bug' });
     // Stored marker says In Progress; hash is CURRENT — a pure status flip
     // (status lives in frontmatter, outside the body hash) must still be
-    // detected via the footer marker.
+    // detected via the footer marker and refresh the draft. A bug-type story
+    // is a DRAFT in v3, so there is no issue timeline / comment.
     const body = existingBody(content, 'SHY-9103-fixture-story', 'In Progress');
-    const items = itemsResponse([issueNode('SHY-9103', 'ITEM_I9103', 103)]);
-    const rules = createPathRules(mock.dir, { items });
-    writeResponse(mock.dir, 'resp-body-103.txt', body);
-    writeRules(mock.dir, [['^issue view 103 --json body', 'resp-body-103.txt', ''], ...rules]);
+    const items = itemsResponse([draftNode('SHY-9103', 'ITEM_D9103', 'DI_9103', body)]);
+    writeRules(mock.dir, createPathRules(mock.dir, { items }));
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(0);
     const lines = readRecording(mock.recording);
-    const commentIdx = lines.findIndex(
-      (l) => l === 'issue comment 103 --body Status: In Progress → In Review',
-    );
-    const editIdx = lines.findIndex((l) => l.startsWith('issue edit 103'));
-    expect(commentIdx).toBeGreaterThanOrEqual(0);
-    expect(editIdx).toBeGreaterThan(commentIdx);
-    // Refreshed body carries the NEW marker + Tracking status line.
-    const edited = readCaptures(mock.dir, 'issue-edit')[0];
-    expect(edited).toContain('_Status: In Review_');
-    expect(edited).toContain('- Status: In Review');
+    // No issue writes at all — drafts have no timeline.
+    expect(lines.filter((l) => l.startsWith('issue comment'))).toEqual([]);
+    expect(lines.filter((l) => l.startsWith('issue edit'))).toEqual([]);
+    // Draft body refreshed with the NEW marker.
+    expect(
+      lines.find(
+        (l) => l.includes('updateProjectV2DraftIssue') && l.includes('draftIssueId=DI_9103'),
+      ),
+    ).toBeDefined();
+    expect(readCaptures(mock.dir, 'graphql')[0]).toContain('_Status: In Review_');
     // Board column moves too.
-    expect(fieldLine(lines, 'ITEM_I9103', 'field-status', 'optionId=opt-st-inrev')).toBeDefined();
-    expect(r.stderr).toMatch(/comments posted: 1/);
+    expect(fieldLine(lines, 'ITEM_D9103', 'field-status', 'optionId=opt-st-inrev')).toBeDefined();
     expect(r.stderr).toMatch(/1 updated/);
+    expect(r.stderr).not.toMatch(/comments posted/);
   });
 
   test('draft transition refreshes the body marker but posts NO comment (drafts have no timeline)', () => {
@@ -935,23 +1106,21 @@ describe('SHY-0074 v2: status transitions — comments on bug issues, silent ref
       ),
     ).toBeDefined();
     expect(readCaptures(mock.dir, 'graphql')[0]).toContain('_Status: In Progress_');
-    expect(r.stderr).toMatch(/comments posted: 0/);
+    expect(r.stderr).not.toMatch(/comments posted/);
   });
 
   test('unchanged stories (hash + status both match) are full no-ops: no edits, no comments, no field writes', () => {
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories74tr3-');
-    const draft = makeStory(storiesDir, { id: 'SHY-9105', status: 'In Progress', type: 'feature' });
-    const bug = makeStory(storiesDir, { id: 'SHY-9106', status: 'In Review', type: 'bug' });
-    const draftBody = existingBody(draft.content, 'SHY-9105-fixture-story', 'In Progress');
-    const issueBody = existingBody(bug.content, 'SHY-9106-fixture-story', 'In Review');
+    const a = makeStory(storiesDir, { id: 'SHY-9105', status: 'In Progress', type: 'feature' });
+    const b = makeStory(storiesDir, { id: 'SHY-9106', status: 'In Review', type: 'bug' });
+    const aBody = existingBody(a.content, 'SHY-9105-fixture-story', 'In Progress');
+    const bBody = existingBody(b.content, 'SHY-9106-fixture-story', 'In Review');
     const items = itemsResponse([
-      draftNode('SHY-9105', 'ITEM_D9105', 'DI_9105', draftBody),
-      issueNode('SHY-9106', 'ITEM_I9106', 106),
+      draftNode('SHY-9105', 'ITEM_D9105', 'DI_9105', aBody),
+      draftNode('SHY-9106', 'ITEM_D9106', 'DI_9106', bBody),
     ]);
-    const rules = createPathRules(mock.dir, { items });
-    writeResponse(mock.dir, 'resp-body-106.txt', issueBody);
-    writeRules(mock.dir, [['^issue view 106 --json body', 'resp-body-106.txt', ''], ...rules]);
+    writeRules(mock.dir, createPathRules(mock.dir, { items }));
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(0);
     expect(r.stderr).toMatch(/2 skipped/);
@@ -963,166 +1132,9 @@ describe('SHY-0074 v2: status transitions — comments on bug issues, silent ref
   });
 });
 
-// ============================================================== close on terminal states
-
-describe('SHY-0074 v2: terminal statuses close bug issues (mock-gh)', () => {
-  function terminalSetup({ id, num, status, releasedIn = '', marker, state = 'OPEN' }) {
-    const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories74cl-');
-    const { content } = makeStory(storiesDir, { id, status, type: 'bug', releasedIn });
-    const slug = `${id}-fixture-story`;
-    const body = existingBody(content, slug, marker);
-    const items = itemsResponse([issueNode(id, `ITEM_I${num}`, num, state)]);
-    const rules = createPathRules(mock.dir, { items });
-    writeResponse(mock.dir, `resp-body-${num}.txt`, body);
-    writeRules(mock.dir, [
-      [`^issue view ${num} --json body`, `resp-body-${num}.txt`, ''],
-      ...rules,
-    ]);
-    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
-    return { r, lines: readRecording(mock.recording) };
-  }
-
-  test('Done bug with released_in → transition comment, body refresh, close as completed naming the release', () => {
-    const { r, lines } = terminalSetup({
-      id: 'SHY-9107',
-      num: 107,
-      status: 'Done',
-      releasedIn: 'v0.98.0',
-      marker: 'In Review',
-    });
-    expect(r.code).toBe(0);
-    expect(
-      lines.find((l) => l === 'issue comment 107 --body Status: In Review → Done'),
-    ).toBeDefined();
-    const closeIdx = lines.findIndex(
-      (l) => l === 'issue close 107 --reason completed --comment Released in v0.98.0',
-    );
-    const editIdx = lines.findIndex((l) => l.startsWith('issue edit 107'));
-    expect(closeIdx).toBeGreaterThanOrEqual(0);
-    expect(closeIdx).toBeGreaterThan(editIdx);
-    expect(r.stderr).toMatch(/issues closed: 1/);
-  });
-
-  test('Done bug without released_in, otherwise unchanged but still open → closed as completed (no release comment)', () => {
-    const { r, lines } = terminalSetup({
-      id: 'SHY-9108',
-      num: 108,
-      status: 'Done',
-      marker: 'Done',
-    });
-    expect(r.code).toBe(0);
-    const close = lines.find((l) => l.startsWith('issue close 108'));
-    expect(close).toBe('issue close 108 --reason completed');
-    expect(r.stderr).toMatch(/issues closed: 1/);
-  });
-
-  test('Cancelled bug → closed as not planned', () => {
-    const { r, lines } = terminalSetup({
-      id: 'SHY-9109',
-      num: 109,
-      status: 'Cancelled',
-      marker: 'In Progress',
-    });
-    expect(r.code).toBe(0);
-    expect(
-      lines.find((l) => l === 'issue comment 109 --body Status: In Progress → Cancelled'),
-    ).toBeDefined();
-    expect(lines.find((l) => l === 'issue close 109 --reason not planned')).toBeDefined();
-  });
-
-  test('already-CLOSED Done bug with no changes → no re-close, full skip', () => {
-    const { r, lines } = terminalSetup({
-      id: 'SHY-9110',
-      num: 110,
-      status: 'Done',
-      marker: 'Done',
-      state: 'CLOSED',
-    });
-    expect(r.code).toBe(0);
-    expect(lines.filter((l) => l.startsWith('issue close'))).toEqual([]);
-    expect(r.stderr).toMatch(/1 skipped/);
-  });
-
-  test('bug born terminal (rebuild path): create + board + fields, then immediate close naming the release', () => {
-    const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories74cl2-');
-    makeStory(storiesDir, { id: 'SHY-9111', status: 'Done', type: 'bug', releasedIn: 'v0.97.2' });
-    writeRules(mock.dir, createPathRules(mock.dir));
-    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
-    expect(r.code).toBe(0);
-    const lines = readRecording(mock.recording);
-    expect(lines.find((l) => l.startsWith('issue create --title SHY-9111:'))).toBeDefined();
-    const closeIdx = lines.findIndex(
-      (l) => l === 'issue close 100 --reason completed --comment Released in v0.97.2',
-    );
-    const statusIdx = lines.findIndex((l) => l.includes('fieldId=field-status'));
-    expect(closeIdx).toBeGreaterThanOrEqual(0);
-    expect(closeIdx).toBeGreaterThan(statusIdx);
-  });
-
-  test('bug born Cancelled → created then closed as not planned', () => {
-    const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories74cl3-');
-    makeStory(storiesDir, { id: 'SHY-9112', status: 'Cancelled', type: 'bug' });
-    writeRules(mock.dir, createPathRules(mock.dir));
-    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
-    expect(r.code).toBe(0);
-    const lines = readRecording(mock.recording);
-    expect(lines.find((l) => l === 'issue close 100 --reason not planned')).toBeDefined();
-  });
-});
-
-// ============================================================== type flips
-
-describe('SHY-0074 v2: type flip recreates the correct backing (mock-gh)', () => {
-  test('draft-backed story re-typed to bug → draft item deleted, bug issue created on the board', () => {
-    const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories74tf-');
-    makeStory(storiesDir, { id: 'SHY-9201', status: 'In Progress', type: 'bug' });
-    const items = itemsResponse([draftNode('SHY-9201', 'ITEM_D9201', 'DI_9201', 'old draft body')]);
-    const rules = createPathRules(mock.dir, { items });
-    writeRules(mock.dir, [['deleteProjectV2Item', '', ''], ...rules]);
-    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
-    expect(r.code).toBe(0);
-    const lines = readRecording(mock.recording);
-    const delIdx = lines.findIndex(
-      (l) => l.includes('deleteProjectV2Item') && l.includes('itemId=ITEM_D9201'),
-    );
-    const createIdx = lines.findIndex((l) => l.startsWith('issue create --title SHY-9201:'));
-    expect(delIdx).toBeGreaterThanOrEqual(0);
-    expect(createIdx).toBeGreaterThan(delIdx);
-    expect(
-      lines.find((l) => l.includes('addProjectV2ItemById') && l.includes('contentId=I_node_100')),
-    ).toBeDefined();
-    expect(r.stderr).toMatch(/type flip/i);
-    expect(r.stderr).toMatch(/project items deleted: 1/);
-  });
-
-  test('issue-backed story re-typed to non-bug → item deleted, orphan issue closed as not planned, draft created', () => {
-    const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories74tf2-');
-    makeStory(storiesDir, { id: 'SHY-9202', status: 'In Progress', type: 'feature' });
-    const items = itemsResponse([issueNode('SHY-9202', 'ITEM_I9202', 202)]);
-    const rules = createPathRules(mock.dir, { items });
-    writeRules(mock.dir, [['deleteProjectV2Item', '', ''], ...rules]);
-    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
-    expect(r.code).toBe(0);
-    const lines = readRecording(mock.recording);
-    expect(
-      lines.find((l) => l.includes('deleteProjectV2Item') && l.includes('itemId=ITEM_I9202')),
-    ).toBeDefined();
-    expect(lines.find((l) => l === 'issue close 202 --reason not planned')).toBeDefined();
-    expect(
-      lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes('title=SHY-9202:')),
-    ).toBeDefined();
-    expect(r.stderr).toMatch(/type flip/i);
-  });
-});
-
 // ============================================================== rebuild
 
-describe('SHY-0074 v2: --rebuild teardown (mock-gh)', () => {
+describe('SHY-0074: --rebuild teardown (v3: recreates drafts) (mock-gh)', () => {
   test('refuses without REBUILD_CONFIRM=yes: exit 2 naming the env var, ZERO gh calls', () => {
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories74rb-');
@@ -1223,7 +1235,7 @@ describe('SHY-0074 v2: --rebuild teardown (mock-gh)', () => {
 
 // ============================================================== items map
 
-describe('SHY-0074 v2: items-map query (mock-gh)', () => {
+describe('SHY-0074: items-map query (mock-gh)', () => {
   test('map query failure aborts the run BEFORE any mutations (exit 40)', () => {
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories74im-');
@@ -1281,7 +1293,7 @@ describe('SHY-0074 v2: items-map query (mock-gh)', () => {
 
 // ============================================================== change detection
 
-describe('SHY-0074 v2: body-hash anchoring + idempotent skip (mock-gh)', () => {
+describe('SHY-0074: body-hash anchoring + idempotent skip (mock-gh)', () => {
   test('DRAFT: spec containing literal "body-hash:" text does not break change detection', () => {
     // Run 1: create the draft; capture the body the script generated.
     const mock1 = makePatternMockGh();
@@ -1308,39 +1320,11 @@ describe('SHY-0074 v2: body-hash anchoring + idempotent skip (mock-gh)', () => {
     expect(r2.stderr).toContain('1 skipped');
     expect(readCaptures(mock2.dir, 'graphql')).toHaveLength(0);
   });
-
-  test('BUG ISSUE: Why section containing literal "body-hash:" text does not break change detection', () => {
-    const mock1 = makePatternMockGh();
-    const storiesDir = tempDir('stories74h2-');
-    makeStory(storiesDir, {
-      id: 'SHY-8202',
-      type: 'bug',
-      why: 'Discusses the footer format `body-hash: deadbeef` inline.',
-    });
-    writeRules(mock1.dir, createPathRules(mock1.dir));
-    const r1 = runScript(['--all'], baseEnv(mock1.ghPath, storiesDir));
-    expect(r1.code).toBe(0);
-    const generatedBody = readCaptures(mock1.dir, 'issue-create')[0];
-    expect(generatedBody).toContain('body-hash: deadbeef');
-
-    const mock2 = makePatternMockGh();
-    const items = itemsResponse([issueNode('SHY-8202', 'ITEM_I8202', 100)]);
-    const rules = createPathRules(mock2.dir, { items });
-    writeResponse(mock2.dir, 'resp-existing-body.txt', generatedBody);
-    writeRules(mock2.dir, [
-      ['^issue view 100 --json body', 'resp-existing-body.txt', ''],
-      ...rules,
-    ]);
-    const r2 = runScript(['--all'], baseEnv(mock2.ghPath, storiesDir));
-    expect(r2.code).toBe(0);
-    expect(r2.stderr).toContain('1 skipped');
-    expect(readCaptures(mock2.dir, 'issue-edit')).toHaveLength(0);
-  });
 });
 
 // ============================================================== truncation
 
-describe('SHY-0074 v2: oversize body truncation (mock-gh)', () => {
+describe('SHY-0074: oversize body truncation (mock-gh)', () => {
   test('DRAFT body over the 64K cap is line-truncated with notice + intact footer (exact arithmetic)', () => {
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories74t-');
@@ -1374,27 +1358,6 @@ describe('SHY-0074 v2: oversize body truncation (mock-gh)', () => {
     const spec = expectedSpecBody(content);
     const keptSpec = beforeNotice.replace(/\n\n…$/, '');
     expect(Number(notice[1])).toBe(spec.length - keptSpec.length);
-    expect(r.stderr).toMatch(/bodies truncated: 1/);
-  });
-
-  test('BUG body with an oversize Why is capped with notice + intact footer', () => {
-    const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories74t2-');
-    const filler = Array.from(
-      { length: 700 },
-      (_, i) => `Why filler line ${i} ${'Y'.repeat(100)}`,
-    ).join('\n');
-    makeStory(storiesDir, { id: 'SHY-8302', type: 'bug', why: filler });
-    writeRules(mock.dir, createPathRules(mock.dir));
-    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
-    expect(r.code).toBe(0);
-    const body = readCaptures(mock.dir, 'issue-create')[0];
-    expect(body.length).toBeLessThanOrEqual(GITHUB_BODY_LIMIT);
-    expect(body.startsWith('## Bug\n')).toBe(true);
-    expect(body).toMatch(
-      /_\[spec truncated — \d+ chars omitted; read the full file at the Source link\]_/,
-    );
-    expect(body).toMatch(/_Last synced: .* body-hash: [0-9a-f]{64}_\n$/);
     expect(r.stderr).toMatch(/bodies truncated: 1/);
   });
 });
@@ -1438,16 +1401,14 @@ describe('SHY-0074: duplicated label-family migration (mock-gh)', () => {
     expect(r.stderr).toMatch(/labels deleted: 0/);
   });
 
-  test('CORRECTIVE (pre-existing SHY-0067 bug): labels-created counter survives the command-substitution subshell', () => {
-    // ensure_labels_for_story was $()-captured; N_LABELS_CREATED used to
-    // die in the subshell. With `story` absent from the repo, exactly one
-    // label create fires (for the bug issue) and must be counted.
+  test('SHY-0081 v3: no `label create` fires at all (the story label is no longer applied)', () => {
+    // v3 retired the issue path, so ensure_labels_for_story / build_labels are
+    // gone — the run never creates the `story` label (or any other).
     const { mock, storiesDir } = migrationSetup('dependencies\n');
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(0);
-    const creates = readRecording(mock.recording).filter((l) => l.startsWith('label create story'));
-    expect(creates).toHaveLength(1);
-    expect(r.stderr).toMatch(/labels created: 1/);
+    expect(readRecording(mock.recording).filter((l) => l.startsWith('label create'))).toEqual([]);
+    expect(r.stderr).not.toMatch(/labels created/);
   });
 
   test('label delete failure → warning + N_FAILED + exit 40, sync continues', () => {
@@ -1458,9 +1419,11 @@ describe('SHY-0074: duplicated label-family migration (mock-gh)', () => {
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(40);
     expect(r.stderr).toMatch(/label delete/);
-    // The story itself still synced despite the migration failure.
-    const creates = readRecording(mock.recording).filter((l) => l.startsWith('issue create'));
-    expect(creates).toHaveLength(1);
+    // The story itself still synced (as a draft) despite the migration failure.
+    const drafts = readRecording(mock.recording).filter((l) =>
+      l.includes('addProjectV2DraftIssue'),
+    );
+    expect(drafts).toHaveLength(1);
   });
 });
 
@@ -1491,24 +1454,27 @@ describe('SHY-0074: per-component failure bubbles independently (mock-gh)', () =
     expect(r.stderr).toContain('1 failed');
   });
 
-  test('a failing Pri does not mask the issue create from having happened', () => {
+  test('a failing Pri does not mask the draft create from having happened', () => {
     const { r, lines } = failingFieldRun('field-pri');
-    expect(lines.filter((l) => l.startsWith('issue create'))).toHaveLength(1);
+    expect(lines.filter((l) => l.includes('addProjectV2DraftIssue'))).toHaveLength(1);
     expect(r.code).toBe(40);
   });
 
-  test('draft create failure → exit 40; subsequent stories still sync', () => {
+  test('draft create failure on one story → exit 40; subsequent stories still sync', () => {
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories74f2-');
     makeStory(storiesDir, { id: 'SHY-8502', type: 'feature' });
     makeStory(storiesDir, { id: 'SHY-8503', type: 'bug' });
     const rules = createPathRules(mock.dir);
-    writeRules(mock.dir, [['addProjectV2DraftIssue', '', '1'], ...rules]);
+    // Fail ONLY SHY-8502's draft create; SHY-8503's must still be attempted.
+    writeRules(mock.dir, [['addProjectV2DraftIssue.*title=SHY-8502:', '', '1'], ...rules]);
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(40);
     expect(r.stderr).toMatch(/failed to create draft/);
     const lines = readRecording(mock.recording);
-    expect(lines.filter((l) => l.startsWith('issue create'))).toHaveLength(1);
+    expect(
+      lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes('title=SHY-8503:')),
+    ).toBeDefined();
   });
 
   test('draft update failure → exit 40', () => {
@@ -1524,76 +1490,22 @@ describe('SHY-0074: per-component failure bubbles independently (mock-gh)', () =
     expect(r.stderr).toMatch(/failed to update draft/);
   });
 
-  test('transition comment failure → exit 40, body refresh still attempted', () => {
+  test('field-population failure on an EXISTING draft (update path) → exit 40', () => {
+    // A draft already on the board, body changed → update path runs
+    // populate_project_fields; a field mutation 5xx must surface + exit 40.
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories74f4-');
-    const { content } = makeStory(storiesDir, { id: 'SHY-8505', status: 'In Review', type: 'bug' });
-    const body = existingBody(content, 'SHY-8505-fixture-story', 'In Progress');
-    const items = itemsResponse([issueNode('SHY-8505', 'ITEM_I8505', 505)]);
+    makeStory(storiesDir, { id: 'SHY-8505', status: 'In Review', type: 'bug' });
+    const staleBody = `Old.\n\n${syncedFooter('SHY-8505-fixture-story', 'In Review', STALE_HASH)}`;
+    const items = itemsResponse([draftNode('SHY-8505', 'ITEM_D8505', 'DI_8505', staleBody)]);
     const rules = createPathRules(mock.dir, { items });
-    writeResponse(mock.dir, 'resp-body-505.txt', body);
-    writeRules(mock.dir, [
-      ['^issue comment', '', '1'],
-      ['^issue view 505 --json body', 'resp-body-505.txt', ''],
-      ...rules,
-    ]);
+    writeRules(mock.dir, [['fieldId=field-status', '', '1'], ...rules]);
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(40);
+    expect(r.stderr).toMatch(/\[gh-error\] updateProjectV2ItemFieldValue/);
+    // No Issues-tab writes were attempted at any point.
     const lines = readRecording(mock.recording);
-    expect(lines.find((l) => l.startsWith('issue edit 505'))).toBeDefined();
-  });
-
-  test('issue close failure → exit 40', () => {
-    const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories74f5-');
-    const { content } = makeStory(storiesDir, { id: 'SHY-8506', status: 'Done', type: 'bug' });
-    const body = existingBody(content, 'SHY-8506-fixture-story', 'Done');
-    const items = itemsResponse([issueNode('SHY-8506', 'ITEM_I8506', 506)]);
-    const rules = createPathRules(mock.dir, { items });
-    writeResponse(mock.dir, 'resp-body-506.txt', body);
-    writeRules(mock.dir, [
-      ['^issue close', '', '1'],
-      ['^issue view 506 --json body', 'resp-body-506.txt', ''],
-      ...rules,
-    ]);
-    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
-    expect(r.code).toBe(40);
-    expect(r.stderr).toMatch(/failed to close/);
-  });
-
-  test('issue edit failure with the large body → stderr captured + exit 40', () => {
-    const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories74f6-');
-    makeStory(storiesDir, { id: 'SHY-8507', type: 'bug' });
-    const staleBody = `Old.\n\n${syncedFooter('SHY-8507-fixture-story', 'Draft', STALE_HASH)}`;
-    const items = itemsResponse([issueNode('SHY-8507', 'ITEM_I8507', 507)]);
-    const rules = createPathRules(mock.dir, { items });
-    writeResponse(mock.dir, 'resp-body-507.txt', staleBody);
-    writeRules(mock.dir, [
-      ['^issue view 507 --json body', 'resp-body-507.txt', ''],
-      ['^issue edit', '', '1'],
-      ...rules,
-    ]);
-    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
-    expect(r.code).toBe(40);
-    expect(r.stderr).toContain('failed to update issue');
-  });
-
-  test('gh issue view failure after create → [gh-error] + N_FAILED + exit 40, board add skipped (reviewer C1)', () => {
-    // The node-id resolution between `issue create` and the board add used
-    // to be `2>/dev/null || true`-swallowed: a created issue with NO board
-    // card and exit 0. The failure must surface + count.
-    const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories74f7-');
-    makeStory(storiesDir, { id: 'SHY-8508', type: 'bug' });
-    const rules = createPathRules(mock.dir);
-    writeRules(mock.dir, [['^issue view 100 --json id', '', '1', 'not found'], ...rules]);
-    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
-    expect(r.code).toBe(40);
-    expect(r.stderr).toMatch(/\[gh-error\] issue view 100/);
-    expect(r.stderr).toContain('1 failed');
-    const lines = readRecording(mock.recording);
-    expect(lines.filter((l) => l.includes('addProjectV2ItemById'))).toEqual([]);
+    expect(lines.filter((l) => l.startsWith('issue '))).toEqual([]);
   });
 });
 
@@ -1652,8 +1564,8 @@ describe('SHY-0074: board config gaps degrade with warnings, not failures (mock-
 
 // ============================================================== dry-run
 
-describe('SHY-0074 v2: dry-run fires nothing but previews everything (mock-gh)', () => {
-  test('zero mutations; previews draft create, issue create, and label-family deletion', () => {
+describe('SHY-0081 v3: dry-run fires nothing but previews everything (mock-gh)', () => {
+  test('zero mutations; previews a DRAFT create for every type (incl. bug) + label-family deletion', () => {
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories74d-');
     makeStory(storiesDir, { id: 'SHY-8701', type: 'feature' });
@@ -1671,8 +1583,10 @@ describe('SHY-0074 v2: dry-run fires nothing but previews everything (mock-gh)',
     expect(lines.filter((l) => l.startsWith('issue comment'))).toEqual([]);
     expect(lines.filter((l) => l.startsWith('issue close'))).toEqual([]);
     expect(lines.filter((l) => l.startsWith('label delete'))).toEqual([]);
+    // Both stories (feature AND bug) preview a DRAFT create — no issue preview.
     expect(r.stderr).toMatch(/DRY-RUN: .*SHY-8701.*would CREATE DRAFT item/);
-    expect(r.stderr).toMatch(/DRY-RUN: .*SHY-8702.*would CREATE issue/);
+    expect(r.stderr).toMatch(/DRY-RUN: .*SHY-8702.*would CREATE DRAFT item/);
+    expect(r.stderr).not.toMatch(/would CREATE issue/);
     expect(r.stderr).toMatch(/DRY-RUN: would DELETE label "status:done"/);
     expect(r.stderr).toMatch(/DRY-RUN: would DELETE label "priority:p1"/);
   });
@@ -1700,128 +1614,6 @@ describe('SHY-0074: frontmatter validator pins the five-value status contract', 
     );
     const res = spawnSync('bash', [VALIDATOR, filePath], { encoding: 'utf-8' });
     expect(res.status).not.toBe(0);
-  });
-});
-
-// ============================================================== SHY-0078 dedup guard
-
-describe('SHY-0078: idempotency guard against Projects v2 stale-empty reads (mock-gh)', () => {
-  test('stale-empty items map + existing bug issue → ZERO issue create (dedup guard skips, counts the hit)', () => {
-    // The headline regression: the rebuild duplication came from a stale
-    // items query returning empty while the issue already existed. The
-    // consistent-source check must find it and refuse to re-create.
-    const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories78a-');
-    makeStory(storiesDir, { id: 'SHY-8901', type: 'bug' });
-    const rules = createPathRules(mock.dir); // items map is EMPTY (stale)
-    writeResponse(mock.dir, 'resp-exists.txt', '900\n'); // dedup search finds #900
-    writeRules(mock.dir, [['^issue list .*SHY-8901:', 'resp-exists.txt', ''], ...rules]);
-    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
-    expect(r.code).toBe(0);
-    const lines = readRecording(mock.recording);
-    expect(lines.filter((l) => l.startsWith('issue create'))).toEqual([]);
-    // The dedup search fired EXACTLY once for this story (not zero — guard
-    // reached; not twice — no spurious re-check).
-    expect(lines.filter((l) => l.startsWith('issue list') && l.includes('SHY-8901:'))).toHaveLength(
-      1,
-    );
-    expect(r.stderr).toMatch(/dedup-guard hits: 1/);
-    expect(r.stderr).toMatch(/existing issue #900 found/);
-    // Skipped, NOT created or updated (the next fresh-map sync refreshes it).
-    expect(r.stderr).toMatch(/0 created \(0 drafts, 0 issues\), 0 updated, 1 skipped/);
-  });
-
-  test('empty-read is retried once: two items(first:100) queries before the board is accepted empty', () => {
-    const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories78b-');
-    makeStory(storiesDir, { id: 'SHY-8902', type: 'bug' });
-    writeRules(mock.dir, createPathRules(mock.dir)); // items empty both reads
-    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
-    expect(r.code).toBe(0);
-    const lines = readRecording(mock.recording);
-    expect(lines.filter((l) => l.includes('items(first: 100'))).toHaveLength(2);
-  });
-
-  test('genuine first sync (empty board + no existing issue) still creates exactly once — no over-guarding', () => {
-    const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories78c-');
-    makeStory(storiesDir, { id: 'SHY-8903', type: 'bug' });
-    writeRules(mock.dir, createPathRules(mock.dir)); // dedup search → empty
-    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
-    expect(r.code).toBe(0);
-    const lines = readRecording(mock.recording);
-    expect(lines.filter((l) => l.startsWith('issue create'))).toHaveLength(1);
-    expect(r.stderr).toMatch(/dedup-guard hits: 0/);
-    expect(r.stderr).toMatch(/1 created \(0 drafts, 1 issues\)/);
-  });
-
-  test('prefix-exact: an existing SHY-0070 issue does not block creating SHY-0007', () => {
-    // The dedup search for SHY-0007 uses the exact "SHY-0007:" prefix, so a
-    // SHY-0070 issue is never a false hit. The mock only answers the
-    // SHY-0070 search; the SHY-0007 search falls through to empty → creates.
-    const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories78d-');
-    makeStory(storiesDir, { id: 'SHY-0007', type: 'bug' });
-    const rules = createPathRules(mock.dir);
-    writeResponse(mock.dir, 'resp-70.txt', '70\n');
-    writeRules(mock.dir, [['^issue list .*SHY-0070:', 'resp-70.txt', ''], ...rules]);
-    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
-    expect(r.code).toBe(0);
-    const lines = readRecording(mock.recording);
-    const createLine = lines.find((l) => l.startsWith('issue create'));
-    expect(createLine).toBeDefined();
-    expect(createLine).toContain('SHY-0007:');
-    expect(r.stderr).toMatch(/dedup-guard hits: 0/);
-  });
-
-  test('dedup existence check gh-error → exit 40, NO create (never create-on-uncertainty)', () => {
-    const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories78e-');
-    makeStory(storiesDir, { id: 'SHY-8905', type: 'bug' });
-    const rules = createPathRules(mock.dir);
-    writeRules(mock.dir, [['^issue list .*SHY-8905:', '', '1'], ...rules]);
-    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
-    expect(r.code).toBe(40);
-    expect(r.stderr).toMatch(/\[gh-error\] dedup issue search/);
-    const lines = readRecording(mock.recording);
-    expect(lines.filter((l) => l.startsWith('issue create'))).toEqual([]);
-  });
-
-  test('non-bug stories do NOT trigger the issue-search dedup (drafts are not issue-backed)', () => {
-    const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories78f-');
-    makeStory(storiesDir, { id: 'SHY-8906', type: 'feature' });
-    writeRules(mock.dir, createPathRules(mock.dir));
-    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
-    expect(r.code).toBe(0);
-    const lines = readRecording(mock.recording);
-    expect(lines.filter((l) => l.startsWith('issue list'))).toEqual([]);
-    expect(
-      lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes('title=SHY-8906:')),
-    ).toBeDefined();
-  });
-
-  test('jq startswith filter is value-level prefix-exact: a SHY-0070 response does not match a SHY-0007 query', () => {
-    // The mock cats fixed responses (it never runs --jq), so the mock-based
-    // prefix test above only proves the SEARCH STRING is per-id. This proves
-    // the actual --jq filter the script passes is prefix-exact against real
-    // data: a SHY-0070 row must NOT satisfy startswith("SHY-0007:").
-    const input = JSON.stringify([
-      { title: 'SHY-0070: unrelated', number: 70 },
-      { title: 'SHY-0007: the real one', number: 7 },
-    ]);
-    const filter = '.[] | select(.title | startswith("SHY-0007:")) | .number';
-    const res = spawnSync('jq', ['-r', filter], { input, encoding: 'utf-8' });
-    expect(res.status).toBe(0);
-    expect(res.stdout.trim()).toBe('7'); // only the exact SHY-0007 match, never 70
-  });
-
-  test('structural: dedup search is prefix-exact (startswith with the colon) + items-map retry present', () => {
-    const src = fs.readFileSync(SCRIPT, 'utf-8');
-    expect(src).toMatch(/issue_exists_for\(\)/);
-    expect(src).toMatch(/startswith\(\\"\$\{id\}:\\"\)/);
-    expect(src).toMatch(/_items_map_pass/);
-    expect(src).toMatch(/ITEMS_MAP_RETRY_BACKOFF/);
   });
 });
 
@@ -1858,7 +1650,7 @@ describe('SHY-0079: board-items.json sidecar overlay heals stale Projects v2 rea
       ),
     ).toBeDefined();
     expect(r.stderr).toMatch(/sidecar overlay fills: 1/);
-    expect(r.stderr).toMatch(/0 created \(0 drafts, 0 issues\), 1 updated/);
+    expect(r.stderr).toMatch(/0 created, 1 updated/);
   });
 
   test('overlay: API-present entry WINS over the sidecar (freshest live state)', () => {
@@ -1912,23 +1704,22 @@ describe('SHY-0079: board-items.json sidecar overlay heals stale Projects v2 rea
     });
   });
 
-  test('write-back: a type-flipped-away draft is PURGED from the sidecar', () => {
-    // SHY-8804 was a draft; now it is type:bug. The draft item is deleted and
-    // recreated as an issue → the sidecar entry must reflect ISSUE, not the
-    // stale DRAFT id.
+  test('write-back: a legacy ISSUE-backed entry is converted + the sidecar reflects DRAFT (not the stale ISSUE)', () => {
+    // SHY-8804 is a v2 leftover backed by an ISSUE. The incremental migration
+    // deletes the item + issue and recreates a draft → the sidecar entry must
+    // reflect DRAFT at the new item id, not the stale ISSUE.
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories79d-');
     makeStory(storiesDir, { id: 'SHY-8804', status: 'In Progress', type: 'bug' });
-    const items = itemsResponse([
-      draftNode('SHY-8804', 'DRAFT_ITEM', 'DRAFT_DI', 'old draft body'),
-    ]);
+    const items = itemsResponse([issueNode('SHY-8804', 'ISSUE_ITEM', 884)]);
     const rules = createPathRules(mock.dir, { items });
-    writeRules(mock.dir, [['deleteProjectV2Item', '', ''], ...rules]);
+    writeResponse(mock.dir, 'resp-draft-add.json', draftAddResponse('NEW_DRAFT', 'NEW_DI'));
+    writeRules(mock.dir, [['deleteProjectV2Item', '', ''], ['deleteIssue', '', ''], ...rules]);
     const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
     expect(r.code).toBe(0);
     const sidecar = readSidecar(mock);
-    expect(sidecar['SHY-8804'].backing).toBe('ISSUE'); // not the stale DRAFT
-    expect(sidecar['SHY-8804'].itemId).not.toBe('DRAFT_ITEM');
+    expect(sidecar['SHY-8804'].backing).toBe('DRAFT'); // not the stale ISSUE
+    expect(sidecar['SHY-8804'].itemId).toBe('NEW_DRAFT');
   });
 
   test('malformed sidecar → ::warning:: + API-only fallback, run completes, valid sidecar rewritten', () => {
@@ -2168,14 +1959,45 @@ describe('SHY-0074: structural pins on the script source', () => {
     expect(src).toMatch(/sed -n 's\/\^_Status: /);
   });
 
-  test('build_labels no longer emits the duplicated families', () => {
-    const fn = src.slice(
-      src.indexOf('build_labels()'),
-      src.indexOf('}', src.indexOf('build_labels()')),
-    );
-    for (const family of ['status:', 'priority:', 'effort:', 'type:', 'roadmap:']) {
-      expect(fn).not.toContain(`'${family}`);
+  test('SHY-0081 v3: the issue-path machinery is fully retired from the source', () => {
+    // No story-sync code creates/edits/comments/closes a GitHub issue, and the
+    // retired helpers are gone (no dead code).
+    for (const gone of [
+      'create_issue_path',
+      'issue_exists_for',
+      'build_bug_body',
+      'post_status_comment',
+      'close_if_terminal',
+      'extract_issue_node_id',
+      'update_issue_body',
+      'add_to_project_board',
+      'ensure_labels_for_story',
+      'build_labels',
+    ]) {
+      expect(src).not.toContain(`${gone}()`);
     }
+    // gh issue create/edit/comment is never invoked from the script.
+    expect(src).not.toMatch(/"\$GH" issue create/);
+    expect(src).not.toMatch(/"\$GH" issue edit/);
+    expect(src).not.toMatch(/"\$GH" issue comment/);
+  });
+
+  test('SHY-0081 v3: sync_one routes EVERY story to the draft path (no type==bug → issue branch)', () => {
+    const fn = src.slice(src.indexOf('sync_one()'), src.indexOf('teardown_for_rebuild()'));
+    // The create path calls create_draft_path unconditionally — no desired/ISSUE fork.
+    expect(fn).toContain('create_draft_path "$file" "$id" "$title" "$hash"');
+    expect(fn).not.toContain('create_issue_path');
+    expect(fn).not.toMatch(/desired="ISSUE"/);
+  });
+
+  test('--rebuild still deletes story-labeled issues (the legacy migration) via delete_issue_node', () => {
+    expect(src).toContain('delete_issue_node');
+    expect(src).toMatch(/issue list --state all --label story/);
+  });
+
+  test('the SHY-0078 items-map empty-read retry is retained (the Projects v2 lag guard survives v3)', () => {
+    expect(src).toMatch(/_items_map_pass/);
+    expect(src).toMatch(/ITEMS_MAP_RETRY_BACKOFF/);
   });
 
   test('dead SYNC_GRACE_WINDOW_SECS config doc is removed (was documented but never implemented)', () => {

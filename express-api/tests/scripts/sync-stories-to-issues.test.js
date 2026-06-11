@@ -188,6 +188,12 @@ describe('scripts/sync-stories-to-issues.sh', () => {
       expect(code).toBe(2);
       expect(stderr).toMatch(/--story requires/);
     });
+
+    it('exits 2 when --rebuild is combined with --story (mutually exclusive)', () => {
+      const { code, stderr } = runScript(['--rebuild', '--story', 'SHY-0001', '--dry-run']);
+      expect(code).toBe(2);
+      expect(stderr).toMatch(/--rebuild cannot combine with --story|cannot combine/);
+    });
   });
 
   describe('auth check → exit 30 (skipped in dry-run)', () => {
@@ -229,10 +235,8 @@ describe('scripts/sync-stories-to-issues.sh', () => {
       // Should mention each live story.
       expect(stderr).toMatch(/SHY-0001/);
       expect(stderr).toMatch(/SHY-0002/);
-      // Summary line (SHY-0074 v2 form: created splits into drafts + issues).
-      expect(stderr).toMatch(
-        /Sync result: \d+ created \(\d+ drafts, \d+ issues\), \d+ updated, \d+ skipped, \d+ failed/,
-      );
+      // Summary line (SHY-0081 v3 form: every story is a draft, no split).
+      expect(stderr).toMatch(/Sync result: \d+ created, \d+ updated, \d+ skipped, \d+ failed/);
       // DRY-RUN tag visible.
       expect(stderr).toMatch(/DRY-RUN/);
     });

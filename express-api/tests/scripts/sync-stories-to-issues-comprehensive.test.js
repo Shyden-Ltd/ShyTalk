@@ -331,48 +331,44 @@ describe('SHY-0067: script body — Defect C (silent-failure removal)', () => {
   });
 });
 
-describe('SHY-0067: script body — Defect B (label auto-create)', () => {
+describe('SHY-0081 v3: script body — label families deleted, NONE created', () => {
   let scriptContent;
 
   beforeAll(() => {
     scriptContent = fs.readFileSync(SCRIPT, 'utf8');
   });
 
-  test('script defines a label-ensure helper (e.g. ensure_label)', () => {
-    // Function may be named ensure_label / ensure_labels / provision_labels.
-    expect(scriptContent).toMatch(/ensure_label|provision_label/);
+  test('script still deletes the duplicated label families (remove_duplicated_label_families)', () => {
+    expect(scriptContent).toMatch(/remove_duplicated_label_families/);
+    expect(scriptContent).toMatch(/label\s+delete/);
   });
 
-  test('script invokes `gh label create` for missing labels', () => {
-    expect(scriptContent).toMatch(/gh\s+label\s+create|"\$GH"\s+label\s+create/);
-  });
-
-  test('script lists existing labels via `gh label list` (cache for idempotency)', () => {
+  test('script lists existing labels via `gh label list` (cache for the family sweep)', () => {
     expect(scriptContent).toMatch(/gh\s+label\s+list|"\$GH"\s+label\s+list/);
   });
 
-  test('script treats "label already exists" as success (idempotent)', () => {
-    // `gh label create story` returns 422 + stderr "label already exists"
-    // when re-run. The fix detects this exit-code/stderr-substring + continues.
-    expect(scriptContent).toMatch(/already exists|label.{0,40}exists/i);
+  test('SHY-0081 v3: the label-CREATE helpers are retired (the `story` label is never applied)', () => {
+    // No function DEFINITIONS for the retired helpers (an explanatory comment
+    // mentioning them is fine — match line-start definitions only).
+    expect(scriptContent).not.toMatch(/^(ensure_label|ensure_labels_for_story|build_labels)\(\)/m);
+    expect(scriptContent).not.toMatch(/"\$GH"\s+label\s+create/);
   });
 });
 
-describe('SHY-0067: script body — Defect D (Project v2 board addition)', () => {
+describe('SHY-0081 v3: script body — board draft creation + field population', () => {
   let scriptContent;
 
   beforeAll(() => {
     scriptContent = fs.readFileSync(SCRIPT, 'utf8');
   });
 
-  test('script defines a project-add helper (e.g. add_to_project_board)', () => {
-    expect(scriptContent).toMatch(/add_to_project_board|add_to_project|project_add/);
+  test('script creates board items via the addProjectV2DraftIssue mutation (every type is a draft)', () => {
+    expect(scriptContent).toMatch(/addProjectV2DraftIssue/);
   });
 
-  test('script invokes the addProjectV2ItemById GraphQL mutation', () => {
-    // GraphQL is the only API capable of adding to Projects v2 (no REST
-    // endpoint). gh exposes it via `gh api graphql -f query='mutation { ... }'`.
-    expect(scriptContent).toMatch(/addProjectV2ItemById/);
+  test('the issue-backed board-add helper is retired (no add_to_project_board / addProjectV2ItemById)', () => {
+    expect(scriptContent).not.toMatch(/add_to_project_board/);
+    expect(scriptContent).not.toMatch(/addProjectV2ItemById/);
   });
 
   test('script invokes the updateProjectV2ItemFieldValue mutation for field population', () => {
@@ -380,8 +376,6 @@ describe('SHY-0067: script body — Defect D (Project v2 board addition)', () =>
   });
 
   test('script references the ShyTalk Stories Project v2 (number 1 in Shyden-Ltd)', () => {
-    // The script must know WHICH project to add items to. Either via a hard-
-    // coded project ID or via a lookup against `gh project list --owner ...`.
     expect(scriptContent).toMatch(
       /projectV2|ShyTalk Stories|Shyden-Ltd.{0,60}project|projectId|PROJECT_NUMBER/,
     );
@@ -417,19 +411,19 @@ describe('SHY-0067: script body — Defect E (Type field auto-create)', () => {
   });
 });
 
-describe('SHY-0067: script body — issue body passed via stdin (safe shell escape)', () => {
+describe('SHY-0081 v3: script body — draft body passed via stdin (safe shell escape)', () => {
   let scriptContent;
 
   beforeAll(() => {
     scriptContent = fs.readFileSync(SCRIPT, 'utf8');
   });
 
-  test('script invokes `gh issue create` with --body-file - (stdin) NOT --body "$body"', () => {
-    // SHYs contain markdown with single quotes, backticks, and multi-line
-    // sections. Passing as `--body "$body"` argv is shell-escape-fragile; the
-    // fix uses `--body-file -` so the body comes from stdin via heredoc.
-    expect(scriptContent).toMatch(/issue\s+create[^\n]*--body-file\s+-/);
-    expect(scriptContent).not.toMatch(/issue\s+create[^\n]*--body\s+"\$body"/);
+  test('draft create/update pass the body via stdin (-F body=@-), and no `gh issue create` exists', () => {
+    // Spec bodies contain quotes, backticks, and multi-line markdown. Passing
+    // as argv would be shell-escape-fragile; the draft mutations read the body
+    // from stdin (`-F body=@-`). v3 retired the Issues-tab create entirely.
+    expect(scriptContent).toMatch(/-F body=@-/);
+    expect(scriptContent).not.toMatch(/"\$GH"\s+issue\s+create/);
   });
 });
 
@@ -437,25 +431,31 @@ describe('SHY-0067: script body — issue body passed via stdin (safe shell esca
 // These exercise the script end-to-end against a mock-gh binary, asserting
 // the API call SEQUENCE matches the SHY-0067 contract.
 
-describe('SHY-0067: runtime — label auto-create flow (mock-gh)', () => {
-  test('first sync of a bug story invokes `gh label list` then `gh label create` before `issue create`', () => {
+describe('SHY-0081 v3: runtime — draft-create failure surfaces (mock-gh)', () => {
+  test('script exits 40 when the addProjectV2DraftIssue mutation fails', () => {
+    const { ghPath, dir } = makeMockGh();
+    // Fail the api-graphql channel (the items-map query has its own channel,
+    // so the run reaches the create path, where the draft mutation fails).
+    fs.writeFileSync(path.join(dir, 'gh-exit-cmd-api-graphql'), '1');
+
+    const { code, stderr } = runScript(['--story', 'SHY-7001'], {
+      env: mockEnv(ghPath, makeBugStoryDir()),
+    });
+    expect(code).toBe(40);
+    // No `>/dev/null 2>&1` silencing — the failure is visible.
+    expect(stderr).toMatch(/failed to create draft|\[gh-error\]|N_FAILED/i);
+  });
+});
+
+describe('SHY-0081 v3: runtime — board draft creation (mock-gh)', () => {
+  test('script invokes addProjectV2DraftIssue (never issue create, never addProjectV2ItemById)', () => {
     const { ghPath, recording, dir } = makeMockGh();
-    // `label list` returns empty array (no labels exist yet).
-    fs.writeFileSync(path.join(dir, 'gh-responses-label-list'), '[]');
-    // Realistic create/view responses — post reviewer-C1 the node-id
-    // resolution failure is no longer silently swallowed, so the fixture
-    // must let the create sequence complete.
-    fs.writeFileSync(
-      path.join(dir, 'gh-responses-issue-create'),
-      'https://github.com/Shyden-Ltd/ShyTalk/issues/100\n',
-    );
-    fs.writeFileSync(path.join(dir, 'gh-responses-issue-view'), 'I_test_node_id\n');
     fs.writeFileSync(
       path.join(dir, 'gh-responses-api-graphql'),
       JSON.stringify({
         data: {
           organization: { projectV2: { id: 'PVT_test', fields: { nodes: [] } } },
-          addProjectV2ItemById: { item: { id: 'PVTI_test' } },
+          addProjectV2DraftIssue: { projectItem: { id: 'PVTI_test', content: { id: 'DI_test' } } },
         },
       }),
     );
@@ -466,75 +466,11 @@ describe('SHY-0067: runtime — label auto-create flow (mock-gh)', () => {
     expect(code).toBe(0);
 
     const calls = readRecording(recording);
-    const labelListIdx = calls.findIndex((c) => c.startsWith('label list'));
-    const labelCreateIdx = calls.findIndex((c) => c.startsWith('label create'));
-    const issueCreateIdx = calls.findIndex((c) => c.startsWith('issue create'));
-    // All three must occur, in this order: label list → label create → issue create.
-    expect(labelListIdx).toBeGreaterThanOrEqual(0);
-    expect(labelCreateIdx).toBeGreaterThan(labelListIdx);
-    expect(issueCreateIdx).toBeGreaterThan(labelCreateIdx);
-  });
-});
-
-describe('SHY-0067: runtime — silent-failure removal (mock-gh)', () => {
-  test('script exits non-zero when `gh issue create` fails', () => {
-    const { ghPath, dir } = makeMockGh();
-    // Per-call exit override: `issue create` returns non-zero.
-    fs.writeFileSync(path.join(dir, 'gh-exit-cmd-issue-create'), '1');
-
-    const { code, stderr } = runScript(['--story', 'SHY-7001'], {
-      env: mockEnv(ghPath, makeBugStoryDir()),
-    });
-    // Pre-SHY-0067: code would be 0 (silent success). Post-fix: code is 40.
-    expect(code).toBe(40);
-    // Stderr should reveal the failure — no more `>/dev/null 2>&1`.
-    expect(stderr).toMatch(/failed to create issue|issue create failed|N_FAILED/i);
-  });
-});
-
-describe('SHY-0067: runtime — Project v2 board addition (mock-gh)', () => {
-  test('script invokes `gh api graphql` with addProjectV2ItemById after `issue create`', () => {
-    const { ghPath, recording, dir } = makeMockGh();
-    fs.writeFileSync(path.join(dir, 'gh-responses-label-list'), '[]');
-    // `issue create` returns the issue URL (gh issue create's default stdout).
-    fs.writeFileSync(
-      path.join(dir, 'gh-responses-issue-create'),
-      'https://github.com/Shyden-Ltd/ShyTalk/issues/100\n',
-    );
-    // `issue view 100 --json id --jq .id` returns the node ID. This is the
-    // second gh call extract_issue_node_id() makes (it parses the issue
-    // number from the URL then queries gh for the node_id).
-    fs.writeFileSync(path.join(dir, 'gh-responses-issue-view'), 'I_test_node_id\n');
-    // `api graphql` (for project lookups + mutation) returns enough JSON to
-    // keep the script happy.
-    fs.writeFileSync(
-      path.join(dir, 'gh-responses-api-graphql'),
-      JSON.stringify({
-        data: {
-          organization: {
-            projectV2: {
-              id: 'PVT_kwDOC_test',
-              fields: { nodes: [] },
-            },
-          },
-          addProjectV2ItemById: { item: { id: 'PVTI_lADO_test' } },
-        },
-      }),
-    );
-
-    const { code } = runScript(['--story', 'SHY-7001'], {
-      env: mockEnv(ghPath, makeBugStoryDir()),
-    });
-    expect(code).toBe(0);
-
-    const calls = readRecording(recording);
-    // The board-add mutation must appear AFTER the issue create.
-    const createIdx = calls.findIndex((c) => c.startsWith('issue create'));
-    const projectAddIdx = calls.findIndex(
-      (c) => c.startsWith('api graphql') && c.includes('addProjectV2ItemById'),
-    );
-    expect(createIdx).toBeGreaterThanOrEqual(0);
-    expect(projectAddIdx).toBeGreaterThan(createIdx);
+    expect(
+      calls.some((c) => c.startsWith('api graphql') && c.includes('addProjectV2DraftIssue')),
+    ).toBe(true);
+    expect(calls.some((c) => c.startsWith('issue create'))).toBe(false);
+    expect(calls.some((c) => c.includes('addProjectV2ItemById'))).toBe(false);
   });
 });
 
@@ -560,19 +496,18 @@ describe('SHY-0067: extended summary format (mock-gh, reviewer-I4)', () => {
     );
     expect(res.status ?? 1).toBe(0);
     const stderr = res.stderr ?? '';
-    // SHY-0074 v2 form: created splits into drafts + issues.
-    expect(stderr).toMatch(
-      /Sync result: \d+ created \(\d+ drafts, \d+ issues\), \d+ updated, \d+ skipped, \d+ failed/,
-    );
-    // Extended counters (SHY-0067 + SHY-0074).
-    expect(stderr).toMatch(/labels created: \d+/);
+    // SHY-0081 v3 form: every story is a draft — no draft/issue split.
+    expect(stderr).toMatch(/Sync result: \d+ created, \d+ updated, \d+ skipped, \d+ failed/);
+    // Retained counters.
     expect(stderr).toMatch(/project items added: \d+/);
     expect(stderr).toMatch(/project items deleted: \d+/);
     expect(stderr).toMatch(/issues deleted: \d+/);
     expect(stderr).toMatch(/project fields updated: \d+/);
-    expect(stderr).toMatch(/comments posted: \d+/);
-    expect(stderr).toMatch(/issues closed: \d+/);
     expect(stderr).toMatch(/type-field auto-created: (yes|no)/);
+    // Retired issue-specific counters must NOT appear.
+    expect(stderr).not.toMatch(/labels created/);
+    expect(stderr).not.toMatch(/comments posted/);
+    expect(stderr).not.toMatch(/issues closed/);
   });
 });
 
@@ -602,39 +537,22 @@ describe('SHY-0074: runtime — items-map lookup failure path (mock-gh)', () => 
   });
 });
 
-// SHY-0067 reviewer-I6: `add_to_project_board` failure is silently swallowed
-// by `|| true` on the create path (line 847) and the update path (line 903),
-// AND on every `set_project_field_*` call inside `populate_project_fields`
-// (lines 581/586/591/595/599). AC line 79 of the story explicitly requires
-// `N_FAILED++` + non-zero exit on board-add failure (Defect-C-class silent
-// success otherwise leaks through the Defect-D code path). This test
-// simulates the addProjectV2ItemById mutation returning a null item by
-// shaping the gh api graphql response payload — load_project_cache still
-// succeeds (project lookup is unaffected) but the mutation returns no item id,
-// driving add_to_project_board to its empty-id branch (line 491-494).
-describe('SHY-0067: runtime — board-add failure → N_FAILED (mock-gh, reviewer-I6)', () => {
-  test('addProjectV2ItemById returning null item drives N_FAILED++ + exit 40', () => {
+// SHY-0081 v3: the analogous Defect-C silent-failure guard for the DRAFT
+// path. A draft create whose response carries no projectItem id must not
+// silently succeed — it increments N_FAILED and drives the exit-40 gate.
+describe('SHY-0081 v3: runtime — draft-create returning a null item → N_FAILED + exit 40 (mock-gh)', () => {
+  test('addProjectV2DraftIssue with an empty projectItem id drives N_FAILED++ + exit 40', () => {
     const { ghPath, recording, dir } = makeMockGh();
-    fs.writeFileSync(path.join(dir, 'gh-responses-label-list'), '[]');
-    fs.writeFileSync(
-      path.join(dir, 'gh-responses-issue-create'),
-      'https://github.com/Shyden-Ltd/ShyTalk/issues/100\n',
-    );
-    fs.writeFileSync(path.join(dir, 'gh-responses-issue-view'), 'I_test_node_id\n');
-    // Project lookup succeeds (so load_project_cache passes) BUT
-    // addProjectV2ItemById returns null (simulates PAT missing project:write,
-    // or upstream board id changing). Field-set keys are present so any
-    // post-add path that incorrectly proceeds would still appear consistent.
-    // (The items-map query is served separately by the mock's dedicated
-    // channel — an empty board, so the create path runs.)
+    // Project lookup succeeds (load_project_cache passes) BUT the draft
+    // mutation returns a null projectItem (simulates PAT missing project:write
+    // or an upstream board id change), so create_draft_item hits its empty-id
+    // branch. The items-map query is served on its own channel (empty board).
     fs.writeFileSync(
       path.join(dir, 'gh-responses-api-graphql'),
       JSON.stringify({
         data: {
-          organization: {
-            projectV2: { id: 'PVT_kwDOC_test', fields: { nodes: [] } },
-          },
-          addProjectV2ItemById: null,
+          organization: { projectV2: { id: 'PVT_kwDOC_test', fields: { nodes: [] } } },
+          addProjectV2DraftIssue: { projectItem: null },
         },
       }),
     );
@@ -643,20 +561,14 @@ describe('SHY-0067: runtime — board-add failure → N_FAILED (mock-gh, reviewe
       env: mockEnv(ghPath, makeBugStoryDir()),
     });
 
-    // Pre-fix: `|| true` swallowed the return-1 from add_to_project_board,
-    // script exited 0. Post-fix: failure increments N_FAILED and the
-    // Defect-C exit-40 gate fires.
     expect(code).toBe(40);
-    // The board-add error must surface in stderr (no `>/dev/null` silencing,
-    // matches the Defect-C contract). emit() route OR explicit failure marker.
-    expect(stderr).toMatch(/addProjectV2ItemById|item-add|project board|N_FAILED/i);
-    // Sanity check: the addProjectV2ItemById mutation was actually invoked
-    // (otherwise we'd be testing the wrong silent-failure path).
+    // The draft-add error must surface (no `>/dev/null` silencing).
+    expect(stderr).toMatch(/addProjectV2DraftIssue|draft-add|failed to create draft|N_FAILED/i);
+    // Sanity: the draft mutation was actually invoked.
     const calls = readRecording(recording);
-    const projectAdd = calls.find(
-      (c) => c.startsWith('api graphql') && c.includes('addProjectV2ItemById'),
-    );
-    expect(projectAdd).toBeDefined();
+    expect(
+      calls.some((c) => c.startsWith('api graphql') && c.includes('addProjectV2DraftIssue')),
+    ).toBe(true);
   });
 });
 

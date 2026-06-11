@@ -4,44 +4,41 @@
 # sync-stories-to-issues.sh
 #
 # One-way mirror of .project/stories/SHY-NNNN-*.md files to the GitHub
-# Projects v2 board + (bugs only) GitHub Issues, per the SHY-0074
-# architecture v2 spec at
-# .project/stories/SHY-0074-mirror-fidelity-board-body-labels.md:
+# Projects v2 board, per the SHY-0081 architecture v3 spec at
+# .project/stories/SHY-0081-mirror-v3-uniform-board-drafts.md:
 #
-#   - Non-bug stories  → board DRAFT items (addProjectV2DraftIssue) carrying
-#     the full spec body; NO Issues-tab entry. The Issues tab is bugs-only.
-#   - type: bug stories → a real GitHub Issue framed as a BUG REPORT
-#     (## Bug = the story's ## Why; ## Tracking = source/board links +
-#     status) + its issue-backed board item.
-#   - Issue lifecycle follows the story: status-transition comments
-#     (driven by the body-footer `_Status: X_` marker), hash-gated body
-#     refresh, close on Done (reason completed, naming released_in) /
-#     Cancelled (reason "not planned").
-#   - One paginated items-map query replaces per-story issue searches.
+#   - EVERY story (any type, including `bug`) → a board DRAFT item
+#     (addProjectV2DraftIssue) carrying the full spec body + footer. The
+#     GitHub Issues page is NEVER written from the corpus — it is reserved
+#     for a future, separate bug-REPORT intake (v3 reverses the v2 model
+#     where `type: bug` stories became Issues).
+#   - Lifecycle drives the board only: hash-gated draft body refresh + the
+#     body-footer `_Status: X_` marker detects a pure status flip (status
+#     lives in frontmatter, outside the body hash) and moves the board
+#     Status column. No issue comments / closes — drafts have no timeline.
+#   - One paginated items-map query feeds every create-vs-update decision.
+#   - A legacy issue-backed item (a v2 leftover) is converted: the board
+#     item + its issue are deleted and the story is recreated as a draft
+#     (the incremental safety net; --rebuild does the bulk migration).
 #   - --rebuild (gated on REBUILD_CONFIRM=yes) tears down every board item
-#     + every story-labeled issue, then resyncs fresh — the one-shot v1→v2
-#     migration chosen by the operator.
+#     + every story-labeled issue (delete_issue_node), then resyncs fresh —
+#     the one-shot migration that empties the Issues page of corpus entries.
 #
-# Built on the SHY-0002 foundation with SHY-0067 defect fixes layered on:
+# Defect fixes carried forward from SHY-0067:
 #
-#   - Defect A (auth env): script + workflow now both export GH_TOKEN so
-#     the gh CLI actually authenticates as the PAT (pre-SHY-0067 gh ran
-#     with the read-only auto GITHUB_TOKEN and failed silently).
-#   - Defect B (labels): script auto-creates the SHY-namespace label via
-#     `gh label create` on first encounter; caches via `gh label list`.
-#     SHY-0074 shrank the namespace to the single `story` marker — the old
-#     status:/priority:/effort:/type:/roadmap: families duplicated board
-#     columns and are now actively DELETED on every run
-#     (remove_duplicated_label_families).
+#   - Defect A (auth env): script + workflow both export GH_TOKEN so the gh
+#     CLI authenticates as the PAT (the read-only auto GITHUB_TOKEN can't
+#     carry project:write).
+#   - Defect B (labels): the five duplicated families (status:/priority:/
+#     effort:/type:/roadmap:) are DELETED repo-wide on every run
+#     (remove_duplicated_label_families). v3 retired label CREATION entirely
+#     (the `story` marker is no longer applied — left inert for a future
+#     bug-report intake).
 #   - Defect C (silent failure): every `gh` invocation captures stderr to a
-#     tmpfile; failures log the captured stderr context (no more `>/dev/null
-#     2>&1`); N_FAILED > 0 propagates to non-zero E_API=40 exit at script end.
-#   - Defect D (Project v2 board addition): post-issue-create, script calls
-#     `addProjectV2ItemById` then `updateProjectV2ItemFieldValue` for each
-#     populated SHY-derived field (Pri / Effort / Type / SHY ID / Roadmap IDs /
-#     Epic).
+#     tmpfile; failures log the captured context (no `>/dev/null 2>&1`);
+#     N_FAILED > 0 propagates to a non-zero E_API=40 exit at script end.
 #   - Defect E (Type field auto-create): script invokes `createProjectV2Field`
-#     mutation if the Type single-select field is absent on the board.
+#     if the Type single-select field is absent on the board.
 #
 # Source of truth is the .md file. Change detection is SHA-256 of the file
 # body (mid-PR edits share the same commit, so commit-SHA alone is
@@ -89,7 +86,7 @@
 
 set -euo pipefail
 
-VERSION="2.0.0"
+VERSION="3.0.0"
 
 # ============================================================== constants
 
@@ -114,13 +111,15 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # fixture corpus instead of the live .project/stories tree.
 STORIES_DIR="${STORIES_DIR:-${REPO_ROOT}/.project/stories}"
 
+# SHY-0081 v3: every story is a board DRAFT card, so `created` needs no
+# draft/issue split. The issue-specific counters (issues created, drafts
+# created, labels created, comments posted, issues closed, dedup-guard hits)
+# are retired with the issue path. N_ISSUES_DELETED survives — `--rebuild`
+# still deletes the legacy story-labeled issues during the one-shot migration.
 N_CREATED=0
-N_DRAFTS_CREATED=0
-N_ISSUES_CREATED=0
 N_UPDATED=0
 N_SKIPPED=0
 N_FAILED=0
-N_LABELS_CREATED=0
 N_LABELS_DELETED=0
 N_PROJECT_ITEMS_ADDED=0
 N_ITEMS_DELETED=0
@@ -129,9 +128,6 @@ N_PROJECT_FIELDS_UPDATED=0
 N_STATUS_SET=0
 N_BODIES_EMBEDDED=0
 N_BODIES_TRUNCATED=0
-N_COMMENTS_POSTED=0
-N_ISSUES_CLOSED=0
-N_DEDUP_GUARD_HITS=0
 TYPE_FIELD_AUTO_CREATED="no"
 
 # Caches populated at runtime.
@@ -164,8 +160,8 @@ FLAGS
   --story SHY-NNNN   Process only the named story
   --rebuild          DESTRUCTIVE one-shot migration: delete every Project v2
                      board item + every story-labeled issue, then run a
-                     fresh --all sync (drafts for non-bugs, bug-report
-                     issues for bugs). Refuses without REBUILD_CONFIRM=yes.
+                     fresh --all sync (every story type as a board draft
+                     card). Refuses without REBUILD_CONFIRM=yes.
   --dry-run          Print actions; make no API mutations
   --verbose          Print API calls + payloads (token redacted) to stderr
   --help             Print this usage and exit 0
@@ -231,12 +227,12 @@ body_hash() {
 # into the GitHub label).
 # SHY-0074 dropped the lowercased priority/effort/roadmap variants — they
 # only fed the deleted label families. PS_STATUS (raw lifecycle form, e.g.
-# "In Progress") feeds the footer `_Status: X_` marker, transition comments
-# and the bug-report Tracking section; PS_STATUS_LC feeds the board Status
-# mapping (status_board_option); PS_RELEASED_IN names the release in the
-# close-on-Done comment.
+# "In Progress") feeds the footer `_Status: X_` marker; PS_STATUS_LC feeds
+# the board Status mapping (status_board_option). SHY-0081 v3 dropped the
+# `released_in` parse too — it only fed the now-retired issue close-on-Done
+# comment.
 PS_ID="" PS_TITLE="" PS_PRIORITY="" PS_EFFORT="" PS_TYPE="" PS_ROADMAPS=""
-PS_STATUS="" PS_STATUS_LC="" PS_RELEASED_IN=""
+PS_STATUS="" PS_STATUS_LC=""
 
 parse_story_fields() {
   local rec
@@ -255,20 +251,19 @@ parse_story_fields() {
       else if (key=="effort")      effort=val
       else if (key=="type")        type=val
       else if (key=="roadmap_ids") roadmaps=val
-      else if (key=="released_in") released=val
       next
     }
     n>=2 && title=="" && /^# / { t=$0; sub(/^# /,"",t); title=trim(t) }
     END{
       gsub(/^\[/,"",roadmaps); gsub(/\]$/,"",roadmaps); gsub(/[[:space:]]/,"",roadmaps)
       status_lc=tolower(status); gsub(/ /,"-",status_lc)
-      printf "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s", \
+      printf "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s", \
         id, US, title, US, priority, US, effort, US, type, US, roadmaps, US, \
-        status, US, status_lc, US, released
+        status, US, status_lc
     }
   ' "$1")"
   IFS=$'\x1f' read -r PS_ID PS_TITLE PS_PRIORITY PS_EFFORT PS_TYPE PS_ROADMAPS \
-    PS_STATUS PS_STATUS_LC PS_RELEASED_IN <<<"$rec"
+    PS_STATUS PS_STATUS_LC <<<"$rec"
 }
 
 # Pre-flight: required env vars. Skipped in --dry-run mode.
@@ -302,17 +297,6 @@ load_label_cache() {
   fi
   rm -f "$stderr_file"
   LABEL_CACHE_LOADED=1
-}
-
-# Default color for the SHY namespace. SHY-0074 shrank this to the single
-# `story` marker — status/priority/effort/type/roadmap facts live in their
-# board columns only (see remove_duplicated_label_families).
-# Returns the suggested color (no leading '#').
-label_default_color() {
-  case "$1" in
-    story) echo "8a2be2" ;; # purple
-    *)     echo "ededed" ;;
-  esac
 }
 
 # SHY-0074: a fact lives in its board column ONLY. Delete the five label
@@ -351,85 +335,13 @@ remove_duplicated_label_families() {
         ;;
     esac
   done <<<"$LABEL_CACHE"
-  # Keep the cache honest for the ensure_label calls that follow.
-  LABEL_CACHE="$(printf '%s\n' "$LABEL_CACHE" \
-    | grep -vE '^(status|priority|effort|type|roadmap):' || true)"
 }
 
-# Ensure a label exists. If missing, create it (idempotent on repeat).
-# Increments N_LABELS_CREATED on actual creation. On --dry-run, only logs.
-ensure_label() {
-  local label="$1"
-  load_label_cache
-  if printf '%s\n' "$LABEL_CACHE" | grep -Fxq -- "$label"; then
-    return 0
-  fi
-  if [ "$DRY_RUN" = "1" ]; then
-    printf 'DRY-RUN: would CREATE label "%s"\n' "$label" >&2
-    LABEL_CACHE="${LABEL_CACHE}"$'\n'"$label"
-    return 0
-  fi
-  local color
-  color="$(label_default_color "$label")"
-  local stderr_file
-  stderr_file="$(mktemp)"
-  set +e
-  "$GH" label create "$label" --color "$color" --description "Auto-created by sync-stories-to-issues" \
-    >/dev/null 2>"$stderr_file"
-  local rc=$?
-  set -e
-  # gh returns non-zero on "label already exists" — treat as success (idempotent).
-  if [ "$rc" -ne 0 ]; then
-    if grep -qiE "already exists|already a label" "$stderr_file"; then
-      verbose "ensure_label: label '${label}' already exists (gh returned non-zero but idempotent OK)"
-    else
-      printf '[gh-error] label create %s (exit %d): %s\n' \
-        "$label" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
-      rm -f "$stderr_file"
-      return 1
-    fi
-  else
-    verbose "ensure_label: created '${label}'"
-    N_LABELS_CREATED=$((N_LABELS_CREATED + 1))
-  fi
-  LABEL_CACHE="${LABEL_CACHE}"$'\n'"$label"
-  rm -f "$stderr_file"
-  return 0
-}
-
-# Build label set (one per line). SHY-0074: exactly ONE mirror label — the
-# `story` marker (identifies mirror-managed issues; has no board-column
-# equivalent). Status/priority/effort/type/roadmap facts are mirrored as
-# Project v2 fields instead (populate_project_fields).
-build_labels() {
-  printf 'story\n'
-}
-
-# Ensure every label for a SHY exists, creating any missing ones. Result is
-# the CSV of *verified* labels (those that exist post-call) via the
-# VERIFIED_LABELS_CSV global — NOT echoed, because a $(...) capture would run
-# this function (and ensure_label's N_LABELS_CREATED increment) in a subshell
-# (SHY-0074; same pattern as BODY_RESULT). Labels whose create failed are
-# DROPPED from the result so the caller's `gh issue create --label <csv>`
-# doesn't fail with "label not found" — addresses reviewer C1.
-VERIFIED_LABELS_CSV=""
-ensure_labels_for_story() {
-  local file="$1"
-  local verified_csv="" label
-  while IFS= read -r label; do
-    [ -z "$label" ] && continue
-    if ensure_label "$label"; then
-      if [ -z "$verified_csv" ]; then
-        verified_csv="$label"
-      else
-        verified_csv="${verified_csv},${label}"
-      fi
-    else
-      verbose "ensure_labels_for_story: dropping '${label}' (ensure failed) from --label CSV"
-    fi
-  done < <(build_labels)
-  VERIFIED_LABELS_CSV="$verified_csv"
-}
+# SHY-0081 v3: the `story` label is no longer applied to anything (no issues
+# are created from the corpus). It is left inert in the repo for a future
+# bug-report intake to reuse, and is NOT auto-deleted. The label-creation
+# helpers (ensure_label / build_labels / ensure_labels_for_story) were retired
+# with the issue path.
 
 # ============================================================== project v2 (Defects D + E)
 
@@ -580,7 +492,6 @@ overlay_board_items_sidecar() {
         backing: .backing,
         contentId: .contentId,
         issueNumber: (.issueNumber // 0),
-        issueState: "",
         draftBody: ""
       })) + .[1]')"
   # Seed write-back state from the merged map (post-overlay, pre-mutation).
@@ -649,7 +560,6 @@ _items_map_pass() {
                         else "OTHER" end),
               contentId: (.content.id // ""),
               issueNumber: (.content.number // 0),
-              issueState: (.content.state // ""),
               draftBody: (.content.body // "")
             } }
         | select(.key != "") ]
@@ -699,9 +609,9 @@ load_items_map() {
   # mutation) rather than a genuinely empty board. A stale-empty read would
   # route every story to the create path and duplicate the whole board (the
   # defect this story fixes). Retry once after a bounded backoff; if the
-  # board is truly empty the retry is a cheap no-op. The consistent-source
-  # issue_exists_for guard (create path) is the hard backstop for the
-  # harmful case (duplicate ISSUES) when even the retry reads stale.
+  # board is truly empty the retry is a cheap no-op. The SHY-0079 board-items
+  # sidecar (overlay) is the hard backstop for duplicate DRAFTS when even the
+  # retry reads stale.
   if [ "$(_items_map_keyed_count)" -eq 0 ]; then
     verbose "load_items_map: empty on first read; retrying once after ${ITEMS_MAP_RETRY_BACKOFF}s (Projects v2 lag guard)"
     if [ "${ITEMS_MAP_RETRY_BACKOFF:-0}" -gt 0 ] 2>/dev/null; then
@@ -718,15 +628,15 @@ load_items_map() {
 
 # Look up one SHY ID in the items map. Results via MAP_* globals.
 MAP_FOUND=0 MAP_ITEM_ID="" MAP_BACKING="" MAP_CONTENT_ID=""
-MAP_ISSUE_NUMBER="" MAP_ISSUE_STATE="" MAP_DRAFT_BODY=""
+MAP_ISSUE_NUMBER="" MAP_DRAFT_BODY=""
 map_lookup() {
   local id="$1" rec
   MAP_FOUND=0 MAP_ITEM_ID="" MAP_BACKING="" MAP_CONTENT_ID=""
-  MAP_ISSUE_NUMBER="" MAP_ISSUE_STATE="" MAP_DRAFT_BODY=""
+  MAP_ISSUE_NUMBER="" MAP_DRAFT_BODY=""
   rec="$(printf '%s' "$ITEMS_MAP_JSON" | jq -r --arg k "$id" \
-    'if has($k) then .[$k] | [.itemId, .backing, .contentId, (.issueNumber|tostring), .issueState] | join("\u001f") else empty end')"
+    'if has($k) then .[$k] | [.itemId, .backing, .contentId, (.issueNumber|tostring)] | join("\u001f") else empty end')"
   [ -z "$rec" ] && return 0
-  IFS=$'\x1f' read -r MAP_ITEM_ID MAP_BACKING MAP_CONTENT_ID MAP_ISSUE_NUMBER MAP_ISSUE_STATE <<<"$rec"
+  IFS=$'\x1f' read -r MAP_ITEM_ID MAP_BACKING MAP_CONTENT_ID MAP_ISSUE_NUMBER <<<"$rec"
   if [ "$MAP_BACKING" = "DRAFT" ]; then
     # Separate jq call: the body is multi-line and would truncate the
     # one-line \x1f read above.
@@ -781,43 +691,6 @@ ensure_project_type_field() {
   done < <(printf '%s' "$response" | jq -c '.data.createProjectV2Field.projectV2Field.options[]?')
   TYPE_FIELD_AUTO_CREATED="yes"
   verbose "ensure_project_type_field: created Type field id=${TYPE_FIELD_ID}"
-  return 0
-}
-
-# Add an issue (by node ID) to the Project v2 board. Echoes the project item ID.
-# Callers capture the echo via $(...) — a subshell — so the
-# N_PROJECT_ITEMS_ADDED increment MUST live at the call sites, not in here
-# (SHY-0074: an in-function increment is lost when the subshell exits).
-add_to_project_board() {
-  local issue_node_id="$1"
-  load_project_cache || return 1
-  if [ "$DRY_RUN" = "1" ]; then
-    printf 'DRY-RUN: would addProjectV2ItemById(content=%s)\n' "$issue_node_id" >&2
-    printf 'dry-run-item-id\n'
-    return 0
-  fi
-  local query response stderr_file rc
-  stderr_file="$(mktemp)"
-  # shellcheck disable=SC2016
-  # ^ $projectId / $contentId are GraphQL variables, NOT bash.
-  query='mutation($projectId: ID!, $contentId: ID!) { addProjectV2ItemById(input: { projectId: $projectId, contentId: $contentId }) { item { id } } }'
-  set +e
-  response="$("$GH" api graphql -f query="$query" -f projectId="$PROJECT_NODE_ID" -f contentId="$issue_node_id" 2>"$stderr_file")"
-  rc=$?
-  set -e
-  if [ "$rc" -ne 0 ]; then
-    printf '[gh-error] addProjectV2ItemById (exit %d): %s\n' "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
-    rm -f "$stderr_file"
-    return 1
-  fi
-  rm -f "$stderr_file"
-  local item_id
-  item_id="$(printf '%s' "$response" | jq -r '.data.addProjectV2ItemById.item.id // empty')"
-  if [ -z "$item_id" ]; then
-    emit "project" "item-add" "addProjectV2ItemById returned empty id; response: $(printf '%s' "$response" | head -c 200)"
-    return 1
-  fi
-  printf '%s\n' "$item_id"
   return 0
 }
 
@@ -1101,87 +974,6 @@ delete_issue_node() {
   return 0
 }
 
-# ============================================================== issue lifecycle (SHY-0074)
-
-# Post the status-transition comment on a bug issue. Bug issues only —
-# drafts have no timeline. Increments its own counter (direct call).
-post_status_comment() {
-  local num="$1" old="$2" new="$3"
-  if [ "$DRY_RUN" = "1" ]; then
-    printf 'DRY-RUN: would COMMENT on issue #%s: "Status: %s → %s"\n' "$num" "$old" "$new" >&2
-    return 0
-  fi
-  local stderr_file rc
-  stderr_file="$(mktemp)"
-  set +e
-  "$GH" issue comment "$num" --body "Status: ${old} → ${new}" >/dev/null 2>"$stderr_file"
-  rc=$?
-  set -e
-  if [ "$rc" -ne 0 ]; then
-    printf '[gh-error] issue comment %s (exit %d): %s\n' \
-      "$num" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
-    rm -f "$stderr_file"
-    return 1
-  fi
-  rm -f "$stderr_file"
-  N_COMMENTS_POSTED=$((N_COMMENTS_POSTED + 1))
-  return 0
-}
-
-# Close an issue with a reason + optional comment.
-close_issue() {
-  local num="$1" reason="$2" comment="$3"
-  if [ "$DRY_RUN" = "1" ]; then
-    printf 'DRY-RUN: would CLOSE issue #%s (reason: %s)\n' "$num" "$reason" >&2
-    return 0
-  fi
-  local stderr_file rc
-  stderr_file="$(mktemp)"
-  set +e
-  if [ -n "$comment" ]; then
-    "$GH" issue close "$num" --reason "$reason" --comment "$comment" >/dev/null 2>"$stderr_file"
-  else
-    "$GH" issue close "$num" --reason "$reason" >/dev/null 2>"$stderr_file"
-  fi
-  rc=$?
-  set -e
-  if [ "$rc" -ne 0 ]; then
-    printf '[gh-error] issue close %s (exit %d): %s\n' \
-      "$num" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
-    rm -f "$stderr_file"
-    return 1
-  fi
-  rm -f "$stderr_file"
-  N_ISSUES_CLOSED=$((N_ISSUES_CLOSED + 1))
-  return 0
-}
-
-# Close a bug issue when its story sits in a terminal state. Runs on every
-# touch of an OPEN bug issue (created, updated, or unchanged-but-open) so a
-# previously failed close self-heals. Done ⇒ completed (naming released_in
-# when the frontmatter carries it); Cancelled ⇒ "not planned".
-close_if_terminal() {
-  local id="$1" num="$2" state="$3"
-  case "$PS_STATUS_LC" in
-    done|cancelled) ;;
-    *) return 0 ;;
-  esac
-  [ "$state" = "OPEN" ] || return 0
-  local reason="completed" comment=""
-  if [ "$PS_STATUS_LC" = "cancelled" ]; then
-    reason="not planned"
-  elif [ -n "$PS_RELEASED_IN" ]; then
-    comment="Released in ${PS_RELEASED_IN}"
-  fi
-  if ! close_issue "$num" "$reason" "$comment"; then
-    emit "$id" "api" "failed to close issue #${num}"
-    N_FAILED=$((N_FAILED + 1))
-    return 0
-  fi
-  verbose "${id}: closed issue #${num} (${reason})"
-  return 0
-}
-
 # ============================================================== body builders (SHY-0074)
 
 # Shared footer: absolute Source URL + `_Status: X_` lifecycle marker +
@@ -1240,25 +1032,6 @@ build_draft_body() {
   assemble_body "$spec" "$footer"
 }
 
-# Bug-report body (type: bug stories): the issue reads as a bug report —
-# ## Bug carries the story's ## Why section (the symptom) verbatim;
-# ## Tracking links the story file + board and states the lifecycle
-# status. The full spec stays on the board card / in the .md.
-build_bug_body() {
-  local file="$1" id="$2" hash="$3"
-  local slug why footer content
-  slug="$(basename "$file" .md)"
-  # ## Why section: body lines between the `## Why` heading and the next
-  # `## ` heading, leading blank lines stripped (trailing ones die in the
-  # command substitution).
-  why="$(awk 'BEGIN{n=0; f=0} /^---[[:space:]]*$/{n++; next} n<2{next} /^## Why[[:space:]]*$/{f=1; next} /^## /{f=0} f{print}' "$file" \
-    | sed -e '/./,$!d')"
-  footer="$(build_footer "$slug" "$hash")"
-  content="$(printf -- '## Bug\n\n%s\n\n## Tracking\n\n- Source: [.project/stories/%s.md](https://github.com/Shyden-Ltd/ShyTalk/blob/main/.project/stories/%s.md)\n- Tracked as %s on the [ShyTalk Stories board](https://github.com/orgs/Shyden-Ltd/projects/1)\n- Status: %s' \
-    "$why" "$slug" "$slug" "$id" "$PS_STATUS")"
-  assemble_body "$content" "$footer"
-}
-
 # ============================================================== stored-state extraction (SHY-0074)
 
 # Extract the stored body-hash from an existing mirror body. Anchored on
@@ -1277,104 +1050,11 @@ extract_stored_status() {
   printf '%s\n' "$1" | sed -n 's/^_Status: \(.*\)_$/\1/p' | tail -n 1
 }
 
-# SHY-0067: Create an issue with title + body (via stdin) + labels.
-# Echoes the gh-stdout (URL OR JSON when --json is used) so the caller can
-# parse the new issue's number and node_id for follow-on project-board
-# addition. On failure, captures stderr context (no >/dev/null silencing) +
-# returns non-zero.
-create_issue() {
-  local title="$1" body="$2" labels_csv="$3"
-  if [ "$DRY_RUN" = "1" ]; then
-    printf 'DRY-RUN: would CREATE issue with title "%s" labels=%s\n' "$title" "$labels_csv" >&2
-    # Emit JSON-shaped dry-run output so the caller's jq parse stays consistent.
-    printf '{"id":"DRY_RUN_NODE_ID","number":0,"url":"https://github.com/dry-run/dry-run/issues/0"}\n'
-    return 0
-  fi
-  local stderr_file rc
-  stderr_file="$(mktemp)"
-  # SHY-0067: --body-file - reads from stdin (heredoc). Avoids shell-escape
-  # bugs for SHYs with single quotes / backticks / multi-line markdown that
-  # would corrupt --body "$body" argv passing.
-  set +e
-  printf '%s' "$body" \
-    | "$GH" issue create --title "$title" --body-file - --label "$labels_csv" \
-        2>"$stderr_file"
-  rc=$?
-  set -e
-  if [ "$rc" -ne 0 ]; then
-    printf '[gh-error] issue create "%s" (exit %d): %s\n' \
-      "$title" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
-    rm -f "$stderr_file"
-    return 1
-  fi
-  rm -f "$stderr_file"
-  return 0
-}
-
-# SHY-0067: After a successful create, derive the issue's node ID + number.
-# Strategy: gh issue create's default stdout is a URL; parse the number,
-# then `gh issue view <num> --json id` for the node ID. Two API calls but
-# keeps the flow simple + works on all gh versions. Mock-test fixtures
-# can return either a URL string OR the node-id JSON directly.
-extract_issue_node_id() {
-  # $1 = stdout from create_issue (URL on stdout, possibly trailing newline)
-  local create_stdout="$1"
-  local issue_num
-  # Trim trailing newline + extract trailing path segment (the issue number).
-  issue_num="$(printf '%s' "$create_stdout" | tr -d '\n' | awk -F/ '{print $NF}')"
-  if [ -z "$issue_num" ] || ! printf '%s' "$issue_num" | grep -qE '^[0-9]+$'; then
-    return 1
-  fi
-  # Now ask gh for the node ID.
-  local stderr_file rc node_id
-  stderr_file="$(mktemp)"
-  set +e
-  node_id="$("$GH" issue view "$issue_num" --json id --jq '.id' 2>"$stderr_file")"
-  rc=$?
-  set -e
-  if [ "$rc" -ne 0 ] || [ -z "$node_id" ]; then
-    if [ "$rc" -ne 0 ]; then
-      printf '[gh-error] issue view %s for node id (exit %d): %s\n' \
-        "$issue_num" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
-    fi
-    rm -f "$stderr_file"
-    return 1
-  fi
-  rm -f "$stderr_file"
-  printf '%s\n' "$node_id"
-  return 0
-}
-
-# SHY-0067: Update an issue's body via stdin (same rationale as create_issue).
-update_issue_body() {
-  local issue_num="$1" new_body="$2"
-  if [ "$DRY_RUN" = "1" ]; then
-    printf 'DRY-RUN: would UPDATE issue #%s (body-hash changed)\n' "$issue_num" >&2
-    return 0
-  fi
-  local stderr_file rc
-  stderr_file="$(mktemp)"
-  set +e
-  printf '%s' "$new_body" \
-    | "$GH" issue edit "$issue_num" --body-file - \
-        2>"$stderr_file"
-  rc=$?
-  set -e
-  if [ "$rc" -ne 0 ]; then
-    printf '[gh-error] issue edit %s (exit %d): %s\n' \
-      "$issue_num" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
-    rm -f "$stderr_file"
-    return 1
-  fi
-  rm -f "$stderr_file"
-  return 0
-}
-
 # ============================================================== sync orchestration
 
 # ---- create paths --------------------------------------------------------
 
-# Create a board DRAFT item for a non-bug story (SHY-0074 v2 routing).
+# Create a board DRAFT item for a story (SHY-0081 v3: every type routes here).
 create_draft_path() {
   local file="$1" id="$2" title="$3" hash="$4"
   # Result via global (subshell would lose the truncation counter).
@@ -1383,7 +1063,6 @@ create_draft_path() {
   if [ "$DRY_RUN" = "1" ]; then
     printf 'DRY-RUN: %s: would CREATE DRAFT item "%s" (full-spec body) + populate fields\n' "$id" "$title" >&2
     N_CREATED=$((N_CREATED + 1))
-    N_DRAFTS_CREATED=$((N_DRAFTS_CREATED + 1))
     return 0
   fi
   local create_out item_id content_id
@@ -1398,7 +1077,6 @@ create_draft_path() {
   item_id="${create_out%% *}"
   content_id="${create_out#* }"
   N_CREATED=$((N_CREATED + 1))
-  N_DRAFTS_CREATED=$((N_DRAFTS_CREATED + 1))
   N_BODIES_EMBEDDED=$((N_BODIES_EMBEDDED + 1))
   N_PROJECT_ITEMS_ADDED=$((N_PROJECT_ITEMS_ADDED + 1))
   # SHY-0079: record the new draft in the sidecar write-back state so future
@@ -1412,141 +1090,7 @@ create_draft_path() {
   return 0
 }
 
-# SHY-0078: consistent-source existence check. The Issues SEARCH API is
-# strongly consistent (unlike the eventually-consistent Projects v2 items
-# query), so this is the hard backstop against creating a DUPLICATE issue
-# when a stale-empty items-map read routes an already-mirrored bug story to
-# the create path. Sets EXISTING_ISSUE_NUM on a prefix-exact hit. Returns:
-#   0 = an issue titled "SHY-NNNN: …" already exists
-#   1 = no such issue
-#   2 = the search itself failed (gh error) — caller must NOT create on this
-EXISTING_ISSUE_NUM=""
-issue_exists_for() {
-  local id="$1"
-  EXISTING_ISSUE_NUM=""
-  # Dry-run never calls gh: report "none" so the create-path preview fires.
-  if [ "$DRY_RUN" = "1" ]; then return 1; fi
-  local stderr_file out rc
-  stderr_file="$(mktemp)"
-  set +e
-  # The `startswith("${id}:")` --jq filter is PREFIX-EXACT (the trailing
-  # colon means SHY-0007 never matches SHY-0070), so GitHub's fuzzy title
-  # search can't cause a false dedup hit.
-  out="$("$GH" issue list --state all --search "in:title \"${id}:\"" --json number,title \
-    --jq ".[] | select(.title | startswith(\"${id}:\")) | .number" 2>"$stderr_file")"
-  rc=$?
-  set -e
-  if [ "$rc" -ne 0 ]; then
-    printf '[gh-error] dedup issue search for %s (exit %d): %s\n' \
-      "$id" "$rc" "$(tr '\n' ' ' <"$stderr_file")" >&2
-    rm -f "$stderr_file"
-    return 2
-  fi
-  rm -f "$stderr_file"
-  EXISTING_ISSUE_NUM="$(printf '%s\n' "$out" | head -n 1)"
-  [ -n "$EXISTING_ISSUE_NUM" ] && return 0 || return 1
-}
-
-# Create a bug-report ISSUE + its issue-backed board item (type: bug).
-create_issue_path() {
-  local file="$1" id="$2" title="$3" hash="$4"
-  # SHY-0078: idempotency guard. We only reach create_issue_path because the
-  # (eventually-consistent) items map had no entry for this SHY. Before
-  # creating, confirm against the CONSISTENT Issues API that no issue already
-  # exists — otherwise a stale-empty map read would duplicate it. On a hit we
-  # skip the create (no duplicate); the next fresh-map sync refreshes its
-  # body/fields. On a search error we refuse to create (create-on-uncertainty
-  # is what produced the duplication defect).
-  # set-e-safe 3-way capture: issue_exists_for re-enables errexit internally
-  # (after its own gh call), so a bare call returning non-zero would trip
-  # set -e. `|| dedup_rc=$?` is exempt from errexit and captures all of 0/1/2.
-  local dedup_rc=0
-  issue_exists_for "$id" || dedup_rc=$?
-  if [ "$dedup_rc" -eq 2 ]; then
-    emit "$id" "api" "dedup existence check failed — not creating (avoids duplicate)"
-    N_FAILED=$((N_FAILED + 1))
-    return 0
-  elif [ "$dedup_rc" -eq 0 ]; then
-    emit "$id" "dedup" "existing issue #${EXISTING_ISSUE_NUM} found via consistent-source check; skipping create (stale items-map suspected — will refresh next sync)"
-    N_DEDUP_GUARD_HITS=$((N_DEDUP_GUARD_HITS + 1))
-    N_SKIPPED=$((N_SKIPPED + 1))
-    return 0
-  fi
-  # SHY-0067: ensure labels exist before issue create (Defect B fix). The
-  # function yields the CSV of *verified* labels (reviewer C1) so the gh
-  # issue create --label flag won't be rejected on a label that failed to
-  # create. Result via global, not $(...): subshell loses N_LABELS_CREATED.
-  local verified_labels
-  ensure_labels_for_story "$file"
-  verified_labels="$VERIFIED_LABELS_CSV"
-  # Result via global (subshell would lose the truncation counter).
-  build_bug_body "$file" "$id" "$hash"
-  local body="$BODY_RESULT"
-  if [ "$DRY_RUN" = "1" ]; then
-    printf 'DRY-RUN: %s: would CREATE issue (bug report) "%s" labels=%s + board item + fields\n' \
-      "$id" "$title" "$verified_labels" >&2
-    N_CREATED=$((N_CREATED + 1))
-    N_ISSUES_CREATED=$((N_ISSUES_CREATED + 1))
-    return 0
-  fi
-  # SHY-0067: capture create stdout (URL) so we can derive number + node_id.
-  local create_response
-  set +e
-  create_response="$(create_issue "$title" "$body" "$verified_labels")"
-  local create_rc=$?
-  set -e
-  if [ "$create_rc" -ne 0 ]; then
-    emit "$id" "api" "failed to create issue"
-    N_FAILED=$((N_FAILED + 1))
-    return 0
-  fi
-  N_CREATED=$((N_CREATED + 1))
-  N_ISSUES_CREATED=$((N_ISSUES_CREATED + 1))
-  N_BODIES_EMBEDDED=$((N_BODIES_EMBEDDED + 1))
-  emit "$id" "created" "bug issue created"
-
-  local issue_num node_id item_id view_rc
-  issue_num="$(printf '%s' "$create_response" | tr -d '\n' | awk -F/ '{print $NF}')"
-  # SHY-0074 reviewer-C1: node-id resolution failure must surface ([gh-error]
-  # flows through) + count into the exit-40 gate — a `2>/dev/null || true`
-  # swallow here left a created issue with NO board card and exit 0.
-  set +e
-  node_id="$(extract_issue_node_id "$create_response")"
-  view_rc=$?
-  set -e
-  if [ "$view_rc" -ne 0 ] || [ -z "$node_id" ]; then
-    emit "$id" "project" "failed to resolve node_id for new issue — board add skipped"
-    N_FAILED=$((N_FAILED + 1))
-  else
-    # SHY-0067 reviewer-I6: board-add / field-set failures must count into
-    # the Defect-C exit-40 gate, never `|| true`-swallowed.
-    if item_id="$(add_to_project_board "$node_id")"; then
-      N_PROJECT_ITEMS_ADDED=$((N_PROJECT_ITEMS_ADDED + 1))
-      if [ -n "$item_id" ]; then
-        # SHY-0079: record the issue-backed item in the sidecar write-back
-        # state (issues are also guarded by issue_exists_for, but a complete
-        # sidecar keeps the board mirror accurate).
-        board_items_put "$id" "ISSUE" "$item_id" "$node_id" "${issue_num:-0}"
-        if ! populate_project_fields "$item_id" "$file" "$id"; then
-          emit "$id" "project" "failed to populate fields for item ${item_id}"
-          N_FAILED=$((N_FAILED + 1))
-        fi
-      fi
-    else
-      emit "$id" "project" "failed to add issue node ${node_id} to project board"
-      N_FAILED=$((N_FAILED + 1))
-    fi
-  fi
-
-  # A bug born terminal (e.g. rebuild recreating a Done story) closes
-  # immediately — the Issues tab reads closed = fixed/not-planned.
-  if printf '%s' "$issue_num" | grep -qE '^[0-9]+$'; then
-    close_if_terminal "$id" "$issue_num" "OPEN"
-  fi
-  return 0
-}
-
-# ---- sync_one (SHY-0074 v2 routing) ---------------------------------------
+# ---- sync_one (SHY-0081 v3: uniform draft routing) ------------------------
 
 # Sync one story file. Returns 0 always (failures increment N_FAILED).
 sync_one() {
@@ -1574,67 +1118,54 @@ sync_one() {
   raw_title="${raw_title#"${id}": }"
   title="${id}: ${raw_title}"
 
-  # Routing: bugs are ISSUE-backed (bug report on the Issues tab); every
-  # other type is a board DRAFT item. The Issues tab is bugs-only.
-  local desired="DRAFT"
-  [ "$PS_TYPE" = "bug" ] && desired="ISSUE"
-
+  # SHY-0081 v3: EVERY story type routes to a board DRAFT card. The Issues
+  # page is reserved for a future bug-REPORT intake and is never written from
+  # the corpus.
   map_lookup "$id"
 
-  # Type flip: the existing backing no longer matches the story's type —
-  # delete the stale item and recreate the correct backing.
-  if [ "$MAP_FOUND" = "1" ] && [ "$MAP_BACKING" != "$desired" ]; then
+  # Legacy migration safety net: the one-shot --rebuild converts the whole
+  # board, but if a normal sync still finds a story backed by an ISSUE (a v2
+  # leftover), delete that board item AND its issue, then recreate the story
+  # as a draft below. Steady state never hits this (post-rebuild there are no
+  # issue-backed items).
+  if [ "$MAP_FOUND" = "1" ] && [ "$MAP_BACKING" = "ISSUE" ]; then
     if [ "$DRY_RUN" = "1" ]; then
-      printf 'DRY-RUN: %s: type flip — would DELETE %s-backed item and recreate as %s\n' \
-        "$id" "$MAP_BACKING" "$desired" >&2
+      printf 'DRY-RUN: %s: legacy issue-backed item — would DELETE the item + issue #%s and recreate as a draft\n' \
+        "$id" "$MAP_ISSUE_NUMBER" >&2
       MAP_FOUND=0
     else
-      emit "$id" "type-flip" "type flip: story type is now ${PS_TYPE}; replacing ${MAP_BACKING}-backed item with ${desired}"
+      emit "$id" "migrate" "legacy issue-backed item: replacing with a board draft (deleting item ${MAP_ITEM_ID} + issue #${MAP_ISSUE_NUMBER})"
       if ! delete_project_item "$MAP_ITEM_ID"; then
-        # Don't create a duplicate backing while the stale one survives.
-        emit "$id" "project" "failed to delete item ${MAP_ITEM_ID} during type flip"
+        # Don't create a duplicate draft while the stale item survives.
+        emit "$id" "project" "failed to delete item ${MAP_ITEM_ID} during issue→draft migration"
         N_FAILED=$((N_FAILED + 1))
         return 0
       fi
       N_ITEMS_DELETED=$((N_ITEMS_DELETED + 1))
       # SHY-0079: drop the stale backing from the sidecar; the recreate below
-      # re-adds the correct backing via board_items_put.
+      # re-adds the DRAFT backing via board_items_put.
       board_items_del "$id"
-      if [ "$MAP_BACKING" = "ISSUE" ] && [ "$MAP_ISSUE_STATE" = "OPEN" ]; then
-        # bug→non-bug: the issue is orphaned (story is no longer a bug).
-        if ! close_issue "$MAP_ISSUE_NUMBER" "not planned" ""; then
-          emit "$id" "api" "failed to close orphaned issue #${MAP_ISSUE_NUMBER} during type flip"
-          N_FAILED=$((N_FAILED + 1))
-        fi
-      fi
+      # Delete the orphaned issue so the Issues page stays free of corpus
+      # entries (the migration policy — same as --rebuild). A permission gap
+      # warns + counts inside delete_issue_node; don't let it wedge the
+      # recreate that follows (|| true is set-e-safe here).
+      delete_issue_node "$MAP_ISSUE_NUMBER" "$MAP_CONTENT_ID" || true
       MAP_FOUND=0
     fi
   fi
 
   # ---- create path
   if [ "$MAP_FOUND" != "1" ]; then
-    if [ "$desired" = "DRAFT" ]; then
-      create_draft_path "$file" "$id" "$title" "$hash"
-    else
-      create_issue_path "$file" "$id" "$title" "$hash"
-    fi
+    create_draft_path "$file" "$id" "$title" "$hash"
     return 0
   fi
 
-  # ---- update path: change detection via the stored footer.
-  local existing_body=""
-  if [ "$MAP_BACKING" = "DRAFT" ]; then
-    existing_body="$MAP_DRAFT_BODY"
-  else
-    local stderr_file
-    stderr_file="$(mktemp)"
-    set +e
-    existing_body="$("$GH" issue view "$MAP_ISSUE_NUMBER" --json body --jq .body 2>"$stderr_file" || echo "")"
-    set -e
-    rm -f "$stderr_file"
-  fi
-
-  local existing_hash existing_status changed=0 transition=0
+  # ---- update path (DRAFT only — every card is a draft in v3). Change
+  # detection via the stored footer: body-hash for content edits, the
+  # `_Status:` marker for pure status flips (status lives in frontmatter,
+  # outside the body hash, so a lifecycle move would otherwise be invisible).
+  local existing_body existing_hash existing_status changed=0 transition=0
+  existing_body="$MAP_DRAFT_BODY"
   existing_hash="$(extract_stored_hash "$existing_body")"
   existing_status="$(extract_stored_status "$existing_body")"
   [ "$existing_hash" != "$hash" ] && changed=1
@@ -1643,65 +1174,34 @@ sync_one() {
   fi
 
   if [ "$changed" = "0" ] && [ "$transition" = "0" ]; then
-    # Self-heal: an OPEN bug issue whose story is terminal closes even on a
-    # no-change run (covers a previously failed close).
-    if [ "$MAP_BACKING" = "ISSUE" ]; then
-      close_if_terminal "$id" "$MAP_ISSUE_NUMBER" "$MAP_ISSUE_STATE"
-    fi
     verbose "${id}: body-hash + status unchanged; skipping"
     N_SKIPPED=$((N_SKIPPED + 1))
     return 0
   fi
 
   if [ "$DRY_RUN" = "1" ]; then
-    printf 'DRY-RUN: %s: would UPDATE %s-backed item (changed=%s transition=%s)\n' \
-      "$id" "$MAP_BACKING" "$changed" "$transition" >&2
+    printf 'DRY-RUN: %s: would UPDATE draft item (changed=%s transition=%s)\n' \
+      "$id" "$changed" "$transition" >&2
     N_UPDATED=$((N_UPDATED + 1))
     return 0
   fi
 
-  # Transition comment FIRST (bug issues only — drafts have no timeline),
-  # then the body refresh writes the new `_Status:` marker.
-  if [ "$MAP_BACKING" = "ISSUE" ] && [ "$transition" = "1" ]; then
-    if ! post_status_comment "$MAP_ISSUE_NUMBER" "$existing_status" "$PS_STATUS"; then
-      emit "$id" "api" "failed to post status comment on issue #${MAP_ISSUE_NUMBER}"
-      N_FAILED=$((N_FAILED + 1))
-      # Continue: the body refresh must not be blocked by a comment failure.
-    fi
+  # Result via global (subshell would lose the truncation counter).
+  build_draft_body "$file" "$hash"
+  if ! update_draft_item "$MAP_CONTENT_ID" "$title" "$BODY_RESULT"; then
+    emit "$id" "api" "failed to update draft item ${MAP_ITEM_ID}"
+    N_FAILED=$((N_FAILED + 1))
+    return 0
   fi
-
-  if [ "$MAP_BACKING" = "DRAFT" ]; then
-    # Result via global (subshell would lose the truncation counter).
-    build_draft_body "$file" "$hash"
-    if ! update_draft_item "$MAP_CONTENT_ID" "$title" "$BODY_RESULT"; then
-      emit "$id" "api" "failed to update draft item ${MAP_ITEM_ID}"
-      N_FAILED=$((N_FAILED + 1))
-      return 0
-    fi
-    emit "$id" "updated" "draft item body refreshed"
-  else
-    build_bug_body "$file" "$id" "$hash"
-    if ! update_issue_body "$MAP_ISSUE_NUMBER" "$BODY_RESULT"; then
-      emit "$id" "api" "failed to update issue #${MAP_ISSUE_NUMBER}"
-      N_FAILED=$((N_FAILED + 1))
-      return 0
-    fi
-    emit "$id" "updated" "issue #${MAP_ISSUE_NUMBER} body refreshed"
-  fi
+  emit "$id" "updated" "draft item body refreshed"
   N_UPDATED=$((N_UPDATED + 1))
   N_BODIES_EMBEDDED=$((N_BODIES_EMBEDDED + 1))
 
   # Re-assert all board fields on the EXISTING item (no re-add needed —
-  # the items map already carries the item id).
+  # the items map already carries the item id). Status is mutated last.
   if ! populate_project_fields "$MAP_ITEM_ID" "$file" "$id"; then
     emit "$id" "project" "failed to refresh fields for item ${MAP_ITEM_ID}"
     N_FAILED=$((N_FAILED + 1))
-  fi
-
-  # Close on terminal states (bug issues only), AFTER the board reflects
-  # the final column + the body carries the final marker.
-  if [ "$MAP_BACKING" = "ISSUE" ]; then
-    close_if_terminal "$id" "$MAP_ISSUE_NUMBER" "$MAP_ISSUE_STATE"
   fi
 }
 
@@ -1825,39 +1325,33 @@ sync_all() {
   # written (idempotent no-op diff when unchanged); the workflow commits it.
   write_board_items_sidecar
 
-  printf 'Sync result: %d created (%d drafts, %d issues), %d updated, %d skipped, %d failed' \
-    "$N_CREATED" "$N_DRAFTS_CREATED" "$N_ISSUES_CREATED" "$N_UPDATED" "$N_SKIPPED" "$N_FAILED" >&2
-  printf ' (labels created: %d; labels deleted: %d; project items added: %d; project items deleted: %d; issues deleted: %d; project fields updated: %d; status fields set: %d; bodies embedded: %d; bodies truncated: %d; comments posted: %d; issues closed: %d; dedup-guard hits: %d; sidecar overlay fills: %d; type-field auto-created: %s)\n' \
-    "$N_LABELS_CREATED" "$N_LABELS_DELETED" "$N_PROJECT_ITEMS_ADDED" "$N_ITEMS_DELETED" \
+  printf 'Sync result: %d created, %d updated, %d skipped, %d failed' \
+    "$N_CREATED" "$N_UPDATED" "$N_SKIPPED" "$N_FAILED" >&2
+  printf ' (labels deleted: %d; project items added: %d; project items deleted: %d; issues deleted: %d; project fields updated: %d; status fields set: %d; bodies embedded: %d; bodies truncated: %d; sidecar overlay fills: %d; type-field auto-created: %s)\n' \
+    "$N_LABELS_DELETED" "$N_PROJECT_ITEMS_ADDED" "$N_ITEMS_DELETED" \
     "$N_ISSUES_DELETED" "$N_PROJECT_FIELDS_UPDATED" "$N_STATUS_SET" "$N_BODIES_EMBEDDED" \
-    "$N_BODIES_TRUNCATED" "$N_COMMENTS_POSTED" "$N_ISSUES_CLOSED" "$N_DEDUP_GUARD_HITS" "$N_SIDECAR_FILLS" "$TYPE_FIELD_AUTO_CREATED" >&2
+    "$N_BODIES_TRUNCATED" "$N_SIDECAR_FILLS" "$TYPE_FIELD_AUTO_CREATED" >&2
 
   # SHY-0067 reviewer-I2: emit a GITHUB_STEP_SUMMARY audit trail when running
   # under GitHub Actions. Local + test runs skip silently (env var unset).
   if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
     {
-      printf '## Roadmap sync — board mirror (drafts) + bugs-only Issues\n\n'
+      printf '## Roadmap sync — board mirror (every story is a draft card)\n\n'
       printf '| Metric | Count |\n'
       printf '|---|---|\n'
-      printf '| Created | %d |\n' "$N_CREATED"
-      printf '| — drafts | %d |\n' "$N_DRAFTS_CREATED"
-      printf '| — bug issues | %d |\n' "$N_ISSUES_CREATED"
+      printf '| Created (draft cards) | %d |\n' "$N_CREATED"
       printf '| Updated | %d |\n' "$N_UPDATED"
       printf '| Skipped (unchanged) | %d |\n' "$N_SKIPPED"
       printf '| Failed | %d |\n' "$N_FAILED"
-      printf '| Labels auto-created | %d |\n' "$N_LABELS_CREATED"
       printf '| Labels deleted (duplicated families) | %d |\n' "$N_LABELS_DELETED"
       printf '| Project items added | %d |\n' "$N_PROJECT_ITEMS_ADDED"
       printf '| Project items deleted | %d |\n' "$N_ITEMS_DELETED"
-      printf '| Issues deleted (rebuild) | %d |\n' "$N_ISSUES_DELETED"
+      printf '| Issues deleted (rebuild migration) | %d |\n' "$N_ISSUES_DELETED"
       printf '| Project fields updated | %d |\n' "$N_PROJECT_FIELDS_UPDATED"
       printf '| Status fields set | %d |\n' "$N_STATUS_SET"
       printf '| Bodies embedded | %d |\n' "$N_BODIES_EMBEDDED"
       printf '| Bodies truncated | %d |\n' "$N_BODIES_TRUNCATED"
-      printf '| Status comments posted | %d |\n' "$N_COMMENTS_POSTED"
-      printf '| Issues closed | %d |\n' "$N_ISSUES_CLOSED"
       printf '| Sidecar overlay fills (stale-API gaps healed) | %d |\n' "$N_SIDECAR_FILLS"
-      printf '| Dedup-guard hits (stale-map duplicate prevented) | %d |\n' "$N_DEDUP_GUARD_HITS"
       printf '| Type-field auto-created | %s |\n' "$TYPE_FIELD_AUTO_CREATED"
     } >> "$GITHUB_STEP_SUMMARY"
   fi

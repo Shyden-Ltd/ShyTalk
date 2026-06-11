@@ -73,8 +73,8 @@ function resetRecording() {
 }
 
 /** Minimal story that passes check-story-frontmatter.sh. type: bug —
- *  post-SHY-0074 v2 only bug stories reach `gh issue create`, and these
- *  tests pin title/label fidelity on exactly that argv surface. */
+ *  SHY-0081 v3 routes EVERY type (incl. bug) to a board DRAFT, so these
+ *  tests pin title fidelity on the addProjectV2DraftIssue argv surface. */
 function storyTemplate({ id, title, frontmatterOverrides = '' }) {
   return `---
 id: ${id}
@@ -202,20 +202,16 @@ exit 0
       },
     }),
   );
-  // Realistic create-sequence responses: post SHY-0074 reviewer-C1 the
-  // node-id resolution failure is counted (exit 40), so the bug fixtures
-  // must let create → view → board-add complete.
-  fs.writeFileSync(
-    path.join(mockGhDir, 'resp-issue-create'),
-    'https://github.com/Shyden-Ltd/ShyTalk/issues/100\n',
-  );
-  fs.writeFileSync(path.join(mockGhDir, 'resp-issue-view'), 'I_test_node_id\n');
+  // SHY-0081 v3: every story routes to a board DRAFT. The shared api-graphql
+  // response carries both the project-lookup id AND the addProjectV2DraftIssue
+  // result (projectItem id + DraftIssue content id) so the create path
+  // completes (item_id non-empty → no exit 40).
   fs.writeFileSync(
     path.join(mockGhDir, 'resp-api-graphql'),
     JSON.stringify({
       data: {
         organization: { projectV2: { id: 'PVT_test', fields: { nodes: [] } } },
-        addProjectV2ItemById: { item: { id: 'PVTI_test' } },
+        addProjectV2DraftIssue: { projectItem: { id: 'PVTI_test', content: { id: 'DI_test' } } },
       },
     }),
   );
@@ -248,22 +244,28 @@ beforeEach(() => {
   fs.rmSync(path.join(mockGhDir, 'board-items.json'), { force: true });
 });
 
+/** The draft-create call carries the title via `-f title=<id>: <title>`. */
+function draftCreateCall() {
+  return recordedCalls().find((c) => c.includes('addProjectV2DraftIssue'));
+}
+
 describe('title fidelity through the parse phase', () => {
-  test('quotes, $ and backticks reach `gh issue create --title` intact; \\x1f is stripped without corrupting fields', () => {
+  test('quotes, $ and backticks reach the draft `title=` intact; \\x1f is stripped without corrupting fields', () => {
     // \x1f is the parser's record separator. The single-pass parser strips
     // exactly that byte from values (documented divergence: pre-refactor it
     // passed through) so a malicious/corrupt title can never shift fields
-    // into each other — the labels below would scramble if it did.
+    // into each other.
     const title = 'Title with "quotes" and $dollar and `backticks` and \x1funit-sep end';
     writeStory('SHY-9999', title);
     const { code } = runSync(['--story', 'SHY-9999']);
     expect(code).toBe(0);
-    const create = recordedCalls().find((c) => c.startsWith('issue create'));
+    const create = draftCreateCall();
     expect(create).toBeDefined();
     expect(create).toContain(
-      '--title SHY-9999: Title with "quotes" and $dollar and `backticks` and unit-sep end',
+      'title=SHY-9999: Title with "quotes" and $dollar and `backticks` and unit-sep end',
     );
-    expect(create).toContain('--label story');
+    // No Issues-tab write of any kind.
+    expect(recordedCalls().some((c) => c.startsWith('issue create'))).toBe(false);
   });
 
   test('a 1000-char title survives byte-for-byte', () => {
@@ -271,39 +273,37 @@ describe('title fidelity through the parse phase', () => {
     writeStory('SHY-9999', title);
     const { code } = runSync(['--story', 'SHY-9999']);
     expect(code).toBe(0);
-    const create = recordedCalls().find((c) => c.startsWith('issue create'));
-    expect(create).toContain(title);
+    expect(draftCreateCall()).toContain(title);
   });
 });
 
-describe('label derivation (single-source post-SHY-0074)', () => {
-  test('clean frontmatter derives exactly the story marker label (SHY-0074: board columns are the single home for status/pri/effort/type/roadmap facts)', () => {
+describe('routing + parse (single-source post-SHY-0081 v3)', () => {
+  test('clean frontmatter → a board DRAFT is created and NO label is applied (board columns are the single home for facts)', () => {
     writeStory('SHY-9999', 'Clean fixture');
     const { code } = runSync(['--story', 'SHY-9999']);
     expect(code).toBe(0);
-    const create = recordedCalls().find((c) => c.startsWith('issue create'));
-    expect(create).toContain('--label story');
+    expect(draftCreateCall()).toBeDefined();
+    expect(recordedCalls().some((c) => c.startsWith('label create'))).toBe(false);
+    expect(recordedCalls().some((c) => c.startsWith('issue create'))).toBe(false);
   });
 
-  test('CORRECTIVE (red pre-refactor): padded frontmatter values trim — title stays clean', () => {
-    // Live bug in the pre-refactor parser: `priority:   P1   ` leaks its
-    // trailing spaces into the label (`priority:p1   ,`). The validator
-    // accepts padded files, so the corruption is production-reachable.
-    // The single-pass parser must trim. Sole exception to the story's
-    // byte-identical contract (documented in SHY-0040 Notes).
+  test('CORRECTIVE (red pre-refactor): padded frontmatter values trim — the draft title stays clean', () => {
+    // Live bug in the pre-refactor parser: `priority:   P1   ` leaked trailing
+    // spaces. The validator accepts padded files, so the corruption is
+    // production-reachable. The single-pass parser must trim — the draft title
+    // must be exactly "SHY-9999: Padded fixture", no leaked padding.
     const file = writeStory('SHY-9999', 'Padded fixture');
     let src = fs.readFileSync(file, 'utf-8');
     src = src.replace('priority: P1', 'priority:   P1   ').replace('effort: S', 'effort:\tS\t');
     fs.writeFileSync(file, src);
     const { code } = runSync(['--story', 'SHY-9999']);
     expect(code).toBe(0);
-    const create = recordedCalls().find((c) => c.startsWith('issue create'));
-    expect(create).toContain('--label story');
+    expect(draftCreateCall()).toContain('title=SHY-9999: Padded fixture');
   });
 });
 
 describe('malformed frontmatter exit contract', () => {
-  test('unterminated frontmatter → validate-category failure, exit 40', () => {
+  test('unterminated frontmatter → validate-category failure, exit 40, no mutations', () => {
     fs.writeFileSync(
       path.join(fixtureRepo, '.project', 'stories', 'SHY-9997-malformed.md'),
       '---\nid: SHY-9997\nstatus: Draft\nNO CLOSING DELIMITER\n',
@@ -312,5 +312,6 @@ describe('malformed frontmatter exit contract', () => {
     expect(code).toBe(40);
     expect(stderr).toMatch(/validate.*failed frontmatter validation/);
     expect(recordedCalls().some((c) => c.startsWith('issue create'))).toBe(false);
+    expect(recordedCalls().some((c) => c.includes('addProjectV2DraftIssue'))).toBe(false);
   });
 });
