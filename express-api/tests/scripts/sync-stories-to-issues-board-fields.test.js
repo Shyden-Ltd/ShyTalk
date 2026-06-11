@@ -2131,3 +2131,93 @@ describe('SHY-0074: structural pins on the script source', () => {
     expect(src).not.toContain('SYNC_GRACE_WINDOW_SECS');
   });
 });
+
+// ============================================================== v4 bootstrap + state-reconcile edges (reviewer-found)
+describe('SHY-0082 v4: bootstrap + issue-state reconcile edge cases (mock-gh)', () => {
+  test('bootstrap: org missing a native issue type (no Bug) → exit 40 BEFORE any create', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories82bt-');
+    makeStory(storiesDir, { id: 'SHY-8601', type: 'feature' });
+    const rules = createPathRules(mock.dir);
+    // Override the bootstrap response: only Task present (Bug + Feature missing).
+    writeResponse(
+      mock.dir,
+      'resp-issuetypes.json',
+      JSON.stringify({
+        data: {
+          repository: {
+            id: 'REPO_1',
+            issueTypes: { nodes: [{ id: 'IT_TASK', name: 'Task' }] },
+            label: { id: 'LBL_story' },
+          },
+        },
+      }),
+    );
+    writeRules(mock.dir, rules);
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(40);
+    expect(r.stderr).toMatch(/missing a native issue type/);
+    // Aborts before any issue is created.
+    expect(readRecording(mock.recording).filter((l) => l.includes('createIssue'))).toEqual([]);
+  });
+
+  test('terminal→non-terminal transition (Done→In Progress) REOPENS the issue', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories82re-');
+    const { content } = makeStory(storiesDir, {
+      id: 'SHY-8602',
+      status: 'In Progress',
+      type: 'feature',
+    });
+    // Stored marker Done (closed), hash CURRENT → pure status flip; Done→In
+    // Progress crosses the terminal boundary the other way → reopenIssue.
+    const body = existingBody(content, 'SHY-8602-fixture-story', 'Done');
+    const items = itemsResponse([
+      issueNode('SHY-8602', 'ITEM_I8602', 8602, 'CLOSED', 'SHY-8602: Fixture story', body),
+    ]);
+    writeRules(mock.dir, createPathRules(mock.dir, { items }));
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const lines = readRecording(mock.recording);
+    expect(
+      lines.find((l) => l.includes('reopenIssue') && l.includes('id=I_node_8602')),
+    ).toBeDefined();
+    expect(lines.filter((l) => l.includes('closeIssue'))).toEqual([]);
+    expect(r.stderr).toMatch(/issues reopened: 1/);
+  });
+
+  test('closeIssue FAILURE on the create path (terminal story) → exit 40; the issue is still created', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories82cf-');
+    makeStory(storiesDir, { id: 'SHY-8603', status: 'Done', type: 'feature' });
+    const rules = createPathRules(mock.dir);
+    writeRules(mock.dir, [['closeIssue', '', '1'], ...rules]);
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(40);
+    const lines = readRecording(mock.recording);
+    // The issue WAS created (it appears on the Issues tab); only the close failed.
+    expect(
+      lines.find((l) => l.includes('createIssue') && l.includes('title=SHY-8603:')),
+    ).toBeDefined();
+    expect(r.stderr).toMatch(/failed to close terminal issue/);
+  });
+
+  test('addProjectV2ItemById FAILURE after createIssue succeeds → exit 40; the story is NOT in the sidecar', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories82ab-');
+    makeStory(storiesDir, { id: 'SHY-8604', type: 'feature' });
+    const rules = createPathRules(mock.dir);
+    writeRules(mock.dir, [['addProjectV2ItemById', '', '1'], ...rules]);
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(40);
+    const lines = readRecording(mock.recording);
+    expect(
+      lines.find((l) => l.includes('createIssue') && l.includes('title=SHY-8604:')),
+    ).toBeDefined();
+    // KNOWN HAZARD (documented in SHY-0082 Notes): the issue exists on the Issues
+    // tab but is NOT on the board and NOT in the sidecar, so the next run would
+    // re-create a duplicate. A future idempotency-by-search guard is the fix.
+    const sidecar = JSON.parse(fs.readFileSync(path.join(mock.dir, 'board-items.json'), 'utf-8'));
+    expect(sidecar['SHY-8604']).toBeUndefined();
+  });
+});

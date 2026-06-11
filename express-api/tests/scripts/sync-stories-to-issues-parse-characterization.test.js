@@ -73,8 +73,8 @@ function resetRecording() {
 }
 
 /** Minimal story that passes check-story-frontmatter.sh. type: bug —
- *  SHY-0081 v3 routes EVERY type (incl. bug) to a board DRAFT, so these
- *  tests pin title fidelity on the addProjectV2DraftIssue argv surface. */
+ *  SHY-0082 v4 routes EVERY type (incl. bug) to a typed ISSUE, so these
+ *  tests pin title fidelity on the createIssue argv surface. */
 function storyTemplate({ id, title, frontmatterOverrides = '' }) {
   return `---
 id: ${id}
@@ -290,7 +290,7 @@ describe('title fidelity through the parse phase', () => {
 });
 
 describe('routing + parse (single-source post-SHY-0081 v3)', () => {
-  test('clean frontmatter → a board DRAFT is created and NO label is applied (board columns are the single home for facts)', () => {
+  test('clean frontmatter → a typed issue is created with the story label (board columns hold the other facts)', () => {
     writeStory('SHY-9999', 'Clean fixture');
     const { code } = runSync(['--story', 'SHY-9999']);
     expect(code).toBe(0);

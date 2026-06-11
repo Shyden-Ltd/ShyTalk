@@ -1041,7 +1041,10 @@ update_issue() {
   local query stderr_file rc
   stderr_file="$(mktemp)"
   # shellcheck disable=SC2016
-  query='mutation($id: ID!, $title: String!, $body: String!, $issueTypeId: ID!) { updateIssue(input: { id: $id, title: $title, body: $body, issueTypeId: $issueTypeId }) { issue { id } } }'
+  # ^ GraphQL variables, NOT bash. STORY_LABEL_ID is inlined into labelIds (a
+  # controlled API node id) so a manually-removed `story` label is re-applied
+  # on every update — keeping `--rebuild`'s `--label story` scoping reliable.
+  query='mutation($id: ID!, $title: String!, $body: String!, $issueTypeId: ID!) { updateIssue(input: { id: $id, title: $title, body: $body, issueTypeId: $issueTypeId, labelIds: ["'"$STORY_LABEL_ID"'"] }) { issue { id } } }'
   set +e
   printf '%s' "$body" | "$GH" api graphql -f query="$query" -f id="$issue_node" -f title="$title" -F body=@- -f issueTypeId="$type_id" \
     >/dev/null 2>"$stderr_file"
@@ -1468,6 +1471,25 @@ teardown_for_rebuild() {
   verbose "teardown_for_rebuild: done (items deleted: ${N_ITEMS_DELETED}; issues deleted: ${N_ISSUES_DELETED})"
 }
 
+# Shared pre-sync setup (sync_all + sync_story): cache the project fields,
+# ensure the Type field, then bootstrap the repo (node id + native issue-type
+# ids + `story` label id) BEFORE the per-story loop — story_type_to_issue_type_id
+# reads the type-id globals, so the FIRST story would otherwise be created with
+# an empty issueTypeId. Skipped entirely in dry-run (read-only preview).
+setup_pre_sync() {
+  [ "$DRY_RUN" = "1" ] && return 0
+  load_project_cache || true
+  ensure_project_type_field || true
+  bootstrap_repo \
+    || fail_global "repo" "repo bootstrap (issue types / story label) failed — aborting before any mutations" "$E_API"
+  # ensure_story_label is a no-op once bootstrap resolved the id. If the label
+  # is absent AND creation fails, warn LOUDLY — the per-issue create has its own
+  # guard, but a silent `|| true` would hide a setup failure that lets every
+  # story-issue escape `--rebuild`'s `--label story` scoping.
+  ensure_story_label \
+    || printf '::warning::ensure_story_label failed — the story marker label may be missing; story-issues could escape --rebuild scoping until it is created\n' >&2
+}
+
 sync_all() {
   if [ ! -d "$STORIES_DIR" ]; then
     fail_global "config" "stories directory not found: $STORIES_DIR" "$E_USAGE"
@@ -1479,21 +1501,9 @@ sync_all() {
   load_items_map \
     || fail_global "project" "items-map query failed — aborting before any mutations" "$E_API"
 
-  # SHY-0067: setup phase — ensure Type field exists before per-story sync
-  # (Defect E). load_project_cache is also called transitively but explicit
-  # call here makes the workflow log clearer.
-  if [ "$DRY_RUN" != "1" ]; then
-    load_project_cache || true
-    ensure_project_type_field || true
-    # SHY-0082 v4: resolve repo node id + native issue-type ids + `story` label
-    # id BEFORE any per-story create/update. story_type_to_issue_type_id reads
-    # the type-id globals, so without this the FIRST story would be created with
-    # an empty issueTypeId. Idempotent guard means create_issue's own call is a
-    # no-op after this.
-    bootstrap_repo \
-      || fail_global "repo" "repo bootstrap (issue types / story label) failed — aborting before any mutations" "$E_API"
-    ensure_story_label || true
-  fi
+  # SHY-0067 + SHY-0082: pre-sync setup (Type field + repo bootstrap) before the
+  # per-story loop — see setup_pre_sync.
+  setup_pre_sync
 
   # SHY-0074: one-shot v1→v2 migration (gated on REBUILD_CONFIRM in main).
   if [ "$REBUILD" = "1" ]; then
@@ -1578,16 +1588,8 @@ sync_story() {
   # SHY-0074: create-vs-update decisions need the items map (see sync_all).
   load_items_map \
     || fail_global "project" "items-map query failed — aborting before any mutations" "$E_API"
-  # SHY-0067 + SHY-0082: setup phase for single-story mode too — bootstrap the
-  # repo node id + native issue-type ids + story label BEFORE sync_one (the
-  # create path needs the type-id globals; see sync_all).
-  if [ "$DRY_RUN" != "1" ]; then
-    load_project_cache || true
-    ensure_project_type_field || true
-    bootstrap_repo \
-      || fail_global "repo" "repo bootstrap (issue types / story label) failed — aborting before any mutations" "$E_API"
-    ensure_story_label || true
-  fi
+  # SHY-0067 + SHY-0082: pre-sync setup for single-story mode too — see setup_pre_sync.
+  setup_pre_sync
   # SHY-0074: single-source-label invariant (see sync_all).
   remove_duplicated_label_families
   sync_one "$match"
