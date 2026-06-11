@@ -758,7 +758,7 @@ describe('SHY-0082 v4: legacy DRAFT-backed board items are converted to typed is
 
 // ============================================================== create-path matrix
 
-describe('SHY-0081 v3: create path — per-value board-field matrix (every type is a draft card) (mock-gh)', () => {
+describe('SHY-0082 v4: create path — per-value board-field matrix (every type is a typed issue) (mock-gh)', () => {
   // SHY-0081 v3: every type (incl. bug) → a board draft card. Types cover all
   // 7 values; statuses cover all 5 lifecycle values; the per-value matrix
   // below proves each frontmatter value lands on the correct board field.
@@ -1249,7 +1249,7 @@ describe('SHY-0082 v4: status transitions on issues — body marker + board colu
 
 // ============================================================== rebuild
 
-describe('SHY-0074: --rebuild teardown (v3: recreates drafts) (mock-gh)', () => {
+describe('SHY-0082 v4: --rebuild teardown recreates typed issues (mock-gh)', () => {
   test('refuses without REBUILD_CONFIRM=yes: exit 2 naming the env var, ZERO gh calls', () => {
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories74rb-');
@@ -1292,11 +1292,11 @@ describe('SHY-0074: --rebuild teardown (v3: recreates drafts) (mock-gh)', () => 
     expect(
       lines.find((l) => l.includes('deleteIssue') && l.includes('issueId=I_node_2')),
     ).toBeDefined();
-    // Fresh sync sees an EMPTY board (teardown reset the map): creates, not updates.
+    // Fresh sync sees an EMPTY board (teardown reset the map): creates typed issues, not updates.
     expect(
-      lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes('title=SHY-8003:')),
+      lines.find((l) => l.includes('createIssue') && l.includes('title=SHY-8003:')),
     ).toBeDefined();
-    expect(lines.filter((l) => l.includes('updateProjectV2DraftIssue'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('updateIssue'))).toEqual([]);
     expect(r.stderr).toMatch(/project items deleted: 2/);
     expect(r.stderr).toMatch(/issues deleted: 1/);
   });
@@ -1330,7 +1330,7 @@ describe('SHY-0074: --rebuild teardown (v3: recreates drafts) (mock-gh)', () => 
     expect(lines.filter((l) => l.includes('deleteIssue'))).toHaveLength(2);
     // …and the fresh sync still ran.
     expect(
-      lines.find((l) => l.includes('addProjectV2DraftIssue') && l.includes('title=SHY-8004:')),
+      lines.find((l) => l.includes('createIssue') && l.includes('title=SHY-8004:')),
     ).toBeDefined();
   });
 
@@ -1679,10 +1679,10 @@ describe('SHY-0074: board config gaps degrade with warnings, not failures (mock-
 
 // ============================================================== dry-run
 
-describe('SHY-0081 v3: dry-run fires nothing but previews everything (mock-gh)', () => {
-  test('zero mutations; previews a DRAFT create for every type (incl. bug) + label-family deletion', () => {
+describe('SHY-0082 v4: dry-run fires nothing but previews everything (mock-gh)', () => {
+  test('zero mutations; previews a typed ISSUE create for every type (incl. bug) + label-family deletion', () => {
     const mock = makePatternMockGh();
-    const storiesDir = tempDir('stories74d-');
+    const storiesDir = tempDir('stories82d-');
     makeStory(storiesDir, { id: 'SHY-8701', type: 'feature' });
     makeStory(storiesDir, { id: 'SHY-8702', type: 'bug' });
     const rules = createPathRules(mock.dir);
@@ -1693,15 +1693,14 @@ describe('SHY-0081 v3: dry-run fires nothing but previews everything (mock-gh)',
     const lines = readRecording(mock.recording);
     expect(lines.filter((l) => l.includes('updateProjectV2ItemFieldValue'))).toEqual([]);
     expect(lines.filter((l) => l.includes('addProjectV2ItemById'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('createIssue'))).toEqual([]);
     expect(lines.filter((l) => l.includes('addProjectV2DraftIssue'))).toEqual([]);
     expect(lines.filter((l) => l.startsWith('issue create'))).toEqual([]);
     expect(lines.filter((l) => l.startsWith('issue comment'))).toEqual([]);
-    expect(lines.filter((l) => l.startsWith('issue close'))).toEqual([]);
     expect(lines.filter((l) => l.startsWith('label delete'))).toEqual([]);
-    // Both stories (feature AND bug) preview a DRAFT create — no issue preview.
-    expect(r.stderr).toMatch(/DRY-RUN: .*SHY-8701.*would CREATE DRAFT item/);
-    expect(r.stderr).toMatch(/DRY-RUN: .*SHY-8702.*would CREATE DRAFT item/);
-    expect(r.stderr).not.toMatch(/would CREATE issue/);
+    // Both stories (feature AND bug) preview a typed ISSUE create.
+    expect(r.stderr).toMatch(/DRY-RUN: .*SHY-8701.*would CREATE typed ISSUE/);
+    expect(r.stderr).toMatch(/DRY-RUN: .*SHY-8702.*would CREATE typed ISSUE/);
     expect(r.stderr).toMatch(/DRY-RUN: would DELETE label "status:done"/);
     expect(r.stderr).toMatch(/DRY-RUN: would DELETE label "priority:p1"/);
   });
