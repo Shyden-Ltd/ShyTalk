@@ -1797,6 +1797,20 @@ sync_all() {
   done < <(find -P "$STORIES_DIR" -maxdepth 1 -type f ! -type l \
              -name 'SHY-[0-9][0-9][0-9][0-9]-*.md' | LC_ALL=C sort)
 
+  # SHY-0079 (AC edge-3): --all is the only mode that sees the WHOLE corpus,
+  # so prune sidecar entries for SHY IDs whose .md no longer exists — a
+  # deleted/renamed story must not leave an orphan entry that the overlay
+  # would keep filling (which would drive spurious update attempts on a gone
+  # item). Only safe in --all (sync_story sees one story, can't prune).
+  if [ "$DRY_RUN" != "1" ]; then
+    local live_ids
+    live_ids="$(find -P "$STORIES_DIR" -maxdepth 1 -type f ! -type l \
+                 -name 'SHY-[0-9][0-9][0-9][0-9]-*.md' \
+                 | sed -E 's|.*/(SHY-[0-9]{4})-.*|\1|' | jq -R . | jq -s .)"
+    BOARD_ITEMS_JSON="$(printf '%s' "$BOARD_ITEMS_JSON" | jq -c --argjson live "$live_ids" \
+      'with_entries(select(.key as $k | $live | index($k) != null))')"
+  fi
+
   # SHY-0079: rewrite the sidecar from the post-run board state. Always
   # written (idempotent no-op diff when unchanged); the workflow commits it.
   write_board_items_sidecar

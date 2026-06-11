@@ -1968,6 +1968,33 @@ describe('SHY-0079: board-items.json sidecar overlay heals stale Projects v2 rea
     expect(fs.readFileSync(path.join(mock.dir, 'board-items.json'), 'utf-8')).toBe(before);
   });
 
+  test('AC edge-3: a sidecar entry whose .md no longer exists is PURGED on --all write-back', () => {
+    // SHY-8808 has a story file + an existing draft; SHY-8888 is in the
+    // sidecar but has NO .md (deleted/renamed). After --all, the rewritten
+    // sidecar keeps SHY-8808 and drops the orphaned SHY-8888.
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories79h-');
+    const s = makeStory(storiesDir, { id: 'SHY-8808', status: 'Draft', type: 'feature' });
+    const items = itemsResponse([
+      draftNode(
+        'SHY-8808',
+        'IT_8808',
+        'DI_8808',
+        existingBody(s.content, 'SHY-8808-fixture-story', 'Draft'),
+      ),
+    ]);
+    writeRules(mock.dir, createPathRules(mock.dir, { items }));
+    writeSidecar(mock, {
+      'SHY-8808': { backing: 'DRAFT', itemId: 'IT_8808', contentId: 'DI_8808', issueNumber: 0 },
+      'SHY-8888': { backing: 'DRAFT', itemId: 'ORPHAN_IT', contentId: 'ORPHAN_DI', issueNumber: 0 },
+    });
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const sidecar = readSidecar(mock);
+    expect(sidecar['SHY-8808']).toBeDefined(); // still has a .md → kept
+    expect(sidecar['SHY-8888']).toBeUndefined(); // no .md → purged
+  });
+
   test('bootstrap: absent sidecar behaves as SHY-0078 (creates) AND populates the sidecar', () => {
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories79g-');
