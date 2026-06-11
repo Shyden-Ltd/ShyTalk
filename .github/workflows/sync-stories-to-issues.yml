@@ -1,8 +1,10 @@
 name: Sync SHY Stories to GitHub Issues
 
-# One-way mirror of .project/stories/SHY-NNNN-*.md → Projects v2 board
-# (draft items for non-bugs) + GitHub Issues (bug reports, bugs only).
-# Spec: .project/stories/SHY-0074-mirror-fidelity-board-body-labels.md
+# One-way mirror of .project/stories/SHY-NNNN-*.md → Projects v2 board, where
+# EVERY story becomes a REAL typed GitHub issue (Bug/Feature/Task) added to the
+# board (SHY-0082 v4). The repo Issues tab is a shared surface (story-issues +
+# future user bug reports), distinguished by the `story` label + terminal-close.
+# Spec: .project/stories/SHY-0082-mirror-v4-typed-issues.md
 # Operator-side prerequisite: provision GH_PAT_PROJECT secret (fine-grained PAT
 # with issues:write + pull-requests:write + project:write — the auto
 # GITHUB_TOKEN cannot carry project:write).
