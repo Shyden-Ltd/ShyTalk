@@ -149,6 +149,19 @@ describe('scripts/check-epic-frontmatter.sh', () => {
       expect(code).toBe(0);
       expect(stdout).toBe('');
     });
+
+    test.each([['true'], ['false'], ['yes'], ['1'], ['True']])(
+      'SHY-0083: a stray mvp: "%s" on an EPIC is a no-op (SHY-only scope)',
+      (val) => {
+        // The mvp: classification flag is a SHY-level field (SHY-0083). The EPIC
+        // validator must neither require nor reject it for ANY value — even
+        // values that would be invalid on a SHY (yes/1/True) must be ignored,
+        // proving the field is SHY-scoped only.
+        const content = VALID_CONTENT.replace(/^id:.*$/m, (m) => `${m}\nmvp: ${val}`);
+        const { code } = runScript([tempEpicFile(content)]);
+        expect(code).toBe(0);
+      },
+    );
   });
 
   describe('missing frontmatter field → exit 30', () => {

@@ -50,6 +50,11 @@ VALID_TYPE="feature|bug|refactor|docs|infra|spike|chore"
 # only (forward-reference protection); per-file mode skips it per architect
 # Finding 2 resolution.
 VALID_EPIC="^epic:[[:space:]]*EPIC-[0-9]{4}[[:space:]]*$"
+# `mvp:` added by SHY-0083 — when present, must be exactly `true` or `false`
+# (lowercase). Marks a story as part of the first public release (MVP) launch
+# set. Optional; absence is equivalent to `false`. SHY-scoped only (the EPIC
+# validator does not learn this field).
+VALID_MVP="^mvp:[[:space:]]*(true|false)[[:space:]]*$"
 
 # Required `##` body sections (10 — h1 `# Title` is NOT a `## ` section).
 REQ_SECTIONS="User Story|Why|Acceptance Criteria|BDD Scenarios|Test Plan|Out of Scope|Dependencies|Risks & Mitigations|Definition of Done|Notes"
@@ -272,6 +277,14 @@ check_optional_fields() {
     verbose "optional:epic"
     if ! grep -qE "$VALID_EPIC" "$fm"; then
       fail "$abs" "invalid optional field" "epic must match EPIC-NNNN pattern (4-digit zero-padded), e.g. EPIC-0001" "$E_INVALID_VALUE"
+    fi
+  fi
+
+  # mvp: when present, must be exactly true or false (SHY-0083 MVP launch-set flag)
+  if grep -qE '^mvp:' "$fm"; then
+    verbose "optional:mvp"
+    if ! grep -qE "$VALID_MVP" "$fm"; then
+      fail "$abs" "invalid optional field" "mvp must be true or false" "$E_INVALID_VALUE"
     fi
   fi
 }

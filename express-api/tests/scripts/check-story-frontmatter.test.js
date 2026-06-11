@@ -265,6 +265,79 @@ describe('scripts/check-story-frontmatter.sh', () => {
     });
   });
 
+  // ============================================================== SHY-0083: optional mvp: field
+  describe('SHY-0083: optional mvp: field', () => {
+    // `mvp:` is not in the canonical fixture; inject it after the `type:` line.
+    const withMvp = (value) => VALID_CONTENT.replace(/^type:.*$/m, (m) => `${m}\nmvp: ${value}`);
+
+    it('accepts mvp: true (exit 0)', () => {
+      const { code } = runScript([tempStoryFile(withMvp('true'))]);
+      expect(code).toBe(0);
+    });
+
+    it('accepts mvp: false (exit 0)', () => {
+      const { code } = runScript([tempStoryFile(withMvp('false'))]);
+      expect(code).toBe(0);
+    });
+
+    it('treats an absent mvp: field as valid (exit 0)', () => {
+      // The canonical fixture has no mvp: line — absence must be accepted.
+      expect(VALID_CONTENT).not.toMatch(/^mvp:/m);
+      const { code } = runScript([tempStoryFile(VALID_CONTENT)]);
+      expect(code).toBe(0);
+    });
+
+    it('tolerates surrounding whitespace ("mvp:   true  ") (exit 0)', () => {
+      const { code } = runScript([tempStoryFile(withMvp('  true  '))]);
+      expect(code).toBe(0);
+    });
+
+    // Non-boolean / non-lowercase values → exit 11 with an actionable message.
+    describe.each([['yes'], ['no'], ['1'], ['0'], ['True'], ['FALSE'], ['maybe'], ['']])(
+      'rejects mvp: "%s" → exit 11',
+      (value) => {
+        let result;
+        beforeAll(() => {
+          result = runScript([tempStoryFile(withMvp(value))]);
+        });
+        it('exits 11', () => expect(result.code).toBe(11));
+        it('stderr says "mvp must be true or false"', () =>
+          expect(result.stderr).toMatch(/mvp must be true or false/));
+        it('stderr names the absolute file path', () => expect(result.stderr).toMatch(/^\//m));
+      },
+    );
+
+    it('rejects a bare "mvp:" line (no space, no value) → exit 11', () => {
+      // withMvp('') yields "mvp: " (trailing space); this covers the YAML
+      // bare-key form "mvp:" with no whitespace at all after the colon.
+      const content = VALID_CONTENT.replace(/^type:.*$/m, (m) => `${m}\nmvp:`);
+      const { code, stderr } = runScript([tempStoryFile(content)]);
+      expect(code).toBe(11);
+      expect(stderr).toMatch(/mvp must be true or false/);
+    });
+
+    it('does not mask a different failure (invalid priority still wins, exit 11)', () => {
+      const content = setFrontmatterField(withMvp('true'), 'priority', 'P9');
+      const { code, stderr } = runScript([tempStoryFile(content)]);
+      expect(code).toBe(11);
+      expect(stderr).toMatch(/P0/);
+    });
+
+    it('--verbose emits an "optional:mvp" check line', () => {
+      const { stderr } = runScript(['--verbose', tempStoryFile(withMvp('true'))]);
+      expect(stderr).toMatch(/optional:mvp/);
+    });
+
+    it('--scan stays green with mixed mvp presence (true / false / absent)', () => {
+      const dir = tempScanDir();
+      fs.writeFileSync(path.join(dir, 'SHY-0001-mvp-true.md'), withMvp('true'));
+      fs.writeFileSync(path.join(dir, 'SHY-0002-mvp-false.md'), withMvp('false'));
+      fs.writeFileSync(path.join(dir, 'SHY-0003-no-mvp.md'), VALID_CONTENT);
+      const { code } = runScript(['--scan', dir]);
+      expect(code).toBe(0);
+    });
+  });
+
   // ============================================================== missing body sections → exit 12
   describe('missing body section → exit 12', () => {
     const REQUIRED_SECTIONS = [

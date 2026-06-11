@@ -18,7 +18,7 @@ Every piece of work is captured as ONE detailed user-story `.md` file at `.proje
 - **File path:** `.project/stories/SHY-XXXX-kebab-slug.md`.
 - **Index:** `.project/stories/SHY-INDEX.md` is the live backlog. Sorted `priority asc, created asc`. Active / Done / Cancelled tables. Index is human-maintained — the `SHY-[0-9][0-9][0-9][0-9]-*.md` glob in the validator naturally excludes it.
 
-### Frontmatter (9 required fields + 3 optional)
+### Frontmatter (9 required fields + 4 optional)
 
 - `id` — matches `^SHY-[0-9]{4}$`
 - `status` — one of `Draft` / `In Progress` / `In Review` / `Done` / `Cancelled`
@@ -32,6 +32,7 @@ Every piece of work is captured as ONE detailed user-story `.md` file at `.proje
 - `epic` _(optional)_ — matches `^EPIC-[0-9]{4}$` (e.g. `EPIC-0001`); when present, the referenced EPIC file MUST exist in `.project/stories/` (cross-checked in `--scan` mode only). See `### EPICs` below.
 - `public` _(optional, default `false`)_ — `true` opts the SHY into surfacing on `shytalk.com/roadmap`. See `### Public-surfacing` below.
 - `phase` _(optional, REQUIRED when `public: true`)_ — string matching one of the phase titles in `public/roadmap-data.json` (e.g. `Safety & Compliance`, `Website & Presence`). See `### Public-surfacing` below.
+- `mvp` _(optional, default `false`)_ — `true` marks the story as part of the first public release (MVP) launch set. Boolean, lowercase `true`/`false` only (validator exit 11 otherwise); absence ≡ `false`. SHY-scoped (EPICs don't carry it). Added by SHY-0083; consumed by the public roadmap redesign + board filtering (later SHYs).
 
 ### Body sections (10 required `## ` headings + 8 required `### ` AC sub-headings)
 
