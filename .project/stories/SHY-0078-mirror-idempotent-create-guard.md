@@ -1,6 +1,6 @@
 ---
 id: SHY-0078
-status: Draft
+status: Done
 owner: claude
 created: 2026-06-10
 priority: P1
@@ -9,6 +9,8 @@ type: bug
 roadmap_ids: []
 epic: EPIC-0001
 public: false
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1243
+released_in: v0.97.10
 ---
 
 # SHY-0078: Mirror create-path idempotency guard against Projects v2 read-after-write lag

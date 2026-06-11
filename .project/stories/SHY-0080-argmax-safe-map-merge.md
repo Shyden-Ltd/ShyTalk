@@ -1,6 +1,6 @@
 ---
 id: SHY-0080
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-11
 priority: P0
@@ -9,6 +9,8 @@ type: bug
 roadmap_ids: []
 epic: EPIC-0001
 public: false
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1274
+released_in: v0.97.10
 ---
 
 # SHY-0080: ARG_MAX-safe items-map merges — the real board-duplication root cause

@@ -1,6 +1,6 @@
 ---
 id: SHY-0060
-status: In Progress
+status: Draft
 owner: claude
 created: 2026-06-08
 priority: P0

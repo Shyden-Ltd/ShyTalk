@@ -1,14 +1,15 @@
 ---
 id: SHY-0072
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-10
 priority: P1
 effort: M
 type: feature
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1132
 epic: EPIC-0002
+released_in: v0.97.10
 ---
 
 # SHY-0072: Lazy translation service — translate-on-first-view with server cache

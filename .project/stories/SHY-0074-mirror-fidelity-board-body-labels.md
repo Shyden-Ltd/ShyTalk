@@ -1,15 +1,16 @@
 ---
 id: SHY-0074
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-10
 priority: P1
 effort: XL
 type: bug
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1134
 epic: EPIC-0001
 public: false
+released_in: v0.97.10
 ---
 
 # SHY-0074: Mirror architecture v2 — bugs-only Issues, draft cards for stories, faithful board columns

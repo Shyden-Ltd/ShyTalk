@@ -1,6 +1,6 @@
 ---
 id: SHY-0079
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-11
 priority: P1
@@ -9,6 +9,8 @@ type: bug
 roadmap_ids: []
 epic: EPIC-0001
 public: false
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1272
+released_in: v0.97.10
 ---
 
 # SHY-0079: Draft-dedup sidecar — a consistent board-items.json oracle overlaying the laggy Projects v2 query

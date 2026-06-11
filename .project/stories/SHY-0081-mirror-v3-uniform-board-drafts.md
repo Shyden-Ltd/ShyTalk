@@ -1,6 +1,6 @@
 ---
 id: SHY-0081
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-11
 priority: P1
@@ -9,6 +9,8 @@ type: refactor
 roadmap_ids: []
 epic: EPIC-0001
 public: false
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1305
+released_in: v0.97.10
 ---
 
 # SHY-0081: Mirror v3 — every story is a board work-item card; the Issues page is reserved for bug reports
