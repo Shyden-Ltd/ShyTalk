@@ -2066,13 +2066,18 @@ describe('SHY-0080: items-map merges are ARG_MAX-safe (stdin, not --argjson) (mo
 
   test('structural: the map merges pipe via `jq -s` and never pass the map through --argjson', () => {
     const src = fs.readFileSync(SCRIPT, 'utf-8');
-    // The pagination merge + the overlay merge both use the stdin form.
+    // All THREE map merges use the stdin form: pagination, overlay merge,
+    // and the fill-count (the last uses `jq -s` without -c — scalar output).
     expect(src).toMatch(/printf '%s\\n%s\\n' "\$ITEMS_MAP_JSON" "\$page_map" \| jq -c -s/);
     expect(src).toMatch(/printf '%s\\n%s\\n' "\$sidecar" "\$ITEMS_MAP_JSON" \| jq -c -s/);
-    // No --argjson is fed the body-laden map or page_map (the overflow source).
-    expect(src).not.toMatch(/--argjson [ab] "\$ITEMS_MAP_JSON"/);
-    expect(src).not.toMatch(/--argjson b "\$page_map"/);
-    expect(src).not.toMatch(/--argjson api "\$ITEMS_MAP_JSON"/);
+    // Fill-count: stdin `jq -s` over the two slurped objects (its printf is on
+    // a line-continuation, so pin its distinctive jq body, which proves stdin).
+    expect(src).toMatch(/jq -s '\(\(\.\[0\] \| keys\) - \(\.\[1\] \| keys\)\)/);
+    // No --argjson is fed ANY body-laden operand (map / page_map / sidecar) —
+    // the overflow source. Variable-name-agnostic on the value side.
+    expect(src).not.toMatch(/--argjson \w+ "\$ITEMS_MAP_JSON"/);
+    expect(src).not.toMatch(/--argjson \w+ "\$page_map"/);
+    expect(src).not.toMatch(/--argjson \w+ "\$sidecar"/);
   });
 });
 
