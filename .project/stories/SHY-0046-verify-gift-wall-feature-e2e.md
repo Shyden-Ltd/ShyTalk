@@ -108,6 +108,20 @@ This is a verification + targeted extension SHY, not a from-scratch authoring ta
 
 **Coverage gate:** 3 scenarios + 3 test tags verified by Cucumber + Espresso assertions.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (adds BDD scenarios + test tags to the shared `GiftWallScreen.kt` + a fake repository) → the FULL gauntlet applies. The gift-wall is an **Android app** surface (no web/iOS UI equivalent yet), so the real-Android BDD run is the headline.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Android instrumented BDD** (`connectedDevDebugAndroidTest -Pcucumber.filter.tags='@gift-wall'`) — the 3 state scenarios (loading/populated/empty) on a **real Android device**; the story's primary RED→GREEN.
+- ✅ **Kotlin/JVM unit** — any `FakeGiftRepository` controlled-state logic gets a unit test; `GiftWallScreen` state mapping if non-trivial.
+- ✅ **detekt** + **ktlint** — the `GiftWallScreen.kt` test-tag additions + fake repository.
+- ✅ **iOS shared compile-check** (`:shared:compileKotlinIosArm64`) — `GiftWallScreen.kt` lives in commonMain, so the test-tag edit MUST still compile for iOS even though iOS XCUITest UI parity is deferred to a dedicated follow-up SHY.
+- ⬜ **Web Playwright / Express Jest** — N/A (no gift-wall web or server change); web + iOS journeys run as the REGRESSION net.
+
+**LOCAL gauntlet:** the 3 `@gift-wall` scenarios green on a **real Android device** (controlled-delay loading fake, zero-gift empty fixture, deterministic 5-gift populated fixture, `onIdle()` post-animation), impact-selected regression each loop, full corpus on real Android + real iPhone + all browsers at the pre-push gate. Any failure → fix TDD → restart.
+**DEV gauntlet:** redeploy the unmerged branch via Deploy-To-Dev `ref`; re-run the `@gift-wall` BDD on the real Android device + apps regression on real iPhone, web on Chrome. Restart from LOCAL on failure. **Judgment-merge** only when production-ready with zero doubt.
+
 ## Out of Scope
 
 - Refactoring `GiftWallScreen.kt` itself beyond test-tag additions.
@@ -134,9 +148,11 @@ This is a verification + targeted extension SHY, not a from-scratch authoring ta
 - [ ] State-coverage matrix audit done + recorded in Notes.
 - [ ] Missing scenarios added + test tags added.
 - [ ] BDD runs pass.
-- [ ] Reviewer ZERO findings.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): the 3 `@gift-wall` state scenarios green on a real Android device + `:shared:compileKotlinIosArm64` clean (iOS compile parity) + detekt/ktlint clean → full regression net green on real Android + real iPhone + all browsers → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green (Chrome web) → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
 - [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-08 ~13:08 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 48 (G018). Reserved ID SHY-0046.
+- 2026-06-13 ~00:08 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): Android-app gift-wall state coverage → real-device BDD headline (3 states), with the shared `GiftWallScreen.kt` test-tag edit gated on `:shared:compileKotlinIosArm64` so iOS commonMain still compiles. DoD gains protocol-satisfied + judgment-merge. Pickup-fitness: AC current; the iOS-XCUITest carve-out stays a separate follow-up SHY (not folded into this XS audit) — no stale cross-refs.
