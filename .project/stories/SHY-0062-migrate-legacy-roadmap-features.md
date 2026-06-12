@@ -86,6 +86,20 @@ Reserved since 2026-06-07; operator greenlit FULL migration 2026-06-10 ("Yes, st
 
 Tracking-only: each batch SHY carries its own Test Plan (validator scan green; sync-regen assertions; entry-count parity check per the UX AC — a Playwright fixture test comparing pre/post counts ships with batch 1 and runs for every batch).
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Meta/tracker story — the protocol binds on each of the 8 BATCH PRs, not on this coordinator.** Editing *this* file touches no code, so the SHY-0062 coordinator merge is itself `*.md`-only (device/browser gauntlet exempt: validator + review only). But every batch PR it tracks is a **public-web change** (removes `features[]` entries + adds migrated `public: true` SHYs + the sync regenerates `items[]` + SHY-0073's renderer translates them lazily) → each batch runs the FULL protocol:
+
+**Per-batch frameworks exercised (RED→GREEN):**
+- ✅ **Web E2E Playwright** — the **entry-count parity** test (UX AC: total visible count unchanged across the batch's atomic merge) + badge/link/lazy-translation render, run against the **REAL rendered public page off the real sync-regenerated `roadmap-data.json`** — NOT a mocked roadmap payload (per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only); on ALL browsers (Mac chromium/firefox/webkit/edge + Android + iOS device browsers).
+- ✅ **Express Jest** — only if a batch touches the sync/regen script itself (pure content batches do not; the relevant batch flags it in its own Test Plan if so).
+- ✅ **`scripts/check-story-frontmatter.sh --scan` + `check-epic-frontmatter.sh --scan`** — green after each batch (new SHY files + EPIC-0002 `child_shys` update well-formed).
+- ⬜ **Android/iOS app · Kotlin/detekt/ktlint** — N/A (web-content migration; no app surface).
+
+**LOCAL gauntlet (per batch):** the parity + render Playwright pack green on the real local-stack-served page across all Mac browsers + real Android + real iPhone browsers; validator scans exit 0. Any failure → fix TDD → restart.
+**DEV gauntlet (per batch):** redeploy the unmerged batch branch via Deploy-To-Dev `ref`; re-run the parity + render pack on Chrome against the real dev-served page. Restart from LOCAL on failure.
+**Judgment-merge** each batch only when production-ready with zero doubt; the coordinator flips Done only once 8/8 batches have each passed their own gauntlet AND the post-batch-8 release is cut.
+
 ## Out of Scope
 
 - The translation service + renderer work (SHY-0072/0073).
@@ -105,8 +119,10 @@ Tracking-only: each batch SHY carries its own Test Plan (validator scan green; s
 ## Definition of Done
 
 - [ ] 8/8 batches shipped + table complete; all conventions held; EPIC-0002 DoD items relating to migration satisfied; entry-count parity held at every step.
+- [ ] **Pre-Merge Testing Protocol satisfied** on every batch PR (`CLAUDE.md` § Pre-Merge Testing Protocol): each batch's Web E2E parity + render pack green on ALL browsers (real Mac + real Android + real iPhone) against the real sync-regenerated page → `code-reviewer` 100% clean → CI green by name → DEV (Chrome) parity green → judgment-merge. The SHY-0062 coordinator merge is itself `*.md`-only → device gauntlet exempt.
 - [ ] `status: Done` deferred to the release cut after batch 8; SHY-INDEX synced throughout.
 
 ## Notes (running log)
 
 - 2026-06-10 ~10:25 BST — Meta-story authored after the operator's three-round design session (full migration greenlit; full refinement re-affirmed with the new pickup-review net; translations = web-layer lazy service; stories English-only; gated GitHub links). Filed alongside EPIC-0002 + SHY-0072 + SHY-0073.
+- 2026-06-13 ~00:44 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): meta/tracker → the protocol binds on the 8 BATCH PRs (each a public-web change: Web E2E entry-count parity + render on ALL browsers against the REAL sync-regenerated page), not on this coordinator (whose own merge is `*.md`-only-exempt). No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]): the parity "fixture" test is bound to the REAL rendered page off real `roadmap-data.json` — no mocked roadmap payload; the subsection supersedes the older "fixture" wording. DoD gains a per-batch protocol-satisfied bullet. Pickup-fitness: AC current; the hard ordering (gated behind SHY-0072+0073 live) + the smallest-phase-first pilot both stand; no stale cross-refs.
