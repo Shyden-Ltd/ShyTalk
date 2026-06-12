@@ -103,6 +103,22 @@ Critical detail from the audit: **the bug doesn't currently manifest for our cod
 
 **Coverage gate:** `./gradlew detekt` exits 0 against the post-bump (or pre-bump unchanged) state.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Two outcomes, two footprints:**
+- **Tracker/comment case** (detekt 2.0 NOT on GPP yet): the only change is a comment block in `gradle/libs.versions.toml` — non-`.md`, so NOT gauntlet-exempt, but with *zero* runtime effect. The regression net is the proof-of-no-behavioural-change; the SHY may legitimately stay `Draft`/blocked (per its DoD) rather than merge.
+- **Bump case** (2.0 stable lands): `libs.versions.toml` + `config/detekt/detekt.yml` change, and the bump may force source edits to satisfy new rules → behaviourally risky → the FULL gauntlet applies in earnest.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **detekt** (`./gradlew detekt`) — headline; exits 0 on the post-state (bump migrates the config; tracker case unchanged).
+- ✅ **Kotlin/JVM unit** + **ktlint** — regression net; if the bump forces any source edit, that edit gets full unit coverage.
+- ✅ **iOS shared compile-check** (`:shared:compileKotlinIosArm64`) — any commonMain edit to satisfy a new rule must still compile for iOS.
+- ⬜ **Web Playwright / Express Jest / Android BDD / iOS UI** — N/A for the version bump itself; apps + all-browser journeys run as the REGRESSION net (only meaningful if the bump forced source edits).
+- ✅ **SonarCloud** — quality gate.
+
+**LOCAL gauntlet:** `./gradlew detekt` green + (bump case) full journey corpus on real Android + real iPhone + all browsers as the regression net proving the static-analysis bump changed no behaviour. Any failure → fix TDD → restart.
+**DEV gauntlet:** (bump case only) redeploy the unmerged branch via Deploy-To-Dev `ref`; apps regression on real devices + web on Chrome. Restart from LOCAL on failure. **Judgment-merge** only when production-ready with zero doubt; for the tracker case the "merge" may instead be "stay Draft + documented blocker."
+
 ## Out of Scope
 
 - detekt 1.x patch bumps (e.g. 1.23.8 → 1.23.9) — handled by Dependabot.
@@ -125,9 +141,11 @@ Critical detail from the audit: **the bug doesn't currently manifest for our cod
 
 - [ ] If bump: version + config updated; CI green.
 - [ ] If blocked: explicit comment + this SHY remains `Draft` with concrete trigger.
-- [ ] Reviewer ZERO findings.
-- [ ] `status: Done` (or `Blocked` if external).
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol) — *bump case*: `./gradlew detekt` + Kotlin unit/ktlint + `:shared:compileKotlinIosArm64` clean, full regression net green on real Android + real iPhone + all browsers → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green (Chrome) → **judgment-merge** (zero doubt; NO auto-merge). *Tracker case*: validator + lint + `code-reviewer` clean on the TOML-comment diff (zero runtime change); SHY stays `Draft`/blocked rather than merging.
+- [ ] `released_in: vX.Y.Z` set after the release cut (bump case only).
+- [ ] `status: Done` (or stays `Draft` with documented blocker if 2.0 not yet on GPP).
 
 ## Notes (running log)
 
 - 2026-06-08 ~13:08 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 118 (G053). Reserved ID SHY-0048.
+- 2026-06-13 ~00:22 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): forked the footprint by outcome — tracker/comment case = lightest non-md change (a `libs.versions.toml` comment, zero runtime effect, may stay Draft); bump case = full gauntlet (a detekt bump can force source edits ⇒ behaviourally risky), with `:shared:compileKotlinIosArm64` guarding any commonMain edit. DoD `Reviewer ZERO findings` folded into the protocol bullet. Pickup-fitness: [[SHY-0041]] (Kotlin) interaction cross-ref still current; re-check the Gradle Plugin Portal at actual pickup.
