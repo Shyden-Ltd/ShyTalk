@@ -148,6 +148,25 @@ P2 Tier-4 (operator ergonomics). Together these scripts close the manual-toil on
 3. Update runbooks.
 4. Re-run → GREEN.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (adds two helper scripts + Jest tests + `--check-env` wiring + runbook edits) → the FULL protocol applies. These scripts only have value against **real mobile hardware** (a real Android device via `adb`; a real iPhone via Xcode/WDA), so real-device operator verification is the headline — this is part of EPIC-0003's mobile-cell enablement.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Express Jest** — `mobile-android-flags-check.test.js` + `setup-ios-wda.test.js` + the `--check-env` integration test, `spawnSync`-ing the **real scripts** (no mocked script).
+- ✅ **shellcheck** — both bash scripts (warnings = failures).
+- ✅ **eslint** (`--max-warnings=0`) — the test JS.
+- ⬜ **Kotlin/detekt/ktlint · Android app-BDD · Web Playwright** — N/A (operator tooling).
+
+**No-Stubs scrub of the Test Plan (per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only):**
+- The "missing-adb error path **mock**" (Red step 1C) → INDUCE for real: run the script with a `PATH` that lacks `adb` (a real absent-binary condition), not a mocked failure. Same for "xcrun not installed" (a real `PATH` without xcrun).
+- "no device connected" / "--team-id missing" / "invalid team-id signing failure" → induced for real (really no device attached; a real bad team-ID that genuinely fails `xcodebuild` signing). **🚩 "device unauthorized"** is the one hard-to-script case (it needs a real un-accepted USB prompt) → flag for the gate: induce manually during operator verification, or escalate — never a mocked unauthorized state.
+- **Simulator vs real device:** the script may keep `--target simulator|device` as an operator convenience, but the **protocol-satisfying matrix cell uses `--target device` (a real iPhone)** — the simulator is never the gauntlet-passing run (No-Stubs disfavours simulators standing in for the real device).
+
+**LOCAL gauntlet:** Jest + shellcheck + eslint green; then **real-device operator verification** — `mobile-android-flags-check.sh` against a real connected Android device (PASS + each induced error path), `setup-ios-wda.sh --target device` building+signing WDA for a **real iPhone** with a real team-ID, both surfaced in `--check-env`. Any failure → fix → restart.
+**DEV gauntlet:** the scripts are operator-side (Out of Scope: "CI-side automation"), so the dev phase = re-run the real-device verification on the branch + confirm the `--check-env` integration end-to-end on real hardware. Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt — with the real-device + real-iPhone verification outcome recorded; NO auto-merge.
+
 ## Out of Scope
 
 - **Other matrix-cell helper scripts** (mobile-firefox, ios-real-device-cellular) — separate SHYs if needed.
@@ -172,12 +191,12 @@ P2 Tier-4 (operator ergonomics). Together these scripts close the manual-toil on
 - [ ] Both scripts exist and pass their tests.
 - [ ] --check-env integration verified via integration test.
 - [ ] Runbooks updated.
-- [ ] Reviewer ZERO findings.
-- [ ] Per-type Done gate (`infra` → auto-merge once green; manual operator verification on a real device + simulator).
-- [ ] PR merged.
-- [ ] `status: Done`; `pr:` populated; operator-verification outcome in Notes.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): Jest (real-script spawn) + shellcheck + eslint green → real-device verification (real Android via adb + WDA `--target device` on a real iPhone; induced error paths, no mocks) → `code-reviewer` 100% clean → push → CI green by name → DEV real-hardware re-verification → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
+- [ ] `status: Done`; `pr:` populated; real-device (+ real-iPhone) verification outcome in Notes.
 
 ## Notes (running log)
 
 - 2026-06-07 ~21:37 BST — Refined under SHY-0032. Tier 4 operator ergonomics.
 - 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-I4` (G043, G044).
+- 2026-06-13 ~00:57 BST — **Embedded the Pre-Merge Testing Protocol + No-Stubs scrub** ([[SHY-0091]] pass, [[feedback-no-stubs-mocks-fakes-real-only]]): EPIC-0003 mobile-cell enablement → real-hardware verification is the headline (real Android via adb + WDA on a REAL iPhone). Scrubbed the Test Plan's "missing-adb error path mock" → real induced absent-binary (PATH without adb/xcrun); flagged **🚩 "device unauthorized"** as the one hard-to-script case (manual induction at operator verification or escalate, never mocked). **Simulator → real iPhone:** the script may keep `--target simulator|device` as convenience, but the gauntlet-satisfying cell uses `--target device`. DoD swaps the stale Reviewer-ZERO / `infra→auto-merge` lines + upgrades "simulator" → "real iPhone"; adds protocol-satisfied + judgment-merge + released_in. Pickup-fitness: AC current; script paths + runbook names to re-confirm at pickup.
