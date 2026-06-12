@@ -124,6 +124,21 @@ Demoted P1 → P2 under SHY-0032 (Tier 5 — CI nice-to-have; doesn't block user
 3. Test on a dry-run release (workflow_dispatch with `dry-run=true` if supported).
 4. Re-run lint test → GREEN.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (edits `release.yml` + `manual-qa-matrix.yml`) → the FULL protocol applies. No rendered app/web surface changes here — the behavioural proof is a **real release that actually triggers the real browser matrix** against the real dev backend, not a simulated pipeline.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Express Jest** (`release-calls-matrix.test.js`) — parses the **real** `release.yml` + `manual-qa-matrix.yml` on disk (a `workflow_call` job wiring `target: dev` + `filter: chromium,firefox,webkit`; an `on.workflow_call` block with inputs; NO `schedule:` trigger). Real YAML, no fixture workflow.
+- ✅ **eslint** (`--max-warnings=0`) — the new test file.
+- ✅ **actionlint** — both workflow edits (warnings = failures).
+- ⬜ **`scripts/check-action-shas.sh`** — only if a new external action ref is introduced; the `uses: ./.github/workflows/...` local reusable-workflow ref is a path, not a SHA-pinnable marketplace action.
+- ⬜ **app/web/iOS UI · Kotlin/detekt/ktlint** — N/A (CI wiring; no app/web/shared code).
+
+**LOCAL gauntlet:** Jest + eslint + actionlint green locally; the web E2E matrix itself (chromium/firefox/webkit on Mac + device browsers) is the regression net for the surfaces a release touches. Any failure → fix TDD → restart.
+**DEV gauntlet:** trigger the wired path on the branch `ref` (a real `workflow_dispatch`/dry-run release) and confirm `manual-qa-matrix.yml` is actually invoked post-deploy with the right inputs and runs the real 3-browser matrix non-blocking; web = Chrome for the apps regression. Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt — confirmed on a **real release's** post-deploy matrix invocation (per [[feedback-workflow-verify-by-running]]); NO auto-merge.
+
 ## Out of Scope
 
 - **Replacing the existing matrix-cell scripts** — only wiring.
@@ -147,12 +162,12 @@ Demoted P1 → P2 under SHY-0032 (Tier 5 — CI nice-to-have; doesn't block user
 - [ ] workflow_call block added; release.yml calls matrix.
 - [ ] Lint test passes; no cron triggers.
 - [ ] Tested via real release (post-merge observation).
-- [ ] Reviewer ZERO findings.
-- [ ] Per-type Done gate (`infra` → auto-merge + workflow-verified per [[feedback-workflow-verify-by-running]]).
-- [ ] PR merged.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): Jest workflow-assertion + eslint + actionlint green → `code-reviewer` 100% clean → push → CI green by name → DEV dispatch confirms the matrix is really invoked post-deploy with the right inputs ([[feedback-workflow-verify-by-running]]) → verified on a real release's post-deploy matrix → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
 - [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-07 ~21:37 BST — Refined under SHY-0032. Demoted P1 → P2 (Tier 5 CI improvement).
 - 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-G3` (G022, G049).
+- 2026-06-13 ~00:50 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): CI-wiring ticket → NOT `*.md`-only → full protocol but no rendered surface; the behavioural proof is a real release actually triggering the real 3-browser matrix against the real dev backend (verified-by-running, [[feedback-workflow-verify-by-running]]). Jest parses the REAL workflow YAML (no fixture). No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]): nothing to scrub — real YAML + real release + real matrix. DoD swaps the stale Reviewer-ZERO / `infra→auto-merge` / PR-merged lines for protocol-satisfied + judgment-merge + released_in. Pickup-fitness: AC current; the `filter: chromium,firefox,webkit` web cells are operational today (independent of EPIC-0003's pending device cells), so this is runnable now; SHY-0031 gh-pages serialization dependency stands.
