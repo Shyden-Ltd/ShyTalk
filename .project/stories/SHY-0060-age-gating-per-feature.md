@@ -180,6 +180,23 @@ This SHY captures the FULL per-feature age-gating design as the source-of-truth 
 - **Manual QA**: T&S team runs through the per-feature blocked-UX in 3 locales (en, de, ar). Sign-off required before merge.
 - **Compliance audit**: legal team reviews region-override map against current EU/UK/US regulations. Documented sign-off in PR description.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (touches Express, shared Kotlin, Android UI, iOS UI, BDD, web surfaces) → the FULL gauntlet applies, and as a **Safety & Compliance** feature the bar is absolute. The Test Plan above already names the per-framework suites; this is the device/browser gauntlet that gates the merge.
+
+**Frameworks exercised (RED→GREEN before code — every one):**
+- ✅ **Express/Node Jest** — `age-gate.test.js` (≥60 cases; server-side authoritative enforcement is the headline — the client age claim is never trusted).
+- ✅ **Kotlin/JVM unit** — `SafetyGateTest` (≥40 cases incl. the AgeThresholds CI validator: no <13, no >21).
+- ✅ **Android instrumented BDD + iOS XCUITest** — `AgeGateUiTest` + `AgeGateUITests.swift` (≥10 each) on a **real Android device AND a real iPhone**: every one of the 10 gated features blocked/allowed at its threshold, incl. RTL (ar) + screen-reader.
+- ✅ **Web E2E (all browsers)** — the gated features that exist on web (public-room browse, DM, gifting, gacha) blocked/allowed at threshold across the `local` browser matrix (Mac chromium/firefox/webkit/edge + the device browsers).
+- ✅ **Manual-QA journey matrix** — the `age_gate.feature` scenarios (14yo-blocked-at-DM-stranger, birthday-rollover-unlock, region-strict, tamper-reject, legacy-reverify, country-change-downgrade) walked end-to-end on real Android + real iPhone + web.
+- ✅ **detekt + ktlint + iOS shared compile-check** — new shared `safety/` Kotlin passes static analysis + compiles for iOS.
+- ✅ **eslint** (`--max-warnings=0`) on the new Express code + **SonarCloud** quality gate.
+- ➕ **Human pre-merge gates (NOT skippable):** legal sign-off on the region-override map + T&S sign-off on the blocked-UX copy + Apple/Google age-rating re-submission if warranted — all BEFORE merge, documented in the PR.
+
+**LOCAL gauntlet:** every framework suite green → all 10 gated features + the 6+ BDD scenarios walked on **real Android + real iPhone + ALL browsers on the Mac and devices** (server-side enforcement re-confirmed by attempting a tampered claim and seeing the 403). Any failure → fix TDD across all frameworks → restart the whole local gauntlet.
+**DEV gauntlet:** redeploy the unmerged branch via Deploy-To-Dev `ref`; re-walk every gated feature + audit-log + tamper-alert on real Android + real iPhone; web = Chrome only. Restart from LOCAL on failure. **Judgment-merge** only when production-ready with zero doubt AND legal + T&S sign-offs are in hand — a Safety/Compliance regression is the highest-stakes incident class on the platform.
+
 ## Out of Scope
 
 - **Parental-consent flow** for under-13 users (separate SHY — out of scope; current spec assumes all users are at least 13 globally, except where region requires higher).
@@ -218,9 +235,10 @@ This SHY captures the FULL per-feature age-gating design as the source-of-truth 
 - [ ] T&S sign-off documented in PR description.
 - [ ] Apple/Google age-rating re-submission filed if any threshold change warrants it.
 - [ ] Operator-controlled feature flag for staged rollout (default OFF; flip to ON in production after T&S monitoring confirms baseline).
-- [ ] CI green; reviewer ZERO findings.
-- [ ] PR squash-merged.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): every framework suite green + all 10 gated features + the BDD scenarios green on **real Android + real iPhone + ALL browsers** (LOCAL) → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green → legal + T&S sign-offs in hand → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
 
 ## Notes (running log)
 
 - 2026-06-08 ~19:05 BST — Spec authored as the migration target for the legacy `currentlyWorkingOn: "Age-gating per feature"` JSON entry preserved per SHY-0038's authoritative-sync design (operator decision 2026-06-08 ~19:00 BST: file fully-refined SHY-0060 in the SHY-0038 PR). Status is **In Progress** to preserve the legacy public-roadmap visibility; this is a continuity-of-visibility decision pending operator review of whether implementation work is actually in flight (if not, status should flip to Draft and the public roadmap's `currentlyWorkingOn` becomes empty until a real In Progress + public SHY exists). All AC values are my proposal grounded in COPPA/GDPR/store-policy research; final threshold values are an operator/product/legal decision. The 10 features + region-override map are starting points for that conversation, not finalised contracts.
+- 2026-06-12 ~23:50 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): Safety & Compliance XL feature → every framework + all 10 gated features on real Android + real iPhone + ALL browsers + legal/T&S human sign-offs as pre-merge gates; bar is absolute. DoD → judgment-merge. **Pickup-fitness flag (for operator):** frontmatter `status: Draft` conflicts with the 2026-06-08 Note describing it as "In Progress to preserve public-roadmap visibility." As Draft + `public: true` it does NOT surface in `currentlyWorkingOn` (which requires `In Progress`). Operator to confirm the intended status + whether age-gating should appear on the public roadmap now; status NOT changed here (no transition without operator).
