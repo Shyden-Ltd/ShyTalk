@@ -37,7 +37,7 @@ As the ShyTalk operator who flagged that `gradle/libs.versions.toml:3` declares 
 
 - [ ] **Maven Central lookup fails** (network blip, 5xx): retry once; if still failing, defer the SHY (mark `Blocked` in Notes) rather than guess.
 - [ ] **Bump breaks iOS K/N link** (compileKotlinIosArm64 fails with internal compiler error): bisect — revert to 2.4.0-RC2 + file detekt-blocker SHY for follow-up.
-- [ ] **Bump triggers a detekt failure** that wasn't present on RC2: cross-link with SHY-0059 (detekt 2.0 wait) — if detekt 1.23.8 can't handle 2.4.0 metadata, this SHY must wait for SHY-0059's resolution.
+- [ ] **Bump triggers a detekt failure** that wasn't present on RC2: cross-link with [[SHY-0048]] (detekt 2.0 wait) — if detekt 1.23.8 can't handle 2.4.0 metadata, this SHY must wait for SHY-0048's resolution.
 - [ ] **Bump breaks a dependent plugin** (e.g. Compose Multiplatform, KSP): identify + file follow-up SHY for plugin bump in same series.
 
 ### Edge cases
@@ -96,6 +96,20 @@ As the ShyTalk operator who flagged that `gradle/libs.versions.toml:3` declares 
 
 **Coverage gate:** local + CI build pass on the bump; iOS K/N link verified.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (edits `gradle/libs.versions.toml`) → the FULL gauntlet applies. **A Kotlin compiler bump recompiles the entire Android + iOS app** — the canonical "could break anything" change — so the full device gauntlet + full journey corpus is genuinely warranted, not ceremonial. (If the stable build is unavailable and this ships only a blocker comment, the gauntlet collapses to its build/compile + regression floor, like a `.toml` comment-only change.)
+
+**Frameworks exercised (if the bump ships):**
+- ✅ **Kotlin/JVM unit + detekt + ktlint** — `./gradlew testDevDebugUnitTest :shared:jvmTest detekt` (detekt is the headline: 1.23.8's metadata ceiling is the whole reason — cross-ref [[SHY-0048]]).
+- ✅ **iOS shared compile-check + K/N link** — `./gradlew :shared:compileKotlinIosArm64` (a compiler bump is highest-risk at the K/N link).
+- ✅ **Android instrumented BDD + Manual-QA journey matrix** — the FULL journey corpus on a **real Android device AND a real iPhone** (a compiler change can regress anywhere; full-corpus regression is mandatory, not impact-selected).
+- ⬜ **Web E2E / integration / eslint / Express Jest** — the web pages are static JS, untouched by a Kotlin bump → N/A as impact, but still run as the regression net.
+- ✅ **SonarCloud** — quality gate.
+
+**LOCAL gauntlet:** the full build (jvm + ios + detekt) green → FULL journey corpus on real Android + real iPhone (every cell — a compiler change earns the whole matrix). Any failure → bisect/revert per the Error-paths AC → restart the whole local gauntlet.
+**DEV gauntlet:** the existing dev-deploy AC IS the DEV gauntlet — redeploy the unmerged branch via Deploy-To-Dev `ref`; full journeys on real Android + real iPhone; web = Chrome only. Restart from LOCAL on failure. **Judgment-merge** only when production-ready with zero doubt.
+
 ## Out of Scope
 
 - Upgrade of dependent plugins beyond what Kotlin 2.4.0 requires (Compose Multiplatform, KSP, etc.) — separate SHYs per plugin.
@@ -118,11 +132,13 @@ As the ShyTalk operator who flagged that `gradle/libs.versions.toml:3` declares 
 
 ## Definition of Done
 
-- [ ] If bump: `libs.versions.toml` updated; full local + CI build green; dev deploy succeeds; release notes mention Kotlin bump.
-- [ ] If blocked: explicit comment + SHY-0048 created; this SHY closes as `Blocked` with concrete trigger condition.
-- [ ] Reviewer ZERO findings.
+- [ ] If bump: `libs.versions.toml` updated; full local + CI build green; release notes mention Kotlin bump.
+- [ ] If blocked: explicit comment + [[SHY-0048]] created; this SHY closes as `Blocked` with concrete trigger condition.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol) when the bump ships: full build (jvm + ios + detekt) green + FULL journey corpus green on **real Android + real iPhone** (a compiler bump earns the whole matrix) → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green → **judgment-merge** (zero doubt; NO auto-merge). (Blocker-comment-only path: build/compile + regression floor, then judgment-merge.)
+- [ ] `released_in: vX.Y.Z` set after the release cut (if the bump shipped).
 - [ ] `status: Done` (or `Blocked` if external); `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-08 ~12:58 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 24 (G001). Reserved ID SHY-0041.
+- 2026-06-12 ~23:45 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): a Kotlin compiler bump recompiles both apps → full journey corpus on real Android + real iPhone is mandatory (not impact-selected); detekt is the headline framework. Blocker-comment-only path collapses to the build/regression floor. **Pickup-fitness fix:** corrected a stale cross-ref in Error-paths (detekt-2.0 wait is [[SHY-0048]], NOT SHY-0059 which is the admin-users-moderation-skip bug). DoD auto-merge → judgment-merge.
