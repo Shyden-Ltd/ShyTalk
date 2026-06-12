@@ -136,11 +136,25 @@ P1 Tier-3 coverage. High coverage-per-effort ratio — fixing fixtures unblocks 
 4. Re-run → GREEN.
 5. Verify in CI (push branch, observe Playwright job).
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (un-skips 7 Playwright tests + adds web fixtures) → the FULL gauntlet applies. The admin-keyboard tool is a **web** surface, so the all-browser web gauntlet is the headline here.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Web E2E (Playwright, all browsers)** — `tests/web/admin-keyboard.spec.ts` with the 7 skips removed + `tests/web/fixtures/admin-data.ts` seeding, run across the `local` browser matrix (Mac chromium/firefox/webkit/edge + the device browsers); the story's primary RED→GREEN. 0 skipped at the end.
+- ✅ **eslint** (`--max-warnings=0`) — the new TS test + fixture.
+- ✅ **Test isolation** ([[feedback-test-isolation-no-leaks]]) — provenance-tagged seed data, cleaned per-test; no leaked pending reports in the dev backend.
+- ⬜ **Kotlin / detekt / ktlint / iOS compile / Express Jest** — N/A (web-only admin tool, no app/Kotlin change); apps run the regression corpus as the net.
+- ✅ **SonarCloud** — quality gate.
+
+**LOCAL gauntlet:** all 7 (previously-skipped) admin-keyboard tests green across the **full `local` browser matrix** (Mac + device browsers), 0 skipped, with clean fixture teardown → impact-selected each loop, full web corpus at the pre-push gate. Any failure → fix TDD → restart.
+**DEV gauntlet:** redeploy the unmerged branch via Deploy-To-Dev `ref`; re-run the admin-keyboard suite on **Chrome only** (the dev web reduction) + apps regression on real devices. Restart from LOCAL on failure. **Judgment-merge** only when production-ready with zero doubt.
+
 ## Out of Scope
 
 - **Refactoring the admin-keyboard implementation** — only tests.
 - **Adding new admin shortcuts** — only fixture seeding for existing.
-- **Other Playwright skips** — covered by SHY-0023, SHY-0033.
+- **Other Playwright skips** — covered by [[SHY-0023]] (admin-backups), [[SHY-0057]] (admin-keyboard mobile), and the other skip-remediation SHYs ([[SHY-0051]]/[[SHY-0052]]/[[SHY-0058]]/[[SHY-0059]]). (NOT SHY-0033 — that is the Done 506-branch cleanup; corrected during the [[SHY-0091]] pass.)
 - **Backend admin API tests** — separate scope.
 
 ## Dependencies
@@ -163,12 +177,12 @@ P1 Tier-3 coverage. High coverage-per-effort ratio — fixing fixtures unblocks 
 - [ ] All 7 tests pass locally + in CI.
 - [ ] Seeding helper extracted to fixture file.
 - [ ] No test debt (cleanup verified).
-- [ ] Reviewer ZERO findings.
-- [ ] Per-type Done gate (`bug` → auto-merge + CI green).
-- [ ] PR merged.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): all 7 admin-keyboard tests green across the **full `local` browser matrix** (0 skipped, clean teardown) → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green (Chrome) → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
 - [ ] `status: Done`; `pr:` populated; final pass count in Notes.
 
 ## Notes (running log)
 
 - 2026-06-07 ~21:25 BST — Refined under SHY-0032. Tier 3 high-coverage-per-effort win.
 - 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-H1a` (G023).
+- 2026-06-12 ~23:59 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): web admin-keyboard skip-remediation → all 7 tests across the full local browser matrix (Mac + device browsers), 0 skipped, provenance-tagged fixtures cleaned per-test. DoD auto-merge → judgment-merge. **Pickup-fitness fix:** Out-of-Scope cross-ref `SHY-0033` was wrong (that's the Done branch-cleanup) → corrected to the real skip-remediation siblings ([[SHY-0023]]/[[SHY-0051]]/[[SHY-0052]]/[[SHY-0057]]/[[SHY-0058]]/[[SHY-0059]]).
