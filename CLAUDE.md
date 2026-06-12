@@ -73,11 +73,13 @@ Every new SHY `.md` file is created **fully refined** at the moment of creation.
 ### Lifecycle (no backward transitions; Cancelled is terminal)
 
 - `Draft` → architect APPROVE / APPROVE-WITH-CHANGES + concerns applied → `In Progress`
-- `In Progress` → code-reviewer agent dispatched → `In Review`
-- `In Review` → PR auto-merges → `Done` (for `infra` / `docs` / `chore` / `refactor`)
-- `In Review` → for `feature` / `bug`: auto-merge + deploy-to-dev + dev smoke test → `Done`
-- `In Review` → for `spike`: Notes-recorded decision + follow-up SHYs filed → `Done`
+- `In Progress` → tests-first (all frameworks) + **LOCAL gauntlet 100% green** + `code-reviewer` 100% clean → push → CI green → `In Review`
+- `In Review` → **DEV gauntlet 100% green** (unmerged branch via Deploy-To-Dev `ref`) → **judgment-merge** (zero doubt, production-ready; NO auto-merge) → stays `In Review` (merged-not-released) → release cut + `released_in:` → `Done`
+- `*.md`-only stories: exempt from the device/browser gauntlet (validator + lint + review only); `In Review` → judgment-merge → `Done` on release
+- `spike`: Notes-recorded decision + follow-up SHYs filed → `Done` (no release needed)
 - any active → operator decides not to do → `Cancelled` (Notes captures why)
+
+See `## Pre-Merge Testing Protocol` for the full gauntlet EVERY non-`*.md` story must pass before merge. Every story's `## Test Plan` + `## Definition of Done` must name the specific frameworks/surfaces it exercises and assert the gauntlet (local-green on real Android + real iOS + all browsers → dev-green → judgment-merge).
 
 ### Granularity + naming convention (strict)
 
@@ -251,36 +253,70 @@ When adding new background work: prefer event-driven (RTDB `onDisconnect`, write
 - Fix all failures before committing
 - JVM test gotcha: `org.json.JSONObject` is stubbed — add `testImplementation("org.json:json:20231013")` if needed
 
-## PR Quality Gate (Pre-Push Checklist)
+## Pre-Merge Testing Protocol (HARD RULE — operator 2026-06-12)
 
-**Run ALL tests locally before pushing.** CI should be a safety net, not the first time tests run.
+**Capstone principle:** you only ever consider merging when you genuinely believe the change is **production-ready**. Merging is an assertion of production-readiness, NOT "CI is green." **Any doubt → it must NOT merge.** There is **no auto-merge** for stories — merge is a manual, judgment-gated act taken only after BOTH gauntlets below are fully green. Claude merges autonomously when it has zero doubt and notifies the operator on each merge.
 
-### Local test sequence (run before every push):
+### Tests-first across EVERY framework (true TDD)
 
-1. **Kotlin lint**: `ktlint --relative` (~1s, requires standalone ktlint 1.8.0)
-2. **Express tests**: `cd express-api && npm test` (~10s)
-3. **Kotlin tests + detekt**: `./gradlew testDevDebugUnitTest :shared:jvmTest detekt` (~2min)
-4. **iOS compilation**: `./gradlew :shared:compileKotlinIosArm64` (~1min, mandatory for shared code changes)
-5. **Playwright tests**: `npx playwright test` (~5min, requires local stack)
-6. **E2E smoke tests**: `./gradlew connectedDevDebugAndroidTest` (requires emulator + local stack)
+Before any production code, write **deep** tests — RED before GREEN — across every framework the change touches. Not happy-path only: cover **every QA dimension** (happy path, error paths, edge cases, performance, security, i18n, observability, UX) with an adversarial "try my hardest to break it" mindset, over the worked-on surface **and** regression-prone areas. The frameworks (all of them):
 
-### Local stack prerequisite (for steps 5-6):
+1. **Kotlin/JVM unit** — `./gradlew testDevDebugUnitTest :shared:jvmTest`
+2. **detekt** (Kotlin static analysis) — `./gradlew detekt`
+3. **ktlint** (Kotlin lint) — `ktlint --relative`
+4. **Express/Node** — `cd express-api && npm test` (Jest)
+5. **eslint** (`--max-warnings=0`) — `npm run lint`
+6. **Web E2E** — `npx playwright test`
+7. **Web integration** — `npx playwright test --config=playwright.integration.config.ts`
+8. **Android instrumented BDD/Gherkin** (~235 scenarios) — `./gradlew connectedDevDebugAndroidTest`
+9. **iOS unit** (XCTest) — `iosApp/iosAppTests`
+10. **iOS UI** (XCUITest) — `iosApp/iosAppUITests`
+11. **Manual-QA journey matrix** (real device × browser) — `express-api/scripts/manual-qa-runner.js`
+12. **SonarCloud** quality gate
+
+(+ iOS shared compile-check `./gradlew :shared:compileKotlinIosArm64`.)
+
+### Phase 1 — LOCAL gauntlet (100% green before any push)
+
+- **Apps on REAL devices:** a real Android device AND a real iOS device. NO emulator / simulator.
+- **Web on ALL browsers** (the `express-api/scripts/browser-allowlist.js` `local` matrix):
+  - Mac: `chromium`, `firefox`, `webkit` (Safari), `edge`
+  - Android device: `chrome`, `samsung`, `edge`, `firefox`
+  - iOS device: `safari`, `chrome`, `firefox`, `edge`
+- Run user journeys + regression. **Regression scope:** worked-on + impact-selected journeys each loop; the **FULL corpus** runs as the final pre-push gate.
+- **Any failure → fix in TDD fashion across ALL frameworks (failing test first) → restart the ENTIRE local gauntlet from the top.** Loop until everything is green.
+
+### Phase 2 — Review + push
+
+- `code-reviewer` (and security review) on the LOCAL commit BEFORE push; apply ALL findings (incl. pre-existing) as one batch; verify each claim before agreeing. 100% clean — zero findings.
+- Push only when local is fully green AND the review is clean.
+- CI required checks must each pass BY NAME: **Detect Changes**, **Analyze JavaScript**, **PR Gate**.
+
+### Phase 3 — DEV gauntlet (deploy the UNMERGED branch)
+
+- Deploy the PR branch to dev via the **Deploy To Dev** workflow `ref` input (accepts branch / tag / SHA — no merge needed).
+- Re-run the SAME full suite on dev, apps on **real Android + real iOS** devices.
+- Web on dev: **Chrome only**, any device (the allowlist `dev` matrix) — the ONLY reduction from local.
+- **Any failure → fix in TDD fashion across ALL frameworks → restart from the LOCAL gauntlet (Phase 1) → re-push → re-deploy.** Loop until dev is fully green.
+
+### Phase 4 — Merge (judgment gate)
+
+- Merge **only** when dev is fully green **and** you have **zero doubt** it is production-ready. No `--auto`. Notify the operator on each merge.
+
+### Exemption (the ONLY one)
+
+- **Only `*.md`-only PRs** skip the device/browser gauntlet. They still run their relevant non-device frameworks (story-frontmatter validator, lint) + `code-reviewer` + CI. ANY change touching code, workflows, or scripts runs the FULL protocol — even if it looks like it doesn't touch an app/web surface.
+
+### After merge → Done
+
+- Done still = release cut (`release.yml` `vX.Y.Z`) + `released_in: vX.Y.Z`. The pre-merge gauntlet is the gate; the release just cuts the version + flips Done. A full re-run at release is required only if code changed after merge.
+
+### Local stack prerequisite (for the web + Android + journey frameworks):
 
 - Start Docker Desktop
-- Run `bash local/start.sh` (Firebase Emulators + LiveKit + MinIO + Mailpit)
-- Run `cd express-api && npm run local` (Express API against emulators)
-- Android emulator for step 6
-
-### Additional checks:
-
-- Code review agent on the diff
-- Security review agent on the changes
-- i18n checker for all 20 locales (if user-facing strings changed)
-- Update CLAUDE.md if new patterns/conventions introduced
-- Re-run all tests after fixes
-- Only push when all checks pass
-- Use **Deploy to Dev** workflow (Actions tab → workflow_dispatch) when ready for internal testers
-- Workflow-only changes (`.github/`, `.claude/`, `*.md`) don't need app testing
+- `bash local/start.sh` (Firebase Emulators + LiveKit + MinIO + Mailpit)
+- `cd express-api && npm run local` (Express API against emulators)
+- Real Android + real iOS device connected; iOS real-UI needs `WDA_TEAM_ID` + a running Appium server
 
 ### Workflow / Actions hygiene (enforced by `lint.yml`):
 
@@ -369,7 +405,7 @@ These were previously in the global `~/.claude/projects/-Users-shyden/memory/MEM
 ## Deploy / Release
 
 - **Pause merges while release PR is open** — each main commit triggers release PR's E2E pipeline to re-evaluate (~30-45min queued); hold all new branch merges until release lands.
-- **Local-first then dev verify — STRENGTHENED** (HARD GLOBAL, operator flagged 2x: 2026-05-28 + 2026-05-30 ~12:55 BST) — full loop = test LOCAL first (all devices × all browsers) → fix locally → write tests → retest locally until clean → deploy dev → reverify on dev (Android device + Chrome on Mac + Chrome on Android only — no iPhone, no other browsers in dev) → if dev finds a bug, fix LOCALLY first, retest LOCALLY, redeploy, reverify. NEVER skip local. NEVER ask permission to deploy-dev — direct authority, do it.
+- **Local-first then dev verify — SUPERSEDED by `## Pre-Merge Testing Protocol`** (HARD GLOBAL, operator 2026-05-28/30 + REWRITTEN 2026-06-12) — full loop = LOCAL gauntlet first (real Android + real iOS + ALL browsers on both devices AND on the Mac) → fix locally in TDD across ALL frameworks → retest locally until clean → push → CI → deploy the **unmerged branch** to dev (Deploy-To-Dev `ref`) → DEV gauntlet (real Android + real iOS apps; **Chrome only** for web on dev) → if dev finds a bug, fix LOCALLY first (TDD, all frameworks), restart from the LOCAL gauntlet, re-push, redeploy → MERGE only once dev is green AND production-ready with zero doubt. The old "Android + Chrome only, no iPhone on dev" rule is REPLACED: dev now runs real-iOS app journeys too; only the web-browser fan-out collapses to Chrome. NEVER skip local. NEVER ask permission to deploy-dev — direct authority, do it.
 
 ## Persona & Auth Setup
 
