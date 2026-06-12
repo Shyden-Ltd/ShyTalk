@@ -109,6 +109,20 @@ Supply-chain hardening (see [[feedback-update-sweep-comprehensive]]): every `use
 
 **Coverage gate:** lint script + pin test + actionlint all pass.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (edits two workflow YAMLs + a Jest pin-test) → the FULL gauntlet applies even though this is a CI-only supply-chain change. The honest connection to the device/browser gauntlet: one of the edited files IS `manual-qa-matrix.yml` — the workflow that orchestrates the device×browser matrix — so a successful dev matrix run *is* the proof the SHA-pin didn't break CI orchestration.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Express Jest** — `manual-qa-matrix-workflow-pin.test.js` flipped to assert the 40-hex SHA format (RED against the new assertion until the YAML is pinned).
+- ✅ **eslint** (`--max-warnings=0`) — the edited pin-test.
+- ✅ **actionlint** + **`scripts/check-action-shas.sh`** — both YAML files clean + exit 0.
+- ✅ **SonarCloud** — quality gate.
+- ⬜ **Kotlin / detekt / ktlint / iOS compile / Web Playwright** — N/A (no app/web/Kotlin source change); the apps + all-browser journeys run only as the REGRESSION net.
+
+**LOCAL gauntlet:** pin-test + eslint + actionlint + `check-action-shas.sh` green; full journey corpus on real Android + real iPhone + all browsers as the regression net (proving no behavioural change). Any failure → fix TDD → restart.
+**DEV gauntlet:** dispatch the SHA-pinned `manual-qa-matrix.yml` on the unmerged branch via Deploy-To-Dev `ref` → confirm it still fans out the device×browser matrix correctly; apps regression on real devices, web on Chrome. Restart from LOCAL on failure. **Judgment-merge** only when production-ready with zero doubt.
+
 ## Out of Scope
 
 - Creating a NEW pin test for `qa-runner-driver-checks.yml` if one doesn't exist (follow-up SHY).
@@ -137,9 +151,11 @@ Supply-chain hardening (see [[feedback-update-sweep-comprehensive]]): every `use
 - [ ] Pin test updated + passes.
 - [ ] `actionlint` clean.
 - [ ] PR body includes the Action-ref mapping table.
-- [ ] Reviewer ZERO findings.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): Jest pin-test + eslint + actionlint + `check-action-shas.sh` green locally; full journey regression net green on real Android + real iPhone + all browsers → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green (SHA-pinned `manual-qa-matrix.yml` re-confirmed to orchestrate the matrix; Chrome web) → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
 - [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-08 ~13:05 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 79 (G011). Reserved ID SHY-0045.
+- 2026-06-13 ~00:05 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): CI/workflow change (SHA-pin + Jest pin-test) → NOT `*.md`-only → full protocol applies; headline frameworks = Express Jest pin-test + eslint + actionlint + `check-action-shas.sh`, with the apps/all-browser journeys as the regression net (the SHA-pinned `manual-qa-matrix.yml` is itself the matrix orchestrator, so the dev matrix run doubles as proof the pin didn't break CI). DoD gains the protocol-satisfied + judgment-merge bullets. Pickup-fitness: AC already current (G011 supply-chain policy + `#1016` live); no stale cross-refs found.
