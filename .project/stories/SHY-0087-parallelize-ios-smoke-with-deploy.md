@@ -1,6 +1,6 @@
 ---
 id: SHY-0087
-status: Draft
+status: In Review
 owner: claude
 created: 2026-06-12
 priority: P1
@@ -30,7 +30,7 @@ So that the post-approval iOS critical path drops from ~82 min to ~57 min with n
 
 ### Happy path
 
-- [ ] `smoke-test-ios`'s `needs:` no longer includes `deploy-ios-prod` — it becomes `needs: [validate-release]` so GitHub schedules it as soon as `validate-release` completes (concurrently with `deploy-ios-prod`).
+- [ ] `smoke-test-ios`'s `needs:` no longer includes `deploy-ios-prod` — it becomes `needs: [validate-release, approve-prod]` so GitHub schedules it concurrently with `deploy-ios-prod` once the single approval gate clears. (Refined from the original `needs: [validate-release]`: gating on `approve-prod` rather than bare `validate-release` keeps the smoke from burning an expensive `macos-latest` runner pre-approval / on a denied release — see Notes.)
 - [ ] On a release where `inputs.ios` is true and both jobs succeed, the run graph shows `smoke-test-ios` and `deploy-ios-prod` with **overlapping** `started_at`/`completed_at` windows (verified via `gh api .../jobs`), and the run's total post-approval wall-clock is ≈ `max(deploy-ios, smoke-ios)`, not their sum.
 - [ ] The iOS smoke still gates on `inputs.ios` (it must not run when iOS is deselected for the release).
 
@@ -114,4 +114,17 @@ So that the post-approval iOS critical path drops from ~82 min to ~57 min with n
 
 ## Notes (running log)
 
+- 2026-06-12 ~19:42 BST — **code-reviewer cycle 1: 0 Critical, 2 Important, 2 Minor → all dispositioned; suite now 31/31 GREEN, eslint clean.**
+  - ✅ **Fixed (Important):** added a negative assertion that the smoke `if` does NOT contain `always()`. The auto-skip-on-deny/cancel guarantee depends on its absence — a "make it consistent with the deploy-*-prod jobs" refactor adding `always()` would silently let the smoke (and a 10×-billed `macos-latest` runner) run on a DENIED release. Now pinned.
+  - ✅ **Fixed (Minor):** the Happy-path AC bullet still read `needs: [validate-release]`; updated to `[validate-release, approve-prod]` to match the implemented + Notes-documented refinement.
+  - ⛔ **Not a finding (verified against the file, [[feedback-reviewer-regex-anchoring-false-alarms]]):** reviewer claimed the `alert-desync` needs-regex test omitted a `not.toBeNull()` guard — it already has one. No change.
+  - ⛔ **No action (verified harmless):** concurrent `~/.konan` cache save is first-writer-wins + both steps `continue-on-error: true`; pre-existing, not worsened by the now-parallel jobs.
+- 2026-06-12 ~19:30 BST — **IMPLEMENTED (Draft → In Progress). TDD RED→GREEN; self-review clean.**
+  - **Pickup-fitness re-validated against live `deploy-prod.yml`:** confirmed `smoke-test-ios needs: [validate-release, deploy-ios-prod]` (the serial chain) + `alert-desync` still depends on both the iOS deploy and the iOS smoke. Story still accurate against current code.
+  - **TDD:** added a `SHY-0087:` describe block to `express-api/tests/scripts/deploy-prod-single-gate-and-smoke.test.js` (+81 lines, 7 assertions) — 4 failed RED against the serial YAML (needs-not-deploy, needs-has-approve, if-approve-success, if-inputs.ios), then GREEN after the workflow edit (**30/30 pass**). actionlint exit 0; prettier OK; `check-no-paid-runners` / `check-workflow-concurrency-scoping` / `check-action-shas` all OK.
+  - **REFINEMENT — gate on `approve-prod`, not bare `validate-release`.** The story's prose Test Plan said `needs: [validate-release]`, but that would start the smoke **pre-approval** — burning a 10×-billed `macos-latest` runner on *every* dispatch (incl. denied/abandoned releases) during a potentially multi-hour approval wait, and it contradicts this story's own BDD ("When validate-release completes **and the approval gate is cleared**, Then both start"). Implemented the BDD-consistent form: `needs: [validate-release, approve-prod]` + `if: inputs.ios && needs.approve-prod.result == 'success'` (no `always()` — we WANT the default auto-skip when approval is denied/cancelled). This still satisfies every Test-Plan assertion: (a) `needs` no longer contains `deploy-ios-prod`; (b) `needs` contains `validate-release`; (c) `if` references `inputs.ios`; (d) `alert-desync.needs` unchanged (both retained).
+  - **Why `inputs.ios` became explicit:** the old `deploy-ios-prod.result == 'success'` gate did double duty — "skip if deploy died" AND "skip if iOS deselected" (deselected → deploy skipped → not success). With the deploy dependency gone, `inputs.ios` is now the sole iOS-deselect guard (approve-prod runs regardless of platform), so it had to be added to the `if`.
+  - **Concurrency edge verified (not assumed):** smoke + deploy now write the shared `~/.konan` key concurrently on a cold cache; both save steps are `continue-on-error: true` (deploy L653, smoke L936) so a 409 collision is tolerated by both — neither job fails. Saves are last-writer-wins, content-valid (compiler/klib layer is target-agnostic).
+  - **Architect skipped** (low-risk infra, [[feedback-rate-limit-slowdown-strategies]]); the spec-inconsistency that an architect would have caught (literal `needs` vs BDD) was found + resolved during pickup-fitness above.
+  - **Live-verification AC still OPEN:** the overlap proof (`gh api .../jobs` showing overlapping windows + post-approval iOS path < 60 min) can only be captured on the next REAL prod release. Status holds at In Review after merge until that release confirms it (infra DoD = verify-on-real-deploy), then → Done with `released_in`.
 - 2026-06-12 — Filed by SHY-0086 (prod-deploy profiling spike). Origin: the iOS smoke runs serially after the iOS deploy despite sharing no data with it; parallelising saves ~25 min off the post-approval critical path. Highest-ROI / lowest-risk of the three SHY-0086 follow-ups — do first.

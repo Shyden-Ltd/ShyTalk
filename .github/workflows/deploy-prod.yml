@@ -803,10 +803,25 @@ jobs:
 
   smoke-test-ios:
     name: Smoke Test (iOS Boot)
-    needs: [validate-release, deploy-ios-prod]
-    if: |
-      always() &&
-      needs.deploy-ios-prod.result == 'success'
+    # SHY-0087: run the iOS boot smoke IN PARALLEL with deploy-ios-prod instead
+    # of serially after it — ~25 min off the post-approval critical path. The
+    # smoke shares NO data with the deploy: it checks out the same source commit
+    # (needs.validate-release.outputs.commit-sha) and rebuilds the simulator app
+    # from scratch, so depending on deploy-ios-prod was only a "skip if the
+    # deploy died" gate, never a data handoff. We gate on approve-prod instead:
+    # the smoke still waits for the single approval (so no expensive macos-latest
+    # runner is burned pre-approval or on a denied release) but now overlaps the
+    # deploy rather than queuing behind it. Trade-off (accepted per the SHY-0086
+    # escalation): a wasted runner on the RARE post-approval deploy FAILURE, in
+    # exchange for ~25 min saved on every successful release — and the smoke
+    # still yields a valid boot signal (it builds from source, not the deployed
+    # IPA). inputs.ios is now checked EXPLICITLY: it is the only thing that skips
+    # the smoke on a non-iOS release (approve-prod runs regardless of platform,
+    # so the old deploy-result gate can no longer stand in for the iOS-deselect
+    # check). No always() — we WANT the default auto-skip when approve-prod is
+    # denied/cancelled.
+    needs: [validate-release, approve-prod]
+    if: inputs.ios && needs.approve-prod.result == 'success'
     # Migrated 2026-05-20 to GitHub-hosted macos-latest per the
     # no-self-hosted-runners policy. See deploy-dev.yml for rationale.
     runs-on: macos-latest
