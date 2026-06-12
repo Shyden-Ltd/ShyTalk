@@ -177,6 +177,20 @@ P1 Tier-3 coverage. **Sequenced after SHY-0024** (Android→SharedNavGraph migra
 2. Re-run until GREEN.
 3. Sonar coverage ≥85% on AppLockRepository.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (wires/tests security nav + may refactor `AppLockRepository`) → the FULL gauntlet applies. This is **security-adjacent** (the lock screen + PIN gate), so the device gauntlet is the safety net against an auth-bypass regression.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Android instrumented BDD + Manual-QA journey matrix** — `AppLockInterceptTest` + `security_settings.feature` on a **real Android device**: background → re-foreground after lock-timeout → Lock screen (not Home), PIN + biometric auth both restore the original destination, 3-wrong-PIN cool-down, SecuritySettings reachable from AppSettings. The non-bypassable assertion (no back-button escape) is the headline.
+- ✅ **Kotlin/JVM + Android unit (Robolectric)** — `AppLockRepository` intercept logic (≥85% per AC); Robolectric for the lifecycle-simulation unit layer.
+- ✅ **detekt + ktlint + iOS shared compile-check** — Path A's `SharedNavGraph` wiring must keep the iOS build green (`:shared:compileKotlinIosArm64`) since the graph is shared.
+- ⬜ **Web E2E / integration / eslint / Express Jest / iOS XCUITest** — N/A (Android-only security nav); the iOS app runs the regression corpus on the real iPhone as the net.
+- ✅ **SonarCloud** — coverage gate.
+
+**LOCAL gauntlet:** the security-nav suite + BDD green on a **real Android device** (lock intercept + biometric + PIN cool-down, all non-bypassable) → impact-selected each loop, full corpus at the pre-push gate. Any failure → fix TDD → restart the whole local gauntlet.
+**DEV gauntlet:** redeploy the unmerged branch via Deploy-To-Dev `ref`; real Android + real iPhone regression; web = Chrome only. Restart from LOCAL on failure. **Judgment-merge** only when production-ready with zero doubt — an auth-bypass regression is a security incident. (Depends on [[SHY-0024]] for Path A's SharedNavGraph wiring.)
+
 ## Out of Scope
 
 - **Refactoring SecureStorage** — SHY-0015 covers.
@@ -199,12 +213,12 @@ P1 Tier-3 coverage. **Sequenced after SHY-0024** (Android→SharedNavGraph migra
 - [ ] Chosen path implemented + tested.
 - [ ] BDD scenarios pass.
 - [ ] Sonar coverage ≥85%.
-- [ ] Reviewer ZERO findings.
-- [ ] Per-type Done gate (`feature` → auto-merge + dev smoke).
-- [ ] PR merged.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): security-nav suite + BDD green on a **real Android device** (lock intercept + biometric + PIN cool-down, non-bypassable) + iOS regression on real iPhone → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
 - [ ] `status: Done`; `pr:` populated; chosen-path rationale in Notes.
 
 ## Notes (running log)
 
 - 2026-06-07 ~21:18 BST — Refined under SHY-0032. Tier 3; sequenced after SHY-0024.
 - 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-C3` (G010).
+- 2026-06-12 ~23:58 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): security-adjacent Android nav → AppLockInterceptTest + security_settings BDD on real Android (non-bypassable lock + biometric + PIN cool-down); iOS build kept green for Path A's SharedNavGraph wiring. DoD auto-merge → judgment-merge. Pickup-fitness: depends on [[SHY-0024]] (Path A) + [[SHY-0015]] (SecureStorage) + [[SHY-0005]] (biometric); no dupes/stale found.
