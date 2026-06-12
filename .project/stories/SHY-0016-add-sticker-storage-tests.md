@@ -136,6 +136,24 @@ P2 Tier-4 polish. Same contract-test pattern as SHY-0015 (SecureStorage), smalle
 1. Add minimum fixes for surfaced bugs.
 2. Sonar coverage ≥85%.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (adds KMP contract + platform tests, and may fix the `StickerStorage` actual impls) → the FULL protocol applies. This is a **shared (KMP) file-I/O** surface with no web equivalent; the headline is the platform tests running real file I/O on **real devices**.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Kotlin/JVM unit** — the `commonTest` `StickerStorageContractTest` abstract class (the shared ≥12-case contract).
+- ✅ **Android instrumented** (`connectedDevDebugAndroidTest`) — `AndroidStickerStorageTest` runs the contract against the **REAL Android filesystem + real app-private cache dir on a real device** (real `Context`), NOT Robolectric — a simulated Android framework is a stand-in the No-Stubs rule disfavours where a real device is available (per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only).
+- ✅ **iOS XCTest** — `IosStickerStorageTest` runs the contract against the **real `NSFileManager` app-private dir on a real iPhone** (not the simulator).
+- ✅ **iOS shared compile-check** (`:shared:compileKotlinIosArm64`) — the `iosMain` actual + any fix must still compile.
+- ✅ **detekt** + **ktlint** — the new test files + any impl fix.
+- ⬜ **Web Playwright / Express Jest** — N/A (no web/server surface).
+
+**Error paths INDUCED for real (No-Stubs):** permission-denied = a real `chmod` on the cache dir; corruption = a real partial/truncated write on disk; concurrent write/read = real threads — never a mocked `Result.Failure`. **🚩 Disk-full** is the one genuinely-hard condition: induce it against a real constrained filesystem (a small quota'd / tmpfs dir), and if that proves non-deterministic on the device, **escalate to the operator** at the gate — do NOT mock a `DiskFull`.
+
+**LOCAL gauntlet:** the contract green on a **real Android device + real iPhone**; `:shared:compileKotlinIosArm64` + detekt + ktlint clean; Sonar coverage ≥85% on both actual files; apps regression net as the safety net. Any failure → fix TDD → restart.
+**DEV gauntlet:** redeploy the unmerged branch via Deploy-To-Dev `ref`; re-run the platform tests on the real Android device + real iPhone; web = Chrome regression. Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt; NO auto-merge.
+
 ## Out of Scope
 
 - **Refactoring StickerStorage interface** — only tests.
@@ -158,12 +176,12 @@ P2 Tier-4 polish. Same contract-test pattern as SHY-0015 (SecureStorage), smalle
 - [ ] 3 test files exist; ≥12 cases pass per platform.
 - [ ] Any surfaced bugs fixed.
 - [ ] Sonar coverage ≥85%.
-- [ ] Reviewer ZERO findings.
-- [ ] Per-type Done gate (`bug` → auto-merge + dev smoke).
-- [ ] PR merged.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): the contract green on a real Android device + real iPhone (real filesystem; induced error paths, no mocked failures) + `:shared:compileKotlinIosArm64`/detekt/ktlint clean + Sonar ≥85% → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green (real devices; Chrome web) → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
 - [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-07 ~21:31 BST — Refined under SHY-0032. Tier 4 polish.
 - 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-E4` (G038).
+- 2026-06-13 ~00:48 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): KMP file-I/O → real-device headline (Android instrumented on a real device + iOS XCTest on a real iPhone, NOT Robolectric/simulator per the No-Stubs disfavour of stand-ins), gated on `:shared:compileKotlinIosArm64`. No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]): error paths induced for real (chmod / truncated write / real threads); **🚩 disk-full flagged** as the one genuinely-hard case → real quota'd/tmpfs dir or escalate, never a mocked DiskFull. DoD swaps the stale Reviewer-ZERO / `bug→auto-merge` / PR-merged lines for protocol-satisfied + judgment-merge + released_in. Pickup-fitness: AC current; the Robolectric-vs-instrumented Risk is resolved toward real-device instrumented per No-Stubs; SHY-0015 remains the pattern template.
