@@ -137,6 +137,24 @@ This is a process chore — TDD's "Red" state is procedural confirmation of the 
 2. Check extractor; if good, set var; verify next CodeQL run.
 3. Update Notes log with outcomes.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Two-part ops chore with a thin code surface.** The SHY-0027 PR itself adds little or no code (the dependency changes live in the *Dependabot* PRs; the CodeQL enable is a repo-variable set + maybe a `codeql.yml` comment + an optional Jest assertion), so its own footprint is light — but the protocol's spirit (verified-by-running, no silent skips) binds on both halves:
+
+**G045 — Dependabot sweep:** each swept PR passes **its own** CI/gauntlet before merge; this SHY only coordinates the sweep and adds no code. Dependabot PRs retain their **operator-mandated auto-merge** ([[feedback-dependabot-auto-merge-required]]) — that is a sanctioned exception to this protocol's no-auto-merge rule, which governs *our* stories, not Dependabot's own queue. Major bumps stay for human review.
+
+**G047 — CodeQL Kotlin frameworks exercised (RED→GREEN):**
+- ✅ **CodeQL (real run)** — the headline: after `ENABLE_CODEQL_KOTLIN=true`, the CodeQL **Kotlin analysis must actually run green on a real push** against the **real Kotlin codebase** (verified-by-running, [[feedback-workflow-verify-by-running]]) — a real static-analysis pass, never assumed-from-config.
+- ✅ **Express Jest** — *conditionally*, if the optional `codeql-config.test.js` is added: it asserts the **real** `codeql.yml` includes Kotlin in the language matrix when the flag is true.
+- ✅ **actionlint** — if `codeql.yml` is edited (even a comment).
+- ⬜ **app/web/iOS UI · detekt/ktlint** — N/A (no app/shared source change; CodeQL *analyses* the Kotlin, it doesn't modify it).
+
+**No-Stubs (already aligned):** nothing to mock — real PR merges, a real CodeQL run, a real-YAML Jest assertion. If the Kotlin extractor is still incomplete, the honest outcome is a **documented deferral** (codeql.yml comment + follow-up SHY), NOT a faked-pass enable (per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only).
+
+**LOCAL gauntlet:** if a Jest test is added, it + actionlint green locally; the sweep is verified PR-by-PR against real CI. Any failure → fix → restart.
+**DEV gauntlet:** push to the branch and confirm the **real** CodeQL Kotlin analysis runs + completes (no extractor crash; findings surface in the Security tab) on real infrastructure. Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt — with the sweep outcomes + the real CodeQL Kotlin run (or the documented deferral) recorded; NO auto-merge of *this* coordinating PR.
+
 ## Out of Scope
 
 - **Updating individual deps proactively** (beyond what Dependabot already proposed).
@@ -160,12 +178,12 @@ This is a process chore — TDD's "Red" state is procedural confirmation of the 
 - [ ] Dependabot queue swept; PR description lists outcomes.
 - [ ] CodeQL Kotlin either enabled OR deferred with documented reason.
 - [ ] Any blocked items have follow-up SHYs filed.
-- [ ] Reviewer ZERO findings.
-- [ ] Per-type Done gate (`chore` → auto-merge once green).
-- [ ] PR merged.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): each swept Dependabot PR green on its own CI (operator-sanctioned auto-merge) + CodeQL Kotlin verified by a real green analysis run on a real push (or a documented deferral) + any optional Jest/actionlint green → `code-reviewer` 100% clean → push → CI green by name → **judgment-merge** of this coordinating PR (zero doubt; NO auto-merge of it).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
 - [ ] `status: Done`; `pr:` populated; sweep summary in Notes.
 
 ## Notes (running log)
 
 - 2026-06-07 ~21:14 BST — Refined under SHY-0032. Tier 5 chore.
 - 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-I5` (G045, G047).
+- 2026-06-13 ~01:00 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): two-part ops chore, thin code surface. G045 sweep = each Dependabot PR on its own gauntlet + retains operator-mandated auto-merge ([[feedback-dependabot-auto-merge-required]], a sanctioned exception to the no-auto-merge rule that governs our own stories); G047 CodeQL Kotlin verified by a REAL green analysis run on a real push (verified-by-running), not assumed-from-config. No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]): nothing to mock; a still-incomplete extractor → honest documented deferral, never a faked-pass enable. DoD swaps the stale Reviewer-ZERO / `chore→auto-merge` / PR-merged lines for protocol-satisfied + judgment-merge + released_in. Pickup-fitness: AC current; the live Dependabot queue + the current `ENABLE_CODEQL_KOTLIN` value + the codeql-action Kotlin-extractor state all need the read-and-confirm at pickup (state may have moved since 2026-06-07).
