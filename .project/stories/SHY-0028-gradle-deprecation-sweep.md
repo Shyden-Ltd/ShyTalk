@@ -106,6 +106,24 @@ P2 Tier-5 chore. Per [[feedback-never-suppress-fix-or-upgrade]]: fix root cause 
 2. Re-run baseline check → count == 0 (GREEN).
 3. CI step in `lint.yml` running the check.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (fixes deprecations across Kotlin/Gradle source + adds a CI lint step) → the FULL protocol applies. Deprecation fixes can reach shared/commonMain code, so they can ripple into real app behaviour — the apps regression net is load-bearing here, not ceremonial.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Kotlin/JVM unit** (`./gradlew testDevDebugUnitTest --warning-mode all`) — both the RED surface (the deprecation enumeration) AND the GREEN gate (zero warnings) run against the **real Gradle build + real unit suite**; the suite is the regression net for each fix.
+- ✅ **detekt** + **ktlint** — the source fixes.
+- ✅ **iOS shared compile-check** (`:shared:compileKotlinIosArm64`) — any fix touching commonMain/shared must still compile for iOS.
+- ✅ **Android instrumented BDD** (`connectedDevDebugAndroidTest`) — if a fix touches Android runtime code paths, the instrumented suite on a **real Android device** is the regression net.
+- ✅ **actionlint** — the new `lint.yml` deprecation-check step.
+- ⬜ **Web Playwright / Express Jest** — N/A (no web/server surface).
+
+**No-Stubs (already aligned):** the whole ticket is real — real Gradle, real `--warning-mode all` output, real unit/instrumented runs verify each fix. Nothing to mock. Per [[feedback-never-suppress-fix-or-upgrade]] + the Out-of-Scope ban, suppression flags are forbidden — fix the root cause or upgrade, never `-Werror=no-deprecation`.
+
+**LOCAL gauntlet:** zero deprecations on `--warning-mode all`; unit + detekt + ktlint + `:shared:compileKotlinIosArm64` clean; the FULL apps regression on a **real Android device + real iPhone** (shared-code fixes can change runtime behaviour) + web regression. Any failure → fix TDD → restart. (If >20 distinct deprecations, batch per the Risk row — each batch still runs the full gauntlet.)
+**DEV gauntlet:** redeploy the unmerged branch via Deploy-To-Dev `ref`; re-run the apps regression on real devices; web = Chrome; confirm the new CI lint step is green on the real pipeline. Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt; NO auto-merge.
+
 ## Out of Scope
 
 - **Upgrading Gradle major version** — that's a separate SHY.
@@ -129,12 +147,12 @@ P2 Tier-5 chore. Per [[feedback-never-suppress-fix-or-upgrade]]: fix root cause 
 - [ ] Zero deprecations on `--warning-mode all` run.
 - [ ] CI step added; passes.
 - [ ] PR description enumerates findings + fixes.
-- [ ] Reviewer ZERO findings.
-- [ ] Per-type Done gate (`chore` → auto-merge once green).
-- [ ] PR merged.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): zero deprecations on `--warning-mode all` + unit/detekt/ktlint/`:shared:compileKotlinIosArm64` clean + full apps regression green on real Android + real iPhone + the new CI step green → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green (real devices; Chrome web) → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
 - [ ] `status: Done`; `pr:` populated; finding count + fix breakdown in Notes.
 
 ## Notes (running log)
 
 - 2026-06-07 ~21:37 BST — Refined under SHY-0032. Tier 5 chore.
 - 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-I6` (G046).
+- 2026-06-13 ~01:05 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): Gradle/Kotlin deprecation sweep → real-build headline (`--warning-mode all` is both RED enumeration + GREEN gate); deprecation fixes can reach commonMain → `:shared:compileKotlinIosArm64` + the FULL apps regression on real Android + real iPhone are load-bearing (shared-code ripple). No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]): already aligned (all-real build/test) — nothing to scrub; suppression flags stay forbidden ([[feedback-never-suppress-fix-or-upgrade]]). DoD swaps the stale Reviewer-ZERO / `chore→auto-merge` / PR-merged lines for protocol-satisfied + judgment-merge + released_in. Pickup-fitness: AC current; the live deprecation count + Gradle/Kotlin versions need the read-and-confirm at pickup; the >20-distinct batching rule stands.
