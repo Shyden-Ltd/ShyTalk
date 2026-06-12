@@ -683,6 +683,7 @@ jobs:
             -scheme iosApp \
             -sdk iphoneos \
             -configuration Release \
+            -showBuildTimingSummary \
             -archivePath "$RUNNER_TEMP/iosApp.xcarchive" \
             -clonedSourcePackagesDirPath ../build/ios-spm-packages \
             -parallelizeTargets \

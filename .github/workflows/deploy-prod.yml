@@ -562,6 +562,7 @@ jobs:
             -scheme iosApp \
             -sdk iphoneos \
             -configuration Release \
+            -showBuildTimingSummary \
             -archivePath "$RUNNER_TEMP/iosApp.xcarchive" \
             DEVELOPMENT_TEAM=F3XX4PM3MF \
             CURRENT_PROJECT_VERSION="${VERSION_CODE}" \

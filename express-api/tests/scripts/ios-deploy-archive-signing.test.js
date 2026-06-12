@@ -66,3 +66,40 @@ describe('iOS deploy archive signing (#8 regression guard)', () => {
     expect(src).toMatch(/ShyTalk App Store Distribution/);
   });
 });
+
+describe('iOS deploy archive timing instrumentation (SHY-0088)', () => {
+  // The archive action is a line that is exactly `archive` (the export call's
+  // action is the inline `-exportArchive` flag; the smoke job builds with
+  // `build`). Walk back from that line to its owning `xcodebuild` line to
+  // isolate the archive invocation — so we assert the flag is on IT, not merely
+  // somewhere in the file (a whole-file grep would also match the
+  // comment-stripped export call). Line-based on purpose: a single span regex
+  // across the block backtracks catastrophically (sonarjs/slow-regex).
+  const archiveInvocation = (src) => {
+    const lines = src.split('\n');
+    const end = lines.findIndex((l) => l.trim() === 'archive');
+    if (end === -1) return null;
+    let start = end;
+    while (start >= 0 && !/^\s*xcodebuild\b/.test(lines[start])) start -= 1;
+    return start >= 0 ? lines.slice(start, end + 1).join('\n') : null;
+  };
+
+  test.each(WORKFLOWS)('%s runs the archive with -showBuildTimingSummary', (name) => {
+    const src = stripComments(fs.readFileSync(workflowPath(name), 'utf8'));
+    const archive = archiveInvocation(src);
+    expect(archive).not.toBeNull();
+    expect(archive).toMatch(/-showBuildTimingSummary\b/);
+  });
+
+  test.each(WORKFLOWS)(
+    '%s puts -showBuildTimingSummary ONLY on the archive, not -exportArchive',
+    (name) => {
+      const src = stripComments(fs.readFileSync(workflowPath(name), 'utf8'));
+      // Exactly one occurrence: combined with the archive-isolation test above,
+      // this proves the flag is on the archive call and not duplicated onto the
+      // export call (which would time a no-compilation step).
+      const occurrences = (src.match(/-showBuildTimingSummary\b/g) || []).length;
+      expect(occurrences).toBe(1);
+    },
+  );
+});
