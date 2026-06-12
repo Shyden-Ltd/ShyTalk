@@ -188,6 +188,20 @@ P1 Tier-3 coverage. Sequential dependency on SHY-0010 (GachaVM tests) for the un
 3. Re-run until all scenarios green on dev device.
 4. Manual run via `manual-qa-runner.js`.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (authors 2 `.feature` files + step-defs, may surface production fixes) → the FULL gauntlet applies. Android-only BDD (iOS BDD is separate per Out of Scope); the age-verification flow is **Safety**-adjacent, so its gauntlet is non-negotiable.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Android instrumented BDD** — `gacha.feature` (≥8) + `age_verification.feature` (≥7) + step-defs (`./gradlew connectedDevDebugAndroidTest --tests "*Gacha*" --tests "*AgeVerification*"`) on a **real Android device**; the story's primary RED→GREEN.
+- ✅ **Manual-QA journey matrix** — `manual-qa-runner.js --feature gacha,age_verification` on the real Android device (incl. the under-18 age-gate redirect, which depends on [[SHY-0024]]).
+- ✅ **Kotlin JVM unit + detekt + ktlint + iOS shared compile-check** — any production fix surfaced by a scenario passes the unit/static-analysis gates + keeps the iOS build green.
+- ⬜ **Web E2E / integration / eslint / Express Jest / iOS XCUITest** — N/A (Android-only here; iOS parity BDD is a separate SHY); the iOS app runs the regression corpus on the real iPhone as the net.
+- ✅ **SonarCloud** — quality gate.
+
+**LOCAL gauntlet:** the ≥15 scenarios green on a **real Android device** (both <18 and >18 personas for the age path) → impact-selected each loop, full corpus at the pre-push gate. Any failure → fix TDD → restart the whole local gauntlet.
+**DEV gauntlet:** redeploy the unmerged branch via Deploy-To-Dev `ref`; re-run on real Android + real iPhone regression; web = Chrome only. Restart from LOCAL on failure. **Judgment-merge** only when production-ready with zero doubt — the age-verification path gates a regulatory surface.
+
 ## Out of Scope
 
 - **Gacha mechanic redesign** — only BDD coverage of existing.
@@ -213,12 +227,12 @@ P1 Tier-3 coverage. Sequential dependency on SHY-0010 (GachaVM tests) for the un
 
 - [ ] 2 .feature files exist; ≥15 scenarios pass.
 - [ ] Manual run + dev smoke pass.
-- [ ] Reviewer ZERO findings.
-- [ ] Per-type Done gate (`feature` → auto-merge + dev smoke).
-- [ ] PR merged.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): ≥15 BDD scenarios green on a **real Android device** (both <18/>18 personas) + iOS regression on real iPhone → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
 - [ ] `status: Done`; `pr:` populated; smoke outcome in Notes.
 
 ## Notes (running log)
 
 - 2026-06-07 ~21:18 BST — Refined under SHY-0032. Tier 3 coverage; sequenced after SHY-0024.
 - 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-C1` (G007, G008).
+- 2026-06-12 ~23:55 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): Android BDD (gacha + age-verification) → real-device scenarios + manual-qa-runner; age-verification = Safety surface so the bar is high. DoD auto-merge → judgment-merge. Pickup-fitness: no dupes/stale found (depends on [[SHY-0024]] for the Android age-gate route + [[SHY-0010]] for the GachaVM substrate).
