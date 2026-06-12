@@ -145,6 +145,19 @@ describe('SHY-0084: deploy-prod.yml Android boot smoke runs under bash', () => {
     expect(androidBlock).toMatch(/uses:[ \t]*actions\/checkout@/);
   });
 
+  test('the smoke checkout does NOT pin the DEPLOYED ref (verifier is workflow tooling)', () => {
+    // Regression guard (run 27388236740): pinning the smoke checkout to the
+    // deploy ref (needs.validate-release.outputs.commit-sha) made the bash
+    // verifier "No such file" when deploying a tag cut before the script
+    // existed. The verifier must come from the workflow's own (default) ref;
+    // the deployed APP under test is the downloaded APK artifact.
+    const checkoutIdx = androidBlock.indexOf('actions/checkout@');
+    expect(checkoutIdx).toBeGreaterThanOrEqual(0);
+    // The 4 lines following the checkout must not re-introduce the deploy-ref pin.
+    const after = androidBlock.slice(checkoutIdx).split('\n').slice(0, 4).join('\n');
+    expect(after).not.toMatch(/ref:\s*\$\{\{\s*needs\.validate-release\.outputs\.commit-sha/);
+  });
+
   test('still pinned to ubuntu-22.04 (emulator-boot-stability pin is preserved)', () => {
     expect(androidBlock).toMatch(/^[ \t]+runs-on:[ \t]*ubuntu-22\.04\b/m);
   });

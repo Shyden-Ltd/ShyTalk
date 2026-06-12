@@ -762,9 +762,13 @@ jobs:
       # SHY-0084: check out the repo so the committed bash smoke verifier
       # (scripts/ci/android-smoke-verify.sh) exists on disk — this job
       # previously only downloaded the APK artifact, with no working tree.
+      # Do NOT pin `ref:` to the DEPLOYED ref: the verifier is workflow TOOLING
+      # and must come from the workflow's own version (the default checkout ref
+      # = the dispatched branch, main). Pinning the deploy ref broke the smoke
+      # when deploying a tag cut BEFORE this script existed (run 27388236740:
+      # deploying v0.97.12 → "No such file", exit 127). The deployed APP under
+      # test is the downloaded APK artifact, not this checked-out tree.
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        with:
-          ref: ${{ needs.validate-release.outputs.commit-sha }}
 
       - name: Download debug APK
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
