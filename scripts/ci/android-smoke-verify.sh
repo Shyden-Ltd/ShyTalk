@@ -75,7 +75,18 @@ fi
 sleep "$SMOKE_LAUNCH_WAIT"
 
 echo "=== Verifying app is foreground activity ==="
-focused="$("$ADB" shell dumpsys window windows 2>&1 | grep -E 'mCurrentFocus' || true)"
+# Read the RESUMED (foreground) activity from the activity manager. On API 33
+# `dumpsys window windows` stopped emitting `mCurrentFocus`, so the old window
+# grep returned EMPTY and false-failed even though the app was foreground (prod
+# run 27411098883, 2026-06-12: `am start` reported `Status: ok` + MainActivity,
+# yet the foreground `Got:` was blank). `dumpsys activity activities` surfaces
+# the resumed activity reliably across API levels (mResumedActivity /
+# topResumedActivity); fall back to the window focus (`dumpsys window`, NOT
+# `window windows`) only if the activity-manager read is empty.
+focused="$("$ADB" shell dumpsys activity activities 2>&1 | grep -E 'mResumedActivity|topResumedActivity' || true)"
+if [ -z "$focused" ]; then
+  focused="$("$ADB" shell dumpsys window 2>&1 | grep -E 'mCurrentFocus|mFocusedApp' || true)"
+fi
 echo "$focused"
 if ! printf '%s\n' "$focused" | grep -q "$APP_ID"; then
   echo "::error::ShyTalk is not the foreground activity. Got: $focused"

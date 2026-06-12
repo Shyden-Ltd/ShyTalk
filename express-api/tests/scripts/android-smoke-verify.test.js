@@ -22,7 +22,16 @@ const { spawnSync } = require('node:child_process');
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const SCRIPT = path.join(REPO_ROOT, 'scripts/ci/android-smoke-verify.sh');
 
-// dumpsys mCurrentFocus lines — one WITH the app id (foreground), one without.
+// `dumpsys activity activities` resumed-activity lines (the PRIMARY foreground
+// signal, reliable on API 33) — one WITH the app id (foreground), one with the
+// launcher (app backgrounded).
+const RESUMED_OK = 'mResumedActivity: ActivityRecord{a1b2 u0 com.shyden.shytalk/.MainActivity t42}';
+const RESUMED_OTHER =
+  'mResumedActivity: ActivityRecord{c3d4 u0 com.android.launcher3/.Launcher t1}';
+
+// `dumpsys window` focus lines (the FALLBACK signal) — one WITH the app id, one
+// without. On API 33 the legacy `dumpsys window windows` emitted NO mCurrentFocus
+// at all (the prod-run-27411098883 false-fail); '' models that empty dump.
 const FOCUS_OK = 'mCurrentFocus=Window{a1b2 u0 com.shyden.shytalk/com.shyden.shytalk.MainActivity}';
 const FOCUS_OTHER = 'mCurrentFocus=Window{c3d4 u0 com.android.launcher3/.Launcher}';
 
@@ -41,7 +50,12 @@ function writeAdbStub(binDir) {
       '# Stub adb: branches on the subcommand, emits scenario output from env.',
       'if [ "$1" = "install" ]; then echo "Success"; exit "${STUB_INSTALL_RC:-0}"; fi',
       'if [ "$1" = "shell" ] && [ "$2" = "am" ]; then printf "%s\\n" "${STUB_AM_OUTPUT}"; exit 0; fi',
-      'if [ "$1" = "shell" ] && [ "$2" = "dumpsys" ]; then printf "%s\\n" "${STUB_FOCUS}"; exit 0; fi',
+      // Subcommand-aware: `dumpsys activity activities` (the resumed-activity
+      // read) vs `dumpsys window` (the focus fallback) return DIFFERENT output,
+      // so a test can model API 33 — where the window dump is empty but the
+      // activity manager still surfaces the resumed activity.
+      'if [ "$1" = "shell" ] && [ "$2" = "dumpsys" ] && [ "$3" = "activity" ]; then printf "%s\\n" "${STUB_RESUMED}"; exit 0; fi',
+      'if [ "$1" = "shell" ] && [ "$2" = "dumpsys" ] && [ "$3" = "window" ]; then printf "%s\\n" "${STUB_FOCUS}"; exit 0; fi',
       'if [ "$1" = "logcat" ]; then printf "%s\\n" "${STUB_LOGCAT}"; exit 0; fi',
       'exit 0',
       '',
@@ -53,6 +67,7 @@ function writeAdbStub(binDir) {
 function run({
   apks = ['app-prod-debug.apk'],
   am = AM_OK,
+  resumed = RESUMED_OK,
   focus = FOCUS_OK,
   logcat = '',
   installRc = '0',
@@ -80,6 +95,7 @@ function run({
       APK_DIR: apkDir,
       LOGCAT_FILE: path.join(tmp, 'runtime.log'),
       STUB_AM_OUTPUT: am,
+      STUB_RESUMED: resumed,
       STUB_FOCUS: focus,
       STUB_LOGCAT: logcat,
       STUB_INSTALL_RC: installRc,
@@ -151,9 +167,30 @@ describe('SHY-0084: android-smoke-verify.sh', () => {
   });
 
   test('app is not the foreground activity → exit 1', () => {
-    const res = run({ focus: FOCUS_OTHER });
+    // Launcher is resumed (app backgrounded) AND the window fallback also shows
+    // the launcher — neither source contains the app id, so the smoke fails.
+    const res = run({ resumed: RESUMED_OTHER, focus: FOCUS_OTHER });
     expect(res.status).toBe(1);
     expect(res.stdout).toContain('not the foreground activity');
+  });
+
+  test('API 33: `dumpsys window` is empty but the resumed-activity read still passes → exit 0', () => {
+    // Reproduces prod run 27411098883 (2026-06-12): on API 33 `dumpsys window
+    // windows` emitted no mCurrentFocus, so the old window-only grep false-failed
+    // a foreground app. The fix reads the resumed activity from the activity
+    // manager FIRST, which still surfaces the app even when the window dump is blank.
+    const res = run({ resumed: RESUMED_OK, focus: '' });
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain('installs and launches successfully');
+  });
+
+  test('activity-manager read empty → falls back to window focus → exit 0', () => {
+    // If `dumpsys activity activities` yields nothing (older/odd image), the
+    // window-focus fallback (`dumpsys window`, not `window windows`) still
+    // confirms the foreground app.
+    const res = run({ resumed: '', focus: FOCUS_OK });
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain('installs and launches successfully');
   });
 
   test('a FATAL EXCEPTION in logcat → exit 1', () => {
