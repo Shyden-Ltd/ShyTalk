@@ -108,6 +108,20 @@ So the path is: implement, NOT delete. Removal is only allowed if the skipped te
 
 **Coverage gate:** Playwright suite green; grep for `test.skip` in this file returns no matches (or only the bare `test.skip(` if the test still skipped for documented reasons — should be ZERO per AC).
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (un-skips / removes a Playwright test, possibly extends global-setup fixtures) → the FULL gauntlet applies. The admin-core-modules tool is a **web** surface, so the all-browser web gauntlet is the headline.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Web E2E (Playwright, all browsers)** — `tests/web/admin-core-modules.spec.ts` with the bare skip resolved (real test OR documented removal), run across the `local` browser matrix (Mac chromium/firefox/webkit/edge + the device browsers); 0 bare skips at the end.
+- ✅ **eslint** (`--max-warnings=0`) — the edited spec (+ any fixture/global-setup change).
+- ✅ **Test isolation** ([[feedback-test-isolation-no-leaks]]) — if the implement-path needs seeded admin data, it's provenance-tagged + cleaned per-test.
+- ⬜ **Kotlin / detekt / ktlint / iOS compile / Express Jest** — N/A (web-only admin tool, no app/Kotlin/server change); the apps run the regression corpus as the net.
+- ✅ **SonarCloud** — quality gate.
+
+**LOCAL gauntlet:** the resolved admin-core-modules spec green across the **full `local` browser matrix** (Mac + device browsers), 0 bare skips, clean fixture teardown → impact-selected each loop, full web corpus at the pre-push gate. Any failure → fix TDD → restart.
+**DEV gauntlet:** redeploy the unmerged branch via Deploy-To-Dev `ref`; re-run the admin-core-modules suite on **Chrome only** + apps regression on real devices. Restart from LOCAL on failure. **Judgment-merge** only when production-ready with zero doubt.
+
 ## Out of Scope
 
 - Other `test.skip(true, ...)` in this file (covered by [[SHY-0023]] data-fixture remediation for admin-* specs).
@@ -132,9 +146,11 @@ So the path is: implement, NOT delete. Removal is only allowed if the skipped te
 - [ ] Audit done; categorisation recorded.
 - [ ] Implementation OR removal applied.
 - [ ] Playwright suite green.
-- [ ] Reviewer ZERO findings.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): admin-core-modules spec green across the **full `local` browser matrix** (0 bare skips, clean teardown) → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green (Chrome) → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
 - [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-08 ~13:08 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 92 (G024). Reserved ID SHY-0047.
+- 2026-06-13 ~00:11 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): web admin bare-skip remediation → all-browser Playwright headline (0 bare skips, provenance-tagged fixtures if the implement-path needs seed data). DoD auto-merge → judgment-merge. Pickup-fitness: Out-of-Scope cross-refs verified current — the *data-dependent* `test.skip(true,...)` siblings remain [[SHY-0023]]'s scope (admin-* data fixtures), distinct from this bare/unconditional skip; no stale refs.
