@@ -93,13 +93,17 @@ This SHY-0042 exists purely so the G003 top-level identifier resolves to a SHY w
 
 **Red:**
 - `grep -n 'SHY-0042' .project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md` — must return at least one line (the cross-label).
-- `bash scripts/check-story-frontmatter.sh --story SHY-0042` — must exit 0.
+- `bash scripts/check-story-frontmatter.sh .project/stories/SHY-0042-viewmodel-coverage-tracker.md` — must exit 0.
 
 **Green:**
 - This file is the entire deliverable.
 - Roadmap cross-label is one line edit on the G003 row.
 
 **Coverage gate:** frontmatter validator + grep for cross-label both succeed.
+
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**`*.md`-only — gauntlet EXEMPT.** This tracker's entire deliverable is this Markdown spec file (no code, config, or workflow). Per the protocol's sole exemption, it runs only the non-device frameworks: the **story-frontmatter validator** (`scripts/check-story-frontmatter.sh`) + the roadmap cross-label grep + `code-reviewer` on the spec + CI. No real-device / browser gauntlet applies. It also has **no implementation PR of its own** — it shipped in the SHY-0036 batch and merely flips to `Done` (a frontmatter-only change, itself `*.md`-only) once [[SHY-0010]] + [[SHY-0011]] + [[SHY-0012]] all reach Done.
 
 ## Out of Scope
 
@@ -123,8 +127,10 @@ This SHY-0042 exists purely so the G003 top-level identifier resolves to a SHY w
 - [ ] File exists with valid frontmatter + 10 body sections + 8 AC sub-headings.
 - [ ] Roadmap cross-label exists.
 - [ ] Reviewer ZERO findings on the spec (this SHY ships as part of SHY-0036).
+- [ ] **`*.md`-only → gauntlet-exempt** (`CLAUDE.md` § Pre-Merge Testing Protocol): validator + cross-label grep + `code-reviewer` 100% clean only; no device/browser gauntlet. The eventual `status: Done` flip is a frontmatter-only `*.md` edit, judgment-merged on the sweep that records all three sub-SHY PRs.
 - [ ] `status: Draft` at creation; flips to `Done` later when sub-SHYs all ship (managed by a future sweep).
 
 ## Notes (running log)
 
 - 2026-06-08 ~12:58 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 28 (G003 parent). Per Edge-case AC in SHY-0036, this is the tracker pattern for G-IDs whose implementation is split into pre-existing sub-SHYs.
+- 2026-06-12 ~23:50 BST — **Recorded the gauntlet exemption** ([[SHY-0091]] pass): `*.md`-only tracker → validator + review only, no device gauntlet; no implementation PR (flips to Done on the sub-SHY sweep). Pickup-fitness: fixed a stale validator invocation in the Test Plan Red (`--story SHY-0042` is not a real flag → file-path form). No dupes found.
