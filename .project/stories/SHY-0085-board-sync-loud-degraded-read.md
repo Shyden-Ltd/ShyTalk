@@ -1,6 +1,6 @@
 ---
 id: SHY-0085
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-12
 priority: P2
@@ -11,6 +11,7 @@ pr:
 epic: EPIC-0001
 public: false
 mvp: true
+released_in: v0.97.13
 ---
 
 # SHY-0085: Make a fully-degraded board items-map read LOUD (sidecar-only sync)
@@ -129,5 +130,6 @@ So that a broken/degraded `GH_PAT_PROJECT` read surfaces in the Actions UI inste
 
 ## Notes (running log)
 
+- 2026-06-12 ~15:00 BST — **CLOSED (Done, released_in: v0.97.13).** Shipped in the v0.97.13 release (#1391 merged before that tag was cut). Infra/CI observability change — no app deploy needed; the release cut is its release event. Batched into the v0.97.14 closeout PR with SHY-0084/SHY-0086. (Operator still to re-provision `GH_PAT_PROJECT` with Issues:Read — the underlying fix; this story is the loud-warning net for when the read is fully blind.)
 - 2026-06-12 ~03:35 BST — **IMPLEMENTED (In Review).** `overlay_board_items_sidecar()` now computes `api_keyed` (the API-only map size, before the overlay merge) and, inside the existing `N_SIDECAR_FILLS > 0` block, emits a `::warning::` when `api_keyed == 0` (fully-blind read) — the existing `[sidecar] API read missed N` info line is retained. Tests: new `SHY-0085` describe in `sync-stories-to-issues-board-fields.test.js` (4 cases, value-level): fully-blind→`::warning::` (+ names the fill count), healthy (API keys the item)→no warning, partial (API keys it + a ghost sidecar key lag-fills)→info line only/no warning, bootstrap (no sidecar + empty API)→no warning. board-fields 156 green; shellcheck clean. **Self-review** (no agent dispatch — low-risk additive observability one-liner per the rate-limit-slowdown convention): api_keyed measured pre-merge ✓; no token value logged (names `GH_PAT_PROJECT` only) ✓; bootstrap path unreached (early return) ✓; partial stays quiet ✓.
 - 2026-06-12 ~02:50 BST — Filed from the SHY-0082 v4 migration-verification finding (see SHY-0082 ## Notes). The CI items-map read returns empty (`[sidecar] API read missed 79`) while the same PAT reads all 79 from a laptop → sidecar-only sync (correct but churny + dup-on-loss footgun). Operator chose to re-provision the PAT (fix the read); this story is the observability net (loud `::warning::` on a fully-blind read). P2 — board is healthy. Authored fully-refined; implementation is a ~5-line script change + a 4-case board-fields test (deferred to a focused PR to pace rate limits during the AFK window).

@@ -10,9 +10,6 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 | ID                                                              | Pri | Effort | Type     | Title                                                                                            | Status         | Roadmap IDs      | PR  |
 | --------------------------------------------------------------- | --- | ------ | -------- | ------------------------------------------------------------------------------------------------ | -------------- | ---------------- | --- |
-| [SHY-0084](SHY-0084-prod-deploy-gate-and-smoke-fixes.md)        | P0  | M      | bug      | Consolidate prod-deploy approval gates + fix Android & iOS boot smoke tests                      | 👀 In Review   | —                | —   |
-| [SHY-0085](SHY-0085-board-sync-loud-degraded-read.md)           | P2  | S      | infra    | Make a fully-degraded board items-map read LOUD (sidecar-only sync warning)                      | 👀 In Review   | —                | —   |
-| [SHY-0086](SHY-0086-speed-up-prod-deploy-pipeline.md)           | P0  | M      | spike    | Investigate + speed up the entire prod-deploy pipeline (currently multiple hours)                | 👀 In Review   | —                | —   |
 | [SHY-0087](SHY-0087-parallelize-ios-smoke-with-deploy.md)       | P1  | S      | infra    | Run the iOS boot smoke in parallel with the iOS App Store deploy (~25 min saving)                | 📝 Draft       | —                | —   |
 | [SHY-0088](SHY-0088-cache-cocoapods-instrument-ios-archive.md)  | P1  | M      | infra    | Instrument + cache the 29-min iOS `xcodebuild archive` (CocoaPods compile)                       | 📝 Draft       | —                | —   |
 | [SHY-0089](SHY-0089-gradle-build-cache-kn-ios-link.md)          | P2  | M      | infra    | Build-cache the 22-min Kotlin/Native iOS framework link (feasibility-gated)                      | 📝 Draft       | —                | —   |
@@ -100,6 +97,9 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0081](SHY-0081-mirror-v3-uniform-board-drafts.md)          | P1  | L      | refactor | Mirror v3: every story (incl. bug) is a board draft card; the Issues page is reserved for bug reports | ✅ Done        | —                | [#1305](https://github.com/Shyden-Ltd/ShyTalk/pull/1305) |
 | [SHY-0082](SHY-0082-mirror-v4-typed-issues.md)                  | P1  | XL     | refactor | Mirror v4: every story is a real typed GitHub issue (Bug/Feature/Task), never a draft                | ✅ Done        | —                | [#1308](https://github.com/Shyden-Ltd/ShyTalk/pull/1308) |
 | [SHY-0083](SHY-0083-mvp-frontmatter-field.md)                   | P1  | S      | infra    | Add optional `mvp:` frontmatter field (MVP launch-set classification flag)                           | ✅ Done        | —                | [#1307](https://github.com/Shyden-Ltd/ShyTalk/pull/1307) |
+| [SHY-0084](SHY-0084-prod-deploy-gate-and-smoke-fixes.md)        | P0  | M      | bug      | Consolidate prod-deploy approval gates + fix Android & iOS boot smoke tests (released_in v0.97.14)   | ✅ Done        | —                | [#1389](https://github.com/Shyden-Ltd/ShyTalk/pull/1389) |
+| [SHY-0085](SHY-0085-board-sync-loud-degraded-read.md)           | P2  | S      | infra    | Make a fully-degraded board items-map read LOUD (sidecar-only sync warning) (released_in v0.97.13)   | ✅ Done        | —                | [#1391](https://github.com/Shyden-Ltd/ShyTalk/pull/1391) |
+| [SHY-0086](SHY-0086-speed-up-prod-deploy-pipeline.md)           | P0  | M      | spike    | Investigate + speed up the entire prod-deploy pipeline (spike — findings + SHY-0087/0088/0089)       | ✅ Done        | —                | [#1399](https://github.com/Shyden-Ltd/ShyTalk/pull/1399) |
 
 ## Cancelled
 

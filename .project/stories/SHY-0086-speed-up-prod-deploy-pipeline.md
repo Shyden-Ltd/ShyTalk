@@ -1,6 +1,6 @@
 ---
 id: SHY-0086
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-12
 priority: P0
@@ -137,6 +137,7 @@ Spike — the deliverable is the measurement methodology + the evidentiary recor
 
 ## Notes (running log)
 
+- 2026-06-12 ~15:00 BST — **CLOSED (Done).** Spike deliverables landed via #1399 (profiling findings + the 3 follow-up SHYs). Spike → no `released_in` (ships findings, not code; the follow-ups SHY-0087/0088/0089 carry the implementation + release). Status flipped In Review→Done in the v0.97.14 closeout PR alongside SHY-0084/0085.
 - 2026-06-12 ~12:10 BST — **SPIKE COMPLETE — profiled, decision recorded, follow-ups filed (SHY-0087 / SHY-0088 / SHY-0089). Status → In Review (→ Done on merge of this closeout PR; spikes carry no release gate).** Profiling source: `gh api repos/Shyden-Ltd/ShyTalk/actions/runs/27388236740/jobs` per-step `started_at`/`completed_at` (v0.97.12 baseline). The v0.97.13 run (queued, pending approval) will add a 2nd data point for ranges; the breakdown below is already decisive enough to sequence the fixes.
 
   **Two-phase wall-clock — the "several hours" is mostly the APPROVAL WAIT, not the pipeline:**
