@@ -1,13 +1,14 @@
 ---
 id: SHY-0082
-status: In Review
+status: Done
 owner: claude
 created: 2026-06-11
 priority: P1
 effort: XL
 type: refactor
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1308
+released_in: v0.97.12
 epic: EPIC-0001
 public: false
 ---
@@ -196,6 +197,8 @@ All script behaviour is covered by the mock-`gh` harness in `express-api/tests/s
 
 ## Notes (running log)
 
+- 2026-06-12 ~01:10 BST — **DONE — released in v0.97.12.** Migration verified clean: post-merge incremental sync (run 27384094365) → `Sync result: 79 created, 0 updated, 0 skipped, 0 failed` (79 drafts→typed issues, 79 board items added + 79 old draft items deleted, issue types set ×79, 27 terminal-status issues closed, sidecar id-map committed `f6ce3b0`). Live board verified = 79 typed issues (52 open + 27 closed), all keyed by the "SHY ID" field; bodies + hashes correct (issue #1387 footer body-hash == freshly-computed SHY-0083 body-hash, byte-identical). Release: bump run 27384760667 → commit `c1a50d3` → tag run 27384868546 → **v0.97.12** tagged.
+  - **FOLLOW-UP FINDING → SHY-0085:** in GitHub Actions the items-map read returns an EMPTY `items.nodes` array (the same `GH_PAT_PROJECT` PAT returns all 79 from a laptop), so CI runs SIDECAR-ONLY (`[sidecar] API read missed 79 item(s)`). Correct today (no dups — the sidecar supplies item IDs → UPDATE path, never CREATE) but it re-updates all 79 every run + would duplicate them all if the sidecar were ever lost. Root cause: the CI token can create/add issues but apparently can't traverse-READ Issue-backed project items (Drafts read fine pre-migration → that's why the migration's read worked). Operator will re-provision the secret with Issues: Read; SHY-0085 makes the degraded read LOUD (`::warning::`) instead of silent + keeps the API read primary.
 - 2026-06-12 ~00:25 BST — **IMPLEMENTED + reviewed; all tests green (In Review).** Script v4.0.0 (shellcheck-clean, bash -n OK): `bootstrap_repo` (repo id + native type ids + `story` label via repo-level GraphQL), `create_issue` (`createIssue` + `issueTypeId` + inlined `story` labelId) + `add_to_board`, `update_issue` (now also re-applies the `story` label so a manual removal is restored), `set_issue_state` (close/reopen reconciled ONLY on a terminal-boundary change → no spurious calls, all-skip preserved), `sync_one` create→`create_issue_path` + update→`update_issue`, migration INVERTED (DRAFT-backed = legacy → recreate as issue; ISSUE-backed = normal), items-map fetches the Issue `body`, summary → v4 counters, `setup_pre_sync` shared by sync_all + sync_story. **TWO real bugs caught by the tests:** the first story got an empty `issueTypeId` because the type id was computed before `bootstrap_repo` ran — fixed by bootstrapping before the loop in BOTH `sync_all` AND `sync_story`. Tests: board-fields 152 + comprehensive 27 + characterization 5 + main 14 = **198 sync tests**; full express-api **12,151 green**; CLAUDE.md Board-mirror section + `sync-stories-to-issues.yml` header → v4. **code-reviewer (agent a78baf09): ZERO Critical** (core logic / bootstrap ordering / migration inversion / globals-not-echo / `--label story` scoping all verified correct). Applied: I1 (`ensure_story_label` failure → loud `::warning::` not silent `|| true`), I2 (`setup_pre_sync` DRY helper), I8 (`update_issue` re-applies the label), + 4 new tests (C2 bootstrap-missing-type → exit 40 before any create; C3 terminal→non-terminal `reopenIssue`; I3 `closeIssue` fails on create → exit 40, issue still created; I4 `addProjectV2ItemById` fails after createIssue → exit 40, story absent from sidecar). I7 stale v3 comments fixed.
   - **KNOWN LIMITATION (I4, tracked):** if `addProjectV2ItemById` fails AFTER `createIssue` succeeds, the issue exists on the Issues tab but is NOT on the board and NOT in the sidecar → the next run re-creates a duplicate. Acceptable for now (rare; loud exit 40). Future fix: idempotency-by-search (find an existing story-issue by SHY id before create) — a follow-up SHY.
   - **Next:** merge → release → LIVE `--rebuild` migration (drafts→issues; operator authorized; verify 0-failed + all-skip after; the 25 prod-desync alerts already manually deleted).

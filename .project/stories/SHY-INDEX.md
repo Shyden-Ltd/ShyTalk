@@ -10,8 +10,6 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 | ID                                                              | Pri | Effort | Type     | Title                                                                                            | Status         | Roadmap IDs      | PR  |
 | --------------------------------------------------------------- | --- | ------ | -------- | ------------------------------------------------------------------------------------------------ | -------------- | ---------------- | --- |
-| [SHY-0083](SHY-0083-mvp-frontmatter-field.md)                   | P1  | S      | infra    | Add optional `mvp:` frontmatter field (MVP launch-set classification flag)                       | 🚧 In Progress | —                | —   |
-| [SHY-0082](SHY-0082-mirror-v4-typed-issues.md)                  | P1  | XL     | refactor | Mirror v4: every story is a real typed GitHub issue (Bug/Feature/Task), never a draft            | 👀 In Review   | —                | —   |
 | [SHY-0060](SHY-0060-age-gating-per-feature.md)                  | P0  | XL     | feature  | Age-gating per feature: tiered per-feature age thresholds replacing single 13+ signup gate       | 📝 Draft       | —                | —   |
 | [SHY-0071](SHY-0071-sync-wall-clock-batching.md)                | P1  | M      | refactor | Sync wall-clock: batch gh lookups (one upfront list → map) + scan-mode validation (36.2s→≤6s)      | 📝 Draft       | —                | —   |
 | [SHY-0062](SHY-0062-migrate-legacy-roadmap-features.md)         | P1  | XL     | chore    | Migrate ~95 legacy roadmap features into tracked stories (meta/tracker; EPIC-0002)                | 📝 Draft       | —                | —   |
@@ -94,6 +92,8 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0079](SHY-0079-draft-dedup-sidecar.md)                     | P1  | L      | bug      | Draft-dedup sidecar: board-items.json consistent id-map overlaying the laggy Projects v2 query     | ✅ Done        | —                | [#1272](https://github.com/Shyden-Ltd/ShyTalk/pull/1272) |
 | [SHY-0080](SHY-0080-argmax-safe-map-merge.md)                   | P0  | S      | bug      | ARG_MAX-safe items-map merges (stdin not --argjson) — the deterministic board-duplication root cause | ✅ Done        | —                | [#1274](https://github.com/Shyden-Ltd/ShyTalk/pull/1274) |
 | [SHY-0081](SHY-0081-mirror-v3-uniform-board-drafts.md)          | P1  | L      | refactor | Mirror v3: every story (incl. bug) is a board draft card; the Issues page is reserved for bug reports | ✅ Done        | —                | [#1305](https://github.com/Shyden-Ltd/ShyTalk/pull/1305) |
+| [SHY-0082](SHY-0082-mirror-v4-typed-issues.md)                  | P1  | XL     | refactor | Mirror v4: every story is a real typed GitHub issue (Bug/Feature/Task), never a draft                | ✅ Done        | —                | [#1308](https://github.com/Shyden-Ltd/ShyTalk/pull/1308) |
+| [SHY-0083](SHY-0083-mvp-frontmatter-field.md)                   | P1  | S      | infra    | Add optional `mvp:` frontmatter field (MVP launch-set classification flag)                           | ✅ Done        | —                | [#1307](https://github.com/Shyden-Ltd/ShyTalk/pull/1307) |
 
 ## Cancelled
 

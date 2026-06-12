@@ -1,13 +1,14 @@
 ---
 id: SHY-0083
-status: In Progress
+status: Done
 owner: claude
 created: 2026-06-11
 priority: P1
 effort: S
 type: infra
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1307
+released_in: v0.97.11
 epic: EPIC-0001
 public: false
 ---
@@ -147,4 +148,5 @@ So that I can mark the stories that must ship for the first public release (the 
 
 ## Notes (running log)
 
+- 2026-06-12 ~01:10 BST — **DONE — released in v0.97.11** (PR #1307; tag v0.97.11 cut 2026-06-11). Closeout was overdue — the `.md` + index lagged at In Progress while the field itself shipped; flipped to Done + `released_in: v0.97.11` in the v0.97.12 corpus-closeout PR alongside SHY-0082. The `mvp:` frontmatter field is live and validator-accepted; `released_in:` rides the same tolerant-unknown-field path (validator exit 0).
 - 2026-06-11 ~19:38 BST — Filed as the framework prerequisite for the MVP programme (operator chose "mvp: field first" over building SHY-0082 Mirror-v4 immediately; v4 is approved-as-spec and deferred to right after this). Marker decision = `mvp: true` frontmatter flag, no MVP EPIC (`project-mvp-golive-parameters` memory). Validator-only, shape-checked like `epic:`; consumption (roadmap redesign, board filtering) and bulk-classification are separate follow-ups.
