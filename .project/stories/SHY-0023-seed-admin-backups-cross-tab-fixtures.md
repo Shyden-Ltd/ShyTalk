@@ -112,6 +112,22 @@ Same pattern as SHY-0022 but smaller scope (4 skips across 2 files). P2 Tier-4. 
 3. Add cleanup.
 4. Re-run → GREEN.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (un-skips 4 Playwright tests + extends a fixture helper) → the FULL protocol applies. This is a **web admin** surface (desktop-primary, operator-facing); the headline is the 4 specs green on the real rendered admin UI across browsers.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Web E2E Playwright** — `admin-backups.spec.ts` + `admin-cross-tab.spec.ts` with the 4 skips removed, run against the **REAL rendered admin UI backed by the REAL admin API** (the seed helpers create real backups + trace-links via the admin API's server-side state — never a mocked endpoint, per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only). Admin is desktop-primary → all Mac browsers (chromium/firefox/webkit/edge) as the headline; mobile browsers as the regression net.
+- ✅ **eslint** (`--max-warnings=0`) — the new/edited TS fixture + spec code.
+- ⬜ **Express Jest** — N/A (no server route change; the helpers call existing admin endpoints).
+- ⬜ **Android/iOS UI · Kotlin/detekt/ktlint** — N/A (no app/shared surface).
+
+**No-Stubs (already aligned):** the cross-tab test opens TWO real browser contexts and the trace-link must propagate via real server-side state (the Risk note's own mitigation) — inherently real, no scrub. Error paths induced for real: a real seed-step failure surfaces a failing test; per-test cleanup keeps isolation (no leaks, [[feedback-test-isolation-no-leaks]]); test-only personas/IDs in a test namespace (never prod data/restore).
+
+**LOCAL gauntlet:** the 4 specs + the admin web regression green on all Mac browsers (real admin API on the local stack) + real Android + real iPhone browsers as the net; pass-count delta +4 / 0 skipped; eslint clean. Any failure → fix TDD → restart.
+**DEV gauntlet:** redeploy the unmerged branch via Deploy-To-Dev `ref`; re-run the 2 specs on Chrome against the real dev admin API. Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt; NO auto-merge.
+
 ## Out of Scope
 
 - **admin-keyboard skips** — SHY-0022 covers.
@@ -133,12 +149,12 @@ Same pattern as SHY-0022 but smaller scope (4 skips across 2 files). P2 Tier-4. 
 
 - [ ] 4 skips removed; 4 tests pass.
 - [ ] Helpers extracted to fixture file.
-- [ ] Reviewer ZERO findings.
-- [ ] Per-type Done gate (`bug` → auto-merge + CI green).
-- [ ] PR merged.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): the 4 un-skipped specs green on all Mac browsers (real admin API; per-test cleanup; 0 skipped) + eslint clean → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green (Chrome, real dev admin API) → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
 - [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-07 ~21:31 BST — Refined under SHY-0032. Tier 4 polish-with-real-value.
 - 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-H2` (G033).
+- 2026-06-13 ~00:52 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): web-admin un-skip → Playwright headline on the real admin UI across all Mac browsers (admin = desktop-primary; mobile browsers = regression net). No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]): ALREADY aligned — the seed helpers create real backups + trace-links via the real admin API (server-side state, the Risk's own mitigation), test-only namespace, per-test cleanup; nothing to scrub. DoD swaps the stale Reviewer-ZERO / `bug→auto-merge` / PR-merged lines for protocol-satisfied + judgment-merge + released_in. Pickup-fitness: AC current; SHY-0022's `admin-data.ts` fixture reuse stands; line numbers (`:150,187` / `:361,384`) to be re-confirmed at pickup (specs may have drifted).
