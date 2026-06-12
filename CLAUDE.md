@@ -325,6 +325,26 @@ Before any production code, write **deep** tests — RED before GREEN — across
 - **SHA-pinned third-party actions** (added in PR #1016, pending merge at time of writing) — `scripts/check-action-shas.sh` rejects `uses: foo/bar@vN` for any third-party action; only 40-hex SHAs and local (`./...`) refs pass. Supply-chain hardening. Get the SHA via `gh api repos/<owner>/<repo>/git/refs/tags/<tag> --jq '.object.sha'`. Once #1016 lands, drop the "pending merge" caveat from this bullet.
 - **actionlint** + embedded shellcheck — runs in pre-push hook + CI lint job
 
+## No Stubs / Mocks / Fakes — Real Only (HARD GLOBAL RULE — operator 2026-06-13)
+
+**Everything you build is FULLY OPERATIONAL and tested against REAL services. No stubs, no mocks, no fakes, no placeholders — ever.** Stubs have repeatedly created false confidence — things looked complete that were not — so they are banned outright.
+
+**What this bans:**
+- Placeholder / non-functional implementations presented as complete: no-op or `TODO`/`throw NotImplemented` bodies, scaffold-only modules, "fill this in later" shells, matrix cells that report pass without really exercising the surface.
+- **In-process test doubles**: mocks, fakes, stubs, spies, fetch-mocks, fake repositories standing in for real collaborators in tests.
+- Simulators / emulators standing in for the device-under-test where the Pre-Merge Testing Protocol requires a REAL one (real Android + real iPhone for app journeys).
+
+**What "real" means (how to comply):**
+- Tests run against **real services**: the local emulator stack (`local/start.sh` — Firebase Emulators + LiveKit + MinIO + Mailpit are *real* local backends, $0), real dev backends, real test personas, real devices, real browsers. The local stack IS the real backend for local testing — use it instead of in-process fakes.
+- Error paths / edge cases are exercised by **inducing the real condition** (a real `PERMISSION_DENIED` from real rules, a real seeded empty-state in the real datastore, a real throttled/again-real network condition) — NOT by mocking a rejection.
+- The matrix/gauntlet must be **genuinely runnable end-to-end** before it is called done (EPIC-0003 builds a fully-operational 14-cell matrix — every cell drives a real device/browser).
+
+**Scope + migration:** binds on ALL new work going forward — no new mock/fake/stub may be introduced. Existing mock-based tests migrate to real-backend equivalents **opportunistically** when a story touches that area (no big-bang rewrite of the 12k-test suite, but the direction is one-way toward real). A story's `## Test Plan` names the REAL backend/service/device each test runs against.
+
+**The ONE escape hatch:** if a condition is genuinely impossible to induce for real (e.g. simulating a specific third-party outage, a deterministic wall-clock), do NOT silently add a mock — STOP and escalate to the operator for a decision. A test double is never the default; it is an operator-approved exception or it does not exist.
+
+**Reference:** `[[feedback-no-stubs-mocks-fakes-real-only]]` memory.
+
 ## Debugging
 
 - **Check Firestore security rules first** for read/write failures — pull logcat for `PERMISSION_DENIED`

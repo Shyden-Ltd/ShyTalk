@@ -29,6 +29,7 @@ Operator 2026-06-12: the "before push" step was a one-line "code review agent" t
 - [ ] `CLAUDE.md` contains a `## Pre-Merge Testing Protocol` section enumerating all 12 frameworks + the 4 phases (LOCAL gauntlet → review+push → DEV gauntlet → judgment-merge).
 - [ ] The Lifecycle section reflects: In Progress → local-gauntlet + reviewer → In Review → dev-gauntlet → judgment-merge → Done-on-release.
 - [ ] Every not-Done story (54 at adoption) has its `## Test Plan` + `## Definition of Done` updated to name its specific frameworks/surfaces and assert the gauntlet; `*.md`-only stories record the exemption instead.
+- [ ] `CLAUDE.md` also codifies the companion **No Stubs / Mocks / Fakes — Real Only** HARD GLOBAL rule (operator 2026-06-13): every implementation fully operational; tests run against real services (local emulator stack / real backends / real devices), no in-process test doubles; new mocks/fakes/stubs banned, existing migrated opportunistically; genuinely-impossible-to-induce cases escalate to the operator (never a silent mock).
 
 ### Error paths
 - [ ] `scripts/check-story-frontmatter.sh --scan .project/stories` exits 0 across the whole corpus after refinement (no malformed frontmatter / missing sections introduced).
@@ -95,7 +96,7 @@ This story is `*.md`-only (CLAUDE.md + story files + out-of-repo memory) → **d
 - CI required checks (Detect Changes, Analyze JavaScript, PR Gate) → SUCCESS by name.
 
 ## Out of Scope
-- BUILDING the test-framework matrix (the stubbed iOS-UI / Mac-browser / mobile-browser drivers) — that is **EPIC-0003** + its SHYs, sequenced after this.
+- BUILDING the test-framework matrix (making the currently-non-functional iOS-UI / Mac-browser / mobile-browser drivers FULLY OPERATIONAL — no stubs, per the No-Stubs rule) — that is **EPIC-0003** + its SHYs, sequenced after this.
 - Refining Done/Cancelled stories.
 - Running the gauntlet on any feature work — this story only embeds the requirement into the specs.
 
@@ -110,6 +111,7 @@ This story is `*.md`-only (CLAUDE.md + story files + out-of-repo memory) → **d
 
 ## Definition of Done
 - [ ] `## Pre-Merge Testing Protocol` codified in `CLAUDE.md` + Lifecycle + dev-verify rule updated.
+- [ ] `## No Stubs / Mocks / Fakes — Real Only` HARD GLOBAL rule codified in `CLAUDE.md`; memory `feedback-no-stubs-mocks-fakes-real-only` written + `MEMORY.md` pointer (operator directive 2026-06-13, folded into this testing-standards PR to keep one active branch).
 - [ ] Memory `feedback-pre-merge-testing-protocol` written; `MEMORY.md` pointer added.
 - [ ] SHY-0088 → In Review; SHY-0089 → Cancelled (reject evidence) — closed out in this PR.
 - [ ] All 54 not-Done stories refined (one commit each) to embed the protocol; `*.md`-only stories record the exemption.
@@ -118,5 +120,6 @@ This story is `*.md`-only (CLAUDE.md + story files + out-of-repo memory) → **d
 - [ ] Done on the next release cut + `released_in: vX.Y.Z`.
 
 ## Notes (running log)
-- 2026-06-12 ~22:45 BST — Created as the umbrella adoption story (operator 2026-06-12: "go through EVERY not-done ticket and refine them to include all this testing"). Consolidates codification + the 54-ticket embed into one PR with per-ticket commits (operator: "one single PR… commit and review each ticket individually… complete the PR once all committed"). Decisions from the Q&A: merge = production-ready / zero-doubt, Claude merges autonomously when certain; devices connected now; dev includes real-iOS app journeys (web = Chrome only); regression = impact-loops + full-corpus-at-gate; exemption = `*.md`-only; release = the cut (pre-merge gauntlet is the gate). Framework build (the stubbed drivers) = EPIC-0003, after this.
+- 2026-06-12 ~22:45 BST — Created as the umbrella adoption story (operator 2026-06-12: "go through EVERY not-done ticket and refine them to include all this testing"). Consolidates codification + the 54-ticket embed into one PR with per-ticket commits (operator: "one single PR… commit and review each ticket individually… complete the PR once all committed"). Decisions from the Q&A: merge = production-ready / zero-doubt, Claude merges autonomously when certain; devices connected now; dev includes real-iOS app journeys (web = Chrome only); regression = impact-loops + full-corpus-at-gate; exemption = `*.md`-only; release = the cut (pre-merge gauntlet is the gate). Framework build (making today's non-functional drivers fully operational — NO stubs, per the new rule) = EPIC-0003, after this.
 - 2026-06-12 — Commit 1: codified `## Pre-Merge Testing Protocol` in `CLAUDE.md` (482eb9b).
+- 2026-06-13 ~00:26 BST — Operator added a companion HARD GLOBAL rule: **No Stubs / Mocks / Fakes — Real Only** ("real only... stubs is no longer allowed"; chose the sweeping scope incl. test doubles after being shown it reworks mock-gh / FakeGiftRepository / recording-diff). Codified into `CLAUDE.md` § No Stubs — Real Only + memory, folded into THIS PR (one-active-branch). EPIC-0003 reframed to build the matrix FULLY OPERATIONAL (no stubbed cells). Already-refined ticket Test Plans naming test doubles (0046 FakeGiftRepository, 0071 mock-gh recording-diff, 0019 fetch-mocks) get a real-backend scrub before the PR completes. Interpretation recorded for operator review: "real" = local emulator stack / real backends / real devices; new-work-forward + opportunistic migration (no 12k big-bang); impossible-to-induce conditions escalate, never silently mock.
