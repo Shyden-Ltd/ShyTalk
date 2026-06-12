@@ -10,6 +10,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 | ID                                                              | Pri | Effort | Type     | Title                                                                                            | Status         | Roadmap IDs      | PR  |
 | --------------------------------------------------------------- | --- | ------ | -------- | ------------------------------------------------------------------------------------------------ | -------------- | ---------------- | --- |
+| [SHY-0084](SHY-0084-prod-deploy-gate-and-smoke-fixes.md)        | P0  | M      | bug      | Consolidate prod-deploy approval gates + fix Android & iOS boot smoke tests                      | 👀 In Review   | —                | —   |
 | [SHY-0060](SHY-0060-age-gating-per-feature.md)                  | P0  | XL     | feature  | Age-gating per feature: tiered per-feature age thresholds replacing single 13+ signup gate       | 📝 Draft       | —                | —   |
 | [SHY-0071](SHY-0071-sync-wall-clock-batching.md)                | P1  | M      | refactor | Sync wall-clock: batch gh lookups (one upfront list → map) + scan-mode validation (36.2s→≤6s)      | 📝 Draft       | —                | —   |
 | [SHY-0062](SHY-0062-migrate-legacy-roadmap-features.md)         | P1  | XL     | chore    | Migrate ~95 legacy roadmap features into tracked stories (meta/tracker; EPIC-0002)                | 📝 Draft       | —                | —   |

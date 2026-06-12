@@ -164,6 +164,15 @@ jobs:
   # ── Build Android (shared by deploy + smoke test) ──────────
   build-android:
     name: Build Android
+    # SHY-0084 note: intentionally NOT gated on `approve-prod`. This job only
+    # BUILDS + signs artifacts (it does not deploy) — publication to Play Store
+    # is gated on the deploy-android-prod job, which DOES need approve-prod. The
+    # signing key is used by trusted CI either way; the gate controls SHIPPING,
+    # not signing. Building during the approval wait (rather than after) keeps
+    # the post-approval deploy fast — important for queued/overnight releases
+    # where the artifact is ready by the time the operator clicks approve.
+    # Behaviour unchanged from the pre-SHY-0084 design (the old per-platform
+    # gates were on the deploy jobs, never on this build).
     needs: [validate-release]
     if: inputs.android
     runs-on: ubuntu-latest
@@ -208,16 +217,34 @@ jobs:
           retention-days: 3
 
   # ── Deploy jobs ────────────────────────────────────────────
+  approve-prod:
+    name: Approve Prod Release
+    # SHY-0084: the SINGLE manual approval gate for the entire prod deploy.
+    # Replaces the four per-platform `environment: prod-*` gates (one release
+    # used to need four approval clicks). Every deploy job below `needs:` this
+    # job AND checks `needs.approve-prod.result == 'success'` in its `if:`, so
+    # ONE approval of the protected `production` environment unlocks backend +
+    # web + android + ios — and a DENIED approval (this job fails) blocks all
+    # four, even though they use `always()` for selective-platform logic.
+    # `production` is the pre-existing protected environment (required reviewer:
+    # the repo owner); no per-platform environment is auto-created un-gated.
+    needs: [validate-release]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - name: Record approval
+        env:
+          DEPLOY_SHA: ${{ needs.validate-release.outputs.commit-sha || github.sha }}
+        run: echo "Production release approved for $DEPLOY_SHA"
+
   deploy-backend-prod:
     name: Deploy Backend to Prod
-    needs: [validate-release]
+    # SHY-0084: gated by the single `approve-prod` job above (no own
+    # environment). `needs: approve-prod` (no `always()` here) means a denied
+    # approval auto-skips this first deploy.
+    needs: [validate-release, approve-prod]
     if: inputs.backend
-    # Repo-owner approval gate (configured via GitHub Environments).
-    # The `prod-backend` environment must exist with the repo owner
-    # listed as a required reviewer — see PR description for one-time
-    # setup. Without the environment + reviewers, the job would run
-    # un-gated (environments default to empty reviewers when auto-created).
-    environment: prod-backend
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -308,7 +335,8 @@ jobs:
     # (incident 2026-05-03 run 25276782190 where web shipped with a
     # broken backend deploy and testers got a working-looking site
     # whose every API call errored). Prod stakes are higher than dev.
-    needs: [validate-release, deploy-backend-prod]
+    # SHY-0084: + approve-prod (the single gate); no own environment.
+    needs: [validate-release, approve-prod, deploy-backend-prod]
     # Allow `success` OR `skipped` — `skipped` covers the legitimate
     # `inputs.backend=false` web-only redeploy. Block only on `failure`
     # / `cancelled` so a crashed backend can't ship a working-looking
@@ -317,11 +345,13 @@ jobs:
     # rationale (run 25280868804 — implicit "needs success" gate skips
     # dependent jobs whenever upstream is `skipped`, even when explicit
     # `if:` checks for `result == 'skipped'`).
+    # The explicit `approve-prod.result == 'success'` keeps the gate
+    # enforced under always() (a denied approval blocks this deploy).
     if: |
       always() &&
       inputs.web &&
+      needs.approve-prod.result == 'success' &&
       (needs.deploy-backend-prod.result == 'success' || needs.deploy-backend-prod.result == 'skipped')
-    environment: prod-web
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -350,14 +380,17 @@ jobs:
     # Gate Android on backend success — see deploy-web-prod for the
     # rationale. Pushing a broken-backend build to Play Store would
     # be visible to every prod user on next app open.
-    needs: [validate-release, build-android, deploy-backend-prod]
+    # SHY-0084: + approve-prod (the single gate); no own environment.
+    needs: [validate-release, approve-prod, build-android, deploy-backend-prod]
     # See deploy-web-prod for `success || skipped` rationale.
     # See deploy-web-prod / deploy-dev.yml for `always()` + allowlist rationale.
+    # The explicit `approve-prod.result == 'success'` keeps the gate enforced
+    # under always() (a denied approval blocks this deploy).
     if: |
       always() &&
       inputs.android &&
+      needs.approve-prod.result == 'success' &&
       (needs.deploy-backend-prod.result == 'success' || needs.deploy-backend-prod.result == 'skipped')
-    environment: prod-android
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -396,14 +429,17 @@ jobs:
     # Gate iOS on backend success — see deploy-web-prod for the
     # rationale. Apple App Store review pulls and exercises the binary
     # against the live backend; a broken-backend build risks rejection.
-    needs: [validate-release, deploy-backend-prod]
+    # SHY-0084: + approve-prod (the single gate); no own environment.
+    needs: [validate-release, approve-prod, deploy-backend-prod]
     # See deploy-web-prod for `success || skipped` rationale.
     # See deploy-web-prod / deploy-dev.yml for `always()` + allowlist rationale.
+    # The explicit `approve-prod.result == 'success'` keeps the gate enforced
+    # under always() (a denied approval blocks this deploy).
     if: |
       always() &&
       inputs.ios &&
+      needs.approve-prod.result == 'success' &&
       (needs.deploy-backend-prod.result == 'success' || needs.deploy-backend-prod.result == 'skipped')
-    environment: prod-ios
     # Migrated 2026-05-20 from self-hosted Mac (shytalk-mac) to GitHub-hosted
     # macos-latest per the no-self-hosted-runners policy. See deploy-dev.yml
     # for full rationale.
@@ -723,6 +759,13 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
     steps:
+      # SHY-0084: check out the repo so the committed bash smoke verifier
+      # (scripts/ci/android-smoke-verify.sh) exists on disk — this job
+      # previously only downloaded the APK artifact, with no working tree.
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ needs.validate-release.outputs.commit-sha }}
+
       - name: Download debug APK
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -745,47 +788,14 @@ jobs:
           force-avd-creation: true
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim
           disable-animations: true
-          script: |
-            set -euo pipefail
-            echo "=== Installing APK ==="
-            shopt -s nullglob
-            apks=(debug-apk/*.apk)
-            shopt -u nullglob
-            if [ "${#apks[@]}" -ne 1 ]; then
-              echo "::error::Expected exactly one debug APK, found ${#apks[@]}"
-              exit 1
-            fi
-            adb install -r "${apks[0]}"
-            echo "=== Launching app ==="
-            am_output=$(adb shell am start -W -n com.shyden.shytalk/com.shyden.shytalk.MainActivity 2>&1)
-            echo "$am_output"
-            # Match only real failures. The benign messages
-            # "Activity not started, its current task has been brought to the front"
-            # and "Activity not started, intent has been delivered to currently running top-most instance"
-            # are normal `am start` output when re-launching. Match the
-            # "unable to" variant or explicit Error type/Java exception lines.
-            if echo "$am_output" | grep -qE '^Error|FATAL|Activity not started, unable to|java\.lang\.|Exception type'; then
-              echo "::error::am start reported an error — app failed to launch"
-              exit 1
-            fi
-            sleep 3
-            echo "=== Verifying app is foreground activity ==="
-            focused=$(adb shell dumpsys window windows 2>&1 | grep -E 'mCurrentFocus' || true)
-            echo "$focused"
-            if ! echo "$focused" | grep -q 'com.shyden.shytalk'; then
-              echo "::error::ShyTalk is not the foreground activity. Got: $focused"
-              exit 1
-            fi
-            sleep 5
-            echo "=== Checking for fatal crashes in logcat ==="
-            adb logcat -d -s AndroidRuntime > /tmp/runtime.log 2>&1
-            CRASHES=$(grep -c "FATAL EXCEPTION" /tmp/runtime.log || echo 0)
-            if [ "${CRASHES:-0}" -gt 0 ]; then
-              echo "::error::Found $CRASHES fatal crash(es)"
-              tail -30 /tmp/runtime.log
-              exit 1
-            fi
-            echo "No fatal crashes — Android APK installs and launches successfully"
+          # SHY-0084: the verification runs as a committed bash file. The action
+          # executes `script` via /usr/bin/sh (dash), where the previous inline
+          # `set -o pipefail` / `shopt` / arrays aborted on line 1 ("Illegal
+          # option -o pipefail") before installing anything — the emulator
+          # booted but the smoke never ran (prod run 27286731472, 2026-06-10).
+          # `bash <file>` guarantees a bash interpreter; the logic is unit-tested
+          # in tests/scripts/android-smoke-verify.test.js.
+          script: bash "$GITHUB_WORKSPACE/scripts/ci/android-smoke-verify.sh"
 
   smoke-test-ios:
     name: Smoke Test (iOS Boot)
@@ -796,7 +806,13 @@ jobs:
     # Migrated 2026-05-20 to GitHub-hosted macos-latest per the
     # no-self-hosted-runners policy. See deploy-dev.yml for rationale.
     runs-on: macos-latest
-    timeout-minutes: 20
+    # SHY-0084: raised 20 → 45. At 20 min the K/N framework link
+    # (--max-workers=1) + pod install + xcodebuild build consumed the whole
+    # budget on a cold ~/.konan cache and the job was CANCELLED before the
+    # "Boot simulator and verify" step ever ran (prod run 27286731472:
+    # started 17:21:26, cancelled 17:41:49 mid-build). 45 min leaves headroom
+    # for the boot+launch verification even on the cold-cache worst case.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
