@@ -1,6 +1,6 @@
 ---
 id: SHY-0003
-status: Draft
+status: Cancelled
 owner: claude
 created: 2026-06-06
 priority: P1
@@ -375,3 +375,4 @@ Fixtures: 4 fixture roadmaps (well-formed, malformed, all-shipped phase, mixed-s
 ## Notes (running log)
 
 - 2026-06-06 12:40 BST — Draft v1 created. Scope confirmed in operator Q&A: 1 PR-bundle = 1 SHY; skip shipped items + cross-label with ✅ PR #N; add G054 (gh-pages) as a new roadmap row + a SHY; same strict template + 8-dimension AC + BDD for every generated SHY (although skeletons start as TBD-on-pickup placeholders); `type: chore` so Done = auto-merge fires. Blocked by SHY-0001 + SHY-0002 + repo migration. Ready for operator review of this draft.
+- 2026-06-12 ~22:56 BST — **CANCELLED** (operator decision during SHY-0091's dedup/closeout pass). Deliverable already shipped: the zero-gap roadmap carries 60 SHY cross-labels, the 91-story corpus exists, and the one-time `convert-roadmap-to-stories.sh` skeleton generator's output was refined under SHY-0032. Stale Draft superseded by SHY-0032; distinct from SHY-0062 (the PUBLIC `phases[].features[]` migration, still open). Cancelled rather than Done per operator.
