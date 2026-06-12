@@ -1,6 +1,6 @@
 ---
 id: SHY-0086
-status: Draft
+status: In Review
 owner: claude
 created: 2026-06-12
 priority: P0
@@ -136,6 +136,37 @@ Spike — the deliverable is the measurement methodology + the evidentiary recor
 - Spike closed (status Done) with the decision summary in `## Notes` (spikes ship findings, not code — no `released_in`; the follow-up SHYs carry the implementation + release).
 
 ## Notes (running log)
+
+- 2026-06-12 ~12:10 BST — **SPIKE COMPLETE — profiled, decision recorded, follow-ups filed (SHY-0087 / SHY-0088 / SHY-0089). Status → In Review (→ Done on merge of this closeout PR; spikes carry no release gate).** Profiling source: `gh api repos/Shyden-Ltd/ShyTalk/actions/runs/27388236740/jobs` per-step `started_at`/`completed_at` (v0.97.12 baseline). The v0.97.13 run (queued, pending approval) will add a 2nd data point for ranges; the breakdown below is already decisive enough to sequence the fixes.
+
+  **Two-phase wall-clock — the "several hours" is mostly the APPROVAL WAIT, not the pipeline:**
+  - Pre-gate (parallel off `validate-release`): Validate Deploy Ref **1m45s** · Build Android **7m08s** — both BEFORE the gate, off the critical path.
+  - **Approval wait: ~8h** (gate parked 01:29 → 09:33 overnight, operator asleep). **OPERATOR-CONTROLLED** — this dwarfs everything and is the bulk of the perceived "several hours". The fixable engineering budget is the post-approval cost below.
+  - **Post-approval critical path ≈ 82 min, ENTIRELY the iOS path:** approve(4s) → `deploy-backend-prod` (1m04s) → **`deploy-ios-prod` 56m30s** → **`smoke-test-ios` ~25–30m**. Every non-iOS job (backend, web, android-deploy, API/Web smokes) finishes within **~2.5 min** of the gate clearing — they are NOT the problem.
+
+  **`Deploy iOS to App Store` 56m30s decomposed (our-build vs Apple-side — the ticket's central question, ANSWERED):**
+  - KMP framework link (`linkReleaseFrameworkIosArm64` + `linkDebugFrameworkIosArm64`, `--max-workers=1`): **22m49s (40%)** — our build
+  - `pod install`: 2m20s (4%)
+  - **`xcodebuild archive` (Release): 29m04s (51%)** — our build
+  - Export IPA: 10s · **App Store upload (`xcrun altool`): 58s (~2%)** — Apple-side · TestFlight distribute: 1s · konan save: 22s
+  - **VERDICT: ~92% (52 of 56 min) is OUR BUILD (K/N link + xcodebuild archive). The App Store upload is 58 SECONDS — negligible. The ticket's "maybe the upload dominates" hypothesis is REFUTED.** The fixable share is the build, not Apple.
+
+  **Double-build hypothesis — REFUTED literally, CONFIRMED in spirit:** `deploy-ios-prod` links the **device** framework (`IosArm64`); `smoke-test-ios` links the **simulator** framework (`IosSimulatorArm64`) — genuinely different K/N targets, so NOT the same artifact built twice. BUT each job independently pays a full ~15–23 min K/N link + full `pod install` + full `xcodebuild`, on separate runners; the shared `~/.konan` cache amortizes only the compiler/stdlib layer, not the project link. The smoke's 2nd framework link (**15m03s** in the baseline) + pod install (4m08s) + xcodebuild is redundant rebuild that overlaps nothing.
+
+  **Parallelism — the biggest structural win:** `smoke-test-ios` declares `needs: [validate-release, deploy-ios-prod]` but consumes **NONE** of the deploy's output — it rebuilds the app from the same source commit and boots it in a simulator (no artifact handoff from the deploy). The `needs` is a *logical gate* ("don't bother smoking if the deploy failed"), not a *data dependency*. Running the iOS smoke **in parallel** with the iOS deploy collapses the iOS path from `56.5 + ~27 ≈ 82 min` to `max(56.5, ~30) ≈ 57 min` — **~25 min saved, zero new build cost, lowest risk** (the only downside: a wasted macOS runner on the rare deploy-failure, since the smoke builds from source anyway).
+
+  **Recommended fixes → follow-up SHYs filed (each fully refined):**
+  - **SHY-0087 (P1, infra) — Parallelize iOS smoke with iOS deploy.** ~25 min saving; gate-relaxation only, no build change. Highest ROI, do first.
+  - **SHY-0088 (P1, infra) — Cache CocoaPods + instrument the 29 min `xcodebuild archive`.** Add `-showBuildTimingSummary` to split the archive into app-Swift-compile vs pod-compile (LiveKit / WebRTC / SwiftProtobuf, plausibly recompiled from source every archive) vs sign/package, then cache `iosApp/Pods` + SwiftPM/WebRTC build products keyed on `Podfile.lock`. Potentially the largest single fixable chunk — instrument first to size it.
+  - **SHY-0089 (P2, infra) — Gradle build cache for the K/N iOS framework link (22m49s).** Feasibility-gated: K/N link outputs are large; a GH-Actions-cache-backed gradle build cache could let the link reuse outputs across jobs/runs. Lower confidence — gate on a cache-size / restore-time check before committing.
+
+  **Rejected / parked candidates (recorded so they aren't re-investigated):**
+  - "App Store upload is the bottleneck" — **REJECTED**, it is 58s.
+  - K/N parallel link WITHOUT `--max-workers=1` — **NOT re-tested** here: the deadlock evidence from commit 1b788059cb0 stands, and re-testing burns a macOS runner on a known hang. Parked — if SHY-0089's build-cache approach removes the link cost, the deadlock workaround need not be revisited at all.
+
+  **Cache state note:** konan restore took <1s (prefix-key hit) yet the link still took 22m — confirming `~/.konan` holds the *compiler* layer, not the *project link* cache. Cold-cache is the worst case the pipeline must tolerate; the warm-ish 2nd-job link (15m) shows the ceiling of what cross-job cache sharing alone buys.
+
+  **DECISION: spike conclusions delivered; closing on merge of this PR (→ Done). No prod behaviour changed (measurement only). Target for the follow-ups: post-approval iOS path < 60 min (from ~82) — SHY-0087 (parallelism, −25m) first, then SHY-0088 (pod cache) to attack the 29m archive.**
 
 - 2026-06-12 ~11:55 BST — **Scope EXPANDED (operator escalation)** from "iOS build is slow" to "the entire prod-deploy pipeline takes several hours; pick this up as the NEXT ticket." Bumped P1→**P0**, renamed `…-investigate-slow-ios-build` → `…-speed-up-prod-deploy-pipeline`. Baseline already captured (run 27388236740): `Deploy iOS to App Store` **56 min** dominates; the iOS smoke build is separately slow (likely a second framework build); backend/web/Android all <8 min. The fixable wall-clock is the **iOS path** (App Store deploy + iOS smoke build, serial) — the rest is already fast. NEXT ENGINEER: start from the baseline table, break the 56-min iOS job into steps, confirm the double-build, assess post-gate parallelism, file follow-ups. `mvp: false` retained (dev-velocity/CI-efficiency, not a launch feature — flag to flip).
 - 2026-06-12 ~11:32 BST — Originally filed (iOS-build-only scope) at operator request; superseded by the 11:55 expansion above.
