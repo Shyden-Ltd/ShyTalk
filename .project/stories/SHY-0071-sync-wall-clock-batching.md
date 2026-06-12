@@ -83,6 +83,22 @@ Both levers were explicitly out of scope there (API patterns + the validator's i
 **Red first:** extend the SHY-0040 characterization harness (tests/scripts/sync-stories-to-issues-parse-characterization.test.js pattern — temp repo skeleton + mock-gh recording): invocation-count assertions (currently N `issue list` calls — red target: 1), fail-closed lookup-failure test, mixed-corpus scan test. These are behavioural (recording-based), not wall-clock.
 **Green:** implement the map + scan-set; full 48-test suite UNCHANGED + new tests green; shellcheck clean; wall-clock re-measured for Notes.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (edits `sync-stories-to-issues.sh` + its Jest characterization suite) → the FULL protocol applies, BUT this is **internal ops tooling with no rendered app/web/iOS surface**, so the device/browser journey matrix is N/A — the real-backend proof is the sync run against the **real GitHub issues/project board**, not a faked one.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Express Jest** — the decision-parity + fail-closed + mixed-corpus tests, run against a **REAL throwaway GitHub test repo via real `gh`** (auth from the project PAT), each test seeding + tearing down its own real issues (test isolation — no leaks), asserting the resulting REAL issue states (create/update/skip). NO `mock-gh` for the decision-parity layer (per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only).
+- ✅ **shellcheck** — the bash script edit (warnings = failures).
+- ⬜ **Web/Android/iOS · Kotlin/detekt/ktlint** — N/A (no app/web surface).
+
+**🚩 No-Stubs escape-hatch escalation (architect + operator gate, BEFORE implementation):** the headline behavioural claim of this refactor — "`--all` makes exactly ONE `gh issue list` call instead of N" (Performance AC) — is a per-process *invocation count*, which a real backend cannot expose as a deterministic test assertion. This is the one part that genuinely cannot be induced against real gh+GitHub. Options to decide WITH the operator (never silently retain `mock-gh`): (a) an operator-sanctioned thin gh-invocation *recording wrapper* scoped to the call-count assertion ONLY (real gh still does the work; the wrapper only tallies), (b) a transparent counting proxy in front of real gh→GitHub (real responses; proxy only observes), or (c) rate-limit-header deltas from real `gh api`. Pick at the architect gate; record the operator's choice here.
+**🚩 Foundational-harness flag:** the existing 48-test suite is `mock-gh`-based (the SHY-0040 characterization harness) — the SAME operator-decision class as the Android BDD fakes. Per the rule's "opportunistic, no big-bang" scope, migrating those 48 to the real test repo is flagged for operator direction, not done wholesale in this M-sized story. The older AC/BDD prose naming "mock gh recording" is superseded by this Test-Plan directive; the pickup-fitness gate re-validates at implementation.
+
+**LOCAL gauntlet:** the real-test-repo Jest tests + shellcheck green locally (no device matrix — internal tooling). Fail-closed path induced for real (point at a nonexistent repo / a scope-revoked token, not a mocked non-zero). Any failure → fix TDD → restart.
+**DEV gauntlet:** run the sync `--all --dry-run` on the branch against the **real** repo's real issues to confirm decision parity, then a non-dry run against the real test board; confirm the wall-clock saving on the real corpus. Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt; NO auto-merge.
+
 ## Out of Scope
 
 - Caching across runs (the map lives for one process).
@@ -103,9 +119,10 @@ Both levers were explicitly out of scope there (API patterns + the validator's i
 ## Definition of Done
 
 - [ ] All AC checked; 48 pre-existing tests UNCHANGED + new behavioural tests green; shellcheck clean.
-- [ ] Reviewer at ZERO findings before push; PR auto-merged.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): real-test-repo Jest decision-parity + shellcheck green → the No-Stubs call-count escape-hatch resolved at the architect gate (operator's choice recorded) → `code-reviewer` 100% clean → push → CI green by name → DEV sync dry-run + real-board run confirm parity + the wall-clock saving → **judgment-merge** (zero doubt; NO auto-merge).
 - [ ] Wall-clock before/after in Notes; `status: Done` deferred to release cut; SHY-INDEX synced.
 
 ## Notes (running log)
 
 - 2026-06-10 ~04:30 BST — Authored fully-refined from SHY-0040's measurements (the evidence is hours old: 0.38s/file network + 0.14s/file validator of 36.2s total). Architect gate still required at pickup per lifecycle; the scan-stderr parseability checkpoint is pre-flagged for it.
+- 2026-06-13 ~00:46 BST — **Embedded the Pre-Merge Testing Protocol + No-Stubs scrub** ([[SHY-0091]] pass, [[feedback-no-stubs-mocks-fakes-real-only]]): internal ops tooling → full protocol but no device matrix; the real-backend proof is the real GitHub issues/board. Decision-parity tests reframed `mock-gh` → a REAL throwaway test repo via real `gh` with per-test seed+teardown isolation. **Two operator flags raised:** (1) the call-count-reduction assertion (1 vs N `issue list`) genuinely cannot be induced against a real backend → No-Stubs escape-hatch escalated to the architect/operator gate (sanctioned recording wrapper vs counting proxy vs rate-limit deltas — never silent `mock-gh`); (2) the existing 48-test `mock-gh` harness is the same foundational-fake class as the Android BDD suite → opportunistic migration flagged, not big-banged here. DoD swaps the stale "Reviewer ZERO / auto-merged" line for protocol-satisfied + judgment-merge. Pickup-fitness: the SHY-0040 dependency (PR #1121) + the scan-stderr-parseability checkpoint stand; the AC/BDD "mock gh" prose is superseded by the Test-Plan directive (re-validated at the gate).
