@@ -8,6 +8,7 @@ effort: M
 type: bug
 roadmap_ids: [G014]
 pr:
+mvp: true
 ---
 
 # SHY-0017: IosRoomRepositoryImpl tests (P2 client migration coverage)

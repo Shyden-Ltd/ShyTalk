@@ -8,6 +8,7 @@ effort: M
 type: bug
 roadmap_ids: [G023]
 pr:
+mvp: true
 ---
 
 # SHY-0022: admin-keyboard data-dependent skip remediation

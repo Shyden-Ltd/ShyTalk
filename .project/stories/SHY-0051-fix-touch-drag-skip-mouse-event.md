@@ -8,6 +8,7 @@ effort: XS
 type: bug
 roadmap_ids: [G034]
 pr:
+mvp: true
 ---
 
 # SHY-0051: Convert Firefox/WebKit touch-skip in suggestions-board.spec.ts to mouse-event drag

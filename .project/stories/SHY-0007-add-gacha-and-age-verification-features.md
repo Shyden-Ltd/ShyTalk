@@ -8,6 +8,7 @@ effort: S
 type: feature
 roadmap_ids: [G007, G008]
 pr:
+mvp: true
 ---
 
 # SHY-0007: gacha.feature + age_verification.feature (BDD coverage)

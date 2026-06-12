@@ -8,6 +8,7 @@ effort: XS
 type: infra
 roadmap_ids: [G002]
 pr:
+mvp: true
 ---
 
 # SHY-0005: Biometric alpha → stable (downgrade or rationale comment)

@@ -8,6 +8,7 @@ effort: XS
 type: feature
 roadmap_ids: [G039]
 pr:
+mvp: true
 ---
 
 # SHY-0030: ios_parity_navigation.feature freshness check + update

@@ -8,6 +8,7 @@ effort: XS
 type: chore
 roadmap_ids: [G037]
 pr:
+mvp: true
 ---
 
 # SHY-0054: Audit `.github/workflows/allure-report.yml:117`'s `continue-on-error: true`

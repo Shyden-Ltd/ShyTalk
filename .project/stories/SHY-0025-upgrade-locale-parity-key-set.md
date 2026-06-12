@@ -8,6 +8,7 @@ effort: XS
 type: bug
 roadmap_ids: [G042, G052]
 pr:
+mvp: true
 ---
 
 # SHY-0025: Locale parity test upgrade (key-set comparison) + PR #1010 string verification

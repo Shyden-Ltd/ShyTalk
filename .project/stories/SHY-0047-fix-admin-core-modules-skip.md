@@ -8,6 +8,7 @@ effort: XS
 type: bug
 roadmap_ids: [G024]
 pr:
+mvp: true
 ---
 
 # SHY-0047: Fix bare `test.skip()` at `admin-core-modules.spec.ts:133` — identify intent + implement or remove

@@ -8,6 +8,7 @@ effort: XS
 type: bug
 roadmap_ids: [G025]
 pr:
+mvp: true
 ---
 
 # SHY-0044: Fix `firestore.rules:140` admin-claim throws-on-absent — use `isAdmin()` helper

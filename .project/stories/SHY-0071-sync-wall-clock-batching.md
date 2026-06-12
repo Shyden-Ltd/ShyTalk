@@ -8,6 +8,7 @@ effort: M
 type: refactor
 roadmap_ids: []
 pr:
+mvp: true
 ---
 
 # SHY-0071: Sync wall-clock — batch per-file gh lookups + scan-mode validation

@@ -8,6 +8,7 @@ effort: S
 type: bug
 roadmap_ids: [G005, G013, G029]
 pr:
+mvp: true
 ---
 
 # SHY-0006: PushPermissionDeniedBanner + HomeScreen + HomeViewModel push tests

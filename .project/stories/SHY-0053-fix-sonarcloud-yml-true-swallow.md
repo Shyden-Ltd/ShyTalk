@@ -8,6 +8,7 @@ effort: XS
 type: bug
 roadmap_ids: [G036]
 pr:
+mvp: true
 ---
 
 # SHY-0053: Remove `|| true` from sonarcloud.yml coverage step (was silently swallowing Jest failures)

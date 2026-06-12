@@ -8,6 +8,7 @@ effort: M
 type: bug
 roadmap_ids: [G003-D1]
 pr:
+mvp: true
 ---
 
 # SHY-0010: HomeViewModel + GachaViewModel tests

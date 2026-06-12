@@ -8,6 +8,7 @@ effort: XS
 type: chore
 roadmap_ids: [G018]
 pr:
+mvp: true
 ---
 
 # SHY-0046: Verify `gift_wall.feature` covers loading/populated/empty states + GiftWallScreen test tags

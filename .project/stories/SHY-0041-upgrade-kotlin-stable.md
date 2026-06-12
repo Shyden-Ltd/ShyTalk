@@ -8,6 +8,7 @@ effort: XS
 type: chore
 roadmap_ids: [G001]
 pr:
+mvp: true
 ---
 
 # SHY-0041: Upgrade Kotlin from 2.4.0-RC2 to 2.4.0 stable

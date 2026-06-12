@@ -8,6 +8,7 @@ effort: S
 type: infra
 roadmap_ids: [G022, G049]
 pr:
+mvp: true
 ---
 
 # SHY-0020: release.yml → manual-qa-matrix.yml workflow_call (event-driven E2 matrix)

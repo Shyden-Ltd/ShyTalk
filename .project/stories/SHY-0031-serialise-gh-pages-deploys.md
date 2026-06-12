@@ -8,6 +8,7 @@ effort: S
 type: infra
 roadmap_ids: [G055]
 pr:
+mvp: true
 ---
 
 # SHY-0031: Serialise gh-pages cross-workflow deploys (split-job + shared concurrency group)

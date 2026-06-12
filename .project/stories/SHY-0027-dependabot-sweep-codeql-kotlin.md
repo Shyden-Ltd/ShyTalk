@@ -8,6 +8,7 @@ effort: XS
 type: chore
 roadmap_ids: [G045, G047]
 pr:
+mvp: true
 ---
 
 # SHY-0027: Dependabot open-PR sweep + CodeQL Kotlin enable

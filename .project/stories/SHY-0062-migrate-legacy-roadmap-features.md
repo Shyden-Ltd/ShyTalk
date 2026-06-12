@@ -9,6 +9,7 @@ type: chore
 roadmap_ids: []
 pr:
 epic: EPIC-0002
+mvp: true
 ---
 
 # SHY-0062: Migrate ~95 legacy roadmap features into tracked stories (meta/tracker)

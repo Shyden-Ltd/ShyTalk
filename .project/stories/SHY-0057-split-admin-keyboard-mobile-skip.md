@@ -8,6 +8,7 @@ effort: XS
 type: bug
 roadmap_ids: [G048]
 pr:
+mvp: true
 ---
 
 # SHY-0057: Split admin-keyboard.spec.ts:61 mobile-viewport skip — keyboard-only vs general

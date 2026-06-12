@@ -8,6 +8,7 @@ effort: S
 type: bug
 roadmap_ids: [G035]
 pr:
+mvp: true
 ---
 
 # SHY-0052: Rewrite admin-suggestions.spec.ts mobile-context skips using viewport sizing

@@ -8,6 +8,7 @@ effort: S
 type: feature
 roadmap_ids: [G006]
 pr:
+mvp: true
 ---
 
 # SHY-0043: Add `push_permission.feature` BDD coverage for PR #1010's denial flow

@@ -8,6 +8,7 @@ effort: M
 type: bug
 roadmap_ids: [G016]
 pr:
+mvp: true
 ---
 
 # SHY-0014: Android/Ios RoomServiceController tests + FakeRoomLifecycleManager extraction

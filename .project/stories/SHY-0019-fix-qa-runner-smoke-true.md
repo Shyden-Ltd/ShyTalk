@@ -8,6 +8,7 @@ effort: S
 type: infra
 roadmap_ids: [G012]
 pr:
+mvp: true
 ---
 
 # SHY-0019: qa-runner --smoke `|| true` → targeted exit-code handling

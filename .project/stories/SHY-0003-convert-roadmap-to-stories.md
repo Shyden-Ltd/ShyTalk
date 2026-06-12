@@ -9,6 +9,7 @@ type: chore
 roadmap_ids: [G054]
 epic: EPIC-0001
 pr:
+mvp: true
 ---
 
 # SHY-0003: Convert zero-gap roadmap to user stories + cross-label

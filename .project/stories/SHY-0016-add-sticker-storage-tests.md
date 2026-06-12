@@ -8,6 +8,7 @@ effort: S
 type: bug
 roadmap_ids: [G038]
 pr:
+mvp: true
 ---
 
 # SHY-0016: StickerStorage platform tests (file I/O lifecycle)

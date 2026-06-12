@@ -8,6 +8,7 @@ effort: S
 type: chore
 roadmap_ids: [G053]
 pr:
+mvp: true
 ---
 
 # SHY-0048: Track detekt 2.0 stable release on Gradle Plugin Portal + migrate config

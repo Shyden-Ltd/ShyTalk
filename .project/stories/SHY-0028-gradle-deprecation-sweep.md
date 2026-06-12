@@ -8,6 +8,7 @@ effort: S
 type: chore
 roadmap_ids: [G046]
 pr:
+mvp: true
 ---
 
 # SHY-0028: Gradle deprecation sweep (--warning-mode all)

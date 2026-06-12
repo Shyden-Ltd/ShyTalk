@@ -8,6 +8,7 @@ effort: XS
 type: docs
 roadmap_ids: [G003]
 pr:
+mvp: true
 ---
 
 # SHY-0042: G003 ViewModel-coverage tracker (meta — links the 3 implementation SHYs)

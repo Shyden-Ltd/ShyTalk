@@ -8,6 +8,7 @@ effort: S
 type: bug
 roadmap_ids: [G033]
 pr:
+mvp: true
 ---
 
 # SHY-0023: admin-backups + admin-cross-tab data fixture gaps

@@ -8,6 +8,7 @@ effort: XS
 type: docs
 roadmap_ids: [G040]
 pr:
+mvp: true
 ---
 
 # SHY-0055: Update CLAUDE.md stale feature-file count (33 → 47)

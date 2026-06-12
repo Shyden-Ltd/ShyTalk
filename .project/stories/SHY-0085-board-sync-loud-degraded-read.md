@@ -10,6 +10,7 @@ roadmap_ids: []
 pr:
 epic: EPIC-0001
 public: false
+mvp: true
 ---
 
 # SHY-0085: Make a fully-degraded board items-map read LOUD (sidecar-only sync)

@@ -8,6 +8,7 @@ effort: XS
 type: infra
 roadmap_ids: [G011]
 pr:
+mvp: true
 ---
 
 # SHY-0045: SHA-pin floating Action tags in manual-qa-matrix.yml + qa-runner-driver-checks.yml

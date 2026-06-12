@@ -8,6 +8,7 @@ effort: XS
 type: docs
 roadmap_ids: [G032]
 pr:
+mvp: true
 ---
 
 # SHY-0050: Add rationale comment to `biometric = "1.4.0-alpha07"` in libs.versions.toml

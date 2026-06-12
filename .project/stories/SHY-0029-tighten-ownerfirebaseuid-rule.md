@@ -8,6 +8,7 @@ effort: S
 type: bug
 roadmap_ids: [G026]
 pr:
+mvp: true
 ---
 
 # SHY-0029: Tighten ownerFirebaseUid rule (strict equality, no legacy fallback)

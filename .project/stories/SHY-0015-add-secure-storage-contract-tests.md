@@ -8,6 +8,7 @@ effort: S
 type: bug
 roadmap_ids: [G019]
 pr:
+mvp: true
 ---
 
 # SHY-0015: SecureStorage + CryptoKeyPair contract tests

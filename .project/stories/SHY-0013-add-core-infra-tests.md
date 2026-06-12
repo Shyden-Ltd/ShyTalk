@@ -8,6 +8,7 @@ effort: M
 type: infra
 roadmap_ids: [G004, G020]
 pr:
+mvp: true
 ---
 
 # SHY-0013: RoomLifecycleManager + AnimationQueue + ModerationFilter tests

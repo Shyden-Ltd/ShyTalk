@@ -8,6 +8,7 @@ effort: S
 type: feature
 roadmap_ids: [G010]
 pr:
+mvp: true
 ---
 
 # SHY-0009: Lock/PinSetup/SecuritySettings navigation coverage

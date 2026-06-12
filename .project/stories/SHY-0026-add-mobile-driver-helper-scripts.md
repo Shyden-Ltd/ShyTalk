@@ -8,6 +8,7 @@ effort: S
 type: infra
 roadmap_ids: [G043, G044]
 pr:
+mvp: true
 ---
 
 # SHY-0026: Mobile driver helper scripts (Android flags check + iOS WDA build)

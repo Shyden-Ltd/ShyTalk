@@ -8,6 +8,7 @@ effort: S
 type: feature
 roadmap_ids: []
 pr:
+mvp: true
 ---
 
 # SHY-0070: System-routes observability — structured sweep logging + count plumbing

@@ -8,6 +8,7 @@ effort: XS
 type: docs
 roadmap_ids: [G041]
 pr:
+mvp: true
 ---
 
 # SHY-0056: Document App Lock navigation intercept pattern in CLAUDE.md

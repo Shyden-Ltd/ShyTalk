@@ -8,6 +8,7 @@ effort: L
 type: bug
 roadmap_ids: [G003-D3]
 pr:
+mvp: true
 ---
 
 # SHY-0012: 10 remaining ViewModel test files (Messaging + Profile + Settings + Daily + Splash)

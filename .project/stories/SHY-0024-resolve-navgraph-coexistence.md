@@ -8,6 +8,7 @@ effort: L
 type: refactor
 roadmap_ids: [G028]
 pr:
+mvp: true
 ---
 
 # SHY-0024: Migrate Android to SharedNavGraph + delete NavGraph.kt

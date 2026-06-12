@@ -8,6 +8,7 @@ effort: XS
 type: infra
 roadmap_ids: [G031]
 pr:
+mvp: true
 ---
 
 # SHY-0049: Add `check-kotlin-prerelease.sh` CI gate (fires when Kotlin stable lands)

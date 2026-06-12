@@ -8,6 +8,7 @@ effort: M
 type: bug
 roadmap_ids: [G015, G030]
 pr:
+mvp: true
 ---
 
 # SHY-0018: IosMessage + IosSeatRequest + IosEconomyGift + IosSmallRepositories + IosPushBridge tests

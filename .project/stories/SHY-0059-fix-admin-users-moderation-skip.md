@@ -8,6 +8,7 @@ effort: XS
 type: bug
 roadmap_ids: [G051]
 pr:
+mvp: true
 ---
 
 # SHY-0059: Audit admin-users-moderation.spec.ts:149 conditional skip + seed required data

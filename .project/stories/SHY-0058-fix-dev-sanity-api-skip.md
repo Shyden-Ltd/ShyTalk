@@ -8,6 +8,7 @@ effort: XS
 type: bug
 roadmap_ids: [G050]
 pr:
+mvp: true
 ---
 
 # SHY-0058: Convert dev-sanity.spec.ts:66-72 API-not-running skip to assertion error

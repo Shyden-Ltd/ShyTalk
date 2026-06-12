@@ -10,6 +10,7 @@ roadmap_ids: []
 phase: Safety & Compliance
 public: true
 pr:
+mvp: true
 ---
 
 # SHY-0060: Age-gating per feature — replace single 13+ signup gate with tiered per-feature age thresholds
