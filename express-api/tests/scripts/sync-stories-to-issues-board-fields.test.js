@@ -1940,6 +1940,90 @@ describe('SHY-0079: board-items.json sidecar overlay heals stale Projects v2 rea
 
 // ============================================================== SHY-0080 ARG_MAX
 
+// ============================================================== SHY-0085 loud degraded read
+
+describe('SHY-0085: a fully-blind items-map read warns loudly (mock-gh)', () => {
+  function writeSidecar(mock, obj) {
+    fs.writeFileSync(path.join(mock.dir, 'board-items.json'), JSON.stringify(obj, null, 2));
+  }
+  // The escalation message overlay_board_items_sidecar emits when api_keyed == 0.
+  const DEGRADED =
+    /::warning::Board items-map API read returned 0 items; relying entirely on the board-items\.json sidecar/;
+
+  test('fully blind (API keys 0) + sidecar has entries → ::warning:: naming the fill count', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories85a-');
+    makeStory(storiesDir, { id: 'SHY-8851', type: 'feature' });
+    writeRules(mock.dir, createPathRules(mock.dir)); // EMPTY_ITEMS → live read keys 0
+    writeSidecar(mock, {
+      'SHY-8851': {
+        backing: 'ISSUE',
+        itemId: 'EXIST_ITEM',
+        contentId: 'EXIST_NODE',
+        issueNumber: 8851,
+      },
+    });
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    expect(r.stderr).toMatch(DEGRADED);
+    expect(r.stderr).toMatch(/sidecar \(1 entries\)/);
+  });
+
+  test('healthy (API keys the item) → NO degraded warning', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories85b-');
+    const s = makeStory(storiesDir, { id: 'SHY-8852', status: 'Draft', type: 'feature' });
+    const body = existingBody(s.content, 'SHY-8852-fixture-story', 'Draft');
+    const items = itemsResponse([
+      issueNode('SHY-8852', 'API_ITEM', 8852, 'OPEN', 'SHY-8852: Fixture story', body),
+    ]);
+    writeRules(mock.dir, createPathRules(mock.dir, { items }));
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    expect(r.stderr).toMatch(/1 skipped/); // the API item was keyed → skip, not blind
+    expect(r.stderr).not.toMatch(DEGRADED);
+  });
+
+  test('partial (API keys the item; sidecar has an extra lagging key) → info line, NO warning', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories85c-');
+    const s = makeStory(storiesDir, { id: 'SHY-8853', status: 'Draft', type: 'feature' });
+    const body = existingBody(s.content, 'SHY-8853-fixture-story', 'Draft');
+    const items = itemsResponse([
+      issueNode('SHY-8853', 'API_ITEM', 8853, 'OPEN', 'SHY-8853: Fixture story', body),
+    ]);
+    writeRules(mock.dir, createPathRules(mock.dir, { items }));
+    writeSidecar(mock, {
+      'SHY-8853': {
+        backing: 'ISSUE',
+        itemId: 'API_ITEM',
+        contentId: 'I_node_8853',
+        issueNumber: 8853,
+      },
+      'SHY-9999': {
+        backing: 'ISSUE',
+        itemId: 'GHOST_ITEM',
+        contentId: 'GHOST_NODE',
+        issueNumber: 9999,
+      },
+    });
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    expect(r.stderr).toMatch(/API read missed 1 item/); // the ghost key was filled
+    expect(r.stderr).not.toMatch(DEGRADED); // but api keyed > 0 → stays quiet
+  });
+
+  test('bootstrap (no sidecar + empty API) → NO warning (the empty map is legitimate)', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories85d-');
+    makeStory(storiesDir, { id: 'SHY-8854', type: 'feature' });
+    writeRules(mock.dir, createPathRules(mock.dir)); // empty API, no sidecar pre-write
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    expect(r.stderr).not.toMatch(DEGRADED);
+  });
+});
+
 describe('SHY-0080: items-map merges are ARG_MAX-safe (stdin, not --argjson) (mock-gh)', () => {
   test('REGRESSION: a board whose draft bodies exceed ARG_MAX still produces a COMPLETE map (no re-create)', () => {
     // The defect: the map carries full ~64K draft bodies; merging it via

@@ -514,6 +514,18 @@ overlay_board_items_sidecar() {
     | jq -s '((.[0] | keys) - (.[1] | keys)) | length')"
   if [ "${N_SIDECAR_FILLS:-0}" -gt 0 ]; then
     printf '[sidecar] API read missed %s item(s); filled from board-items.json\n' "$N_SIDECAR_FILLS" >&2
+    # SHY-0085: a FULLY-blind read — the live API keyed ZERO items while the
+    # sidecar has entries — means the sync is running on the sidecar ALONE: it
+    # can't hash-skip (every story re-updates = churn) and would DUPLICATE every
+    # story if the sidecar were ever lost. Escalate that case from the info line
+    # above to a GitHub Actions ::warning:: so it's visible in the run summary.
+    # A PARTIAL fill (a few lagging new items, the sidecar's normal Projects-v2
+    # lag job) keys >0 and stays quiet.
+    local api_keyed
+    api_keyed="$(printf '%s' "$ITEMS_MAP_JSON" | jq 'length')"
+    if [ "${api_keyed:-0}" -eq 0 ]; then
+      printf '::warning::Board items-map API read returned 0 items; relying entirely on the board-items.json sidecar (%s entries) — the sync cannot hash-skip (churn) and would duplicate every story if the sidecar is lost. Check GH_PAT_PROJECT can read Issue-backed project items.\n' "$N_SIDECAR_FILLS" >&2
+    fi
   fi
   # Merge: normalize sidecar entries to the full value shape, then API (.[1])
   # overlays/wins.
