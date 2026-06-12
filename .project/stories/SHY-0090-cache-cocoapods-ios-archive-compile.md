@@ -97,6 +97,21 @@ So that the dominant non-link chunk of the 56-min iOS deploy shrinks and, with S
 - **GREEN:** edit `deploy-prod.yml` (`deploy-ios-prod`) to add the split restore/save cache around the archive, with the path/key chosen from SHY-0088's recorded split. Re-run suite → green.
 - **Live verification:** two real releases (cold then warm) recorded in `## Notes` with `gh api .../jobs` step timings showing the warm-run saving + a successful `altool` upload both times.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** — this story edits a release workflow (`deploy-prod.yml` › `deploy-ios-prod`) plus its Jest YAML-assertion test → the FULL protocol applies. There is **no rendered app/web surface** in this change, so the device/browser journey matrix is the REGRESSION net rather than the headline; the headline real-backend proof is the **two live iOS releases** (cold then warm) that must each upload successfully to App Store Connect — a real deploy against the real Apple backend, never a simulated one (inherently No-Stubs compliant, per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only).
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Express Jest** (`cd express-api && npm test` → `ios-deploy-pod-cache.test.js`) — asserts against the **real** `deploy-prod.yml` on disk (a restore step keyed on the measured dependency lockfile + runner-image/Xcode segment; a split `save` with `continue-on-error` + `timeout-minutes` + `if: … cache-hit != 'true'`; no overlap with the signing-material paths). It parses the actual YAML — no fixture/mock workflow.
+- ✅ **eslint** (`--max-warnings=0`) — the new/edited test file.
+- ✅ **actionlint** — the `deploy-prod.yml` edit must pass the workflow linter (warnings = failures).
+- ✅ **`scripts/check-action-shas.sh`** — the added `actions/cache/restore` + `actions/cache/save` refs MUST be SHA-pinned (per [[SHY-0045]]); a tag-form ref fails the pin gate.
+- ⬜ **Kotlin/JVM unit · detekt · ktlint · Android BDD · iOS XCTest/XCUITest · Web Playwright** — N/A (no shared/app/web/iOS-source change; the cache wraps the existing archive, it does not alter compiled output).
+
+**LOCAL gauntlet:** Jest + eslint + actionlint + SHA-pin check green locally; the apps + web regression net (real Android + real iPhone + all browsers) runs as the safety net to confirm a cached build is still byte-functionally a correct app — the cached IPA must boot + pass SHY-0087's parallel boot smoke. Any failure → fix TDD → restart.
+**DEV gauntlet:** trigger the iOS deploy on the branch `ref` (a cold run to populate the cache, a warm run to prove the saving) confirming the cache mechanics + a clean archive before the prod path is relied on; web = Chrome. Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt — AND, per this story's own gate, only after the **two real prod releases** show the warm saving + successful `altool` uploads (if no saving materialises, the cache is reverted, not shipped). HARD-gated behind SHY-0088's recorded measurement before implementation begins.
+
 ## Out of Scope
 
 - **Instrumentation** — `-showBuildTimingSummary` is SHY-0088 (this story consumes its output).
@@ -119,9 +134,11 @@ So that the dominant non-link chunk of the 56-min iOS deploy shrinks and, with S
 - Pod build-product cache added to `deploy-ios-prod` (version-segmented, `Podfile.lock`-keyed, split restore/save, save non-fatal); no signing material cached.
 - YAML-assertion tests green.
 - Two real releases (cold + warm) recorded showing the warm saving + successful uploads; if no saving materialises, the cache is reverted and that outcome recorded.
-- PR merged; `released_in: vX.Y.Z` set once the warm saving is verified on a real deploy.
+- **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): Jest YAML-assertion green + eslint/actionlint/SHA-pin clean → apps + web regression net green (cached IPA boots + passes the parallel boot smoke) → `code-reviewer` 100% clean → push → CI green by name → DEV iOS deploy cold+warm green → **two real prod releases** (cold+warm) show the warm saving + successful App Store Connect uploads → **judgment-merge** (zero doubt; NO auto-merge). If no saving materialises, the cache is reverted and that outcome recorded.
+- `released_in: vX.Y.Z` set once the warm saving is verified on a real deploy.
 
 ## Notes (running log)
 
 - 2026-06-12 — Filed by splitting SHY-0088 per the operator's "Measure first, cache next" decision. SHY-0088 ships the `-showBuildTimingSummary` instrumentation; this story consumes its recorded split to design the cache against real numbers instead of a blind guess. Carries the cache-specific ACs that originally lived in SHY-0088. **Blocked until SHY-0088 records a real-release breakdown.**
 - 2026-06-12 — **SPM-vs-CocoaPods cache-key caveat (pickup-fitness discovery on SHY-0088).** `deploy-dev.yml`'s archive already uses SwiftPM (`-clonedSourcePackagesDirPath ../build/ios-spm-packages -parallelizeTargets`) — the #841 migration moved LiveKit CocoaPods→SPM — while `deploy-prod.yml` still runs a `pod install` step. So the 29-min compile may be **SwiftPM**, not CocoaPods. The cache key therefore depends on which it is: `Podfile.lock` for pods vs `Package.resolved` for SPM (the dev/prod archives may even need different keys). SHY-0088's `-showBuildTimingSummary` split settles which dependency system dominates; the AC's `Podfile.lock` keying above is the *expected* case, to be confirmed (or swapped to `Package.resolved`) against that measurement before implementing.
+- 2026-06-13 ~00:42 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): infra/workflow ticket → NOT `*.md`-only → full protocol, but no rendered surface, so the headline real-backend proof is the two live iOS releases (cold+warm) uploading to App Store Connect; Jest asserts the REAL `deploy-prod.yml` (no fixture), and the new `actions/cache/*` refs inherit [[SHY-0045]]'s SHA-pin gate. No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]): nothing to scrub — the unit test reads the real YAML and the behavioural proof is real deploys, never simulated. DoD swaps the stale "PR merged" line for protocol-satisfied + judgment-merge; `released_in` retained. Pickup-fitness: AC current; the HARD gate on SHY-0088's measurement + the open SPM(`Package.resolved`)-vs-CocoaPods(`Podfile.lock`) cache-key question both stand — the protocol subsection stays lockfile-agnostic to match.
