@@ -1,6 +1,6 @@
 ---
 id: SHY-0089
-status: Draft
+status: Cancelled
 owner: claude
 created: 2026-06-12
 priority: P2
@@ -113,3 +113,4 @@ So that the second-largest chunk of the 56-min iOS deploy stops being re-paid fr
 ## Notes (running log)
 
 - 2026-06-12 — Filed by SHY-0086. Origin: the K/N framework link = 22m49s (deploy) + 15m03s (smoke), and `~/.konan` caches only the compiler layer not the project link. Highest-uncertainty of the three follow-ups — explicitly feasibility-gated with a net-positive measurement requirement and an allowed "reject with evidence" outcome. Do after SHY-0087 + SHY-0088.
+- 2026-06-12 ~22:55 BST — **CANCELLED — rejected with evidence** (the DoD's allowed reject outcome; closed out during SHY-0091's dedup/closeout pass). Local cold/warm profiling (`/tmp/shy-0089-profile.log`, ~18 min run): the bottleneck task `:shared:linkReleaseFrameworkIosArm64` printed `Caching disabled for task … because:` in BOTH the cold AND warm runs — **Gradle itself refuses to cache the link task.** Only `compileKotlinIosArm64` cached (`Stored` cold → `FROM-CACHE` warm); the entire build-cache dir was **3.5M**, not the 391M framework. Warm finished only 35s faster (9m05s → 8m30s), and that saving came from the *compile* step, **not** the link. Net: a build cache cannot touch the 22-min link — feasibility gate fails. No workflow change shipped.
