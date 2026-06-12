@@ -117,6 +117,20 @@ This is a **security correctness defect** because:
 
 **Coverage gate:** 3 emulator-test scenarios pass; production rules-deploy succeeds.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (edits `firestore.rules` + adds a rules test) → the FULL gauntlet applies. An authz-helper fix changes how denials are classified (throw → clean `PERMISSION_DENIED`), so the admin-gated flow must be re-proven on the live surfaces.
+
+**Frameworks exercised (RED→GREEN before the rule change):**
+- ✅ **Firestore rules emulator tests** — `admin-claim.test.js` over all 3 token states (admin-allowed / non-admin-denied / **absent-claim-denied-cleanly**, the RED that reveals the throw); the story's primary RED→GREEN.
+- ✅ **Manual-QA journey matrix** — the admin-gated moderation flow (true admin permitted; non-admin / no-claim denied with a clean `PERMISSION_DENIED`, no internal error) walked on a **real Android device AND a real iPhone** AND on web (admin tools are a web surface) — proving the helper fix preserves admin access and cleanly denies others.
+- ✅ **Web E2E** — the web admin-moderation path across the `local` browser matrix.
+- ⬜ **Kotlin JVM unit / detekt / ktlint / iOS compile / Express Jest** — N/A (no Kotlin/Express change); apps run the regression corpus as the net.
+- ✅ **SonarCloud** — quality gate.
+
+**LOCAL gauntlet:** rules emulator suite green (3 token states) → admin-moderation journeys green on real Android + real iPhone + all Mac browsers. Any failure → fix TDD → restart the whole local gauntlet.
+**DEV gauntlet:** the `firebase deploy --only firestore:rules --project shytalk-dev` IS the dev deploy; redeploy the unmerged branch's rules + re-walk the admin journeys on real devices; web = Chrome only. Restart from LOCAL on failure. **Judgment-merge** only when production-ready with zero doubt — a security-rule mis-deploy is an incident.
+
 ## Out of Scope
 
 - Migrating EVERY direct `request.auth.token.*` access in `firestore.rules` — only the `.admin` direct access is in scope here. Other claims (if any direct accesses exist) get their own follow-up SHYs if a grep surfaces them.
@@ -142,10 +156,11 @@ This is a **security correctness defect** because:
 
 - [ ] `firestore.rules` edited; grep verifies no remaining direct `.admin` access.
 - [ ] Emulator test added covering 3 token states; all pass.
-- [ ] Dev deploy verified.
-- [ ] Reviewer ZERO findings.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): rules emulator suite green (3 token states incl. absent-claim-denied-cleanly) + admin-moderation journeys green on **real Android + real iPhone + all Mac browsers** → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green (rules deployed to dev + journeys re-walked; web = Chrome) → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
 - [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-08 ~12:58 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 27 (G025). Reserved ID SHY-0044. **Critical security correctness item** — schedule pickup ahead of the lower-priority polish SHYs.
+- 2026-06-12 ~23:50 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): authz-helper fix → rules emulator suite (3 token states) is RED→GREEN, admin-moderation flow re-proven on real Android + real iPhone + all browsers; firestore dev deploy maps onto the DEV gauntlet. DoD → judgment-merge. Pickup-fitness: no dupes/stale found.
