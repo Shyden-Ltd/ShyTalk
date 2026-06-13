@@ -5,7 +5,7 @@ owner: claude
 created: 2026-06-13
 priority: P1
 title: No stubs/fakes/gaps — fully-operational, real-only test apparatus (every framework)
-child_shys: [SHY-0092, SHY-0093, SHY-0094, SHY-0095]
+child_shys: [SHY-0092, SHY-0093, SHY-0094, SHY-0095, SHY-0096]
 ---
 
 # EPIC-0003: No stubs/fakes/gaps — fully-operational, real-only test apparatus (every framework)
@@ -52,8 +52,9 @@ Delivered as phases — each phase is one or more 1-SHY-1-PR vertical slices; th
 - **SHY-0094** — runner Appium auto-start + health-check (Phase 1). Status: Draft.
 - **SHY-0095** — extend `ios-appium-driver` to full native-iOS journey coverage (Phase 1). Status: Draft.
 
+- **SHY-0096** — `androidPersonaSignIn` real signed-out reset via `androidSignOut` + warning-ack behaviour (Phase 0, **THE LINCHPIN**). Status: In Progress (branch `story/SHY-0096-android-persona-signout-reset`).
+
 **Planned (filed fully-refined per [[feedback-no-skeleton-stories-fully-refined]] as each is started, in phase order — NOT pre-stubbed):**
-- **SHY-0096** (Phase 0, **NEXT**) — `androidPersonaSignIn` real signed-out reset via `androidSignOut` + warning-ack behaviour. The linchpin.
 - **Phase 1** — driver-test `execSync`-mock removal (real-captured fixtures + gauntlet).
 - **Phase 2** — one SHY per androidTest domain group (≈6 stories).
 - **Phase 3** — emulator-in-CI infra SHY + one SHY per express-api route/domain group (≈8–12 stories).
