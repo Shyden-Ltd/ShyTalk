@@ -89,6 +89,21 @@ Pattern: same as the broader admin-* test-skip family — these were left to ski
 
 **Coverage gate:** Playwright suite green; skip reduced.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (un-skips a Playwright test + extends global-setup seeding) → the FULL protocol applies. Web admin surface (desktop-primary, operator-facing).
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Web E2E Playwright** — `admin-users-moderation.spec.ts` with the skip removed, run against the **REAL rendered admin UI + real dev stack**, the prerequisite state **seeded for real in global-setup** (real admin SDK / real backend, idempotent, test-only personas — never a mocked endpoint, per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only). Admin = desktop-primary → all Mac browsers headline; mobile = regression net.
+- ✅ **eslint** (`--max-warnings=0`) — the spec + global-setup TS.
+- ⬜ **Express Jest · Android/iOS app · Kotlin/detekt/ktlint** — N/A (web test only).
+
+**No-Stubs — real seed, legitimate-constraint exceptions:** the seed creates real moderation state via the real backend (test-only personas, no PII per the Security AC). Two legitimate non-mock exceptions: (1) a skip genuinely gated on **real external connectivity** (e.g. real S3 in CI) stays a documented real-condition skip ([[SHY-0057]]-style), never a fake; (2) a **feature-flag** gate uses a real env-aware flag override, not a skip and not a mocked flag. Per-test isolation so the new seed entries don't leak ([[feedback-test-isolation-no-leaks]]).
+
+**LOCAL gauntlet:** the un-skipped spec green on all Mac browsers (real admin API on the local stack; real seed) + real Android/iOS device-browser regression net; eslint clean; seed idempotency verified. Any failure → fix TDD → restart.
+**DEV gauntlet:** redeploy the unmerged branch via Deploy-To-Dev `ref`; re-run the spec on Chrome against the real dev admin API. Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt; NO auto-merge.
+
 ## Out of Scope
 
 - Other tests in this file unless trivially adjacent root cause.
@@ -110,9 +125,11 @@ Pattern: same as the broader admin-* test-skip family — these were left to ski
 - [ ] Audit done; categorisation recorded.
 - [ ] Fix applied per categorisation.
 - [ ] Playwright suite green.
-- [ ] Reviewer ZERO findings.
-- [ ] `status: Done`.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): the un-skipped spec green on all Mac browsers (real admin API; real idempotent seed; per-test isolation) + eslint clean → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green (Chrome, real dev admin API) → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
+- [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-08 ~13:22 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 98 (G051). Reserved ID SHY-0059.
+- 2026-06-13 ~01:36 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): web-admin un-skip via real global-setup seeding (sibling of [[SHY-0023]]). No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]): seed is real-backend (real admin SDK, idempotent, test-only personas/no-PII) — already aligned; two legitimate non-mock exceptions documented (a real-external-connectivity gate stays a real-condition skip [[SHY-0057]]-style; a feature-flag gate uses a real env-aware override, not a mocked flag). Admin = desktop-primary (Mac browsers headline; mobile = regression net). DoD swaps the stale Reviewer-ZERO line for protocol-satisfied + judgment-merge + released_in + `pr:`. Pickup-fitness: AC current; the `:149` line number + the live global-setup seed contents to re-confirm at pickup.
