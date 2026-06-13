@@ -8,7 +8,7 @@ effort: XL
 type: feature
 roadmap_ids: []
 phase: Safety & Compliance
-public: true
+public: false
 pr:
 mvp: true
 ---
@@ -242,3 +242,4 @@ This SHY captures the FULL per-feature age-gating design as the source-of-truth 
 
 - 2026-06-08 ~19:05 BST — Spec authored as the migration target for the legacy `currentlyWorkingOn: "Age-gating per feature"` JSON entry preserved per SHY-0038's authoritative-sync design (operator decision 2026-06-08 ~19:00 BST: file fully-refined SHY-0060 in the SHY-0038 PR). Status is **In Progress** to preserve the legacy public-roadmap visibility; this is a continuity-of-visibility decision pending operator review of whether implementation work is actually in flight (if not, status should flip to Draft and the public roadmap's `currentlyWorkingOn` becomes empty until a real In Progress + public SHY exists). All AC values are my proposal grounded in COPPA/GDPR/store-policy research; final threshold values are an operator/product/legal decision. The 10 features + region-override map are starting points for that conversation, not finalised contracts.
 - 2026-06-12 ~23:50 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): Safety & Compliance XL feature → every framework + all 10 gated features on real Android + real iPhone + ALL browsers + legal/T&S human sign-offs as pre-merge gates; bar is absolute. DoD → judgment-merge. **Pickup-fitness flag (for operator):** frontmatter `status: Draft` conflicts with the 2026-06-08 Note describing it as "In Progress to preserve public-roadmap visibility." As Draft + `public: true` it does NOT surface in `currentlyWorkingOn` (which requires `In Progress`). Operator to confirm the intended status + whether age-gating should appear on the public roadmap now; status NOT changed here (no transition without operator).
+- 2026-06-13 ~01:45 BST — **Operator RESOLVED the status/visibility conflict** (AFK decision #3, 2026-06-13): keep `status: Draft` AND take it **OFF the public roadmap**. The 2026-06-08 Note's "Status is **In Progress** to preserve public-roadmap visibility" is **superseded** — it stays Draft; the In-Progress rationale no longer applies. Acted here: frontmatter `public: true → false` (the source-of-truth lever that removes this SHY from the public roadmap). **🚩 Downstream (out of this md-only PR's scope):** the legacy hand-authored `currentlyWorkingOn: "Age-gating per feature"` entry in the synced `roadmap-data.json` should retire (becomes empty until a real `In Progress + public: true` age-gating SHY exists) — that is a `roadmap-data.json`/sync change, a separate follow-up, NOT in the SHY-0091 protocol PR. The XL safety design + the embedded protocol stand for whoever implements.
