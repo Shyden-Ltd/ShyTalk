@@ -97,6 +97,21 @@ Roadmap row (line 95, 2026-06-05): `G035 | 🟡 Polish | Mobile FF/WebKit isMobi
 
 **Coverage gate:** 4 tests × N browser projects all green.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (un-skips + rewrites 4 Playwright tests) → the FULL protocol applies. This is a **responsive-web admin** coverage fix.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Web E2E Playwright** — the 4 `admin-suggestions.spec.ts` tests with the skips removed + viewport-sizing rewrites, run against the **REAL rendered admin UI + real dev stack** (no mocked state, per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only) on Mac chromium/firefox/webkit/edge.
+- ✅ **eslint** (`--max-warnings=0`) — the spec TS.
+- ⬜ **Express Jest · Android/iOS app · Kotlin/detekt/ktlint** — N/A (web test only).
+
+**No-Stubs — honest layering of "mobile":** viewport-sizing (`setViewportSize({375×667})`) tests **real responsive layout on real desktop engines** — that is the ticket's fix, and it is genuinely real at that layer. It is NOT a claim of real-mobile coverage: the **true mobile-browser assurance** comes from the protocol's real **Android-Chrome + iOS-Safari device-browser cells** (built by EPIC-0003), which run the same admin surface on real hardware. The two are complementary, not substitutes. **🚩** the Error-path note is correct under No-Stubs: if `isMobile` controls behaviour beyond layout (touch registration, viewport-meta parsing), viewport sizing can't replicate it → use Playwright's real touch context OR file a follow-up SHY — never assert mobile-only behaviour via a desktop viewport and call it covered.
+
+**LOCAL gauntlet:** the 4 tests green on all Mac desktop browsers against the real local stack + the real Android + iOS device-browser cells as the true-mobile net; eslint clean; per-test viewport isolation verified. Any failure → fix TDD → restart.
+**DEV gauntlet:** redeploy the unmerged branch via Deploy-To-Dev `ref`; re-run the 4 tests on Chrome against the real dev stack. Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt; NO auto-merge.
+
 ## Out of Scope
 
 - Re-architecting the admin-suggestions component itself for better mobile support.
@@ -118,9 +133,11 @@ Roadmap row (line 95, 2026-06-05): `G035 | 🟡 Polish | Mobile FF/WebKit isMobi
 
 - [ ] 4 skips removed; viewport-based rewrites applied.
 - [ ] All 4 tests pass on all browser projects.
-- [ ] Reviewer ZERO findings.
-- [ ] `status: Done`.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): the 4 tests green on all Mac desktop browsers (real admin UI + real stack) + the real Android/iOS device-browser cells as the true-mobile net + eslint clean → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green (Chrome) → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
+- [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-08 ~13:15 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 95 (G035). Reserved ID SHY-0052.
+- 2026-06-13 ~01:16 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): responsive-web admin un-skip → Playwright headline on the real admin UI across Mac desktop browsers. No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]) **honest-layering note:** viewport-sizing tests REAL responsive layout on real desktop engines (the fix), but is NOT real-mobile — the true mobile assurance is the real Android-Chrome + iOS-Safari device-browser cells (EPIC-0003); the two are complementary. **🚩** if `isMobile` drives behaviour beyond layout (touch/viewport-meta), use a real touch context or a follow-up SHY — never fake mobile-only behaviour via a desktop viewport. DoD swaps the stale Reviewer-ZERO line for protocol-satisfied + judgment-merge + released_in + `pr:`. Pickup-fitness: AC current; the 4 line numbers (`:1349,1402,1414,1426`) to re-confirm at pickup.
