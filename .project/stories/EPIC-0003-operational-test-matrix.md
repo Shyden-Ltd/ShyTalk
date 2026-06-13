@@ -1,6 +1,6 @@
 ---
 id: EPIC-0003
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-06-13
 priority: P1
@@ -90,4 +90,5 @@ _None filed yet — deliberately deferred (`child_shys: []`)._ The three `## Sco
 
 ## Notes (running log)
 
+- 2026-06-13 ~02:05 BST — **Operator resolved ALL decisions (present, post-SHY-0091 Q&A) → status In Progress.** #1 **finish EPIC-0003 BEFORE MVP**. #2 native-iOS canonical = **Appium + WebDriverAgent** (extend the partial ~11-method `ios-appium-driver` to full journey coverage; `ios-devicectl`/`simctl` become documented NON-canonical alternatives). #3 Mac Safari = **Playwright-WebKit acceptable** (no real safaridriver; cell already green — no work). #4 Appium server = **runner auto-starts + health-checks** (new runner plumbing). #5 real Android + real iPhone **both connected + trusted** (real gauntlet runnable autonomously). #6 Firefox-Android → default: a pre-run geckodriver-vs-Firefox version-skew check that skips LOUDLY on mismatch. Separately, the foundational fake-harness question → operator chose **migrate EVERYTHING to real** (big-bang) = its own epic AFTER EPIC-0003. **Child SHYs to file (fully-refined, then implement TDD on the real gauntlet):** **(A)** verify/fix `mobile-edge-android` (evidence-first on the real device); **(B)** runner Appium auto-start + health-check; **(C)** extend `ios-appium-driver` to full native-iOS journey coverage [the substantive item]; **(D)** docstring-honesty fix (`web-playwright` + `android-adb` stale "stub" comments + a "non-canonical alternative" note on `devicectl`/`simctl`). `child_shys` populated as each is filed.
 - 2026-06-13 ~01:55 BST — **Authored (corrected) during the operator-AFK window** after the SHY-0091 merge. An Explore-agent synthesis of the real framework files **overturned the "2/14 cells → build 12" premise**: the web matrix is 11/12 operational + native Android/iOS-Appium are real; only `ios-devicectl`/`simctl` UI inspection + `mobile-edge-android` verification + two stale docstrings remain. Status kept **Draft** (NOT In Progress) and **child_shys empty** deliberately — the cell-SHYs are gated on the 6 operator decisions (esp. devicectl-vs-Appium), so authoring them now would assume a tooling direction, which [[feedback-consumer-first-surface-design]] forbids. Pushed to a branch for operator review; NOT merged (decision-gated, per the AFK commit-push-flag permission). **Recommend the operator weigh re-prioritising to MVP** given the gauntlet is largely runnable.
