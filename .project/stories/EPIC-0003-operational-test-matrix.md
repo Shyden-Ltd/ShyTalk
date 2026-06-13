@@ -4,101 +4,96 @@ status: In Progress
 owner: claude
 created: 2026-06-13
 priority: P1
-title: Fully-operational cross-platform QA test-framework matrix (no stubs)
+title: No stubs/fakes/gaps — fully-operational, real-only test apparatus (every framework)
 child_shys: [SHY-0092, SHY-0093, SHY-0094, SHY-0095]
 ---
 
-# EPIC-0003: Fully-operational cross-platform QA test-framework matrix (no stubs)
+# EPIC-0003: No stubs/fakes/gaps — fully-operational, real-only test apparatus (every framework)
 
-## ⚠️ PREMISE CORRECTION — operator read FIRST (authored 2026-06-13 AFK, evidence-based)
+## ⚠️ RE-SCOPE 2026-06-13 (operator: "a single epic… all completed before you move on") — read FIRST
 
-EPIC-0003 has been a forward-reference since SHY-0091 on the assumption that **"only 2/14 matrix cells run today"** and the work is to **"build the 12 missing cells."** A first-investigation-before-acting pass ([[feedback-never-guess-always-investigate]]) against the real framework files **overturns that premise**:
+This EPIC was originally "fully-operational QA test-framework matrix (no stubs)" — the 4 matrix-cell items below (SHY-0092..0095). The operator has now **consolidated the entire real-only test mission into this ONE epic** and made it the **sole focus until 100% of its child stories are complete** — no MVP work, no other tickets, until done. Two decisions drive the expansion:
 
-- The **12-cell web-browser matrix is 11/12 OPERATIONAL today** — real drivers, real journeys, real timings (e.g. mobile-safari-iOS 8211 ms = real device). The single non-green cell, `mobile-edge-android`, is an **environment skip** (device/Edge availability), not a code stub.
-- The **native-app drivers are REAL and extensive**: `android-adb-driver.js` (2560 lines, ~79 real methods), `ios-appium-driver.js` (419 lines, real XCUITest bridge).
-- The **only true scaffolds** are `ios-devicectl-driver.js` + `ios-simctl-driver.js`: real device/simulator *selection* is in place, but **UI inspection is stubbed** (`iosUiDump()` returns `''`, all `iosShows*` return `false`) — these block real **native-iOS journey** testing via devicectl/simctl (NOT the 12-cell web matrix).
-- Two driver **docstrings are stale-and-misleading** (`web-playwright-driver.js`, `android-adb-driver.js` still say "SCAFFOLD / STUB FOR EVERY METHOD" though both are fully implemented) — the inverse No-Stubs hazard: a comment claiming "stub" over real code.
+1. **The big-bang migration is now IN this epic, not a separate later one.** The earlier plan (Notes 2026-06-13 ~02:05) parked "migrate EVERYTHING to real" as a follow-on epic. The operator reversed that: it lives here, as child stories.
+2. **A linchpin gap was found by live investigation** (2026-06-13 ~14:xx, post-compact): `androidPersonaSignIn` assumes `am force-stop → sign-in screen`, but **Firebase auth survives force-stop** on the real device, and both data-wipe resets (`pm clear`, `run-as rm`) are **blocked** on the OnePlus CPH2653 (SecurityException / SELinux). So multi-journey Android persona-switching is broken → **no clean corpus can be measured** until a real in-app sign-out exists. This is Phase 0 (unblocks the gauntlet that proves everything else).
 
-**Consequence for the plan:** the "gauntlet isn't runnable yet" contradiction that motivated sequencing EPIC-0003 *before* MVP (operator decision #2, 2026-06-13) is **largely resolved already** — the gauntlet is mostly runnable. EPIC-0003's genuine remaining scope is therefore SMALL (four concrete child SHYs below). **RESOLVED 2026-06-13:** the operator chose to **finish EPIC-0003 before MVP** (decision #1) with this corrected small scope (build order D→A→B→C); the re-prioritise-to-MVP option was declined. See `## ✅ Operator decisions` + Notes.
+**Standing constraint:** per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only (operator override 2026-06-13 — see that section), **every** test across **every** framework runs against real services/devices. The "opportunistic, no big-bang" clause is **superseded for this epic** by the operator's explicit "true big-bang, all ~300 now" decision. Inventory: ~300 mock/fake-using test files (express-api Jest 195, Kotlin unit 61, androidTest 22 `Fake*.kt` used by 36 files, Playwright 8, iOS 3).
 
 ## Vision
 
-The cross-platform QA matrix proves every ShyTalk story on the real surfaces it ships to — real Mac browsers, real Android + real iPhone browsers, and the real native apps — with **zero stubs/fakes** (per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only). The framework + driver-interface contract already exist (`express-api/scripts/QA_FRAMEWORK_*.md` + `manual-qa-runner.js` + `manual-qa-matrix.yml`). EPIC-0003 closes the **last** real gaps so the Pre-Merge Testing Protocol's LOCAL gauntlet is 100% genuine on every cell, and corrects the misleading "stub" docstrings so no one mistakes real drivers for placeholders.
+ShyTalk's entire automated-test apparatus proves behaviour on the **real** surfaces it ships to — real Mac browsers, real Android + real iPhone (browsers AND native apps), the real local Firebase-emulator/LiveKit/MinIO/Mailpit stack — with **zero in-process mocks/fakes/stubs** anywhere, and **zero coverage gaps** (behaviour-level assertions, not presence-grep). When this epic is done: no `jest.mock`, no `Fake*Repository`, no `page.route` fulfilment, no iOS test doubles remain; the Pre-Merge gauntlet is 100% genuine on every cell; CI provisions the real stack; and a lint guard prevents any new in-process double from regrowing the debt.
 
-## Current state — evidence-based cell status (2026-06-13)
+## Test-strategy line (operating definition of "real")
 
-**Web 12-cell matrix (against the driver-interface contract):**
+- **Pure logic** (UI-dump → state classification, tap-coordinate math, string formatting) keeps unit tests fed **real device-/backend-captured fixtures** — that is test *data*, not a mock *collaborator*, so it is permitted and keeps CI coverage.
+- **Device / backend behaviour** is proven against the **real** thing: the real-device gauntlet (Android/iOS apps), the real local emulator stack (express-api Jest, androidTest, Playwright), real collaborators (Kotlin unit).
+- **CI consequence (designed-for, not silent):** GitHub-hosted runners have no attached device → driver *behaviour* is gauntlet-only (operator-gated, real device); express-api Jest moves to an **emulator-in-CI** model (`firebase emulators:exec` + docker-compose for LiveKit/MinIO/Mailpit).
 
-| Platform | Browser | Driver | Status |
+## Scope
+
+Delivered as phases — each phase is one or more 1-SHY-1-PR vertical slices; the suite stays green at every commit.
+
+| Phase | Scope | ~Files | Rationale / ordering |
 |---|---|---|---|
-| Mac | chromium / firefox / webkit / edge | `web-playwright-driver` | ✅ operational (4 cells) |
-| Android (real device) | Chrome | `web-mobile-chrome-android-driver` | ✅ operational |
-| Android (real device) | Samsung Internet | `web-mobile-samsung-android-driver` | ✅ operational |
-| Android (real device) | Firefox | `web-mobile-firefox-android-driver` | ✅ operational (Gecko/Marionette) |
-| Android (real device) | Edge | `web-mobile-edge-android-driver` | ⬜ environment-skip (verify on a real Edge-capable device) |
-| iPhone (real device) | Safari / Chrome / Firefox / Edge | `web-mobile-{safari,webkit}-ios-driver` | ✅ operational (4 cells; iOS FF/Chrome/Edge are WebKit per Apple policy) |
-
-**Native-app drivers (separate from the 12-cell web matrix):**
-
-| Target | Driver | Status |
-|---|---|---|
-| Android native app | `android-adb-driver` | ✅ real (2560 lines) |
-| iOS native app (Appium) | `ios-appium-driver` | ✅ real (419 lines) |
-| iOS native app (devicectl, real device) | `ios-devicectl-driver` | ⬜ SCAFFOLD — UI inspection stubbed |
-| iOS native app (simctl, simulator) | `ios-simctl-driver` | ⬜ SCAFFOLD — UI inspection stubbed |
-
-## Scope — the four real remaining items (decisions resolved 2026-06-13 → all filed as child SHYs)
-
-Build order **D → A → B → C** (warm-up → small → plumbing → substantive). Each is its own branch + PR on the full real-device gauntlet (reviewer-before-push, judgment-merge).
-
-1. **(D) `SHY-0092` — driver docstring-honesty fix.** Correct the misleading "STUB / SCAFFOLD for every method" headers on `web-playwright-driver.js` + `android-adb-driver.js` (real code under a stale stub claim) + add a "non-canonical alternative" note to `ios-devicectl`/`ios-simctl` (Appium is canonical). Comment-only, but `.js` → runs the gauntlet. *(XS.)*
-2. **(A) `SHY-0093` — make `mobile-edge-android` green-or-provably-env-gated.** Evidence-first on the real Android device (device-availability skip vs CDP-socket wiring bug `com.microsoft.emmx_devtools_remote`); the sole non-green web cell. *(S.)*
-3. **(B) `SHY-0094` — runner auto-starts + health-checks Appium.** Parent-owned shared Appium at `:4723` (probe → start-if-absent → health-check → reuse-or-owned-teardown) so the iOS-native cells run hands-free. *(M.)*
-4. **(C) `SHY-0095` — extend `ios-appium-driver` to full native-iOS journey coverage.** Implement the 6 stubbed `iosShows*` presence-checks (real XCUITest XML) + every journey-required method; the substantive item, on the real iPhone. *(L.)*
-
-> Decision #2 (devicectl-vs-Appium) resolved to **Appium** → the earlier "complete `ios-devicectl` UI inspection" scope item is **dropped** (devicectl/simctl are documented non-canonical via SHY-0092). The runner-Appium-lifecycle item (SHY-0094) was added to support the Appium path.
+| **0 — Linchpin** | `androidPersonaSignIn` clean signed-out start via real `androidSignOut` (warning-screen interception → real acknowledge → Profile→Settings→Sign Out → picker) + **behaviour-level** warning-ack test (`hasActiveWarning→false`) | ~3 | Unblocks the real-device gauntlet — the proof surface for every later phase |
+| **1 — QA drivers real** | Original matrix items (SHY-0092 docstring · 0093 mobile-edge-android · 0094 runner Appium auto-start · 0095 ios-appium full coverage) + drop the **5 `child_process` `execSync` mocks** → real-captured-XML fixtures + gauntlet behaviour | ~20 | Makes the matrix itself real |
+| **2 — androidTest real-emulator** | 22 `Fake*Repository` + `ResetFakesRule` → real local-emulator-backed instrumented tests, grouped by domain (auth/user/identity/device/token · room/seat/presence/voice · message/PM/typing · economy/gift · moderation/report/banner/notification · translation/appconfig/funfact/storage) | 36 | Largest fake cluster; real backend = local emulator |
+| **3 — express-api Jest real-stack** | 195 mocked Jest files → real local stack; **emulator-in-CI** infra SHY first, then grouped by route/domain; 10 fetch mocks → real endpoints | 195 | Biggest layer |
+| **4 — Kotlin unit real** | 61 mockk/Mockito files → real collaborators or promote to instrumented/real-backed | 61 | |
+| **5 — Playwright real-API** | 8 `page.route` fulfilment → real backend | 8 | |
+| **6 — iOS real** | 3 test doubles → real | 3 | |
+| **X — Cross-cutting** | anti-regression lint guard (fail any NEW `jest.mock`/`Fake*Repository`/`page.route`) · CLAUDE.md No-Stubs reconciliation (this charter) · per-persona clean-state reset for corpus isolation | — | Stops the debt regrowing while we drain it |
 
 ## Child SHYs
 
-Filed 2026-06-13, fully-refined (validator PASS) per [[feedback-no-skeleton-stories-fully-refined]] — authored only after the tooling decisions resolved, so none is built in a guessed direction:
-- **SHY-0092** — driver docstring-honesty fix (build item **D**). Status: Draft.
-- **SHY-0093** — make `mobile-edge-android` green-or-env-gated (build item **A**). Status: Draft.
-- **SHY-0094** — runner Appium auto-start + health-check (build item **B**). Status: Draft.
-- **SHY-0095** — extend `ios-appium-driver` to full native-iOS journey coverage (build item **C**). Status: Draft.
+**Filed (Phase 0/1):**
+- **SHY-0092** — driver docstring-honesty fix (Phase 1). Status: In Progress (draft PR #1416, **HELD** — its journeys need the Phase-0 linchpin to go green).
+- **SHY-0093** — make `mobile-edge-android` green-or-env-gated (Phase 1). Status: Draft.
+- **SHY-0094** — runner Appium auto-start + health-check (Phase 1). Status: Draft.
+- **SHY-0095** — extend `ios-appium-driver` to full native-iOS journey coverage (Phase 1). Status: Draft.
 
-## ✅ Operator decisions (ALL RESOLVED 2026-06-13 — see Notes for the full resolution)
+**Planned (filed fully-refined per [[feedback-no-skeleton-stories-fully-refined]] as each is started, in phase order — NOT pre-stubbed):**
+- **SHY-0096** (Phase 0, **NEXT**) — `androidPersonaSignIn` real signed-out reset via `androidSignOut` + warning-ack behaviour. The linchpin.
+- **Phase 1** — driver-test `execSync`-mock removal (real-captured fixtures + gauntlet).
+- **Phase 2** — one SHY per androidTest domain group (≈6 stories).
+- **Phase 3** — emulator-in-CI infra SHY + one SHY per express-api route/domain group (≈8–12 stories).
+- **Phase 4** — Kotlin-unit real-collaborator SHYs (grouped by module).
+- **Phase 5** — Playwright real-API SHY.
+- **Phase 6** — iOS real-double SHY.
+- **Phase X** — anti-regression lint-guard SHY.
 
-_The 6 questions below were surfaced for the operator and all resolved on 2026-06-13 (recorded in Notes). Kept verbatim for traceability; they no longer gate the child SHYs (filed above)._
+> `child_shys` frontmatter lists only filed-and-existing SHYs (validator cross-checks existence in `--scan`); planned ones are promoted into it as their files are created.
 
+## Operator decisions (running)
 
-1. **Re-prioritisation:** given the matrix is actually ~11/12 + real native runnable, do we still do EPIC-0003 before MVP, or pivot to MVP (Safety-first) now and fit these three items in opportunistically? *(Biggest call.)*
-2. **Canonical native-iOS real-device path:** `ios-appium-driver` (already real, needs an Appium server) **vs** completing `ios-devicectl` (no Appium dependency, but UI inspection unbuilt). Which is the protocol's "real iPhone native journey" cell? (Recommendation: pick one canonical; keep the other as fallback.)
-3. **Mac Safari fidelity:** the matrix's Mac "webkit" cell is Playwright-WebKit, not real Safari. Is webkit-as-Safari-proxy acceptable, or does "fully operational" require a real `safaridriver` + real Safari cell?
-4. **Appium server lifecycle:** the 4 iOS web-mobile cells need a real Appium server at `:4723`. Keep the current "operator starts `appium server` once per session" model, or have the runner auto-start + health-check it?
-5. **Real-device requirement for web-mobile cells:** confirm the No-Stubs/Pre-Merge-Protocol "real device" mandate binds the web-mobile matrix cells to **real** Android + real iPhone (not emulator/simulator), with the Mac-webkit synthetic as the only exception.
-6. **Firefox version-pin policy:** `mobile-firefox-android` pairs geckodriver + Marionette with Play-Store Firefox; add a pre-run version-skew check / pin policy, or accept driver-skip-on-mismatch?
+- **2026-06-13 (this session):** "a single epic… all completed before you move on" → this epic is the sole focus until every child story is Done. "True big-bang, all ~300 now" → overrides the codified opportunistic/no-big-bang clause (reconciled in CLAUDE.md). Test rigor = "real-only everywhere now". Recommendation accepted: fix sign-out first (Phase 0), then re-measure, then drain the debt phase by phase.
+- **2026-06-13 ~02:05 (earlier):** #1 do this before MVP; #2 native-iOS canonical = Appium + WebDriverAgent; #3 Mac Safari = Playwright-WebKit acceptable; #4 runner auto-starts Appium; #5 real Android + real iPhone connected; #6 Firefox-Android version-skew skip-loud.
 
 ## Out of Scope
 
-- Re-architecting the driver-interface contract or the runner (both sound + complete).
-- Re-implementing the already-real web/native drivers.
-- The foundational *unit-test* fake-harness question (Android BDD `ResetFakesRule`, KMP VM `FakeRepository`, sync `mock-gh`) — that is the separate 🔴 operator decision flagged across the SHY-0091 corpus, NOT this matrix-cell epic.
+- Re-architecting the driver-interface contract or `manual-qa-runner.js` (sound + complete).
+- Re-implementing already-real web/native drivers (only the docstrings + the `execSync`-mock *tests* change in Phase 1).
+- Shipping NEW product features — this epic is test-apparatus + the linchpin sign-out only.
 
 ## Dependencies
 
 - The QA framework docs + `manual-qa-runner.js` + `manual-qa-matrix.yml` (present, sound).
-- SHY-0026 (mobile driver helper scripts — `mobile-android-flags-check.sh` + `setup-ios-wda.sh`) for the real-device onboarding the devicectl/Appium cells need; its "device unauthorized needs manual USB trust" + WDA-signing flags are real-hardware/operator-gated.
-- Real hardware: a real Edge-capable Android device (item 1); a real iPhone + Apple Developer signing for WDA (item 2).
+- The real local stack ([[reference-local-stack-runner-setup]] — provisioning corrected 2026-06-13) as the real backend for Jest/androidTest/Playwright/journeys.
+- Real hardware: real Android + real iPhone + Apple Developer WDA signing (operator-gated gauntlet, [[project-qa-gauntlet-operator-gated]]).
+- SHY-0026 mobile driver helper scripts for real-device onboarding.
 
 ## DoD at Epic Level
 
-- [x] Operator resolved the 6 decisions (2026-06-13 — see Notes). #1 finish EPIC-0003 before MVP; #2 canonical native-iOS = Appium.
-- [x] The four scope items each filed as a fully-refined child SHY (`child_shys` populated: SHY-0092/0093/0094/0095) per [[feedback-no-skeleton-stories-fully-refined]] — authored after the decisions.
-- [ ] Each child SHY satisfies the Pre-Merge Testing Protocol (all four are `.js`/runner changes → run the now-available gauntlet); `released_in` on the release cut.
-- [ ] Post-completion: a full `manual-qa-runner.js --matrix` run is 12/12 green on real devices (incl. `mobile-edge-android` per SHY-0093) + the native-iOS journeys pass via the Appium path (SHY-0095); the misleading docstrings are corrected (SHY-0092).
+- [ ] **Phase 0:** `androidPersonaSignIn` reaches a clean signed-out picker on the real device every call (real `androidSignOut` + warning handling); the warning-ack DB-flip is tested behaviourally; a clean full-corpus re-measure produces a true gap taxonomy.
+- [ ] **Phases 1–6:** every one of the ~300 mock/fake-using test files is migrated to real services/devices (zero `jest.mock`, zero `Fake*Repository`, zero `page.route` fulfilment, zero iOS doubles remain); each migration slice keeps the whole suite green.
+- [ ] **Phase X:** lint guard fails any NEW in-process double; CLAUDE.md No-Stubs section reconciled; CI provisions the real stack for the migrated Jest layer.
+- [ ] A full `manual-qa-runner.js --matrix` run is green on real devices across all cells (incl. `mobile-edge-android`) + native-iOS journeys via Appium.
+- [ ] Every child SHY satisfies the Pre-Merge Testing Protocol and is Done (`released_in:` set on its release cut).
+- [ ] No coverage gaps remain on any touched surface (behaviour-level assertions, AC-traceable, both create + update paths, every enum/mapping value-matrixed).
 
 ## Notes (running log)
 
-- 2026-06-13 ~12:50 BST — **Four child SHYs FILED** (post-compact resume, decisions locked): **SHY-0092** (D, docstring-honesty), **SHY-0093** (A, mobile-edge-android verify/fix), **SHY-0094** (B, runner Appium auto-start + health-check), **SHY-0095** (C, extend ios-appium-driver to full native-iOS coverage). All fully-refined (frontmatter validator PASS ×4); `child_shys` populated; Scope/Child-SHYs/Operator-decisions/DoD reconciled to the locked plan. Evidence captured at filing: `ios-appium-driver.js` has 5 real methods (`iosLaunchApp`/`iosUiDump`/`iosTap`/`iosTapByTag`/`iosPersonaSignIn` + `close`) + **6 stubbed `iosShows*`** (line 394 fail-loud fallback); `web-playwright`/`android-adb` headers claim "STUB/SCAFFOLD" over real code; the runner has **no Appium lifecycle** (each cell is a `spawnSync` child → a parent-owned shared server is needed); `mobile-edge-android` uses the `com.microsoft.emmx_devtools_remote` CDP socket. Filed inside the EPIC-scoping branch (PR #1411, all-`.md`); implementation starts on per-child branches in build order D→A→B→C **after** #1411 merges (one active branch at a time).
-- 2026-06-13 ~02:05 BST — **Operator resolved ALL decisions (present, post-SHY-0091 Q&A) → status In Progress.** #1 **finish EPIC-0003 BEFORE MVP**. #2 native-iOS canonical = **Appium + WebDriverAgent** (extend the partial ~11-method `ios-appium-driver` to full journey coverage; `ios-devicectl`/`simctl` become documented NON-canonical alternatives). #3 Mac Safari = **Playwright-WebKit acceptable** (no real safaridriver; cell already green — no work). #4 Appium server = **runner auto-starts + health-checks** (new runner plumbing). #5 real Android + real iPhone **both connected + trusted** (real gauntlet runnable autonomously). #6 Firefox-Android → default: a pre-run geckodriver-vs-Firefox version-skew check that skips LOUDLY on mismatch. Separately, the foundational fake-harness question → operator chose **migrate EVERYTHING to real** (big-bang) = its own epic AFTER EPIC-0003. **Child SHYs to file (fully-refined, then implement TDD on the real gauntlet):** **(A)** verify/fix `mobile-edge-android` (evidence-first on the real device); **(B)** runner Appium auto-start + health-check; **(C)** extend `ios-appium-driver` to full native-iOS journey coverage [the substantive item]; **(D)** docstring-honesty fix (`web-playwright` + `android-adb` stale "stub" comments + a "non-canonical alternative" note on `devicectl`/`simctl`). `child_shys` populated as each is filed.
-- 2026-06-13 ~01:55 BST — **Authored (corrected) during the operator-AFK window** after the SHY-0091 merge. An Explore-agent synthesis of the real framework files **overturned the "2/14 cells → build 12" premise**: the web matrix is 11/12 operational + native Android/iOS-Appium are real; only `ios-devicectl`/`simctl` UI inspection + `mobile-edge-android` verification + two stale docstrings remain. Status kept **Draft** (NOT In Progress) and **child_shys empty** deliberately — the cell-SHYs are gated on the 6 operator decisions (esp. devicectl-vs-Appium), so authoring them now would assume a tooling direction, which [[feedback-consumer-first-surface-design]] forbids. Pushed to a branch for operator review; NOT merged (decision-gated, per the AFK commit-push-flag permission). **Recommend the operator weigh re-prioritising to MVP** given the gauntlet is largely runnable.
+- 2026-06-13 (post-compact, ~14:50 BST) — **RE-SCOPED to the single governing epic** per operator "a single epic… all completed before you move on" + "true big-bang, all ~300 now". Live investigation (real OnePlus CPH2653) established the **linchpin** (Phase 0): auth survives `am force-stop`; `pm clear` → `SecurityException CLEAR_APP_USER_DATA`; `run-as rm` → Permission denied; the only reliable signed-out reset is the real in-app sign-out. Also caught + corrected a self-inflicted false measurement: a `curl` REST read reported "0 user docs / empty P-10", but the **authoritative admin-SDK read shows 20 docs, P-10 present with `hasActiveWarning:true`** (leftover j10 state the merge-upsert seed doesn't clear) — environment data is fine; the curl was mangling `(default)`. Mock/fake inventory taken (~300 files across 5 frameworks). Charter authored on branch `chore/EPIC-0003-rescope-single-real-only` (md-only): this re-scope + CLAUDE.md No-Stubs reconciliation. Next: file SHY-0096 (Phase 0) fully-refined and TDD it on the real gauntlet.
+- 2026-06-13 ~12:50 BST — **Four child SHYs FILED** (SHY-0092 D docstring · 0093 A mobile-edge-android · 0094 B runner Appium auto-start · 0095 C ios-appium coverage); all fully-refined (validator PASS ×4). Filed inside EPIC-scoping PR #1411 (all-`.md`).
+- 2026-06-13 ~02:05 BST — **Operator resolved the 6 matrix decisions** (#1 before MVP; #2 Appium canonical; #3 WebKit-as-Safari OK; #4 runner auto-starts Appium; #5 real devices connected; #6 Firefox skip-loud) AND chose **migrate EVERYTHING to real (big-bang)** — at the time parked as a separate later epic; now folded into THIS epic by the 2026-06-13 re-scope above.
+- 2026-06-13 ~01:55 BST — Authored during operator-AFK; an Explore-agent synthesis overturned the "2/14 cells → build 12" premise (web matrix 11/12 operational; native Android/iOS-Appium real). Original premise-correction preserved for traceability.

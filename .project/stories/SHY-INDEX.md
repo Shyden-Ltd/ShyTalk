@@ -133,7 +133,7 @@ These IDs are reserved by the SHY-0032 + SHY-0033 multi-PR plan (operator 2026-0
 | --------- | ---------------------------------------------------------- | ----------- | ----------------------------------------------- |
 | EPIC-0001 | ShyTalk SHY framework (stories, validator, GH sync, EPICs) | In Progress | SHY-0001, SHY-0002, SHY-0003, SHY-0037 (4 SHYs) |
 | EPIC-0002 | Public roadmap story-migration + lazy translation platform | In Progress | SHY-0062, SHY-0072, SHY-0073 (+batches as filed) |
-| EPIC-0003 | Fully-operational cross-platform QA test-framework matrix (no stubs) | In Progress | SHY-0092, SHY-0093, SHY-0094, SHY-0095 (4 SHYs) |
+| EPIC-0003 | No stubs/fakes/gaps — fully-operational, real-only test apparatus (every framework) | In Progress | SHY-0092..0095 + real-only big-bang (Phase 0–6 + X, ~300 files); sole focus until all Done |
 
 EPICs are validated by `scripts/check-epic-frontmatter.sh` (separate from the SHY validator). The `epic:` field on SHY frontmatter is optional — most SHYs need not belong to an EPIC. See `CLAUDE.md` § "Agile Way of Working" → "### EPICs" for the full spec.
 
