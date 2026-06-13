@@ -86,6 +86,17 @@ This is a tiny but real correctness gap. CLAUDE.md is read by every Claude sessi
 
 **Coverage gate:** counts match.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**`*.md`-only → device/browser gauntlet EXEMPT** (the sole exemption): this story edits **only `CLAUDE.md`** (one count line + a `last verified` date stamp), touching no app/web/server/CI surface. So the full real-device/all-browser gauntlet does not apply.
+
+**Verification (the exemption still demands real evidence, not a guess):**
+- ✅ The counts are taken from the **real** filesystem at edit time — `ls app/src/androidTest/assets/features/*.feature | wc -l` + `grep -r '^[[:space:]]*[Ss]cenario:' …` against the **real** features dir (per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only: verify against reality, never assume the number).
+- ✅ `scripts/check-story-frontmatter.sh` exit 0; `code-reviewer` 100% clean.
+- ⬜ Kotlin/Web/Android/iOS frameworks · CI lints — N/A (no code/workflow change; a CLAUDE.md doc-line edit).
+
+**No LOCAL/DEV device gauntlet** — `*.md`-only exemption. **Judgment-merge** when the freshly-counted numbers match the edited line and review is clean; NO auto-merge.
+
 ## Out of Scope
 
 - Adding a CI gate that fails when the count is stale (consider for SHY-NN follow-up if recurrence becomes annoying).
@@ -104,9 +115,11 @@ This is a tiny but real correctness gap. CLAUDE.md is read by every Claude sessi
 ## Definition of Done
 
 - [ ] CLAUDE.md updated with fresh counts + date stamp.
-- [ ] Reviewer ZERO findings.
-- [ ] `status: Done`.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): `*.md`-only → device gauntlet EXEMPT; counts verified against the real features dir + `code-reviewer` 100% clean → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
+- [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-08 ~13:22 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 105 (G040). Reserved ID SHY-0055.
+- 2026-06-13 ~01:24 BST — **Embedded the Pre-Merge Testing Protocol (exemption form)** ([[SHY-0091]] pass): `*.md`-only (CLAUDE.md count line + date stamp) → device/browser gauntlet EXEMPT — the sole exemption. The exemption still requires REAL evidence: the file/scenario counts come from a live `ls`/`grep` against the real features dir, never assumed ([[feedback-no-stubs-mocks-fakes-real-only]] applied to a doc fact). DoD swaps the stale Reviewer-ZERO line for protocol-satisfied(exempt) + judgment-merge + released_in + `pr:`. Pickup-fitness: AC current; the stale source numbers ("33 files" vs the now-claimed 47) MUST be re-counted live at pickup — the count has likely drifted again since 2026-06-08, and the Scenario-Outline counting convention should be decided then.
