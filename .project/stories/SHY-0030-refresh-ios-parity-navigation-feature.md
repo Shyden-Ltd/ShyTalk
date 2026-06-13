@@ -120,6 +120,22 @@ P2 Tier-3 (kept at original priority). XS effort — quick audit + sync.
 2. Remove obsolete scenarios.
 3. Run on dev device → GREEN.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (edits the `ios_parity_navigation.feature` BDD file) → the FULL protocol applies. The headline is the navigation BDD running on a **real Android device** against the live app.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Android instrumented BDD** (`connectedDevDebugAndroidTest --tests "*IosParityNavigation*"`) — the refreshed nav scenarios on a **real Android device** exercising real navigation + screen render + back-nav; plus `manual-qa-runner.js --feature ios_parity_navigation --device android` as the journey-runner pass.
+- ⬜ **Kotlin/JVM unit · detekt · ktlint · `:shared:compileKotlinIosArm64`** — N/A unless a route-rename forces a Kotlin edit (Out of Scope bans nav-graph refactoring; this ticket edits only the `.feature`). If a rename fix is needed, these promote to ✅.
+- ⬜ **iOS XCUITest** — N/A here: iOS-side instrumented nav is an explicit Out-of-Scope carve-out (a separate iOS XCUITest parity SHY). **Honest parity caveat:** this ticket verifies parity *structurally* (both platforms consume the shared `SharedNavGraph` route set) + at **Android runtime**; the **iOS-runtime** parity render is NOT exercised here and remains the known follow-up — the title's "parity" is route-set + Android-verified until that SHY lands.
+- ⬜ **Web Playwright / Express Jest** — N/A.
+
+**No-Stubs (per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only):** the nav BDD runs real navigation on a real device. Where a scenario needs seeded preconditions (e.g. reaching `AgeVerificationSubmit` via the gacha gate needs persona state), use **real-emulator-seeded data**, not fakes. **🚩 Foundational-harness flag:** the Android BDD harness is fake-based by design (`ResetFakesRule` + fake repos, ~235 scenarios) — new scenarios get real data where inducible; the suite-wide migration to the real local stack is the flagged operator decision, not done in this XS ticket.
+
+**LOCAL gauntlet:** the nav scenarios green on a **real Android device** (+ the journey-runner pass); the apps regression net on real Android + **real iPhone** confirms the app didn't break (even though the iOS-nav parity render is the carve-out); web regression. Any failure → fix → restart.
+**DEV gauntlet:** redeploy the unmerged branch via Deploy-To-Dev `ref`; re-run the nav BDD on the real Android device; apps regression on real iPhone; web = Chrome. Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt; NO auto-merge.
+
 ## Out of Scope
 
 - **Refactoring nav graph structure** — only feature freshness.
@@ -142,12 +158,12 @@ P2 Tier-3 (kept at original priority). XS effort — quick audit + sync.
 - [ ] Comparison table in PR description.
 - [ ] .feature file updated with all gaps closed.
 - [ ] All scenarios pass on dev device.
-- [ ] Reviewer ZERO findings.
-- [ ] Per-type Done gate (`feature` → auto-merge + dev smoke).
-- [ ] PR merged.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): the refreshed nav scenarios green on a real Android device + journey-runner pass + apps regression green on real Android + real iPhone → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green → **judgment-merge** (zero doubt; NO auto-merge). iOS-runtime nav parity carved out to a separate iOS XCUITest SHY.
+- [ ] `released_in: vX.Y.Z` set after the release cut.
 - [ ] `status: Done`; `pr:` populated; final route count in Notes.
 
 ## Notes (running log)
 
 - 2026-06-07 ~21:25 BST — Refined under SHY-0032. Tier 3 freshness check.
 - 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-I8` (G039).
+- 2026-06-13 ~01:08 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): `.feature` freshness → real-Android-device BDD headline (+ journey-runner). **Honest parity caveat recorded:** parity is verified structurally (shared `SharedNavGraph` route set) + Android-runtime only; the iOS-runtime render parity is the explicit Out-of-Scope carve-out (separate iOS XCUITest SHY) — the title's "parity" is route-set+Android until then. No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]): nav runs real on a real device; seeded preconditions use real-emulator data; **🚩 the fake-based Android BDD harness flagged** for the suite-wide operator migration decision (new scenarios real-where-inducible). DoD swaps the stale Reviewer-ZERO / `feature→auto-merge` / PR-merged lines for protocol-satisfied + judgment-merge + released_in; real iPhone in the regression net. Pickup-fitness: AC current; the SHY-0024 (NavGraph migration) sequencing dependency + the AgeVerificationSubmit example route both need the read-and-confirm at pickup.
