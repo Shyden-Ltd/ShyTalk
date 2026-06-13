@@ -29,6 +29,8 @@ Both levers were explicitly out of scope there (API patterns + the validator's i
 
 ## Acceptance Criteria
 
+> **⚠️ No-Stubs supersession** ([[feedback-no-stubs-mocks-fakes-real-only]], operator 2026-06-13): the `mock-gh recording-diff tests` named in the AC below is a now-banned test double. The `### Pre-Merge Testing Protocol` subsection + the `## Notes` No-Stubs scrub govern — decision-parity runs against a **real throwaway GitHub test repo via real `gh`**; the call-count assertion is the flagged 🚩 architect/operator escape-hatch. Do NOT implement `mock-gh` as written.
+
 ### Happy path
 - [ ] **Lookup batching:** `--all` mode performs ONE `gh issue list` (paginated, `--limit` high enough for the corpus with a documented headroom assertion) up front, building a bash associative map `SHY-ID → issue_number`; `find_issue_for` consults the map with zero network. `--story` mode keeps the existing single lookup (one file = one lookup is already optimal).
 - [ ] **Validation batching:** `--all` mode runs `check-story-frontmatter.sh --scan` ONCE over the stories dir; per-file validity is derived by parsing the scan's per-file stderr failure lines into a bash invalid-set. `sync_one` consults the set — same skip/emit/N_FAILED semantics per invalid file as today, byte-identical stderr `validate` category lines. `--story` mode keeps the per-file validator call (exit-code contract untouched where it is user-visible).
