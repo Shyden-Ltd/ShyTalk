@@ -7,11 +7,12 @@
  * Android driver backed by `adb` (shell + uiautomator).
  *
  * Exposes the ctx.uiDriver methods that manual-qa-runner.js matchers
- * call for Android scenarios. The current implementation is a SCAFFOLD:
- * every method name from the matcher contract is wired to a stub that
- * returns false + logs a clear "not implemented" message. As scenarios
- * are exercised end-to-end, methods get real implementations one at a
- * time (input tap, uiautomator dump, am start, intent broadcast).
+ * call for Android scenarios. This is a REAL, fully-implemented adb /
+ * UIAutomator driver (~2.5k lines): every method name from the matcher
+ * contract is first registered with a fail-loud fallback (returns false
+ * + logs a clear "not implemented yet" message for any not-yet-mapped
+ * name), then the real implementations below override the mapped names
+ * (input tap, uiautomator dump, am start, intent broadcast).
  *
  * Wiring contract:
  *   - `createAndroidDriver({ serial })` selects which adb device to drive.
@@ -28,9 +29,8 @@
  *   - `adb shell am start -n pkg/.Activity`  — launches activity
  *   - `adb shell am broadcast -a ...`        — broadcasts intent
  *
- * The driver doesn't currently know which Activity each "screen"
- * corresponds to — that mapping needs to come from the app's
- * navigation registry. For now, methods log "not implemented" and the
+ * Where a "screen"→Activity mapping isn't yet wired, that method falls
+ * through to the fail-loud fallback (logs + returns false) and the
  * runner surfaces a finding listing the matcher and the missing call.
  */
 const { execSync } = require('child_process');
@@ -59,8 +59,9 @@ function selectSerial(preferredSerial) {
 /**
  * Method-name list the runner expects on ctx.uiDriver for Android
  * scenarios. Extracted by grepping `androidXxx:` patterns in
- * manual-qa-runner.js. Each name maps to a stub returning false +
- * log; real implementations replace stubs incrementally.
+ * manual-qa-runner.js. Each name is registered with the fail-loud
+ * fallback, then overridden below by its real implementation where one
+ * exists.
  */
 const ANDROID_METHOD_NAMES = [
   // Wake 86-106 vocabulary (matcher contract):
