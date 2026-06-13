@@ -35,6 +35,8 @@ P1 Tier-3 coverage. Cross-platform parity with Android's existing tests.
 
 ## Acceptance Criteria
 
+> **⚠️ No-Stubs supersession** ([[feedback-no-stubs-mocks-fakes-real-only]], operator 2026-06-13): the `FakeHttpClient` / Ktor `MockEngine` named in the AC / BDD / Risks below is a now-banned in-process test double. The `### Pre-Merge Testing Protocol` subsection + the `## Notes` No-Stubs entry govern — drive `IosRoomRepositoryImpl` against the **real local backend (real HTTP) on the emulator stack** and induce real error statuses, OR await the flagged 🔴 operator decision on the foundational fake harness. Do NOT implement `FakeHttpClient`/`MockEngine` as written.
+
 ### Happy path
 
 - [ ] Test file `shared/src/iosTest/kotlin/com/shyden/shytalk/data/repository/IosRoomRepositoryImplTest.kt` exists (OR `shared/src/commonTest/.../IosRoomRepositoryImplTest.kt` if iOS-specific source set isn't set up).
@@ -200,3 +202,4 @@ P1 Tier-3 coverage. Cross-platform parity with Android's existing tests.
 - 2026-06-07 ~21:18 BST — Refined under SHY-0032. Tier 3 iOS parity coverage.
 - 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-F1` (G014).
 - 2026-06-12 ~23:58 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): iOS room-repo parity → unit suite (all error-mapping paths) + room-mutation journeys on real iPhone + real Android. UPGRADED the spec's "iOS simulator" smoke to a **real iPhone** (protocol forbids simulator for app-level gauntlet). DoD auto-merge → judgment-merge. Pickup-fitness: no dupes/stale found.
+- 2026-06-13 ~02:00 BST — **No-Stubs flag (self-review-surfaced, beyond the reviewer's spot-check)** ([[feedback-no-stubs-mocks-fakes-real-only]]): AC/Test-Plan name `FakeHttpClient` + Ktor `MockEngine` for `IosRoomRepositoryImpl` HTTP dispatch/error-mapping — new in-process doubles the rule bans. Real path: drive the repo against the REAL local backend (real HTTP) on the emulator stack; induce real error statuses where deterministic (real 403 unauthorized / real 409 conflict / real net-fail), 🚩 escalate the genuinely-hard ones (429 / 5xx / malformed) to the operator gate rather than mock. Same foundational-fake class as [[SHY-0010]] (🔴 operator-decision item, SHY-0091 handoff); AC/BDD prose superseded by the No-Stubs banner atop `## Acceptance Criteria` — NOT re-architected here (opportunistic, no big-bang).
