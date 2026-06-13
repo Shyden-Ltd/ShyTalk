@@ -25,6 +25,8 @@ This is a verification + targeted extension SHY, not a from-scratch authoring ta
 
 ## Acceptance Criteria
 
+> **⚠️ No-Stubs supersession** ([[feedback-no-stubs-mocks-fakes-real-only]], operator 2026-06-13): the `FakeGiftRepository` / `loading-controlled-fake` named in the AC / BDD / Risks below is a now-banned in-process test double. The `### Pre-Merge Testing Protocol` subsection + the `## Notes` No-Stubs scrub govern — populated/empty states use **real emulator-seeded personas**; loading-state is the escape-hatch case (real throttle or operator decision). Do NOT implement `FakeGiftRepository` as written.
+
 ### Happy path
 
 - [ ] Read `gift_wall.feature` + `GiftWallScreen.kt` + any associated step definitions; produce a state-coverage matrix in this SHY's `## Notes` (3 rows × 2 cols: state × covered?).
