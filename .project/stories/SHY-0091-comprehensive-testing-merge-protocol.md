@@ -38,6 +38,7 @@ Operator 2026-06-12: the "before push" step was a one-line "code review agent" t
 ### Edge cases
 - [ ] Stories that touch no app/web surface but are not `*.md`-only (workflow/script infra) still assert the FULL protocol (only `*.md`-only is exempt).
 - [ ] Terminal-status stories (Done/Cancelled) are excluded from refinement; SHY-0089 (Cancelled) carries no gauntlet assertion.
+- [ ] **In-flight `In Review` stories whose code already merged before the protocol existed** (SHY-0087, SHY-0088) receive a **Note-only carve-out** (operator AFK decision #4, 2026-06-13): the protocol is NOT retroactively rewritten into their Test Plan/DoD; it binds on any FUTURE change to their surface. This is the sole not-Done exception to the "every not-Done story gets the embed" rule above.
 
 ### Performance
 - N/A — documentation/process change, no runtime surface. (The protocol's own regression-scope rule — impact-selected loops + full corpus at the gate — is the mitigation for the gauntlet's wall-clock cost.)
