@@ -88,6 +88,17 @@ The pattern works (and is intentional — App Lock has to gate ALL navigation in
 
 **Coverage gate:** subsection exists + content matches code reality.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**`*.md`-only → device/browser gauntlet EXEMPT** (the sole exemption): this story edits **only `CLAUDE.md`** (a new Architecture subsection), touching no app/web/server/CI surface — so the full real-device/all-browser gauntlet does not apply.
+
+**Verification (the exemption still demands real evidence — a doc that doesn't match code is a "stub doc"):**
+- ✅ Every claim in the subsection is **verified against the real source** — read the live `MainActivity` + `AppLockRepository` to confirm the intercept pattern, the 3 gated screens, and (Security dimension) that **no `SharedNavGraph` entry bypasses the lock** — never paraphrase the 2026-06-05 audit (per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only: describe reality, not a remembered snapshot). Add a `<!-- last verified -->` date stamp.
+- ✅ `scripts/check-story-frontmatter.sh` exit 0; `code-reviewer` 100% clean.
+- ⬜ Kotlin/Web/Android/iOS frameworks · CI lints — N/A (a CLAUDE.md doc edit; no code change).
+
+**No LOCAL/DEV device gauntlet** — `*.md`-only exemption. **Judgment-merge** when the prose is confirmed accurate against the live code and review is clean; NO auto-merge.
+
 ## Out of Scope
 
 - Refactoring MainActivity / AppLockRepository.
@@ -108,9 +119,11 @@ The pattern works (and is intentional — App Lock has to gate ALL navigation in
 ## Definition of Done
 
 - [ ] Subsection added; accurate against code.
-- [ ] Reviewer ZERO findings.
-- [ ] `status: Done`.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): `*.md`-only → device gauntlet EXEMPT; the subsection verified accurate against the live `MainActivity`/`AppLockRepository` (incl. the security contract) + `code-reviewer` 100% clean → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
+- [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-08 ~13:22 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 106 (G041). Reserved ID SHY-0056.
+- 2026-06-13 ~01:27 BST — **Embedded the Pre-Merge Testing Protocol (exemption form)** ([[SHY-0091]] pass): `*.md`-only (new CLAUDE.md Architecture subsection) → device/browser gauntlet EXEMPT. The exemption still requires REAL evidence — every claim verified against the LIVE `MainActivity` + `AppLockRepository` (incl. the security contract that no NavGraph entry bypasses the lock), never paraphrasing the 2026-06-05 audit; a doc that doesn't match code is a "stub doc" ([[feedback-no-stubs-mocks-fakes-real-only]] applied to prose). DoD swaps the stale Reviewer-ZERO line for protocol-satisfied(exempt) + judgment-merge + released_in + `pr:`. Pickup-fitness: AC current; the Error-path "pattern may have changed since the 2026-06-05 audit" check IS the live re-verify gate — confirm against code at pickup before writing.
