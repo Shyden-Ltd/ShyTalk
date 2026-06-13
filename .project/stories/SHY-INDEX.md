@@ -10,7 +10,11 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 | ID                                                              | Pri | Effort | Type     | Title                                                                                            | Status         | Roadmap IDs      | PR  |
 | --------------------------------------------------------------- | --- | ------ | -------- | ------------------------------------------------------------------------------------------------ | -------------- | ---------------- | --- |
-| [SHY-0091](SHY-0091-comprehensive-testing-merge-protocol.md)    | P0  | XL     | chore    | Adopt the comprehensive Pre-Merge Testing Protocol (codify + embed in every not-Done story)      | 🚧 In Progress | —                | —   |
+| [SHY-0091](SHY-0091-comprehensive-testing-merge-protocol.md)    | P0  | XL     | chore    | Adopt the comprehensive Pre-Merge Testing Protocol (codify + embed in every not-Done story)      | 👀 In Review   | —                | —   |
+| [SHY-0092](SHY-0092-driver-docstring-honesty.md)                | P2  | XS     | chore    | Correct the misleading "STUB/SCAFFOLD for every method" driver docstrings (EPIC-0003 / build D)  | 📝 Draft       | —                | —   |
+| [SHY-0093](SHY-0093-verify-mobile-edge-android-cell.md)         | P2  | S      | chore    | Make the `mobile-edge-android` matrix cell green-or-provably-env-gated (EPIC-0003 / build A)     | 📝 Draft       | —                | —   |
+| [SHY-0094](SHY-0094-runner-appium-autostart-healthcheck.md)     | P1  | M      | infra    | Runner auto-starts + health-checks the Appium server for native-iOS cells (EPIC-0003 / build B)  | 📝 Draft       | —                | —   |
+| [SHY-0095](SHY-0095-ios-appium-full-journey-coverage.md)        | P1  | L      | feature  | Extend `ios-appium-driver` to full real-iPhone native-journey coverage (EPIC-0003 / build C)     | 📝 Draft       | —                | —   |
 | [SHY-0087](SHY-0087-parallelize-ios-smoke-with-deploy.md)       | P1  | S      | infra    | Run the iOS boot smoke in parallel with the iOS App Store deploy (~25 min saving)                | 📝 Draft       | —                | —   |
 | [SHY-0088](SHY-0088-instrument-ios-archive-timing.md)           | P1  | S      | infra    | Instrument the 29-min iOS `xcodebuild archive` with `-showBuildTimingSummary` (measure first)    | 👀 In Review   | —                | —   |
 | [SHY-0090](SHY-0090-cache-cocoapods-ios-archive-compile.md)     | P1  | M      | infra    | Cache the CocoaPods compile in the iOS `xcodebuild archive` (gated on SHY-0088 measurement)      | 📝 Draft       | —                | —   |
@@ -129,6 +133,7 @@ These IDs are reserved by the SHY-0032 + SHY-0033 multi-PR plan (operator 2026-0
 | --------- | ---------------------------------------------------------- | ----------- | ----------------------------------------------- |
 | EPIC-0001 | ShyTalk SHY framework (stories, validator, GH sync, EPICs) | In Progress | SHY-0001, SHY-0002, SHY-0003, SHY-0037 (4 SHYs) |
 | EPIC-0002 | Public roadmap story-migration + lazy translation platform | In Progress | SHY-0062, SHY-0072, SHY-0073 (+batches as filed) |
+| EPIC-0003 | Fully-operational cross-platform QA test-framework matrix (no stubs) | In Progress | SHY-0092, SHY-0093, SHY-0094, SHY-0095 (4 SHYs) |
 
 EPICs are validated by `scripts/check-epic-frontmatter.sh` (separate from the SHY validator). The `epic:` field on SHY frontmatter is optional — most SHYs need not belong to an EPIC. See `CLAUDE.md` § "Agile Way of Working" → "### EPICs" for the full spec.
 

@@ -5,7 +5,7 @@ owner: claude
 created: 2026-06-13
 priority: P1
 title: Fully-operational cross-platform QA test-framework matrix (no stubs)
-child_shys: []
+child_shys: [SHY-0092, SHY-0093, SHY-0094, SHY-0095]
 ---
 
 # EPIC-0003: Fully-operational cross-platform QA test-framework matrix (no stubs)
@@ -19,7 +19,7 @@ EPIC-0003 has been a forward-reference since SHY-0091 on the assumption that **"
 - The **only true scaffolds** are `ios-devicectl-driver.js` + `ios-simctl-driver.js`: real device/simulator *selection* is in place, but **UI inspection is stubbed** (`iosUiDump()` returns `''`, all `iosShows*` return `false`) — these block real **native-iOS journey** testing via devicectl/simctl (NOT the 12-cell web matrix).
 - Two driver **docstrings are stale-and-misleading** (`web-playwright-driver.js`, `android-adb-driver.js` still say "SCAFFOLD / STUB FOR EVERY METHOD" though both are fully implemented) — the inverse No-Stubs hazard: a comment claiming "stub" over real code.
 
-**Consequence for the plan:** the "gauntlet isn't runnable yet" contradiction that motivated sequencing EPIC-0003 *before* MVP (operator decision #2, 2026-06-13) is **largely resolved already** — the gauntlet is mostly runnable. EPIC-0003's genuine remaining scope is therefore SMALL (three concrete items below) and partly **gated on operator tooling decisions**. **This may warrant re-prioritising toward MVP work now** rather than a large framework build. → operator call (see `## 🔴 Operator decisions`).
+**Consequence for the plan:** the "gauntlet isn't runnable yet" contradiction that motivated sequencing EPIC-0003 *before* MVP (operator decision #2, 2026-06-13) is **largely resolved already** — the gauntlet is mostly runnable. EPIC-0003's genuine remaining scope is therefore SMALL (four concrete child SHYs below). **RESOLVED 2026-06-13:** the operator chose to **finish EPIC-0003 before MVP** (decision #1) with this corrected small scope (build order D→A→B→C); the re-prioritise-to-MVP option was declined. See `## ✅ Operator decisions` + Notes.
 
 ## Vision
 
@@ -47,20 +47,29 @@ The cross-platform QA matrix proves every ShyTalk story on the real surfaces it 
 | iOS native app (devicectl, real device) | `ios-devicectl-driver` | ⬜ SCAFFOLD — UI inspection stubbed |
 | iOS native app (simctl, simulator) | `ios-simctl-driver` | ⬜ SCAFFOLD — UI inspection stubbed |
 
-## Scope — the THREE real remaining items (each → one child SHY, filed post-decision)
+## Scope — the four real remaining items (decisions resolved 2026-06-13 → all filed as child SHYs)
 
-1. **Verify / fix `mobile-edge-android`** — confirm whether the cell's skip is a device-availability skip (document as such) OR a CDP-socket wiring bug (`com.microsoft.emmx_devtools_remote` per the Android runbook). Run `--check-drivers --target local --filter mobile-edge-android` on a **real** Edge-capable Android device; let the evidence name the cause before any code change. *(Small.)*
-2. **Complete `ios-devicectl` (+ `ios-simctl`) real UI inspection** — the substantive gap. Implement the real element-tree read (WebDriverAgent / XCUITest harness) so `iosUiDump()` + the `iosShows*` checks reflect the **real** on-device UI, unblocking native-iOS journeys via devicectl on a **real iPhone**. *(Gated on decision #2 below: devicectl vs Appium as the canonical native-iOS path.)*
-3. **Docstring-honesty fix** — update the stale `web-playwright-driver.js` + `android-adb-driver.js` docstrings that falsely claim "SCAFFOLD / STUB" though both are fully implemented. A comment asserting "stub" over real code is the inverse of the No-Stubs hazard (false *under*-confidence; misleads pickup sessions into "rebuilding" working drivers). *(Trivial, comment-only — but it is a `.js` change, so NOT `*.md`-only → runs the protocol gauntlet, which is now mostly available.)*
+Build order **D → A → B → C** (warm-up → small → plumbing → substantive). Each is its own branch + PR on the full real-device gauntlet (reviewer-before-push, judgment-merge).
+
+1. **(D) `SHY-0092` — driver docstring-honesty fix.** Correct the misleading "STUB / SCAFFOLD for every method" headers on `web-playwright-driver.js` + `android-adb-driver.js` (real code under a stale stub claim) + add a "non-canonical alternative" note to `ios-devicectl`/`ios-simctl` (Appium is canonical). Comment-only, but `.js` → runs the gauntlet. *(XS.)*
+2. **(A) `SHY-0093` — make `mobile-edge-android` green-or-provably-env-gated.** Evidence-first on the real Android device (device-availability skip vs CDP-socket wiring bug `com.microsoft.emmx_devtools_remote`); the sole non-green web cell. *(S.)*
+3. **(B) `SHY-0094` — runner auto-starts + health-checks Appium.** Parent-owned shared Appium at `:4723` (probe → start-if-absent → health-check → reuse-or-owned-teardown) so the iOS-native cells run hands-free. *(M.)*
+4. **(C) `SHY-0095` — extend `ios-appium-driver` to full native-iOS journey coverage.** Implement the 6 stubbed `iosShows*` presence-checks (real XCUITest XML) + every journey-required method; the substantive item, on the real iPhone. *(L.)*
+
+> Decision #2 (devicectl-vs-Appium) resolved to **Appium** → the earlier "complete `ios-devicectl` UI inspection" scope item is **dropped** (devicectl/simctl are documented non-canonical via SHY-0092). The runner-Appium-lifecycle item (SHY-0094) was added to support the Appium path.
 
 ## Child SHYs
 
-_None filed yet — deliberately deferred (`child_shys: []`)._ The three `## Scope` items become fully-refined child SHYs **after** the operator resolves the tooling decisions below (esp. #2 devicectl-vs-Appium), so they are not authored in a guessed direction (per [[feedback-consumer-first-surface-design]] + [[feedback-no-skeleton-stories-fully-refined]] — a SHY born in the wrong direction is worse than one filed a day later):
-- _(planned)_ Verify / fix `mobile-edge-android` — small; evidence-first (device-skip vs CDP-socket bug).
-- _(planned)_ Complete `ios-devicectl` (+ `ios-simctl`) real UI inspection — substantive; **gated on decision #2**.
-- _(planned)_ Docstring-honesty fix (`web-playwright-driver.js` + `android-adb-driver.js` stale "stub/scaffold" comments over real code).
+Filed 2026-06-13, fully-refined (validator PASS) per [[feedback-no-skeleton-stories-fully-refined]] — authored only after the tooling decisions resolved, so none is built in a guessed direction:
+- **SHY-0092** — driver docstring-honesty fix (build item **D**). Status: Draft.
+- **SHY-0093** — make `mobile-edge-android` green-or-env-gated (build item **A**). Status: Draft.
+- **SHY-0094** — runner Appium auto-start + health-check (build item **B**). Status: Draft.
+- **SHY-0095** — extend `ios-appium-driver` to full native-iOS journey coverage (build item **C**). Status: Draft.
 
-## 🔴 Operator decisions (these GATE the child SHYs — surfaced, not assumed)
+## ✅ Operator decisions (ALL RESOLVED 2026-06-13 — see Notes for the full resolution)
+
+_The 6 questions below were surfaced for the operator and all resolved on 2026-06-13 (recorded in Notes). Kept verbatim for traceability; they no longer gate the child SHYs (filed above)._
+
 
 1. **Re-prioritisation:** given the matrix is actually ~11/12 + real native runnable, do we still do EPIC-0003 before MVP, or pivot to MVP (Safety-first) now and fit these three items in opportunistically? *(Biggest call.)*
 2. **Canonical native-iOS real-device path:** `ios-appium-driver` (already real, needs an Appium server) **vs** completing `ios-devicectl` (no Appium dependency, but UI inspection unbuilt). Which is the protocol's "real iPhone native journey" cell? (Recommendation: pick one canonical; keep the other as fallback.)
@@ -83,12 +92,13 @@ _None filed yet — deliberately deferred (`child_shys: []`)._ The three `## Sco
 
 ## DoD at Epic Level
 
-- [ ] Operator resolves the 6 decisions above (esp. #1 re-prioritisation + #2 native-iOS path).
-- [ ] The three scope items each filed as a fully-refined child SHY (`child_shys` populated) per [[feedback-no-skeleton-stories-fully-refined]] — authored AFTER the tooling decisions so they're not built in a guessed direction.
-- [ ] Each child SHY satisfies the Pre-Merge Testing Protocol (the non-`.md` ones run the now-available gauntlet); `released_in` on the release cut.
-- [ ] Post-completion: a full `manual-qa-runner.js --matrix` run is 12/12 green on real devices + the native-iOS journeys pass via the chosen path; the misleading docstrings are corrected.
+- [x] Operator resolved the 6 decisions (2026-06-13 — see Notes). #1 finish EPIC-0003 before MVP; #2 canonical native-iOS = Appium.
+- [x] The four scope items each filed as a fully-refined child SHY (`child_shys` populated: SHY-0092/0093/0094/0095) per [[feedback-no-skeleton-stories-fully-refined]] — authored after the decisions.
+- [ ] Each child SHY satisfies the Pre-Merge Testing Protocol (all four are `.js`/runner changes → run the now-available gauntlet); `released_in` on the release cut.
+- [ ] Post-completion: a full `manual-qa-runner.js --matrix` run is 12/12 green on real devices (incl. `mobile-edge-android` per SHY-0093) + the native-iOS journeys pass via the Appium path (SHY-0095); the misleading docstrings are corrected (SHY-0092).
 
 ## Notes (running log)
 
+- 2026-06-13 ~12:50 BST — **Four child SHYs FILED** (post-compact resume, decisions locked): **SHY-0092** (D, docstring-honesty), **SHY-0093** (A, mobile-edge-android verify/fix), **SHY-0094** (B, runner Appium auto-start + health-check), **SHY-0095** (C, extend ios-appium-driver to full native-iOS coverage). All fully-refined (frontmatter validator PASS ×4); `child_shys` populated; Scope/Child-SHYs/Operator-decisions/DoD reconciled to the locked plan. Evidence captured at filing: `ios-appium-driver.js` has 5 real methods (`iosLaunchApp`/`iosUiDump`/`iosTap`/`iosTapByTag`/`iosPersonaSignIn` + `close`) + **6 stubbed `iosShows*`** (line 394 fail-loud fallback); `web-playwright`/`android-adb` headers claim "STUB/SCAFFOLD" over real code; the runner has **no Appium lifecycle** (each cell is a `spawnSync` child → a parent-owned shared server is needed); `mobile-edge-android` uses the `com.microsoft.emmx_devtools_remote` CDP socket. Filed inside the EPIC-scoping branch (PR #1411, all-`.md`); implementation starts on per-child branches in build order D→A→B→C **after** #1411 merges (one active branch at a time).
 - 2026-06-13 ~02:05 BST — **Operator resolved ALL decisions (present, post-SHY-0091 Q&A) → status In Progress.** #1 **finish EPIC-0003 BEFORE MVP**. #2 native-iOS canonical = **Appium + WebDriverAgent** (extend the partial ~11-method `ios-appium-driver` to full journey coverage; `ios-devicectl`/`simctl` become documented NON-canonical alternatives). #3 Mac Safari = **Playwright-WebKit acceptable** (no real safaridriver; cell already green — no work). #4 Appium server = **runner auto-starts + health-checks** (new runner plumbing). #5 real Android + real iPhone **both connected + trusted** (real gauntlet runnable autonomously). #6 Firefox-Android → default: a pre-run geckodriver-vs-Firefox version-skew check that skips LOUDLY on mismatch. Separately, the foundational fake-harness question → operator chose **migrate EVERYTHING to real** (big-bang) = its own epic AFTER EPIC-0003. **Child SHYs to file (fully-refined, then implement TDD on the real gauntlet):** **(A)** verify/fix `mobile-edge-android` (evidence-first on the real device); **(B)** runner Appium auto-start + health-check; **(C)** extend `ios-appium-driver` to full native-iOS journey coverage [the substantive item]; **(D)** docstring-honesty fix (`web-playwright` + `android-adb` stale "stub" comments + a "non-canonical alternative" note on `devicectl`/`simctl`). `child_shys` populated as each is filed.
 - 2026-06-13 ~01:55 BST — **Authored (corrected) during the operator-AFK window** after the SHY-0091 merge. An Explore-agent synthesis of the real framework files **overturned the "2/14 cells → build 12" premise**: the web matrix is 11/12 operational + native Android/iOS-Appium are real; only `ios-devicectl`/`simctl` UI inspection + `mobile-edge-android` verification + two stale docstrings remain. Status kept **Draft** (NOT In Progress) and **child_shys empty** deliberately — the cell-SHYs are gated on the 6 operator decisions (esp. devicectl-vs-Appium), so authoring them now would assume a tooling direction, which [[feedback-consumer-first-surface-design]] forbids. Pushed to a branch for operator review; NOT merged (decision-gated, per the AFK commit-push-flag permission). **Recommend the operator weigh re-prioritising to MVP** given the gauntlet is largely runnable.
