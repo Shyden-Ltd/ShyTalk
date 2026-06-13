@@ -126,8 +126,7 @@ This SHY-0042 exists purely so the G003 top-level identifier resolves to a SHY w
 
 - [ ] File exists with valid frontmatter + 10 body sections + 8 AC sub-headings.
 - [ ] Roadmap cross-label exists.
-- [ ] Reviewer ZERO findings on the spec (this SHY ships as part of SHY-0036).
-- [ ] **`*.md`-only → gauntlet-exempt** (`CLAUDE.md` § Pre-Merge Testing Protocol): validator + cross-label grep + `code-reviewer` 100% clean only; no device/browser gauntlet. The eventual `status: Done` flip is a frontmatter-only `*.md` edit, judgment-merged on the sweep that records all three sub-SHY PRs.
+- [ ] **`*.md`-only → gauntlet-exempt** (`CLAUDE.md` § Pre-Merge Testing Protocol): validator + cross-label grep + `code-reviewer` 100% clean only (this tracker ships as part of SHY-0036); no device/browser gauntlet. The eventual `status: Done` flip is a frontmatter-only `*.md` edit, judgment-merged on the sweep that records all three sub-SHY PRs.
 - [ ] `status: Draft` at creation; flips to `Done` later when sub-SHYs all ship (managed by a future sweep).
 
 ## Notes (running log)
