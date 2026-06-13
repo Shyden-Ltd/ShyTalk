@@ -88,6 +88,21 @@ Companion pattern to [[SHY-0053]] (`|| true` swallow). Same [[feedback-warnings-
 
 **Coverage gate:** actionlint pass; CI run green or instructive-failure.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (edits `allure-report.yml`) → the FULL protocol applies. No app/web surface; the proof is the **real allure-report workflow** behaving correctly on a real run. Companion to [[SHY-0053]] — `continue-on-error: true` is the same silent-swallow family as `|| true`.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **actionlint** — the `allure-report.yml` edit (warnings = failures).
+- ⬜ **Express Jest** — N/A unless an optional structural assertion is added against the **real** YAML (the allure step publishes a report; it doesn't run Jest).
+- ⬜ **app/web/iOS UI · Kotlin/detekt/ktlint** — N/A.
+
+**No-Stubs / verified-by-running:** whichever audit branch is chosen, **prove it on a real run** ([[feedback-workflow-verify-by-running]]) — if REMOVED, induce a real step failure on a scratch run and confirm the workflow goes red; if KEPT (genuinely best-effort, e.g. a gh-pages deploy that races per [[SHY-0031]]), induce a real failure and confirm the `if: failure()` step **really emits a visible `::warning::` + writes to `GITHUB_STEP_SUMMARY`** — a WARN that doesn't actually fire is a swallow in disguise ([[feedback-warnings-are-failures]]). Any pre-existing failure surfaced by removal is fixed in THIS PR ([[feedback-fix-pre-existing-and-new-same]]).
+
+**LOCAL gauntlet:** actionlint clean; the induced-failure visibility proof done on a scratch run. Any failure → fix → restart.
+**DEV gauntlet:** push to the branch and confirm the **real** allure-report workflow behaves per the audit decision (green on success; visibly red/WARNed on the induced failure). Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt; NO auto-merge.
+
 ## Out of Scope
 
 - Other workflow files with `continue-on-error`.
@@ -106,9 +121,11 @@ Companion pattern to [[SHY-0053]] (`|| true` swallow). Same [[feedback-warnings-
 
 - [ ] Audit decision applied.
 - [ ] actionlint clean.
-- [ ] Reviewer ZERO findings.
-- [ ] `status: Done`.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): actionlint clean + the audit decision proven on a real run (verified-by-running; the WARN path actually fires if kept) → `code-reviewer` 100% clean → push → CI green by name (real allure-report workflow) → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
+- [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-08 ~13:15 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 85 (G037). Reserved ID SHY-0054.
+- 2026-06-13 ~01:21 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): companion to [[SHY-0053]] — `continue-on-error: true` is the same silent-swallow family. Proof = actionlint + **verified-by-running** the audit decision on a real run ([[feedback-workflow-verify-by-running]]): if removed → real induced failure goes red; if kept (best-effort gh-pages race per [[SHY-0031]]) → confirm the `if: failure()` step REALLY emits `::warning::` + `GITHUB_STEP_SUMMARY` (a non-firing WARN is a disguised swallow). No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]): nothing to mock; the real workflow run is the proof. DoD swaps the stale Reviewer-ZERO line for protocol-satisfied + judgment-merge + released_in + `pr:`. Pickup-fitness: AC current; the `:117` line number + whether other `continue-on-error` exist in the file to re-confirm at pickup.
