@@ -963,6 +963,53 @@ router.post('/users/:uniqueId/lift-suspension', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// POST /api/users/:uniqueId/acknowledge-warning — user acknowledges their
+// active moderation warning (SHY-0097). Server-authorized: the moderation
+// fields (hasActiveWarning/warningReason/warningCount) are rules-protected
+// from client writes (firestore.rules) — a user must NOT be able to clear
+// their own warning via a direct client write. This endpoint (Admin SDK)
+// clears the ACTIVE warning + records the acknowledgement, but PRESERVES
+// warningCount so strike-escalation history survives.
+// ═══════════════════════════════════════════════════════════════════
+
+router.post('/users/:uniqueId/acknowledge-warning', async (req, res) => {
+  try {
+    if (requireOwner(req, res)) return;
+
+    const uniqueId = req.params.uniqueId;
+    const user = await getDoc(`users/${uniqueId}`);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const hasActiveWarning = user.hasActiveWarning ?? user.has_active_warning ?? false;
+    if (!hasActiveWarning) {
+      // Idempotent: acknowledging with no active warning is a no-op success
+      // (covers double-tap / retry without surfacing a spurious error).
+      return res.json({ success: true, alreadyClear: true });
+    }
+
+    log.info('users', 'User acknowledged active warning', { uniqueId });
+
+    await db.doc(`users/${uniqueId}`).update({
+      hasActiveWarning: false,
+      warningReason: null,
+      warningAcknowledged: true,
+      warningAcknowledgedAt: now(),
+      // warningCount intentionally PRESERVED — strike-escalation history.
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    log.error('users', 'Acknowledge warning failed', {
+      uniqueId: req.params.uniqueId,
+      error: err.message,
+    });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // POST /api/users/:uniqueId/follow — Follow a user
 // ═══════════════════════════════════════════════════════════════════
 

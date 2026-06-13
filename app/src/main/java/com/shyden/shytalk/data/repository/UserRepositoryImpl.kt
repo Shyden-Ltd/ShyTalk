@@ -385,11 +385,13 @@ class UserRepositoryImpl(
         }
 
     override suspend fun acknowledgeWarning(userId: String): Resource<Unit> =
+        // Server-authorized (SHY-0097). The moderation fields
+        // (hasActiveWarning/warningReason/warningCount) are rules-protected
+        // from client writes (firestore.rules), so a direct client update is
+        // DENIED. Clearing the active warning goes through the Express
+        // endpoint (Admin SDK), which preserves warningCount (strike history).
         firebaseCall("Failed to acknowledge warning") {
-            firestore
-                .document("users/$userId")
-                .update(mapOf("hasActiveWarning" to false, "warningReason" to null))
-                .await()
+            api.post("/api/users/$userId/acknowledge-warning", JSONObject())
         }
 
     override suspend fun requestAccountDeletion(

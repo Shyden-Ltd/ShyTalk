@@ -789,9 +789,16 @@ fun SharedNavGraph(
                         onAccept = {
                             warningScope.launch {
                                 val userId = authRepository.currentUserId ?: return@launch
-                                warningUserRepo.acknowledgeWarning(userId)
-                                navController.navigate(Screen.Main.route) {
-                                    popUpTo(Screen.Warning.route) { inclusive = true }
+                                // SHY-0097: AWAIT the server result and navigate to Main
+                                // ONLY on success. On failure, stay on the warning screen
+                                // — the reactive gate keeps the user here (hasActiveWarning
+                                // is still set), so a retry is possible. This replaces the
+                                // old fire-and-forget that navigated optimistically then got
+                                // bounced straight back (silent failure).
+                                if (warningUserRepo.acknowledgeWarning(userId) is Resource.Success) {
+                                    navController.navigate(Screen.Main.route) {
+                                        popUpTo(Screen.Warning.route) { inclusive = true }
+                                    }
                                 }
                             }
                         },
