@@ -99,6 +99,21 @@ Roadmap row (line 84, 2026-06-05): `G036 | 🟡 Polish | CI — || true swallows
 
 **Coverage gate:** actionlint clean; CI run on the PR succeeds.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (edits `sonarcloud.yml`) → the FULL protocol applies. No app/web surface; the proof is the **real SonarCloud workflow** behaving correctly on a real run. (This ticket is itself the No-Stubs / warnings-are-failures principle in CI form — a `|| true` is "make it green without making it real.")
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **actionlint** — the `sonarcloud.yml` edit (warnings = failures).
+- ✅ **Express Jest** — the coverage step runs the **real** Jest suite; the fix is that a real Jest failure now surfaces (red) instead of being swallowed. If an optional assertion is added, it reads the **real** `sonarcloud.yml` and asserts no `|| true` remains on the coverage step.
+- ⬜ **app/web/iOS UI · Kotlin/detekt/ktlint** — N/A.
+
+**No-Stubs / verified-by-running:** the loud-failure behaviour is **proven by inducing a REAL Jest failure** on a scratch run and confirming the step + workflow go red (then revert) — NOT asserted from the YAML alone (per [[feedback-workflow-verify-by-running]]); the green path is a real passing run. If removing `|| true` surfaces a real pre-existing Jest failure, fix it in THIS PR ([[feedback-fix-pre-existing-and-new-same]]). The WARN-path fallback still **emits a visible `::warning::`** — never a silent swallow ([[feedback-warnings-are-failures]]); a warning counts as a failure to fix, not to tolerate.
+
+**LOCAL gauntlet:** actionlint clean; the real Jest suite green locally; the induced-failure proof done on a scratch run. Any failure → fix → restart.
+**DEV gauntlet:** push to the branch and confirm the **real** SonarCloud workflow's coverage step is green on a passing Jest run (and would go red on failure, per the scratch proof). Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt; NO auto-merge.
+
 ## Out of Scope
 
 - Other `|| true` patterns in OTHER workflow files (separate SHYs).
@@ -119,9 +134,11 @@ Roadmap row (line 84, 2026-06-05): `G036 | 🟡 Polish | CI — || true swallows
 - [ ] `|| true` removed or replaced with WARN.
 - [ ] actionlint clean.
 - [ ] Any surfaced Jest failure fixed in same PR.
-- [ ] Reviewer ZERO findings.
-- [ ] `status: Done`.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): actionlint clean + real Jest green + the loud-failure behaviour proven by a real induced failure (verified-by-running) → `code-reviewer` 100% clean → push → CI green by name (real SonarCloud workflow) → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
+- [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-08 ~13:15 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 84 (G036). Reserved ID SHY-0053.
+- 2026-06-13 ~01:18 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): this ticket IS the No-Stubs/warnings-are-failures principle in CI form (`|| true` = green-without-real). Proof framework = actionlint + the real Jest coverage run + **verified-by-running** the loud-failure path via a REAL induced Jest failure on a scratch run ([[feedback-workflow-verify-by-running]]), not YAML-only assertion; any surfaced pre-existing failure fixed in-PR ([[feedback-fix-pre-existing-and-new-same]]); the WARN fallback still emits a visible `::warning::` (never a silent swallow). DoD swaps the stale Reviewer-ZERO line for protocol-satisfied + judgment-merge + released_in + `pr:`. Pickup-fitness: AC current; the `:63` line number + whether multiple `|| true` exist in the file to re-confirm at pickup.
