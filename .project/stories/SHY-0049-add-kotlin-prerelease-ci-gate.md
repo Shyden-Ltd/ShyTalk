@@ -107,7 +107,7 @@ Companion to [[SHY-0041]] (which does the actual bump). This SHY adds the GATE s
 ## Test Plan
 
 **Red:**
-- New `express-api/tests/scripts/check-kotlin-prerelease.test.js` — 5 cases per AC. Each case mocks the Maven Central response (env-var or fixture file).
+- New `express-api/tests/scripts/check-kotlin-prerelease.test.js` — 5 cases per AC. **No mocked Maven responses** (per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only): each case drives the script against the **real** Maven Central using immutable historical coordinates that genuinely exhibit the state — a real old RC (e.g. `2.0.0-RC1`) whose real stable (`2.0.0`) exists → gate fires; a real stable pin → exit 0; an injectable `MAVEN_METADATA_URL` pointed at a **real unreachable host** for the network-failure path (a real `curl` failure, not a mocked 503); a real nonexistent toml path for exit-2. The "pre-release + no-stable-yet" case uses a real perpetually-pre-release coordinate if one exists, else 🚩 escalate (never a fixture metadata file).
 
 **Green:**
 - Author `scripts/check-kotlin-prerelease.sh` (~80 lines bash).
@@ -115,6 +115,23 @@ Companion to [[SHY-0041]] (which does the actual bump). This SHY adds the GATE s
 - Run tests + shellcheck + actionlint.
 
 **Coverage gate:** 5 Jest cases pass; shellcheck + actionlint clean.
+
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (adds a bash script + Jest tests + `lint.yml`/`.husky/pre-push` wiring) → the FULL protocol applies. CI-gate tooling with no app/web surface; the proof is the gate really firing/passing against **real Maven Central**.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Express Jest** — the 5 `check-kotlin-prerelease.test.js` cases, each driving the **real script against real Maven Central** via immutable historical coordinates (no mocked responses — see the scrubbed Red step above).
+- ✅ **shellcheck** — `check-kotlin-prerelease.sh` (warnings = failures).
+- ✅ **actionlint** — the `lint.yml` step wiring.
+- ✅ **eslint** (`--max-warnings=0`) — the test JS.
+- ⬜ **app/web/iOS UI · Kotlin unit · detekt/ktlint** — N/A (the gate inspects the version pin; it changes no app/shared code).
+
+**No-Stubs (scrubbed):** the original Red step "mocks the Maven Central response" is replaced by **real immutable Maven coordinates** (Maven Central never deletes versions, so a real RC + its real stable reproduce the fire-state deterministically forever) + a **real unreachable URL** for the network-failure path. **🚩** the "pre-release + no-stable-yet" state is the one hard-to-find condition → a real perpetually-pre-release coordinate, or escalate — never a fixture metadata file.
+
+**LOCAL gauntlet:** Jest (real-Maven) + shellcheck + actionlint + eslint green locally; the pre-push hook wiring exercised by a real push. Any failure → fix TDD → restart.
+**DEV gauntlet:** push to the branch and confirm the new `lint.yml` step runs the gate on the **real** pipeline (passes on the current stable pin; the fire-path is proven by the Jest real-Maven cases). Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt; NO auto-merge.
 
 ## Out of Scope
 
@@ -139,9 +156,11 @@ Companion to [[SHY-0041]] (which does the actual bump). This SHY adds the GATE s
 
 - [ ] Script + 5 Jest tests + lint.yml wiring + pre-push wiring.
 - [ ] shellcheck + actionlint + Jest all green.
-- [ ] Reviewer ZERO findings.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): the 5 Jest cases green against real Maven Central + shellcheck + actionlint + eslint clean → `code-reviewer` 100% clean → push → CI green by name (the new gate step runs on the real pipeline) → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
 - [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-08 ~13:15 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 107 (G031). Reserved ID SHY-0049.
+- 2026-06-13 ~01:11 BST — **Embedded the Pre-Merge Testing Protocol + No-Stubs scrub** ([[SHY-0091]] pass, [[feedback-no-stubs-mocks-fakes-real-only]]): CI-gate tooling → Jest headline driven against REAL Maven Central. Scrubbed the Red step's "mocks the Maven Central response" → real immutable coordinates (a real RC + its real stable reproduce the fire-state forever; Maven never deletes versions) + a real unreachable URL for the network-failure path (real curl failure, not a mocked 503); 🚩 the "pre-release + no-stable-yet" case uses a real perpetually-pre-release coordinate or escalates. DoD swaps the stale Reviewer-ZERO line for protocol-satisfied + judgment-merge + released_in. Pickup-fitness: AC current; companion [[SHY-0041]] (the actual bump) + the live `libs.versions.toml` kotlin pin need the read-and-confirm at pickup.
