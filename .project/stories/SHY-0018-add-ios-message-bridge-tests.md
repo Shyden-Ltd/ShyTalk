@@ -40,6 +40,8 @@ P1 Tier-3 coverage. Closes the iOS data-layer + push-platform-bridge coverage ga
 
 ## Acceptance Criteria
 
+> **⚠️ No-Stubs supersession** ([[feedback-no-stubs-mocks-fakes-real-only]], operator 2026-06-13): the `FakeFirestore` / `FakePushAPI` / "fake Firestore snapshots" named in the AC / BDD / Risks below is a now-banned in-process test double. The `### Pre-Merge Testing Protocol` subsection + the `## Notes` No-Stubs entry govern — drive the iOS data-layer repos against the **real Firestore emulator (real snapshots) + real push path on the local stack**, OR await the flagged 🔴 operator decision on the foundational fake harness. Do NOT implement `FakeFirestore`/`FakePushAPI` as written.
+
 ### Happy path
 
 **Repository tests (G015)**:
@@ -240,3 +242,4 @@ P1 Tier-3 coverage. Closes the iOS data-layer + push-platform-bridge coverage ga
 - 2026-06-07 ~21:25 BST — Refined under SHY-0032. Tier 3 iOS coverage; closes the iOS data-layer + push-bridge gap.
 - 2026-06-07 — Skeleton from `convert-roadmap-to-stories.sh` PR-bundle `PR-F2` (G015, G030).
 - 2026-06-12 ~23:58 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): iOS data-layer + push-bridge parity → 5 unit suites + DM/seat/gift/push-deep-link journeys on real iPhone + real Android. UPGRADED "iOS simulator" → **real iPhone**. DoD auto-merge → judgment-merge. Pickup-fitness: no dupes/stale found.
+- 2026-06-13 ~02:00 BST — **No-Stubs flag (self-review-surfaced, beyond the reviewer's spot-check)** ([[feedback-no-stubs-mocks-fakes-real-only]]): AC/Test-Plan name `FakeFirestore` + `FakePushAPI` + "fake Firestore snapshots" — new in-process doubles the rule bans. Real path: drive the iOS data-layer repos against the REAL Firestore emulator (real snapshots) + real push path on the local stack. The Risk's own "Real FirebaseFirestoreException can't be constructed in tests" is the 🚩 genuinely-hard case → induce the real Firestore error via the emulator (real `PERMISSION_DENIED` etc.) or escalate, never a mocked exception. Same foundational-fake class as [[SHY-0010]] (🔴 operator-decision item, SHY-0091 handoff); AC/BDD prose superseded by the No-Stubs banner atop `## Acceptance Criteria` — NOT re-architected here.
