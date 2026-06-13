@@ -10,10 +10,10 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 | ID                                                              | Pri | Effort | Type     | Title                                                                                            | Status         | Roadmap IDs      | PR  |
 | --------------------------------------------------------------- | --- | ------ | -------- | ------------------------------------------------------------------------------------------------ | -------------- | ---------------- | --- |
+| [SHY-0091](SHY-0091-comprehensive-testing-merge-protocol.md)    | P0  | XL     | chore    | Adopt the comprehensive Pre-Merge Testing Protocol (codify + embed in every not-Done story)      | 🚧 In Progress | —                | —   |
 | [SHY-0087](SHY-0087-parallelize-ios-smoke-with-deploy.md)       | P1  | S      | infra    | Run the iOS boot smoke in parallel with the iOS App Store deploy (~25 min saving)                | 📝 Draft       | —                | —   |
-| [SHY-0088](SHY-0088-instrument-ios-archive-timing.md)           | P1  | S      | infra    | Instrument the 29-min iOS `xcodebuild archive` with `-showBuildTimingSummary` (measure first)    | 🚧 In Progress | —                | —   |
+| [SHY-0088](SHY-0088-instrument-ios-archive-timing.md)           | P1  | S      | infra    | Instrument the 29-min iOS `xcodebuild archive` with `-showBuildTimingSummary` (measure first)    | 👀 In Review   | —                | —   |
 | [SHY-0090](SHY-0090-cache-cocoapods-ios-archive-compile.md)     | P1  | M      | infra    | Cache the CocoaPods compile in the iOS `xcodebuild archive` (gated on SHY-0088 measurement)      | 📝 Draft       | —                | —   |
-| [SHY-0089](SHY-0089-gradle-build-cache-kn-ios-link.md)          | P2  | M      | infra    | Build-cache the 22-min Kotlin/Native iOS framework link (feasibility-gated)                      | 📝 Draft       | —                | —   |
 | [SHY-0060](SHY-0060-age-gating-per-feature.md)                  | P0  | XL     | feature  | Age-gating per feature: tiered per-feature age thresholds replacing single 13+ signup gate       | 📝 Draft       | —                | —   |
 | [SHY-0071](SHY-0071-sync-wall-clock-batching.md)                | P1  | M      | refactor | Sync wall-clock: batch gh lookups (one upfront list → map) + scan-mode validation (36.2s→≤6s)      | 📝 Draft       | —                | —   |
 | [SHY-0062](SHY-0062-migrate-legacy-roadmap-features.md)         | P1  | XL     | chore    | Migrate ~95 legacy roadmap features into tracked stories (meta/tracker; EPIC-0002)                | 📝 Draft       | —                | —   |
@@ -70,7 +70,6 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | -------------------------------------------------- | --- | ------ | -------- | --------------------------------------------------------------------------------------------------- | ------- | ----------- | -------------------------------------------------------- |
 | [SHY-0001](SHY-0001-establish-agile-workflow.md)   | P1  | M      | infra    | Establish Agile user-story way of working                                                           | ✅ Done | —           | [#1034](https://github.com/Shyden-Ltd/ShyTalk/pull/1034) |
 | [SHY-0002](SHY-0002-wire-github-integration.md)    | P1  | M      | infra    | Wire GitHub Issues + Projects v2 integration                                                        | ✅ Done | —           | [#1035](https://github.com/Shyden-Ltd/ShyTalk/pull/1035) |
-| [SHY-0003](SHY-0003-convert-roadmap-to-stories.md) | P1  | L      | chore    | Convert zero-gap roadmap to user stories + cross-label                                              | ✅ Done | G054        | [#1036](https://github.com/Shyden-Ltd/ShyTalk/pull/1036) |
 | [SHY-0032](SHY-0032-refine-skeleton-acs.md)        | P0  | L      | chore    | Refine the 28 skeleton SHYs + codify no-skeleton rule                                               | ✅ Done | —           | [#1037](https://github.com/Shyden-Ltd/ShyTalk/pull/1037) |
 | [SHY-0033](SHY-0033-investigate-stale-branches.md) | P0  | M      | chore    | Investigate 506-branch sprawl + close stale + 1-active-branch                                       | ✅ Done | —           | [#1038](https://github.com/Shyden-Ltd/ShyTalk/pull/1038) |
 | [SHY-0034](SHY-0034-tag-only-release-flow.md)      | P0  | L      | refactor | Re-architect release.yml to tag-only signed-commit flow (eliminate ephemeral `release/v*` branches) | ✅ Done | —           | [#1040](https://github.com/Shyden-Ltd/ShyTalk/pull/1040) |
@@ -104,7 +103,10 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 ## Cancelled
 
-_None yet._
+| ID                                                 | Pri | Effort | Type  | Title                                                                                                  | Status       | Roadmap IDs | PR                                                       |
+| -------------------------------------------------- | --- | ------ | ----- | ----------------------------------------------------------------------------------------------------- | ------------ | ----------- | -------------------------------------------------------- |
+| [SHY-0003](SHY-0003-convert-roadmap-to-stories.md) | P1  | L      | chore | Convert zero-gap roadmap to user stories (work shipped via #1036; story superseded by SHY-0032)       | ❌ Cancelled | G054        | [#1036](https://github.com/Shyden-Ltd/ShyTalk/pull/1036) |
+| [SHY-0089](SHY-0089-gradle-build-cache-kn-ios-link.md) | P2 | M | infra | Build-cache the 22-min Kotlin/Native iOS framework link — rejected (non-cacheable; evidence in story) | ❌ Cancelled | —           | —                                                        |
 
 ## Reserved (planned, not yet filed)
 
