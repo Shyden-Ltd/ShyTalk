@@ -95,6 +95,21 @@ The skip is correct (mobile has no physical keyboard) but too coarse — it's sk
 
 **Coverage gate:** mobile project gains ≥1 passing test from this file (or audit-cancellation documented).
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (splits + un-skips part of a Playwright test) → the FULL protocol applies. Web admin surface; the headline is the non-keyboard half gaining real mobile coverage.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Web E2E Playwright** — the split `admin-keyboard.spec.ts`, run against the **REAL rendered admin UI + real dev stack** (no mocked state, per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only): the non-keyboard block on Mac desktop browsers + mobile projects; the keyboard-only block stays skipped on mobile.
+- ✅ **eslint** (`--max-warnings=0`) — the spec TS.
+- ⬜ **Express Jest · Android/iOS app · Kotlin/detekt/ktlint** — N/A (web test only).
+
+**No-Stubs — the keyboard skip is a REAL constraint, not a stub:** a mobile device genuinely has no physical keyboard, so skipping the keyboard-only assertions on mobile is a legitimate real-condition skip (documented), NOT a coverage dodge — the bug being fixed is that the skip was too *coarse*. Honest-layering (as [[SHY-0052]]): if a split assertion needs viewport-specific layout, `setViewportSize` gives real responsive coverage on desktop engines, while the **real Android/iOS device-browser cells** are the true-mobile net. The **Cancelled** path (all assertions keyboard-dependent) is a valid audited outcome, recorded — never a silent leave-as-is.
+
+**LOCAL gauntlet:** the non-keyboard block green on Mac desktop browsers + mobile projects against the real local stack + the real device-browser cells; per-test isolation verified ([[feedback-test-isolation-no-leaks]]); eslint clean. Any failure → fix TDD → restart.
+**DEV gauntlet:** redeploy the unmerged branch via Deploy-To-Dev `ref`; re-run the file on Chrome against the real dev stack. Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt; NO auto-merge. (If audited to Cancelled, the audit record + comment is the deliverable — no merge-gauntlet.)
+
 ## Out of Scope
 
 - Other test.skip cases in admin-keyboard.spec.ts (covered by [[SHY-0023]] for data-fixture skips).
@@ -115,9 +130,11 @@ The skip is correct (mobile has no physical keyboard) but too coarse — it's sk
 
 - [ ] Block split OR cancellation recorded.
 - [ ] No regression.
-- [ ] Reviewer ZERO findings.
-- [ ] `status: Done` or `Cancelled`.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): the non-keyboard block green on desktop + mobile (real admin UI + real stack; keyboard block skipped on mobile = real constraint) + eslint clean → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green (Chrome) → **judgment-merge** (zero doubt; NO auto-merge). (Cancellation path: documented audit, no gauntlet.)
+- [ ] `released_in: vX.Y.Z` set after the release cut (Done path only).
+- [ ] `status: Done` or `Cancelled`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-08 ~13:22 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 96 (G048). Reserved ID SHY-0057.
+- 2026-06-13 ~01:30 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): web-admin skip-split → Playwright headline (non-keyboard half gains real mobile coverage). No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]): the keyboard-only skip on mobile is a REAL device constraint (no physical keyboard), legitimate + documented — the bug is that it was too coarse, not that it exists; honest-layering as [[SHY-0052]] (viewport = real desktop responsive; device-browser cells = true mobile). The Cancelled path (all-keyboard) is a valid audited outcome. DoD swaps the stale Reviewer-ZERO line for protocol-satisfied + judgment-merge + released_in(Done-path) + `pr:`. Pickup-fitness: AC current; the `:61` line number to re-confirm at pickup; [[SHY-0023]] covers the data-fixture skips in the same file (no overlap).
