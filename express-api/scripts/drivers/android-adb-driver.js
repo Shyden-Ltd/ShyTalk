@@ -57,6 +57,48 @@ function selectSerial(preferredSerial) {
 }
 
 /**
+ * Classify the ShyTalk Android app's auth/screen state from a uiautomator
+ * UI dump, so androidPersonaSignIn can decide whether to proceed to the
+ * picker, sign out first, clear a gate, or wait. Pure string→enum (no I/O)
+ * so it is unit-tested against REAL device-captured dumps (SHY-0096).
+ *
+ * Returned states (checked in precedence order — most-blocking first):
+ *   - 'warning'    — a moderation warning gate is shown over the session
+ *                    (`warning_acknowledgeButton`). Must win over signed_in so
+ *                    the caller signs out/acknowledges rather than treating the
+ *                    user as fully on main.
+ *   - 'legal_gate' — fresh-install legal-acceptance screen
+ *                    (`legal_continueButton` / `legal_accept*Checkbox`).
+ *   - 'picker'     — signed-out sign-in screen with the test-persona picker
+ *                    (`persona_picker_open` / `signIn_googleButton`). Wins over
+ *                    a stray main_* fragment so a visible picker isn't masked.
+ *   - 'signed_in'  — on the main app (`main_roomsTab`/`main_profileTab`/
+ *                    `main_settingsButton`).
+ *   - 'unknown'    — none of the above (splash, system permission dialog,
+ *                    empty/raced dump). Caller waits-and-re-dumps; never acts.
+ *
+ * Note: system permission dialogs (`com.android.permissioncontroller`) are the
+ * foreground window during onboarding and dump as a sparse tree with none of
+ * these tags → 'unknown' (correct: the caller dismisses them, then re-dumps).
+ */
+function classifyAndroidAuthState(dumpXml) {
+  const x = String(dumpXml || '');
+  if (x.includes('warning_acknowledgeButton')) return 'warning';
+  if (x.includes('legal_continueButton') || x.includes('legal_acceptTermsCheckbox')) {
+    return 'legal_gate';
+  }
+  if (x.includes('persona_picker_open') || x.includes('signIn_googleButton')) return 'picker';
+  if (
+    x.includes('main_roomsTab') ||
+    x.includes('main_profileTab') ||
+    x.includes('main_settingsButton')
+  ) {
+    return 'signed_in';
+  }
+  return 'unknown';
+}
+
+/**
  * Method-name list the runner expects on ctx.uiDriver for Android
  * scenarios. Extracted by grepping `androidXxx:` patterns in
  * manual-qa-runner.js. Each name maps to a stub returning false +
@@ -2557,4 +2599,10 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   return driver;
 }
 
-module.exports = { createAndroidDriver, listMethods, selectSerial, ANDROID_METHOD_NAMES };
+module.exports = {
+  createAndroidDriver,
+  listMethods,
+  selectSerial,
+  classifyAndroidAuthState,
+  ANDROID_METHOD_NAMES,
+};
