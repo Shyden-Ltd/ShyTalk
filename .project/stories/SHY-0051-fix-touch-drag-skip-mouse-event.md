@@ -96,6 +96,22 @@ Permanent browser skips reduce coverage silently. Real desktop browsers DO suppo
 
 **Coverage gate:** all 3 browser-project runs pass.
 
+### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
+
+**Not `*.md`-only** (un-skips + rewrites a Playwright drag test) → the FULL protocol applies. This is a **desktop-web** coverage fix; the headline is the drag test passing on the real suggestions-board across desktop browsers.
+
+**Frameworks exercised (RED→GREEN):**
+- ✅ **Web E2E Playwright** — the `suggestions-board.spec.ts` drag test with the skip removed + mouse-event drag, run against the **REAL rendered suggestions-board backed by the real dev API / local stack** (no mocked board state, per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only) on **Mac chromium + firefox + webkit** (the 3 the AC names) + edge.
+- ✅ **eslint** (`--max-warnings=0`) — the spec TS.
+- ⬜ **Mobile browsers** — N/A: mobile-WebKit/Firefox still use real touch (explicit Out of Scope; a separate mobile SHY) — this ticket fixes desktop coverage only.
+- ⬜ **Express Jest · Android/iOS app · Kotlin/detekt/ktlint** — N/A (web test only).
+
+**No-Stubs (already aligned, one caveat):** the drag exercises the real component against real backend state. **🚩 No `.fixme` plaster:** the Risk row's fallback "ship with `.fixme`" is a skip-by-another-name — if the real run shows the component listens only to `touchstart` (no mouse handler), the honest outcome is to **block this ticket on a component-update follow-up SHY**, NOT ship a `.fixme`-disabled test (per [[feedback-think-like-qa-real-fixes]] + [[feedback-fill-gaps-always-no-skip]]).
+
+**LOCAL gauntlet:** the drag test green on all desktop Mac browsers against the real local stack (verify headless + headed per the Risk); eslint clean. Any failure → fix TDD → restart.
+**DEV gauntlet:** redeploy the unmerged branch via Deploy-To-Dev `ref`; re-run the drag test on Chrome against the real dev API. Restart from LOCAL on failure.
+**Judgment-merge** only when production-ready with zero doubt; NO auto-merge.
+
 ## Out of Scope
 
 - Mobile-WebKit / mobile-Firefox coverage (separate SHY).
@@ -118,9 +134,11 @@ Permanent browser skips reduce coverage silently. Real desktop browsers DO suppo
 - [ ] Skip removed.
 - [ ] Mouse drag implemented.
 - [ ] 3 browser projects pass.
-- [ ] Reviewer ZERO findings.
-- [ ] `status: Done`.
+- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): the drag test green on all desktop Mac browsers (real suggestions-board + real backend; no `.fixme`) + eslint clean → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green (Chrome) → **judgment-merge** (zero doubt; NO auto-merge).
+- [ ] `released_in: vX.Y.Z` set after the release cut.
+- [ ] `status: Done`; `pr:` populated.
 
 ## Notes (running log)
 
 - 2026-06-08 ~13:15 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 94 (G034). Reserved ID SHY-0051.
+- 2026-06-13 ~01:13 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): desktop-web coverage fix → Playwright drag headline on the real suggestions-board (real dev API/local stack) across Mac chromium/firefox/webkit/edge; mobile browsers N/A (separate touch SHY). No-Stubs ([[feedback-no-stubs-mocks-fakes-real-only]]): already real-backend; **🚩 flagged** that the Risk's `.fixme` fallback is a skip-by-another-name → if the component only handles `touchstart`, block on a component-update SHY, never ship `.fixme` ([[feedback-think-like-qa-real-fixes]]). DoD swaps the stale Reviewer-ZERO line for protocol-satisfied + judgment-merge + released_in + `pr:` populated. Pickup-fitness: AC current; the `:1252` line number to re-confirm at pickup (spec may have drifted).
