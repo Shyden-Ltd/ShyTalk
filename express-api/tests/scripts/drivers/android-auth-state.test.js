@@ -31,6 +31,7 @@ describe('classifyAndroidAuthState — real device-captured dumps', () => {
     ['android-dump-picker.xml', 'picker'],
     ['android-dump-legal-gate.xml', 'legal_gate'],
     ['android-dump-main.xml', 'signed_in'],
+    ['android-dump-splash.xml', 'splash'],
   ];
   test.each(cases)('fixture %s classifies as "%s"', (file, expected) => {
     expect(classifyAndroidAuthState(fixture(file))).toBe(expected);
@@ -55,6 +56,17 @@ describe('classifyAndroidAuthState — branch + precedence (synthetic minimal du
 
   test('main_profileTab alone → "signed_in"', () => {
     expect(classifyAndroidAuthState(wrap('main_profileTab'))).toBe('signed_in');
+  });
+
+  test('splash intro → "splash"', () => {
+    expect(classifyAndroidAuthState(wrap('splash_continueButton'))).toBe('splash');
+  });
+
+  // Precedence: a warning gate over a still-rendering splash must classify as
+  // warning (the more-blocking state) so the caller signs out, not continues.
+  test('warning + splash tags together → "warning" (warning takes precedence)', () => {
+    const both = `<hierarchy>${wrap('warning_acknowledgeButton')}${wrap('splash_continueButton')}</hierarchy>`;
+    expect(classifyAndroidAuthState(both)).toBe('warning');
   });
 
   // Precedence: a warning gate is shown OVER a signed-in session — it must win

@@ -67,6 +67,9 @@ function selectSerial(preferredSerial) {
  *                    (`warning_acknowledgeButton`). Must win over signed_in so
  *                    the caller signs out/acknowledges rather than treating the
  *                    user as fully on main.
+ *   - 'splash'     — the launch intro screen (`splash_continueButton`), shown
+ *                    on cold start before the picker/main resolves. A transient
+ *                    gate the caller dismisses (tap Continue) then re-classifies.
  *   - 'legal_gate' — fresh-install legal-acceptance screen
  *                    (`legal_continueButton` / `legal_accept*Checkbox`).
  *   - 'picker'     — signed-out sign-in screen with the test-persona picker
@@ -84,6 +87,7 @@ function selectSerial(preferredSerial) {
 function classifyAndroidAuthState(dumpXml) {
   const x = String(dumpXml || '');
   if (x.includes('warning_acknowledgeButton')) return 'warning';
+  if (x.includes('splash_continueButton')) return 'splash';
   if (x.includes('legal_continueButton') || x.includes('legal_acceptTermsCheckbox')) {
     return 'legal_gate';
   }
@@ -97,6 +101,17 @@ function classifyAndroidAuthState(dumpXml) {
   }
   return 'unknown';
 }
+
+/**
+ * ShyTalk Android package id per target. local → `.local`, dev → `.dev`,
+ * prod → bare (no suffix). Mirrors applicationIdSuffix at
+ * app/build.gradle.kts. Shared by androidPersonaSignIn + androidSignOut.
+ */
+const PACKAGE_BY_TARGET = {
+  local: 'com.shyden.shytalk.local',
+  dev: 'com.shyden.shytalk.dev',
+  prod: 'com.shyden.shytalk',
+};
 
 /**
  * Method-name list the runner expects on ctx.uiDriver for Android
@@ -2370,6 +2385,165 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // (open-picker / pick-row / wait-for-main) so the runner surfaces
   // a precise finding rather than the generic "ui dump didn't
   // contain X" downstream.
+  // ── Auth-state helpers + real in-app sign-out (SHY-0096) ──────────────
+  //
+  // Tap an element by its VISIBLE TEXT, for screens whose buttons lack a
+  // testTag (e.g. the daily-reward popup's "Later"). Resolves the text
+  // node's bounds from a fresh UI dump and taps its centre. Returns false
+  // if the text is not present.
+  async function tapByVisibleText(text) {
+    let dump;
+    try {
+      dump = await driver.androidUiDump();
+    } catch {
+      return false;
+    }
+    const esc = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m =
+      new RegExp(`text="${esc}"[^>]*?bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"`).exec(dump) ||
+      new RegExp(`bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"[^>]*?text="${esc}"`).exec(dump);
+    if (!m) return false;
+    const x = Math.floor((Number(m[1]) + Number(m[3])) / 2);
+    const y = Math.floor((Number(m[2]) + Number(m[4])) / 2);
+    await driver.androidTap(x, y);
+    return true;
+  }
+  driver._tapByVisibleText = tapByVisibleText;
+
+  // Dismiss the daily-reward popup ("Claim Today's Reward" / "Later") shown
+  // on the first login of the day. It has no testTag, so it is dismissed via
+  // the "Later" text. No-op (returns false) when not present.
+  async function dismissDailyRewardIfPresent() {
+    let dump;
+    try {
+      dump = await driver.androidUiDump();
+    } catch {
+      return false;
+    }
+    if (!/Claim Today|Daily Reward/i.test(dump)) return false;
+    const tapped = await tapByVisibleText('Later');
+    if (tapped) await new Promise((r) => setTimeout(r, 800));
+    return tapped;
+  }
+  driver._dismissDailyRewardIfPresent = dismissDailyRewardIfPresent;
+
+  // Advance past transient launch gates — the splash intro
+  // (`splash_continueButton`, shown on cold start), the daily-reward popup,
+  // and short-lived splash/transition frames — until a STABLE auth state is
+  // reached. Returns 'picker' | 'signed_in' | 'warning' | 'legal_gate' |
+  // 'unknown'. Bounded loop (8 iterations) so a stuck system dialog can't
+  // hang the driver. Shared by androidPersonaSignIn (Step 0b) + androidSignOut.
+  async function advancePastLaunchGates(maxIterations = 12) {
+    for (let i = 0; i < maxIterations; i++) {
+      let dump;
+      try {
+        dump = await driver.androidUiDump();
+      } catch {
+        dump = '';
+      }
+      const state = classifyAndroidAuthState(dump);
+      if (state === 'splash') {
+        await driver.androidTapByTag('splash_continueButton');
+        await new Promise((r) => setTimeout(r, 1500));
+        continue;
+      }
+      if (/Claim Today|Daily Reward/i.test(dump)) {
+        await tapByVisibleText('Later');
+        await new Promise((r) => setTimeout(r, 800));
+        continue;
+      }
+      // System permission dialogs re-prompt on launch and CANNOT be pre-granted
+      // via adb on this device (appops/pm grant are blocked — OEM security), so
+      // dismiss/grant them in-UI. NOTE: English-only system strings — an
+      // operator-side device reconfig (grant the overlay permission once, or
+      // enable adb security settings) is the locale-robust fix.
+      if (/Display over other apps/i.test(dump)) {
+        await tapByVisibleText('Not now');
+        await new Promise((r) => setTimeout(r, 800));
+        continue;
+      }
+      if (dump.includes('permission_allow_foreground_only_button')) {
+        await driver.androidTapByTag('permission_allow_foreground_only_button');
+        await new Promise((r) => setTimeout(r, 800));
+        continue;
+      }
+      if (state === 'unknown') {
+        // Splash/transition frame or a foreground system permission dialog —
+        // wait and re-dump rather than acting on an unrecognized screen.
+        await new Promise((r) => setTimeout(r, 800));
+        continue;
+      }
+      return state;
+    }
+    try {
+      return classifyAndroidAuthState(await driver.androidUiDump());
+    } catch {
+      return 'unknown';
+    }
+  }
+  driver._advancePastLaunchGates = advancePastLaunchGates;
+
+  // Real in-app sign-out — the ONLY reliable signed-out reset on a physical
+  // device (`pm clear` → SecurityException, `run-as rm` → Permission denied
+  // on the OnePlus CPH2653; SHY-0096). `am force-stop` does NOT clear the
+  // Firebase session, so persona-switching needs this genuine UI sign-out.
+  //
+  // Flow (testTags verified in source):
+  //   [warning gate] warning_acknowledgeButton — clear a moderation gate
+  //   [reward popup] "Later"                    — first-login-of-day popup
+  //   main_profileTab → main_settingsButton     — gear is Profile-tab-only
+  //                                               (MainScreen.kt:87-88)
+  //   → settings_signOutButton → settings_signOutConfirmButton
+  //   → assert persona_picker_open              — signed-out
+  //
+  // Idempotent: returns true immediately if already on the picker. Throws a
+  // specific, screen-naming error if any step cannot reach the picker (never
+  // a silent false that would leak a stale session into the next journey).
+  driver.androidSignOut = async () => {
+    const dumpState = async () => {
+      try {
+        return classifyAndroidAuthState(await driver.androidUiDump());
+      } catch {
+        return 'unknown';
+      }
+    };
+    let state = await advancePastLaunchGates();
+    if (state === 'picker') return true;
+    if (state === 'warning') {
+      await driver.androidTapByTag('warning_acknowledgeButton');
+      await new Promise((r) => setTimeout(r, 1500));
+      state = await dumpState();
+      if (state === 'picker') return true;
+    }
+    await dismissDailyRewardIfPresent();
+    await driver.androidTapByTag('main_profileTab');
+    await new Promise((r) => setTimeout(r, 800));
+    if (!(await waitForTag('main_settingsButton', 4000))) {
+      throw new Error(
+        `androidSignOut: "main_settingsButton" not visible after tapping main_profileTab — cannot reach settings (observed state: ${await dumpState()}). The app may be on a fresh-install gate (legal/onboarding) rather than main.`,
+      );
+    }
+    await driver.androidTapByTag('main_settingsButton');
+    if (!(await waitForTag('settings_signOutButton', 5000))) {
+      throw new Error(
+        'androidSignOut: "settings_signOutButton" never appeared after opening settings — the settings screen did not render or the testTag drifted.',
+      );
+    }
+    await driver.androidTapByTag('settings_signOutButton');
+    if (!(await waitForTag('settings_signOutConfirmButton', 4000))) {
+      throw new Error(
+        'androidSignOut: sign-out confirmation dialog ("settings_signOutConfirmButton") never appeared after tapping settings_signOutButton.',
+      );
+    }
+    await driver.androidTapByTag('settings_signOutConfirmButton');
+    if (!(await waitForTag('persona_picker_open', 8000))) {
+      throw new Error(
+        `androidSignOut: confirmed sign-out but "persona_picker_open" never returned within 8s (observed state: ${await dumpState()}) — sign-out may have failed or landed on a legal/onboarding gate.`,
+      );
+    }
+    return true;
+  };
+
   driver.androidPersonaSignIn = async (personaId, tab, target = 'dev') => {
     if (!/^P-\d{2}$/.test(personaId)) {
       throw new Error(
@@ -2382,12 +2556,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // never opened ShyTalk. Per-target package: local → .local,
     // dev → .dev, prod → bare (no suffix). Mirrors the
     // applicationIdSuffix config at app/build.gradle.kts lines 43/132.
-    const packageMap = {
-      local: 'com.shyden.shytalk.local',
-      dev: 'com.shyden.shytalk.dev',
-      prod: 'com.shyden.shytalk',
-    };
-    const pkg = packageMap[target] || packageMap.dev;
+    const pkg = PACKAGE_BY_TARGET[target] || PACKAGE_BY_TARGET.dev;
     // Force-stop FIRST so each call starts from a cold app state.
     // Critical for scenario isolation: when scenario N finishes
     // signed-in, scenario N+1's androidPersonaSignIn would otherwise
@@ -2417,6 +2586,15 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // need longer; if the dump doesn't have persona_picker_open after
     // 3s, the test below will catch it with the canonical error.
     await new Promise((r) => setTimeout(r, 3000));
+    // Step 0b: advance past launch gates (splash intro / daily-reward popup /
+    // transition frames) then classify (SHY-0096). force-stop does NOT clear
+    // the Firebase session, so the app may relaunch signed-in (or on a
+    // moderation warning gate) instead of the picker; if so, perform a real
+    // in-app sign-out so the picker becomes reachable.
+    const launchState = await advancePastLaunchGates();
+    if (launchState === 'signed_in' || launchState === 'warning') {
+      await driver.androidSignOut();
+    }
     // Step 1: tap `persona_picker_open` on the sign-in screen.
     // Available on local + dev (PR #882); on prod the button is
     // hidden so this will return false → actionable error.
@@ -2520,10 +2698,15 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // since that's the default landing tab for all signed-in users.
     // Firebase REST sign-in via the picker can take 3-5s in the worst
     // case (network roundtrip + Firestore profile fetch + Compose nav).
-    const signedIn = await waitForTag('main_roomsTab', 10000);
-    if (!signedIn) {
+    // Step 4: wait for Firebase sign-in to complete + advance past any
+    // post-sign-in launch gates (splash / system permission dialogs / the
+    // daily-reward popup) to the main screen (SHY-0096). The post-pick flow
+    // re-shows the same per-launch gates as Step 0b, so reuse the gate-advancer
+    // (with extra headroom for the Firebase sign-in roundtrip).
+    const postState = await advancePastLaunchGates(16);
+    if (postState !== 'signed_in') {
       throw new Error(
-        `androidPersonaSignIn: never reached main screen ("main_roomsTab") within 10s of picking ${personaId} — Firebase sign-in may have failed (check device logcat) or main nav testTag has drifted`,
+        `androidPersonaSignIn: after picking ${personaId}, expected the main screen but classified "${postState}" within the gate-advance budget — Firebase sign-in may have failed, or a warning/legal gate intercepted (check device logcat).`,
       );
     }
     // Step 5: if the requested tab is not "rooms" (default landing),

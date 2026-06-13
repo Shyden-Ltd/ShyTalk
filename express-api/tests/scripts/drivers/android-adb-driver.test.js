@@ -16514,13 +16514,23 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
     // to androidTapByTag / waitForTag. We advance the dump cursor on
     // the cat call (not the uiautomator one) so each "dump cycle" gets
     // one entry from the dumps[] array.
+    // SHY-0096: androidPersonaSignIn now dumps ONCE up-front to classify the
+    // launch state (classifyAndroidAuthState) before tapping the picker — so
+    // it can sign out first if the app relaunched signed-in. In these tests
+    // the app launches to the picker, so prepend a picker-classifiable dump
+    // for that classification call; the per-test sequence is then consumed
+    // unchanged. (These execSync mocks are a Phase-1 real-migration target.)
+    const seq = [
+      `<node resource-id="com.shyden.shytalk.local:id/persona_picker_open" bounds="[100,500][400,600]" />`,
+      ...dumps,
+    ];
     let dumpIdx = 0;
     execSync.mockImplementation((cmd) => {
       if (cmd === 'adb devices') {
         return 'List of devices attached\nemulator-5554\tdevice\n';
       }
       if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
-        const out = dumps[Math.min(dumpIdx, dumps.length - 1)];
+        const out = seq[Math.min(dumpIdx, seq.length - 1)];
         dumpIdx += 1;
         return out;
       }
@@ -16660,7 +16670,9 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
       if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
       if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
         dumpCalls += 1;
-        if (dumpCalls <= 1) {
+        // dumps 1-2: Step-0b classify + Step-1 picker tap (SHY-0096 added the
+        // up-front classify dump, so picker_open must answer the first TWO).
+        if (dumpCalls <= 2) {
           return '<node resource-id="com.shyden.shytalk.local:id/persona_picker_open" bounds="[100,500][400,600]" />';
         }
         // Container is present so the dialog-ready check passes; row
@@ -16706,17 +16718,17 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
       if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
       if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
         dumpCalls += 1;
-        if (dumpCalls === 1) {
+        // dumps 1-2: Step-0b classify + Step-1 picker tap (SHY-0096 added the
+        // up-front classify dump, so all thresholds shift by +1).
+        if (dumpCalls <= 2) {
           return '<node resource-id="com.shyden.shytalk.local:id/persona_picker_open" bounds="[100,500][400,600]" />';
         }
-        // Container-ready (dump 2) + first 5 row-wait polls
-        // (dumps 3-7) all show container only → row never found in
-        // initial viewport → swipe fires.
-        if (dumpCalls <= 7) return containerOnly;
-        // From dump 8 onwards the row IS visible (after the swipe).
-        // Tap consumes another dump for bounds parsing. After the
-        // tap, wait-for-main polls.
-        if (dumpCalls <= 13) return containerWithRow;
+        // Container-ready check + first 5 row-wait polls all show container
+        // only → row never found in initial viewport → swipe fires.
+        if (dumpCalls <= 8) return containerOnly;
+        // After the swipe the row IS visible; the tap consumes another dump
+        // for bounds parsing, then wait-for-main polls.
+        if (dumpCalls <= 14) return containerWithRow;
         return mainScreen;
       }
       return '';
@@ -16732,19 +16744,20 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
     expect(swipeCalls.length).toBeGreaterThanOrEqual(1);
   });
 
-  test('main_roomsTab never appears within 10s → throws with Firebase-sign-in hint', async () => {
+  test('post-pick gate-advance never reaches main → throws with Firebase-sign-in hint', async () => {
     let dumpCalls = 0;
     execSync.mockImplementation((cmd) => {
       if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
       if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
         dumpCalls += 1;
-        if (dumpCalls === 1) {
+        // dumps 1-2: Step-0b classify + Step-1 picker tap (SHY-0096 added the
+        // up-front classify dump, so all thresholds shift by +1).
+        if (dumpCalls <= 2) {
           return '<node resource-id="com.shyden.shytalk.local:id/persona_picker_open" bounds="[100,500][400,600]" />';
         }
-        if (dumpCalls === 2 || dumpCalls === 3 || dumpCalls === 4) {
-          // dump 2: container-ready check; 3: row visible (no scroll
-          // needed); 4: tap dump — all rendered with the picker open
-          // + P-10 row visible.
+        if (dumpCalls === 3 || dumpCalls === 4 || dumpCalls === 5) {
+          // dialog-ready check; row visible (no scroll needed); tap dump —
+          // all rendered with the picker open + P-10 row visible.
           return (
             '<node resource-id="com.shyden.shytalk.local:id/persona_picker_list" bounds="[200,800][1200,2200]" />' +
             '<node resource-id="com.shyden.shytalk.local:id/persona_row_P-10" bounds="[100,900][800,1000]" />'
@@ -16759,10 +16772,10 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
     const promise = driver.androidPersonaSignIn('P-10', 'rooms');
     // See the dialog-never-shows test for why this noop catch is needed.
     promise.catch(() => {});
-    await jest.advanceTimersByTimeAsync(14000);
-    await expect(promise).rejects.toThrow(
-      /never reached main screen \("main_roomsTab"\) within 10s/,
-    );
+    // advancePastLaunchGates(16) polls ~16×800ms on the never-resolving
+    // "something_else" dump before reporting the classified state.
+    await jest.advanceTimersByTimeAsync(30000);
+    await expect(promise).rejects.toThrow(/expected the main screen but classified/);
     await expect(promise).rejects.toThrow(/Firebase sign-in may have failed/);
   });
 });
