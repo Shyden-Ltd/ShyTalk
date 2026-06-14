@@ -11,11 +11,15 @@
  *   - android-dump-picker.xml    — signed-out sign-in screen (persona_picker_open)
  *   - android-dump-legal-gate.xml — fresh-install legal acceptance (legal_continueButton)
  *   - android-dump-main.xml      — signed-in Rooms screen (main_roomsTab)
+ *   - android-dump-splash.xml    — intro/splash screen (splash_continueButton)
+ *   - android-dump-warning.xml   — moderation warning gate (warning_acknowledgeButton),
+ *                                  captured 2026-06-13 on the OnePlus CPH2653 after
+ *                                  androidSignOut switched to P-10 Theo (hasActiveWarning).
  *
- * Warning-state fixture (warning_acknowledgeButton) is captured + asserted once
- * androidSignOut can switch to P-10 (has hasActiveWarning) — sequenced within
- * SHY-0096; the classifier's warning branch is exercised by the synthetic-tag
- * cases below in the meantime so the branch is not untested.
+ * The synthetic-tag cases below remain even with the real warning fixture in
+ * place: they prove *precedence* (warning over signed_in, picker over signed_in),
+ * which a single real dump can't — a real screen only ever shows one state at a
+ * time, so the multi-tag tie-breaks need synthetic inputs.
  */
 
 const fs = require('fs');
@@ -32,6 +36,7 @@ describe('classifyAndroidAuthState — real device-captured dumps', () => {
     ['android-dump-legal-gate.xml', 'legal_gate'],
     ['android-dump-main.xml', 'signed_in'],
     ['android-dump-splash.xml', 'splash'],
+    ['android-dump-warning.xml', 'warning'],
   ];
   test.each(cases)('fixture %s classifies as "%s"', (file, expected) => {
     expect(classifyAndroidAuthState(fixture(file))).toBe(expected);
