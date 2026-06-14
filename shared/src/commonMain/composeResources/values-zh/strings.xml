@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">钱包·%1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">持续违规可能会导致您的帐户被暂停。</string>
+    <string name="warning_acknowledge_failed">无法清除您的警告。请检查您的网络连接后重试。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">您的帐户已被审核并已发出警告。</string>
     <!-- google-translated 2026-05-04 -->

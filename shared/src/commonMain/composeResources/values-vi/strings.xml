@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">Ví · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Việc tiếp tục vi phạm có thể dẫn đến việc đình chỉ tài khoản của bạn.</string>
+    <string name="warning_acknowledge_failed">Không thể xóa cảnh báo của bạn. Vui lòng kiểm tra kết nối và thử lại.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Tài khoản của bạn đã được xem xét và cảnh báo đã được đưa ra.</string>
     <!-- google-translated 2026-05-04 -->

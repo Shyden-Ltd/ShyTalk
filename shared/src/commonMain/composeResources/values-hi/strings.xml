@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">बटुआ · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">लगातार उल्लंघनों के परिणामस्वरूप आपका खाता निलंबित किया जा सकता है।</string>
+    <string name="warning_acknowledge_failed">आपकी चेतावनी हटाई नहीं जा सकी। कृपया अपना कनेक्शन जाँचें और फिर से प्रयास करें।</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">आपके खाते की समीक्षा की गई है और एक चेतावनी जारी की गई है.</string>
     <!-- google-translated 2026-05-04 -->

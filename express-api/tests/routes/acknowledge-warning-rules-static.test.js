@@ -57,6 +57,13 @@ describe('firestore.rules — users warning fields are client-write-protected (S
     'warning_reason',
     'warningCount',
     'warning_count',
+    // SHY-0097 I1: the acknowledgement-audit fields the endpoint writes
+    // server-side must also be client-write-protected (a client must not be
+    // able to forge an acknowledgement and falsify the moderation record).
+    'warningAcknowledged',
+    'warning_acknowledged',
+    'warningAcknowledgedAt',
+    'warning_acknowledged_at',
   ])('keeps %s in the client-write deny-list', (field) => {
     expect(denyList).toContain(`'${field}'`);
   });

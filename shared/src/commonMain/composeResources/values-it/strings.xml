@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">Portafoglio · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Violazioni continue potrebbero comportare la sospensione del tuo account.</string>
+    <string name="warning_acknowledge_failed">Impossibile rimuovere l\'avviso. Controlla la connessione e riprova.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Il tuo account è stato esaminato ed è stato emesso un avviso.</string>
     <!-- google-translated 2026-05-04 -->

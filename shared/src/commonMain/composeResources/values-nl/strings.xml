@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">Portemonnee · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Aanhoudende schendingen kunnen leiden tot opschorting van uw account.</string>
+    <string name="warning_acknowledge_failed">Kan je waarschuwing niet opheffen. Controleer je verbinding en probeer het opnieuw.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Uw account is beoordeeld en er is een waarschuwing afgegeven.</string>
     <!-- google-translated 2026-05-04 -->

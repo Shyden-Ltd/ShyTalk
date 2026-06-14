@@ -1308,6 +1308,7 @@
     <string name="wallet_with_balance">Portefeuille · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Des violations continues peuvent entraîner la suspension de votre compte.</string>
+    <string name="warning_acknowledge_failed">Impossible de lever l\'avertissement. Vérifiez votre connexion et réessayez.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Votre compte a été examiné et un avertissement a été émis.</string>
     <!-- google-translated 2026-05-04 -->

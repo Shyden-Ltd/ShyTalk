@@ -985,7 +985,9 @@ router.post('/users/:uniqueId/acknowledge-warning', async (req, res) => {
     const hasActiveWarning = user.hasActiveWarning ?? user.has_active_warning ?? false;
     if (!hasActiveWarning) {
       // Idempotent: acknowledging with no active warning is a no-op success
-      // (covers double-tap / retry without surfacing a spurious error).
+      // (covers double-tap / retry without surfacing a spurious error). Logged
+      // for the moderation audit (Observability AC — every acknowledge + outcome).
+      log.info('users', 'Acknowledge warning — already clear (idempotent)', { uniqueId });
       return res.json({ success: true, alreadyClear: true });
     }
 
@@ -993,6 +995,10 @@ router.post('/users/:uniqueId/acknowledge-warning', async (req, res) => {
 
     await db.doc(`users/${uniqueId}`).update({
       hasActiveWarning: false,
+      // Clear the "new warning" badge too — the user has now seen + acknowledged
+      // it (issuance sets hasNewWarning:true in admin-users.js). Leaving it true
+      // is stale moderation state.
+      hasNewWarning: false,
       warningReason: null,
       warningAcknowledged: true,
       warningAcknowledgedAt: now(),

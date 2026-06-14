@@ -130,6 +130,8 @@ describe('POST /api/users/:uniqueId/acknowledge-warning (unit)', () => {
     expect(path).toBe(`users/${id}`);
     expect(payload).toMatchObject({
       hasActiveWarning: false,
+      // The "new warning" badge is cleared on acknowledge (issuance sets it true).
+      hasNewWarning: false,
       warningReason: null,
       warningAcknowledged: true,
       warningAcknowledgedAt: FIXED_NOW,
