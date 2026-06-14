@@ -173,6 +173,26 @@ function requireOwner(req, res) {
   return false;
 }
 
+// Owner-gated handler helpers (SHY-0097): collapse the repeated
+// "verify owner → load the user doc → 404 if missing" preamble and the
+// 500-error epilogue into one place so new handlers don't re-duplicate
+// the boilerplate. Adopted by acknowledge-warning; the existing handlers
+// can migrate onto these incrementally.
+async function requireOwnedUser(req, res) {
+  if (requireOwner(req, res)) return null; // 400/403 already sent
+  const user = await getDoc(`users/${req.params.uniqueId}`);
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return null;
+  }
+  return user;
+}
+
+function failInternal(res, req, action, err) {
+  log.error('users', `${action} failed`, { uniqueId: req.params.uniqueId, error: err.message });
+  return res.status(500).json({ error: 'Internal server error' });
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // POST /api/users — Create new user with identity map
 // ═══════════════════════════════════════════════════════════════════
@@ -974,14 +994,10 @@ router.post('/users/:uniqueId/lift-suspension', async (req, res) => {
 
 router.post('/users/:uniqueId/acknowledge-warning', async (req, res) => {
   try {
-    if (requireOwner(req, res)) return;
+    const user = await requireOwnedUser(req, res);
+    if (!user) return; // 400/403/404 already sent
 
-    const uniqueId = req.params.uniqueId;
-    const user = await getDoc(`users/${uniqueId}`);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
+    const { uniqueId } = req.params;
     const hasActiveWarning = user.hasActiveWarning ?? user.has_active_warning ?? false;
     if (!hasActiveWarning) {
       // Idempotent: acknowledging with no active warning is a no-op success
@@ -1005,13 +1021,9 @@ router.post('/users/:uniqueId/acknowledge-warning', async (req, res) => {
       // warningCount intentionally PRESERVED — strike-escalation history.
     });
 
-    res.json({ success: true });
+    return res.json({ success: true });
   } catch (err) {
-    log.error('users', 'Acknowledge warning failed', {
-      uniqueId: req.params.uniqueId,
-      error: err.message,
-    });
-    res.status(500).json({ error: 'Internal server error' });
+    return failInternal(res, req, 'Acknowledge warning', err);
   }
 });
 
