@@ -212,6 +212,10 @@ const ANDROID_METHOD_NAMES = [
   // exact testTag varies by surface (room_endRoomConfirmButton vs
   // settings_signOutConfirmButton vs dialog_confirmButton, etc.).
   'androidConfirmDialog',
+  // j10/j11 moderation journeys: force-stop + cold-relaunch the app so its
+  // startup routing re-reads a seeded moderation flag (a freshly seeded
+  // hasActiveWarning surfaces the warning screen only on a fresh launch).
+  'androidKillAndRelaunch',
 ];
 
 function listMethods() {
@@ -2180,6 +2184,32 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       return true;
     } catch (e) {
       console.error(`[android-driver] androidOpenScreen(${screen}) failed: ${e.message}`);
+      return false;
+    }
+  };
+
+  // Force-stop and cold-relaunch the local app. Used by the moderation
+  // journeys (j10/j11): a seeded `hasActiveWarning` / `isSuspended` flag only
+  // surfaces its gate screen when the app's startup routing re-reads auth +
+  // moderation state on a FRESH launch — `am force-stop` then `am start`
+  // guarantees that cold path (a warm resume would keep the prior screen).
+  // The `name` arg (persona) is accepted for matcher symmetry + logging; the
+  // relaunch is session-agnostic (it restarts whatever session is signed in
+  // on the device). Returns true once the activity has been (re)started; the
+  // caller's `within <N>ms ...` assertion polls for the resulting screen.
+  driver.androidKillAndRelaunch = async (name) => {
+    try {
+      const pkg = 'com.shyden.shytalk.local';
+      adb(['shell', 'am', 'force-stop', pkg]);
+      adb(['shell', 'am', 'start', '-n', `${pkg}/com.shyden.shytalk.MainActivity`]);
+      // Cold start is slower than androidOpenScreen's warm launch (Firebase
+      // re-init + auth-state recheck), so settle a touch longer before the
+      // caller begins asserting. 2500ms mirrors the warning-screen cold-start
+      // budget observed on the OnePlus CPH2653.
+      await new Promise((r) => setTimeout(r, 2500));
+      return true;
+    } catch (e) {
+      console.error(`[android-driver] androidKillAndRelaunch(${name}) failed: ${e.message}`);
       return false;
     }
   };

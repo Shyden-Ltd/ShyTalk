@@ -16862,3 +16862,54 @@ describe('android-adb-driver — androidConfirmDialog', () => {
     expect(tapCalls).toHaveLength(1);
   });
 });
+
+describe('android-adb-driver — androidKillAndRelaunch', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Fake timers so the method's 2500ms cold-start settle doesn't pay real
+    // wall-clock time (mirrors the androidNavigatesBackToTab suite above).
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('force-stops then cold-starts the local MainActivity (force-stop first)', async () => {
+    mockExec({});
+    const driver = await createAndroidDriver();
+    const promise = driver.androidKillAndRelaunch('Raul');
+    await jest.advanceTimersByTimeAsync(2500);
+    const ok = await promise;
+
+    expect(ok).toBe(true);
+
+    const forceStop = execSync.mock.calls.find((c) => c[0].includes("'force-stop'"));
+    expect(forceStop).toBeDefined();
+    expect(forceStop[0]).toContain("'com.shyden.shytalk.local'");
+
+    const amStart = execSync.mock.calls.find(
+      (c) => c[0].includes("'am' 'start'") && c[0].includes('MainActivity'),
+    );
+    expect(amStart).toBeDefined();
+    expect(amStart[0]).toContain("'com.shyden.shytalk.local/com.shyden.shytalk.MainActivity'");
+
+    // Cold path, not warm resume: force-stop MUST precede the start.
+    const forceStopIdx = execSync.mock.calls.findIndex((c) => c[0].includes("'force-stop'"));
+    const startIdx = execSync.mock.calls.findIndex((c) => c[0].includes("'am' 'start'"));
+    expect(forceStopIdx).toBeGreaterThanOrEqual(0);
+    expect(forceStopIdx).toBeLessThan(startIdx);
+  });
+
+  test('returns false (does not throw) when adb force-stop fails', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'force-stop'")) throw new Error('device offline');
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    // No timer advance needed — it throws before the settle.
+    const ok = await driver.androidKillAndRelaunch('Raul');
+    expect(ok).toBe(false);
+  });
+});
