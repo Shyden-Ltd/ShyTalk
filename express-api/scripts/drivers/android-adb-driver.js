@@ -2188,18 +2188,21 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     }
   };
 
-  // Force-stop and cold-relaunch the local app. Used by the moderation
-  // journeys (j10/j11): a seeded `hasActiveWarning` / `isSuspended` flag only
-  // surfaces its gate screen when the app's startup routing re-reads auth +
-  // moderation state on a FRESH launch — `am force-stop` then `am start`
-  // guarantees that cold path (a warm resume would keep the prior screen).
-  // The `name` arg (persona) is accepted for matcher symmetry + logging; the
-  // relaunch is session-agnostic (it restarts whatever session is signed in
-  // on the device). Returns true once the activity has been (re)started; the
-  // caller's `within <N>ms ...` assertion polls for the resulting screen.
-  driver.androidKillAndRelaunch = async (name) => {
+  // Force-stop and cold-relaunch the app for `target` (default 'local'). Used
+  // by the moderation journeys (j10/j11): a seeded `hasActiveWarning` /
+  // `isSuspended` flag only surfaces its gate screen when the app's startup
+  // routing re-reads auth + moderation state on a FRESH launch — `am
+  // force-stop` then `am start` guarantees that cold path (a warm resume would
+  // keep the prior screen). The `name` arg (persona) is accepted for matcher
+  // symmetry + logging; the relaunch is session-agnostic (it restarts whatever
+  // session is signed in on the device). `target` selects the package
+  // (local/dev/prod) via PACKAGE_BY_TARGET so a dev-device run force-stops the
+  // .dev build (not .local). Returns true once the activity has been
+  // (re)started; the caller's `within <N>ms ...` assertion polls for the
+  // resulting screen.
+  driver.androidKillAndRelaunch = async (name, target = 'local') => {
     try {
-      const pkg = 'com.shyden.shytalk.local';
+      const pkg = PACKAGE_BY_TARGET[target] || PACKAGE_BY_TARGET.local;
       adb(['shell', 'am', 'force-stop', pkg]);
       adb(['shell', 'am', 'start', '-n', `${pkg}/com.shyden.shytalk.MainActivity`]);
       // Cold start is slower than androidOpenScreen's warm launch (Firebase
@@ -2435,8 +2438,11 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     if (!m) return false;
     const x = Math.floor((Number(m[1]) + Number(m[3])) / 2);
     const y = Math.floor((Number(m[2]) + Number(m[4])) / 2);
-    await driver.androidTap(x, y);
-    return true;
+    // Return the ACTUAL tap result — androidTap returns false on an adb error
+    // (e.g. device offline mid-flow). An unconditional `true` would mask a
+    // failed tap as a successful dismissal (review Finding 5).
+    const tapped = await driver.androidTap(x, y);
+    return tapped;
   }
   driver._tapByVisibleText = tapByVisibleText;
 
@@ -2461,8 +2467,9 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // (`splash_continueButton`, shown on cold start), the daily-reward popup,
   // and short-lived splash/transition frames — until a STABLE auth state is
   // reached. Returns 'picker' | 'signed_in' | 'warning' | 'legal_gate' |
-  // 'unknown'. Bounded loop (8 iterations) so a stuck system dialog can't
-  // hang the driver. Shared by androidPersonaSignIn (Step 0b) + androidSignOut.
+  // 'unknown'. Bounded loop (`maxIterations`, default 12) so a stuck system
+  // dialog can't hang the driver. Shared by androidPersonaSignIn (Step 0b) +
+  // androidSignOut.
   async function advancePastLaunchGates(maxIterations = 12) {
     for (let i = 0; i < maxIterations; i++) {
       let dump;
@@ -2544,6 +2551,26 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       await new Promise((r) => setTimeout(r, 1500));
       state = await dumpState();
       if (state === 'picker') return true;
+      // AC (Error paths): a warning-acknowledge tap that does NOT advance must
+      // surface a clear "acknowledge did not clear the gate" error rather than
+      // falling through to a blind main-nav tap. A still-`warning` state means
+      // the ack failed (genuinely invalid/expired session, or the acknowledge
+      // endpoint failed) — the real-time observeUserFlags listener re-routes
+      // back to the warning screen while hasActiveWarning stays true, so the
+      // settings chain is unreachable. Fail loud, not silent.
+      if (state === 'warning') {
+        throw new Error(
+          'androidSignOut: tapped "warning_acknowledgeButton" but the warning gate is still showing — the acknowledge did not clear the gate (invalid/expired session, or the acknowledge endpoint failed). Cannot reach the settings sign-out chain.',
+        );
+      }
+    }
+    // A fresh-install legal/onboarding gate has no main nav — sign-out cannot
+    // clear it. Throw a specific, actionable error rather than a blind
+    // main_profileTab tap that would time out with a vaguer message.
+    if (state === 'legal_gate') {
+      throw new Error(
+        'androidSignOut: app is on a legal/onboarding gate ("legal_gate") — sign-out cannot clear a fresh-install gate. Re-install or provision the device, then retry.',
+      );
     }
     await dismissDailyRewardIfPresent();
     await driver.androidTapByTag('main_profileTab');
@@ -2587,12 +2614,12 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // dev → .dev, prod → bare (no suffix). Mirrors the
     // applicationIdSuffix config at app/build.gradle.kts lines 43/132.
     const pkg = PACKAGE_BY_TARGET[target] || PACKAGE_BY_TARGET.dev;
-    // Force-stop FIRST so each call starts from a cold app state.
-    // Critical for scenario isolation: when scenario N finishes
-    // signed-in, scenario N+1's androidPersonaSignIn would otherwise
-    // launch into the main screen instead of the sign-in screen and
-    // fail to find persona_picker_open. force-stop guarantees a
-    // sign-in-screen start every time. Errors are non-fatal — the
+    // Force-stop FIRST so each call starts from a cold app PROCESS state
+    // (process isolation only). NOTE: force-stop does NOT clear the Firebase
+    // session — the app can relaunch already signed-in or on a moderation
+    // gate. The Step 0b classifier below (advancePastLaunchGates +
+    // androidSignOut when signed-in/warning) is what actually guarantees a
+    // picker-reachable sign-in-screen start. Errors are non-fatal — the
     // package may not be running, that's fine.
     try {
       adb(['shell', 'am', 'force-stop', pkg]);

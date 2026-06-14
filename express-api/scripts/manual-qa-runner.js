@@ -3720,7 +3720,7 @@ const matchers = [
       if (!ctx.uiDriver.androidKillAndRelaunch) {
         return { ok: false, error: 'ctx.uiDriver.androidKillAndRelaunch not configured' };
       }
-      await ctx.uiDriver.androidKillAndRelaunch(name);
+      await ctx.uiDriver.androidKillAndRelaunch(name, ctx.target);
       return { ok: true };
     },
   },
