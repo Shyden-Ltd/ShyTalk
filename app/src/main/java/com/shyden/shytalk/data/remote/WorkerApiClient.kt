@@ -74,7 +74,7 @@ class WorkerApiClient(
                 .get()
                 .build()
         val response = httpClient.newCall(request).executeAsync()
-        val bodyStr = response.use { it.body?.string() ?: "{}" }
+        val bodyStr = response.use { it.body.string() }
         if (!response.isSuccessful) {
             val error =
                 try {
@@ -102,7 +102,7 @@ class WorkerApiClient(
                 .post(body.toString().toRequestBody(JSON_MEDIA_TYPE))
                 .build()
         val response = httpClient.newCall(request).executeAsync()
-        val bodyStr = response.use { it.body?.string() ?: "{}" }
+        val bodyStr = response.use { it.body.string() }
         if (!response.isSuccessful) {
             val error =
                 try {
@@ -195,7 +195,7 @@ class WorkerApiClient(
         val token = getIdToken()
         val request = buildRequest(url, token).withTraceAndDeviceHeaders(deviceId)
         val response = httpClient.newCall(request).executeAsync()
-        val bodyStr = response.use { it.body?.string() ?: "{}" }
+        val bodyStr = response.use { it.body.string() }
         val code = response.code
 
         if (code == 401) {
@@ -204,7 +204,7 @@ class WorkerApiClient(
             val freshToken = getIdToken(forceRefresh = true)
             val retryRequest = buildRequest(url, freshToken).withTraceAndDeviceHeaders(deviceId)
             val retryResponse = httpClient.newCall(retryRequest).executeAsync()
-            val retryBody = retryResponse.use { it.body?.string() ?: "{}" }
+            val retryBody = retryResponse.use { it.body.string() }
             if (!retryResponse.isSuccessful) {
                 val error =
                     try {
@@ -239,7 +239,7 @@ class WorkerApiClient(
         val token = getIdToken()
         val request = buildRequest(url, token).withTraceAndDeviceHeaders(deviceId)
         val response = httpClient.newCall(request).executeAsync()
-        val bodyStr = response.use { it.body?.string() ?: "[]" }
+        val bodyStr = response.use { it.body.string() }
         val code = response.code
 
         if (code == 401) {
@@ -247,7 +247,7 @@ class WorkerApiClient(
             val freshToken = getIdToken(forceRefresh = true)
             val retryRequest = buildRequest(url, freshToken).withTraceAndDeviceHeaders(deviceId)
             val retryResponse = httpClient.newCall(retryRequest).executeAsync()
-            val retryBody = retryResponse.use { it.body?.string() ?: "[]" }
+            val retryBody = retryResponse.use { it.body.string() }
             if (!retryResponse.isSuccessful) {
                 val error =
                     try {
