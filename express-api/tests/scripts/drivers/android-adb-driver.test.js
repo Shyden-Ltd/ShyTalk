@@ -16514,13 +16514,23 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
     // to androidTapByTag / waitForTag. We advance the dump cursor on
     // the cat call (not the uiautomator one) so each "dump cycle" gets
     // one entry from the dumps[] array.
+    // SHY-0096: androidPersonaSignIn now dumps ONCE up-front to classify the
+    // launch state (classifyAndroidAuthState) before tapping the picker — so
+    // it can sign out first if the app relaunched signed-in. In these tests
+    // the app launches to the picker, so prepend a picker-classifiable dump
+    // for that classification call; the per-test sequence is then consumed
+    // unchanged. (These execSync mocks are a Phase-1 real-migration target.)
+    const seq = [
+      `<node resource-id="com.shyden.shytalk.local:id/persona_picker_open" bounds="[100,500][400,600]" />`,
+      ...dumps,
+    ];
     let dumpIdx = 0;
     execSync.mockImplementation((cmd) => {
       if (cmd === 'adb devices') {
         return 'List of devices attached\nemulator-5554\tdevice\n';
       }
       if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
-        const out = dumps[Math.min(dumpIdx, dumps.length - 1)];
+        const out = seq[Math.min(dumpIdx, seq.length - 1)];
         dumpIdx += 1;
         return out;
       }
@@ -16660,7 +16670,9 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
       if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
       if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
         dumpCalls += 1;
-        if (dumpCalls <= 1) {
+        // dumps 1-2: Step-0b classify + Step-1 picker tap (SHY-0096 added the
+        // up-front classify dump, so picker_open must answer the first TWO).
+        if (dumpCalls <= 2) {
           return '<node resource-id="com.shyden.shytalk.local:id/persona_picker_open" bounds="[100,500][400,600]" />';
         }
         // Container is present so the dialog-ready check passes; row
@@ -16706,17 +16718,17 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
       if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
       if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
         dumpCalls += 1;
-        if (dumpCalls === 1) {
+        // dumps 1-2: Step-0b classify + Step-1 picker tap (SHY-0096 added the
+        // up-front classify dump, so all thresholds shift by +1).
+        if (dumpCalls <= 2) {
           return '<node resource-id="com.shyden.shytalk.local:id/persona_picker_open" bounds="[100,500][400,600]" />';
         }
-        // Container-ready (dump 2) + first 5 row-wait polls
-        // (dumps 3-7) all show container only → row never found in
-        // initial viewport → swipe fires.
-        if (dumpCalls <= 7) return containerOnly;
-        // From dump 8 onwards the row IS visible (after the swipe).
-        // Tap consumes another dump for bounds parsing. After the
-        // tap, wait-for-main polls.
-        if (dumpCalls <= 13) return containerWithRow;
+        // Container-ready check + first 5 row-wait polls all show container
+        // only → row never found in initial viewport → swipe fires.
+        if (dumpCalls <= 8) return containerOnly;
+        // After the swipe the row IS visible; the tap consumes another dump
+        // for bounds parsing, then wait-for-main polls.
+        if (dumpCalls <= 14) return containerWithRow;
         return mainScreen;
       }
       return '';
@@ -16732,19 +16744,20 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
     expect(swipeCalls.length).toBeGreaterThanOrEqual(1);
   });
 
-  test('main_roomsTab never appears within 10s → throws with Firebase-sign-in hint', async () => {
+  test('post-pick gate-advance never reaches main → throws with Firebase-sign-in hint', async () => {
     let dumpCalls = 0;
     execSync.mockImplementation((cmd) => {
       if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
       if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
         dumpCalls += 1;
-        if (dumpCalls === 1) {
+        // dumps 1-2: Step-0b classify + Step-1 picker tap (SHY-0096 added the
+        // up-front classify dump, so all thresholds shift by +1).
+        if (dumpCalls <= 2) {
           return '<node resource-id="com.shyden.shytalk.local:id/persona_picker_open" bounds="[100,500][400,600]" />';
         }
-        if (dumpCalls === 2 || dumpCalls === 3 || dumpCalls === 4) {
-          // dump 2: container-ready check; 3: row visible (no scroll
-          // needed); 4: tap dump — all rendered with the picker open
-          // + P-10 row visible.
+        if (dumpCalls === 3 || dumpCalls === 4 || dumpCalls === 5) {
+          // dialog-ready check; row visible (no scroll needed); tap dump —
+          // all rendered with the picker open + P-10 row visible.
           return (
             '<node resource-id="com.shyden.shytalk.local:id/persona_picker_list" bounds="[200,800][1200,2200]" />' +
             '<node resource-id="com.shyden.shytalk.local:id/persona_row_P-10" bounds="[100,900][800,1000]" />'
@@ -16759,10 +16772,10 @@ describe('android-adb-driver — androidPersonaSignIn', () => {
     const promise = driver.androidPersonaSignIn('P-10', 'rooms');
     // See the dialog-never-shows test for why this noop catch is needed.
     promise.catch(() => {});
-    await jest.advanceTimersByTimeAsync(14000);
-    await expect(promise).rejects.toThrow(
-      /never reached main screen \("main_roomsTab"\) within 10s/,
-    );
+    // advancePastLaunchGates(16) polls ~16×800ms on the never-resolving
+    // "something_else" dump before reporting the classified state.
+    await jest.advanceTimersByTimeAsync(30000);
+    await expect(promise).rejects.toThrow(/expected the main screen but classified/);
     await expect(promise).rejects.toThrow(/Firebase sign-in may have failed/);
   });
 });
@@ -16847,5 +16860,456 @@ describe('android-adb-driver — androidConfirmDialog', () => {
       .map((c) => c[0])
       .filter((c) => c.includes("'input' 'tap'"));
     expect(tapCalls).toHaveLength(1);
+  });
+});
+
+describe('android-adb-driver — androidKillAndRelaunch', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Fake timers so the method's 2500ms cold-start settle doesn't pay real
+    // wall-clock time (mirrors the androidNavigatesBackToTab suite above).
+    jest.useFakeTimers();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('force-stops then cold-starts the local MainActivity (force-stop first)', async () => {
+    mockExec({});
+    const driver = await createAndroidDriver();
+    const promise = driver.androidKillAndRelaunch('Raul');
+    await jest.advanceTimersByTimeAsync(2500);
+    const ok = await promise;
+
+    expect(ok).toBe(true);
+
+    const forceStop = execSync.mock.calls.find((c) => c[0].includes("'force-stop'"));
+    expect(forceStop).toBeDefined();
+    expect(forceStop[0]).toContain("'com.shyden.shytalk.local'");
+
+    const amStart = execSync.mock.calls.find(
+      (c) => c[0].includes("'am' 'start'") && c[0].includes('MainActivity'),
+    );
+    expect(amStart).toBeDefined();
+    expect(amStart[0]).toContain("'com.shyden.shytalk.local/com.shyden.shytalk.MainActivity'");
+
+    // Cold path, not warm resume: force-stop MUST precede the start.
+    const forceStopIdx = execSync.mock.calls.findIndex((c) => c[0].includes("'force-stop'"));
+    const startIdx = execSync.mock.calls.findIndex((c) => c[0].includes("'am' 'start'"));
+    expect(forceStopIdx).toBeGreaterThanOrEqual(0);
+    expect(forceStopIdx).toBeLessThan(startIdx);
+  });
+
+  test('returns false (does not throw) when adb force-stop fails', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'force-stop'")) throw new Error('device offline');
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    // No timer advance needed — it throws before the settle.
+    const ok = await driver.androidKillAndRelaunch('Raul');
+    expect(ok).toBe(false);
+  });
+
+  // SHY-0096 review C-4: the package must follow the `target` arg, not be
+  // hard-coded to .local — j10/j11 run against dev where the build is .dev.
+  test('target="dev" → force-stops + relaunches com.shyden.shytalk.dev (not .local)', async () => {
+    mockExec({});
+    const driver = await createAndroidDriver();
+    const promise = driver.androidKillAndRelaunch('Theo', 'dev');
+    await jest.advanceTimersByTimeAsync(2500);
+    expect(await promise).toBe(true);
+    const forceStop = execSync.mock.calls.find((c) => c[0].includes("'force-stop'"));
+    expect(forceStop[0]).toContain("'com.shyden.shytalk.dev'");
+    const amStart = execSync.mock.calls.find(
+      (c) => c[0].includes("'am' 'start'") && c[0].includes('MainActivity'),
+    );
+    expect(amStart[0]).toContain("'com.shyden.shytalk.dev/com.shyden.shytalk.MainActivity'");
+  });
+
+  test('default target (omitted) → uses the local package', async () => {
+    mockExec({});
+    const driver = await createAndroidDriver();
+    const promise = driver.androidKillAndRelaunch('Raul');
+    await jest.advanceTimersByTimeAsync(2500);
+    expect(await promise).toBe(true);
+    const forceStop = execSync.mock.calls.find((c) => c[0].includes("'force-stop'"));
+    expect(forceStop[0]).toContain("'com.shyden.shytalk.local'");
+  });
+
+  test('unknown target → falls back to the local package (defensive default)', async () => {
+    mockExec({});
+    const driver = await createAndroidDriver();
+    const promise = driver.androidKillAndRelaunch('Raul', 'staging');
+    await jest.advanceTimersByTimeAsync(2500);
+    expect(await promise).toBe(true);
+    const forceStop = execSync.mock.calls.find((c) => c[0].includes("'force-stop'"));
+    expect(forceStop[0]).toContain("'com.shyden.shytalk.local'");
+  });
+});
+
+// ── SHY-0096 review C-2: androidSignOut (real in-app sign-out chain) ──────────
+// Drives the driver's pure control logic via the established execSync mock
+// (jest.mock('child_process')) — a unit-test mock of the device transport, the
+// only place a mock is permitted (operator 2026-06-14). Each `cat` returns the
+// UI dump for that moment; the device behaviour itself is proven on the real
+// OnePlus by the SHY-0096 device gauntlet (Scenarios 1-4).
+describe('android-adb-driver — androidSignOut', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  const pickerNode = () => dumpWithId('persona_picker_open', '[100,500][400,600]');
+  const warningNode = () => dumpWithId('warning_acknowledgeButton', '[100,1500][1000,1600]');
+  const legalNode = () => dumpWithId('legal_continueButton', '[100,1800][1000,1900]');
+  // "main super-dump": every tag the settings sign-out chain taps/waits for.
+  // classify() sees main_settingsButton → 'signed_in' (no picker/warning), so
+  // it doubles as the signed-in launch state.
+  const mainChainDump = () =>
+    [
+      dumpWithId('main_profileTab', '[0,1900][270,2100]'),
+      dumpWithId('main_settingsButton', '[800,100][1000,300]'),
+      dumpWithId('settings_signOutButton', '[100,800][1000,900]'),
+      dumpWithId('settings_signOutConfirmButton', '[100,1000][1000,1100]'),
+    ].join('');
+
+  // Stateful mock: the dump (`cat`) output is a function of how many taps have
+  // happened — robust to the exact number of dump calls each step makes.
+  function mockByTaps(dumpFor) {
+    let taps = 0;
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'input' 'tap'")) {
+        taps += 1;
+        return '';
+      }
+      if (cmd.includes("'cat' '/sdcard/dump.xml'")) return dumpFor(taps);
+      return '';
+    });
+  }
+  const tapCount = () => execSync.mock.calls.filter((c) => c[0].includes("'input' 'tap'")).length;
+
+  test('idempotent: already on the picker → returns true with no taps', async () => {
+    mockByTaps(() => pickerNode());
+    const driver = await createAndroidDriver();
+    const promise = driver.androidSignOut();
+    await jest.advanceTimersByTimeAsync(3000);
+    expect(await promise).toBe(true);
+    expect(tapCount()).toBe(0);
+  });
+
+  test('happy path: main → profileTab → settings → signOut → confirm → picker', async () => {
+    // After the 4th tap (the confirm), the dumps flip to the picker.
+    mockByTaps((taps) => (taps >= 4 ? pickerNode() : mainChainDump()));
+    const driver = await createAndroidDriver();
+    const promise = driver.androidSignOut();
+    await jest.advanceTimersByTimeAsync(20000);
+    expect(await promise).toBe(true);
+    // The 4 chain taps: profileTab, settingsButton, signOutButton, confirm.
+    expect(tapCount()).toBe(4);
+  });
+
+  test('warning gate: taps acknowledge then reaches the picker → true (1 tap)', async () => {
+    // After the acknowledge tap, the gate clears straight to the picker.
+    mockByTaps((taps) => (taps >= 1 ? pickerNode() : warningNode()));
+    const driver = await createAndroidDriver();
+    const promise = driver.androidSignOut();
+    await jest.advanceTimersByTimeAsync(5000);
+    expect(await promise).toBe(true);
+    expect(tapCount()).toBe(1);
+  });
+
+  test('warning gate: acknowledge lands on main (not picker) → drives full settings chain (review Finding 1)', async () => {
+    // The acknowledge tap (tap 1) dismisses the gate to the MAIN screen
+    // (signed_in, not picker); androidSignOut must then drive the settings
+    // chain: profileTab (2), settingsButton (3), signOut (4), confirm (5) → picker.
+    mockByTaps((taps) => (taps >= 5 ? pickerNode() : taps >= 1 ? mainChainDump() : warningNode()));
+    const driver = await createAndroidDriver();
+    const promise = driver.androidSignOut();
+    await jest.advanceTimersByTimeAsync(30000);
+    expect(await promise).toBe(true);
+    expect(tapCount()).toBe(5); // acknowledge + 4 settings-chain taps
+  });
+
+  test('C-1: acknowledge tap does NOT clear the warning → throws (no silent fall-through)', async () => {
+    mockByTaps(() => warningNode()); // acknowledge never clears the gate
+    const driver = await createAndroidDriver();
+    const assertion = expect(driver.androidSignOut()).rejects.toThrow(
+      /acknowledge did not clear|warning gate is still/i,
+    );
+    await jest.advanceTimersByTimeAsync(5000);
+    await assertion;
+  });
+
+  test('I-2: legal/onboarding gate → throws a specific error (not a blind nav tap)', async () => {
+    mockByTaps(() => legalNode());
+    const driver = await createAndroidDriver();
+    const assertion = expect(driver.androidSignOut()).rejects.toThrow(/legal.*gate/i);
+    await jest.advanceTimersByTimeAsync(3000);
+    await assertion;
+  });
+
+  test('main_settingsButton never appears → throws naming the tag', async () => {
+    // Signed-in (main_profileTab present) but the gear never renders.
+    mockByTaps(() => dumpWithId('main_profileTab', '[0,1900][270,2100]'));
+    const driver = await createAndroidDriver();
+    const assertion = expect(driver.androidSignOut()).rejects.toThrow(/main_settingsButton/);
+    await jest.advanceTimersByTimeAsync(8000);
+    await assertion;
+  });
+
+  test('settings_signOutButton never appears → throws naming the tag', async () => {
+    mockByTaps(() =>
+      [
+        dumpWithId('main_profileTab', '[0,1900][270,2100]'),
+        dumpWithId('main_settingsButton', '[800,100][1000,300]'),
+      ].join(''),
+    );
+    const driver = await createAndroidDriver();
+    const assertion = expect(driver.androidSignOut()).rejects.toThrow(/settings_signOutButton/);
+    await jest.advanceTimersByTimeAsync(12000);
+    await assertion;
+  });
+
+  test('settings_signOutConfirmButton never appears → throws naming the tag', async () => {
+    mockByTaps(() =>
+      [
+        dumpWithId('main_profileTab', '[0,1900][270,2100]'),
+        dumpWithId('main_settingsButton', '[800,100][1000,300]'),
+        dumpWithId('settings_signOutButton', '[100,800][1000,900]'),
+      ].join(''),
+    );
+    const driver = await createAndroidDriver();
+    const assertion = expect(driver.androidSignOut()).rejects.toThrow(
+      /settings_signOutConfirmButton/,
+    );
+    await jest.advanceTimersByTimeAsync(16000);
+    await assertion;
+  });
+
+  test('persona_picker_open never returns after confirm → throws naming the tag', async () => {
+    // All chain tags present but the picker NEVER appears (even post-confirm).
+    mockByTaps(() => mainChainDump());
+    const driver = await createAndroidDriver();
+    const assertion = expect(driver.androidSignOut()).rejects.toThrow(/persona_picker_open/);
+    await jest.advanceTimersByTimeAsync(25000);
+    await assertion;
+  });
+});
+
+// ── SHY-0096 review C-3: internal launch-gate / tap helpers ───────────────────
+describe('android-adb-driver — _advancePastLaunchGates / _tapByVisibleText / _dismissDailyRewardIfPresent', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  // Dump output as a function of running tap-count (for tap→continue loops).
+  function mockByTaps(dumpFor) {
+    let taps = 0;
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'input' 'tap'")) {
+        taps += 1;
+        return '';
+      }
+      if (cmd.includes("'cat' '/sdcard/dump.xml'")) return dumpFor(taps);
+      return '';
+    });
+  }
+  // Dump output as a function of running dump-call-count (for wait→re-dump).
+  function mockByDumpCount(dumpFor) {
+    let n = 0;
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
+        n += 1;
+        return dumpFor(n);
+      }
+      return '';
+    });
+  }
+
+  test('_advancePastLaunchGates: stable picker is returned directly', async () => {
+    mockByDumpCount(() => dumpWithId('persona_picker_open'));
+    const driver = await createAndroidDriver();
+    const promise = driver._advancePastLaunchGates();
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(await promise).toBe('picker');
+  });
+
+  test('_advancePastLaunchGates: warning state → returned directly, no tap (review Finding 2)', async () => {
+    mockByDumpCount(() => dumpWithId('warning_acknowledgeButton'));
+    const driver = await createAndroidDriver();
+    const promise = driver._advancePastLaunchGates();
+    await jest.advanceTimersByTimeAsync(2000);
+    expect(await promise).toBe('warning');
+    expect(execSync.mock.calls.some((c) => c[0].includes("'input' 'tap'"))).toBe(false);
+  });
+
+  test('_advancePastLaunchGates: splash → taps splash_continueButton → resolves to signed_in', async () => {
+    mockByTaps((taps) =>
+      taps >= 1 ? dumpWithId('main_roomsTab') : dumpWithId('splash_continueButton'),
+    );
+    const driver = await createAndroidDriver();
+    const promise = driver._advancePastLaunchGates();
+    await jest.advanceTimersByTimeAsync(5000);
+    expect(await promise).toBe('signed_in');
+    const tapped = execSync.mock.calls.filter((c) => c[0].includes("'input' 'tap'"));
+    expect(tapped.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test('_advancePastLaunchGates: daily-reward popup → taps "Later" → resolves to picker', async () => {
+    const reward =
+      '<node text="Claim Today\'s Reward" bounds="[0,0][100,100]" />' +
+      '<node text="Later" bounds="[100,200][300,300]" />';
+    mockByTaps((taps) => (taps >= 1 ? dumpWithId('persona_picker_open') : reward));
+    const driver = await createAndroidDriver();
+    const promise = driver._advancePastLaunchGates();
+    await jest.advanceTimersByTimeAsync(4000);
+    expect(await promise).toBe('picker');
+  });
+
+  test('_advancePastLaunchGates: unknown/transition frame → waits + re-dumps → resolves', async () => {
+    mockByDumpCount((n) => (n >= 2 ? dumpWithId('main_roomsTab') : '<hierarchy></hierarchy>'));
+    const driver = await createAndroidDriver();
+    const promise = driver._advancePastLaunchGates();
+    await jest.advanceTimersByTimeAsync(4000);
+    expect(await promise).toBe('signed_in');
+  });
+
+  test('_advancePastLaunchGates: persistent unknown → exhausts the bounded loop → final classify', async () => {
+    mockByDumpCount(() => '<hierarchy></hierarchy>');
+    const driver = await createAndroidDriver();
+    const promise = driver._advancePastLaunchGates();
+    await jest.advanceTimersByTimeAsync(15000);
+    expect(await promise).toBe('unknown');
+  });
+
+  test('_tapByVisibleText: text-before-bounds node → taps its centre, returns true', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'cat' '/sdcard/dump.xml'"))
+        return '<node text="Later" bounds="[100,200][300,400]" />';
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver._tapByVisibleText('Later')).toBe(true);
+    const tap = execSync.mock.calls.find((c) => c[0].includes("'input' 'tap'"));
+    expect(tap[0]).toContain("'200'"); // centre x = (100+300)/2
+    expect(tap[0]).toContain("'300'"); // centre y = (200+400)/2
+  });
+
+  test('_tapByVisibleText: bounds-before-text node → still resolves + taps, returns true', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'cat' '/sdcard/dump.xml'"))
+        return '<node bounds="[100,200][300,400]" text="Later" />';
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver._tapByVisibleText('Later')).toBe(true);
+    // Same capture-group order as the text-before-bounds form → identical centre
+    // (review Finding 4): assert the coordinates, not just that a tap happened.
+    const tap = execSync.mock.calls.find((c) => c[0].includes("'input' 'tap'"));
+    expect(tap[0]).toContain("'200'"); // centre x = (100+300)/2
+    expect(tap[0]).toContain("'300'"); // centre y = (200+400)/2
+  });
+
+  test('_tapByVisibleText: text not present → returns false, no tap', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'cat' '/sdcard/dump.xml'"))
+        return '<node text="Something Else" bounds="[0,0][10,10]" />';
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver._tapByVisibleText('Later')).toBe(false);
+    expect(execSync.mock.calls.some((c) => c[0].includes("'input' 'tap'"))).toBe(false);
+  });
+
+  test('_tapByVisibleText: UI dump failure → returns false (does not throw)', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'cat' '/sdcard/dump.xml'")) throw new Error('dump failed');
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver._tapByVisibleText('Later')).toBe(false);
+  });
+
+  test('_tapByVisibleText: androidTap fails (adb error) → returns false (review Finding 5)', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'cat' '/sdcard/dump.xml'"))
+        return '<node text="Later" bounds="[100,200][300,400]" />';
+      if (cmd.includes("'input' 'tap'")) throw new Error('device offline');
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    // Text IS present but the tap itself fails — must report false (not a masked true).
+    expect(await driver._tapByVisibleText('Later')).toBe(false);
+  });
+
+  test('_dismissDailyRewardIfPresent: reward present → taps "Later" → returns true', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'cat' '/sdcard/dump.xml'"))
+        return (
+          '<node text="Claim Today\'s Reward" bounds="[0,0][100,100]" />' +
+          '<node text="Later" bounds="[100,200][300,400]" />'
+        );
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver._dismissDailyRewardIfPresent();
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(await promise).toBe(true);
+  });
+
+  test('_dismissDailyRewardIfPresent: "Daily Reward" text variant → taps "Later" → returns true (review Finding 3)', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'cat' '/sdcard/dump.xml'"))
+        return (
+          '<node text="Daily Reward" bounds="[0,0][100,100]" />' +
+          '<node text="Later" bounds="[100,200][300,400]" />'
+        );
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    const promise = driver._dismissDailyRewardIfPresent();
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(await promise).toBe(true);
+  });
+
+  test('_dismissDailyRewardIfPresent: no reward popup → returns false, no tap', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'cat' '/sdcard/dump.xml'")) return dumpWithId('main_roomsTab');
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver._dismissDailyRewardIfPresent()).toBe(false);
+    expect(execSync.mock.calls.some((c) => c[0].includes("'input' 'tap'"))).toBe(false);
+  });
+
+  test('_dismissDailyRewardIfPresent: UI dump failure → returns false (does not throw)', async () => {
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'cat' '/sdcard/dump.xml'")) throw new Error('dump failed');
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver._dismissDailyRewardIfPresent()).toBe(false);
   });
 });
