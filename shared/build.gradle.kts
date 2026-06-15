@@ -44,8 +44,12 @@ kotlin {
         }
     }
 
+    // iosX64 (Intel simulator) dropped: Coil 3.5.0 no longer publishes an
+    // iosX64 artifact, and both this machine and CI are arm64. Real devices
+    // use iosArm64; Apple-Silicon simulators use iosSimulatorArm64. This also
+    // removes the :shared:compileKotlinIosX64 and :shared:iosX64Test tasks —
+    // K/N tests now run via :shared:iosSimulatorArm64Test.
     listOf(
-        iosX64(),
         iosArm64(),
         iosSimulatorArm64(),
     ).forEach { target ->
