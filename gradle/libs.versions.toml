@@ -32,7 +32,7 @@ cucumberAndroid = "7.18.1"
 securityCrypto = "1.1.0"
 biometric = "1.1.0"
 ktlint = "14.2.0"
-detekt = "2.0.0-alpha.3"
+detekt = "2.0.0-alpha.4"
 gitliveFirebase = "2.4.0"
 
 [libraries]
