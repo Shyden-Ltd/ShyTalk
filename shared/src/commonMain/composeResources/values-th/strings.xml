@@ -1309,6 +1309,7 @@
     <string name="wallet_with_balance">กระเป๋าเงิน · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">การละเมิดอย่างต่อเนื่องอาจส่งผลให้บัญชีของคุณถูกระงับ</string>
+    <string name="warning_acknowledge_failed">ไม่สามารถล้างคำเตือนของคุณได้ โปรดตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">บัญชีของคุณได้รับการตรวจสอบแล้วและมีการออกคำเตือนแล้ว</string>
     <!-- google-translated 2026-05-04 -->

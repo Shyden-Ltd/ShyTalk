@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">Dompet · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Pelanggaran yang berkelanjutan dapat mengakibatkan penangguhan akun Anda.</string>
+    <string name="warning_acknowledge_failed">Tidak dapat menghapus peringatan Anda. Periksa koneksi Anda dan coba lagi.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Akun Anda telah ditinjau dan peringatan telah dikeluarkan.</string>
     <!-- google-translated 2026-05-04 -->

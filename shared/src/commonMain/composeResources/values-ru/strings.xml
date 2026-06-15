@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">Кошелек · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Продолжающиеся нарушения могут привести к блокировке вашего аккаунта.</string>
+    <string name="warning_acknowledge_failed">Не удалось снять предупреждение. Проверьте подключение и повторите попытку.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Ваша учетная запись была проверена и вынесено предупреждение.</string>
     <!-- google-translated 2026-05-04 -->

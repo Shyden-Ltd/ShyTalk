@@ -30,6 +30,10 @@ data class WarningScreenParams(
     val reason: String?,
     val onAccept: () -> Unit,
     val onViewCommunityStandards: () -> Unit,
+    // SHY-0097: acknowledge is server-authorized + awaited; these surface the
+    // in-flight (disabled button) and failure (error text) states.
+    val isAcknowledging: Boolean = false,
+    val acknowledgeError: String? = null,
 )
 
 /** Parameters for the profile screen. */

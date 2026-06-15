@@ -65,5 +65,7 @@ private fun IosWarningScreen(params: WarningScreenParams) {
         reason = params.reason,
         onAccept = params.onAccept,
         onViewCommunityStandards = params.onViewCommunityStandards,
+        isAcknowledging = params.isAcknowledging,
+        acknowledgeError = params.acknowledgeError,
     )
 }

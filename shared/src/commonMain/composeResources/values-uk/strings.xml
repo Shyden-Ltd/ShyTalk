@@ -1310,6 +1310,7 @@
     <string name="wallet_with_balance">Гаманець · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Подальше порушення може призвести до призупинення дії вашого облікового запису.</string>
+    <string name="warning_acknowledge_failed">Не вдалося зняти попередження. Перевірте з\'єднання та повторіть спробу.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Ваш обліковий запис переглянуто та винесено попередження.</string>
     <!-- google-translated 2026-05-04 -->

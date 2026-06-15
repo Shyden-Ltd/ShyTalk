@@ -35,7 +35,7 @@ const DRIVERS_DIR = path.resolve(__dirname, '../../../scripts/drivers');
 // Drift in EITHER direction surfaces a red test for deliberate review.
 const EXPECTED_COUNTS = {
   'web-playwright-driver': 78,
-  'android-adb-driver': 72,
+  'android-adb-driver': 73, // SHY-0096: +androidKillAndRelaunch
   'ios-devicectl-driver': 66,
   'ios-simctl-driver': 66,
   'ios-appium-driver': 11,

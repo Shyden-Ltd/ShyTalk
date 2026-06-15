@@ -2589,6 +2589,113 @@ describe('Persona "is signed in on <Platform> with device locale <code>" (j13 ph
   });
 });
 
+// ── SHY-0096 review C-5: the GENERIC "is signed in on Android" catch-all now
+// drives the REAL device sign-in too (not just a server REST token). The
+// androidPersonaSignIn spy is a unit-test mock of the device collaborator — the
+// only place a mock is permitted (operator 2026-06-14). The real device
+// behaviour is proven by the SHY-0096 device gauntlet + the j06/j05 runner runs.
+describe('Generic "is signed in on Android" catch-all — real device sign-in branch (SHY-0096)', () => {
+  function withSignInFetch(uniqueId = 50000010) {
+    return jest.fn(async (url) => {
+      if (typeof url === 'string' && url.includes('signInWithPassword')) {
+        const idToken =
+          'h.' +
+          Buffer.from(JSON.stringify({ uniqueId, admin: false })).toString('base64url') +
+          '.s';
+        return { status: 200, json: async () => ({ idToken, refreshToken: 'r', localId: 'f' }) };
+      }
+      return { status: 500, text: async () => '{}' };
+    });
+  }
+
+  test('driver wired → androidPersonaSignIn fires with (P-NN, default "rooms" tab, target)', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({
+      fetch: withSignInFetch(50000010),
+      uiDriver: { androidPersonaSignIn: spy },
+      target: 'local',
+    });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice [P-02] is signed in on Android' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('P-02', 'rooms', 'local');
+  });
+
+  test('driver wired + "at the X screen" → the tab is extracted and passed', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({
+      fetch: withSignInFetch(50000010),
+      uiDriver: { androidPersonaSignIn: spy },
+      target: 'local',
+    });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice [P-02] is signed in on Android at the "discovery" screen' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).toHaveBeenCalledWith('P-02', 'discovery', 'local');
+  });
+
+  test('androidPersonaSignIn returns false → ok=false with "returned false" error', async () => {
+    const spy = jest.fn(async () => false);
+    const ctx = makeCtx({
+      fetch: withSignInFetch(50000010),
+      uiDriver: { androidPersonaSignIn: spy },
+      target: 'local',
+    });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice [P-02] is signed in on Android' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/returned false/);
+  });
+
+  test('androidPersonaSignIn throws → ok=false with "threw" + the driver message', async () => {
+    const spy = jest.fn(async () => {
+      throw new Error('could not tap persona_picker_open');
+    });
+    const ctx = makeCtx({
+      fetch: withSignInFetch(50000010),
+      uiDriver: { androidPersonaSignIn: spy },
+      target: 'local',
+    });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice [P-02] is signed in on Android' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/threw.*persona_picker_open/);
+  });
+
+  test('no uiDriver → device branch skipped, server sign-in still ok=true', async () => {
+    const ctx = makeCtx({ fetch: withSignInFetch(50000010) });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice [P-02] is signed in on Android' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(ctx.sessions.get('Alice')).toBeDefined();
+  });
+
+  test('web step + driver wired → device branch NOT taken (no androidPersonaSignIn call)', async () => {
+    const spy = jest.fn(async () => true);
+    const ctx = makeCtx({
+      fetch: withSignInFetch(50000010),
+      uiDriver: { androidPersonaSignIn: spy },
+      target: 'local',
+    });
+    const r = await executeStep(
+      { kind: 'Given', text: 'Alice [P-02] is signed in on Web Chromium' },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+    expect(spy).not.toHaveBeenCalled();
+  });
+});
+
 describe('Persona "is signed in on Android physical at the <tab> tab" (j09 Background — drives picker)', () => {
   function withSignInFetch(uniqueId = 50000060) {
     return jest.fn(async (url) => {
@@ -5105,24 +5212,27 @@ describe('Android search composite matchers (searches "X" in screen / types "X" 
 describe('Android kill-and-relaunch matcher (When <P> on Android kills and relaunches the app)', () => {
   test('calls androidKillAndRelaunch with the persona name (for driver logging)', async () => {
     const killSpy = jest.fn(async () => {});
-    const ctx = makeCtx({ uiDriver: { androidKillAndRelaunch: killSpy } });
+    const ctx = makeCtx({ uiDriver: { androidKillAndRelaunch: killSpy }, target: 'local' });
     const r = await executeStep(
       { kind: 'When', text: 'Adam on Android kills and relaunches the app' },
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(killSpy).toHaveBeenCalledWith('Adam');
+    // SHY-0096 C-4: the matcher passes ctx.target so the driver force-stops the
+    // correct package (local/dev/prod), not a hard-coded .local.
+    expect(killSpy).toHaveBeenCalledWith('Adam', 'local');
   });
 
   test('P-NN annotation form handled correctly', async () => {
     const killSpy = jest.fn(async () => {});
-    const ctx = makeCtx({ uiDriver: { androidKillAndRelaunch: killSpy } });
+    const ctx = makeCtx({ uiDriver: { androidKillAndRelaunch: killSpy }, target: 'dev' });
     const r = await executeStep(
       { kind: 'When', text: 'Raul [P-08] on Android kills and relaunches the app' },
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(killSpy).toHaveBeenCalledWith('Raul');
+    // SHY-0096 C-4: target ('dev' here) is forwarded to the driver.
+    expect(killSpy).toHaveBeenCalledWith('Raul', 'dev');
   });
 
   test('no ctx.uiDriver — loud error', async () => {

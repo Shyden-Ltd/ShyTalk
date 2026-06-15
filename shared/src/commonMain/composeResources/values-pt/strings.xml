@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">Carteira · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Violações contínuas podem resultar na suspensão da sua conta.</string>
+    <string name="warning_acknowledge_failed">Não foi possível remover o seu aviso. Verifique a sua ligação e tente novamente.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Sua conta foi revisada e um aviso foi emitido.</string>
     <!-- google-translated 2026-05-04 -->

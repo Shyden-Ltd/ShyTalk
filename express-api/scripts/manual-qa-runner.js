@@ -1306,6 +1306,37 @@ const matchers = [
           }
         }
       }
+      // Drive the REAL device-app sign-in when this is an Android step and an
+      // adb device driver is wired. The server REST sign-in above only mints a
+      // ctx.sessions token — on a real device that is a FAKE "signed in": the
+      // app itself stays on the persona picker, so later @android-physical
+      // steps (relaunch → warning screen, taps) act on a signed-OUT app. This
+      // wires the genuine picker sign-in (androidPersonaSignIn force-stops,
+      // launches, picks the persona, lands on the tab) so the device is truly
+      // signed in. Guarded on the captured P-NN id (androidPersonaSignIn
+      // requires it) + the "on Android" platform + driver presence, so web /
+      // iOS / driver-less runs are unaffected. (operator 2026-06-14: fill the
+      // gaps, remove the fakes — [[feedback-no-stubs-mocks-fakes-real-only]].)
+      if (
+        m[2] &&
+        /\bon Android\b/.test(m[0]) &&
+        ctx.uiDriver &&
+        ctx.uiDriver.androidPersonaSignIn
+      ) {
+        const tabMatch = m[0].match(/at the "([^"]+)" (?:screen|tab)/);
+        const tab = tabMatch ? tabMatch[1] : 'rooms';
+        try {
+          const signedIn = await ctx.uiDriver.androidPersonaSignIn(m[2], tab, ctx.target);
+          if (signedIn === false) {
+            return {
+              ok: false,
+              error: `androidPersonaSignIn(${m[2]}) returned false — device app not signed in`,
+            };
+          }
+        } catch (e) {
+          return { ok: false, error: `androidPersonaSignIn(${m[2]}) threw: ${e.message}` };
+        }
+      }
       return { ok: true };
     },
   },
@@ -3689,7 +3720,7 @@ const matchers = [
       if (!ctx.uiDriver.androidKillAndRelaunch) {
         return { ok: false, error: 'ctx.uiDriver.androidKillAndRelaunch not configured' };
       }
-      await ctx.uiDriver.androidKillAndRelaunch(name);
+      await ctx.uiDriver.androidKillAndRelaunch(name, ctx.target);
       return { ok: true };
     },
   },
