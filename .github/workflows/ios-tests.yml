@@ -398,6 +398,13 @@ jobs:
           #   Xcode 26 trust prompts for build-time package plugins +
           #   Swift macros (~5-10s per launch on cold runner; we don't
           #   need interactive trust in CI).
+          # EXCLUDED_ARCHS=x86_64: Coil 3.5.0 dropped the iosX64 (Intel-sim)
+          #   artifact, so shared/ no longer declares an iosX64 KMP target.
+          #   'generic/platform=iOS Simulator' otherwise also builds the
+          #   x86_64 slice, and the Compose plugin's syncComposeResourcesForIos
+          #   cannot infer a KMP target for x86_64 (fails evaluating
+          #   xcodeTargetArchs → "Cannot query the value of this provider").
+          #   The runner + simulators are arm64, so build the arm64 slice only.
           xcodebuild build-for-testing \
             -workspace iosApp/iosApp.xcworkspace \
             -scheme iosApp \
@@ -408,6 +415,7 @@ jobs:
             -skipMacroValidation \
             -quiet \
             CODE_SIGNING_ALLOWED=NO \
+            EXCLUDED_ARCHS=x86_64 \
             2>&1 | tee build/ios-build-logs/xcodebuild-build-for-testing.log
 
       - name: Upload xcodebuild logs
