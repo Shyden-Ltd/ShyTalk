@@ -67,6 +67,11 @@ service cloud.firestore {
                      'gcsScore', 'gcs_score', 'gcs_last_deduction_at',
                      'warningCount', 'warning_count', 'hasActiveWarning', 'has_active_warning',
                      'hasNewWarning', 'warningReason', 'warning_reason', 'warningIssuedAt',
+                     // Acknowledgement audit — written server-side only (SHY-0097
+                     // acknowledge endpoint, Admin SDK). A client must not forge an
+                     // acknowledgement (would falsify the moderation record).
+                     'warningAcknowledged', 'warning_acknowledged',
+                     'warningAcknowledgedAt', 'warning_acknowledged_at',
                      'suspensionStartDate', 'suspension_start_date', 'suspensionCanAppeal',
                      'suspendedBy', 'is_suspended', 'suspensionReason', 'suspension_reason',
                      'preSuspensionDisplayName', 'preSuspensionProfilePhotoUrl',

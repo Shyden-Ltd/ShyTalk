@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">ウォレット · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">違反が続くと、アカウントが停止される場合があります。</string>
+    <string name="warning_acknowledge_failed">警告を解除できませんでした。接続を確認して、もう一度お試しください。</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">あなたのアカウントは審査され、警告が発行されました。</string>
     <!-- google-translated 2026-05-04 -->

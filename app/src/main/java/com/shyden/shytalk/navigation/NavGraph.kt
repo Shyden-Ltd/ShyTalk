@@ -950,6 +950,9 @@ fun NavGraph(
 
                 // Read the warning reason from user doc
                 var warningReason by remember { mutableStateOf<String?>(null) }
+                var isAcknowledging by remember { mutableStateOf(false) }
+                var acknowledgeError by remember { mutableStateOf<String?>(null) }
+                val ackFailedMessage = stringResource(Res.string.warning_acknowledge_failed)
                 LaunchedEffect(Unit) {
                     val userId = authRepository.currentUserId ?: return@LaunchedEffect
                     when (val result = warningUserRepo.getWarningReason(userId)) {
@@ -960,13 +963,34 @@ fun NavGraph(
 
                 WarningScreen(
                     reason = warningReason,
+                    isAcknowledging = isAcknowledging,
+                    acknowledgeError = acknowledgeError,
                     onAccept = {
                         warningScope.launch {
-                            val userId = authRepository.currentUserId ?: return@launch
-                            warningUserRepo.acknowledgeWarning(userId)
-                            navController.navigate(Screen.Main.route) {
-                                popUpTo(Screen.Warning.route) { inclusive = true }
-                            }
+                            // SHY-0097: await the server-authorized acknowledge and
+                            // navigate ONLY on success; on failure stay + show the
+                            // error. The old code navigated unconditionally then got
+                            // bounced back by the reactive gate (silent failure).
+                            isAcknowledging = true
+                            acknowledgeError = null
+                            acknowledgeWarningAndRoute(
+                                userId = authRepository.currentUserId,
+                                acknowledge = warningUserRepo::acknowledgeWarning,
+                                onSuccess = {
+                                    // Reset before navigating: if the navigate is a no-op
+                                    // (the reactive gate may have already moved us) the
+                                    // composable can linger — don't leave it stuck
+                                    // disabled/spinning.
+                                    isAcknowledging = false
+                                    navController.navigate(Screen.Main.route) {
+                                        popUpTo(Screen.Warning.route) { inclusive = true }
+                                    }
+                                },
+                                onError = {
+                                    acknowledgeError = ackFailedMessage
+                                    isAcknowledging = false
+                                },
+                            )
                         }
                     },
                     onViewCommunityStandards = {

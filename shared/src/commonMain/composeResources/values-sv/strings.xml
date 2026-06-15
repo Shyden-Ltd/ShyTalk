@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">Plånbok · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Fortsatta överträdelser kan leda till att ditt konto stängs av.</string>
+    <string name="warning_acknowledge_failed">Det gick inte att ta bort varningen. Kontrollera din anslutning och försök igen.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Ditt konto har granskats och en varning har utfärdats.</string>
     <!-- google-translated 2026-05-04 -->

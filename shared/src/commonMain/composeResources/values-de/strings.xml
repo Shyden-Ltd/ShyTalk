@@ -1309,6 +1309,7 @@
     <string name="wallet_with_balance">Brieftasche · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Anhaltende Verstöße können zur Sperrung Ihres Kontos führen.</string>
+    <string name="warning_acknowledge_failed">Verwarnung konnte nicht aufgehoben werden. Bitte überprüfe deine Verbindung und versuche es erneut.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Ihr Konto wurde überprüft und es wurde eine Warnung ausgegeben.</string>
     <!-- google-translated 2026-05-04 -->

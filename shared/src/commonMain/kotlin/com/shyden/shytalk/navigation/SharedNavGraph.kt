@@ -69,6 +69,7 @@ import com.shyden.shytalk.feature.splash.FunFactSplashScreen
 import com.shyden.shytalk.feature.splash.FunFactSplashViewModel
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.resources.back
+import com.shyden.shytalk.resources.warning_acknowledge_failed
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
@@ -775,6 +776,9 @@ fun SharedNavGraph(
                 val warningScope = rememberCoroutineScope()
 
                 var warningReason by remember { mutableStateOf<String?>(null) }
+                var isAcknowledging by remember { mutableStateOf(false) }
+                var acknowledgeError by remember { mutableStateOf<String?>(null) }
+                val ackFailedMessage = stringResource(Res.string.warning_acknowledge_failed)
                 LaunchedEffect(Unit) {
                     val userId = authRepository.currentUserId ?: return@LaunchedEffect
                     when (val result = warningUserRepo.getWarningReason(userId)) {
@@ -786,13 +790,36 @@ fun SharedNavGraph(
                 platformScreens.warningScreen(
                     WarningScreenParams(
                         reason = warningReason,
+                        isAcknowledging = isAcknowledging,
+                        acknowledgeError = acknowledgeError,
                         onAccept = {
                             warningScope.launch {
-                                val userId = authRepository.currentUserId ?: return@launch
-                                warningUserRepo.acknowledgeWarning(userId)
-                                navController.navigate(Screen.Main.route) {
-                                    popUpTo(Screen.Warning.route) { inclusive = true }
-                                }
+                                // SHY-0097: AWAIT the server result and navigate to
+                                // Main ONLY on success. On failure stay on the
+                                // warning screen + show the error (retry possible) —
+                                // never the old fire-and-forget that navigated
+                                // optimistically then got bounced straight back by
+                                // the reactive moderation gate (silent failure).
+                                isAcknowledging = true
+                                acknowledgeError = null
+                                acknowledgeWarningAndRoute(
+                                    userId = authRepository.currentUserId,
+                                    acknowledge = warningUserRepo::acknowledgeWarning,
+                                    onSuccess = {
+                                        // Reset before navigating: if the navigate is a
+                                        // no-op (the reactive gate may have already moved
+                                        // us) the composable can linger — don't leave it
+                                        // stuck disabled/spinning.
+                                        isAcknowledging = false
+                                        navController.navigate(Screen.Main.route) {
+                                            popUpTo(Screen.Warning.route) { inclusive = true }
+                                        }
+                                    },
+                                    onError = {
+                                        acknowledgeError = ackFailedMessage
+                                        isAcknowledging = false
+                                    },
+                                )
                             }
                         },
                         onViewCommunityStandards = {

@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">Portfel · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Dalsze naruszenia mogą skutkować zawieszeniem Twojego konta.</string>
+    <string name="warning_acknowledge_failed">Nie udało się usunąć ostrzeżenia. Sprawdź połączenie i spróbuj ponownie.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Twoje konto zostało sprawdzone i wydano ostrzeżenie.</string>
     <!-- google-translated 2026-05-04 -->

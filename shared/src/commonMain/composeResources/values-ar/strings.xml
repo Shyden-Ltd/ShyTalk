@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">المحفظة · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">قد تؤدي الانتهاكات المستمرة إلى تعليق حسابك.</string>
+    <string name="warning_acknowledge_failed">تعذّر إزالة التحذير. يُرجى التحقق من اتصالك والمحاولة مرة أخرى.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">لقد تمت مراجعة حسابك وتم إصدار تحذير.</string>
     <!-- google-translated 2026-05-04 -->

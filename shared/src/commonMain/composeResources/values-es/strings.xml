@@ -1311,6 +1311,7 @@
     <string name="wallet_with_balance">Cartera · %1$s</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_consequence">Las infracciones continuas pueden resultar en la suspensión de su cuenta.</string>
+    <string name="warning_acknowledge_failed">No se pudo eliminar tu advertencia. Comprueba tu conexión e inténtalo de nuevo.</string>
     <!-- google-translated 2026-05-04 -->
     <string name="warning_reviewed">Su cuenta ha sido revisada y se ha emitido una advertencia.</string>
     <!-- google-translated 2026-05-04 -->

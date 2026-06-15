@@ -78,6 +78,7 @@ import com.shyden.shytalk.core.platform.PlatformSettingsService
 import com.shyden.shytalk.core.platform.SettingsType
 import com.shyden.shytalk.core.ui.StyledSnackbarHost
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.feature.auth.exposeTestTagsToPlatformDumps
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -242,7 +243,16 @@ fun AppSettingsScreen(
                         showSignOutDialog = false
                         onSignOut()
                     },
-                    modifier = Modifier.testTag("settings_signOutConfirmButton"),
+                    modifier =
+                        Modifier
+                            // AlertDialog renders in a separate Popup window that
+                            // doesn't inherit MainActivity's testTagsAsResourceId,
+                            // so the confirm button's testTag would not reach
+                            // uiautomator without this (mirrors the persona-picker
+                            // dialog in SignInScreen.kt; SHY-0096) — enables the QA
+                            // driver's locale-independent testTag-based sign-out.
+                            .exposeTestTagsToPlatformDumps()
+                            .testTag("settings_signOutConfirmButton"),
                 ) {
                     Text(stringResource(Res.string.sign_out), color = MaterialTheme.colorScheme.error)
                 }
@@ -250,7 +260,10 @@ fun AppSettingsScreen(
             dismissButton = {
                 TextButton(
                     onClick = { showSignOutDialog = false },
-                    modifier = Modifier.testTag("settings_signOutCancelButton"),
+                    modifier =
+                        Modifier
+                            .exposeTestTagsToPlatformDumps()
+                            .testTag("settings_signOutCancelButton"),
                 ) {
                     Text(stringResource(Res.string.cancel))
                 }

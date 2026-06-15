@@ -70,7 +70,12 @@ Feature: j11 — Full harassment moderation lifecycle
     Then within 5000ms Raul's Android UI shows the warning screen with reason "First-strike harassment"
     Then Raul's Android UI does not show "main_roomsTab"
 
-  @blocker @android-physical
+  # KNOWN FAILURE — SHY-0097: warning-acknowledge does a client Firestore write
+  # to the rules-protected `hasActiveWarning` field → DENIED → the flag never
+  # clears and the user is bounced back to the warning screen. The assertion
+  # below is CORRECT (do NOT weaken it); it stays RED until SHY-0097 routes the
+  # acknowledge through a server endpoint. Verified failing on-device 2026-06-13.
+  @blocker @android-physical @known-failure-SHY-0097
   Scenario: Raul acknowledges the warning — flag clears, rooms tab returns
     Given Raul is on the warning screen
     When Raul on Android taps "warning_acknowledgeButton"

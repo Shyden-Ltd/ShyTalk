@@ -23,8 +23,8 @@ android {
         applicationId = "com.shyden.shytalk"
         minSdk = 28
         targetSdk = 36
-        versionCode = 175
-        versionName = "0.97.14"
+        versionCode = 176
+        versionName = "0.97.15"
 
         testInstrumentationRunner = "com.shyden.shytalk.ShyTalkTestRunner"
 
@@ -330,7 +330,7 @@ dependencies {
     implementation(libs.google.id)
 
     // OkHttp (explicit dep for StorageRepositoryImpl; also brought transitively by ktor-client-okhttp)
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.4.0")
 
     // Coil (comes transitively from :shared, but app-specific screens still need it)
     implementation(libs.coil3.compose)
@@ -358,7 +358,7 @@ dependencies {
     testImplementation(libs.turbine)
     // Provides real org.json.JSONObject impl (the Android SDK version is a stub in JVM unit tests)
     testImplementation("org.json:json:20260522")
-    testImplementation("com.squareup.okhttp3:okhttp:4.12.0")
+    testImplementation("com.squareup.okhttp3:okhttp:5.4.0")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
