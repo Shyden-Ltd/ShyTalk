@@ -112,6 +112,13 @@ jobs:
       - name: Release workflow contract (PR-flow + signed commits)
         run: bash scripts/check-release-trigger.sh
 
+      # SHY-0108 (EPIC-0003 Phase X): ratchet guard — the in-process-double
+      # debt (jest.mock / Fake*Repository / page.route) may only SHRINK.
+      # Fails on any NEW double not in scripts/no-stubs-baseline.json, or a
+      # stale baseline entry left behind by a migration.
+      - name: No NEW in-process test doubles (EPIC-0003 ratchet)
+        run: node scripts/check-no-new-stubs.js
+
       # SHY-0035: reject any file >5MB added in the diff vs main. Fetch
       # origin/main explicitly because actions/checkout above checks out
       # a single ref (no main reference). The fetch is cheap (commit graph

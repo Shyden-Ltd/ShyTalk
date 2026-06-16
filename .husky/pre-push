@@ -66,6 +66,19 @@ if ! bash scripts/check-release-trigger.sh; then
   exit 1
 fi
 
+# SHY-0108 (EPIC-0003 Phase X): the in-process-double debt (jest.mock /
+# Fake*Repository / page.route) may only SHRINK. Fails on any NEW double
+# not in scripts/no-stubs-baseline.json, or a stale baseline entry a
+# migration forgot to remove. Fast (one git ls-files + scan).
+if ! node scripts/check-no-new-stubs.js; then
+  echo ""
+  echo "✗ no-new-stubs ratchet tripped — push blocked (EPIC-0003)"
+  echo "  Migrate the new double to the real local stack, or run"
+  echo "  'node scripts/check-no-new-stubs.js --generate-baseline' after a"
+  echo "  legitimate migration to shrink the baseline."
+  exit 1
+fi
+
 # Node-major guard (SHY-0069): abort fast, unconditionally on every push,
 # if the local node major drifted from .nvmrc. brew's floating `node`
 # formula upgraded to 26.3.0 on 2026-06-09 and wedged every full Jest run.
