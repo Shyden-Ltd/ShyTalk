@@ -82,6 +82,13 @@ jobs:
 
       - uses: ./.github/actions/setup-node
 
+      # EPIC-0003 Phase 3: run the express Jest suite against the REAL
+      # Firebase emulator stack ($0, credential-free under projectId
+      # demo-shytalk) instead of jest.mock(firebase). The JVM the
+      # Firestore/RTDB emulators need is already provided by
+      # setup-jdk-gradle above (no second JVM setup).
+      - uses: ./.github/actions/start-firebase-emulators
+
       - name: Run Express API tests with coverage
         # `--experimental-vm-modules` lets Jest resolve dynamic `import()`
         # callbacks (data-export-builder.js uses `import('archiver')` since
