@@ -1,12 +1,13 @@
 ---
 id: SHY-0104
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-06-15
 priority: P2
 effort: M
 type: infra
 roadmap_ids: []
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1443
 public: false
 mvp: false
 ---
