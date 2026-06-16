@@ -1,17 +1,18 @@
 platform :ios, '18.0'
 
-# Local-flavour configuration mapping. Without this, CocoaPods sees
-# Debug-Local + Release-Local in iosApp.xcodeproj (project-level
-# configs added for the iOS local-flavour build-out) but doesn't know
-# whether to treat them as debug-style or release-style. Result:
-# refuses to generate Pods-iosApp.debug-local.xcconfig /
-# .release-local.xcconfig — and pod install errors with "There may
-# only be up to 1 unique SWIFT_VERSION per target" when iosAppTests
-# is integrated below (because SWIFT_VERSION resolves to empty on
-# Local configs that lack a known mapping).
+# Custom-flavour configuration mapping. Without this, CocoaPods sees the
+# custom project-level configs in iosApp.xcodeproj (Debug-Local +
+# Release-Local for the iOS local flavour; Debug-Dev for SHY-0104's
+# public-dev-backend variant) but doesn't know whether to treat each as
+# debug-style or release-style. Result: refuses to generate the matching
+# Pods-iosApp.<config>.xcconfig — and pod install errors with "There may
+# only be up to 1 unique SWIFT_VERSION per target" when iosAppTests is
+# integrated below (SWIFT_VERSION resolves to empty on configs that lack a
+# known mapping).
 project 'iosApp.xcodeproj',
   'Debug-Local' => :debug,
-  'Release-Local' => :release
+  'Release-Local' => :release,
+  'Debug-Dev' => :debug
 
 target 'iosApp' do
   use_frameworks! :linkage => :static

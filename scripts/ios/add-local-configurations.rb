@@ -61,6 +61,17 @@ if configs_group.nil?
   puts "Created PBXGroup: iosApp/Configurations"
 end
 
+# The Configurations directory lives at SOURCE_ROOT/Configurations (next to the
+# .xcodeproj), NOT under the iosApp source subdir. With the default `<group>`
+# relativity the path doubles to iosApp/iosApp/Configurations and xcodebuild
+# can't open the xcconfig once a Configurations-based config is built. Pin
+# SOURCE_ROOT. (Latent here because CI never builds Debug-Local; surfaced + fixed
+# under SHY-0104 when Debug-Dev became the first built Configurations config.)
+if configs_group.source_tree != 'SOURCE_ROOT'
+  configs_group.source_tree = 'SOURCE_ROOT'
+  puts 'Fixed Configurations PBXGroup sourceTree → SOURCE_ROOT'
+end
+
 xcconfig_ref = configs_group.files.find { |f| f.display_name == 'Local.xcconfig' }
 if xcconfig_ref.nil?
   xcconfig_ref = configs_group.new_file('Local.xcconfig')

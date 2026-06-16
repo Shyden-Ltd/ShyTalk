@@ -106,5 +106,18 @@
 	-->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!--
+	    SHY-0104 — persona-picker password for the Debug-Dev variant.
+	    Reads the $(DEV_QA_PERSONAS_PASSWORD) build setting: the real value
+	    is injected at build time only on Debug-Dev (xcodebuild command-line
+	    override sourced from ~/.shytalk/dev-personas.env, never committed).
+	    Every other configuration leaves the var undefined, so this resolves
+	    to an EMPTY string — the password literal is absent from any
+	    distributable IPA, and iOSApp.swift's resolver coerces empty → nil so
+	    the picker fails closed. Swift reads it via
+	    Bundle.main.infoDictionary["DevQaPersonasPassword"].
+	-->
+	<key>DevQaPersonasPassword</key>
+	<string>$(DEV_QA_PERSONAS_PASSWORD)</string>
 </dict>
 </plist>

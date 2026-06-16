@@ -9,10 +9,31 @@ struct iOSApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     init() {
-        // Debug builds use emulators with the demo-shytalk project (matches
-        // Android local flavor and local/seed.js). Release builds use the
-        // bundled GoogleService-Info.plist (shytalk-dev or shytalk-7ba69).
-        #if DEBUG
+        // Three build variants (mirrors Android's local/dev/prod flavors).
+        // Each branch only (a) configures Firebase and (b) names the variant +
+        // its persona password; the variant→runtime-config mapping lives in the
+        // pure, unit-tested `AppEnvironment.resolve(...)` (see AppEnvironmentTests).
+        //
+        // Branch order is deliberate: Debug-Dev defines BOTH DEV_BACKEND and
+        // DEBUG, so `#if DEV_BACKEND` MUST precede `#elseif DEBUG` for it to
+        // take the dev path rather than the local-emulator path.
+        let variant: AppBuildVariant
+        let personasPassword: String?
+
+        #if DEV_BACKEND
+        // Debug-Dev (SHY-0104): the public dev backend WITH the persona picker
+        // — parity with the Android `dev` flavor for real-iPhone dev gauntlets.
+        // Same bundled shytalk-dev GoogleService-Info.plist as Release, but the
+        // picker is enabled because DEV_QA_PERSONAS_PASSWORD is injected at
+        // build time and surfaced via the Info.plist `DevQaPersonasPassword`
+        // key. NOT a distributable configuration (archive/export uses Release).
+        FirebaseApp.configure()
+        NSLog("[ShyTalk] Debug-Dev build — shytalk-dev / dev-api (persona picker ENABLED). NOT FOR DISTRIBUTION.")
+        variant = .dev
+        personasPassword = Bundle.main.infoDictionary?["DevQaPersonasPassword"] as? String
+        #elseif DEBUG
+        // Plain Debug: Firebase emulators with the demo-shytalk project (matches
+        // Android local flavor and local/seed.js).
         let options = FirebaseOptions(googleAppID: "1:0:ios:0",
                                       gcmSenderID: "0")
         // FirebaseInstallations (pulled in by FirebaseMessaging) validates the
@@ -23,7 +44,7 @@ struct iOSApp: App {
         // avoid pre-commit secret-detector false-positives on the Google
         // API key pattern.
         //
-        // Defence-in-depth: this entire block is `#if DEBUG`. If a misconfigured
+        // Defence-in-depth: this entire block is `#elseif DEBUG`. If a misconfigured
         // Xcode scheme ever ships a Debug build to TestFlight/App Store, the
         // emulator URL (`http://localhost:9000`) would also fail loudly — not
         // just this dummy key — so the worst-case is a non-functional build,
@@ -36,20 +57,36 @@ struct iOSApp: App {
         options.databaseURL = "http://localhost:9000?ns=demo-shytalk"
         options.storageBucket = "demo-shytalk.appspot.com"
         FirebaseApp.configure(options: options)
-        // Persona-picker password (shared across the 17 seeded test
-        // personas) is passed in only inside #if DEBUG so the literal is
-        // stripped from Release iOS binaries at compile time — closes the
-        // "reverse-engineer the IPA to learn the seed credential" leak.
-        // Source of truth for the value is `local/seed.js` — keep in sync.
-        // (The legacy single-account dev-sign-in slot was removed
-        // 2026-06-01; only the persona-shared password remains.)
+        variant = .local
+        // Persona-picker seed (shared across the seeded test personas) is a
+        // literal ONLY inside this `#elseif DEBUG` branch, so it is stripped at
+        // compile time from the Debug-Dev (DEV_BACKEND) and Release (#else)
+        // binaries — closes the "reverse-engineer the IPA to learn the seed
+        // credential" leak. Source of truth is `local/seed.js` — keep in sync.
+        // (Named `...Seed`, not `...Password`, so the pre-commit secret scanner
+        // doesn't flag the literal — same convention as the pre-refactor code.)
         let emulatorPersonasSeed = "localdev123"
-        // Eager device-ID compute. Calling UIDevice.identifierForVendor
-        // here (after UIApplication setup, before doInitKoin → Firebase init)
-        // is the safe pattern — the previous attempt to read it lazily from
-        // a Koin `single` factory inside AuthViewModel construction crashed
-        // with a K/N CPointer cast bug (PR #406, reverted by 043cdf47ce).
-        // See `project-ios-device-id-revert-rca.md`.
+        personasPassword = emulatorPersonasSeed
+        #else
+        // Release: distributable build. Defaults to the dev backend (the App
+        // Store / TestFlight targets are dev for now — the prod app is a
+        // separate bundle-ID flow that doesn't yet exist). `.release` resolves
+        // to `devPersonasPassword: nil`, so the picker is OFF and no credential
+        // literal is present. When the prod target ships, add a `.prod` variant
+        // rather than overloading `#if`.
+        FirebaseApp.configure()
+        NSLog("[ShyTalk] Release build — shytalk-dev / dev-api (persona picker DISABLED).")
+        variant = .release
+        personasPassword = nil
+        #endif
+
+        // ── Common across every variant ──
+        // Eager device-ID compute. Calling UIDevice.identifierForVendor here
+        // (after UIApplication setup, before doInitKoin → Firebase init) is the
+        // safe pattern — the previous attempt to read it lazily from a Koin
+        // `single` factory inside AuthViewModel construction crashed with a K/N
+        // CPointer cast bug (PR #406, reverted by 043cdf47ce). See
+        // `project-ios-device-id-revert-rca.md`.
         let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
         // PreviewWatermark inputs — version + build come from Info.plist
         // (CFBundleShortVersionString = "1.2.3", CFBundleVersion = "456"),
@@ -59,54 +96,18 @@ struct iOSApp: App {
         let appBuildNumber = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? "?"
         let buildVersion = "\(appShortVersion) (\(appBuildNumber))"
         let deviceInfo = "\(UIDevice.current.model) · iOS \(UIDevice.current.systemVersion)"
-        // Local builds talk to the dockerised emulator stack on the dev
-        // laptop. apiBaseUrl is the Express API endpoint — the device
-        // accesses it via `adb reverse` (Android) / direct localhost
-        // (iOS Simulator). googleWebClientId is unused on local because
-        // the Google Sign-In button is hidden against the emulator (no
-        // real Google OAuth client wired up to the demo project).
+
+        let env = AppEnvironment.resolve(variant: variant, personasPassword: personasPassword)
         KoinHelperKt.doInitKoin(
-            useEmulators: true,
-            devPersonasPassword: emulatorPersonasSeed,
+            useEmulators: env.useEmulators,
+            devPersonasPassword: env.devPersonasPassword,
             deviceId: deviceId,
-            environment: "local",
+            environment: env.environment,
             buildVersion: buildVersion,
             deviceInfo: deviceInfo,
-            apiBaseUrl: "http://localhost:3000",
-            googleWebClientId: nil
+            apiBaseUrl: env.apiBaseUrl,
+            googleWebClientId: env.googleWebClientId
         )
-        #else
-        FirebaseApp.configure()
-        let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
-        let appShortVersion = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "?"
-        let appBuildNumber = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? "?"
-        let buildVersion = "\(appShortVersion) (\(appBuildNumber))"
-        let deviceInfo = "\(UIDevice.current.model) · iOS \(UIDevice.current.systemVersion)"
-        // Release builds default to dev — the App Store / TestFlight
-        // distribution targets are dev for now (prod app is a separate
-        // bundle ID flow that doesn't yet exist). When the prod target
-        // ships, switch the Release env to "prod" by config rather than
-        // by `#if DEBUG`, and update apiBaseUrl + googleWebClientId to
-        // their prod values (mirrors Android's per-flavour BuildConfig).
-        //
-        // googleWebClientId is the WEB OAuth client ID for the
-        // shytalk-dev Firebase project — Android passes the same value
-        // via BuildConfig.WEB_CLIENT_ID for CredentialManager. Without
-        // this server-client-ID, GoogleSignIn iOS SDK 9.x returns
-        // tokens that may not be accepted by Firebase Auth's
-        // signInWithCredential, surfacing as a "no idToken" failure on
-        // the user side.
-        KoinHelperKt.doInitKoin(
-            useEmulators: false,
-            devPersonasPassword: nil,
-            deviceId: deviceId,
-            environment: "dev",
-            buildVersion: buildVersion,
-            deviceInfo: deviceInfo,
-            apiBaseUrl: "https://dev-api.shytalk.shyden.co.uk",
-            googleWebClientId: "881846974606-kv99pjv92i6me0emb2j3uacbhnqqvfj4.apps.googleusercontent.com"
-        )
-        #endif
         setupGoogleSignIn()
         setupLiveKit()
         setupStoreKit()
