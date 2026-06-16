@@ -64,7 +64,7 @@ P1 Tier-3 coverage. Closes the iOS data-layer + push-platform-bridge coverage ga
   - **Permission state reporting**: bridge reports current iOS permission state to shared `PushPermissionStore`; updates on state change.
 - [ ] Parity check with `AndroidPushPermissionTest` (Android equivalent) — same contract test cases.
 
-- [ ] All tests pass via `./gradlew :shared:iosX64Test --tests "*Repository*" --tests "*PushBridge*"` (or jvmTest equivalent if iosTest source set unavailable).
+- [ ] All tests pass via `./gradlew :shared:iosSimulatorArm64Test --tests "*Repository*" --tests "*PushBridge*"` (or jvmTest equivalent if iosTest source set unavailable).
 - [ ] Sonar coverage on all 5 files ≥85%.
 
 ### Error paths
@@ -184,7 +184,7 @@ P1 Tier-3 coverage. Closes the iOS data-layer + push-platform-bridge coverage ga
 1. Locate the 5 files; verify paths.
 2. Create or reuse FakeFirestore + FakePushAPI fixtures.
 3. Add 5 test files; ~55 cases total.
-4. Run `./gradlew :shared:jvmTest --tests "*Ios*"` (or iosX64Test) → RED on uncovered paths.
+4. Run `./gradlew :shared:jvmTest --tests "*Ios*"` (or iosSimulatorArm64Test) → RED on uncovered paths.
 
 ### Green
 
@@ -197,7 +197,7 @@ P1 Tier-3 coverage. Closes the iOS data-layer + push-platform-bridge coverage ga
 **Not `*.md`-only** (adds 5 iOS test files + may fix `iosMain` repos / push bridge) → the FULL gauntlet applies. Closes the iOS data-layer + push-bridge parity gap; the spec's "iOS simulator" smoke is UPGRADED to a **real iPhone** (protocol forbids simulator for the app-level gauntlet).
 
 **Frameworks exercised (RED→GREEN before any production fix):**
-- ✅ **Kotlin/JVM unit (or iOS K/N test)** — the 5 test files (`IosMessage` / `IosSeatRequest` / `IosEconomyGift` / `IosSmallRepositories` / `IosPushBridge`) with FakeFirestore + FakePushAPI (`./gradlew :shared:jvmTest --tests "*Ios*"` or `iosX64Test`); snapshot transforms, null-safety, error propagation, FCM token, deep-link allow-list, permission-state reporting; the story's primary RED→GREEN.
+- ✅ **Kotlin/JVM unit (or iOS K/N test)** — the 5 test files (`IosMessage` / `IosSeatRequest` / `IosEconomyGift` / `IosSmallRepositories` / `IosPushBridge`) with FakeFirestore + FakePushAPI (`./gradlew :shared:jvmTest --tests "*Ios*"` or `iosSimulatorArm64Test`); snapshot transforms, null-safety, error propagation, FCM token, deep-link allow-list, permission-state reporting; the story's primary RED→GREEN.
 - ✅ **detekt + ktlint + iOS shared compile-check** — `./gradlew :shared:compileKotlinIosArm64`.
 - ✅ **Android instrumented BDD + Manual-QA journey matrix** — DM send (incl. ModerationFilter block), seat-request, gift, and a push deep-link walked on a **real iPhone** (the surfaces these repos/bridge back) AND a **real Android device** for the push-permission parity contract.
 - ⬜ **Web E2E / integration / eslint / Express Jest** — N/A; apps run the regression corpus as the net.

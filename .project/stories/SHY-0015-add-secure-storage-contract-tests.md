@@ -53,8 +53,8 @@ Bumped to Tier 1 P0 under SHY-0032 because:
 - [ ] List/iteration contract (if the API exposes it): after `put("a","1") + put("b","2")`, listing keys returns both.
 - [ ] CryptoKeyPair contract: `generate()` returns a pair where `publicKey != privateKey`, the public key encrypts plaintext that the private key can decrypt round-trip, and consecutive `generate()` calls return distinct pairs.
 - [ ] Android platform test in `shared/src/androidInstrumentedTest/kotlin/.../AndroidSecureStorageTest.kt` exercises the contract using a real EncryptedSharedPrefs instance backed by AndroidKeyStore.
-- [ ] iOS platform test in `shared/src/iosTest/kotlin/.../IosSecureStorageTest.kt` (or `iosX64Test`/`iosArm64Test` source set) exercises the contract using real Keychain Services.
-- [ ] Tests run via `./gradlew :shared:jvmTest`, `./gradlew :shared:connectedAndroidTest`, and `./gradlew :shared:iosX64Test`.
+- [ ] iOS platform test in `shared/src/iosTest/kotlin/.../IosSecureStorageTest.kt` (or `iosSimulatorArm64Test`/`iosArm64Test` source set) exercises the contract using real Keychain Services.
+- [ ] Tests run via `./gradlew :shared:jvmTest`, `./gradlew :shared:connectedAndroidTest`, and `./gradlew :shared:iosSimulatorArm64Test`.
 - [ ] All contract assertions pass on both platforms.
 
 ### Error paths
@@ -180,7 +180,7 @@ Bumped to Tier 1 P0 under SHY-0032 because:
 2. Add `shared/src/androidInstrumentedTest/.../AndroidSecureStorageTest.kt` (extends or `actual`-implements the contract).
 3. Add `shared/src/iosTest/.../IosSecureStorageTest.kt`.
 4. Run `./gradlew :shared:connectedAndroidTest --tests "*SecureStorage*"` → all RED (most contract methods not implemented, or implementations have bugs the tests catch).
-5. Run `./gradlew :shared:iosX64Test --tests "*SecureStorage*"` → all RED.
+5. Run `./gradlew :shared:iosSimulatorArm64Test --tests "*SecureStorage*"` → all RED.
 6. Specific failing assertions expected:
    - Concurrent-write atomicity test fails if the current `actual` lacks synchronization.
    - Corruption test fails if the current implementation throws untyped exceptions.
@@ -204,7 +204,7 @@ Bumped to Tier 1 P0 under SHY-0032 because:
 **Frameworks exercised (RED→GREEN before any production fix):**
 - ✅ **Kotlin/JVM unit** — the commonMain portion of `SecureStorageContractTest` (`./gradlew :shared:jvmTest`).
 - ✅ **Android instrumented** — `AndroidSecureStorageTest` against real EncryptedSharedPrefs / AndroidKeyStore on a **real Android device** (`connectedDevDebugAndroidTest`), incl. the "no plaintext in logcat" grep + at-rest-binary check.
-- ✅ **iOS Kotlin/Native test** — `IosSecureStorageTest` against real Keychain (`./gradlew :shared:iosX64Test` / `iosSimulatorArm64Test`); the on-device Keychain accessibility (`ThisDeviceOnly`, no-iCloud-backup) is re-confirmed on the **real iPhone** journey.
+- ✅ **iOS Kotlin/Native test** — `IosSecureStorageTest` against real Keychain (`./gradlew :shared:iosSimulatorArm64Test`); the on-device Keychain accessibility (`ThisDeviceOnly`, no-iCloud-backup) is re-confirmed on the **real iPhone** journey.
 - ✅ **detekt + ktlint** + **iOS shared compile-check** (`./gradlew :shared:compileKotlinIosArm64`).
 - ✅ **Android instrumented BDD + Manual-QA journey matrix** — set a PIN, force-stop + relaunch (persistence), and confirm biometric session round-trip on a **real Android device AND a real iPhone**.
 - ⬜ **Web E2E / integration / eslint / Express Jest** — N/A; full journey corpus runs as the regression net.
@@ -227,7 +227,7 @@ Bumped to Tier 1 P0 under SHY-0032 because:
 - **SHY-0001** + **SHY-0032** — process dependencies.
 - `shared/src/commonMain/.../SecureStorage.kt` + `CryptoKeyPair.kt` + Android + iOS actuals — existing files.
 - `androidInstrumentedTest` source set must be configured (verify `app/build.gradle.kts`).
-- `iosTest` (or `iosX64Test`/`iosArm64Test`) source sets must be configured (verify `shared/build.gradle.kts`).
+- `iosTest` (or `iosSimulatorArm64Test`/`iosArm64Test`) source sets must be configured (verify `shared/build.gradle.kts`).
 - AndroidKeyStore + Keychain Services must be available in test environments (instrumented test on real device or AVD; iOS simulator).
 
 ## Risks & Mitigations

@@ -45,7 +45,7 @@ Bumped to Tier 2 P0 under SHY-0032 because:
 - [ ] `shared/src/commonTest/kotlin/com/shyden/shytalk/room/RoomServiceControllerContractTest.kt` defines the shared contract: an abstract test class with ≥15 test cases that both Android + iOS platform tests extend.
 - [ ] `shared/src/commonTest/kotlin/com/shyden/shytalk/room/fake/FakeRoomLifecycleManager.kt` is extracted — a deterministic test-double that platforms can drive in their tests + that the SHY-0013 unit tests can also reuse.
 - [ ] `app/src/test/java/com/shyden/shytalk/room/AndroidRoomServiceControllerTest.kt` extends the contract; runs as `./gradlew :app:testDevDebugUnitTest --tests "*AndroidRoomServiceController*"`; passes.
-- [ ] `shared/src/iosTest/kotlin/com/shyden/shytalk/room/IosRoomServiceControllerTest.kt` extends the contract; runs as `./gradlew :shared:iosX64Test --tests "*IosRoomServiceController*"`; passes.
+- [ ] `shared/src/iosTest/kotlin/com/shyden/shytalk/room/IosRoomServiceControllerTest.kt` extends the contract; runs as `./gradlew :shared:iosSimulatorArm64Test --tests "*IosRoomServiceController*"`; passes.
 - [ ] Cross-platform parity test: both implementations produce the same observable state-transition sequence given the same input sequence (verified via the shared contract).
 - [ ] `awaitLeaveCompletion` test: assert it does NOT return before the underlying `leave()` flow completes; deterministic via `TestCoroutineScheduler`.
 
@@ -148,7 +148,7 @@ Bumped to Tier 2 P0 under SHY-0032 because:
 2. Extract `FakeRoomLifecycleManager` into commonTest if not already (probably need to create).
 3. Add the shared contract test file in commonTest.
 4. Add platform-specific extensions in androidTest + iosTest source sets.
-5. Run `./gradlew :app:testDevDebugUnitTest --tests "*RoomServiceController*"` + `./gradlew :shared:iosX64Test --tests "*RoomServiceController*"` → RED on most cases.
+5. Run `./gradlew :app:testDevDebugUnitTest --tests "*RoomServiceController*"` + `./gradlew :shared:iosSimulatorArm64Test --tests "*RoomServiceController*"` → RED on most cases.
 6. Specific RED expectations:
    - Concurrent-leave atomicity likely RED on at least one platform.
    - Cross-platform parity contract test surfaces any subtle implementation drift.
@@ -168,7 +168,7 @@ Bumped to Tier 2 P0 under SHY-0032 because:
 **Frameworks exercised (RED→GREEN before any production fix):**
 - ✅ **Kotlin/JVM unit** — the shared `RoomServiceControllerContractTest` + `FakeRoomLifecycleManager` (`./gradlew :shared:jvmTest`).
 - ✅ **Android unit** — `AndroidRoomServiceControllerTest` (`./gradlew :app:testDevDebugUnitTest`).
-- ✅ **iOS Kotlin/Native test** — `IosRoomServiceControllerTest` (`./gradlew :shared:iosX64Test` / `iosSimulatorArm64Test` — the K/N test binary; a native test target, distinct from the on-device app journey below).
+- ✅ **iOS Kotlin/Native test** — `IosRoomServiceControllerTest` (`./gradlew :shared:iosSimulatorArm64Test` — the K/N test binary; a native test target, distinct from the on-device app journey below).
 - ✅ **detekt + ktlint** — new test + any controller fix passes static analysis.
 - ✅ **iOS shared compile-check** — `./gradlew :shared:compileKotlinIosArm64`.
 - ✅ **Android instrumented BDD + Manual-QA journey matrix** — voice-room join→seat→leave (incl. the leave-completion race + backgrounding mid-leave) walked on a **real Android device AND a real iOS device** — NOT a simulator (the protocol forbids it); parity is verified by walking the SAME journey on both physical devices.
@@ -194,7 +194,7 @@ Bumped to Tier 2 P0 under SHY-0032 because:
 
 ## Risks & Mitigations
 
-- **Risk:** iOS test source set isn't yet configured for full instrumented-test parity. **Mitigation:** if `iosX64Test` source set isn't wired, contribute the gradle config in this PR; reviewer agent verifies build.
+- **Risk:** iOS test source set isn't yet configured for full instrumented-test parity. **Mitigation:** if `iosSimulatorArm64Test` source set isn't wired, contribute the gradle config in this PR; reviewer agent verifies build.
 - **Risk:** Real `RoomService` and `IosLiveKitVoiceService` are difficult to fake without significant test scaffolding. **Mitigation:** `FakeRoomLifecycleManager` provides a clean substitute at the LifecycleManager layer; the controllers under test mock down to that fake, not to the full voice stack.
 - **Risk:** Contract test reveals real implementation drift between Android and iOS that requires production fix in both files. **Mitigation:** GOOD outcome — fix both; reviewer agent validates parity.
 - **Risk:** Test concurrency is flaky in CI on iOS simulator. **Mitigation:** use `TestCoroutineScheduler` for deterministic time; mark genuinely-CI-resource-dependent tests as `@FlakyTest` only if proven (not for masking real races).
@@ -213,5 +213,5 @@ Bumped to Tier 2 P0 under SHY-0032 because:
 
 - 2026-06-07 ~20:52 BST — Refined under SHY-0032. Bumped P1 → P0 (cross-platform race coverage = Tier 2 reliability).
 - 2026-06-07 — Skeleton generated by `scripts/convert-roadmap-to-stories.sh` from PR-bundle `PR-E2` (roadmap_ids: G016).
-- 2026-06-12 ~23:40 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): inherently cross-platform parity story → device gauntlet on BOTH real devices. UPGRADED the spec's "iOS simulator" smoke to a **real iPhone** journey (protocol forbids simulator for the app-level gauntlet; K/N iosX64Test still runs as a native test target). DoD auto-merge → judgment-merge. Pickup-fitness: no dupes/stale found.
+- 2026-06-12 ~23:40 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): inherently cross-platform parity story → device gauntlet on BOTH real devices. UPGRADED the spec's "iOS simulator" smoke to a **real iPhone** journey (protocol forbids simulator for the app-level gauntlet; K/N iosSimulatorArm64Test still runs as a native test target). DoD auto-merge → judgment-merge. Pickup-fitness: no dupes/stale found.
 - 2026-06-13 ~01:55 BST — **No-Stubs flag (review-surfaced)** ([[feedback-no-stubs-mocks-fakes-real-only]]): this story's architecture centres on `FakeRoomLifecycleManager` (AC/BDD/Test-Plan/DoD/Risks) — a new in-process double the rule bans. Same foundational-fake class as [[SHY-0010]] (🔴 operator-decision item on the SHY-0091 handoff): testing controllers against a real LifecycleManager backed by the real local stack is an architectural shift. NOT re-architected here (opportunistic, no big-bang); the AC/BDD prose is superseded by the No-Stubs banner atop `## Acceptance Criteria` pending operator direction.
