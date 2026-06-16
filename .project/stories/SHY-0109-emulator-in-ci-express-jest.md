@@ -1,6 +1,6 @@
 ---
 id: SHY-0109
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-06-16
 priority: P1
@@ -8,7 +8,7 @@ effort: M
 type: infra
 roadmap_ids: []
 epic: EPIC-0003
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1445
 mvp: false
 ---
 
@@ -139,3 +139,6 @@ The operator authorised this story to **push and merge on the CI-green gate** (A
 
 ## Notes (running log)
 - **2026-06-16 ~22:35 BST — created In Progress.** Operator chose "Build + push the emulator-in-CI infra" (AskUserQuestion). Architect skipped: low-risk infra reusing an existing, proven composite action ([[feedback-rate-limit-slowdown-strategies]]). Investigation confirmed: 182/198 jest.mock files mock firebase; `start-firebase-emulators` action already exists + is used by 3 workflows; `firebase.js` `NODE_ENV=local`→`demo-shytalk` emulator path is credential-free/$0. PoC target = `expireTempIds` (smallest, pure-Firestore, real compound-query semantics meaningless when mocked). EPIC `child_shys` + SHY-INDEX-vs-0108 baseline reconciliation deferred to consolidation (noted in Out of Scope + Dependencies).
+- **2026-06-16 ~22:40 BST — TDD complete + local green.** RED: pin test 8/8 fail (workflows unwired). GREEN: wired both workflows; pin 8/8 pass. Migrated cron + helper tests pass against the real local emulator (14/14, incl. the fast-fail-when-absent guard). Full canonical `npm test` = 333 suites / 12,333 tests, 0 failed. eslint `--max-warnings=0` + prettier + actionlint clean.
+- **2026-06-16 ~22:50 BST — code-reviewer: 0 Critical, 3 Important (I1 double-settle guard, I2 clearCollection loop clarity, I3 helper console-vs-log note) — ALL applied** to `tests/helpers/firebase-emulator.js`; re-verified green. Pre-push SonarCloud quality gate passed.
+- **2026-06-16 ~23:05 BST — pushed → PR #1445; CI ALL GREEN.** Required checks by name: Detect Changes ✓, Analyze JavaScript ✓, PR Gate ✓. `test-backend / Test Backend` ✓ (3m9s) — CI job log confirms emulators booted (`All emulators ready! Firestore 127.0.0.1:8080`) and `PASS tests/cron/expireTempIds.test.js` + `PASS tests/helpers/firebase-emulator.test.js` + `333 suites / 12,333 tests passed`. `sonarcloud / SonarCloud Analysis` ✓ (also emulator-provisioned), quality gate ✓, lint ✓, integration-tests ✓. Emulator JAR cache saved (`firebase-emulators-Linux`) → steady-state cost = boot only. CI-green gate met (operator-authorised; no device surface) → judgment-merge.
