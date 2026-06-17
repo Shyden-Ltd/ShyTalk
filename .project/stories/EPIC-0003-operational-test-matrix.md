@@ -5,7 +5,7 @@ owner: claude
 created: 2026-06-13
 priority: P1
 title: No stubs/fakes/gaps — fully-operational, real-only test apparatus (every framework)
-child_shys: [SHY-0092, SHY-0093, SHY-0094, SHY-0095, SHY-0096, SHY-0101]
+child_shys: [SHY-0092, SHY-0093, SHY-0094, SHY-0095, SHY-0096, SHY-0101, SHY-0112, SHY-0113, SHY-0114, SHY-0115, SHY-0116, SHY-0117, SHY-0118, SHY-0119, SHY-0120, SHY-0121, SHY-0122, SHY-0123, SHY-0124]
 ---
 
 # EPIC-0003: No stubs/fakes/gaps — fully-operational, real-only test apparatus (every framework)
@@ -18,6 +18,47 @@ This EPIC was originally "fully-operational QA test-framework matrix (no stubs)"
 2. **A linchpin gap was found by live investigation** (2026-06-13 ~14:xx, post-compact): `androidPersonaSignIn` assumes `am force-stop → sign-in screen`, but **Firebase auth survives force-stop** on the real device, and both data-wipe resets (`pm clear`, `run-as rm`) are **blocked** on the OnePlus CPH2653 (SecurityException / SELinux). So multi-journey Android persona-switching is broken → **no clean corpus can be measured** until a real in-app sign-out exists. This is Phase 0 (unblocks the gauntlet that proves everything else).
 
 **Standing constraint:** per `CLAUDE.md` § No Stubs / Mocks / Fakes — Real Only (operator override 2026-06-13 — see that section), **every** test across **every** framework runs against real services/devices. The "opportunistic, no big-bang" clause is **superseded for this epic** by the operator's explicit "true big-bang, all ~300 now" decision. Inventory: ~300 mock/fake-using test files (express-api Jest 195, Kotlin unit 61, androidTest 22 `Fake*.kt` used by 36 files, Playwright 8, iOS 3).
+
+## ⚠️ RE-SCOPE 2026-06-17 (operator: "the only thing I will allow fakes or mocks is the unit tests") — read FIRST
+
+Triggered when the operator caught `makeStatefulFakeDb` (a hand-rolled Firestore fake, **319 call-sites**) being used in NEW SHY-0101 tests, and connected it to a real symptom: **"I tried the dev app yesterday and still can't create rooms / do basic tasks, yet you said it was fixed — so the 'fix' was you faking it."** A fix validated only against a fake proves nothing; the real bug survives. This re-scope hardens the rule, corrects a badly-undercounted inventory, and re-prioritises by real-bug-exposure.
+
+**Hardened policy (GOVERNS every child SHY):** fakes / mocks / stubs / spies are permitted **ONLY in UNIT tests** (pure isolated logic with genuinely no real collaborator). **Every other layer — integration, journey-runner, e2e, device — is REAL-ONLY** (real Firebase emulator / real Express API / real LiveKit / real device). Classification is by what a test EXERCISES: if it touches a real collaborator (Firestore / Auth / API / LiveKit / repository / network) it is integration → real. Codified into `CLAUDE.md` §No-Stubs by the keystone child SHY below. **Testing mindset (operator):** when a real-services test fails, the default assumption is a **real product bug**, not a broken test — prove which with evidence; never "fix" by adjusting the test or faking the pass.
+
+**Accurate inventory (2026-06-17 codebase sweep — supersedes the "~300" estimate below):** ~307 fake-using test files — **~276 INTEGRATION (must migrate to real)**, ~28 genuine UNIT (keep doubles). express-api Jest ~230 (jest.mock 196, jest.fn 227, hand-rolled fakes 18 incl. `makeStatefulFakeDb`=319 call-sites, mockResolved* 202 — heavily overlapping); Kotlin 22 `Fake*.kt` + ~36 androidTest journeys (all integration; Koin-bound) + 51 mockk/Mockito; Playwright 8 `page.route` (6 integration, 2 genuine-unit XSS/i18n payloads); iOS 3 (all genuine unit). **Ratchet blind spots** — SHY-0108 only catches `jest.mock` / `Fake*Repository` / `page.route`; it MISSES jest.fn-collaborators, hand-rolled fakes, mockResolved*, and ALL Kotlin (mockk/Mockito/`Fake*`) + Swift.
+
+**Prioritised child-SHY plan (core-functionality + real-bug-exposure → safety → volume):**
+
+| Pri | Child SHY (to file) | Area / scope | ~Files |
+|---|---|---|---|
+| **P0** | Keystone | Codify unit-only policy in CLAUDE.md + extend ratchet to catch the blind-spot patterns + define the unit-vs-integration boundary convention | — |
+| **P0** | Rooms / Voice / LiveKit → real | express room-mutations/rooms/livekit + Android RoomCreation/RoomBrowsing/GroupChat — **surfaces the real room-creation bug (ties to SHY-0102/0103)** | ~15 |
+| **P0** | Auth / Sign-In → real | express auth/portal/otp/pin/biometric + Android auth journey | ~23 |
+| **P1** | Kotlin androidTest real-emulator harness | replace the 22 `Fake*.kt` Koin bindings with real-emulator + real LiveKit (Android keystone, parallel to SHY-0109 for express) | 22+36 |
+| **P1** | Moderation / Suspension / Warning → real | express admin-users/bans/warn/appeal + segregation; **SHY-0101 j11 leads here** | ~65 |
+| **P1** | Messaging / Conversations → real | conversations / notifications | ~10 |
+| **P1** | Economy / Wallet / Gifting → real | economy / purchase / gacha / gifts | ~35 |
+| **P1** | Starting-screens / cohort → real | cohort-gated reads/writes | ~5 |
+| **P1** | Cron → real | continues SHY-0109/0110 (closedRooms / archiveReports / subscriptions / …) | ~12 |
+| **P2** | Suggestions / Roadmap → real | suggestions lifecycle / contracts / voting | ~45 |
+| **P2** | Admin portal → real | admin alerts / logs / devices / economy / audit | ~25 |
+| **P2** | Utils-integration → real | firebase / email / fcm / r2 / alertManager / data-export | ~25 |
+| **P2** | Playwright integration → real backend | the 6 integration e2e (keep the 2 XSS/i18n unit) | ~6 |
+
+iOS (3 files) are genuine unit → no migration. Big areas (Moderation / Economy / Suggestions) sub-split into multiple PRs at pickup. The **keystone lands FIRST** so no new fakes accrue mid-migration; then Rooms (proves the room bug), then Auth, then the rest in the order above. The original by-framework phase table (below) is retained as the framework view; this feature-area table is the prioritised execution order.
+
+### Bug-handling workflow during migration (operator 2026-06-17) — defer-don't-distract, TDD, regression-proof
+
+Migrating a faked test to real services will SURFACE real bugs the fakes were hiding. Handle every one this way:
+
+1. **Migrate TDD-style** against the real emulator/services. **A real-services failure is assumed a real PRODUCT bug, not a broken test** ([[feedback-think-like-qa-real-fixes]]) — prove which with evidence (logs / real state) before acting. Hold a high bar before blaming the "apparatus".
+2. **Product bug found → FILE A BUG TICKET (a SHY, `type: bug`) and DO NOT fix it now.** It is fixed **after EPIC-0003 completes**. Do this for EVERY bug found (keeps the migration moving, avoids rabbit-holes).
+   - **Non-blocking** → tag the migrated real test `@known-failure-SHY-NNNN` with the **correct assertion kept intact (NEVER weakened)**, referencing the new ticket (mirrors the existing `@known-failure-SHY-0097/0105/0106/0107` pattern). The test is now regression-proof: it passes only when the bug is genuinely fixed, and fails again if it ever regresses. Migration proceeds.
+   - **Blocking** (the bug stops the area's tests from running at all — e.g. "can't create a room" ⇒ the close-room / all room tests can't execute) → **PIVOT: fix the blocking bug FIRST (TDD — a real failing test locks the fix), then resume the migration.**
+3. **Apparatus bug** (the runner / test-harness itself is genuinely wrong, not the product) → fix it; that is part of building the real apparatus. Default to "product bug" unless the evidence clearly shows the harness.
+4. **Regression-proof everything:** every bug (deferred OR fixed) leaves behind a real test whose correct assertion fails iff the bug is present, so it can never silently resurface.
+
+> Net: EPIC-0003 = make every test real + catalogue (as `@known-failure`-tagged tickets) every real bug the fakes were hiding; the post-epic bug-fix backlog then drains those tickets, each already guarded by a real regression test. The operator's room-creation report is the canonical first case — likely a **blocking** bug in the Rooms area (→ pivot-and-fix), tied to SHY-0102/0103.
 
 ## Vision
 
@@ -55,16 +96,22 @@ Delivered as phases — each phase is one or more 1-SHY-1-PR vertical slices; th
 - **SHY-0096** — `androidPersonaSignIn` real signed-out reset via `androidSignOut` + warning-ack behaviour (Phase 0, **THE LINCHPIN**). Status: In Review (merged #1418, released_in v0.97.15).
 - **SHY-0101** — j11 real-Android journey-apparatus completion (launch-gates · dev persona-password bake · acknowledge-scenario robustness · message/conversation/appeal driver actions) + retire `@known-failure-SHY-0097` (Phase-0 completion). Status: Draft.
 
-**Planned (filed fully-refined per [[feedback-no-skeleton-stories-fully-refined]] as each is started, in phase order — NOT pre-stubbed):**
-- **Phase 1** — driver-test `execSync`-mock removal (real-captured fixtures + gauntlet).
-- **Phase 2** — one SHY per androidTest domain group (≈6 stories).
-- **Phase 3** — emulator-in-CI infra SHY + one SHY per express-api route/domain group (≈8–12 stories).
-- **Phase 4** — Kotlin-unit real-collaborator SHYs (grouped by module).
-- **Phase 5** — Playwright real-API SHY.
-- **Phase 6** — iOS real-double SHY.
-- **Phase X** — anti-regression lint-guard SHY.
+**Filed 2026-06-17 — "no more faking" feature-area children (the prioritised execution order above, each fully-refined per [[feedback-no-skeleton-stories-fully-refined]]):**
+- **SHY-0112** (P0) — Keystone: codify "doubles only in unit tests" in `CLAUDE.md` + make `check-no-new-stubs.js` policy-aware + catch the blind-spot patterns + define the unit↔integration boundary. **Lands FIRST.** Status: Draft.
+- **SHY-0113** (P0) — Rooms / Voice / LiveKit → real (surfaces + pivot-fixes the room-creation blocker; ties SHY-0102/0103). Status: Draft.
+- **SHY-0114** (P0) — Auth / Sign-In → real. Status: Draft.
+- **SHY-0115** (P1) — Android instrumented real-emulator harness (replaces the 22 `Fake*.kt` Koin bindings; the Android keystone). Status: Draft.
+- **SHY-0116** (P1) — Moderation / Suspension / Warning → real (SHY-0101 j11 leads; re-authors the reverted fake test REAL). Status: Draft.
+- **SHY-0117** (P1) — Messaging / Conversations → real. Status: Draft.
+- **SHY-0118** (P1) — Economy / Wallet / Gifting → real. Status: Draft.
+- **SHY-0119** (P1) — Starting-screens / cohort-gated → real. Status: Draft.
+- **SHY-0120** (P1) — Remaining crons → real (continues SHY-0109/0110). Status: Draft.
+- **SHY-0121** (P2) — Suggestions / Roadmap → real. Status: Draft.
+- **SHY-0122** (P2) — Admin portal → real. Status: Draft.
+- **SHY-0123** (P2) — Utils-integration → real (firebase/email/fcm/r2/alertManager/data-export). Status: Draft.
+- **SHY-0124** (P2) — Playwright integration e2e → real backend (6 migrate, 2 unit kept). Status: Draft.
 
-> `child_shys` frontmatter lists only filed-and-existing SHYs (validator cross-checks existence in `--scan`); planned ones are promoted into it as their files are created.
+> These 13 are the **feature-area tracking children**; each XL/L area sub-splits into 1-SHY-1-PR work-slices filed as-started at pickup ([[feedback-agile-user-stories]]). The earlier by-phase plan (Phase 1–6+X) is retained as the *framework* view in `## Scope`; this feature-area set is the *prioritised execution order*. `child_shys` frontmatter lists only filed-and-existing SHYs (validator cross-checks existence in `--scan`); per-PR sub-slices are promoted into it as their files are created.
 
 ## Operator decisions (running)
 

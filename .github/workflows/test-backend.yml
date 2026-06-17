@@ -40,7 +40,9 @@ jobs:
   test-backend:
     name: Test Backend
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 15 (was 10) to absorb the first cold-cache Firebase-emulator boot
+    # added below for EPIC-0003 Phase 3 (real-firebase Jest tests).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -49,6 +51,21 @@ jobs:
       - uses: ./.github/actions/setup-node
         with:
           cache: 'npm'
+
+      # The Firestore + RTDB emulators are JVM-based, so a JDK must be
+      # present before they start. Reuses the repo-wide SHA pin for
+      # actions/setup-java (see .github/actions/setup-jdk-gradle) to
+      # satisfy the SHA-pin supply-chain guard.
+      - uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      # EPIC-0003 Phase 3: provision the REAL Firebase emulator stack
+      # (Auth/Firestore/RTDB under projectId demo-shytalk — $0,
+      # credential-free) so the express Jest suite runs against real
+      # services instead of jest.mock(firebase). Caches emulator JARs.
+      - uses: ./.github/actions/start-firebase-emulators
 
       - name: Run Express API tests with coverage
         # `--experimental-vm-modules` lets Jest's CJS VM resolve dynamic
