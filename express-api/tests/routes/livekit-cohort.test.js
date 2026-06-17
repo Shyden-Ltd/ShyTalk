@@ -16,7 +16,9 @@
  *   1. Same-cohort caller → 200 + a token the cohort member can verify (control).
  *   2. Cross-cohort caller → 404 `{ error: 'Not found' }`, byte-identical to the
  *      room-missing 404 (existence-hiding parity with `requireSameCohort`).
- *   3. Admin caller → 200 even cross-cohort (moderation needs entry); NO audit row.
+ *   3. Admin caller → 200 even cross-cohort (moderation needs entry); NO audit row —
+ *      but ONLY a LIVE admin (re-verified via isLiveAdmin); a DEMOTED admin whose
+ *      live claim was removed is denied like any cross-cohort caller (SHY-0126).
  *   4. Room missing → 404, same body. No audit row (gate not fired).
  *   5. Fail-closed defaults: room with no `cohort` → minor; missing/invalid caller
  *      claim → minor; `cohortOverride` (allow-listed) wins over `cohort`.
@@ -41,8 +43,16 @@
  *                                "404 (opaque) when minor caller targets an adult room",
  *                                "writes a real segregationEvents row with the full value shape"
  *   Existence-hiding          -> "cross-cohort 404 body is byte-identical to room-missing 404"
- *   Admin bypass              -> "admin caller bypasses the gate (200) and writes no audit row",
- *                                "admin-bypass token metadata follows the ROOM cohort"
+ *   Admin bypass (LIVE re-check, SHY-0126) -> see the nested describe
+ *                                "admin cohort-bypass re-verifies the LIVE admin claim":
+ *                                live admin → 200 + room-cohort metadata + no audit;
+ *                                demoted admin → 404 + audit; same-cohort not denied;
+ *                                60s adminClaimCache hit (Performance AC).
+ *                                Escalate-not-mock (story AC marked [~]): live-store
+ *                                OUTAGE + `!uid` guard are not real-inducible (a
+ *                                verifiable token implies an existing Auth user);
+ *                                their fail-closed OUTCOME is proven via the demoted
+ *                                admin (live claim absent → isLiveAdmin false).
  *   Fail-closed (value matrix)-> "room without a cohort field defaults to minor — adult blocked",
  *                                "… minor allowed", "missing cohort claim → minor (blocked)",
  *                                "invalid cohort claim → minor (blocked)",
@@ -108,7 +118,7 @@ function setRegionEnv() {
 const express = require('express');
 const request = require('supertest');
 const { TokenVerifier } = require('livekit-server-sdk');
-const { db } = require('../../src/utils/firebase');
+const { auth, db } = require('../../src/utils/firebase');
 const { authMiddleware } = require('../../src/middleware/auth');
 const { assertEmulatorReachable, clearCollection } = require('../helpers/firebase-emulator');
 const { mintRealUser, clearAuthCaches } = require('../helpers/real-auth');
@@ -178,7 +188,8 @@ beforeAll(async () => {
 // workers (maxWorkers: 2), so a whole-collection clear of ROOMS/USERS here would
 // race livekit.test.js (which also seeds those) and wipe its data mid-test. Both
 // files seed globally-unique, deterministic IDs via `set()` (idempotent re-runs;
-// disjoint ranges: this file 60000xxx, livekit.test.js 5xxxx/9xxxx/7xxxx), so no
+// disjoint ranges: this file 60000001–60000027 used, next free 60000028;
+// livekit.test.js 5xxxx/9xxxx/7xxxx), so no
 // ROOMS/USERS clear is needed. SEG_EVENTS is the exception: the route writes it
 // via `.add()` (non-idempotent — accumulates across runs) and ONLY this file
 // touches it, so clearing it here races nothing and keeps per-run counts exact.
@@ -333,39 +344,174 @@ describe('POST /api/livekit/token — cohort gate (real services + real auth)', 
     expect(await pollSegregationEvent(60000007, { timeoutMs: 500 })).toHaveLength(0);
   });
 
-  // ─── Admin bypass ──────────────────────────────────────────────
+  // ─── Admin bypass requires a LIVE admin claim (SHY-0126) ───────
+  //
+  // (Replaces the two prior admin-bypass tests — "admin caller bypasses the gate
+  // (200 cross-cohort) and writes no audit row" and "admin-bypass token metadata
+  // follows the ROOM cohort", formerly uniqueIds 60000008/60000009 — which, after
+  // the SHY-0126 fix, passed only through the JEST_WORKER_ID short-circuit in
+  // isLiveAdmin, i.e. a non-production path. Their assertions — admin cross-cohort
+  // → 200, no audit, room-cohort metadata — are now proven for REAL by the
+  // live-admin test below, 60000024, under AUTH_FORCE_LIVE_ADMIN_CHECK.)
+  //
+  // The fast token claim alone must NOT grant the cross-cohort bypass. A
+  // demoted admin keeps `admin:true` in their already-issued ID token until it
+  // naturally refreshes (~1h), so the route must re-verify the LIVE customClaims
+  // store via `isLiveAdmin`, mirroring `requireSameCohort` (sameCohort.js:87-90)
+  // and `requireAdmin` (auth.js:332-348). These tests run the REAL live-check
+  // path: `AUTH_FORCE_LIVE_ADMIN_CHECK` forces `isLiveAdmin` to hit its real
+  // `auth.getUser` path (auth.js:297 otherwise short-circuits to `true` under
+  // Jest), and the live admin claim is established for real via
+  // `auth.setCustomUserClaims` against the Auth emulator — NOT a mock of getUser.
+  //
+  // Token claim ≠ live claim (verified against the emulator at pickup):
+  // `createCustomToken(uid, {admin:true})` (what mintRealUser uses) puts `admin`
+  // in the ID TOKEN but leaves `getUser().customClaims` undefined — only
+  // `setCustomUserClaims` writes the live store `isLiveAdmin` reads. So
+  // mintRealUser({admin:true}) alone is a STALE-only admin; a genuinely-live
+  // admin additionally needs setCustomUserClaims(uid, {admin:true}).
+  //
+  // Not-real-inducible branches (escalate-not-mock, per CLAUDE.md): the `!uid`
+  // guard and the `isLiveAdmin` catch-branch (live-store outage) cannot be
+  // reached through the real middleware — a token that passes `verifyIdToken`
+  // implies an existing uid (the emulator rejects a deleted user's token with
+  // `auth/user-not-found` BEFORE the route runs). They are defensive mirrors of
+  // the already-shipped requireSameCohort/requireAdmin path (same isLiveAdmin
+  // function); the realistic fail-closed trigger (demotion → live claim absent)
+  // is fully covered below.
+  //
+  // AC → test map (SHY-0126):
+  //   Happy / live admin keeps entry -> "a currently-live admin keeps the cross-cohort bypass …"
+  //   Error / demoted admin denied   -> "a DEMOTED admin … is denied cross-cohort (404 + audit)"
+  //   Edge / no spurious denial       -> "a demoted admin is NOT spuriously denied on a same-cohort room"
+  //   Security / live store wins       -> demoted-admin test (stale token alone no longer bypasses)
+  //   Observability / audit on probe   -> demoted-admin test (real segregationEvents row, full shape)
+  describe('admin cohort-bypass re-verifies the LIVE admin claim (SHY-0126)', () => {
+    let priorForceLiveAdmin;
+    // Hook ordering (per Jest spec, not configurable): the FILE-level beforeEach
+    // runs first — it calls clearAuthCaches() (clears adminClaimCache) + clears
+    // SEG_EVENTS — THEN this inner beforeEach sets the flag. So every test starts
+    // with a cold admin cache and the live-check path forced on.
+    beforeEach(() => {
+      priorForceLiveAdmin = process.env.AUTH_FORCE_LIVE_ADMIN_CHECK;
+      process.env.AUTH_FORCE_LIVE_ADMIN_CHECK = '1';
+    });
+    afterEach(() => {
+      if (priorForceLiveAdmin === undefined) delete process.env.AUTH_FORCE_LIVE_ADMIN_CHECK;
+      else process.env.AUTH_FORCE_LIVE_ADMIN_CHECK = priorForceLiveAdmin;
+    });
 
-  test('admin caller bypasses the gate (200 cross-cohort) and writes no audit row', async () => {
-    await seedRoom('admin-room', { cohort: 'minor' });
-    const admin = await mintRealUser({ uniqueId: 60000008, cohort: 'adult', admin: true });
-    const app = createApp();
+    test('a currently-live admin keeps the cross-cohort bypass (200, room-cohort metadata, no audit)', async () => {
+      await seedRoom('live-admin-room', { cohort: 'minor' });
+      // Adult admin dialling into a minor room for moderation. Token carries the
+      // admin developer claim; establish the matching LIVE claim for real.
+      const admin = await mintRealUser({ uniqueId: 60000024, cohort: 'adult', admin: true });
+      await auth.setCustomUserClaims(admin.uid, { cohort: 'adult', admin: true });
+      const app = createApp();
 
-    const res = await request(app)
-      .post('/api/livekit/token')
-      .set(admin.headers)
-      .send({ roomName: 'admin-room' })
-      .expect(200);
+      const res = await request(app)
+        .post('/api/livekit/token')
+        .set(admin.headers)
+        .send({ roomName: 'live-admin-room' })
+        .expect(200);
 
-    expect(typeof res.body.token).toBe('string');
-    await expectNoSegregationEvent(60000008);
-  });
+      const claims = await verifyWith(res.body.token, ASIA_KEY, ASIA_SECRET);
+      expect(claims.sub).toBe('60000024');
+      // Metadata follows the ROOM cohort, not the admin's own cohort.
+      expect(JSON.parse(claims.metadata)).toEqual({ cohort: 'minor' });
+      await expectNoSegregationEvent(60000024);
+    });
 
-  test('admin-bypass token metadata follows the ROOM cohort, not the admin caller', async () => {
-    // Admin is adult; room is minor. The metadata stamped on the JWT must be the
-    // ROOM's cohort so any LiveKit-server-side policy treats the connection as
-    // belonging to the room's cohort, not the admin's.
-    await seedRoom('admin-room-2', { cohort: 'minor' });
-    const admin = await mintRealUser({ uniqueId: 60000009, cohort: 'adult', admin: true });
-    const app = createApp();
+    test('a DEMOTED admin (stale token claim, live claim removed) is denied cross-cohort (404 + audit)', async () => {
+      await seedRoom('demoted-admin-room', { cohort: 'minor' });
+      // Token still carries admin:true (issued before demotion)…
+      const admin = await mintRealUser({ uniqueId: 60000025, cohort: 'adult', admin: true });
+      // …but the live store no longer grants admin (demotion: cohort kept, admin dropped).
+      await auth.setCustomUserClaims(admin.uid, { cohort: 'adult' });
+      const app = createApp();
 
-    const res = await request(app)
-      .post('/api/livekit/token')
-      .set(admin.headers)
-      .send({ roomName: 'admin-room-2' })
-      .expect(200);
+      const res = await request(app)
+        .post('/api/livekit/token')
+        .set(admin.headers)
+        .send({ roomName: 'demoted-admin-room' })
+        .expect(404);
 
-    const claims = await verifyWith(res.body.token, ASIA_KEY, ASIA_SECRET);
-    expect(JSON.parse(claims.metadata)).toEqual({ cohort: 'minor' });
+      // Opaque 404 — byte-identical to any cross-cohort denial; no token leaks.
+      expect(res.body).toEqual({ error: 'Not found' });
+      expect(res.body.token).toBeUndefined();
+      // Treated exactly as a non-admin cross-cohort caller: a real audit row lands.
+      // Default 4s poll — the route's audit write is fire-and-forget (not awaited),
+      // so it may post-date the 404 and needs a window to land in the emulator.
+      const rows = await pollSegregationEvent(60000025);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        sourceUniqueId: '60000025',
+        sourceCohort: 'adult',
+        targetUniqueId: 'demoted-admin-room',
+        targetRoomId: 'demoted-admin-room',
+        targetCohort: 'minor',
+        surface: LIVEKIT_SURFACE,
+        action: 'blocked',
+        requestId: null,
+      });
+      expect(typeof rows[0].timestamp).toBe('number');
+    });
+
+    test('a demoted admin is NOT spuriously denied on a same-cohort room (200, no audit)', async () => {
+      // Regression guard: the live re-check must gate only the cross-cohort
+      // bypass. A same-cohort caller is allowed by the normal cohort match,
+      // independent of any (now-stale) admin token claim.
+      await seedRoom('demoted-admin-same', { cohort: 'adult' });
+      const admin = await mintRealUser({ uniqueId: 60000026, cohort: 'adult', admin: true });
+      await auth.setCustomUserClaims(admin.uid, { cohort: 'adult' }); // demoted
+      const app = createApp();
+
+      const res = await request(app)
+        .post('/api/livekit/token')
+        .set(admin.headers)
+        .send({ roomName: 'demoted-admin-same' })
+        .expect(200);
+
+      const claims = await verifyWith(res.body.token, ASIA_KEY, ASIA_SECRET);
+      expect(claims.sub).toBe('60000026');
+      await expectNoSegregationEvent(60000026);
+    });
+
+    test('the live admin re-check is served from the 60s adminClaimCache on repeat requests (Performance AC)', async () => {
+      // Proves the re-check is CACHED (no fresh Auth lookup per request) AND
+      // characterises the accepted security window: a just-demoted admin keeps
+      // the bypass only until the 60s adminClaimCache entry expires (vs the ~1h
+      // ID-token lifetime before this fix). Done entirely for real — no spy:
+      //   1) warm the cache with one live-admin request (caches isAdmin=true),
+      //   2) demote in the LIVE store WITHOUT clearing the cache,
+      //   3) a second request within the TTL is STILL 200 — only possible if the
+      //      route consults the cache; a fresh lookup would now read false → 404.
+      // clearAuthCaches() runs only in the file-level beforeEach (before this
+      // test), never between the two in-test requests, so the cache stays warm.
+      await seedRoom('cache-admin-room', { cohort: 'minor' });
+      const admin = await mintRealUser({ uniqueId: 60000027, cohort: 'adult', admin: true });
+      await auth.setCustomUserClaims(admin.uid, { cohort: 'adult', admin: true });
+      const app = createApp();
+
+      // Request 1 — live-admin bypass; populates adminClaimCache[uid] = true.
+      await request(app)
+        .post('/api/livekit/token')
+        .set(admin.headers)
+        .send({ roomName: 'cache-admin-room' })
+        .expect(200);
+
+      // Demote in the live store, but leave the cache warm (no clearAuthCaches).
+      await auth.setCustomUserClaims(admin.uid, { cohort: 'adult' });
+
+      // Request 2 — still 200, served from the cached claim (proves the cache is
+      // consulted; an uncached re-fetch would read the demoted store → 404).
+      await request(app)
+        .post('/api/livekit/token')
+        .set(admin.headers)
+        .send({ roomName: 'cache-admin-room' })
+        .expect(200);
+      await expectNoSegregationEvent(60000027);
+    });
   });
 
   // ─── Fail-closed defaults (value matrix) ───────────────────────

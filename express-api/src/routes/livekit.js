@@ -17,6 +17,7 @@ const { AccessToken } = require('livekit-server-sdk');
 const { db } = require('../utils/firebase');
 const { cohortFromClaim, effectiveCohort } = require('../utils/firebase-claims');
 const { writeSegregationEvent } = require('../middleware/sameCohort');
+const { isLiveAdmin } = require('../middleware/auth');
 const log = require('../utils/log');
 const { getRegion, getRegionConfig } = require('../utils/livekit-region');
 
@@ -78,9 +79,18 @@ router.post('/livekit/token', async (req, res) => {
     const roomCohort = effectiveCohort(roomData);
 
     // Admin bypass — moderators need to dial into any cohort's room
-    // to investigate reports. Mirrors `requireSameCohort`'s bypass.
+    // to investigate reports. Mirrors `requireSameCohort`'s bypass
+    // (sameCohort.js) AND `requireAdmin` (auth.js): the fast token claim
+    // alone is NOT enough — a demoted admin keeps `admin:true` in their
+    // already-issued ID token until it refreshes (~1h), so we re-verify
+    // the LIVE customClaims via `isLiveAdmin`. It is cached (60s) and
+    // fires ONLY on the admin-claim path, so normal callers pay nothing;
+    // the `req.auth.uid` guard fails closed (non-admin) when no uid is
+    // present, matching requireSameCohort.
     const adminClaim = req?.auth?.token?.admin === true;
-    if (!adminClaim && callerCohort !== roomCohort) {
+    const liveAdmin = adminClaim && req?.auth?.uid ? await isLiveAdmin(req.auth.uid) : false;
+    // (read as: (adminClaim && uid) ? <live check> : false — && binds tighter than ?:)
+    if (!liveAdmin && callerCohort !== roomCohort) {
       writeSegregationEvent({
         sourceUniqueId: identity,
         sourceCohort: callerCohort,

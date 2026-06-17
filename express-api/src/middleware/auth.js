@@ -286,14 +286,15 @@ async function authMiddlewareStrict(req, res, next) {
  * grant privileges based on a Firestore-side outage.
  */
 async function isLiveAdmin(uid) {
-  // Jest test environments stub req.auth.token.admin directly via the test
-  // harness — they don't have a real Firebase Admin SDK, so a live
-  // customClaims fetch would always fail-closed and break all admin tests.
-  // Skip the live check ONLY under Jest (process.env.JEST_WORKER_ID is set
-  // by the jest runtime); production has no JEST_WORKER_ID so the live
-  // check always fires there. Dedicated tests for the live-check behaviour
-  // explicitly mock `auth.getUser` and run the live path via
-  // process.env.AUTH_FORCE_LIVE_ADMIN_CHECK.
+  // Skip the live check under Jest UNLESS AUTH_FORCE_LIVE_ADMIN_CHECK is set.
+  // Most admin tests assert behaviour OTHER than the live re-check and would
+  // otherwise need to seed live customClaims for every admin caller; skipping
+  // (return true) lets them pass on the token claim alone. Production has no
+  // JEST_WORKER_ID, so the live check ALWAYS fires there. Tests that DO exercise
+  // the live path set AUTH_FORCE_LIVE_ADMIN_CHECK and establish the live claim
+  // for REAL via auth.setCustomUserClaims against the Auth emulator — no mock of
+  // auth.getUser is involved (EPIC-0003 real-only; see livekit-cohort.test.js
+  // "admin cohort-bypass re-verifies the LIVE admin claim").
   if (process.env.JEST_WORKER_ID && !process.env.AUTH_FORCE_LIVE_ADMIN_CHECK) {
     return true;
   }
