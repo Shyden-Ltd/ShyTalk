@@ -1,6 +1,6 @@
 ---
 id: SHY-0112
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-06-17
 priority: P0
@@ -124,3 +124,4 @@ Until those two are fixed, "no more faking" is unenforced and the boundary is un
 
 ## Notes (running log)
 - **2026-06-17 — created Draft (the EPIC-0003 keystone).** First of the prioritised "no more faking" child SHYs; lands before any migration so new fakes cannot accrue. Grounded in the real ratchet structure (`CATEGORIES`/baseline/`--generate-baseline`, exit 0/1/2) on `story/SHY-0108-no-new-stubs-ratchet-guard@2aeafb48f15` and the existing `CLAUDE.md` §No-Stubs. Boundary convention chosen as `tests/unit/**` + `*.unit.test.js` (greppable, ratchet-friendly); finalised at implementation.
+- **2026-06-17 ~12:40 BST — PICKED UP (Draft→In Progress).** SHY-0108 landed first (PR #1465, commit `06d005aaea2` on main) so the dependency is satisfied — this SHY *extends* the merged ratchet (not absorbs it). Branch `story/SHY-0112-keystone-unit-only-policy-and-ratchet` off `06d005aaea2`. **Pickup-fitness re-validation (per [[feedback-pickup-fitness-review-every-story]]):** the ratchet drifted exactly as the SHY anticipated — `EMPTY()`/baseline shape now `{jestMock:196, fakeRepository:34, pageRoute:8}`; `main`/`reportAndExit`/`SCRIPT_REL` exported; guard test now 37 tests. **Ground-truth blind-spot survey (PCRE — `git grep -E` POSIX-ERE silently drops `\b`/`\s`, must use `-P`):** `jest.fn(`=228 files · `make*Fake*`=5 · `mockResolved|Rejected|Return|Implementation`=204 · Kotlin `mockk`=49 (147 `mockk<`/72 `mockk(`; 0 `Mockito.`/`@Mock`) · iOS doubles=**3 exactly** (`StubViewController`, `MockStartingScreenService`, `MockURLProtocol`, all in `iosApp/iosAppTests/`). **Boundary refined from the handoff shorthand** after enumerating real KMP test source sets: non-instrumented Kotlin = `commonTest`/`jvmTest`/`androidHostTest`/`src/test` (host JVM, exempt); instrumented = `androidTest`/`androidInstrumentedTest`/`androidUiTest` (counted). **Computed post-policy baseline floor:** jestMock 196 · fakeRepository **25** (was 34; 9 in `commonTest`/`jvmTest`/`src/test` exempted) · pageRoute 8 · jestFn 228 · handRolledFake 5 · mockResolved 204 · kotlinMock **0** (all 49 in host/unit source sets — forward-looking guard only) · iosDouble 3. The one pre-existing JS unit-dir file `express-api/tests/unit/seasonal-events.test.js` carries no banned pattern (no baseline impact).
