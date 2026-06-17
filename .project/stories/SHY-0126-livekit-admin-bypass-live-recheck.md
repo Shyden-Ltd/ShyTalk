@@ -1,13 +1,13 @@
 ---
 id: SHY-0126
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-06-17
 priority: P1
 effort: S
 type: bug
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1472
 mvp: true
 ---
 
@@ -115,6 +115,7 @@ Run canonical `npm test` (verbatim) — both livekit files + full suite green. e
 - CI green by name (Detect Changes / Analyze JavaScript / PR Gate); judgment-merge → In Review → Done on release cut.
 
 ## Notes (running log)
+- **2026-06-17 ~18:34 BST — GREEN + pushed → In Review (PR #1472).** RED proven against real services (demoted admin got 200; expected 404). GREEN: live `isLiveAdmin` re-check on the bypass (`livekit.js`). Tests (real, zero doubles): demoted admin → 404 + real `segregationEvents` audit row (full value shape); live admin → 200 + room-cohort metadata + no audit; same-cohort demoted → 200 (no spurious denial); 60s `adminClaimCache` hit (Performance AC). Removed 2 prior admin tests that passed only via the `JEST_WORKER_ID` short-circuit (non-production path); subsumed by the real live-admin test. Canonical `npm test` = **335 suites / 12472 tests** green; eslint/prettier/stub-ratchet (baseline unchanged)/story-validator clean; pre-push full suite + SonarCloud quality gate passed. **code-reviewer: 2 cycles** — cycle 1 (6 findings: C1 stale auth.js comment, C2 short-circuit tests, I1 perf-cache test, I2/M2/M3 clarity) all applied; cycle 2 confirmed cycle-1 resolved, residual = clarity/doc only (I-1 parens not possible — prettier strips them, resolved via precedence comment; I-2 story AC `[~]` escalation annotations; m-2/n-1 comments) all applied. **Remaining:** CI green by name → dev cohort-moderation gauntlet (NOT exempt — production change to a compliance gate) → judgment-merge.
 - **2026-06-17 ~18:05 BST — picked up (operator decision via AskUserQuestion):** (1) FIX NOW — interrupt EPIC-0003 for this one bug-fix PR; (2) `mvp: true` (Safety & Compliance) — set; (3) operator-checkpoint: the `firestore.rules` are unchanged (route-only product change), so no rules-deploy checkpoint — the change is gated by the standard pre-merge gauntlet on the age-segregation surface. Story flipped Draft→In Progress.
 - **2026-06-17 ~18:05 BST — empirical correction to the Test Plan (never-guess rule).** Probed the real Auth emulator before writing tests: `createCustomToken(uid, {admin:true})` puts `admin` in the ID token but leaves `getUser().customClaims` **undefined** — only `setCustomUserClaims` writes the store `isLiveAdmin` reads. So the original Test-Plan claim ("mintRealUser already sets live customClaims") was wrong; the live-admin test now calls `setCustomUserClaims(uid,{admin:true})` explicitly. Also confirmed the emulator's `verifyIdToken` rejects a deleted user (`auth/user-not-found`), so the live-store-outage catch branch is not real-inducible → escalate-not-mock (covered behaviourally by the demoted-admin case).
 - **2026-06-17 — filed from SHY-0125 `code-reviewer` finding C2.** The LiveKit token route's admin cohort-bypass trusts only the decoded `req.auth.token.admin` claim, omitting the live `isLiveAdmin` re-verification that `requireSameCohort` applies — a demoted admin retains cross-cohort LiveKit-grant access until their ID token refreshes (~1h, NOT the 24h the reviewer cited; the 24h is the minted LiveKit JWT TTL, a different token). Deliberately NOT bundled into SHY-0125 (one-PR-one-story; SHY-0125 is a gauntlet-exempt test migration, this is a production change to a compliance gate that needs its own gauntlet). **Operator decisions needed at pickup:** (1) fix now vs. after EPIC-0003 (sole-focus tension); (2) MVP classification (`mvp:` — plausibly Safety & Compliance MVP; left `false` pending operator triage per the operator-directed MVP-flag process); (3) confirm whether the age-segregation surface change warrants an operator checkpoint.
