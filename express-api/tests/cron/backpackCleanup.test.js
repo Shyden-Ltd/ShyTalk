@@ -1,247 +1,112 @@
 /**
- * Tests for cron/backpackCleanup.js
+ * backpackCleanup.test.js — EPIC-0003 Phase 3 (SHY-0110).
  *
- * backpackCleanup():
- * - Uses a collection group query on 'backpack' to find all expired items
- *   (where expiresAt <= now) across all user backpacks in a single read
- * - Batch-deletes expired items (500 per batch)
- * - Skips (no-ops) when there are no expired items
- * - Items without an expiresAt field are not returned by the query (valid items)
+ * MIGRATED off the firebase + log Jest mocks onto the REAL Firestore
+ * emulator. Verifies the cron's REAL outcome — expired backpack items
+ * deleted, fresh items retained — instead of the previous 11 hollow
+ * `toHaveBeenCalled` mock-call assertions (the old test had zero
+ * state-read assertions, so it could not catch the cron deleting the
+ * wrong docs). The real `log` runs unmocked (exercised, not asserted).
+ *
+ * Isolation: backpackCleanup queries the WHOLE `backpack` collection
+ * group, so a clean slate (clearCollectionGroup in beforeEach) is
+ * required — surgical per-id cleanup cannot isolate a global cron.
+ * See tests/helpers/firebase-emulator.js.
  */
-
-// ─── Firebase mock ────────────────────────────────────────────────
-
-const mockBatchDelete = jest.fn();
-const mockBatchCommit = jest.fn().mockResolvedValue();
-
-jest.mock('../../src/utils/firebase', () => ({
-  db: {
-    collectionGroup: jest.fn(() => ({
-      where: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
-      get: jest.fn(),
-    })),
-    batch: jest.fn(() => ({
-      delete: mockBatchDelete,
-      commit: mockBatchCommit,
-    })),
-  },
-}));
-
-jest.mock('../../src/utils/log', () => ({
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-}));
+const PRIOR_NODE_ENV = process.env.NODE_ENV;
+process.env.NODE_ENV = 'local';
 
 const { db } = require('../../src/utils/firebase');
-const log = require('../../src/utils/log');
 const backpackCleanup = require('../../src/cron/backpackCleanup');
+const { assertEmulatorReachable, clearCollectionGroup } = require('../helpers/firebase-emulator');
 
-// ─── Helpers ─────────────────────────────────────────────────────
+const GROUP = 'backpack';
 
-function makeExpiredItem(userId, giftId) {
-  return {
-    id: giftId,
-    ref: { path: `users/${userId}/backpack/${giftId}` },
-    data: () => ({
-      giftId,
-      quantity: 1,
-      expiresAt: Date.now() - 86400000, // expired yesterday
-    }),
-  };
+async function seedItem(uid, itemId, fields) {
+  await db.doc(`users/${uid}/backpack/${itemId}`).set(fields);
 }
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  mockBatchCommit.mockResolvedValue();
+async function readItem(uid, itemId) {
+  const snap = await db.doc(`users/${uid}/backpack/${itemId}`).get();
+  return snap.exists ? snap.data() : null;
+}
+
+beforeAll(async () => {
+  await assertEmulatorReachable();
 });
 
-// ─── Tests ───────────────────────────────────────────────────────
+beforeEach(async () => {
+  await clearCollectionGroup(db, GROUP);
+});
 
-describe('backpackCleanup', () => {
-  describe('when there are no expired backpack items', () => {
-    it('does not delete anything when snapshot is empty', async () => {
-      db.collectionGroup.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
-      });
+afterAll(async () => {
+  await clearCollectionGroup(db, GROUP);
+  process.env.NODE_ENV = PRIOR_NODE_ENV;
+});
 
-      await backpackCleanup();
+describe('backpackCleanup (real Firestore emulator)', () => {
+  test('deletes expired items across multiple users, keeps future ones', async () => {
+    const now = Date.now();
+    await seedItem('u1', 'gift-a', { giftId: 'gift-a', quantity: 1, expiresAt: now - 86400000 });
+    await seedItem('u2', 'gift-b', { giftId: 'gift-b', quantity: 2, expiresAt: now - 1000 });
+    await seedItem('u3', 'gift-c', { giftId: 'gift-c', quantity: 1, expiresAt: now + 86400000 });
 
-      expect(mockBatchDelete).not.toHaveBeenCalled();
-      expect(mockBatchCommit).not.toHaveBeenCalled();
-    });
+    await backpackCleanup();
 
-    it('logs an info message when no expired items are found', async () => {
-      db.collectionGroup.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
-      });
-
-      await backpackCleanup();
-
-      expect(log.info).toHaveBeenCalledWith('cron', 'backpackCleanup: no expired items');
+    expect(await readItem('u1', 'gift-a')).toBeNull();
+    expect(await readItem('u2', 'gift-b')).toBeNull();
+    expect(await readItem('u3', 'gift-c')).toMatchObject({
+      giftId: 'gift-c',
+      expiresAt: now + 86400000,
     });
   });
 
-  describe('when expired backpack items exist', () => {
-    it('deletes all expired items via batch', async () => {
-      const docs = [
-        makeExpiredItem('user-1', 'gift-rose'),
-        makeExpiredItem('user-2', 'gift-diamond'),
-        makeExpiredItem('user-3', 'gift-cake'),
-      ];
+  test('expiry boundary: an item due exactly now is deleted; a future item is kept', async () => {
+    const now = Date.now();
+    // The cron reads its own Date.now() AFTER this seed, so the due item
+    // (expiresAt === now) always satisfies `<= cron-timestamp`, while the
+    // future item (now + 60s) never does within a test run — deterministic.
+    await seedItem('u1', 'due-now', { expiresAt: now });
+    await seedItem('u1', 'future', { expiresAt: now + 60000 });
 
-      db.collectionGroup.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: false, docs }),
-      });
+    await backpackCleanup();
 
-      await backpackCleanup();
-
-      expect(mockBatchDelete).toHaveBeenCalledTimes(3);
-    });
-
-    it('passes doc.ref to batch.delete (not the doc id)', async () => {
-      const item = makeExpiredItem('user-1', 'gift-rose');
-
-      db.collectionGroup.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: false, docs: [item] }),
-      });
-
-      await backpackCleanup();
-
-      expect(mockBatchDelete).toHaveBeenCalledWith(item.ref);
-    });
-
-    it('commits the batch after deleting items', async () => {
-      const docs = [makeExpiredItem('user-1', 'gift-abc')];
-
-      db.collectionGroup.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: false, docs }),
-      });
-
-      await backpackCleanup();
-
-      expect(mockBatchCommit).toHaveBeenCalledTimes(1);
-    });
-
-    it('logs the count of cleaned expired items', async () => {
-      const docs = [makeExpiredItem('user-1', 'gift-a'), makeExpiredItem('user-2', 'gift-b')];
-
-      db.collectionGroup.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: false, docs }),
-      });
-
-      await backpackCleanup();
-
-      expect(log.info).toHaveBeenCalledWith(
-        'cron',
-        'backpackCleanup: cleaned expired items',
-        expect.objectContaining({ count: 2 }),
-      );
-    });
+    expect(await readItem('u1', 'due-now')).toBeNull();
+    expect(await readItem('u1', 'future')).not.toBeNull();
   });
 
-  describe('when there are more than 500 expired items (chunked batch processing)', () => {
-    it('commits multiple batches for large result sets', async () => {
-      // Create 600 expired items to trigger the chunking path (500 per batch)
-      const docs = Array.from({ length: 600 }, (_, i) => makeExpiredItem(`user-${i}`, `gift-${i}`));
+  test('collection-group: expired items under different parents are all collected', async () => {
+    const now = Date.now();
+    await seedItem('alpha', 'x', { expiresAt: now - 5 });
+    await seedItem('beta', 'y', { expiresAt: now - 5 });
+    await seedItem('gamma', 'z', { expiresAt: now - 5 });
 
-      db.collectionGroup.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: false, docs }),
-      });
+    await backpackCleanup();
 
-      await backpackCleanup();
-
-      // 600 docs → 2 batches (500 + 100)
-      expect(mockBatchCommit).toHaveBeenCalledTimes(2);
-      expect(mockBatchDelete).toHaveBeenCalledTimes(600);
-    });
+    expect((await db.collectionGroup(GROUP).get()).empty).toBe(true);
   });
 
-  describe('query filtering', () => {
-    it('queries the backpack collection group', async () => {
-      db.collectionGroup.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
-      });
+  test('empty group → no-op (resolves, nothing created or deleted)', async () => {
+    // beforeEach already cleared the group.
+    await expect(backpackCleanup()).resolves.toBeUndefined();
 
-      await backpackCleanup();
-
-      expect(db.collectionGroup).toHaveBeenCalledWith('backpack');
-    });
-
-    it('applies expiresAt <= timestamp filter', async () => {
-      const whereArgs = [];
-      const chainMock = {
-        where: jest.fn((...args) => {
-          whereArgs.push(args);
-          return chainMock;
-        }),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
-      };
-      db.collectionGroup.mockReturnValueOnce(chainMock);
-
-      await backpackCleanup();
-
-      expect(whereArgs.length).toBeGreaterThan(0);
-      const filter = whereArgs.find((args) => args[0] === 'expiresAt');
-      expect(filter).toBeDefined();
-      expect(filter[1]).toBe('<=');
-      expect(typeof filter[2]).toBe('number');
-    });
-
-    it('limits results to 500 per run', async () => {
-      const limitMock = jest.fn().mockReturnThis();
-      db.collectionGroup.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: limitMock,
-        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
-      });
-
-      await backpackCleanup();
-
-      expect(limitMock).toHaveBeenCalledWith(500);
-    });
+    expect((await db.collectionGroup(GROUP).get()).empty).toBe(true);
   });
 
-  describe('error handling', () => {
-    it('propagates Firestore collection group query errors', async () => {
-      db.collectionGroup.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockRejectedValue(new Error('Firestore collection group unavailable')),
-      });
+  test('does not match a same-named field outside the backpack subcollection', async () => {
+    const now = Date.now();
+    // A top-level user doc carrying an `expiresAt` field is NOT in the
+    // `backpack` collection group, so the cron must not delete it.
+    await db.doc('users/shy0110-decoy').set({ expiresAt: now - 99999, displayName: 'decoy' });
+    await seedItem('u1', 'real-expired', { expiresAt: now - 1 });
 
-      await expect(backpackCleanup()).rejects.toThrow('Firestore collection group unavailable');
-    });
+    await backpackCleanup();
 
-    it('propagates batch commit errors', async () => {
-      const docs = [makeExpiredItem('user-1', 'gift-x')];
+    expect(await readItem('u1', 'real-expired')).toBeNull();
+    const decoy = await db.doc('users/shy0110-decoy').get();
+    expect(decoy.exists).toBe(true);
+    expect(decoy.data()).toMatchObject({ displayName: 'decoy' });
 
-      db.collectionGroup.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: false, docs }),
-      });
-      mockBatchCommit.mockRejectedValueOnce(new Error('Batch commit failed'));
-
-      await expect(backpackCleanup()).rejects.toThrow('Batch commit failed');
-    });
+    await db.doc('users/shy0110-decoy').delete();
   });
 });

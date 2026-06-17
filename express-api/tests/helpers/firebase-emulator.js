@@ -129,4 +129,37 @@ async function clearCollection(db, collectionPath, batchSize = 500) {
   return total;
 }
 
-module.exports = { assertEmulatorReachable, clearCollection, firestoreHostPort };
+/**
+ * Like `clearCollection`, but drains a Firestore COLLECTION GROUP (every
+ * subcollection named `groupName` under any parent). Needed to isolate
+ * tests for crons that query globally via `collectionGroup(...)` — the
+ * cron operates on the whole group, so surgical per-id cleanup cannot
+ * give a clean slate. The unfiltered group query needs no composite
+ * index. Returns the count deleted.
+ */
+async function clearCollectionGroup(db, groupName, batchSize = 500) {
+  let total = 0;
+  for (;;) {
+    const snap = await db.collectionGroup(groupName).limit(batchSize).get();
+    if (snap.empty) {
+      break;
+    }
+    const batch = db.batch();
+    for (const doc of snap.docs) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+    total += snap.size;
+    if (snap.size < batchSize) {
+      break;
+    }
+  }
+  return total;
+}
+
+module.exports = {
+  assertEmulatorReachable,
+  clearCollection,
+  clearCollectionGroup,
+  firestoreHostPort,
+};
