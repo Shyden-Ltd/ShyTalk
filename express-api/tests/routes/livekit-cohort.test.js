@@ -115,7 +115,6 @@ const { mintRealUser, clearAuthCaches } = require('../helpers/real-auth');
 const livekitRouter = require('../../src/routes/livekit');
 
 const ROOMS = 'rooms';
-const USERS = 'users';
 const SEG_EVENTS = 'segregationEvents';
 const LIVEKIT_SURFACE = '/api/livekit/token';
 
@@ -155,7 +154,14 @@ async function pollSegregationEvent(sourceUniqueId, { timeoutMs = 4000, interval
   return snap.empty ? [] : snap.docs.map((d) => d.data());
 }
 
-/** Assert NO audit row exists for this source (used on allow/admin-bypass paths). */
+/**
+ * Assert NO audit row exists for this source (used on the allow / admin-bypass
+ * paths). Race-safe WITHOUT a wait: the allow branch in the route NEVER calls
+ * writeSegregationEvent (the cross-cohort branch is not entered), so there is no
+ * fire-and-forget write in flight to lose to. SEG_EVENTS is also cleared in
+ * beforeEach and the query is scoped to this test's unique sourceUniqueId, so a
+ * late write from a prior test (different id) cannot pollute this assertion.
+ */
 async function expectNoSegregationEvent(sourceUniqueId) {
   const snap = await db
     .collection(SEG_EVENTS)
@@ -168,17 +174,21 @@ beforeAll(async () => {
   await assertEmulatorReachable();
 });
 
+// Cross-file isolation: the emulator is a SINGLE shared backend across Jest
+// workers (maxWorkers: 2), so a whole-collection clear of ROOMS/USERS here would
+// race livekit.test.js (which also seeds those) and wipe its data mid-test. Both
+// files seed globally-unique, deterministic IDs via `set()` (idempotent re-runs;
+// disjoint ranges: this file 60000xxx, livekit.test.js 5xxxx/9xxxx/7xxxx), so no
+// ROOMS/USERS clear is needed. SEG_EVENTS is the exception: the route writes it
+// via `.add()` (non-idempotent — accumulates across runs) and ONLY this file
+// touches it, so clearing it here races nothing and keeps per-run counts exact.
 beforeEach(async () => {
   setRegionEnv();
   clearAuthCaches();
-  await clearCollection(db, ROOMS);
-  await clearCollection(db, USERS);
   await clearCollection(db, SEG_EVENTS);
 });
 
 afterAll(async () => {
-  await clearCollection(db, ROOMS);
-  await clearCollection(db, USERS);
   await clearCollection(db, SEG_EVENTS);
   for (const k of LK_ENV_KEYS) {
     if (PRIOR_LK_ENV[k] === undefined) delete process.env[k];

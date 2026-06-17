@@ -89,12 +89,11 @@ const request = require('supertest');
 const { TokenVerifier } = require('livekit-server-sdk');
 const { db } = require('../../src/utils/firebase');
 const { authMiddleware } = require('../../src/middleware/auth');
-const { assertEmulatorReachable, clearCollection } = require('../helpers/firebase-emulator');
+const { assertEmulatorReachable } = require('../helpers/firebase-emulator');
 const { mintRealUser, mintTokenWithoutUserDoc, clearAuthCaches } = require('../helpers/real-auth');
 const livekitRouter = require('../../src/routes/livekit');
 
 const ROOMS = 'rooms';
-const USERS = 'users';
 
 /** App with the REAL auth middleware ahead of the router (per-request Bearer drives identity). */
 function createApp() {
@@ -118,16 +117,19 @@ beforeAll(async () => {
   await assertEmulatorReachable();
 });
 
-beforeEach(async () => {
+// Cross-file isolation note: the Firebase emulator is a SINGLE shared backend
+// across all Jest workers (jest.config.js maxWorkers: 2), so a whole-collection
+// clear here would race a concurrently-running sibling that also seeds rooms/users
+// (e.g. livekit-cohort.test.js) and wipe its data mid-test. Instead every test
+// seeds globally-unique, deterministic IDs via `set()` (idempotent — re-runs
+// overwrite the same doc; bounded; no cross-talk), so NO whole-collection clear
+// is needed. This route never writes Firestore (no `.add()` accumulation).
+beforeEach(() => {
   setRegionEnv();
   clearAuthCaches();
-  await clearCollection(db, ROOMS);
-  await clearCollection(db, USERS);
 });
 
-afterAll(async () => {
-  await clearCollection(db, ROOMS);
-  await clearCollection(db, USERS);
+afterAll(() => {
   for (const k of LK_ENV_KEYS) {
     if (PRIOR_LK_ENV[k] === undefined) delete process.env[k];
     else process.env[k] = PRIOR_LK_ENV[k];
@@ -402,6 +404,24 @@ describe('POST /api/livekit/token (real services + real auth)', () => {
     expect(res.body.error).toBe('Voice service not available');
   });
 
+  test('503 when only the api secret is missing (symmetric to the key branch)', async () => {
+    // The route guard is `!apiKey || !apiSecret`; the key-missing branch is
+    // covered above, this pins the secret-missing branch (key present, secret
+    // absent for both region + fallback) so neither half of the `||` regresses.
+    delete process.env.LIVEKIT_SECRET_ASIA;
+    delete process.env.LIVEKIT_API_SECRET; // keys remain set
+    await seedRoom('room-adult-11', { cohort: 'adult' });
+    const user = await mintRealUser({ uniqueId: 50000015, cohort: 'adult' });
+    const app = createApp();
+
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .set(user.headers)
+      .send({ roomName: 'room-adult-11' })
+      .expect(503);
+    expect(res.body.error).toBe('Voice service not available');
+  });
+
   // ─── Security: secret never leaves the server ──────────────────
 
   test('never leaks the signing secret in the response body or token payload', async () => {
@@ -427,6 +447,12 @@ describe('POST /api/livekit/token (real services + real auth)', () => {
   // ─── Performance ───────────────────────────────────────────────
 
   test('mints within the local-emulator budget', async () => {
+    // Coarse UPPER bound (matches the SHY-0125 AC): real auth adds verifyIdToken
+    // + ~3 Firestore round-trips (uniqueId resolve, suspension read, room read)
+    // before the local JWT mint, so this guards against a hang / gross regression
+    // (e.g. an N+1 or an accidental real network call), NOT a single extra
+    // round-trip. A sub-500ms bound flakes under CI emulator load; 2000ms is the
+    // CI-safe ceiling agreed in the story.
     await seedRoom('room-adult-10', { cohort: 'adult' });
     const user = await mintRealUser({ uniqueId: 50000014, cohort: 'adult' });
     const app = createApp();

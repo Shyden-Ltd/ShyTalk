@@ -140,6 +140,20 @@ describe('getRegionConfig — per-region credential resolution value matrix', ()
     });
   });
 
+  test('eu: region url falls back per-field independently (url region-set, key+secret fallback)', () => {
+    // Mirror of the asia per-field test for the EU branch — identical ||-per-field
+    // logic, so a refactor that breaks EU's chaining (e.g. all-or-nothing fallback)
+    // would otherwise slip through.
+    process.env.LIVEKIT_URL_EU = 'wss://eu.example';
+    process.env.LIVEKIT_API_KEY = 'fallback-key';
+    process.env.LIVEKIT_API_SECRET = 'fallback-secret';
+    expect(getRegionConfig('eu')).toEqual({
+      url: 'wss://eu.example',
+      apiKey: 'fallback-key',
+      apiSecret: 'fallback-secret',
+    });
+  });
+
   test('unknown region resolves via the asia/global branch (only "eu" is special-cased)', () => {
     setAll();
     // getRegionConfig special-cases only 'eu'; everything else uses the asia path.
