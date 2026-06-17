@@ -5,7 +5,7 @@ owner: claude
 created: 2026-06-13
 priority: P1
 title: No stubs/fakes/gaps — fully-operational, real-only test apparatus (every framework)
-child_shys: [SHY-0092, SHY-0093, SHY-0094, SHY-0095, SHY-0096, SHY-0101]
+child_shys: [SHY-0092, SHY-0093, SHY-0094, SHY-0095, SHY-0096, SHY-0101, SHY-0112, SHY-0113, SHY-0114, SHY-0115, SHY-0116, SHY-0117, SHY-0118, SHY-0119, SHY-0120, SHY-0121, SHY-0122, SHY-0123, SHY-0124]
 ---
 
 # EPIC-0003: No stubs/fakes/gaps — fully-operational, real-only test apparatus (every framework)
@@ -96,16 +96,22 @@ Delivered as phases — each phase is one or more 1-SHY-1-PR vertical slices; th
 - **SHY-0096** — `androidPersonaSignIn` real signed-out reset via `androidSignOut` + warning-ack behaviour (Phase 0, **THE LINCHPIN**). Status: In Review (merged #1418, released_in v0.97.15).
 - **SHY-0101** — j11 real-Android journey-apparatus completion (launch-gates · dev persona-password bake · acknowledge-scenario robustness · message/conversation/appeal driver actions) + retire `@known-failure-SHY-0097` (Phase-0 completion). Status: Draft.
 
-**Planned (filed fully-refined per [[feedback-no-skeleton-stories-fully-refined]] as each is started, in phase order — NOT pre-stubbed):**
-- **Phase 1** — driver-test `execSync`-mock removal (real-captured fixtures + gauntlet).
-- **Phase 2** — one SHY per androidTest domain group (≈6 stories).
-- **Phase 3** — emulator-in-CI infra SHY + one SHY per express-api route/domain group (≈8–12 stories).
-- **Phase 4** — Kotlin-unit real-collaborator SHYs (grouped by module).
-- **Phase 5** — Playwright real-API SHY.
-- **Phase 6** — iOS real-double SHY.
-- **Phase X** — anti-regression lint-guard SHY.
+**Filed 2026-06-17 — "no more faking" feature-area children (the prioritised execution order above, each fully-refined per [[feedback-no-skeleton-stories-fully-refined]]):**
+- **SHY-0112** (P0) — Keystone: codify "doubles only in unit tests" in `CLAUDE.md` + make `check-no-new-stubs.js` policy-aware + catch the blind-spot patterns + define the unit↔integration boundary. **Lands FIRST.** Status: Draft.
+- **SHY-0113** (P0) — Rooms / Voice / LiveKit → real (surfaces + pivot-fixes the room-creation blocker; ties SHY-0102/0103). Status: Draft.
+- **SHY-0114** (P0) — Auth / Sign-In → real. Status: Draft.
+- **SHY-0115** (P1) — Android instrumented real-emulator harness (replaces the 22 `Fake*.kt` Koin bindings; the Android keystone). Status: Draft.
+- **SHY-0116** (P1) — Moderation / Suspension / Warning → real (SHY-0101 j11 leads; re-authors the reverted fake test REAL). Status: Draft.
+- **SHY-0117** (P1) — Messaging / Conversations → real. Status: Draft.
+- **SHY-0118** (P1) — Economy / Wallet / Gifting → real. Status: Draft.
+- **SHY-0119** (P1) — Starting-screens / cohort-gated → real. Status: Draft.
+- **SHY-0120** (P1) — Remaining crons → real (continues SHY-0109/0110). Status: Draft.
+- **SHY-0121** (P2) — Suggestions / Roadmap → real. Status: Draft.
+- **SHY-0122** (P2) — Admin portal → real. Status: Draft.
+- **SHY-0123** (P2) — Utils-integration → real (firebase/email/fcm/r2/alertManager/data-export). Status: Draft.
+- **SHY-0124** (P2) — Playwright integration e2e → real backend (6 migrate, 2 unit kept). Status: Draft.
 
-> `child_shys` frontmatter lists only filed-and-existing SHYs (validator cross-checks existence in `--scan`); planned ones are promoted into it as their files are created.
+> These 13 are the **feature-area tracking children**; each XL/L area sub-splits into 1-SHY-1-PR work-slices filed as-started at pickup ([[feedback-agile-user-stories]]). The earlier by-phase plan (Phase 1–6+X) is retained as the *framework* view in `## Scope`; this feature-area set is the *prioritised execution order*. `child_shys` frontmatter lists only filed-and-existing SHYs (validator cross-checks existence in `--scan`); per-PR sub-slices are promoted into it as their files are created.
 
 ## Operator decisions (running)
 
