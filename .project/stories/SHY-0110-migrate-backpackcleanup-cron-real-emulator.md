@@ -1,6 +1,6 @@
 ---
 id: SHY-0110
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-06-17
 priority: P1
@@ -8,7 +8,7 @@ effort: S
 type: refactor
 roadmap_ids: []
 epic: EPIC-0003
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1447
 mvp: false
 ---
 
@@ -115,3 +115,4 @@ The current test asserts only that the mocked `db`/`batch`/`log` were *called* i
 
 ## Notes (running log)
 - **2026-06-17 ~00:10 BST — created In Progress.** First follow-on Phase-3 migration after the SHY-0109 keystone. Architect skipped (small, low-risk test refactor reusing the proven pattern, [[feedback-rate-limit-slowdown-strategies]]). Chosen because backpackCleanup is the simplest clean (firebase+log only) cron — single `collectionGroup` query + batch delete. Establishes the `collectionGroup` + de-mock-logger patterns. Probe confirmed no composite index needed in the emulator.
+- **2026-06-17 ~00:30 BST — local green + reviewer clean → In Review (PR #1447).** RED→GREEN: rewrote the cron test (5 real-state tests) + added `clearCollectionGroup` helper (+ tests). Full canonical `npm test` = 333 suites / 12,328 tests, 0 failed. eslint/prettier clean. code-reviewer: 0 Critical, 2 Important (group-variant pagination test, boundary comment) — both applied. Pre-push SonarCloud quality gate passed. Flipped to In Review in the same push so CI runs once on the final commit (concurrency cancels the nascent run). Awaiting CI-green → judgment-merge.
