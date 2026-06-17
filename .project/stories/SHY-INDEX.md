@@ -73,6 +73,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0057](SHY-0057-split-admin-keyboard-mobile-skip.md)        | P2  | XS     | bug      | Split admin-keyboard.spec.ts:61 mobile-viewport skip (keyboard-only vs general)                  | 📝 Draft       | G048             | —   |
 | [SHY-0058](SHY-0058-fix-dev-sanity-api-skip.md)                 | P2  | XS     | bug      | Convert dev-sanity.spec.ts:66-72 API-not-running skip to CI-aware assertion                      | 📝 Draft       | G050             | —   |
 | [SHY-0059](SHY-0059-fix-admin-users-moderation-skip.md)         | P2  | XS     | bug      | Audit admin-users-moderation.spec.ts:149 conditional skip + seed required data                   | 📝 Draft       | G051             | —   |
+| [SHY-0111](SHY-0111-suspension-countdown-layout-shift.md)       | P2  | S      | bug      | Suspension-screen countdown clock jitters horizontally each tick (layout instability)            | 📝 Draft       | —                | —   |
 
 ## Done
 
