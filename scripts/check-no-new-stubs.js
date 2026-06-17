@@ -32,6 +32,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const BASELINE_REL = 'scripts/no-stubs-baseline.json';
+const SCRIPT_REL = 'scripts/check-no-new-stubs.js';
 
 // The guard's own source + its test contain these patterns as data /
 // detection regexes — exclude them so they never self-trip the scan.
@@ -99,6 +100,9 @@ function scanFiles(relPaths, readFile) {
       if (hit[cat.key] && cat.applies(rel)) offenders[cat.key].push(rel);
     }
   }
+  // Dedup (belt-and-suspenders against a duplicate path in relPaths) + sort
+  // for deterministic output. git ls-files never repeats a path, but the
+  // signature accepts any list, so we don't rely on the caller's uniqueness.
   for (const cat of CATEGORIES) offenders[cat.key] = [...new Set(offenders[cat.key])].sort();
   return offenders;
 }
@@ -130,7 +134,7 @@ function loadBaseline({ cwd } = {}) {
   try {
     raw = fs.readFileSync(file, 'utf8');
   } catch {
-    throw new Error(`Baseline not found at ${BASELINE_REL} — run \`node ${BASELINE_REL.replace('no-stubs-baseline.json', 'check-no-new-stubs.js')} --generate-baseline\`.`);
+    throw new Error(`Baseline not found at ${BASELINE_REL} — run \`node ${SCRIPT_REL} --generate-baseline\`.`);
   }
   let parsed;
   try {
@@ -247,8 +251,11 @@ module.exports = {
   isClean,
   loadBaseline,
   generateBaseline,
+  reportAndExit,
+  main,
   CATEGORIES,
   BASELINE_REL,
+  SCRIPT_REL,
 };
 
 if (require.main === module) {

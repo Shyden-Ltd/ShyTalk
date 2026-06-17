@@ -66,6 +66,15 @@ if ! bash scripts/check-release-trigger.sh; then
   exit 1
 fi
 
+# Node-major guard (SHY-0069): abort fast, unconditionally on every push,
+# if the local node major drifted from .nvmrc. brew's floating `node`
+# formula upgraded to 26.3.0 on 2026-06-09 and wedged every full Jest run.
+# Runs FIRST — before the ratchet (the hook's first `node` call) and the
+# HAS_CODE path filter — so even a config-only push (e.g. someone editing
+# .nvmrc itself) gets the drift check, and the ratchet runs under a node
+# whose major is already verified.
+bash scripts/check-node-version.sh || exit 1
+
 # SHY-0108 (EPIC-0003 Phase X): the in-process-double debt (jest.mock /
 # Fake*Repository / page.route) may only SHRINK. Fails on any NEW double
 # not in scripts/no-stubs-baseline.json, or a stale baseline entry a
@@ -78,13 +87,6 @@ if ! node scripts/check-no-new-stubs.js; then
   echo "  legitimate migration to shrink the baseline."
   exit 1
 fi
-
-# Node-major guard (SHY-0069): abort fast, unconditionally on every push,
-# if the local node major drifted from .nvmrc. brew's floating `node`
-# formula upgraded to 26.3.0 on 2026-06-09 and wedged every full Jest run.
-# Runs before the HAS_CODE path filter so even a config-only push (e.g.
-# someone editing .nvmrc itself) gets the drift check.
-bash scripts/check-node-version.sh || exit 1
 
 # Block any file >5MB from being added in this push's diff vs origin/main.
 # See SHY-0035 (.project/audit/repo-size-audit-2026-06-08.md). Pre-existing
@@ -165,13 +167,11 @@ echo "  → Kotlin JVM tests..."
 
 # Run SonarCloud analysis with quality gate wait
 echo "  → SonarCloud analysis..."
-./gradlew sonar \
+if ! ./gradlew sonar \
   -Dsonar.token="$SONAR_TOKEN" \
   -Dsonar.qualitygate.wait=true \
   -x :app:sonar \
-  --no-configuration-cache
-
-if [ $? -ne 0 ]; then
+  --no-configuration-cache; then
   echo ""
   echo "✗ SonarCloud quality gate FAILED — push blocked"
   echo "  Fix the issues and try again."
@@ -203,13 +203,12 @@ if [ "$HAS_WEB" = "true" ]; then
     # Do NOT use --reporter=line here: it uses ANSI cursor movement that gets
     # swallowed when stdout is captured/piped, producing 0-byte output files.
     # Do NOT pipe to `tail -N`: tail buffers until EOF, hiding live progress.
-    API_BASE_URL=http://localhost:3000 \
-    WEB_BASE_URL=http://localhost:8888 \
-    ADMIN_EMAIL=claude-test@shytalk.dev \
-    ADMIN_PASSWORD=localdev123 \
-    TEST_API_KEY=local-test-key \
-    npx playwright test --project=chromium --reporter=list
-    if [ $? -ne 0 ]; then
+    if ! API_BASE_URL=http://localhost:3000 \
+      WEB_BASE_URL=http://localhost:8888 \
+      ADMIN_EMAIL=claude-test@shytalk.dev \
+      ADMIN_PASSWORD=localdev123 \
+      TEST_API_KEY=local-test-key \
+      npx playwright test --project=chromium --reporter=list; then
       echo ""
       echo "✗ Playwright chromium tests FAILED — push blocked"
       echo "  ALL failing tests must be fixed (including pre-existing failures)."
