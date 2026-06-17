@@ -363,6 +363,12 @@ describe('SHY-0108 main() — CLI exit-code contract (real spawned process)', ()
     expect(r.stdout).toContain('Bans (ratchet');
   });
 
+  test('-h shorthand → exit 0 + usage banner', () => {
+    const r = runCli(['-h'], REPO_ROOT);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('Bans (ratchet');
+  });
+
   test('clean repo (baseline matches offenders) → exit 0', () => {
     const repo = makeTempRepo({
       'a.test.js': JEST_MOCK,
@@ -394,6 +400,23 @@ describe('SHY-0108 main() — CLI exit-code contract (real spawned process)', ()
       const r = runCli([], repo);
       expect(r.status).toBe(1);
       expect(r.stderr).toContain('ratchet violated');
+    } finally {
+      fs.rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  test('a STALE baseline entry (no longer offends) → exit 1 at the process boundary', () => {
+    const repo = makeTempRepo({
+      'scripts/no-stubs-baseline.json': `${JSON.stringify(
+        { jestMock: ['gone.test.js'], fakeRepository: [], pageRoute: [] },
+        null,
+        2,
+      )}\n`,
+    });
+    try {
+      const r = runCli([], repo);
+      expect(r.status).toBe(1);
+      expect(r.stderr).toContain('STALE baseline entry');
     } finally {
       fs.rmSync(repo, { recursive: true, force: true });
     }
