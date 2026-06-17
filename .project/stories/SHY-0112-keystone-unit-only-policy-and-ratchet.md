@@ -1,6 +1,6 @@
 ---
 id: SHY-0112
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-06-17
 priority: P0
@@ -8,7 +8,7 @@ effort: M
 type: infra
 roadmap_ids: []
 epic: EPIC-0003
-pr:
+pr: 1467
 mvp: false
 ---
 
@@ -125,3 +125,5 @@ Until those two are fixed, "no more faking" is unenforced and the boundary is un
 ## Notes (running log)
 - **2026-06-17 — created Draft (the EPIC-0003 keystone).** First of the prioritised "no more faking" child SHYs; lands before any migration so new fakes cannot accrue. Grounded in the real ratchet structure (`CATEGORIES`/baseline/`--generate-baseline`, exit 0/1/2) on `story/SHY-0108-no-new-stubs-ratchet-guard@2aeafb48f15` and the existing `CLAUDE.md` §No-Stubs. Boundary convention chosen as `tests/unit/**` + `*.unit.test.js` (greppable, ratchet-friendly); finalised at implementation.
 - **2026-06-17 ~12:40 BST — PICKED UP (Draft→In Progress).** SHY-0108 landed first (PR #1465, commit `06d005aaea2` on main) so the dependency is satisfied — this SHY *extends* the merged ratchet (not absorbs it). Branch `story/SHY-0112-keystone-unit-only-policy-and-ratchet` off `06d005aaea2`. **Pickup-fitness re-validation (per [[feedback-pickup-fitness-review-every-story]]):** the ratchet drifted exactly as the SHY anticipated — `EMPTY()`/baseline shape now `{jestMock:196, fakeRepository:34, pageRoute:8}`; `main`/`reportAndExit`/`SCRIPT_REL` exported; guard test now 37 tests. **Ground-truth blind-spot survey (PCRE — `git grep -E` POSIX-ERE silently drops `\b`/`\s`, must use `-P`):** `jest.fn(`=228 files · `make*Fake*`=5 · `mockResolved|Rejected|Return|Implementation`=204 · Kotlin `mockk`=49 (147 `mockk<`/72 `mockk(`; 0 `Mockito.`/`@Mock`) · iOS doubles=**3 exactly** (`StubViewController`, `MockStartingScreenService`, `MockURLProtocol`, all in `iosApp/iosAppTests/`). **Boundary refined from the handoff shorthand** after enumerating real KMP test source sets: non-instrumented Kotlin = `commonTest`/`jvmTest`/`androidHostTest`/`src/test` (host JVM, exempt); instrumented = `androidTest`/`androidInstrumentedTest`/`androidUiTest` (counted). **Computed post-policy baseline floor:** jestMock 196 · fakeRepository **25** (was 34; 9 in `commonTest`/`jvmTest`/`src/test` exempted) · pageRoute 8 · jestFn 228 · handRolledFake 5 · mockResolved 204 · kotlinMock **0** (all 49 in host/unit source sets — forward-looking guard only) · iosDouble 3. The one pre-existing JS unit-dir file `express-api/tests/unit/seasonal-events.test.js` carries no banned pattern (no baseline impact).
+- **2026-06-17 ~14:20 BST — SHIPPED (In Progress→In Review).** Merged via **PR #1467** (squash → `main 25e115777fc`); branch deleted. Guard suite **100 tests** green (from 37); full canonical `npm test` green (334 suites / 12,429 tests — run verbatim, no `NODE_ENV` override per [[feedback-express-suite-no-node-env-override]]); `code-reviewer` 2 passes, all 11 findings (all coverage-gaps, zero product bugs) closed. All required CI checks passed by name (Detect Changes / Analyze JavaScript / PR Gate / Test Backend) + SonarCloud + Lint + Integration; device cells correctly skipped (no-device surface → gauntlet-exempt per SHY-0109/0110 precedent), judgment-merged. Ratchet is **live on main** (`node scripts/check-no-new-stubs.js` exit 0). Stays In Review until the next `release.yml` cut → then Done (alongside SHY-0108/0109/0110/0104).
+- **2026-06-17 ~15:20 BST — board close-out.** Flipped frontmatter `status`→In Review + `pr: 1467` and the SHY-INDEX row (🚧→👀, PR #1467) via doc-only PR, restoring WIP=1 before SHY-0113 (first real EPIC-0003 migration) is picked up.
