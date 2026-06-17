@@ -1,500 +1,602 @@
 /**
- * Tests for the LiveKit token-mint cohort gate (UK OSA #17 PR 7).
+ * POST /api/livekit/token — cohort gate, REAL-services integration test.
  *
- * The `/api/livekit/token` route is the only Express choke-point
- * between a client and a LiveKit room — rooms are written
- * direct-to-Firestore, so the rules layer carries the read/write
- * gates, but the LiveKit grant only happens here. Without this
- * gate, a cross-cohort caller who somehow learns a roomId (off-band,
- * leak, or pre-PR-3 cached id) could obtain a participant grant and
- * speak inside a room of the wrong cohort.
+ * SHY-0125 (EPIC-0003 · SHY-0113 Rooms slice 1): migrated off ALL in-process
+ * doubles. NO jest.mock of firebase / livekit-server-sdk / livekit-region / log,
+ * and NO faked req.auth — the REAL auth middleware is in the chain and the cohort
+ * claim rides on a REAL Firebase ID token minted via the Auth emulator.
  *
- * Contract pinned by these tests:
- *   1. Same-cohort caller → 200 + token (control)
- *   2. Cross-cohort caller → 404 with body `{ error: 'Not found' }`
- *      (byte-identical to "room missing" — existence-hiding parity
- *      with `requireSameCohort`).
- *   3. Admin caller → 200 even cross-cohort (moderation needs entry).
- *   4. Room doc missing → 404 with the same body. No leak between
- *      "wrong cohort" and "no such room".
- *   5. Room doc missing `cohort` field → defaults to 'minor'
- *      (fail-closed; matches `cohortFromClaim` and the rules helper).
- *   6. Cross-cohort attempt writes a `segregationEvents` audit row
- *      with `action: 'blocked'` and `surface` set to the LiveKit
- *      route — same schema as the user-to-user gate's audit, so
- *      moderators can aggregate across surfaces.
- *   7. Audit-write failure does NOT leak via the 404 response.
- *   8. Self-targeting check is irrelevant here (LiveKit targets a
- *      room, not a user); the room-cohort comparison stands.
+ * What the LiveKit token mint enforces (UK OSA #17 PR 7): the `/api/livekit/token`
+ * route is the only Express choke-point between a client and a LiveKit room — rooms
+ * are written direct-to-Firestore so the rules layer carries the read/write gates,
+ * but the participant GRANT only happens here. A cross-cohort caller who somehow
+ * learns a roomId could otherwise obtain a grant and speak in a wrong-cohort room.
+ *
+ * Contract pinned (all proven against real services here):
+ *   1. Same-cohort caller → 200 + a token the cohort member can verify (control).
+ *   2. Cross-cohort caller → 404 `{ error: 'Not found' }`, byte-identical to the
+ *      room-missing 404 (existence-hiding parity with `requireSameCohort`).
+ *   3. Admin caller → 200 even cross-cohort (moderation needs entry); NO audit row.
+ *   4. Room missing → 404, same body. No audit row (gate not fired).
+ *   5. Fail-closed defaults: room with no `cohort` → minor; missing/invalid caller
+ *      claim → minor; `cohortOverride` (allow-listed) wins over `cohort`.
+ *   6. Cross-cohort attempt writes a real `segregationEvents` row with the exact
+ *      value shape (source/target cohorts, targetRoomId, surface, action, ts).
+ *   7. The cohort gate fires BEFORE the credentials check (a mis-configured region
+ *      must not leak room existence via a 503 to a cross-cohort caller).
+ *   8. Defence-in-depth: the minted JWT's `metadata` carries the ROOM cohort.
+ *
+ * COHORT (adult/minor — age segregation) ≠ REGION (asia/eu — LiveKit routing):
+ * orthogonal axes. The region matrix lives in livekit.test.js (signature proof) +
+ * the livekit-region unit test (value matrix). This file sets region creds only so
+ * the same-cohort/admin mints succeed (else 503), and verifies with the asia secret.
+ *
+ * NODE_ENV='local' is set BEFORE requiring src/utils/firebase so the Admin SDK +
+ * Auth emulator target localhost. PER-FILE opt-in only — never prepend NODE_ENV=local
+ * to the canonical `npm test` run (feedback-express-suite-no-node-env-override).
+ *
+ * AC → test map (SHY-0125 cohort slice):
+ *   Happy / same-cohort       -> "200 + verifiable token … both adult", "… both minor"
+ *   Cross-cohort deny + audit -> "404 (opaque) when adult caller targets a minor room",
+ *                                "404 (opaque) when minor caller targets an adult room",
+ *                                "writes a real segregationEvents row with the full value shape"
+ *   Existence-hiding          -> "cross-cohort 404 body is byte-identical to room-missing 404"
+ *   Admin bypass              -> "admin caller bypasses the gate (200) and writes no audit row",
+ *                                "admin-bypass token metadata follows the ROOM cohort"
+ *   Fail-closed (value matrix)-> "room without a cohort field defaults to minor — adult blocked",
+ *                                "… minor allowed", "missing cohort claim → minor (blocked)",
+ *                                "invalid cohort claim → minor (blocked)",
+ *                                "cohortOverride:minor wins (adult blocked)",
+ *                                "cohortOverride:adult wins (adult allowed)"
+ *   Precedence / ordering     -> "roomName-missing 400 wins (no audit, no Firestore read)",
+ *                                "malformed roomName → opaque 404 before the gate (no audit)",
+ *                                "cohort gate fires BEFORE the credentials check (404 not 503)"
+ *   Defence-in-depth metadata -> "JWT metadata carries the room cohort (adult / minor)",
+ *                                "JWT metadata is a JSON string parsing to { cohort }",
+ *                                "minted token carries BOTH cohort metadata AND the room grant",
+ *                                "cross-cohort denial returns no token"
+ *
+ * NOTE (policy — un-inducible errors, escalate-not-mock): three old tests forced a
+ * failure with a double — `audit-write failure does NOT leak`, `audit failure logs
+ * the error`, and `Firestore lookup → 500`. Against the real emulator a Firestore
+ * `add`/`get` cannot be made to reject deterministically without re-introducing a
+ * mock, and the dev logger is a no-op counter (nothing to assert). The behavioural
+ * guarantee they targeted — a cross-cohort caller always gets the SAME opaque 404
+ * regardless of the fire-and-forget audit outcome — is structural (the audit `.catch`
+ * never touches the response) and is covered by the opaque-404 + audit-row tests
+ * below. The faked-failure cases are dropped per "impossible-to-induce → escalate,
+ * never silent-mock" (same call as livekit.test.js's catch-all 500).
  */
+
+const PRIOR_NODE_ENV = process.env.NODE_ENV;
+process.env.NODE_ENV = 'local';
+
+// Deterministic real LiveKit creds (HS256 needs ≥32-char secrets). The mints
+// here use the default (asia) region; tokens are verified with the asia secret.
+const ASIA_KEY = 'lk-asia-key';
+const ASIA_SECRET = 'asia-secret-0000000000000000000000000000';
+const EU_KEY = 'lk-eu-key';
+const EU_SECRET = 'eu-secret-000000000000000000000000000000';
+const FALLBACK_KEY = 'lk-fallback-key';
+const FALLBACK_SECRET = 'fallback-secret-00000000000000000000000';
+
+const LK_ENV_KEYS = [
+  'LIVEKIT_API_KEY',
+  'LIVEKIT_API_SECRET',
+  'LIVEKIT_URL',
+  'LIVEKIT_KEY_ASIA',
+  'LIVEKIT_SECRET_ASIA',
+  'LIVEKIT_URL_ASIA',
+  'LIVEKIT_KEY_EU',
+  'LIVEKIT_SECRET_EU',
+  'LIVEKIT_URL_EU',
+];
+const PRIOR_LK_ENV = Object.fromEntries(LK_ENV_KEYS.map((k) => [k, process.env[k]]));
+
+function setRegionEnv() {
+  process.env.LIVEKIT_API_KEY = FALLBACK_KEY;
+  process.env.LIVEKIT_API_SECRET = FALLBACK_SECRET;
+  process.env.LIVEKIT_URL = 'wss://fallback.livekit.test';
+  process.env.LIVEKIT_KEY_ASIA = ASIA_KEY;
+  process.env.LIVEKIT_SECRET_ASIA = ASIA_SECRET;
+  process.env.LIVEKIT_URL_ASIA = 'wss://asia.livekit.test';
+  process.env.LIVEKIT_KEY_EU = EU_KEY;
+  process.env.LIVEKIT_SECRET_EU = EU_SECRET;
+  process.env.LIVEKIT_URL_EU = 'wss://eu.livekit.test';
+}
 
 const express = require('express');
 const request = require('supertest');
+const { TokenVerifier } = require('livekit-server-sdk');
+const { db } = require('../../src/utils/firebase');
+const { authMiddleware } = require('../../src/middleware/auth');
+const { assertEmulatorReachable, clearCollection } = require('../helpers/firebase-emulator');
+const { mintRealUser, clearAuthCaches } = require('../helpers/real-auth');
+const livekitRouter = require('../../src/routes/livekit');
 
-// ─── Firebase + log mocks ────────────────────────────────────────
+const ROOMS = 'rooms';
+const USERS = 'users';
+const SEG_EVENTS = 'segregationEvents';
+const LIVEKIT_SURFACE = '/api/livekit/token';
 
-const mockRoomGet = jest.fn();
-const mockDoc = jest.fn();
-const mockAdd = jest.fn();
-const mockCollection = jest.fn();
-
-jest.mock('../../src/utils/firebase', () => ({
-  db: {
-    doc: (...args) => mockDoc(...args),
-    collection: (...args) => mockCollection(...args),
-  },
-  admin: { firestore: () => ({}) },
-}));
-
-jest.mock('../../src/utils/log', () => ({
-  debug: jest.fn(),
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-}));
-
-// ─── LiveKit SDK mock ────────────────────────────────────────────
-
-const mockToJwt = jest.fn().mockResolvedValue('mock-jwt-token');
-const mockAddGrant = jest.fn();
-// Capture each constructed AccessToken instance so tests can introspect
-// the property assignments the route handler makes on it (metadata, etc.)
-// — needed for the UK OSA #17 PR 7 metadata-cohort claim pin.
-const mockAccessTokenInstances = [];
-
-jest.mock('livekit-server-sdk', () => ({
-  AccessToken: jest.fn().mockImplementation(() => {
-    const instance = {
-      addGrant: mockAddGrant,
-      toJwt: mockToJwt,
-      // metadata starts unset; the handler should explicitly assign it.
-      // Default `null` distinguishes "handler forgot to set it" (null,
-      // visible in assertions) from "handler set it to undefined"
-      // (which would also pass a `not.toBeDefined` but for the wrong
-      // reason). Pin tests can therefore detect either failure mode.
-      metadata: null,
-    };
-    mockAccessTokenInstances.push(instance);
-    return instance;
-  }),
-}));
-
-// ─── Region routing mock ─────────────────────────────────────────
-
-jest.mock('../../src/utils/livekit-region', () => ({
-  getRegion: jest.fn().mockReturnValue('asia'),
-  getRegionConfig: jest.fn().mockReturnValue({
-    url: 'wss://livekit.test.com',
-    apiKey: 'test-key',
-    apiSecret: 'test-secret',
-  }),
-}));
-
-const log = require('../../src/utils/log');
-const { AccessToken } = require('livekit-server-sdk');
-
-// ─── Helpers ─────────────────────────────────────────────────────
-
-function withRoomDoc(roomData) {
-  mockDoc.mockImplementation((path) => {
-    if (path === `rooms/${roomData?._roomId ?? 'test-room'}`) {
-      return { get: mockRoomGet };
-    }
-    return { get: jest.fn().mockResolvedValue({ exists: false }) };
-  });
-  mockRoomGet.mockResolvedValue({
-    exists: roomData !== null && roomData !== undefined,
-    data: () => roomData,
-  });
-}
-
-// `cohort: undefined` triggers the destructuring default, which would
-// shadow the test intent ("no claim"). Use a sentinel to distinguish
-// "caller omitted the option" from "caller explicitly set null".
-const COHORT_UNSET = Symbol('cohort-unset');
-
-function createApp({ uniqueId = 12345, cohort = COHORT_UNSET, admin = false } = {}) {
-  const livekitRouter = require('../../src/routes/livekit');
+/** App with the REAL auth middleware ahead of the router. */
+function createApp() {
   const app = express();
   app.use(express.json());
-  app.use((req, _res, next) => {
-    const token = { admin };
-    if (cohort !== COHORT_UNSET && cohort !== null) {
-      token.cohort = cohort;
-    }
-    req.auth = {
-      uid: 'firebase-uid',
-      uniqueId,
-      token,
-    };
-    next();
-  });
+  app.use('/api', authMiddleware);
   app.use('/api', livekitRouter);
   return app;
 }
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  mockAdd.mockReset();
-  mockAdd.mockResolvedValue({ id: 'evt_abc' });
-  mockCollection.mockReturnValue({ add: mockAdd });
-  mockToJwt.mockResolvedValue('mock-jwt-token');
-  // CI test-execution-order can pollute the livekit-region mock:
-  // some earlier test file may register a clobbering mockImplementation
-  // on `getRegionConfig` (e.g. for a 503-path-coverage test). When this
-  // file runs after such a test, `getRegionConfig()` returns the
-  // polluted value (often undefined or {}), triggering the 503
-  // "Voice service not available" branch and breaking every test
-  // that expects a 200. Explicitly restore the mockReturnValue here
-  // so this file's tests are deterministic regardless of execution
-  // order. Surfaced as flake on PR #875's metadata.cohort tests
-  // (CI run 26666675170 + 26665942317, 2026-05-29).
-  const livekitRegion = require('../../src/utils/livekit-region');
-  livekitRegion.getRegion.mockReturnValue('asia');
-  livekitRegion.getRegionConfig.mockReturnValue({
-    url: 'wss://livekit.test.com',
-    apiKey: 'test-key',
-    apiSecret: 'test-secret',
-  });
-  // Reset the AccessToken-instance ledger between tests so per-test
-  // assertions on `mockAccessTokenInstances.at(-1)` see only this
-  // test's mint, not a leak from a prior test.
-  mockAccessTokenInstances.length = 0;
+async function seedRoom(roomName, data) {
+  await db.doc(`${ROOMS}/${roomName}`).set(data);
+}
+
+/** Verify a real minted LiveKit token with a key/secret; resolves claims or throws. */
+function verifyWith(token, key, secret) {
+  return new TokenVerifier(key, secret).verify(token);
+}
+
+/**
+ * Poll the real segregationEvents collection until a row for this source lands.
+ * The route's audit write is fire-and-forget (not awaited), so it may post-date
+ * the 404 response. Single-field equality query (always emulator-safe — a 2-field
+ * query would need a composite index); the collection is cleared per-test and
+ * each test uses a unique uniqueId, so at most one row matches.
+ */
+async function pollSegregationEvent(sourceUniqueId, { timeoutMs = 4000, intervalMs = 50 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  const query = db.collection(SEG_EVENTS).where('sourceUniqueId', '==', String(sourceUniqueId));
+  let snap = await query.get();
+  while (snap.empty && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    snap = await query.get();
+  }
+  return snap.empty ? [] : snap.docs.map((d) => d.data());
+}
+
+/** Assert NO audit row exists for this source (used on allow/admin-bypass paths). */
+async function expectNoSegregationEvent(sourceUniqueId) {
+  const snap = await db
+    .collection(SEG_EVENTS)
+    .where('sourceUniqueId', '==', String(sourceUniqueId))
+    .get();
+  expect(snap.empty).toBe(true);
+}
+
+beforeAll(async () => {
+  await assertEmulatorReachable();
 });
 
-// ─── Tests ───────────────────────────────────────────────────────
+beforeEach(async () => {
+  setRegionEnv();
+  clearAuthCaches();
+  await clearCollection(db, ROOMS);
+  await clearCollection(db, USERS);
+  await clearCollection(db, SEG_EVENTS);
+});
 
-describe('POST /api/livekit/token — cohort gate', () => {
-  test('200 + token when caller cohort matches room cohort (adult/adult)', async () => {
-    withRoomDoc({ _roomId: 'test-room', cohort: 'adult' });
+afterAll(async () => {
+  await clearCollection(db, ROOMS);
+  await clearCollection(db, USERS);
+  await clearCollection(db, SEG_EVENTS);
+  for (const k of LK_ENV_KEYS) {
+    if (PRIOR_LK_ENV[k] === undefined) delete process.env[k];
+    else process.env[k] = PRIOR_LK_ENV[k];
+  }
+  if (PRIOR_NODE_ENV === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = PRIOR_NODE_ENV;
+});
 
-    const app = createApp({ cohort: 'adult', uniqueId: 99001 });
+describe('POST /api/livekit/token — cohort gate (real services + real auth)', () => {
+  // ─── Same-cohort allow (control) ───────────────────────────────
+
+  test('200 + verifiable token when caller and room are both adult', async () => {
+    await seedRoom('room-adult', { cohort: 'adult' });
+    const user = await mintRealUser({ uniqueId: 60000001, cohort: 'adult' });
+    const app = createApp();
+
     const res = await request(app)
       .post('/api/livekit/token')
-      .send({ roomName: 'test-room' })
+      .set(user.headers)
+      .send({ roomName: 'room-adult' })
       .expect(200);
 
-    expect(res.body.token).toBe('mock-jwt-token');
-    expect(AccessToken).toHaveBeenCalled();
-    expect(mockAdd).not.toHaveBeenCalled();
+    const claims = await verifyWith(res.body.token, ASIA_KEY, ASIA_SECRET);
+    expect(claims.sub).toBe('60000001');
+    await expectNoSegregationEvent(60000001);
   });
 
-  test('404 + Not found body when caller is adult and room is minor', async () => {
-    withRoomDoc({ _roomId: 'test-room', cohort: 'minor' });
+  test('200 + verifiable token when caller and room are both minor', async () => {
+    await seedRoom('room-minor', { cohort: 'minor' });
+    const user = await mintRealUser({ uniqueId: 60000002, cohort: 'minor' });
+    const app = createApp();
 
-    const app = createApp({ cohort: 'adult', uniqueId: 99001 });
     const res = await request(app)
       .post('/api/livekit/token')
-      .send({ roomName: 'test-room' })
+      .set(user.headers)
+      .send({ roomName: 'room-minor' })
+      .expect(200);
+
+    const claims = await verifyWith(res.body.token, ASIA_KEY, ASIA_SECRET);
+    expect(claims.sub).toBe('60000002');
+    await expectNoSegregationEvent(60000002);
+  });
+
+  // ─── Cross-cohort deny + audit ─────────────────────────────────
+
+  test('404 (opaque) when an adult caller targets a minor room', async () => {
+    await seedRoom('xc-room-1', { cohort: 'minor' });
+    const user = await mintRealUser({ uniqueId: 60000003, cohort: 'adult' });
+    const app = createApp();
+
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .set(user.headers)
+      .send({ roomName: 'xc-room-1' })
       .expect(404);
 
     expect(res.body).toEqual({ error: 'Not found' });
-    expect(AccessToken).not.toHaveBeenCalled();
-    expect(mockAdd).toHaveBeenCalledTimes(1);
-    expect(mockCollection).toHaveBeenCalledWith('segregationEvents');
+    expect(res.body.token).toBeUndefined();
+    const rows = await pollSegregationEvent(60000003);
+    expect(rows).toHaveLength(1);
   });
 
-  test('404 + Not found body when caller is minor and room is adult', async () => {
-    withRoomDoc({ _roomId: 'test-room', cohort: 'adult' });
+  test('404 (opaque) when a minor caller targets an adult room', async () => {
+    await seedRoom('xc-room-2', { cohort: 'adult' });
+    const user = await mintRealUser({ uniqueId: 60000004, cohort: 'minor' });
+    const app = createApp();
 
-    const app = createApp({ cohort: 'minor', uniqueId: 99001 });
     const res = await request(app)
       .post('/api/livekit/token')
-      .send({ roomName: 'test-room' })
+      .set(user.headers)
+      .send({ roomName: 'xc-room-2' })
       .expect(404);
 
     expect(res.body).toEqual({ error: 'Not found' });
-    expect(AccessToken).not.toHaveBeenCalled();
+    const rows = await pollSegregationEvent(60000004);
+    expect(rows).toHaveLength(1);
   });
 
-  test('admin bypass — 200 even cross-cohort', async () => {
-    withRoomDoc({ _roomId: 'test-room', cohort: 'minor' });
+  test('cross-cohort 404 body is byte-identical to the room-missing 404 (existence-hiding)', async () => {
+    await seedRoom('xc-room-3', { cohort: 'minor' });
+    const adult = await mintRealUser({ uniqueId: 60000005, cohort: 'adult' });
+    const app = createApp();
 
-    const app = createApp({ cohort: 'adult', admin: true, uniqueId: 99001 });
-    const res = await request(app)
+    const crossCohort = await request(app)
       .post('/api/livekit/token')
-      .send({ roomName: 'test-room' })
-      .expect(200);
+      .set(adult.headers)
+      .send({ roomName: 'xc-room-3' })
+      .expect(404);
 
-    expect(res.body.token).toBe('mock-jwt-token');
-    expect(mockAdd).not.toHaveBeenCalled();
+    const missingRoom = await request(app)
+      .post('/api/livekit/token')
+      .set(adult.headers)
+      .send({ roomName: 'does-not-exist' })
+      .expect(404);
+
+    // Identical bodies — a probe cannot distinguish "wrong cohort" from "no room".
+    expect(crossCohort.body).toEqual(missingRoom.body);
+    expect(crossCohort.text).toBe(missingRoom.text);
   });
 
-  test('404 + Not found body when room doc does not exist', async () => {
-    mockDoc.mockReturnValue({ get: mockRoomGet });
-    mockRoomGet.mockResolvedValue({ exists: false, data: () => null });
+  test('cross-cohort attempt writes a real segregationEvents row with the full value shape', async () => {
+    await seedRoom('xc-room-4', { cohort: 'minor' });
+    const user = await mintRealUser({ uniqueId: 60000006, cohort: 'adult' });
+    const app = createApp();
 
-    const app = createApp({ cohort: 'adult', uniqueId: 99001 });
+    await request(app)
+      .post('/api/livekit/token')
+      .set(user.headers)
+      .send({ roomName: 'xc-room-4' })
+      .expect(404);
+
+    const rows = await pollSegregationEvent(60000006);
+    expect(rows).toHaveLength(1);
+    const evt = rows[0];
+    expect(evt).toMatchObject({
+      sourceUniqueId: '60000006',
+      sourceCohort: 'adult',
+      targetUniqueId: 'xc-room-4',
+      targetRoomId: 'xc-room-4',
+      targetCohort: 'minor',
+      surface: LIVEKIT_SURFACE,
+      action: 'blocked',
+      requestId: null,
+    });
+    expect(typeof evt.timestamp).toBe('number');
+    expect(evt.timestamp).toBeGreaterThan(0);
+  });
+
+  test('room missing → 404 with no audit row (gate not fired)', async () => {
+    const user = await mintRealUser({ uniqueId: 60000007, cohort: 'adult' });
+    const app = createApp();
+
     const res = await request(app)
       .post('/api/livekit/token')
+      .set(user.headers)
       .send({ roomName: 'ghost-room' })
       .expect(404);
 
     expect(res.body).toEqual({ error: 'Not found' });
-    expect(AccessToken).not.toHaveBeenCalled();
-    // Room-missing branch does NOT write a segregationEvents row —
-    // that branch fires only on a cohort MISMATCH where both sides
-    // exist; a missing room is a regular 404 cause, not a gate hit.
-    expect(mockAdd).not.toHaveBeenCalled();
+    // A missing room is a regular 404 cause, not a gate hit — no audit row.
+    expect(await pollSegregationEvent(60000007, { timeoutMs: 500 })).toHaveLength(0);
   });
 
-  test('room without cohort field defaults to minor (fail-closed)', async () => {
-    // Pre-PR-7 rooms have no cohort field. The default of 'minor' means
-    // an adult-claim caller cannot mint a token for a legacy room until
-    // the migration tags it — surfacing the migration gap rather than
-    // silently allowing through.
-    withRoomDoc({ _roomId: 'legacy-room' /* no cohort */ });
+  // ─── Admin bypass ──────────────────────────────────────────────
 
-    const app = createApp({ cohort: 'adult', uniqueId: 99001 });
+  test('admin caller bypasses the gate (200 cross-cohort) and writes no audit row', async () => {
+    await seedRoom('admin-room', { cohort: 'minor' });
+    const admin = await mintRealUser({ uniqueId: 60000008, cohort: 'adult', admin: true });
+    const app = createApp();
+
     const res = await request(app)
       .post('/api/livekit/token')
-      .send({ roomName: 'legacy-room' })
-      .expect(404);
-
-    expect(res.body).toEqual({ error: 'Not found' });
-
-    // A minor caller on a legacy (no-cohort) room SUCCEEDS — both
-    // resolve to 'minor'. This is the rollout-safety knob: legacy
-    // rooms behave as minor-only until migrated.
-    const minorApp = createApp({ cohort: 'minor', uniqueId: 99002 });
-    await request(minorApp)
-      .post('/api/livekit/token')
-      .send({ roomName: 'legacy-room' })
+      .set(admin.headers)
+      .send({ roomName: 'admin-room' })
       .expect(200);
+
+    expect(typeof res.body.token).toBe('string');
+    await expectNoSegregationEvent(60000008);
   });
 
-  test('audit row captures both cohorts + surface + action + targetRoomId', async () => {
-    withRoomDoc({ _roomId: 'test-room', cohort: 'minor' });
+  test('admin-bypass token metadata follows the ROOM cohort, not the admin caller', async () => {
+    // Admin is adult; room is minor. The metadata stamped on the JWT must be the
+    // ROOM's cohort so any LiveKit-server-side policy treats the connection as
+    // belonging to the room's cohort, not the admin's.
+    await seedRoom('admin-room-2', { cohort: 'minor' });
+    const admin = await mintRealUser({ uniqueId: 60000009, cohort: 'adult', admin: true });
+    const app = createApp();
 
-    const app = createApp({ cohort: 'adult', uniqueId: 99001 });
-    await request(app).post('/api/livekit/token').send({ roomName: 'test-room' }).expect(404);
-
-    expect(mockAdd).toHaveBeenCalledTimes(1);
-    const auditDoc = mockAdd.mock.calls[0][0];
-    expect(auditDoc).toMatchObject({
-      sourceUniqueId: '99001',
-      sourceCohort: 'adult',
-      targetUniqueId: 'test-room',
-      targetRoomId: 'test-room',
-      targetCohort: 'minor',
-      surface: expect.stringContaining('livekit'),
-      action: 'blocked',
-    });
-    expect(typeof auditDoc.timestamp).toBe('number');
-  });
-
-  test('SECURITY: malformed roomName (path-traversal probe) returns opaque 404 — same body as missing-room', async () => {
-    // `r/messages/m` would make db.doc() throw (invalid path-segment
-    // count) which would 500 — letting a probe distinguish path
-    // shapes from "no such room". The pre-Firestore shape check
-    // forces these to the same 404 + Not found body.
-    const app = createApp({ cohort: 'adult', uniqueId: 99001 });
     const res = await request(app)
       .post('/api/livekit/token')
-      .send({ roomName: 'r/messages/m' })
+      .set(admin.headers)
+      .send({ roomName: 'admin-room-2' })
+      .expect(200);
+
+    const claims = await verifyWith(res.body.token, ASIA_KEY, ASIA_SECRET);
+    expect(JSON.parse(claims.metadata)).toEqual({ cohort: 'minor' });
+  });
+
+  // ─── Fail-closed defaults (value matrix) ───────────────────────
+
+  test('room without a cohort field defaults to minor — an adult caller is blocked (404 + audit)', async () => {
+    // Pre-PR-7 rooms have no cohort field; effectiveCohort fails them closed to
+    // 'minor', so an adult cannot mint a token until the room is migration-tagged.
+    await seedRoom('legacy-room-1', { name: 'legacy' /* no cohort */ });
+    const user = await mintRealUser({ uniqueId: 60000010, cohort: 'adult' });
+    const app = createApp();
+
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .set(user.headers)
+      .send({ roomName: 'legacy-room-1' })
       .expect(404);
 
     expect(res.body).toEqual({ error: 'Not found' });
-    expect(mockDoc).not.toHaveBeenCalled(); // Never hits Firestore
+    const rows = await pollSegregationEvent(60000010);
+    expect(rows[0]).toMatchObject({ sourceCohort: 'adult', targetCohort: 'minor' });
   });
 
-  test('SECURITY: roomName with special chars returns opaque 404', async () => {
-    const app = createApp({ cohort: 'adult', uniqueId: 99001 });
-    const tries = ['../etc/passwd', 'room name with spaces', 'room$%^', 'a'.repeat(200)];
-    for (const bad of tries) {
-      const res = await request(app).post('/api/livekit/token').send({ roomName: bad }).expect(404);
-      expect(res.body).toEqual({ error: 'Not found' });
-    }
-    expect(mockDoc).not.toHaveBeenCalled();
-  });
+  test('room without a cohort field defaults to minor — a minor caller is allowed (200)', async () => {
+    await seedRoom('legacy-room-2', { name: 'legacy' /* no cohort */ });
+    const user = await mintRealUser({ uniqueId: 60000011, cohort: 'minor' });
+    const app = createApp();
 
-  test('cohort gate fires BEFORE credentials check (operator-error does not leak room existence)', async () => {
-    // If a future refactor moved the regionConfig validation above
-    // the cohort gate, a cross-cohort caller hitting an unconfigured
-    // region would get 503 (revealing the room exists) instead of
-    // 404. Pin the ordering.
-    withRoomDoc({ _roomId: 'test-room', cohort: 'minor' });
-    const { getRegionConfig } = require('../../src/utils/livekit-region');
-    getRegionConfig.mockReturnValueOnce({
-      url: 'wss://broken.test',
-      apiKey: undefined,
-      apiSecret: undefined,
-    });
-
-    const app = createApp({ cohort: 'adult', uniqueId: 99001 });
     const res = await request(app)
       .post('/api/livekit/token')
-      .send({ roomName: 'test-room' })
+      .set(user.headers)
+      .send({ roomName: 'legacy-room-2' })
+      .expect(200);
+
+    const claims = await verifyWith(res.body.token, ASIA_KEY, ASIA_SECRET);
+    expect(JSON.parse(claims.metadata)).toEqual({ cohort: 'minor' });
+    await expectNoSegregationEvent(60000011);
+  });
+
+  test('a missing cohort claim is treated as minor — blocked from an adult room (404)', async () => {
+    // Real user with a profile but NO cohort claim on the token → fail-closed minor.
+    await seedRoom('adult-room-a', { cohort: 'adult' });
+    const user = await mintRealUser({ uniqueId: 60000012 /* cohort omitted */ });
+    const app = createApp();
+
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .set(user.headers)
+      .send({ roomName: 'adult-room-a' })
       .expect(404);
 
     expect(res.body).toEqual({ error: 'Not found' });
+    const rows = await pollSegregationEvent(60000012);
+    expect(rows[0]).toMatchObject({ sourceCohort: 'minor', targetCohort: 'adult' });
   });
 
-  test('audit-write failure does NOT leak via response', async () => {
-    withRoomDoc({ _roomId: 'test-room', cohort: 'minor' });
-    mockAdd.mockRejectedValueOnce(new Error('firestore unavailable'));
+  test('an invalid cohort claim is treated as minor — blocked from an adult room (404)', async () => {
+    // A bogus claim value (admin-panel typo / tampered token) must NOT be honoured;
+    // cohortFromClaim allow-lists {adult,minor} and fails everything else closed.
+    await seedRoom('adult-room-b', { cohort: 'adult' });
+    const user = await mintRealUser({ uniqueId: 60000013, cohort: 'superadult' });
+    const app = createApp();
 
-    const app = createApp({ cohort: 'adult', uniqueId: 99001 });
     const res = await request(app)
       .post('/api/livekit/token')
-      .send({ roomName: 'test-room' })
+      .set(user.headers)
+      .send({ roomName: 'adult-room-b' })
       .expect(404);
 
     expect(res.body).toEqual({ error: 'Not found' });
-    // log.error fires fire-and-forget for the failed audit; the wait
-    // for it is racy under supertest. We just assert the response
-    // shape is the same as a successful-audit cross-cohort 404.
+    const rows = await pollSegregationEvent(60000013);
+    expect(rows[0]).toMatchObject({ sourceCohort: 'minor', targetCohort: 'adult' });
   });
 
-  test('stripped cohort claim treated as minor (defensive)', async () => {
-    withRoomDoc({ _roomId: 'test-room', cohort: 'adult' });
+  test('cohortOverride wins over cohort — override:minor on a cohort:adult room blocks an adult caller', async () => {
+    await seedRoom('override-room-1', { cohort: 'adult', cohortOverride: 'minor' });
+    const user = await mintRealUser({ uniqueId: 60000014, cohort: 'adult' });
+    const app = createApp();
 
-    // No cohort claim — caller defaults to 'minor'; room is 'adult'.
-    const app = createApp({ cohort: undefined, uniqueId: 99001 });
     const res = await request(app)
       .post('/api/livekit/token')
-      .send({ roomName: 'test-room' })
+      .set(user.headers)
+      .send({ roomName: 'override-room-1' })
       .expect(404);
 
     expect(res.body).toEqual({ error: 'Not found' });
+    const rows = await pollSegregationEvent(60000014);
+    // Room resolves to the OVERRIDE (minor), not the cohort field (adult).
+    expect(rows[0]).toMatchObject({ sourceCohort: 'adult', targetCohort: 'minor' });
   });
 
-  test('roomName-missing 400 still wins over cohort gate', async () => {
-    // Don't even reach Firestore — bad-request shape takes precedence
-    // so callers debugging integrations see the schema error first.
-    const app = createApp({ cohort: 'adult', uniqueId: 99001 });
-    await request(app).post('/api/livekit/token').send({}).expect(400);
-    expect(mockDoc).not.toHaveBeenCalled();
-  });
+  test('cohortOverride wins over cohort — override:adult on a cohort:minor room allows an adult caller', async () => {
+    await seedRoom('override-room-2', { cohort: 'minor', cohortOverride: 'adult' });
+    const user = await mintRealUser({ uniqueId: 60000015, cohort: 'adult' });
+    const app = createApp();
 
-  test('audit failure logs the error', async () => {
-    withRoomDoc({ _roomId: 'test-room', cohort: 'minor' });
-    const err = new Error('quota exhausted');
-    mockAdd.mockRejectedValueOnce(err);
-
-    const app = createApp({ cohort: 'adult', uniqueId: 99001 });
-    await request(app).post('/api/livekit/token').send({ roomName: 'test-room' }).expect(404);
-
-    // Wait a tick for the fire-and-forget promise to reject.
-    await new Promise((r) => setImmediate(r));
-    expect(log.error).toHaveBeenCalledWith(
-      'segregationEvents',
-      'write failed',
-      expect.objectContaining({ error: 'quota exhausted' }),
-    );
-  });
-
-  test('Firestore lookup failure → 500 (not silent 200)', async () => {
-    // A throw inside the room-doc lookup must surface, not silently
-    // fall through to the grant. The gate is the load-bearing op
-    // for cohort isolation — failing closed is mandatory.
-    mockDoc.mockReturnValue({ get: jest.fn().mockRejectedValue(new Error('rpc timeout')) });
-
-    const app = createApp({ cohort: 'adult', uniqueId: 99001 });
     const res = await request(app)
       .post('/api/livekit/token')
-      .send({ roomName: 'test-room' })
-      .expect(500);
+      .set(user.headers)
+      .send({ roomName: 'override-room-2' })
+      .expect(200);
 
-    expect(res.body.error).toBe('Internal server error');
-    expect(AccessToken).not.toHaveBeenCalled();
+    const claims = await verifyWith(res.body.token, ASIA_KEY, ASIA_SECRET);
+    // Token metadata reflects the resolved (override → adult) cohort.
+    expect(JSON.parse(claims.metadata)).toEqual({ cohort: 'adult' });
+    await expectNoSegregationEvent(60000015);
   });
 
-  // ─── UK OSA #17 PR 7 — defence-in-depth metadata.cohort JWT claim ──
-  //
-  // The Express cohort gate above refuses to mint a token whose caller
-  // cohort doesn't match the room — but that's the only line of defence
-  // unless the JWT itself carries the room's cohort. Stamping the cohort
-  // into the AccessToken's `metadata` claim lets the LiveKit server
-  // refuse a stale/mis-routed token at the SFU level too. Caught by
-  // j09's "LiveKit access token contains cohort claim matching the room"
-  // scenario on 2026-05-29 (manual-qa-cycle-1.md finding):
-  //   "JWT payload field metadata.cohort was undefined, expected adult"
-  // Root cause: route constructed AccessToken with identity+ttl only,
-  // and addGrant() never sets metadata. Fix: explicit
-  // `at.metadata = JSON.stringify({ cohort: roomCohort })`.
-  describe('metadata.cohort claim (PR 7 defence-in-depth)', () => {
-    test('JWT metadata is set to JSON-encoded cohort matching an adult room', async () => {
-      withRoomDoc({ _roomId: 'test-room', cohort: 'adult' });
-      const app = createApp({ cohort: 'adult', uniqueId: 99001 });
-      await request(app).post('/api/livekit/token').send({ roomName: 'test-room' }).expect(200);
+  // ─── Precedence / ordering (cohort-relevant) ───────────────────
 
-      const instance = mockAccessTokenInstances.at(-1);
-      expect(instance).toBeDefined();
-      expect(instance.metadata).toBe(JSON.stringify({ cohort: 'adult' }));
-    });
+  test('roomName-missing 400 wins over the cohort gate (no audit, no room read)', async () => {
+    const user = await mintRealUser({ uniqueId: 60000016, cohort: 'adult' });
+    const app = createApp();
 
-    test('JWT metadata is set to JSON-encoded cohort matching a minor room', async () => {
-      withRoomDoc({ _roomId: 'test-room', cohort: 'minor' });
-      const app = createApp({ cohort: 'minor', uniqueId: 99001 });
-      await request(app).post('/api/livekit/token').send({ roomName: 'test-room' }).expect(200);
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .set(user.headers)
+      .send({})
+      .expect(400);
 
-      const instance = mockAccessTokenInstances.at(-1);
-      expect(instance).toBeDefined();
-      expect(instance.metadata).toBe(JSON.stringify({ cohort: 'minor' }));
-    });
+    expect(res.body.error).toBe('roomName is required');
+    await expectNoSegregationEvent(60000016);
+  });
 
-    test('JWT metadata follows the ROOM cohort, not the caller cohort (admin bypass case)', async () => {
-      // Admins can cross cohorts. The metadata stamped on the JWT must
-      // reflect the ROOM's cohort (not the admin's own) so that any
-      // LiveKit-server-side cohort policy still treats the connection
-      // as belonging to the room's cohort.
-      withRoomDoc({ _roomId: 'test-room', cohort: 'minor' });
-      const app = createApp({ cohort: 'adult', uniqueId: 90000001, admin: true });
-      await request(app).post('/api/livekit/token').send({ roomName: 'test-room' }).expect(200);
+  test('malformed roomName → opaque 404 before the cohort gate (no audit row)', async () => {
+    // The charset pattern rejects `x/messages/y` with the same opaque 404 BEFORE
+    // any Firestore read or cohort comparison — so no audit row is written.
+    const user = await mintRealUser({ uniqueId: 60000017, cohort: 'adult' });
+    const app = createApp();
 
-      const instance = mockAccessTokenInstances.at(-1);
-      expect(instance).toBeDefined();
-      expect(instance.metadata).toBe(JSON.stringify({ cohort: 'minor' }));
-    });
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .set(user.headers)
+      .send({ roomName: 'x/messages/y' })
+      .expect(404);
 
-    test('JWT metadata is a STRING (not an object) — LiveKit SDK serializes it verbatim', async () => {
-      // Pin the wire format: the LiveKit SDK puts whatever you assign
-      // to `at.metadata` into the JWT's `metadata` claim. The agreed
-      // shape between client + server is a JSON-serialized object;
-      // any future maintainer who refactors to `at.metadata = { cohort
-      // }` (raw object) breaks the wire and the j09 JWT parse step.
-      withRoomDoc({ _roomId: 'test-room', cohort: 'adult' });
-      const app = createApp({ cohort: 'adult', uniqueId: 99001 });
-      await request(app).post('/api/livekit/token').send({ roomName: 'test-room' }).expect(200);
+    expect(res.body).toEqual({ error: 'Not found' });
+    await expectNoSegregationEvent(60000017);
+  });
 
-      const instance = mockAccessTokenInstances.at(-1);
-      expect(typeof instance.metadata).toBe('string');
-      // And it must JSON.parse back to an object that has the cohort key.
-      expect(JSON.parse(instance.metadata)).toEqual({ cohort: 'adult' });
-    });
+  test('cohort gate fires BEFORE the credentials check — cross-cohort caller gets 404, not 503', async () => {
+    // If a refactor moved the region-credential validation above the cohort gate,
+    // a cross-cohort caller hitting an unconfigured region would get 503 (revealing
+    // the room exists) instead of the existence-hiding 404. Induce the real
+    // condition: clear every region credential, then send a cross-cohort request.
+    for (const k of LK_ENV_KEYS) delete process.env[k];
+    await seedRoom('xc-room-5', { cohort: 'minor' });
+    const user = await mintRealUser({ uniqueId: 60000018, cohort: 'adult' });
+    const app = createApp();
 
-    test('metadata is set BEFORE addGrant — clients reading `metadata` in connect-time event get the cohort', async () => {
-      // Order matters for clarity (and for any future SDK that snapshots
-      // mutable state at `addGrant` time). Pinning this prevents a
-      // future maintainer from accidentally moving the metadata line
-      // below the grant + getting silently-correct behaviour today
-      // that breaks on an SDK upgrade.
-      const callOrder = [];
-      const handler = jest.fn(() => callOrder.push('addGrant'));
-      mockAddGrant.mockImplementationOnce(handler);
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .set(user.headers)
+      .send({ roomName: 'xc-room-5' })
+      .expect(404);
 
-      withRoomDoc({ _roomId: 'test-room', cohort: 'adult' });
-      const app = createApp({ cohort: 'adult', uniqueId: 99001 });
-      await request(app).post('/api/livekit/token').send({ roomName: 'test-room' }).expect(200);
+    expect(res.body).toEqual({ error: 'Not found' });
+    // The gate still fired (and audited) despite the missing creds.
+    const rows = await pollSegregationEvent(60000018);
+    expect(rows).toHaveLength(1);
+  });
 
-      const instance = mockAccessTokenInstances.at(-1);
-      // metadata is set during the synchronous route handler before
-      // addGrant; both are done by the time the response returns.
-      expect(instance.metadata).toBe(JSON.stringify({ cohort: 'adult' }));
-      expect(handler).toHaveBeenCalled();
-    });
+  // ─── Defence-in-depth: metadata.cohort JWT claim (PR 7) ────────
 
-    test('metadata is NOT set on the 404 cross-cohort denial path (no leak via mock instance)', async () => {
-      // The cross-cohort denial returns 404 before AccessToken is even
-      // constructed (per the existing 404 test). Verify no AccessToken
-      // instance was created — there's nothing to leak the cohort
-      // through, and metadata can't exist where the constructor never ran.
-      withRoomDoc({ _roomId: 'test-room', cohort: 'minor' });
-      const app = createApp({ cohort: 'adult', uniqueId: 99001 });
-      await request(app).post('/api/livekit/token').send({ roomName: 'test-room' }).expect(404);
+  test('JWT metadata carries the room cohort (adult)', async () => {
+    await seedRoom('meta-room-1', { cohort: 'adult' });
+    const user = await mintRealUser({ uniqueId: 60000019, cohort: 'adult' });
+    const app = createApp();
 
-      expect(mockAccessTokenInstances).toHaveLength(0);
-    });
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .set(user.headers)
+      .send({ roomName: 'meta-room-1' })
+      .expect(200);
+
+    const claims = await verifyWith(res.body.token, ASIA_KEY, ASIA_SECRET);
+    expect(JSON.parse(claims.metadata)).toEqual({ cohort: 'adult' });
+  });
+
+  test('JWT metadata carries the room cohort (minor)', async () => {
+    await seedRoom('meta-room-2', { cohort: 'minor' });
+    const user = await mintRealUser({ uniqueId: 60000020, cohort: 'minor' });
+    const app = createApp();
+
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .set(user.headers)
+      .send({ roomName: 'meta-room-2' })
+      .expect(200);
+
+    const claims = await verifyWith(res.body.token, ASIA_KEY, ASIA_SECRET);
+    expect(JSON.parse(claims.metadata)).toEqual({ cohort: 'minor' });
+  });
+
+  test('JWT metadata is a JSON string parsing to { cohort } (wire format pinned)', async () => {
+    // The client + LiveKit server agree on a JSON-serialized object; a refactor to
+    // `at.metadata = { cohort }` (raw object) would break the wire + the j09 parse.
+    await seedRoom('meta-room-3', { cohort: 'adult' });
+    const user = await mintRealUser({ uniqueId: 60000021, cohort: 'adult' });
+    const app = createApp();
+
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .set(user.headers)
+      .send({ roomName: 'meta-room-3' })
+      .expect(200);
+
+    const claims = await verifyWith(res.body.token, ASIA_KEY, ASIA_SECRET);
+    expect(typeof claims.metadata).toBe('string');
+    expect(JSON.parse(claims.metadata)).toEqual({ cohort: 'adult' });
+  });
+
+  test('minted token carries BOTH the cohort metadata AND the room-join grant', async () => {
+    // Replaces the old mock-introspected "metadata before addGrant" ordering pin:
+    // ordering is invisible in the real JWT, but the observable contract is that
+    // the minted token ends up with both the metadata claim and the room grant.
+    await seedRoom('meta-room-4', { cohort: 'adult' });
+    const user = await mintRealUser({ uniqueId: 60000022, cohort: 'adult' });
+    const app = createApp();
+
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .set(user.headers)
+      .send({ roomName: 'meta-room-4' })
+      .expect(200);
+
+    const claims = await verifyWith(res.body.token, ASIA_KEY, ASIA_SECRET);
+    expect(JSON.parse(claims.metadata)).toEqual({ cohort: 'adult' });
+    expect(claims.video).toMatchObject({ roomJoin: true, room: 'meta-room-4' });
+  });
+
+  test('cross-cohort denial returns no token (nothing to leak the cohort through)', async () => {
+    await seedRoom('meta-room-5', { cohort: 'minor' });
+    const user = await mintRealUser({ uniqueId: 60000023, cohort: 'adult' });
+    const app = createApp();
+
+    const res = await request(app)
+      .post('/api/livekit/token')
+      .set(user.headers)
+      .send({ roomName: 'meta-room-5' })
+      .expect(404);
+
+    expect(res.body.token).toBeUndefined();
   });
 });

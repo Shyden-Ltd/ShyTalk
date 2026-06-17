@@ -63,14 +63,14 @@ This is the **first concrete slice of SHY-0113** under the operator-chosen "chil
 ## BDD Scenarios
 
 **Scenario: a real cohort member receives a correctly-scoped real token**
-- **Given** the Firestore emulator holds a room `room-asia-1` with `cohort: "asia"` and a caller whose real auth claims include `cohort: "asia"`, `uniqueId: "u-100"`
-- **When** they `POST /api/livekit/token` for `room-asia-1`
-- **Then** the route returns a real JWT that decodes to `video.roomJoin=true`, `video.room="room-asia-1"`, `sub="u-100"`, `metadata.cohort="asia"`, signed by the resolved region's real secret
+- **Given** the Firestore emulator holds a room `room-adult-1` with `cohort: "adult"` (age-segregation cohort — orthogonal to LiveKit region) and a caller whose real Firebase ID token carries `cohort: "adult"` and resolves to `uniqueId: 60000001` via a seeded `users` doc
+- **When** they `POST /api/livekit/token` for `room-adult-1`
+- **Then** the route returns a real JWT that decodes to `video.roomJoin=true`, `video.room="room-adult-1"`, `sub="60000001"`, `metadata` parsing to `{ cohort: "adult" }`, signed by the resolved region's real secret (asia by default)
 
 **Scenario: a cross-cohort caller is denied by the real cohort gate**
-- **Given** a room `room-eu-1` with `cohort: "eu"` and a caller with `cohort: "asia"`
-- **When** they request a token for `room-eu-1`
-- **Then** the real route returns 404 (existence-hiding) and a real audit row is written to the audit collection and asserted by reading it back
+- **Given** a room `room-minor-1` with `cohort: "minor"` and a caller whose real token carries `cohort: "adult"`
+- **When** they request a token for `room-minor-1`
+- **Then** the real route returns 404 (existence-hiding, byte-identical to the room-missing 404) and a real `segregationEvents` row is written (`sourceCohort: "adult"`, `targetCohort: "minor"`, `targetRoomId`, `surface: "/api/livekit/token"`, `action: "blocked"`) and asserted by polling the real collection
 
 **Scenario: missing region creds yields a real 503**
 - **Given** no LiveKit key/secret is set for the resolved region (and no fallback)
@@ -103,7 +103,7 @@ This is the **first concrete slice of SHY-0113** under the operator-chosen "chil
 - Local stack UP — Firestore/Auth emulator + real LiveKit (confirmed running: Firestore 8080, Auth 9099, LiveKit 7880).
 
 ## Risks & Mitigations
-- **Risk:** real auth (a custom token minted via the Auth emulator + the real middleware) is net-new infra for express route tests. **Mitigation:** investigate at RED ([[feedback-never-guess-always-investigate]]); if no helper exists and it would balloon scope, decide the auth-realism level on evidence — keep direct `req.auth` injection **only** if it is genuinely harness *input* (not a mocked collaborator) and raise it to the operator if it is a policy call.
+- **Risk:** real auth (a custom token minted via the Auth emulator + the real middleware) was net-new infra for express route tests. **Resolved:** the operator directed **real auth now and in the future** ([[feedback-real-auth-in-integration-tests]]); a reusable `express-api/tests/helpers/real-auth.js` was built (`mintRealUser` seeds a real `users` doc + mints a real ID token via `createCustomToken` → Auth-emulator `signInWithCustomToken` exchange; `mintTokenWithoutUserDoc`; `clearAuthCaches`). The real `authMiddleware` sits ahead of the router; **no `req.auth` injection, no `synthetic:` tokens** anywhere in these tests. The cohort/admin claims ride on the real token; `uniqueId` resolves from the seeded Firestore doc.
 - **Risk:** real LiveKit test env (key/secret/region) is not documented in `local/start.sh`. **Mitigation:** the test sets deterministic creds itself — real `AccessToken` accepts any key/secret and the JWT is verified with the same secret, so there is no external dependency.
 - **Risk:** removing the `log` mock floods test output or writes externally. **Mitigation:** let it run (exercised-not-asserted per SHY-0113 Observability); redirect to a temp sink if it writes to a real destination.
 
@@ -116,3 +116,18 @@ This is the **first concrete slice of SHY-0113** under the operator-chosen "chil
 
 ## Notes (running log)
 - **2026-06-17 — created (first just-in-time child slice of SHY-0113).** Operator chose the "child SHYs, just-in-time" decomposition + "rules-harness reproduces SHY-0102/0103 (defer fix)". This slice is the smallest safe vertical (one route, no FCM, no RTDB presence → unblocked by the rule bugs); it proves the real-emulator + real-SDK pattern. Grounded in the pickup-fitness map: both files are currently 100% mock-based; the SHY-0110 emulator template (`NODE_ENV=local` before requiring firebase + `assertEmulatorReachable` + `clearCollection` + real seed/assert) is the copy source; LiveKit token mint is local crypto so the real SDK needs no server. Effort M.
+- **2026-06-17 — design corrections during RED.** (A) Conflated cohort (adult/minor — age segregation) with region (asia/eu — LiveKit routing); they are orthogonal axes. Room cohort = `cohortOverride || cohort` via `effectiveCohort` (allow-list {adult,minor}, fail-closed minor); region = `cf-ipcountry` header via `getRegion`. Corrected the BDD examples above. (B) Real-auth obligation: operator "yes i want real now and in the future" → built `tests/helpers/real-auth.js`; the auth-deferral risk language is removed (see Risks).
+- **2026-06-17 — GREEN (both files migrated, real services, zero doubles).** Commits `710f8ccd645` (pickup + decompose), `ba8fab4522d` (livekit.test.js → real Firestore + real SDK), `b8d812c1d7c` (real auth wired + reusable real-auth.js helper). `livekit.test.js` 21/21 green; `livekit-cohort.test.js` 23/23 green (real auth + real cohort gate + real `segregationEvents` row polled back); NEW `tests/unit/livekit-region.test.js` 28/28 (pure url/region/fallback value matrix — unit location, no double, ratchet-exempt). **Un-inducible-error decisions (escalate-not-mock, per CLAUDE.md escape hatch):** the route's catch-all 500, the cross-cohort audit-write-failure path, and the room-lookup-throw 500 cannot be triggered against the real emulator without re-introducing a double (real `toJwt` does not throw on a short secret; the emulator does not reject the route-built audit doc; the dev logger is a no-op counter) — left as defensive code with no faked test; the behavioural guarantee (cross-cohort always returns the same opaque 404 regardless of the fire-and-forget audit outcome) is structural and covered by the opaque-404 + audit-row tests.
+- **Clause → test map (AC clause → named test):**
+  - Happy/grants/identity → livekit.test.js `mints a real token a real cohort member can verify`, `uses the authed uniqueId as identity…`; livekit-cohort.test.js `200 + verifiable token when caller and room are both adult` / `… both minor`.
+  - metadata.cohort → livekit.test.js `stamps the room cohort onto the token metadata`; livekit-cohort.test.js `JWT metadata carries the room cohort (adult)` / `(minor)`, `JWT metadata is a JSON string parsing to { cohort }`, `minted token carries BOTH the cohort metadata AND the room-join grant`.
+  - Region value matrix → livekit-region.test.js `getRegion …` (country→region) + `getRegionConfig …` (per-region url/key/secret, fallback, per-field independence, unknown-region→asia, all-undefined); region SELECTION via signature → livekit.test.js `default region is asia…`, `an EU CF-IPCountry header routes to the eu secret`, `falls back to the global secret…`.
+  - 503 creds → livekit.test.js `503 when the resolved region has no credentials`, `503 when only the api key is missing`.
+  - 400/403/404 → livekit.test.js `400 when roomName missing` / `…non-string`, `403 when the caller has no profile…`, `403 when the caller is suspended…`, `401 when no Authorization header` / `…invalid token`, `404 (opaque) when roomName fails the charset pattern`, `404 when the room does not exist`.
+  - Cross-cohort + audit (Edge/Security/Observability) → livekit-cohort.test.js `404 (opaque) when an adult caller targets a minor room` / `… minor caller targets an adult room`, `cross-cohort attempt writes a real segregationEvents row with the full value shape`, `cross-cohort 404 body is byte-identical to the room-missing 404`, `cohort gate fires BEFORE the credentials check — … 404, not 503`, `cross-cohort denial returns no token`.
+  - Admin bypass → livekit-cohort.test.js `admin caller bypasses the gate (200…) and writes no audit row`, `admin-bypass token metadata follows the ROOM cohort…`.
+  - Fail-closed value matrix → livekit-cohort.test.js `room without a cohort field defaults to minor — adult blocked` / `… minor allowed`, `a missing cohort claim is treated as minor…`, `an invalid cohort claim is treated as minor…`, `cohortOverride:minor wins…`, `cohortOverride:adult wins…`.
+  - Precedence (UX/ordering) → livekit-cohort.test.js `roomName-missing 400 wins over the cohort gate…`, `malformed roomName → opaque 404 before the cohort gate (no audit row)`.
+  - Security (no secret leak) → livekit.test.js `never leaks the signing secret in the response body or token payload`.
+  - i18n → livekit.test.js `rejects an RTL/CJK roomName via the charset pattern (404)`.
+  - Performance → livekit.test.js `mints within the local-emulator budget`.
