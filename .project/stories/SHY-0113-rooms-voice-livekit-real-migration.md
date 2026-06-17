@@ -1,6 +1,6 @@
 ---
 id: SHY-0113
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-06-17
 priority: P0
@@ -110,3 +110,8 @@ The operator reported: *"I tried out the dev app yesterday and I still can't cre
 
 ## Notes (running log)
 - **2026-06-17 — created Draft (P0, first migration after the keystone).** Sequenced first because it surfaces the operator's reproducible room-creation failure — the canonical evidence for "no more faking". Likely BLOCKING → pivot-fix TDD-first; ties to SHY-0102/0103 (operator rules-deploy checkpoint required). XL → sub-split at pickup.
+- **2026-06-17 ~15:40 BST — PICKED UP (Draft→In Progress) as the area UMBRELLA; DECOMPOSED into just-in-time child SHYs.** Pickup-fitness review (Explore map of the express surface) surfaced two corrections to the Draft's premise and three operator decisions:
+  - **Correction A — express tests use the Admin SDK, which BYPASSES security rules.** So the express route-test migration (Admin SDK → emulator) **cannot reproduce SHY-0102/0103** (those are *client-side* rule denials). The express slices drain the in-process doubles; the rule bugs are reproduced on a different surface.
+  - **Correction B — LiveKit token mint is LOCAL crypto** (`AccessToken.toJwt()` signs a JWT with the secret; no server round-trip). So real token tests need the real SDK (not the server), and the SDK mock is both unnecessary and policy-violating.
+  - **Operator decisions (2026-06-17):** (1) **child SHYs, just-in-time** — one fully-refined child SHY per slice, created as it is picked up; (2) **rules-harness reproduces SHY-0102/0103 now** (real non-admin client via `@firebase/rules-unit-testing`; failing tests lock the eventual fix), the rules FIX + device journey stay operator-gated; (3) **FCM** — unit-double permitted LOCALLY (no FCM emulator) but real push MUST be proven in DEV ([[feedback-fcm-real-proof-in-dev]]).
+  - **Planned child slices (created JIT, each = 1 PR, all `epic: EPIC-0003`):** **SHY-0125** LiveKit token route → real (slice 1, started) · rooms invites/seat-requests → real · rooms-same-cohort gate → real · room-mutations seat-claim/accept/leave/move (no RTDB-presence dep) → real · room-mutations owner-away/close (RTDB-presence — sequence vs SHY-0103) → real · admin-warn room-cascade → real · **rules-harness slice** reproducing SHY-0102 (Firestore `list` denial) + SHY-0103 (RTDB presence uid mismatch). Local stack confirmed UP (Firestore 8080 / Auth 9099 / RTDB 9000 / LiveKit 7880).
