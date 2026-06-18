@@ -152,8 +152,14 @@ jobs:
       - name: Write metadata.json
         if: steps.check-existing.outputs.skip != 'true'
         run: |
-          PASSED=$(grep -c '"status":"passed"' allure-report/data/suites.json 2>/dev/null || echo 0)
-          FAILED=$(grep -c '"status":"failed"\|"status":"broken"' allure-report/data/suites.json 2>/dev/null || echo 0)
+          # `grep -c` prints the count AND exits non-zero on zero matches, so the
+          # old `|| echo 0` fired ON TOP of grep's own "0", yielding $'0\n0' and a
+          # `$((..))` "syntax error" that failed the report job on ALL-GREEN runs
+          # (SHY-0127). `VAR=$(grep ...) || VAR=0` keeps each value single-line:
+          # grep's "0"/"N" on success, reset to 0 on any non-zero (zero matches
+          # or missing file). set -e is not tripped — the `||` absorbs the exit.
+          PASSED=$(grep -c '"status":"passed"' allure-report/data/suites.json 2>/dev/null) || PASSED=0
+          FAILED=$(grep -c '"status":"failed"\|"status":"broken"' allure-report/data/suites.json 2>/dev/null) || FAILED=0
           TOTAL=$((PASSED + FAILED))
           DATE=$(date +%Y-%m-%d)
           RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
