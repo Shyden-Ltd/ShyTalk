@@ -1,98 +1,81 @@
 /**
- * Tests for the age-verification audit-log reconciliation cron
- * (`src/cron/ageVerificationAuditReconcile.js`).
+ * ageVerificationAuditReconcile.test.js — EPIC-0003 / SHY-0120 slice 4.
  *
- * Pin the back-fill behaviour: scan submissions decided in the last
- * 7 days, skip those with a matching audit row, write a remediation
- * entry for the gaps. Idempotent on a second run via the
- * `details.fromSubmissionId` marker.
+ * MIGRATED off the firebase + helpers (`now`) Jest mocks. The prior tests
+ * routed `db.collection(name).where(...)` through a hand-rolled query-shape
+ * fake and pinned `now()`, so they asserted "the add mock was called with
+ * shape X" — they could NOT catch the cron reconciling the WRONG submissions,
+ * writing a DUPLICATE remediation row on re-run, or the real Firestore range
+ * query excluding docs the mock happily returned. This rewrite seeds real
+ * `ageVerificationSubmissions` + `auditLog` docs, runs the real cron against
+ * the live Firestore emulator, and reads `auditLog` back to assert the real
+ * value-level outcome. The real `log` runs unmocked (exercised, not asserted).
+ *
+ * REAL-vs-mock corrections surfaced while migrating (documented so the next
+ * author doesn't re-introduce the fictions):
+ *   1. The cron's main query is `where('decisionAt', '>=', cutoff)` with a
+ *      NUMERIC cutoff. Firestore range filters are type-aware — a numeric `>=`
+ *      bound matches ONLY number-typed fields. A string- (or out-of-window)
+ *      `decisionAt` is excluded by the QUERY and never scanned. The mock test
+ *      fed such a doc in and expected `skippedPending`; that path is
+ *      unreachable in production (verified against the emulator). `skippedPending`
+ *      is exercised here the only real way it can fire — a numeric in-window
+ *      doc whose `status === 'pending'`.
+ *   2. The per-doc `failed` counter (and the `data()`-throws branch) is a
+ *      defensive guard: a real `auditLog.add()` throw needs an un-storable
+ *      entry, but every value we can SEED is by definition Firestore-storable,
+ *      so the rebuilt entry is storable too — the throw is not cheaply
+ *      inducible for real (a genuine Firestore outage mid-loop is operator
+ *      escape-hatch territory, never a mock). Loop continuation is proven by a
+ *      real multi-doc test instead.
+ *
+ * Isolation: the cron scans the whole `ageVerificationSubmissions` collection
+ * and queries/writes `auditLog`, so both are cleared in beforeEach for a clean
+ * slate. See tests/helpers/firebase-emulator.js.
  */
+const PRIOR_NODE_ENV = process.env.NODE_ENV;
+process.env.NODE_ENV = 'local';
 
-// ─── Firebase mock ────────────────────────────────────────────────
-
-const mockSubmissionsGet = jest.fn();
-const mockTaggedAuditGet = jest.fn();
-const mockOriginalAuditGet = jest.fn();
-const mockAuditAdd = jest.fn().mockResolvedValue();
-
-// `db.collection(name).where(...).where(...)?.limit(...)?.get()` —
-// we route by collection name + the query shape.
-const mockSubmissionsCollection = {
-  where: (field, op, value) => ({
-    get: () => mockSubmissionsGet({ field, op, value }),
-  }),
-};
-
-// `jest.mock()` is hoisted; only references that start with `mock`
-// (case-insensitive) are allowed. Naming this `mockBuild...` rather
-// than `buildAuditCollection` so Jest's hoist-safety check accepts.
-const mockBuildAuditCollection = () => ({
-  add: (...args) => mockAuditAdd(...args),
-  where: function whereFn(field, op, value) {
-    // Route the two query shapes to dedicated mocks so a test can
-    // stub them independently:
-    //   1) `details.fromSubmissionId` == X  → tagged-row idempotency
-    //   2) `actionType` == X (chained with another `where`) → original
-    if (field === 'details.fromSubmissionId') {
-      return {
-        limit: () => ({ get: () => mockTaggedAuditGet({ value }) }),
-      };
-    }
-    // actionType / targetId chain — return another `where`-like
-    // that captures both clauses then resolves via mockOriginalAuditGet.
-    const captured = [{ field, op, value }];
-    return {
-      where: (f2, o2, v2) => {
-        captured.push({ field: f2, op: o2, value: v2 });
-        return {
-          limit: () => ({ get: () => mockOriginalAuditGet({ captured }) }),
-        };
-      },
-    };
-  },
-});
-
-jest.mock('../../src/utils/firebase', () => ({
-  db: {
-    collection: jest.fn((name) => {
-      if (name === 'ageVerificationSubmissions') return mockSubmissionsCollection;
-      if (name === 'auditLog') return mockBuildAuditCollection();
-      throw new Error(`Unexpected collection: ${name}`);
-    }),
-  },
-}));
-
-// Pin `now` so timestamp math is deterministic. 2026-05-04T12:00:00Z.
-jest.mock('../../src/utils/helpers', () => ({
-  now: () => 1777896000000,
-}));
-
-beforeEach(() => {
-  jest.clearAllMocks();
-});
-
+const { db } = require('../../src/utils/firebase');
 const ageVerificationAuditReconcile = require('../../src/cron/ageVerificationAuditReconcile');
+const { assertEmulatorReachable, clearCollection } = require('../helpers/firebase-emulator');
 
-function submission(overrides = {}) {
-  return {
-    id: 'sub-1',
-    data: () => ({
-      userId: '10000050',
-      idMethod: 'passport',
-      status: 'approved',
-      decisionAt: 1777896000000 - 60_000, // 1 min before now
-      decidedBy: 10000001,
-      ...overrides,
-    }),
-  };
-}
+const MIN_MS = 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+// 1 h ago — comfortably inside the 7-day scan window.
+const withinWindow = () => Date.now() - 60 * MIN_MS;
+// 8 days ago — outside the 7-day window, so the real range query excludes it.
+const beforeWindow = () => Date.now() - 8 * DAY_MS;
 
-// ─── Empty / no-op cases ──────────────────────────────────────────
+const seedSubmission = (id, fields) => db.doc(`ageVerificationSubmissions/${id}`).set(fields);
+const seedAudit = (id, fields) => db.doc(`auditLog/${id}`).set(fields);
 
-describe('ageVerificationAuditReconcile — empty + idempotency', () => {
-  test('returns zero counts when no decided submissions are in the window', async () => {
-    mockSubmissionsGet.mockResolvedValue({ docs: [] });
+const remediationFor = async (submissionId) => {
+  const snap = await db
+    .collection('auditLog')
+    .where('details.fromSubmissionId', '==', submissionId)
+    .get();
+  return snap.docs.map((d) => d.data());
+};
+const auditCount = async () => (await db.collection('auditLog').get()).size;
 
+beforeAll(async () => {
+  await assertEmulatorReachable();
+});
+
+beforeEach(async () => {
+  await clearCollection(db, 'ageVerificationSubmissions');
+  await clearCollection(db, 'auditLog');
+});
+
+afterAll(async () => {
+  await clearCollection(db, 'ageVerificationSubmissions');
+  await clearCollection(db, 'auditLog');
+  process.env.NODE_ENV = PRIOR_NODE_ENV;
+});
+
+describe('ageVerificationAuditReconcile cron (real Firestore emulator)', () => {
+  test('an empty submissions collection is a clean no-op (all-zero counts, no audit rows)', async () => {
     const result = await ageVerificationAuditReconcile();
 
     expect(result).toEqual({
@@ -103,271 +86,376 @@ describe('ageVerificationAuditReconcile — empty + idempotency', () => {
       skippedUnknownStatus: 0,
       failed: 0,
     });
-    expect(mockAuditAdd).not.toHaveBeenCalled();
+    expect(await auditCount()).toBe(0);
   });
 
-  test('skips a submission whose audit row is already tagged with fromSubmissionId (idempotent re-run)', async () => {
-    mockSubmissionsGet.mockResolvedValue({ docs: [submission()] });
-    // Tagged-row query returns a hit → already reconciled.
-    mockTaggedAuditGet.mockResolvedValue({ empty: false, docs: [{ id: 'audit-tagged' }] });
-
-    const result = await ageVerificationAuditReconcile();
-
-    expect(result.scanned).toBe(1);
-    expect(result.reconciled).toBe(0);
-    expect(result.skippedAlreadyAudited).toBe(1);
-    expect(mockAuditAdd).not.toHaveBeenCalled();
-  });
-
-  test('skips a submission whose original audit row matches on actionType + targetId + timestamp window', async () => {
-    mockSubmissionsGet.mockResolvedValue({ docs: [submission()] });
-    mockTaggedAuditGet.mockResolvedValue({ empty: true, docs: [] });
-    // Original audit row, timestamp within ±10 min of decisionAt.
-    mockOriginalAuditGet.mockResolvedValue({
-      docs: [
-        {
-          data: () => ({ timestamp: 1777896000000 - 30_000 }), // 30s before now
-        },
-      ],
+  test('back-fills a full remediation row for an in-window approved decision with no audit row', async () => {
+    const decisionAt = withinWindow();
+    await seedSubmission('sub-approve', {
+      userId: '10000050',
+      idMethod: 'passport',
+      status: 'approved',
+      decisionAt,
+      decidedBy: 10000001,
     });
 
     const result = await ageVerificationAuditReconcile();
 
     expect(result.scanned).toBe(1);
-    expect(result.reconciled).toBe(0);
+    expect(result.reconciled).toBe(1);
+
+    const rows = await remediationFor('sub-approve');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      action: 'age_verification_approved',
+      actionType: 'age_verification_approved',
+      targetType: 'user',
+      targetId: '10000050',
+      adminUid: 10000001,
+    });
+    expect(rows[0].details.fromSubmissionId).toBe('sub-approve');
+    expect(rows[0].details.method).toBe('passport');
+    expect(rows[0].details.originalDecisionAt).toBe(decisionAt);
+    expect(rows[0].details.note).toMatch(/Reconciled by ageVerificationAuditReconcile/);
+    expect(typeof rows[0].timestamp).toBe('number');
+    expect(typeof rows[0].details.reconciledAt).toBe('number');
+  });
+
+  test('maps every submission status to its exact audit action (value matrix)', async () => {
+    // One submission per STATUS_ACTION_MAP key, all in-window with no existing
+    // audit row → each must be reconciled to its mapped action.
+    const cases = [
+      ['s-approved', 'approved', 'age_verification_approved'],
+      ['s-rejected', 'rejected', 'age_verification_rejected'],
+      ['s-dob-modified', 'dob_modified', 'age_verification_dob_modified'],
+      ['s-modify-dob', 'modify-dob', 'age_verification_dob_modified'],
+      ['s-modifyDob', 'modifyDob', 'age_verification_dob_modified'],
+    ];
+    for (const [id, status] of cases) {
+      await seedSubmission(id, {
+        userId: `u-${id}`,
+        status,
+        decisionAt: withinWindow(),
+        decidedBy: 7,
+      });
+    }
+
+    const result = await ageVerificationAuditReconcile();
+
+    expect(result.scanned).toBe(cases.length);
+    expect(result.reconciled).toBe(cases.length);
+    for (const [id, , expectedAction] of cases) {
+      const rows = await remediationFor(id);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].action).toBe(expectedAction);
+      expect(rows[0].actionType).toBe(expectedAction);
+    }
+  });
+
+  test('a rejected remediation row does NOT leak the approve-only method field', async () => {
+    await seedSubmission('sub-reject', {
+      userId: '10000051',
+      idMethod: 'passport', // present on the submission but must not surface
+      status: 'rejected',
+      decisionAt: withinWindow(),
+      decidedBy: 10000001,
+    });
+
+    await ageVerificationAuditReconcile();
+
+    const rows = await remediationFor('sub-reject');
+    expect(rows[0].action).toBe('age_verification_rejected');
+    expect(rows[0].details.method).toBeUndefined();
+  });
+
+  test('a dob-modified remediation row carries the DOB-delta caveat in its note', async () => {
+    await seedSubmission('sub-dob', {
+      userId: '10000052',
+      status: 'dob_modified',
+      decisionAt: withinWindow(),
+      decidedBy: 10000001,
+    });
+
+    await ageVerificationAuditReconcile();
+
+    const rows = await remediationFor('sub-dob');
+    expect(rows[0].action).toBe('age_verification_dob_modified');
+    expect(rows[0].details.note).toMatch(/DOB delta not captured/);
+  });
+
+  test('falls back to adminUid=0 when decidedBy is absent (legacy submission)', async () => {
+    await seedSubmission('sub-no-admin', {
+      userId: '10000053',
+      idMethod: 'passport',
+      status: 'approved',
+      decisionAt: withinWindow(),
+      // no decidedBy
+    });
+
+    await ageVerificationAuditReconcile();
+
+    const rows = await remediationFor('sub-no-admin');
+    expect(rows[0].adminUid).toBe(0);
+  });
+
+  test('falls back to adminUid=0 when decidedBy is non-numeric', async () => {
+    await seedSubmission('sub-str-admin', {
+      userId: '10000054',
+      idMethod: 'passport',
+      status: 'approved',
+      decisionAt: withinWindow(),
+      decidedBy: 'admin@example.com', // string, not a numeric uid
+    });
+
+    await ageVerificationAuditReconcile();
+
+    const rows = await remediationFor('sub-str-admin');
+    expect(rows[0].adminUid).toBe(0);
+  });
+
+  test('skips a submission already tagged with fromSubmissionId (idempotency marker)', async () => {
+    await seedSubmission('sub-tagged', {
+      userId: '10000050',
+      idMethod: 'passport',
+      status: 'approved',
+      decisionAt: withinWindow(),
+      decidedBy: 10000001,
+    });
+    // A prior remediation row already exists for this submission.
+    await seedAudit('pre-tagged', {
+      action: 'age_verification_approved',
+      actionType: 'age_verification_approved',
+      targetId: '10000050',
+      timestamp: Date.now(),
+      details: { fromSubmissionId: 'sub-tagged' },
+    });
+
+    const result = await ageVerificationAuditReconcile();
+
     expect(result.skippedAlreadyAudited).toBe(1);
-    expect(mockAuditAdd).not.toHaveBeenCalled();
+    expect(result.reconciled).toBe(0);
+    expect(await auditCount()).toBe(1); // no duplicate written
   });
-});
 
-// ─── Reconciliation paths ─────────────────────────────────────────
+  test('is idempotent across two real runs — the second run writes no duplicate', async () => {
+    await seedSubmission('sub-twice', {
+      userId: '10000055',
+      idMethod: 'passport',
+      status: 'approved',
+      decisionAt: withinWindow(),
+      decidedBy: 10000001,
+    });
 
-describe('ageVerificationAuditReconcile — back-fill', () => {
-  test('writes a remediation entry when no audit row exists for an approved decision', async () => {
-    mockSubmissionsGet.mockResolvedValue({ docs: [submission()] });
-    mockTaggedAuditGet.mockResolvedValue({ empty: true, docs: [] });
-    mockOriginalAuditGet.mockResolvedValue({ docs: [] });
+    const first = await ageVerificationAuditReconcile();
+    expect(first.reconciled).toBe(1);
+    expect(await auditCount()).toBe(1);
+
+    // Second run finds the tagged row it just wrote → skip, no duplicate.
+    const second = await ageVerificationAuditReconcile();
+    expect(second.reconciled).toBe(0);
+    expect(second.skippedAlreadyAudited).toBe(1);
+    expect(await auditCount()).toBe(1);
+  });
+
+  test('skips when an untagged original audit row matches actionType+targetId within ±10 min', async () => {
+    const decisionAt = withinWindow();
+    await seedSubmission('sub-match', {
+      userId: '10000056',
+      idMethod: 'passport',
+      status: 'approved',
+      decisionAt,
+      decidedBy: 10000001,
+    });
+    // Original route-written audit row (no fromSubmissionId tag), 5 min before
+    // the decision — inside the ±10 min skew window.
+    await seedAudit('orig-match', {
+      actionType: 'age_verification_approved',
+      targetId: '10000056',
+      timestamp: decisionAt - 5 * MIN_MS,
+    });
+
+    const result = await ageVerificationAuditReconcile();
+
+    expect(result.skippedAlreadyAudited).toBe(1);
+    expect(result.reconciled).toBe(0);
+    expect(await auditCount()).toBe(1);
+  });
+
+  test('back-fills when the only candidate audit row is OUTSIDE the ±10 min window', async () => {
+    const decisionAt = withinWindow();
+    await seedSubmission('sub-far', {
+      userId: '10000057',
+      idMethod: 'passport',
+      status: 'approved',
+      decisionAt,
+      decidedBy: 10000001,
+    });
+    // 11 min before the decision — just outside the window → not a match.
+    await seedAudit('orig-far', {
+      actionType: 'age_verification_approved',
+      targetId: '10000057',
+      timestamp: decisionAt - 11 * MIN_MS,
+    });
 
     const result = await ageVerificationAuditReconcile();
 
     expect(result.reconciled).toBe(1);
-    expect(mockAuditAdd).toHaveBeenCalledTimes(1);
-    const entry = mockAuditAdd.mock.calls[0][0];
-    expect(entry.action).toBe('age_verification_approved');
-    expect(entry.actionType).toBe('age_verification_approved');
-    expect(entry.targetId).toBe('10000050');
-    expect(entry.adminUid).toBe(10000001);
-    expect(entry.details.fromSubmissionId).toBe('sub-1');
-    expect(entry.details.method).toBe('passport');
-    expect(entry.details.note).toMatch(/Reconciled by ageVerificationAuditReconcile/);
+    expect(await auditCount()).toBe(2); // the stale original + the new remediation
   });
 
-  test('rejected status maps to age_verification_rejected', async () => {
-    mockSubmissionsGet.mockResolvedValue({
-      docs: [submission({ status: 'rejected' })],
+  test('back-fills when an in-window audit row belongs to a DIFFERENT user (targetId scoping)', async () => {
+    const decisionAt = withinWindow();
+    await seedSubmission('sub-other', {
+      userId: '10000058',
+      idMethod: 'passport',
+      status: 'approved',
+      decisionAt,
+      decidedBy: 10000001,
     });
-    mockTaggedAuditGet.mockResolvedValue({ empty: true, docs: [] });
-    mockOriginalAuditGet.mockResolvedValue({ docs: [] });
-
-    await ageVerificationAuditReconcile();
-
-    const entry = mockAuditAdd.mock.calls[0][0];
-    expect(entry.action).toBe('age_verification_rejected');
-    // Method is approve-only metadata — must NOT leak into reject entries.
-    expect(entry.details.method).toBeUndefined();
-  });
-
-  test('modify-dob status maps to age_verification_dob_modified + adds DOB-delta caveat', async () => {
-    mockSubmissionsGet.mockResolvedValue({
-      docs: [submission({ status: 'modify-dob' })],
-    });
-    mockTaggedAuditGet.mockResolvedValue({ empty: true, docs: [] });
-    mockOriginalAuditGet.mockResolvedValue({ docs: [] });
-
-    await ageVerificationAuditReconcile();
-
-    const entry = mockAuditAdd.mock.calls[0][0];
-    expect(entry.action).toBe('age_verification_dob_modified');
-    expect(entry.details.note).toMatch(/DOB delta not captured/);
-  });
-
-  test('original-audit timestamp OUTSIDE the ±10 min window does not match — back-fill happens', async () => {
-    mockSubmissionsGet.mockResolvedValue({ docs: [submission()] });
-    mockTaggedAuditGet.mockResolvedValue({ empty: true, docs: [] });
-    // Timestamp 11 min before now — outside the window.
-    mockOriginalAuditGet.mockResolvedValue({
-      docs: [{ data: () => ({ timestamp: 1777896000000 - 11 * 60_000 }) }],
+    // Same action + a perfectly in-window timestamp, but a different targetId.
+    await seedAudit('orig-other-user', {
+      actionType: 'age_verification_approved',
+      targetId: '99999999',
+      timestamp: decisionAt,
     });
 
     const result = await ageVerificationAuditReconcile();
 
     expect(result.reconciled).toBe(1);
+    const rows = await remediationFor('sub-other');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].targetId).toBe('10000058');
   });
 
-  test('falls back to adminUid=0 when decidedBy is missing (legacy / corrupted submission)', async () => {
-    mockSubmissionsGet.mockResolvedValue({
-      docs: [submission({ decidedBy: undefined })],
+  test('coerces a REAL Firestore Timestamp on the candidate audit row when matching the window', async () => {
+    const decisionAt = withinWindow();
+    await seedSubmission('sub-ts', {
+      userId: '10000059',
+      idMethod: 'passport',
+      status: 'approved',
+      decisionAt,
+      decidedBy: 10000001,
     });
-    mockTaggedAuditGet.mockResolvedValue({ empty: true, docs: [] });
-    mockOriginalAuditGet.mockResolvedValue({ docs: [] });
-
-    await ageVerificationAuditReconcile();
-
-    const entry = mockAuditAdd.mock.calls[0][0];
-    expect(entry.adminUid).toBe(0);
-  });
-});
-
-// ─── Defensive / unknown status ───────────────────────────────────
-
-describe('ageVerificationAuditReconcile — defensive', () => {
-  test('skips submissions with an unrecognised status without throwing', async () => {
-    mockSubmissionsGet.mockResolvedValue({
-      docs: [submission({ status: 'pending' })], // shouldn't be returned by query but defend anyway
+    // Seeding a JS Date makes Firestore store (and read back) a genuine
+    // Timestamp object with `.toMillis()` — exercising the real coercion path
+    // the mock test faked with a hand-rolled `{ toMillis }`.
+    await seedAudit('orig-ts', {
+      actionType: 'age_verification_approved',
+      targetId: '10000059',
+      timestamp: new Date(decisionAt - 5 * MIN_MS),
     });
 
     const result = await ageVerificationAuditReconcile();
 
+    expect(result.skippedAlreadyAudited).toBe(1);
+    expect(result.reconciled).toBe(0);
+  });
+
+  test('skips an in-window submission whose status is pending (defensive status check)', async () => {
+    await seedSubmission('sub-pending', {
+      userId: '10000060',
+      status: 'pending',
+      decisionAt: withinWindow(), // numeric + in-window → genuinely returned by the query
+      decidedBy: 10000001,
+    });
+
+    const result = await ageVerificationAuditReconcile();
+
+    expect(result.scanned).toBe(1);
     expect(result.skippedPending).toBe(1);
-    expect(mockAuditAdd).not.toHaveBeenCalled();
+    expect(result.reconciled).toBe(0);
+    expect(await auditCount()).toBe(0);
   });
 
-  test('skips submissions with a status not in STATUS_ACTION_MAP', async () => {
-    mockSubmissionsGet.mockResolvedValue({
-      docs: [submission({ status: 'expired' })],
+  test('skips an in-window submission whose status is not in STATUS_ACTION_MAP', async () => {
+    await seedSubmission('sub-unknown', {
+      userId: '10000061',
+      status: 'expired', // not a recognised decision status
+      decisionAt: withinWindow(),
+      decidedBy: 10000001,
     });
 
     const result = await ageVerificationAuditReconcile();
 
+    expect(result.scanned).toBe(1);
     expect(result.skippedUnknownStatus).toBe(1);
-    expect(mockAuditAdd).not.toHaveBeenCalled();
+    expect(result.reconciled).toBe(0);
+    expect(await auditCount()).toBe(0);
   });
 
-  test('skips submissions missing decisionAt (partially-committed transaction)', async () => {
-    mockSubmissionsGet.mockResolvedValue({
-      docs: [submission({ decisionAt: undefined })],
+  test('does not scan a submission decided before the 7-day window (real range-query boundary)', async () => {
+    await seedSubmission('sub-old', {
+      userId: '10000062',
+      idMethod: 'passport',
+      status: 'approved',
+      decisionAt: beforeWindow(), // 8 days ago → excluded by `decisionAt >= cutoff`
+      decidedBy: 10000001,
     });
 
     const result = await ageVerificationAuditReconcile();
 
-    expect(result.skippedPending).toBe(1);
+    expect(result.scanned).toBe(0);
+    expect(result.reconciled).toBe(0);
+    expect(await auditCount()).toBe(0);
   });
-});
 
-// ─── Per-doc isolation: one bad doc must not abort remediation ────
+  test('does not scan a submission whose decisionAt is non-numeric (real type-aware query)', async () => {
+    // The numeric `>=` range query excludes a string-typed decisionAt entirely
+    // (verified against the emulator). It is never returned, so never scanned —
+    // the cron back-fills only the sibling numeric submission.
+    await seedSubmission('sub-string-ts', {
+      userId: '10000063',
+      idMethod: 'passport',
+      status: 'approved',
+      decisionAt: 'not-a-timestamp',
+      decidedBy: 10000001,
+    });
+    await seedSubmission('sub-numeric-ts', {
+      userId: '10000064',
+      idMethod: 'passport',
+      status: 'approved',
+      decisionAt: withinWindow(),
+      decidedBy: 10000001,
+    });
 
-describe('ageVerificationAuditReconcile — per-doc isolation', () => {
-  test('one failing doc does not abort the rest — failed counter increments, others reconciled', async () => {
-    const goodDoc = submission({ id: 'sub-good' });
-    const badDoc = {
-      id: 'sub-bad',
-      data: () => ({
-        userId: '10000051',
+    const result = await ageVerificationAuditReconcile();
+
+    expect(result.scanned).toBe(1);
+    expect(result.reconciled).toBe(1);
+    expect(await remediationFor('sub-string-ts')).toHaveLength(0);
+    expect(await remediationFor('sub-numeric-ts')).toHaveLength(1);
+  });
+
+  test('reconciles every gap across a multi-submission scan (loop continues across docs)', async () => {
+    for (const id of ['multi-a', 'multi-b', 'multi-c']) {
+      await seedSubmission(id, {
+        userId: `u-${id}`,
         idMethod: 'passport',
         status: 'approved',
-        decisionAt: 1777896000000 - 60_000,
+        decisionAt: withinWindow(),
         decidedBy: 10000001,
-      }),
-    };
-    // Two docs in the scan; the second triggers a Firestore failure
-    // when its `auditLog` add is attempted.
-    mockSubmissionsGet.mockResolvedValue({ docs: [goodDoc, badDoc] });
-    mockTaggedAuditGet.mockResolvedValue({ empty: true, docs: [] });
-    mockOriginalAuditGet.mockResolvedValue({ docs: [] });
-    // First add succeeds, second throws.
-    mockAuditAdd.mockResolvedValueOnce().mockRejectedValueOnce(new Error('Firestore unavailable'));
+      });
+    }
 
     const result = await ageVerificationAuditReconcile();
 
-    expect(result.scanned).toBe(2);
-    expect(result.reconciled).toBe(1);
-    expect(result.failed).toBe(1);
-    // The good doc was still written even though the bad one failed.
-    expect(mockAuditAdd).toHaveBeenCalledTimes(2);
-  });
-
-  test('a doc whose data() throws is counted as failed, not as a hard crash', async () => {
-    const exploding = {
-      id: 'sub-explode',
-      data: () => {
-        throw new Error('corrupted snapshot');
-      },
-    };
-    const good = submission({ id: 'sub-ok' });
-    mockSubmissionsGet.mockResolvedValue({ docs: [exploding, good] });
-    mockTaggedAuditGet.mockResolvedValue({ empty: true, docs: [] });
-    mockOriginalAuditGet.mockResolvedValue({ docs: [] });
-
-    const result = await ageVerificationAuditReconcile();
-
-    expect(result.failed).toBe(1);
-    expect(result.reconciled).toBe(1);
+    expect(result.scanned).toBe(3);
+    expect(result.reconciled).toBe(3);
+    expect(result.failed).toBe(0);
+    for (const id of ['multi-a', 'multi-b', 'multi-c']) {
+      expect(await remediationFor(id)).toHaveLength(1);
+    }
   });
 });
 
-// ─── Firestore Timestamp coercion ─────────────────────────────────
-
-describe('ageVerificationAuditReconcile — Firestore Timestamp shapes', () => {
-  test('decisionAt as Firestore Timestamp ({ toMillis() }) is matched against the audit-row window', async () => {
-    const decisionMs = 1777896000000 - 60_000;
-    mockSubmissionsGet.mockResolvedValue({
-      docs: [
-        submission({
-          decisionAt: { toMillis: () => decisionMs },
-        }),
-      ],
-    });
-    mockTaggedAuditGet.mockResolvedValue({ empty: true, docs: [] });
-    // Original audit row 30s before the Timestamp-shaped decisionAt.
-    mockOriginalAuditGet.mockResolvedValue({
-      docs: [{ data: () => ({ timestamp: { toMillis: () => decisionMs - 30_000 } }) }],
-    });
-
-    const result = await ageVerificationAuditReconcile();
-
-    // Match found via the Timestamp coercion path.
-    expect(result.skippedAlreadyAudited).toBe(1);
-    expect(result.reconciled).toBe(0);
-  });
-
-  test('decisionAt as { seconds, nanoseconds } shape (plain-object Timestamp) is coerced', async () => {
-    const decisionMs = 1777896000000 - 60_000;
-    mockSubmissionsGet.mockResolvedValue({
-      docs: [
-        submission({
-          decisionAt: { seconds: Math.floor(decisionMs / 1000), nanoseconds: 0 },
-        }),
-      ],
-    });
-    mockTaggedAuditGet.mockResolvedValue({ empty: true, docs: [] });
-    mockOriginalAuditGet.mockResolvedValue({ docs: [] });
-
-    const result = await ageVerificationAuditReconcile();
-
-    // No matching audit row → back-fill happens, proving decisionAt
-    // was successfully coerced (otherwise it would have skipped as
-    // "no decisionAt").
-    expect(result.reconciled).toBe(1);
-  });
-
-  test('decisionAt as a string is treated as missing — submission is skipped, not back-filled', async () => {
-    mockSubmissionsGet.mockResolvedValue({
-      docs: [submission({ decisionAt: 'not-a-timestamp' })],
-    });
-
-    const result = await ageVerificationAuditReconcile();
-
-    expect(result.skippedPending).toBe(1);
-    expect(mockAuditAdd).not.toHaveBeenCalled();
-  });
-});
-
-// ─── toMillis helper ──────────────────────────────────────────────
-
+// ─── toMillis helper — pure function, real inputs, no doubles ──────────
+// Kept as direct assertions on the exported helper (no mock collaborator),
+// covering the timestamp shapes the cron must coerce in hasExistingAudit /
+// buildRemediationEntry.
 describe('toMillis', () => {
   const { toMillis } = ageVerificationAuditReconcile;
 
-  test('returns numbers unchanged when finite', () => {
+  test('returns finite numbers unchanged', () => {
     expect(toMillis(1777896000000)).toBe(1777896000000);
     expect(toMillis(0)).toBe(0);
   });
@@ -397,10 +485,9 @@ describe('toMillis', () => {
   });
 });
 
-// ─── Internal helper exports ──────────────────────────────────────
-
+// ─── Internal helper exports — pure value assertions ──────────────────
 describe('exports', () => {
-  test('exposes constants for the cron registration site to schedule a window-aware run', () => {
+  test('exposes the scan window + the exact status→action map', () => {
     expect(ageVerificationAuditReconcile.SCAN_WINDOW_MS).toBe(7 * 86_400_000);
     expect(ageVerificationAuditReconcile.STATUS_ACTION_MAP.approved).toBe(
       'age_verification_approved',
@@ -411,7 +498,6 @@ describe('exports', () => {
     expect(ageVerificationAuditReconcile.STATUS_ACTION_MAP['modify-dob']).toBe(
       'age_verification_dob_modified',
     );
-    // The status string actually written by the route handler.
     expect(ageVerificationAuditReconcile.STATUS_ACTION_MAP.dob_modified).toBe(
       'age_verification_dob_modified',
     );
