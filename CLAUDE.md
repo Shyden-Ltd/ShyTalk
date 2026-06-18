@@ -284,6 +284,7 @@ Before any production code, write **deep** tests — RED before GREEN — across
   - Android device: `chrome`, `samsung`, `edge`, `firefox`
   - iOS device: `safari`, `chrome`, `firefox`, `edge`
 - Run user journeys + regression. **Regression scope:** worked-on + impact-selected journeys each loop; the **FULL corpus** runs as the final pre-push gate.
+- **Backend = full gauntlet (HARD GLOBAL — operator 2026-06-18, SHY-0127):** ANY backend change (`express-api/**`, `firestore.rules`, `database.rules.json`) is treated as "everything needs testing" — ALL apps + ALL webpages — because the backend is the **shared core** every client depends on, so a backend regression can break any of them. The FULL device + all-browser matrix runs; NO per-platform skip applies to a backend change. CI enforces this: `detect-changes` forces `app/android/ios/web/integration` true (and overrides the `[skip-*-e2e]` markers) whenever `backend_changed`.
 - **Any failure → fix in TDD fashion across ALL frameworks (failing test first) → restart the ENTIRE local gauntlet from the top.** Loop until everything is green.
 
 ### Phase 2 — Review + push
@@ -301,6 +302,9 @@ Before any production code, write **deep** tests — RED before GREEN — across
 
 ### Phase 4 — Merge (judgment gate)
 
+- **Status In Review BEFORE merge (HARD, SHY-0127 Gate 1):** flip the story frontmatter to `status: In Review` (and push it) before merging. The CI **Pre-Merge Gate** job (inside the required **PR Gate** check) fails any ready PR whose diffed story is still `Draft`/`In Progress` — so a story can't merge while In Progress (the SHY-0120 slip).
+- **Re-review anything pushed after a clean review (HARD, SHY-0127 Gate 3):** any commit landed AFTER a clean `code-reviewer` pass must be re-reviewed; record the reviewed commit as a `Reviewed-up-to: <sha>` line in the story `## Notes` and bump it after each review. A story-`.md`-only commit (status flip / marker bump / Notes) is review-neutral.
+- **Run the local gate before merging (HARD, SHY-0127 Gates 2+3):** `bash scripts/pre-merge-check.sh <PR#>` must emit `PRE-MERGE-CHECK: OK` — it refuses unless the story is In Review, every CI check is green by name, and there are no unreviewed commits since `Reviewed-up-to`. It also prints the human-judgment checklist (DoD met · dev-verified on real devices · backend⇒full-gauntlet-ran) for conscious sign-off.
 - Merge **only** when dev is fully green **and** you have **zero doubt** it is production-ready. No `--auto`. Notify the operator on each merge.
 
 ### Exemption (the ONLY one)

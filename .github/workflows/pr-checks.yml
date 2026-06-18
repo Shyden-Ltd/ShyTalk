@@ -135,6 +135,15 @@ jobs:
           if printf '%s' "$PR_BODY" | grep -qE '^[[:space:]]*\[skip-ios-e2e\][[:space:]]*$'; then
             SKIP_IOS_E2E=true
           fi
+          # SHY-0127 — the Express backend is the shared core of every app +
+          # webpage, so ANY backend change is treated as "everything needs
+          # testing": force the full client matrix on AND override the
+          # per-platform E2E skip markers. A backend regression can break any
+          # client, so no client suite may be skipped on a backend change.
+          if [ "$BACKEND" = "true" ]; then
+            APP=true; ANDROID_APP=true; IOS_APP=true; WEB=true; INTEGRATION=true
+            SKIP_ANDROID_E2E=false; SKIP_IOS_E2E=false
+          fi
           for v in app_changed=$APP android_app_changed=$ANDROID_APP ios_app_changed=$IOS_APP backend_changed=$BACKEND web_changed=$WEB integration_changed=$INTEGRATION qa_runner_drivers_changed=$QA_RUNNER_DRIVERS workflow_only=$WORKFLOW_ONLY skip_android_e2e=$SKIP_ANDROID_E2E skip_ios_e2e=$SKIP_IOS_E2E; do
             echo "$v" >> "$GITHUB_OUTPUT"
           done
@@ -404,9 +413,27 @@ jobs:
     with:
       ref: ${{ github.event.pull_request.head.sha }}
 
+  pre-merge-gate:
+    name: Pre-Merge Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+      # SHY-0127 Gate 1: a PR that touches a SHY story MUST have flipped it to
+      # In Review (not Draft/In Progress) before it can merge. The script skips
+      # when no story .md is in the diff, or for draft PRs.
+      - name: Story status must be In Review before merge
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          IS_DRAFT: ${{ github.event.pull_request.draft }}
+        run: node scripts/check-pr-story-status.js
+
   gate:
     name: PR Gate
-    needs: [detect-changes, lint, build-and-test, sonarcloud, test-backend, android-e2e, playwright-web, integration-tests, ios-e2e, qa-runner-driver-checks]
+    needs: [detect-changes, pre-merge-gate, lint, build-and-test, sonarcloud, test-backend, android-e2e, playwright-web, integration-tests, ios-e2e, qa-runner-driver-checks]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -421,6 +448,7 @@ jobs:
 
           # Check each job — failure or cancelled = block merge
           for result in \
+            "${{ needs.pre-merge-gate.result }}" \
             "${{ needs.lint.result }}" \
             "${{ needs.build-and-test.result }}" \
             "${{ needs.sonarcloud.result }}" \
