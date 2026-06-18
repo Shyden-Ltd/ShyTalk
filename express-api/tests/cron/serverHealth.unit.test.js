@@ -39,6 +39,20 @@ describe('detectPm2Restarts (pure restart-delta logic)', () => {
     expect(last.api).toBe(4); // baseline recorded for next run
   });
 
+  test('does NOT flag a recorded-0 baseline that increases to 1 (first restart after fresh start is absorbed), but advances the baseline', () => {
+    // Distinct from the first-sighting case above: here lastKnown was explicitly
+    // recorded as 0 on a prior run. The `lastKnown > 0` guard means even a real
+    // 0→1 increase does not alert — it just advances the baseline so the NEXT
+    // increase (1→2) will. Pins the documented "fresh start never alerts" contract
+    // against a future `lastKnown >= 0` regression.
+    const last = { api: 0 };
+
+    const result = detectPm2Restarts([proc('api', 1)], last);
+
+    expect(result).toEqual([]); // increase, but lastKnown was 0 → no alert
+    expect(last.api).toBe(1); // baseline advanced; a subsequent 1→2 WILL alert
+  });
+
   test('does not flag a process whose restart count is unchanged', () => {
     const last = { api: 2 };
 

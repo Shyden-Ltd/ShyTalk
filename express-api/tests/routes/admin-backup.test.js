@@ -101,6 +101,7 @@ mockBackupFn.SUBCOLLECTIONS = [
   ['users', 'giftWall'],
   ['users', 'transactions'],
   ['users', 'stalkers'],
+  ['conversations', 'settings'],
 ];
 
 jest.mock('../../src/cron/backups', () => mockBackupFn);

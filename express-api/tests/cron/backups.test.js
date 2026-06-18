@@ -203,6 +203,25 @@ describe('backups cron — local/dev scope (real Firestore emulator + real MinIO
     expect(await exists(recentLegacy)).toBe(true); // < 7 days → kept
   });
 
+  test('keeps a 6-day-old backup but prunes an 8-day-old one (calendar-window boundary)', async () => {
+    // Dates are parsed at midnight UTC and compared against `Date.now() - 7d`.
+    // 6 calendar-days ago (midnight) is always inside the window regardless of
+    // the wall-clock time of day; 8 days ago is always outside. (Exactly-7-days
+    // is deliberately NOT asserted — its midnight value straddles `now - 7d`, so
+    // its kept/pruned outcome is time-of-day dependent and would be flaky.)
+    const sixDays = dayUtc(-6 * 24 * 3600 * 1000);
+    const eightDays = dayUtc(-8 * 24 * 3600 * 1000);
+    const keep = `backups/full/${sixDays}/users.json`;
+    const drop = `backups/full/${eightDays}/users.json`;
+    await r2.putObject(keep, Buffer.from('[]'), 'application/json');
+    await r2.putObject(drop, Buffer.from('[]'), 'application/json');
+
+    await devBackups();
+
+    expect(await exists(keep)).toBe(true); // 6d ago → inside 7d window → kept
+    expect(await exists(drop)).toBe(false); // 8d ago → outside window → pruned
+  });
+
   test('skips pruning keys whose date segment is unparseable', async () => {
     const oldFull = 'backups/full/2020-01-01/users.json';
     const weirdFull = 'backups/full/not-a-date/users.json';
