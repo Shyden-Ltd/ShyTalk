@@ -53,7 +53,11 @@ jobs:
   generate-report:
     name: Generate Allure Report
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 20 (was 10): the playwright suite's gh-pages round-trip (history restore +
+    # report deploy) exceeds 10 min on the large gh-pages branch and was being
+    # guillotined mid-deploy. Headroom guarantee; the real perf fix (shrinking
+    # gh-pages) is tracked in SHY-0128. See SHY-0127.
+    timeout-minutes: 20
     permissions:
       contents: write
     steps:
@@ -114,6 +118,13 @@ jobs:
         with:
           ref: gh-pages
           path: gh-pages
+          # Only the trend `history/` for THIS suite/env is read (next step). A
+          # sparse cone checkout skips writing every other suite's full HTML
+          # report to disk — the bulk of this step's cost. (Does not reduce the
+          # network fetch — `filter:` would, but it overrides sparse-checkout;
+          # the fetch+deploy size is the SHY-0128 bloat concern.)
+          sparse-checkout: |
+            ${{ inputs.suite_name }}/${{ inputs.report_env }}/history
         # Intentional: on the first run for a new suite the gh-pages
         # branch doesn't exist yet, and a missing ref would fail the
         # whole job. The next step's `cp ... 2>/dev/null || echo "No
