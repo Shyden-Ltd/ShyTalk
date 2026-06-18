@@ -1,300 +1,187 @@
-// ─── Firebase mock ───────────────────────────────────────────────
+/**
+ * subscriptions.test.js — EPIC-0003 / SHY-0120 slice 2.
+ *
+ * MIGRATED off the firebase + log Jest mocks (the prior tests asserted
+ * `batch.update toHaveBeenCalledWith` / `commit toHaveBeenCalledTimes` and could
+ * not catch the cron downgrading the WRONG users) onto the REAL Firestore
+ * emulator. Each test seeds real users, runs the real cron, and reads back to
+ * assert the real outcome — the correct users downgraded (isSuperShy=false,
+ * expiry/tier nulled), the exempt ones (future, lifetime, non-supershy)
+ * retained verbatim. The real `log` runs unmocked (exercised, not asserted).
+ *
+ * Note (scoping): the truncation `log.warn` fires only when the query returns
+ * exactly CRON_LIMIT (500) rows. It is an observability log (unmocked → not
+ * asserted per the EPIC-0003 logger policy), and the query's `.limit(500)` caps
+ * `toExpire` at 500 so the batch loop always runs once — the multi-user test
+ * already exercises the single-batch path. Seeding 500 users to fire an
+ * unassertable warn is disproportionate, so that path is intentionally not
+ * re-seeded here.
+ *
+ * Isolation: the cron queries the whole `users` collection, so it is cleared in
+ * beforeEach for a clean slate. See tests/helpers/firebase-emulator.js.
+ */
+const PRIOR_NODE_ENV = process.env.NODE_ENV;
+process.env.NODE_ENV = 'local';
 
-const mockBatchUpdate = jest.fn();
-const mockBatchCommit = jest.fn().mockResolvedValue();
-
-const mockUsersGet = jest.fn();
-
-jest.mock('../../src/utils/firebase', () => ({
-  db: {
-    collection: jest.fn(() => ({
-      where: jest.fn(() => ({
-        where: jest.fn(() => ({
-          limit: jest.fn(() => ({
-            get: mockUsersGet,
-          })),
-        })),
-      })),
-    })),
-    doc: jest.fn((path) => ({ path })),
-    batch: jest.fn(() => ({
-      update: mockBatchUpdate,
-      commit: mockBatchCommit,
-    })),
-  },
-}));
-
-jest.mock('../../src/utils/log', () => ({
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-}));
-
+const { db } = require('../../src/utils/firebase');
 const subscriptions = require('../../src/cron/subscriptions');
+const { assertEmulatorReachable, clearCollection } = require('../helpers/firebase-emulator');
 
-// Helper: timestamp in the past (expired)
-function pastTimestamp() {
-  return Date.now() - 24 * 60 * 60 * 1000; // 1 day ago
-}
+const HOUR_MS = 60 * 60 * 1000;
 
-// Helper: timestamp in the future (not expired)
-function _futureTimestamp() {
-  return Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days from now
-}
+const seedUser = (id, fields) => db.doc(`users/${id}`).set(fields);
+const readUser = async (id) => {
+  const snap = await db.doc(`users/${id}`).get();
+  return snap.exists ? snap.data() : null;
+};
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  mockBatchCommit.mockResolvedValue();
+beforeAll(async () => {
+  await assertEmulatorReachable();
 });
 
-// ─── Tests ───────────────────────────────────────────────────────
+beforeEach(async () => {
+  await clearCollection(db, 'users');
+});
 
-describe('subscriptions cron', () => {
-  test('does nothing when collection is empty', async () => {
-    mockUsersGet.mockResolvedValue({ empty: true, docs: [] });
+afterAll(async () => {
+  await clearCollection(db, 'users');
+  process.env.NODE_ENV = PRIOR_NODE_ENV;
+});
 
-    await subscriptions();
-
-    expect(mockBatchUpdate).not.toHaveBeenCalled();
-    expect(mockBatchCommit).not.toHaveBeenCalled();
+describe('subscriptions cron (real Firestore emulator)', () => {
+  test('an empty users collection is a clean no-op', async () => {
+    await expect(subscriptions()).resolves.toBeUndefined();
   });
 
-  test('expires users with past superShyExpiry', async () => {
-    mockUsersGet.mockResolvedValue({
-      empty: false,
-      docs: [
-        {
-          id: 'user-1',
-          data: () => ({
-            isSuperShy: true,
-            superShyExpiry: pastTimestamp(),
-            superShyTier: 'monthly',
-          }),
-        },
-      ],
+  test('downgrades an expired non-lifetime SuperShy user, nulling expiry + tier', async () => {
+    await seedUser('u1', {
+      isSuperShy: true,
+      superShyExpiry: Date.now() - HOUR_MS,
+      superShyTier: 'monthly',
+      displayName: 'Expired Pat',
     });
 
     await subscriptions();
 
-    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
-    expect(mockBatchUpdate).toHaveBeenCalledWith(expect.anything(), {
+    expect(await readUser('u1')).toMatchObject({
       isSuperShy: false,
       superShyExpiry: null,
       superShyTier: null,
+      displayName: 'Expired Pat', // unrelated fields untouched
     });
-    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
   });
 
-  test('expires multiple users in the same batch', async () => {
-    mockUsersGet.mockResolvedValue({
-      empty: false,
-      docs: [
-        {
-          id: 'user-1',
-          data: () => ({
-            isSuperShy: true,
-            superShyExpiry: pastTimestamp(),
-            superShyTier: 'monthly',
-          }),
-        },
-        {
-          id: 'user-2',
-          data: () => ({
-            isSuperShy: true,
-            superShyExpiry: pastTimestamp(),
-            superShyTier: 'annual',
-          }),
-        },
-      ],
+  test('retains a SuperShy user whose expiry is still in the future', async () => {
+    await seedUser('u1', {
+      isSuperShy: true,
+      superShyExpiry: Date.now() + HOUR_MS,
+      superShyTier: 'monthly',
     });
 
     await subscriptions();
 
-    expect(mockBatchUpdate).toHaveBeenCalledTimes(2);
-    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+    expect(await readUser('u1')).toMatchObject({
+      isSuperShy: true,
+      superShyTier: 'monthly',
+    });
   });
 
-  test('skips lifetime subscribers even if past expiry', async () => {
-    mockUsersGet.mockResolvedValue({
-      empty: false,
-      docs: [
-        {
-          id: 'user-lifetime',
-          data: () => ({
-            isSuperShy: true,
-            superShyExpiry: pastTimestamp(),
-            superShyTier: 'lifetime', // must be skipped
-          }),
-        },
-      ],
+  test('exempts a lifetime subscriber even when past expiry', async () => {
+    await seedUser('u1', {
+      isSuperShy: true,
+      superShyExpiry: Date.now() - HOUR_MS,
+      superShyTier: 'lifetime',
     });
 
     await subscriptions();
 
-    expect(mockBatchUpdate).not.toHaveBeenCalled();
-    expect(mockBatchCommit).not.toHaveBeenCalled();
+    // Lifetime status is never expired by the cron.
+    expect(await readUser('u1')).toMatchObject({
+      isSuperShy: true,
+      superShyTier: 'lifetime',
+    });
   });
 
-  test('expires non-lifetime users while keeping lifetime users', async () => {
-    mockUsersGet.mockResolvedValue({
-      empty: false,
-      docs: [
-        {
-          id: 'user-monthly',
-          data: () => ({
-            isSuperShy: true,
-            superShyExpiry: pastTimestamp(),
-            superShyTier: 'monthly',
-          }),
-        },
-        {
-          id: 'user-lifetime',
-          data: () => ({
-            isSuperShy: true,
-            superShyExpiry: pastTimestamp(),
-            superShyTier: 'lifetime',
-          }),
-        },
-      ],
+  test('downgrades an expired user whose tier field is missing (undefined !== lifetime)', async () => {
+    await seedUser('u1', {
+      isSuperShy: true,
+      superShyExpiry: Date.now() - HOUR_MS,
+      // no superShyTier
     });
 
     await subscriptions();
 
-    // Only the monthly user should be expired
-    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
-    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+    expect(await readUser('u1')).toMatchObject({ isSuperShy: false, superShyExpiry: null });
   });
 
-  test('does nothing when all matched users are lifetime subscribers', async () => {
-    mockUsersGet.mockResolvedValue({
-      empty: false,
-      docs: [
-        {
-          id: 'user-a',
-          data: () => ({
-            isSuperShy: true,
-            superShyExpiry: pastTimestamp(),
-            superShyTier: 'lifetime',
-          }),
-        },
-        {
-          id: 'user-b',
-          data: () => ({
-            isSuperShy: true,
-            superShyExpiry: pastTimestamp(),
-            superShyTier: 'lifetime',
-          }),
-        },
-      ],
+  test('never touches a non-SuperShy user (query scoping)', async () => {
+    await seedUser('u1', { isSuperShy: false, superShyExpiry: Date.now() - HOUR_MS });
+
+    await subscriptions();
+
+    // isSuperShy=false is outside the query — left exactly as seeded.
+    expect(await readUser('u1')).toMatchObject({ isSuperShy: false });
+  });
+
+  test('expiry exactly at "now" is downgraded (the <= boundary)', async () => {
+    // The cron compares against Date.now() captured at run time (>= this seed
+    // time by a few ms), so an expiry equal to seed-now satisfies `<=`.
+    await seedUser('u1', { isSuperShy: true, superShyExpiry: Date.now(), superShyTier: 'monthly' });
+
+    await subscriptions();
+
+    expect(await readUser('u1')).toMatchObject({ isSuperShy: false });
+  });
+
+  test('downgrades multiple expired users and leaves exempt ones in one run', async () => {
+    const now = Date.now();
+    await seedUser('expired-a', {
+      isSuperShy: true,
+      superShyExpiry: now - HOUR_MS,
+      superShyTier: 'monthly',
+    });
+    await seedUser('expired-b', {
+      isSuperShy: true,
+      superShyExpiry: now - 2 * HOUR_MS,
+      superShyTier: 'annual',
+    });
+    await seedUser('future', {
+      isSuperShy: true,
+      superShyExpiry: now + HOUR_MS,
+      superShyTier: 'monthly',
+    });
+    await seedUser('lifetime', {
+      isSuperShy: true,
+      superShyExpiry: now - HOUR_MS,
+      superShyTier: 'lifetime',
     });
 
     await subscriptions();
 
-    expect(mockBatchUpdate).not.toHaveBeenCalled();
-    expect(mockBatchCommit).not.toHaveBeenCalled();
+    expect(await readUser('expired-a')).toMatchObject({ isSuperShy: false, superShyTier: null });
+    expect(await readUser('expired-b')).toMatchObject({ isSuperShy: false, superShyTier: null });
+    expect(await readUser('future')).toMatchObject({ isSuperShy: true, superShyTier: 'monthly' });
+    expect(await readUser('lifetime')).toMatchObject({
+      isSuperShy: true,
+      superShyTier: 'lifetime',
+    });
   });
 
-  test('sets isSuperShy=false, superShyExpiry=null, superShyTier=null on expired user', async () => {
-    mockUsersGet.mockResolvedValue({
-      empty: false,
-      docs: [
-        {
-          id: 'user-expired',
-          data: () => ({
-            isSuperShy: true,
-            superShyExpiry: pastTimestamp(),
-            superShyTier: 'monthly',
-          }),
-        },
-      ],
+  test('when all matched users are lifetime, nothing is downgraded', async () => {
+    await seedUser('l1', {
+      isSuperShy: true,
+      superShyExpiry: Date.now() - HOUR_MS,
+      superShyTier: 'lifetime',
+    });
+    await seedUser('l2', {
+      isSuperShy: true,
+      superShyExpiry: Date.now() - HOUR_MS,
+      superShyTier: 'lifetime',
     });
 
     await subscriptions();
 
-    expect(mockBatchUpdate).toHaveBeenCalledWith(expect.anything(), {
-      isSuperShy: false,
-      superShyExpiry: null,
-      superShyTier: null,
-    });
-  });
-
-  test('processes users in batches of 500', async () => {
-    // Build 501 expired non-lifetime users to trigger two batch commits
-    const docs = Array.from({ length: 501 }, (_, i) => ({
-      id: `user-${i}`,
-      data: () => ({ isSuperShy: true, superShyExpiry: pastTimestamp(), superShyTier: 'monthly' }),
-    }));
-
-    mockUsersGet.mockResolvedValue({ empty: false, docs });
-
-    await subscriptions();
-
-    // 501 updates split into chunk of 500 + chunk of 1
-    expect(mockBatchUpdate).toHaveBeenCalledTimes(501);
-    expect(mockBatchCommit).toHaveBeenCalledTimes(2);
-  });
-
-  test('resolves without throwing when Firestore batch commit succeeds', async () => {
-    mockUsersGet.mockResolvedValue({
-      empty: false,
-      docs: [
-        {
-          id: 'user-ok',
-          data: () => ({
-            isSuperShy: true,
-            superShyExpiry: pastTimestamp(),
-            superShyTier: 'annual',
-          }),
-        },
-      ],
-    });
-    mockBatchCommit.mockResolvedValue();
-
-    await expect(subscriptions()).resolves.not.toThrow();
-  });
-
-  // ── PR #498 (audit M2): truncation warning ──────────────────────
-
-  test('logs warning when query hits CRON_LIMIT (truncation suspected)', async () => {
-    const log = require('../../src/utils/log');
-    // Build 500 expired non-lifetime users to fill CRON_LIMIT exactly
-    const docs = Array.from({ length: 500 }, (_, i) => ({
-      id: `user-${i}`,
-      data: () => ({ isSuperShy: true, superShyExpiry: pastTimestamp(), superShyTier: 'monthly' }),
-    }));
-
-    mockUsersGet.mockResolvedValue({ empty: false, docs, size: 500 });
-
-    await subscriptions();
-
-    // Pre-fix: query hit limit, cron silently ran another day before
-    // catching 501+ users. Now: warn + audit fields visible.
-    expect(log.warn).toHaveBeenCalledWith(
-      'cron',
-      expect.stringMatching(/truncation/i),
-      expect.objectContaining({ limit: 500, processed: 500 }),
-    );
-  });
-
-  test('does NOT log truncation warning when query returns fewer than CRON_LIMIT', async () => {
-    const log = require('../../src/utils/log');
-    mockUsersGet.mockResolvedValue({
-      empty: false,
-      docs: [
-        {
-          id: 'user-1',
-          data: () => ({
-            isSuperShy: true,
-            superShyExpiry: pastTimestamp(),
-            superShyTier: 'monthly',
-          }),
-        },
-      ],
-      size: 1,
-    });
-
-    await subscriptions();
-
-    expect(log.warn).not.toHaveBeenCalled();
+    expect(await readUser('l1')).toMatchObject({ isSuperShy: true });
+    expect(await readUser('l2')).toMatchObject({ isSuperShy: true });
   });
 });
