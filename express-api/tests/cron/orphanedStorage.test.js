@@ -1,617 +1,243 @@
-// ─── R2 mock ─────────────────────────────────────────────────────
+/**
+ * orphanedStorage.test.js — EPIC-0003 / SHY-0120 (cron → real local stack).
+ *
+ * MIGRATED off the firebase + r2 + log Jest mocks. The prior 29 tests faked the
+ * query chains + the R2 client and asserted `deleteObjects` call SHAPES
+ * (`.not.toHaveBeenCalledWith([refKey])`) — they never put a real object, so
+ * they could not prove a referenced photo actually SURVIVED on disk, nor that
+ * an orphan was actually removed. For a garbage collector that deletes live
+ * user media, only the real round-trip is trustworthy.
+ *
+ * This suite drives the REAL cron against the live Firestore emulator + real
+ * MinIO (NODE_ENV=local → http://localhost:9002): referencing docs are seeded,
+ * real objects are PUT in each folder, and after the run object existence is
+ * read back from the bucket — referenced kept, orphans gone.
+ *
+ * Covers every referenced source + both field casings: user photo fields
+ * (profile/cover/preSuspension × camel/snake), conversation group photo,
+ * conversation IMAGE/STICKER messages, reports + reportsArchive evidence,
+ * banners; plus the security-relevant CDN-prefix guard (a foreign-hosted URL
+ * must NOT protect a same-named key) and graceful non-array handling.
+ *
+ * NOT covered (escape-hatch, EPIC-0003): the per-folder list/delete `catch`
+ * branch (a real MinIO list/delete failure is not inducible without a mock).
+ *
+ * KNOWN PRODUCT RISK (flagged for a follow-up SHY, NOT fixed here): the cron
+ * collects message/sticker keys for only the first 30 conversations
+ * (`convsSnap.docs.slice(0, 30)`) but sweeps the whole messages/ + stickers/
+ * folders — so referenced media in the 31st+ conversation would be deleted.
+ * This suite does not assert (and thus does not bless) that data-loss behaviour.
+ *
+ * Isolation: clears the referencing collections + the messages collection-group
+ * + all scanned R2 folders in beforeEach.
+ */
+const PRIOR_NODE_ENV = process.env.NODE_ENV;
+process.env.NODE_ENV = 'local';
 
-const mockListObjects = jest.fn();
-const mockDeleteObjects = jest.fn().mockResolvedValue();
-
-jest.mock('../../src/utils/r2', () => ({
-  listObjects: (...args) => mockListObjects(...args),
-  deleteObjects: (...args) => mockDeleteObjects(...args),
-  CDN_URL: 'https://images.shytalk.shyden.co.uk',
-}));
-
-// ─── Firebase mock ───────────────────────────────────────────────
-// orphanedStorage queries: users (select), conversations (select),
-// conversations/*/messages (where IMAGE, where STICKER),
-// reports, reportsArchive, banners (select)
-
-const mockCollectionSelectGet = jest.fn();
-const mockWhereGet = jest.fn();
-
-// Chain builder helpers
-function _makeSelectChain(get) {
-  return { select: jest.fn(() => ({ limit: jest.fn(() => ({ get })) })) };
-}
-
-function _makeWhereChain(get) {
-  return { where: jest.fn(() => ({ limit: jest.fn(() => ({ get })) })) };
-}
-
-// Track which collection path was requested so we can return correct data
-const collectionMocks = {};
-
-jest.mock('../../src/utils/firebase', () => ({
-  db: {
-    collection: jest.fn((path) => {
-      return (
-        collectionMocks[path] || {
-          select: jest.fn(() => ({ limit: jest.fn(() => ({ get: mockCollectionSelectGet })) })),
-          where: jest.fn(() => ({ limit: jest.fn(() => ({ get: mockWhereGet })) })),
-        }
-      );
-    }),
-  },
-}));
-
-jest.mock('../../src/utils/log', () => ({
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-}));
-
-const CDN_PREFIX = 'https://images.shytalk.shyden.co.uk/';
-
-// Helper: build a CDN URL from an R2 key
-function cdnUrl(key) {
-  return `${CDN_PREFIX}${key}`;
-}
-
-// Helper: make a Firestore doc stub
-function makeDoc(data) {
-  return { id: 'doc-id', data: () => data };
-}
-
+const { CreateBucketCommand } = require('@aws-sdk/client-s3');
+const { db } = require('../../src/utils/firebase');
+const r2 = require('../../src/utils/r2');
 const orphanedStorage = require('../../src/cron/orphanedStorage');
+const {
+  assertEmulatorReachable,
+  clearCollection,
+  clearCollectionGroup,
+} = require('../helpers/firebase-emulator');
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  mockDeleteObjects.mockResolvedValue();
+const FOLDERS = [
+  'profiles/',
+  'covers/',
+  'messages/',
+  'groups/',
+  'evidence/',
+  'stickers/',
+  'banners/',
+  'starting-screens/',
+];
 
-  // Default: all Firestore collections return empty
-  mockCollectionSelectGet.mockResolvedValue({ docs: [] });
-  mockWhereGet.mockResolvedValue({ docs: [] });
+const url = (key) => `${r2.CDN_URL}/${key}`;
+const put = (key) => r2.putObject(key, Buffer.from('x'), 'image/jpeg');
+const exists = async (key) => (await r2.listObjects(key)).includes(key);
 
-  // Default: all R2 folders return empty
-  mockListObjects.mockResolvedValue([]);
+async function clearFolders() {
+  for (const folder of FOLDERS) {
+    const keys = await r2.listObjects(folder);
+    if (keys.length > 0) await r2.deleteObjects(keys);
+  }
+}
 
-  // Reset per-collection mocks
-  Object.keys(collectionMocks).forEach((k) => delete collectionMocks[k]);
+beforeAll(async () => {
+  await assertEmulatorReachable();
+  try {
+    await r2.s3.send(new CreateBucketCommand({ Bucket: r2.bucketName }));
+  } catch (err) {
+    if (err.name !== 'BucketAlreadyOwnedByYou' && err.name !== 'BucketAlreadyExists') {
+      throw err;
+    }
+  }
 });
 
-// ─── Tests ───────────────────────────────────────────────────────
+beforeEach(async () => {
+  await clearCollection(db, 'users');
+  await clearCollection(db, 'conversations');
+  await clearCollection(db, 'reports');
+  await clearCollection(db, 'reportsArchive');
+  await clearCollection(db, 'banners');
+  await clearCollectionGroup(db, 'messages');
+  await clearFolders();
+});
 
-describe('orphanedStorage cron', () => {
-  test('does nothing when R2 bucket is empty', async () => {
-    mockCollectionSelectGet.mockResolvedValue({ docs: [] });
-    mockWhereGet.mockResolvedValue({ docs: [] });
-    mockListObjects.mockResolvedValue([]);
+afterAll(async () => {
+  await clearCollection(db, 'users');
+  await clearCollection(db, 'conversations');
+  await clearCollection(db, 'reports');
+  await clearCollection(db, 'reportsArchive');
+  await clearCollection(db, 'banners');
+  await clearCollectionGroup(db, 'messages');
+  await clearFolders();
+  process.env.NODE_ENV = PRIOR_NODE_ENV;
+});
 
-    await orphanedStorage();
+describe('orphanedStorage cron (real Firestore emulator + real MinIO)', () => {
+  test('keeps every user-referenced photo (all 4 fields, camelCase + snake_case) and deletes orphans', async () => {
+    const keep = [
+      'profiles/p-camel.jpg',
+      'profiles/p-snake.jpg',
+      'covers/c-camel.jpg',
+      'covers/c-snake.jpg',
+      'profiles/presusp-p-camel.jpg',
+      'profiles/presusp-p-snake.jpg',
+      'covers/presusp-c-camel.jpg',
+      'covers/presusp-c-snake.jpg',
+    ];
+    for (const k of keep) await put(k);
+    await put('profiles/orphan.jpg');
+    await put('covers/orphan.jpg');
 
-    expect(mockDeleteObjects).not.toHaveBeenCalled();
-  });
-
-  test('deletes R2 keys not referenced in Firestore', async () => {
-    // All Firestore collections empty → no referenced keys (beyond system key)
-    mockCollectionSelectGet.mockResolvedValue({ docs: [] });
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    // profiles/ folder has two orphaned objects
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'profiles/')
-        return Promise.resolve(['profiles/orphan1.jpg', 'profiles/orphan2.jpg']);
-      return Promise.resolve([]);
+    await db.doc('users/camel').set({
+      profilePhotoUrl: url('profiles/p-camel.jpg'),
+      coverPhotoUrl: url('covers/c-camel.jpg'),
+      preSuspensionProfilePhotoUrl: url('profiles/presusp-p-camel.jpg'),
+      preSuspensionCoverPhotoUrl: url('covers/presusp-c-camel.jpg'),
+    });
+    await db.doc('users/snake').set({
+      profile_photo_url: url('profiles/p-snake.jpg'),
+      cover_photo_url: url('covers/c-snake.jpg'),
+      pre_suspension_profile_photo_url: url('profiles/presusp-p-snake.jpg'),
+      pre_suspension_cover_photo_url: url('covers/presusp-c-snake.jpg'),
     });
 
     await orphanedStorage();
 
-    expect(mockDeleteObjects).toHaveBeenCalledWith([
-      'profiles/orphan1.jpg',
-      'profiles/orphan2.jpg',
-    ]);
+    for (const k of keep) expect(await exists(k)).toBe(true);
+    expect(await exists('profiles/orphan.jpg')).toBe(false);
+    expect(await exists('covers/orphan.jpg')).toBe(false);
   });
 
-  test('keeps R2 keys that are referenced as user profilePhotoUrl', async () => {
-    const referencedKey = 'profiles/user-abc.jpg';
+  test('keeps conversation group photos + IMAGE images + STICKER images (both casings); deletes orphans', async () => {
+    const keep = [
+      'groups/g-camel.jpg',
+      'groups/g-snake.jpg',
+      'messages/i-camel.jpg',
+      'messages/i-snake.jpg',
+      'stickers/s-camel.webp',
+      'stickers/s-snake.webp',
+    ];
+    for (const k of keep) await put(k);
+    await put('groups/orphan.jpg');
+    await put('messages/orphan.jpg');
+    await put('stickers/orphan.webp');
 
-    // users collection returns a user referencing the key
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ profilePhotoUrl: cdnUrl(referencedKey) })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    // R2 has exactly that key in profiles/
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'profiles/') return Promise.resolve([referencedKey]);
-      return Promise.resolve([]);
-    });
+    await db.doc('conversations/c-camel').set({ groupPhotoUrl: url('groups/g-camel.jpg') });
+    await db.doc('conversations/c-snake').set({ group_photo_url: url('groups/g-snake.jpg') });
+    await db
+      .doc('conversations/c-camel/messages/im1')
+      .set({ type: 'IMAGE', imageUrls: [url('messages/i-camel.jpg')] });
+    await db
+      .doc('conversations/c-camel/messages/im2')
+      .set({ type: 'IMAGE', image_urls: [url('messages/i-snake.jpg')] });
+    await db
+      .doc('conversations/c-camel/messages/st1')
+      .set({ type: 'STICKER', stickerUrl: url('stickers/s-camel.webp') });
+    await db
+      .doc('conversations/c-camel/messages/st2')
+      .set({ type: 'STICKER', sticker_url: url('stickers/s-snake.webp') });
 
     await orphanedStorage();
 
-    // Referenced key must NOT be deleted
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([referencedKey]));
+    for (const k of keep) expect(await exists(k)).toBe(true);
+    expect(await exists('groups/orphan.jpg')).toBe(false);
+    expect(await exists('messages/orphan.jpg')).toBe(false);
+    expect(await exists('stickers/orphan.webp')).toBe(false);
   });
 
-  test('keeps R2 keys referenced as user coverPhotoUrl', async () => {
-    const coverKey = 'covers/user-cover.jpg';
+  test('keeps evidence referenced by reports AND reportsArchive (both casings); deletes orphan evidence', async () => {
+    const keep = [
+      'evidence/r-camel.jpg',
+      'evidence/r-snake.jpg',
+      'evidence/a-camel.jpg',
+      'evidence/a-snake.jpg',
+    ];
+    for (const k of keep) await put(k);
+    await put('evidence/orphan.jpg');
 
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ coverPhotoUrl: cdnUrl(coverKey) })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'covers/') return Promise.resolve([coverKey]);
-      return Promise.resolve([]);
-    });
+    await db.doc('reports/r1').set({ evidenceUrls: [url('evidence/r-camel.jpg')] });
+    await db.doc('reports/r2').set({ evidence_urls: [url('evidence/r-snake.jpg')] });
+    await db.doc('reportsArchive/a1').set({ evidenceUrls: [url('evidence/a-camel.jpg')] });
+    await db.doc('reportsArchive/a2').set({ evidence_urls: [url('evidence/a-snake.jpg')] });
 
     await orphanedStorage();
 
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([coverKey]));
+    for (const k of keep) expect(await exists(k)).toBe(true);
+    expect(await exists('evidence/orphan.jpg')).toBe(false);
   });
 
-  test('keeps the hardcoded system key regardless of Firestore state', async () => {
-    mockCollectionSelectGet.mockResolvedValue({ docs: [] });
-    mockWhereGet.mockResolvedValue({ docs: [] });
+  test('keeps banner images (both casings); deletes orphan banners', async () => {
+    await put('banners/b-camel.jpg');
+    await put('banners/b-snake.jpg');
+    await put('banners/orphan.jpg');
 
-    // Suppose the system icon lives in profiles/ (unusual, but tests the Set)
-    // More realistic: it won't be in a scanned folder, so deleteObjects never called with it.
-    // Here we verify the key is in referencedKeys by putting it in a folder we scan.
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'profiles/')
-        return Promise.resolve(['system/shytalk_icon.webp', 'profiles/orphan.jpg']);
-      return Promise.resolve([]);
-    });
+    await db.doc('banners/b1').set({ imageUrl: url('banners/b-camel.jpg') });
+    await db.doc('banners/b2').set({ image_url: url('banners/b-snake.jpg') });
 
     await orphanedStorage();
 
-    // system/shytalk_icon.webp must not be in the delete list
-    const calls = mockDeleteObjects.mock.calls.flat(2);
-    expect(calls).not.toContain('system/shytalk_icon.webp');
-    // orphan should be deleted
-    expect(mockDeleteObjects).toHaveBeenCalledWith(expect.arrayContaining(['profiles/orphan.jpg']));
+    expect(await exists('banners/b-camel.jpg')).toBe(true);
+    expect(await exists('banners/b-snake.jpg')).toBe(true);
+    expect(await exists('banners/orphan.jpg')).toBe(false);
   });
 
-  test('keeps R2 keys referenced in banner imageUrl', async () => {
-    const bannerKey = 'banners/sale-banner.jpg';
-
-    // banners collection returns a banner referencing the key
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ imageUrl: cdnUrl(bannerKey) })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'banners/') return Promise.resolve([bannerKey]);
-      return Promise.resolve([]);
-    });
+  test('does NOT protect an object referenced by a foreign (non-CDN) URL — it is swept as an orphan', async () => {
+    await put('profiles/foreign.jpg');
+    // URL points at another host → extractKey returns null → key not referenced.
+    await db
+      .doc('users/u')
+      .set({ profilePhotoUrl: 'https://evil.example.com/profiles/foreign.jpg' });
 
     await orphanedStorage();
 
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([bannerKey]));
+    expect(await exists('profiles/foreign.jpg')).toBe(false);
   });
 
-  test('keeps R2 keys referenced in report evidenceUrls', async () => {
-    const evidenceKey = 'evidence/report-screenshot.jpg';
-
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ evidenceUrls: [cdnUrl(evidenceKey)] })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'evidence/') return Promise.resolve([evidenceKey]);
-      return Promise.resolve([]);
-    });
+  test('sweeps every unreferenced object across all folders, including starting-screens', async () => {
+    await put('messages/o1.jpg');
+    await put('messages/o2.jpg');
+    await put('starting-screens/s1.webp');
 
     await orphanedStorage();
 
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([evidenceKey]));
+    expect(await exists('messages/o1.jpg')).toBe(false);
+    expect(await exists('messages/o2.jpg')).toBe(false);
+    // starting-screens/ is scanned and has no referencing source → swept.
+    expect(await exists('starting-screens/s1.webp')).toBe(false);
   });
 
-  test('handles R2 folder listing error without crashing', async () => {
-    mockCollectionSelectGet.mockResolvedValue({ docs: [] });
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    // profiles/ throws; other folders succeed
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'profiles/') return Promise.reject(new Error('R2 timeout'));
-      return Promise.resolve([]);
-    });
-
-    await expect(orphanedStorage()).resolves.not.toThrow();
-  });
-
-  test('deletes nothing when all R2 keys are referenced', async () => {
-    const key1 = 'profiles/user-a.jpg';
-    const key2 = 'covers/user-b.jpg';
-
-    // Users reference both keys
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ profilePhotoUrl: cdnUrl(key1), coverPhotoUrl: cdnUrl(key2) })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'profiles/') return Promise.resolve([key1]);
-      if (folder === 'covers/') return Promise.resolve([key2]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).not.toHaveBeenCalled();
-  });
-
-  test('deletes orphans while keeping referenced keys in same folder', async () => {
-    const refKey = 'profiles/active-user.jpg';
-    const orphanKey = 'profiles/old-deleted-user.jpg';
-
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ profilePhotoUrl: cdnUrl(refKey) })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'profiles/') return Promise.resolve([refKey, orphanKey]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).toHaveBeenCalledWith([orphanKey]);
-    const calls = mockDeleteObjects.mock.calls.flat(2);
-    expect(calls).not.toContain(refKey);
-  });
-
-  test('ignores non-CDN URLs in user fields', async () => {
-    // profilePhotoUrl is an external URL (not our CDN)
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ profilePhotoUrl: 'https://external.example.com/photo.jpg' })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    const orphanKey = 'profiles/someone.jpg';
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'profiles/') return Promise.resolve([orphanKey]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    // External URL yields no key, so orphanKey is not referenced → deleted
-    expect(mockDeleteObjects).toHaveBeenCalledWith([orphanKey]);
-  });
-
-  test('accepts snake_case field aliases for user photo URLs', async () => {
-    const key = 'profiles/snake-case-user.jpg';
-
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ profile_photo_url: cdnUrl(key) })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'profiles/') return Promise.resolve([key]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([key]));
-  });
-
-  test('scans all expected R2 folders including starting-screens', async () => {
-    mockCollectionSelectGet.mockResolvedValue({ docs: [] });
-    mockWhereGet.mockResolvedValue({ docs: [] });
-    mockListObjects.mockResolvedValue([]);
-
-    await orphanedStorage();
-
-    const folders = mockListObjects.mock.calls.map((call) => call[0]);
-    expect(folders).toContain('profiles/');
-    expect(folders).toContain('covers/');
-    expect(folders).toContain('messages/');
-    expect(folders).toContain('groups/');
-    expect(folders).toContain('evidence/');
-    expect(folders).toContain('stickers/');
-    expect(folders).toContain('banners/');
-    expect(folders).toContain('starting-screens/');
-  });
-
-  test('keeps R2 keys referenced as conversation groupPhotoUrl', async () => {
-    const groupKey = 'groups/conv-photo.jpg';
-
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ groupPhotoUrl: cdnUrl(groupKey) })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'groups/') return Promise.resolve([groupKey]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([groupKey]));
-  });
-
-  test('keeps R2 keys referenced via group_photo_url snake_case alias', async () => {
-    const groupKey = 'groups/snake-conv-photo.jpg';
-
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ group_photo_url: cdnUrl(groupKey) })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'groups/') return Promise.resolve([groupKey]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([groupKey]));
-  });
-
-  test('keeps R2 keys referenced as user preSuspensionProfilePhotoUrl', async () => {
-    const key = 'profiles/pre-susp-profile.jpg';
-
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ preSuspensionProfilePhotoUrl: cdnUrl(key) })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'profiles/') return Promise.resolve([key]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([key]));
-  });
-
-  test('keeps R2 keys referenced as user preSuspensionCoverPhotoUrl', async () => {
-    const key = 'covers/pre-susp-cover.jpg';
-
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ preSuspensionCoverPhotoUrl: cdnUrl(key) })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'covers/') return Promise.resolve([key]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([key]));
-  });
-
-  test('keeps R2 keys referenced via pre_suspension_profile_photo_url snake_case', async () => {
-    const key = 'profiles/pre-susp-snake-profile.jpg';
-
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ pre_suspension_profile_photo_url: cdnUrl(key) })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'profiles/') return Promise.resolve([key]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([key]));
-  });
-
-  test('keeps R2 keys referenced via pre_suspension_cover_photo_url snake_case', async () => {
-    const key = 'covers/pre-susp-snake-cover.jpg';
-
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ pre_suspension_cover_photo_url: cdnUrl(key) })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'covers/') return Promise.resolve([key]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([key]));
-  });
-
-  test('keeps R2 keys referenced via banner image_url snake_case alias', async () => {
-    const bannerKey = 'banners/snake-banner.jpg';
-
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ image_url: cdnUrl(bannerKey) })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'banners/') return Promise.resolve([bannerKey]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([bannerKey]));
-  });
-
-  test('keeps R2 keys referenced via report evidence_urls snake_case alias', async () => {
-    const evidenceKey = 'evidence/snake-evidence.jpg';
-
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({ evidence_urls: [cdnUrl(evidenceKey)] })],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'evidence/') return Promise.resolve([evidenceKey]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([evidenceKey]));
-  });
-
-  test('keeps R2 keys referenced in conversation IMAGE messages', async () => {
-    const imageKey = 'messages/img-123.jpg';
-
-    const convDoc = { id: 'conv1', data: () => ({}) };
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [convDoc],
-    }));
-
-    mockWhereGet.mockImplementation(() => ({
-      docs: [makeDoc({ imageUrls: [cdnUrl(imageKey)] })],
-    }));
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'messages/') return Promise.resolve([imageKey]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([imageKey]));
-  });
-
-  test('keeps R2 keys referenced in IMAGE messages via image_urls snake_case', async () => {
-    const imageKey = 'messages/img-snake-123.jpg';
-
-    const convDoc = { id: 'conv1', data: () => ({}) };
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [convDoc],
-    }));
-
-    mockWhereGet.mockImplementation(() => ({
-      docs: [makeDoc({ image_urls: [cdnUrl(imageKey)] })],
-    }));
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'messages/') return Promise.resolve([imageKey]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([imageKey]));
-  });
-
-  test('keeps R2 keys referenced in conversation STICKER messages', async () => {
-    const stickerKey = 'stickers/sticker-abc.webp';
-
-    const convDoc = { id: 'conv1', data: () => ({}) };
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [convDoc],
-    }));
-
-    mockWhereGet.mockImplementation(() => ({
-      docs: [makeDoc({ stickerUrl: cdnUrl(stickerKey) })],
-    }));
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'stickers/') return Promise.resolve([stickerKey]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([stickerKey]));
-  });
-
-  test('keeps R2 keys referenced in STICKER messages via sticker_url snake_case', async () => {
-    const stickerKey = 'stickers/sticker-snake.webp';
-
-    const convDoc = { id: 'conv1', data: () => ({}) };
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [convDoc],
-    }));
-
-    mockWhereGet.mockImplementation(() => ({
-      docs: [makeDoc({ sticker_url: cdnUrl(stickerKey) })],
-    }));
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'stickers/') return Promise.resolve([stickerKey]);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).not.toHaveBeenCalledWith(expect.arrayContaining([stickerKey]));
-  });
-
-  test('extractKey returns null for null/undefined URLs', async () => {
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [makeDoc({})],
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'profiles/') return Promise.resolve(['profiles/orphan.jpg']);
-      return Promise.resolve([]);
-    });
-
-    await orphanedStorage();
-
-    expect(mockDeleteObjects).toHaveBeenCalledWith(['profiles/orphan.jpg']);
-  });
-
-  test('collectKeysFromUrls handles non-array input gracefully', async () => {
-    const convDoc = { id: 'conv1', data: () => ({}) };
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: [convDoc],
-    }));
-
-    mockWhereGet.mockImplementation(() => ({
-      docs: [makeDoc({ imageUrls: 'not-an-array' })],
-    }));
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'messages/') return Promise.resolve(['messages/orphan.jpg']);
-      return Promise.resolve([]);
-    });
-
-    await expect(orphanedStorage()).resolves.not.toThrow();
-  });
-
-  test('continues processing other folders when one folder delete fails', async () => {
-    mockCollectionSelectGet.mockResolvedValue({ docs: [] });
-    mockWhereGet.mockResolvedValue({ docs: [] });
-
-    mockListObjects.mockImplementation((folder) => {
-      if (folder === 'profiles/') return Promise.resolve(['profiles/orphan.jpg']);
-      if (folder === 'covers/') return Promise.resolve(['covers/orphan.jpg']);
-      return Promise.resolve([]);
-    });
-
-    mockDeleteObjects.mockRejectedValueOnce(new Error('R2 delete failed')).mockResolvedValue();
-
-    await expect(orphanedStorage()).resolves.not.toThrow();
-  });
-
-  test('limits conversation message scanning to first 30 conversations', async () => {
-    const convDocs = Array.from({ length: 35 }, (_, i) => ({
-      id: `conv${i}`,
-      data: () => ({}),
-    }));
-
-    mockCollectionSelectGet.mockImplementation(() => ({
-      docs: convDocs,
-    }));
-    mockWhereGet.mockResolvedValue({ docs: [] });
-    mockListObjects.mockResolvedValue([]);
-
-    // Should complete without error even with 35 conversations
-    await expect(orphanedStorage()).resolves.not.toThrow();
+  test('tolerates a non-array imageUrls field and still sweeps the orphan', async () => {
+    await put('messages/orphan.jpg');
+    await db.doc('conversations/c1').set({ name: 'c1' });
+    await db.doc('conversations/c1/messages/m1').set({ type: 'IMAGE', imageUrls: 'not-an-array' });
+
+    await expect(orphanedStorage()).resolves.toBeUndefined();
+    expect(await exists('messages/orphan.jpg')).toBe(false);
   });
 });
