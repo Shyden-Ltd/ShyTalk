@@ -9,7 +9,7 @@
  * `tempUniqueIdExpiry <= now AND > 0`, limit 500 — plus the real batch
  * update. The old mock stubbed the entire `db`, so the `> 0` lower bound,
  * the `<= now` upper bound, the field-absent case, and batch atomicity
- * were all simulated by jest.fn() and proved nothing.
+ * were all simulated by in-process fakes and proved nothing.
  *
  * Cleanup is SURGICAL (only the doc ids this suite creates) because the
  * `users` collection is also populated by local/seed.js — we must not
