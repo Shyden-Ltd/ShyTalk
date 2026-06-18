@@ -1,6 +1,6 @@
 ---
 id: SHY-0127
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-06-18
 priority: P1
@@ -137,3 +137,6 @@ Touches `.js` + `.sh` + CI workflow + PR template + `CLAUDE.md` → **NOT `*.md`
 
 ## Notes (running log)
 - 2026-06-18 — **CREATED + PICKED UP** (authored fully-refined per [[feedback-no-skeleton-stories-fully-refined]]; status In Progress immediately) after the SHY-0120 retro surfaced the pre-merge gaps and the operator chose to fix all four (ExitPlanMode-approved plan; enforcement **Option A**; backend ⇒ full gauntlet per the operator's "backend is the core" directive). **Architect gate skipped** per [[feedback-rate-limit-slowdown-strategies]] (low-risk CI/tooling/docs; spec fully-refined; flagged, not silently bypassed). Branch `story/SHY-0127-pre-merge-gate-hardening` off `origin/main`. Pauses EPIC-0003 (operator-directed); resumes after merge (next: SHY-0113 rooms/voice).
+- 2026-06-18 — Tests-first RED→GREEN (3 suites / 26 tests, driven against REAL temp git repos + the real YAML; no mocks). RED-sensitivity proven per gate (backend-forcing absent; In Progress wrongly allowed; unreviewed-check defeated — each failed its test, restored). `code-reviewer`: 0 Critical; C1 (validate Reviewed-up-to is a real commit) / C2 (check every story marker) / I1 (Done-refuse + doc) / I2 (real gh path test) / I3 (header order) all fixed. Focused **re-review** of the fix commit: 0 Critical, residuals fixed; **dogfooding the gate on this branch surfaced a real bug** — Gate-3 review-neutrality used the strict SHY-NNNN pattern so a normal status-flip commit (which also edits SHY-INDEX.md) was wrongly flagged unreviewed → added `NEUTRAL_RE` (any `.project/stories/*.md`). Full express suite green (339 suites / 12436+ tests); actionlint + shellcheck + eslint `--max-warnings=0` + prettier clean. Flipped **In Review**; recorded the reviewed commit below for the Gate-3 self-check (dogfood: `pre-merge-check.sh` emits OK locally). Device leg = no-corruption proof only (CI/tooling/docs change; no app/web/backend RUNTIME surface) — batched to the operator-gated window per the SHY-0108 precedent.
+
+Reviewed-up-to: 42129556e944f7d7ce4c3bd873c8b86e9685610b
