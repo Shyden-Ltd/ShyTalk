@@ -1,250 +1,174 @@
-// Mock Firebase
-const mockGet = jest.fn();
-const mockBatchDelete = jest.fn();
-const mockBatchCommit = jest.fn().mockResolvedValue(undefined);
-const mockBatch = jest.fn(() => ({
-  delete: mockBatchDelete,
-  commit: mockBatchCommit,
-}));
-const mockDoc = jest.fn();
-const mockCollection = jest.fn();
-const mockWhere = jest.fn();
-const mockOrderBy = jest.fn();
-const mockLimit = jest.fn();
+/**
+ * rotateLogs.test.js — EPIC-0003 / SHY-0120 (cron → real local stack).
+ *
+ * MIGRATED off the firebase + r2 + log Jest mocks. The prior tests faked the
+ * query chain + the R2 client and asserted "putObject was called" — they could
+ * not verify the one property that matters for a log-rotation job: that the
+ * rows deleted from Firestore are recoverable as valid NDJSON in R2.
+ *
+ * This suite drives the REAL cron against the live Firestore emulator + real
+ * MinIO (NODE_ENV=local → http://localhost:9002):
+ *   - expired `logs` are seeded for real, then after the run the archive object
+ *     is READ BACK from R2, parsed line-by-line, and asserted to contain the
+ *     rows (with their injected `id`) that vanished from Firestore.
+ *   - the retention window comes from a real `logConfig/settings` doc.
+ *   - pruning is proven by PUTting real dated R2 keys and checking which survive
+ *     (a 2020 key is unconditionally > 90 days old, so no Date.now() pinning is
+ *     needed — the prior mock test had to spy on the clock).
+ *
+ * NOT covered (escape-hatch, EPIC-0003): the config-read `catch` branch (a real
+ * emulator `get()` failure is not inducible without a mock) — the config-absent
+ * default path IS real and is exercised by the default-retention tests. The
+ * fire-and-forget `log.warn('hit CRON_LIMIT')` is observability only; the cap is
+ * proven by the surviving backlog, not by matching the log line.
+ *
+ * Isolation: clears `logs` + `logConfig` and the R2 `logs/` prefix in beforeEach.
+ */
+const PRIOR_NODE_ENV = process.env.NODE_ENV;
+process.env.NODE_ENV = 'local';
 
-jest.mock('../../src/utils/firebase', () => ({
-  db: {
-    collection: (...args) => {
-      mockCollection(...args);
-      return {
-        doc: (...dArgs) => {
-          mockDoc(...dArgs);
-          return { get: mockGet };
-        },
-        where: (...wArgs) => {
-          mockWhere(...wArgs);
-          return {
-            orderBy: (...oArgs) => {
-              mockOrderBy(...oArgs);
-              return {
-                limit: (...lArgs) => {
-                  mockLimit(...lArgs);
-                  return { get: mockGet };
-                },
-              };
-            },
-          };
-        },
-      };
-    },
-    batch: mockBatch,
-  },
-}));
-
-// Mock R2
-jest.mock('../../src/utils/r2', () => ({
-  putObject: jest.fn().mockResolvedValue(undefined),
-  listObjects: jest.fn().mockResolvedValue([]),
-  deleteObject: jest.fn().mockResolvedValue(undefined),
-  deleteObjects: jest.fn().mockResolvedValue(undefined),
-}));
-
-// Mock log so we can assert on truncation warnings without polluting stderr
-jest.mock('../../src/utils/log', () => ({
-  debug: jest.fn(),
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-}));
-
-const rotateLogs = require('../../src/cron/rotateLogs');
+const { CreateBucketCommand } = require('@aws-sdk/client-s3');
+const { db } = require('../../src/utils/firebase');
 const r2 = require('../../src/utils/r2');
-const log = require('../../src/utils/log');
+const rotateLogs = require('../../src/cron/rotateLogs');
+const { assertEmulatorReachable, clearCollection } = require('../helpers/firebase-emulator');
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  // Reset default: config doc doesn't exist, no logs
-  mockGet.mockReset();
-  r2.listObjects.mockResolvedValue([]);
-});
+const HOUR_MS = 3600000;
+const isoHoursAgo = (h) => new Date(Date.now() - h * HOUR_MS).toISOString();
 
-function makeLogDoc(id, data) {
-  return {
-    id,
-    data: () => data,
-    ref: { path: `logs/${id}` },
-  };
+const now = new Date();
+const todayPath = `${now.getUTCFullYear()}/${String(now.getUTCMonth() + 1).padStart(2, '0')}/${String(
+  now.getUTCDate(),
+).padStart(2, '0')}`;
+
+const seedLog = (id, fields) => db.doc(`logs/${id}`).set(fields);
+const docExists = async (path) => (await db.doc(path).get()).exists;
+const logCount = async () => (await db.collection('logs').get()).size;
+const ndjsonObjects = async () =>
+  (await r2.listObjects('logs/')).filter((k) => k.endsWith('.ndjson'));
+const objectExists = async (key) => (await r2.listObjects(key)).includes(key);
+const readObject = async (key) => {
+  const resp = await r2.getObject(key);
+  return resp.Body.transformToString();
+};
+
+async function clearLogObjects() {
+  const keys = await r2.listObjects('logs/');
+  if (keys.length > 0) await r2.deleteObjects(keys);
 }
 
-describe('rotateLogs', () => {
-  test('archives logs older than retention to R2 as NDJSON', async () => {
-    // First call: config doc
-    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ retentionHours: 48 }) });
+beforeAll(async () => {
+  await assertEmulatorReachable();
+  try {
+    await r2.s3.send(new CreateBucketCommand({ Bucket: r2.bucketName }));
+  } catch (err) {
+    if (err.name !== 'BucketAlreadyOwnedByYou' && err.name !== 'BucketAlreadyExists') {
+      throw err;
+    }
+  }
+});
 
-    const docs = [
-      makeLogDoc('log1', { timestamp: '2020-01-01T00:00:00Z', level: 'INFO', message: 'hello' }),
-      makeLogDoc('log2', { timestamp: '2020-01-01T01:00:00Z', level: 'ERROR', message: 'oops' }),
-    ];
-    // Second call: logs query
-    mockGet.mockResolvedValueOnce({ empty: false, docs });
+beforeEach(async () => {
+  await clearCollection(db, 'logs');
+  await clearCollection(db, 'logConfig');
+  await clearLogObjects();
+});
 
-    await rotateLogs();
+afterAll(async () => {
+  await clearCollection(db, 'logs');
+  await clearCollection(db, 'logConfig');
+  await clearLogObjects();
+  process.env.NODE_ENV = PRIOR_NODE_ENV;
+});
 
-    // Should write NDJSON to R2
-    expect(r2.putObject).toHaveBeenCalledTimes(1);
-    const [key, body, contentType] = r2.putObject.mock.calls[0];
-    expect(key).toMatch(/^logs\/\d{4}\/\d{2}\/\d{2}\/\d{2}-\d+\.ndjson$/);
-    expect(contentType).toBe('application/x-ndjson');
-
-    // Verify NDJSON content
-    const lines = body.split('\n');
-    expect(lines).toHaveLength(2);
-    expect(JSON.parse(lines[0])).toEqual({
-      id: 'log1',
-      timestamp: '2020-01-01T00:00:00Z',
+describe('rotateLogs cron (real Firestore emulator + real MinIO)', () => {
+  test('archives expired logs to R2 as NDJSON (rows recoverable) and deletes them from Firestore', async () => {
+    await seedLog('log-a', {
       level: 'INFO',
-      message: 'hello',
+      source: 'test',
+      message: 'alpha',
+      timestamp: isoHoursAgo(72),
     });
-    expect(JSON.parse(lines[1])).toEqual({
-      id: 'log2',
-      timestamp: '2020-01-01T01:00:00Z',
+    await seedLog('log-b', {
       level: 'ERROR',
-      message: 'oops',
+      source: 'test',
+      message: 'beta',
+      timestamp: isoHoursAgo(71),
     });
-  });
-
-  test('deletes archived docs from Firestore', async () => {
-    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ retentionHours: 48 }) });
-
-    const docs = [
-      makeLogDoc('log1', { timestamp: '2020-01-01T00:00:00Z', level: 'INFO', message: 'a' }),
-      makeLogDoc('log2', { timestamp: '2020-01-01T01:00:00Z', level: 'WARN', message: 'b' }),
-    ];
-    mockGet.mockResolvedValueOnce({ empty: false, docs });
 
     await rotateLogs();
 
-    expect(mockBatch).toHaveBeenCalledTimes(1);
-    expect(mockBatchDelete).toHaveBeenCalledTimes(2);
-    expect(mockBatchDelete).toHaveBeenCalledWith(docs[0].ref);
-    expect(mockBatchDelete).toHaveBeenCalledWith(docs[1].ref);
-    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+    // Both rows gone from Firestore.
+    expect(await logCount()).toBe(0);
+    // Exactly one NDJSON archive written; the deleted rows are recoverable from it.
+    const objs = await ndjsonObjects();
+    expect(objs).toHaveLength(1);
+    const lines = (await readObject(objs[0]))
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l));
+    const byId = Object.fromEntries(lines.map((e) => [e.id, e]));
+    expect(byId['log-a']).toMatchObject({ id: 'log-a', level: 'INFO', message: 'alpha' });
+    expect(byId['log-b']).toMatchObject({ id: 'log-b', level: 'ERROR', message: 'beta' });
   });
 
-  test('does nothing when no expired logs', async () => {
-    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ retentionHours: 48 }) });
-    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+  test('applies retentionHours from logConfig/settings — only logs past the custom cutoff are rotated', async () => {
+    await db.doc('logConfig/settings').set({ retentionHours: 1 });
+    await seedLog('old', { message: 'expired', timestamp: isoHoursAgo(2) }); // > 1h cutoff
+    await seedLog('fresh', { message: 'kept', timestamp: isoHoursAgo(0.5) }); // < 1h cutoff
 
     await rotateLogs();
 
-    expect(r2.putObject).not.toHaveBeenCalled();
-    expect(mockBatch).not.toHaveBeenCalled();
+    expect(await docExists('logs/old')).toBe(false);
+    expect(await docExists('logs/fresh')).toBe(true);
   });
 
-  test('uses configurable retentionHours from Firestore', async () => {
-    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ retentionHours: 24 }) });
-    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
-
-    const now = Date.now();
-    jest.spyOn(Date, 'now').mockReturnValue(now);
+  test('archives nothing when every log is within the default (48h) retention window', async () => {
+    await seedLog('fresh', { message: 'recent', timestamp: isoHoursAgo(1) });
 
     await rotateLogs();
 
-    // The cutoff should be 24 hours ago
-    const expectedCutoff = new Date(now - 24 * 3600000).toISOString();
-    expect(mockWhere).toHaveBeenCalledWith('timestamp', '<', expectedCutoff);
-
-    Date.now.mockRestore();
+    expect(await docExists('logs/fresh')).toBe(true);
+    expect(await ndjsonObjects()).toHaveLength(0); // archive block skipped
   });
 
-  test('prunes R2 files older than 90 days', async () => {
-    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ retentionHours: 48 }) });
-    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
+  test('prunes R2 log files older than 90 days, keeping recent and non-dated keys', async () => {
+    const oldKey = 'logs/2020/01/01/00-old.ndjson';
+    const recentKey = `logs/${todayPath}/00-recent.ndjson`;
+    const nonDatedKey = 'logs/keepme.txt';
+    await r2.putObject(oldKey, 'old', 'application/x-ndjson');
+    await r2.putObject(recentKey, 'recent', 'application/x-ndjson');
+    await r2.putObject(nonDatedKey, 'note', 'text/plain');
 
-    // Pin "now" so the recent/old boundary is deterministic regardless
-    // of wall clock — without this, the test goes flaky as `recentKey`
-    // (originally written 2026-03-06) drifts past the 90-day window
-    // with calendar progression. Pre-existing flake surfaced on PR #988.
-    const FIXED_NOW = new Date('2026-04-01T00:00:00Z').getTime();
-    jest.spyOn(Date, 'now').mockReturnValue(FIXED_NOW);
+    // No expired Firestore logs → archive block skipped, only pruneOldLogs runs.
+    await rotateLogs();
 
-    // Set up old and recent R2 keys
-    const oldKey = 'logs/2025/01/01/12-1234567890.ndjson';
-    const recentKey = `logs/2026/03/06/10-9999999999.ndjson`;
-    r2.listObjects.mockResolvedValue([oldKey, recentKey]);
+    expect(await objectExists(oldKey)).toBe(false); // > 90 days → pruned
+    expect(await objectExists(recentKey)).toBe(true); // < 90 days → kept
+    expect(await objectExists(nonDatedKey)).toBe(true); // regex non-match → ignored
+  });
+
+  test('caps at CRON_LIMIT (500) — archives the 500 oldest and leaves the overflow for the next tick', async () => {
+    const total = 501;
+    const base = Date.now() - 72 * HOUR_MS;
+    for (let start = 0; start < total; start += 500) {
+      const batch = db.batch();
+      for (let i = start; i < Math.min(start + 500, total); i++) {
+        // Distinct ascending timestamps so orderBy('timestamp') takes the 500
+        // oldest; the newest (i = 500) is left behind.
+        batch.set(db.doc(`logs/bulk-${i}`), {
+          message: `m${i}`,
+          timestamp: new Date(base + i * 1000).toISOString(),
+        });
+      }
+      await batch.commit();
+    }
 
     await rotateLogs();
 
-    expect(r2.listObjects).toHaveBeenCalledWith('logs/');
-    // Bulk delete should include old key but not recent key
-    const deletedKeys = r2.deleteObjects.mock.calls.flatMap((c) => c[0]);
-    expect(deletedKeys).toContain(oldKey);
-    expect(deletedKeys).not.toContain(recentKey);
-
-    Date.now.mockRestore();
-  });
-
-  test('handles missing config doc gracefully (uses default 48h)', async () => {
-    // Config doc doesn't exist
-    mockGet.mockResolvedValueOnce({ exists: false });
-    mockGet.mockResolvedValueOnce({ empty: true, docs: [] });
-
-    const now = Date.now();
-    jest.spyOn(Date, 'now').mockReturnValue(now);
-
-    await rotateLogs();
-
-    // Should use default 48h
-    const expectedCutoff = new Date(now - 48 * 3600000).toISOString();
-    expect(mockWhere).toHaveBeenCalledWith('timestamp', '<', expectedCutoff);
-
-    Date.now.mockRestore();
-  });
-
-  // ─── CRON_LIMIT truncation warning (Phase 2-cron batch 2) ──────────
-  // rotateLogs always pulls a capped page (CRON_LIMIT=500) from `logs`. If
-  // the page is full, we're behind on rotation — the next tick will pick
-  // up the rest, but operators need a signal so they can lean in (raise
-  // retentionHours? add a sweep cron?) before backlog snowballs and ages
-  // past compliance thresholds. Without this warn, a stuck rotation cron
-  // is silent until R2 storage starts getting noisy.
-  test('logs truncation warning when query hits CRON_LIMIT (500)', async () => {
-    // Config: default retention OK
-    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ retentionHours: 48 }) });
-
-    // 500 log docs returned — fills the page exactly.
-    const fullPage = Array.from({ length: 500 }, (_, i) =>
-      makeLogDoc(`log${i}`, { timestamp: '2020-01-01T00:00:00Z', message: `msg ${i}` }),
-    );
-    mockGet.mockResolvedValueOnce({ empty: false, size: 500, docs: fullPage });
-
-    await rotateLogs();
-
-    expect(log.warn).toHaveBeenCalledWith(
-      'cron',
-      expect.stringContaining('hit CRON_LIMIT'),
-      expect.objectContaining({ limit: 500 }),
-    );
-    // Verify the limit was actually applied (so the cap is real, not just logged)
-    expect(mockLimit).toHaveBeenCalledWith(500);
-  });
-
-  test('does NOT log truncation warning when query returns < CRON_LIMIT', async () => {
-    mockGet.mockResolvedValueOnce({ exists: true, data: () => ({ retentionHours: 48 }) });
-    // Smaller page than the cap
-    const partialPage = Array.from({ length: 100 }, (_, i) =>
-      makeLogDoc(`log${i}`, { timestamp: '2020-01-01T00:00:00Z', message: `msg ${i}` }),
-    );
-    mockGet.mockResolvedValueOnce({ empty: false, size: 100, docs: partialPage });
-
-    await rotateLogs();
-
-    // The warn message must be specifically about CRON_LIMIT — other
-    // log.warn callers in this cron (none today, but defensively) won't
-    // mask a regression that drops the truncation check.
-    const truncationWarn = log.warn.mock.calls.find(
-      ([_, msg]) => typeof msg === 'string' && msg.includes('hit CRON_LIMIT'),
-    );
-    expect(truncationWarn).toBeUndefined();
-  });
+    const objs = await ndjsonObjects();
+    expect(objs).toHaveLength(1);
+    expect((await readObject(objs[0])).trim().split('\n')).toHaveLength(500); // 500 archived
+    expect(await logCount()).toBe(1); // 1 backlog left
+  }, 30000);
 });
