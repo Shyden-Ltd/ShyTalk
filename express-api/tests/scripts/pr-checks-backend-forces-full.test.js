@@ -47,4 +47,13 @@ describe('SHY-0127 — detect-changes forces the full matrix on backend changes'
     expect(outputWrite).toBeGreaterThan(-1);
     expect(force).toBeLessThan(outputWrite);
   });
+
+  test('forcing runs AFTER the WORKFLOW_ONLY computation (cannot flip workflow_only)', () => {
+    // WORKFLOW_ONLY is computed from BACKEND/APP/... before the forcing block, so
+    // a backend change keeps workflow_only=false (BACKEND was already true there).
+    const workflowOnly = yml.indexOf('WORKFLOW_ONLY=false');
+    const force = yml.indexOf(FORCE);
+    expect(workflowOnly).toBeGreaterThan(-1);
+    expect(workflowOnly).toBeLessThan(force);
+  });
 });

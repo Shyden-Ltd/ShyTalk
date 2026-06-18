@@ -61,9 +61,10 @@ function cleanRepo() {
   return { dir, b };
 }
 
-function run(dir) {
+function run(dir, { skipCi = true } = {}) {
+  const args = skipCi ? ['42', '--skip-ci-check'] : ['99999999'];
   try {
-    const stdout = execFileSync('bash', [SCRIPT, '42', '--skip-ci-check'], {
+    const stdout = execFileSync('bash', [SCRIPT, ...args], {
       cwd: dir,
       encoding: 'utf8',
       env: { ...process.env, BASE_REF: 'main' },
@@ -126,5 +127,58 @@ describe('SHY-0127 Gates 2+3 — pre-merge-check.sh', () => {
     const { code, stderr } = run(dir);
     expect(code).not.toBe(0);
     expect(stderr).toMatch(/nothing to gate/);
+  });
+
+  test('REFUSES when Reviewed-up-to is not a real commit (no silent bypass)', () => {
+    const dir = init();
+    fs.writeFileSync(path.join(dir, 'code.js'), 'x\n');
+    writeStory(dir, 'In Review', '0000000000000000000000000000000000000000');
+    commit(dir, 'code + story with bogus marker');
+    const { code, stdout, stderr } = run(dir);
+    expect(code).not.toBe(0);
+    expect(stdout).not.toContain('PRE-MERGE-CHECK: OK');
+    expect(stderr).toMatch(/not a valid commit/);
+  });
+
+  test('REFUSES on a Done story (only In Review passes the local gate)', () => {
+    const dir = init();
+    writeStory(dir, 'Done', 'deadbeef');
+    commit(dir, 'done story');
+    const { code, stderr } = run(dir);
+    expect(code).not.toBe(0);
+    expect(stderr).toMatch(/In Review/);
+  });
+
+  test('checks EVERY story marker — refuses if any story has unreviewed commits (multi-story)', () => {
+    const dir = init();
+    const base = git(dir, ['rev-parse', 'HEAD']); // main commit (loose marker target)
+    fs.writeFileSync(path.join(dir, 'code.js'), 'x\n');
+    writeStory(dir, 'In Review', 'P'); // SHY-0999-x.md
+    fs.writeFileSync(
+      path.join(dir, '.project/stories/SHY-0998-y.md'),
+      `---\nid: SHY-0998\nstatus: In Review\n---\n\n## Notes\nReviewed-up-to: P\n`,
+    );
+    const x = commit(dir, 'code + two stories'); // touches code.js (non-story)
+    // SHY-0999 (processed last) gets a TIGHT marker (clean); SHY-0998 a LOOSE one
+    // (base) that must catch the unreviewed code in commit X. Last-writer-wins
+    // would wrongly pass on SHY-0999's tight marker.
+    writeStory(dir, 'In Review', x);
+    fs.writeFileSync(
+      path.join(dir, '.project/stories/SHY-0998-y.md'),
+      `---\nid: SHY-0998\nstatus: In Review\n---\n\n## Notes\nReviewed-up-to: ${base}\n`,
+    );
+    commit(dir, 'bump markers (story-only)');
+    const { code, stdout } = run(dir);
+    expect(code).not.toBe(0); // SHY-0998's marker catches the unreviewed code commit
+    expect(stdout).not.toContain('PRE-MERGE-CHECK: OK');
+  });
+
+  test('REFUSES (Gate 2) when CI cannot be confirmed green — no --skip-ci-check, no PR', () => {
+    // Status + re-review pass; the gh check then runs against a repo with no
+    // GitHub remote / a non-existent PR → gh fails → refuse. No auth needed.
+    const { dir } = cleanRepo();
+    const { code, stdout } = run(dir, { skipCi: false });
+    expect(code).not.toBe(0);
+    expect(stdout).not.toContain('PRE-MERGE-CHECK: OK');
   });
 });

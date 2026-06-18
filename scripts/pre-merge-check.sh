@@ -4,12 +4,16 @@
 #
 # Run this on the PR branch BEFORE every judgment-merge. It mechanically verifies
 # everything verifiable and refuses (non-zero, no OK token) otherwise:
-#   Gate 1 (local re-check): the SHY story changed on this branch is In Review.
-#   Gate 3 (re-review):      no UNREVIEWED commits since the `Reviewed-up-to: <sha>`
-#                           recorded in the story Notes. A commit that touches ONLY
-#                           a `.project/stories/SHY-*.md` file is review-neutral
-#                           (status flips + marker bumps don't need code re-review).
-#   Gate 2 (CI):            every check on <PR#> is green (via `gh pr checks`).
+# Steps run in this order (the "Gate N" labels are the story's AC numbering):
+#   1. (Gate 1) the SHY story changed on this branch is In Review, with a valid
+#      `Reviewed-up-to: <sha>` marker in its Notes.
+#   2. (Gate 3) no UNREVIEWED commits since that marker — a commit touching ONLY a
+#      `.project/stories/SHY-*.md` file is review-neutral (status flips + marker
+#      bumps don't need code re-review). Every story's marker is checked.
+#   3. (Gate 2) every check on <PR#> is green (via `gh pr checks`).
+# Only `In Review` passes locally — you don't merge a Done/Cancelled story via a
+# normal PR (the CI Gate-1 check separately tolerates Done/Cancelled for incidental
+# edits to an already-closed story).
 # It then prints the pre-merge checklist (incl. the human-judgment items CI cannot
 # verify) and emits `PRE-MERGE-CHECK: OK` only when the mechanical gates all pass.
 #
@@ -35,27 +39,36 @@ fail() {
 STORIES=$(git diff --name-only --diff-filter=ACMR "${BASE_REF}...HEAD" | grep -E "$STORY_RE" || true)
 [ -n "$STORIES" ] || fail "no SHY story .md changed on this branch (BASE_REF=$BASE_REF) — nothing to gate"
 
-REVIEWED_SHA=""
+# Validate each changed story: status In Review + a REAL Reviewed-up-to commit.
+MARKERS=""
 while IFS= read -r story; do
   [ -z "$story" ] && continue
   status=$(grep -m1 '^status:' "$story" | sed 's/^status:[[:space:]]*//' | tr -d '\r')
   [ "$status" = "In Review" ] || fail "$story status is \"$status\" — must be \"In Review\" before merge"
   rs=$(grep -m1 '^Reviewed-up-to:' "$story" | sed 's/^Reviewed-up-to:[[:space:]]*//' | tr -d '\r')
   [ -n "$rs" ] || fail "$story has no 'Reviewed-up-to: <sha>' marker in its Notes — record the reviewed commit then re-run"
-  REVIEWED_SHA="$rs"
+  # A bogus/placeholder SHA must NOT silently pass Gate 3 (rev-list would error
+  # out + the loop would see zero commits). Require a real, reachable commit.
+  git cat-file -e "${rs}^{commit}" 2>/dev/null ||
+    fail "$story Reviewed-up-to: '$rs' is not a valid commit in this repo — record the actual reviewed SHA"
+  MARKERS="${MARKERS}${rs}"$'\n'
 done <<< "$STORIES"
 
-# Gate 3: a commit after REVIEWED_SHA that touches anything other than a story
-# .md is unreviewed. (grep -qvE returns 0 iff a non-story-md path is present.)
+# Gate 3: for EVERY story's marker, a commit after it that touches anything other
+# than a story .md is unreviewed code. Checking every marker keeps multi-story PRs
+# honest. (grep -qvE returns 0 iff a non-story-md path is present in the commit.)
 UNREVIEWED=0
-while IFS= read -r c; do
-  [ -z "$c" ] && continue
-  if git diff-tree --no-commit-id --name-only -r "$c" | grep -qvE "$STORY_RE"; then
-    UNREVIEWED=$((UNREVIEWED + 1))
-    echo "  unreviewed commit since last review: $(git log -1 --oneline "$c")" >&2
-  fi
-done < <(git rev-list "${REVIEWED_SHA}..HEAD" 2>/dev/null)
-[ "$UNREVIEWED" -eq 0 ] || fail "$UNREVIEWED unreviewed commit(s) since Reviewed-up-to ($REVIEWED_SHA) — re-review them + bump the marker"
+while IFS= read -r rs; do
+  [ -z "$rs" ] && continue
+  while IFS= read -r c; do
+    [ -z "$c" ] && continue
+    if git diff-tree --no-commit-id --name-only -r "$c" | grep -qvE "$STORY_RE"; then
+      UNREVIEWED=$((UNREVIEWED + 1))
+      echo "  unreviewed commit since ${rs}: $(git log -1 --oneline "$c")" >&2
+    fi
+  done < <(git rev-list "${rs}..HEAD")
+done <<< "$MARKERS"
+[ "$UNREVIEWED" -eq 0 ] || fail "$UNREVIEWED unreviewed commit(s) since a Reviewed-up-to marker — re-review them + bump the marker"
 
 # Gate 2 (CI): all checks on the PR must be green.
 if [ "$SKIP_CI" = "false" ]; then
@@ -64,11 +77,12 @@ fi
 
 CI_LINE="verified"
 [ "$SKIP_CI" = "true" ] && CI_LINE="SKIPPED (--skip-ci-check)"
+REVIEWED_DISPLAY=$(echo "$MARKERS" | tr '\n' ' ' | sed 's/[[:space:]]*$//')
 
 cat <<EOF
 ── Pre-merge gate (SHY-0127) ──
   [x] story status = In Review
-  [x] no unreviewed commits since last review (Reviewed-up-to: $REVIEWED_SHA)
+  [x] no unreviewed commits since last review (Reviewed-up-to: $REVIEWED_DISPLAY)
   [x] CI checks green: $CI_LINE
   Confirm the human-judgment items before merging:
   [ ] Definition of Done met
