@@ -1,1262 +1,573 @@
 /**
- * Tests for accountDeletion cron job.
+ * accountDeletion.test.js — EPIC-0003 / SHY-0120 (cron → real local stack).
  *
- * Covers:
- * - Processing pending deletions past their execute date
- * - Skipping cancelled deletions (re-reads fresh doc)
- * - Handling empty query (no pending deletions)
- * - Limiting to 10 per run (Firestore quota awareness)
- * - Error handling without stopping other deletions
- * - hardDeleteAccount: all 12 steps in order
- *   Step 0: Capture data
- *   Step 1: Send final email
- *   Step 2: R2 storage deletion
- *   Step 3: Conversations deletion
- *   Step 4: Rooms cleanup
- *   Step 5: Follower/following array cleanup
- *   Step 5b: Gift rankings cleanup
- *   Step 6: Reports & appeals deletion
- *   Step 6b: Suggestions-content cleanup (GDPR right-to-erasure cascade)
- *   Step 7: Auth-related cleanup (biometricKeys, otpCodes, emailMetrics)
- *   Step 8: User doc + subcollections deletion
- *   Step 9: Identity map soft-delete
- *   Step 10: Device bindings deletion
- *   Step 11: Firebase Auth user deletion
- *   Step 12: Audit log entry
- * - Inactivity scheduling when enabled
- * - Inactivity scheduling skips suspended users
- * - Re-registration logic: clean standing allows, suspended blocks
+ * MIGRATED off the firebase + auth + email + r2 + log Jest mocks (the prior 49
+ * tests faked every collaborator and asserted call SHAPES — "deleteUser was
+ * called", "putObject was called", "_path === 'reportsArchive/x'"). For a
+ * GDPR hard-delete cron that erases a user across ~19 collections + Firebase
+ * Auth + R2 + email, only the real round-trip is trustworthy: that the data is
+ * actually GONE / anonymised in the live datastore, that the credential is
+ * actually removed from Auth, that the final email actually lands.
+ *
+ * This suite drives the REAL cron against the full local stack (NODE_ENV=local):
+ *   - Firestore emulator (every collection + collectionGroup cascade)
+ *   - Firebase Auth emulator (auth.createUser → run → getUser throws user-not-found)
+ *   - real MinIO (objects PUT under the user's R2 prefixes, gone after the run)
+ *   - real Mailpit (the deletion-complete email is read back from the HTTP API)
+ * Seeded with the exact field TYPES the cron queries on (numeric uniqueId for
+ * array-contains / collectionGroup; string uniqueId for reports/receipts/etc).
+ *
+ * NOT covered (escape-hatch, EPIC-0003 — un-inducible against a healthy stack
+ * without a mock):
+ *   - the fresh-read cancellation guards in accountDeletion() (`!exists` /
+ *     `!deletionExecuteAt` on re-read) — they fire only on a real concurrent
+ *     mutation between the query and the per-user re-read; no in-process hook.
+ *   - the per-step try/catch logging branches (email-send fail, R2 list fail,
+ *     user-doc delete fail, Auth delete fail, each Step-6b substep fail) — they
+ *     need a real failure injected mid-operation; the happy + selective paths
+ *     ARE exercised, and loop-robustness is proven by the multi-user limit test.
+ *
+ * Isolation: clears every touched collection + collection-group, the user R2
+ * prefixes, Mailpit, and all Auth-emulator accounts in beforeEach.
  */
+const PRIOR_NODE_ENV = process.env.NODE_ENV;
+process.env.NODE_ENV = 'local';
 
-// ─── Mocks ──────────────────────────────────────────────────────
-
-const mockDocGet = jest.fn();
-const mockDocSet = jest.fn().mockResolvedValue();
-const mockDocUpdate = jest.fn().mockResolvedValue();
-const mockDocDelete = jest.fn().mockResolvedValue();
-const mockBatchDelete = jest.fn();
-const mockBatchSet = jest.fn();
-const mockBatchUpdate = jest.fn();
-const mockBatchCommit = jest.fn().mockResolvedValue();
-const mockCollectionGet = jest.fn();
-const mockRtdbRemove = jest.fn().mockResolvedValue();
-
-const mockDoc = jest.fn((path) => ({
-  _path: path,
-  path,
-  get: () => mockDocGet(path),
-  set: (...args) => mockDocSet(path, ...args),
-  update: (...args) => mockDocUpdate(path, ...args),
-  delete: () => mockDocDelete(path),
-}));
-
-const mockWhere = jest.fn();
-const mockLimit = jest.fn();
-const mockCollection = jest.fn();
-const mockCollectionGroup = jest.fn();
-
-let mockLastQueried = { type: null, name: null };
-
-jest.mock('../../src/utils/firebase', () => {
-  const chain = {
-    where: (...args) => {
-      mockWhere(...args);
-      return chain;
-    },
-    limit: (...args) => {
-      mockLimit(...args);
-      return chain;
-    },
-    // Pass the most-recent collection/collectionGroup target into get(). Existing
-    // Once-chain tests ignore the arg and still work; new tests can use
-    // mockImplementation(({type, name}) => …) to dispatch by target instead of
-    // counting prior get() calls.
-    get: () => mockCollectionGet({ ...mockLastQueried }),
-  };
-
-  return {
-    db: {
-      doc: (...args) => mockDoc(...args),
-      collection: (name, ...rest) => {
-        mockLastQueried = { type: 'col', name };
-        mockCollection(name, ...rest);
-        return chain;
-      },
-      collectionGroup: (name, ...rest) => {
-        mockLastQueried = { type: 'cg', name };
-        mockCollectionGroup(name, ...rest);
-        return chain;
-      },
-      batch: jest.fn(() => ({
-        delete: mockBatchDelete,
-        set: mockBatchSet,
-        update: mockBatchUpdate,
-        commit: mockBatchCommit,
-      })),
-    },
-    auth: {
-      deleteUser: jest.fn().mockResolvedValue(),
-      revokeRefreshTokens: jest.fn().mockResolvedValue(),
-    },
-    rtdb: {
-      ref: jest.fn(() => ({
-        remove: mockRtdbRemove,
-      })),
-    },
-    FieldValue: {
-      arrayRemove: jest.fn((...args) => `arrayRemove(${args})`),
-      increment: jest.fn((n) => `increment(${n})`),
-    },
-  };
-});
-
-const mockSendEmail = jest.fn().mockResolvedValue();
-jest.mock('../../src/utils/email', () => ({
-  sendEmail: (...args) => mockSendEmail(...args),
-}));
-
-jest.mock('../../src/utils/email-templates', () => ({
-  buildDeletionCompleteEmail: jest.fn(() => ({
-    subject: 'Your ShyTalk account has been deleted',
-    html: '<p>Deleted</p>',
-  })),
-}));
-
-const mockListObjects = jest.fn().mockResolvedValue([]);
-const mockDeleteObjects = jest.fn().mockResolvedValue();
-
-jest.mock('../../src/utils/r2', () => ({
-  listObjects: (...args) => mockListObjects(...args),
-  deleteObjects: (...args) => mockDeleteObjects(...args),
-}));
-
-jest.mock('../../src/utils/log', () => ({
-  debug: jest.fn(),
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-}));
-
-jest.mock('../../src/utils/firestore-helpers', () => ({
-  queryDocs: jest.fn().mockResolvedValue([]),
-}));
-
-const { auth } = require('../../src/utils/firebase');
-const { queryDocs } = require('../../src/utils/firestore-helpers');
-const log = require('../../src/utils/log');
-
-beforeEach(() => {
-  jest.clearAllMocks();
-});
-
-// ─── Helpers ─────────────────────────────────────────────────────
-
-function makeUserDoc(uniqueId, overrides = {}) {
-  const data = {
-    uniqueId,
-    firebaseUid: `firebase-uid-${uniqueId}`,
-    email: `user${uniqueId}@test.com`,
-    displayName: `User ${uniqueId}`,
-    isSuspended: false,
-    deletionScheduledAt: Date.now() - 31 * 86400000,
-    deletionReason: 'self',
-    deletionExecuteAt: Date.now() - 86400000,
-    currentRoomId: null,
-    fcmTokens: [],
-    ...overrides,
-  };
-  return {
-    id: String(uniqueId),
-    ref: { path: `users/${uniqueId}` },
-    data: () => data,
-    exists: true,
-  };
-}
-
-function makeConfigDoc(overrides = {}) {
-  return {
-    exists: true,
-    data: () => ({
-      accountDeletionGracePeriodDays: 30,
-      inactiveAccountDeleteMonths: 0,
-      ...overrides,
-    }),
-  };
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// accountDeletion cron
-// ═══════════════════════════════════════════════════════════════════
-
+const crypto = require('node:crypto');
+const { CreateBucketCommand } = require('@aws-sdk/client-s3');
+const { db, auth } = require('../../src/utils/firebase');
+const r2 = require('../../src/utils/r2');
+const { now } = require('../../src/utils/helpers');
 const accountDeletion = require('../../src/cron/accountDeletion');
+const {
+  assertEmulatorReachable,
+  clearCollection,
+  clearCollectionGroup,
+} = require('../helpers/firebase-emulator');
 
-describe('accountDeletion cron', () => {
-  test('processes pending deletions past execute date', async () => {
-    const user = makeUserDoc(10000001);
+const UID = '1001'; // user document id (string)
+const N = 1001; // numeric form used by array-contains / collectionGroup queries
+const EMAIL = 'deluser@example.com';
 
-    // First call: collection query returns pending deletion
-    mockCollectionGet.mockResolvedValueOnce({
-      docs: [user],
-      empty: false,
-    });
+const TOP_LEVEL = [
+  'users',
+  'conversations',
+  'rooms',
+  'giftRankings',
+  'reports',
+  'reportsArchive',
+  'suspensionAppeals',
+  'suggestions',
+  'subscriptions',
+  'notifications',
+  'biometricKeys',
+  'otpCodes',
+  'emailMetrics',
+  'purchaseReceipts',
+  'identityMap',
+  'deviceBindings',
+  'deviceBans',
+  'adminAuditLog',
+  'config',
+  'decoys',
+];
+const GROUPS = [
+  'messages',
+  'userSettings',
+  'mutes',
+  'seatRequests',
+  'votes',
+  'comments',
+  'backpack',
+  'giftWall',
+  'transactions',
+  'warnings',
+  'stalkers',
+];
+const R2_PREFIXES = ['profiles/', 'covers/', 'messages/', 'groups/', 'evidence/'];
 
-    // Fresh doc re-read confirms still pending
-    mockDocGet.mockImplementation((path) => {
-      if (path === `users/${10000001}`) return Promise.resolve(user);
-      if (path === 'config/app') return Promise.resolve(makeConfigDoc());
-      return Promise.resolve({ exists: false, data: () => null });
-    });
+const docData = async (path) => (await db.doc(path).get()).data();
+const docExists = async (path) => (await db.doc(path).get()).exists;
+const r2Exists = async (key) => (await r2.listObjects(key)).includes(key);
+const putObj = (key) => r2.putObject(key, Buffer.from('x'), 'image/jpeg');
 
-    // queryDocs returns empty arrays for subcollection queries
-    queryDocs.mockResolvedValue([]);
+const MAILPIT = 'http://localhost:8025/api/v1';
+const clearMailpit = () => fetch(`${MAILPIT}/messages`, { method: 'DELETE' });
+const mailpitMessages = async () =>
+  (await (await fetch(`${MAILPIT}/messages`)).json()).messages || [];
+const clearAuthUsers = () =>
+  fetch('http://localhost:9099/emulator/v1/projects/demo-shytalk/accounts', { method: 'DELETE' });
 
-    // Collection query for inactivity returns empty
-    mockCollectionGet.mockResolvedValueOnce({ docs: [], empty: true });
+async function clearR2() {
+  for (const prefix of R2_PREFIXES) {
+    const keys = await r2.listObjects(prefix);
+    if (keys.length > 0) await r2.deleteObjects(keys);
+  }
+}
 
-    await accountDeletion();
+/** Seed users/UID and return its DocumentSnapshot (what hardDeleteAccount takes). */
+async function seedUserDoc(fields = {}) {
+  const data = { email: EMAIL, firebaseUid: 'fb-1001', ...fields };
+  // The Admin SDK rejects `undefined` field values — an explicit `undefined`
+  // override (e.g. { email: undefined }) means "seed the user without this field".
+  for (const key of Object.keys(data)) {
+    if (data[key] === undefined) delete data[key];
+  }
+  await db.doc(`users/${UID}`).set(data);
+  return db.doc(`users/${UID}`).get();
+}
 
-    // Should have deleted the Firebase Auth user
-    expect(auth.deleteUser).toHaveBeenCalledWith(`firebase-uid-${10000001}`);
-  });
-
-  test('skips cancelled deletions (re-reads fresh doc)', async () => {
-    const user = makeUserDoc(10000001);
-
-    mockCollectionGet.mockResolvedValueOnce({
-      docs: [user],
-      empty: false,
-    });
-
-    // Fresh re-read shows deletion was cancelled
-    mockDocGet.mockImplementation((path) => {
-      if (path === `users/${10000001}`)
-        return Promise.resolve({
-          exists: true,
-          data: () => ({
-            ...user.data(),
-            deletionScheduledAt: null,
-            deletionExecuteAt: null,
-          }),
-        });
-      if (path === 'config/app') return Promise.resolve(makeConfigDoc());
-      return Promise.resolve({ exists: false, data: () => null });
-    });
-
-    mockCollectionGet.mockResolvedValueOnce({ docs: [], empty: true });
-
-    await accountDeletion();
-
-    // Should NOT have deleted the user
-    expect(auth.deleteUser).not.toHaveBeenCalled();
-  });
-
-  test('handles empty query (no pending deletions)', async () => {
-    mockCollectionGet
-      .mockResolvedValueOnce({ docs: [], empty: true })
-      .mockResolvedValueOnce({ docs: [], empty: true });
-
-    mockDocGet.mockImplementation((path) => {
-      if (path === 'config/app') return Promise.resolve(makeConfigDoc());
-      return Promise.resolve({ exists: false, data: () => null });
-    });
-
-    await accountDeletion();
-
-    expect(auth.deleteUser).not.toHaveBeenCalled();
-    expect(log.error).not.toHaveBeenCalled();
-  });
-
-  test('limits processing to 10 per run', async () => {
-    mockCollectionGet.mockResolvedValueOnce({ docs: [], empty: true });
-    mockDocGet.mockImplementation((path) => {
-      if (path === 'config/app') return Promise.resolve(makeConfigDoc());
-      return Promise.resolve({ exists: false, data: () => null });
-    });
-    mockCollectionGet.mockResolvedValueOnce({ docs: [], empty: true });
-
-    await accountDeletion();
-
-    // Verify the limit(10) was called in the query
-    expect(mockLimit).toHaveBeenCalledWith(10);
-  });
-
-  test('error handling does not crash the cron run', async () => {
-    const user1 = makeUserDoc(10000001);
-
-    mockCollectionGet.mockResolvedValueOnce({
-      docs: [user1],
-      empty: false,
-    });
-
-    // Re-read throws
-    mockDocGet.mockImplementation((path) => {
-      if (path === `users/${10000001}`) return Promise.reject(new Error('Firestore read failed'));
-      if (path === 'config/app') return Promise.resolve(makeConfigDoc());
-      return Promise.resolve({ exists: false, data: () => null });
-    });
-    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
-
-    // Should not throw — errors are caught internally
-    await expect(accountDeletion()).resolves.not.toThrow();
-
-    // User should NOT have been deleted (failed at re-read)
-    expect(auth.deleteUser).not.toHaveBeenCalled();
-  });
-
-  test('skips non-existent users on re-read', async () => {
-    const user = makeUserDoc(10000001);
-
-    mockCollectionGet.mockResolvedValueOnce({
-      docs: [user],
-      empty: false,
-    });
-
-    mockDocGet.mockImplementation((path) => {
-      if (path === `users/${10000001}`) return Promise.resolve({ exists: false, data: () => null });
-      if (path === 'config/app') return Promise.resolve(makeConfigDoc());
-      return Promise.resolve({ exists: false, data: () => null });
-    });
-
-    mockCollectionGet.mockResolvedValueOnce({ docs: [], empty: true });
-
-    await accountDeletion();
-
-    expect(auth.deleteUser).not.toHaveBeenCalled();
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════
-// hardDeleteAccount — step-by-step verification
-// ═══════════════════════════════════════════════════════════════════
-
-describe('hardDeleteAccount', () => {
-  const hardDeleteAccount = accountDeletion.hardDeleteAccount;
-
-  beforeEach(() => {
-    queryDocs.mockResolvedValue([]);
-  });
-
-  const testUser = makeUserDoc(10000001, {
-    email: 'delete-me@test.com',
-    isSuspended: false,
-  });
-
-  test('Step 1: sends final email before deleting user data', async () => {
-    mockDocGet.mockImplementation(() => {
-      return Promise.resolve({ exists: false, data: () => null });
-    });
-
-    await hardDeleteAccount(testUser);
-
-    expect(mockSendEmail).toHaveBeenCalledWith(
-      'delete-me@test.com',
-      expect.stringContaining('deleted'),
-      expect.any(String),
-    );
-  });
-
-  test('Step 1: skips email when user has no email', async () => {
-    const noEmailUser = makeUserDoc(10000002, { email: null });
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    await hardDeleteAccount(noEmailUser);
-
-    expect(mockSendEmail).not.toHaveBeenCalled();
-  });
-
-  test('Step 2: deletes R2 storage under all user prefixes', async () => {
-    mockListObjects.mockResolvedValue([
-      'profiles/10000001/photo.jpg',
-      'profiles/10000001/thumb.jpg',
-    ]);
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    await hardDeleteAccount(testUser);
-
-    const prefixes = [
-      'profiles/10000001/',
-      'covers/10000001/',
-      'messages/10000001/',
-      'groups/10000001/',
-      'evidence/10000001/',
-    ];
-    for (const prefix of prefixes) {
-      expect(mockListObjects).toHaveBeenCalledWith(prefix);
+beforeAll(async () => {
+  await assertEmulatorReachable();
+  try {
+    await r2.s3.send(new CreateBucketCommand({ Bucket: r2.bucketName }));
+  } catch (err) {
+    if (err.name !== 'BucketAlreadyOwnedByYou' && err.name !== 'BucketAlreadyExists') {
+      throw err;
     }
-    expect(mockDeleteObjects).toHaveBeenCalled();
-  });
-
-  test('Step 3: deletes conversations where user is participant', async () => {
-    queryDocs.mockImplementation(() => {
-      return Promise.resolve([]);
-    });
-
-    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    await hardDeleteAccount(testUser);
-
-    // Should query conversations collection for this user
-    expect(mockCollection).toHaveBeenCalledWith('conversations');
-  });
-
-  test('Step 4: cleans up rooms where user is participant', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    await hardDeleteAccount(testUser);
-
-    expect(mockCollection).toHaveBeenCalledWith('rooms');
-  });
-
-  test('Step 5: removes user from follower/following arrays', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    // Mock users who follow/are followed by the deleted user
-    const followerDocs = [{ id: '10000002', data: () => ({ followerIds: [10000001, 10000003] }) }];
-    mockCollectionGet
-      .mockResolvedValueOnce({ docs: followerDocs, empty: false }) // followerIds query
-      .mockResolvedValueOnce({ docs: [], empty: true }); // followingIds query
-
-    await hardDeleteAccount(testUser);
-
-    // Should query for users who have this user in their arrays
-    expect(mockWhere).toHaveBeenCalledWith('followerIds', 'array-contains', expect.anything());
-  });
-
-  test('Step 6: deletes reports and appeals', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    await hardDeleteAccount(testUser);
-
-    expect(mockCollection).toHaveBeenCalledWith('reports');
-    expect(mockCollection).toHaveBeenCalledWith('reportsArchive');
-    expect(mockCollection).toHaveBeenCalledWith('suspensionAppeals');
-  });
-
-  // ── Step 6b: suggestions-content cleanup (GDPR cascade) ────────
-  //
-  // hardDeleteAccount must also wipe the user's suggestions footprint:
-  //   - Anonymise own suggestions (preserve community value, redact identity)
-  //   - Delete own votes + decrement parent voteCount per up/down
-  //   - Anonymise own comments (preserve thread structure)
-  //   - Delete subscription preferences doc
-  //   - Delete inbox notifications
-  //
-  // Without this, a deleted user's submitterUid/voterId/authorUid still
-  // identifies them across suggestions — a GDPR right-to-erasure gap.
-  // The tests below assert the contract; the implementation lives in
-  // src/cron/accountDeletion.js#cleanupSuggestionsContent.
-
-  function makeSuggestionDoc(id, data = {}) {
-    return {
-      id,
-      ref: { path: `suggestions/${id}`, _isSuggestion: true },
-      data: () => ({ submitterUid: 10000001, ...data }),
-    };
   }
+});
 
-  function makeVoteDoc(suggestionId, voterId, vote = 'up') {
-    const suggestionRef = {
-      path: `suggestions/${suggestionId}`,
-      parent: { id: 'suggestions' },
-    };
-    return {
-      ref: {
-        path: `suggestions/${suggestionId}/votes/${voterId}`,
-        parent: { parent: suggestionRef },
-      },
-      data: () => ({ voterId, vote, votedAt: 1717000000000 }),
-    };
-  }
+beforeEach(async () => {
+  for (const col of TOP_LEVEL) await clearCollection(db, col);
+  for (const grp of GROUPS) await clearCollectionGroup(db, grp);
+  await clearR2();
+  await clearMailpit();
+  await clearAuthUsers();
+});
 
-  function makeCommentDoc(suggestionId, commentId, authorUid) {
-    const suggestionRef = {
-      path: `suggestions/${suggestionId}`,
-      parent: { id: 'suggestions' },
-    };
-    return {
-      ref: {
-        path: `suggestions/${suggestionId}/comments/${commentId}`,
-        parent: { parent: suggestionRef },
-      },
-      data: () => ({ authorUid, text: 'original text' }),
-    };
-  }
+afterAll(async () => {
+  for (const col of TOP_LEVEL) await clearCollection(db, col);
+  for (const grp of GROUPS) await clearCollectionGroup(db, grp);
+  await clearR2();
+  await clearMailpit();
+  await clearAuthUsers();
+  process.env.NODE_ENV = PRIOR_NODE_ENV;
+});
 
-  // Dispatch helper: returns mockImplementation that switches by query target.
-  // Avoids brittle call-order counting given Steps 3–6 already make ~12 queries
-  // before our Step 6b runs. Unmatched targets fall through to empty.
-  function dispatchByTarget(map) {
-    return ({ type, name }) => {
-      const key = type === 'cg' ? `cg:${name}` : `col:${name}`;
-      if (Object.prototype.hasOwnProperty.call(map, key)) return Promise.resolve(map[key]);
-      return Promise.resolve({ docs: [], empty: true });
-    };
-  }
-
-  test('Step 6b: anonymises own suggestions by submitterUid', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-    mockCollectionGet.mockImplementation(
-      dispatchByTarget({
-        'col:suggestions': {
-          docs: [makeSuggestionDoc('sug-1'), makeSuggestionDoc('sug-2')],
-          empty: false,
-        },
-      }),
-    );
-
-    await hardDeleteAccount(testUser);
-
-    expect(mockCollection).toHaveBeenCalledWith('suggestions');
-    expect(mockWhere).toHaveBeenCalledWith('submitterUid', '==', 10000001);
-    expect(mockBatchUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ _isSuggestion: true }),
-      expect.objectContaining({
-        submitterUid: 0,
-        submitterDeleted: true,
-      }),
-    );
-  });
-
-  test('Step 6b: deletes votes via collectionGroup and decrements parent voteCount', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    const upVote = makeVoteDoc('sug-A', 10000001, 'up');
-    const downVote = makeVoteDoc('sug-B', 10000001, 'down');
-
-    mockCollectionGet.mockImplementation(
-      dispatchByTarget({
-        'cg:votes': { docs: [upVote, downVote], empty: false },
-      }),
-    );
-
-    await hardDeleteAccount(testUser);
-
-    expect(mockCollectionGroup).toHaveBeenCalledWith('votes');
-    expect(mockWhere).toHaveBeenCalledWith('voterId', '==', 10000001);
-    expect(mockBatchDelete).toHaveBeenCalledWith(upVote.ref);
-    expect(mockBatchDelete).toHaveBeenCalledWith(downVote.ref);
-    expect(mockBatchUpdate).toHaveBeenCalledWith(upVote.ref.parent.parent, {
-      voteCount: 'increment(-1)',
-    });
-    expect(mockBatchUpdate).toHaveBeenCalledWith(downVote.ref.parent.parent, {
-      voteCount: 'increment(1)',
-    });
-  });
-
-  test('Step 6b: anonymises comments via collectionGroup by authorUid', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    const comment = makeCommentDoc('sug-C', 'comment-1', 10000001);
-
-    mockCollectionGet.mockImplementation(
-      dispatchByTarget({
-        'cg:comments': { docs: [comment], empty: false },
-      }),
-    );
-
-    await hardDeleteAccount(testUser);
-
-    expect(mockCollectionGroup).toHaveBeenCalledWith('comments');
-    expect(mockWhere).toHaveBeenCalledWith('authorUid', '==', 10000001);
-    expect(mockBatchUpdate).toHaveBeenCalledWith(
-      comment.ref,
-      expect.objectContaining({
-        authorUid: 0,
-        authorDeleted: true,
-        text: '[Comment from deleted user]',
-      }),
-    );
-  });
-
-  test('Step 6b: deletes subscription preferences doc', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
-
-    await hardDeleteAccount(testUser);
-
-    expect(mockDocDelete).toHaveBeenCalledWith('subscriptions/10000001');
-  });
-
-  test('Step 6b: deletes notifications inbox by uid', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    const notif1 = { id: 'notif-1', ref: { path: 'notifications/notif-1' } };
-    const notif2 = { id: 'notif-2', ref: { path: 'notifications/notif-2' } };
-
-    mockCollectionGet.mockImplementation(
-      dispatchByTarget({
-        'col:notifications': { docs: [notif1, notif2], empty: false },
-      }),
-    );
-
-    await hardDeleteAccount(testUser);
-
-    expect(mockCollection).toHaveBeenCalledWith('notifications');
-    expect(mockWhere).toHaveBeenCalledWith('uid', '==', 10000001);
-    expect(mockBatchDelete).toHaveBeenCalledWith(
-      expect.objectContaining({ path: 'notifications/notif-1' }),
-    );
-    expect(mockBatchDelete).toHaveBeenCalledWith(
-      expect.objectContaining({ path: 'notifications/notif-2' }),
-    );
-  });
-
-  test('Step 6b: skips collectionGroup hits whose parent is not "suggestions"', async () => {
-    // Defensive: future feature could introduce another `votes` subcollection
-    // (e.g. polls/{id}/votes/...). The cron must ignore those.
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    const goodVote = makeVoteDoc('sug-X', 10000001, 'up');
-    const strayVote = {
-      ref: {
-        path: 'polls/p1/votes/10000001',
-        parent: { parent: { parent: { id: 'polls' } } },
-      },
-      data: () => ({ voterId: 10000001, vote: 'up' }),
-    };
-
-    mockCollectionGet.mockImplementation(
-      dispatchByTarget({
-        'cg:votes': { docs: [goodVote, strayVote], empty: false },
-      }),
-    );
-
-    await hardDeleteAccount(testUser);
-
-    expect(mockBatchDelete).toHaveBeenCalledWith(goodVote.ref);
-    expect(mockBatchDelete).not.toHaveBeenCalledWith(strayVote.ref);
-  });
-
-  test('Step 6b: error in one substep does not abort hardDeleteAccount', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    // The suggestions query throws — cron must log + continue past Step 6b.
-    mockCollectionGet.mockImplementation(({ type, name }) => {
-      if (type === 'col' && name === 'suggestions') {
-        return Promise.reject(new Error('suggestions query failed'));
-      }
-      return Promise.resolve({ docs: [], empty: true });
+describe('accountDeletion main cron (real Firestore emulator)', () => {
+  test('hard-deletes a user whose deletionExecuteAt is in the past, and writes an audit log', async () => {
+    await db.doc(`users/${UID}`).set({
+      email: EMAIL,
+      firebaseUid: 'fb-1001',
+      deletionExecuteAt: now() - 1000,
+      deletionReason: 'user_request',
     });
 
-    await hardDeleteAccount(testUser);
+    await accountDeletion();
 
-    // Subsequent steps still happen — Firebase Auth deletion is Step 11.
-    expect(auth.deleteUser).toHaveBeenCalled();
-    expect(log.error).toHaveBeenCalledWith(
-      'cron',
-      expect.stringContaining('suggestion'),
-      // uniqueId is logged as a string because hardDeleteAccount derives it
-      // from userDoc.id (always a string), even though Firestore queries
-      // convert to Number for type-safety against the schema.
-      expect.objectContaining({ uniqueId: '10000001' }),
-    );
-  });
+    expect(await docExists(`users/${UID}`)).toBe(false);
+    const audit = (await db.collection('adminAuditLog').get()).docs;
+    expect(audit).toHaveLength(1);
+    expect(audit[0].data().action).toBe('account_deleted');
+  }, 30000);
 
-  test('Step 6b: vote with null vote field deletes without voteCount update', async () => {
-    // Defensive against malformed vote docs (no `vote: up|down`). Production
-    // code computes `delta = 0` for unknown vote shapes; the vote MUST still
-    // be deleted (PII erasure) but the parent voteCount MUST NOT be touched
-    // (no way to know which direction to adjust).
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+  test('leaves not-yet-due (future) and deletionExecuteAt:0 users untouched (both query clauses)', async () => {
+    await db.doc('users/future').set({ deletionExecuteAt: now() + 60 * 60 * 1000 });
+    await db.doc('users/zero').set({ deletionExecuteAt: 0 });
 
-    const malformedVote = makeVoteDoc('sug-Z', 10000001, null);
-    mockCollectionGet.mockImplementation(
-      dispatchByTarget({
-        'cg:votes': { docs: [malformedVote], empty: false },
-      }),
-    );
+    await accountDeletion();
 
-    await hardDeleteAccount(testUser);
+    expect(await docExists('users/future')).toBe(true); // > now → not yet due
+    expect(await docExists('users/zero')).toBe(true); // not > 0 → excluded
+    expect((await db.collection('adminAuditLog').get()).size).toBe(0);
+  }, 30000);
 
-    expect(mockBatchDelete).toHaveBeenCalledWith(malformedVote.ref);
-    expect(mockBatchUpdate).not.toHaveBeenCalledWith(
-      malformedVote.ref.parent.parent,
-      expect.objectContaining({ voteCount: expect.anything() }),
-    );
-  });
-
-  test('Step 6b: subscription-doc deletion failure logs but does not abort', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
-    mockDocDelete.mockImplementation((path) => {
-      if (path === 'subscriptions/10000001') {
-        return Promise.reject(new Error('subscriptions delete failed'));
-      }
-      return Promise.resolve();
-    });
-
-    await hardDeleteAccount(testUser);
-
-    expect(auth.deleteUser).toHaveBeenCalled();
-    expect(log.error).toHaveBeenCalledWith(
-      'cron',
-      expect.stringContaining('subscription'),
-      expect.objectContaining({ uniqueId: '10000001' }),
-    );
-  });
-
-  test('Step 6b: notifications query failure logs but does not abort', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-    mockCollectionGet.mockImplementation(({ type, name }) => {
-      if (type === 'col' && name === 'notifications') {
-        return Promise.reject(new Error('notifications query failed'));
-      }
-      return Promise.resolve({ docs: [], empty: true });
-    });
-
-    await hardDeleteAccount(testUser);
-
-    expect(auth.deleteUser).toHaveBeenCalled();
-    expect(log.error).toHaveBeenCalledWith(
-      'cron',
-      expect.stringContaining('notification'),
-      expect.objectContaining({ uniqueId: '10000001' }),
-    );
-  });
-
-  test('Step 6b: notifications cleanup queries BOTH uid and recipientUid, dedupes by ref', async () => {
-    // The cron runs two queries in parallel and dedupes results by ref.path —
-    // a notification matching BOTH fields (today's invariant) must be deleted
-    // exactly once, not twice.
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    const dualMatch = { id: 'n-1', ref: { path: 'notifications/n-1' } };
-    mockCollectionGet.mockImplementation(({ type, name }) => {
-      if (type === 'col' && name === 'notifications') {
-        // Both queries return the same doc (since today both fields equal uid)
-        return Promise.resolve({ docs: [dualMatch], empty: false });
-      }
-      return Promise.resolve({ docs: [], empty: true });
-    });
-
-    await hardDeleteAccount(testUser);
-
-    expect(mockWhere).toHaveBeenCalledWith('uid', '==', 10000001);
-    expect(mockWhere).toHaveBeenCalledWith('recipientUid', '==', 10000001);
-    // Despite appearing in BOTH result sets, deleted exactly once.
-    const deleteCallsForN1 = mockBatchDelete.mock.calls.filter(
-      ([ref]) => ref?.path === 'notifications/n-1',
-    );
-    expect(deleteCallsForN1).toHaveLength(1);
-  });
-
-  test('Step 7: deletes auth-related data', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    await hardDeleteAccount(testUser);
-
-    // Should clean up biometric keys, OTP codes, email metrics
-    expect(mockCollection).toHaveBeenCalledWith('biometricKeys');
-  });
-
-  test('Step 8: deletes user doc and subcollections', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-    queryDocs.mockResolvedValue([]);
-
-    await hardDeleteAccount(testUser);
-
-    // Should delete subcollections: backpack, giftWall, transactions, warnings, stalkers
-    expect(mockCollection).toHaveBeenCalledWith(`users/10000001/backpack`);
-    expect(mockCollection).toHaveBeenCalledWith(`users/10000001/giftWall`);
-    expect(mockCollection).toHaveBeenCalledWith(`users/10000001/transactions`);
-    expect(mockCollection).toHaveBeenCalledWith(`users/10000001/warnings`);
-    expect(mockCollection).toHaveBeenCalledWith(`users/10000001/stalkers`);
-
-    // Should delete the user document itself
-    expect(mockDocDelete).toHaveBeenCalledWith(`users/10000001`);
-  });
-
-  test('Step 9: soft-deletes identity map entries', async () => {
-    const identityDocs = [{ id: 'google:alice@gmail.com', data: () => ({ uniqueId: 10000001 }) }];
-    mockCollectionGet.mockResolvedValue({ docs: identityDocs, empty: false });
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    await hardDeleteAccount(testUser);
-
-    // Should update identity map with soft-delete fields, not delete
-    expect(mockDocUpdate).toHaveBeenCalledWith(
-      expect.stringContaining('identityMap/'),
-      expect.objectContaining({
-        unlinked: true,
-        deletedAccount: true,
-        deletionStanding: 'clean',
-      }),
-    );
-  });
-
-  test('Step 9: sets suspended standing for suspended users', async () => {
-    const suspendedUser = makeUserDoc(10000003, { isSuspended: true });
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    const identityDocs = [
-      { id: 'google:suspended@test.com', data: () => ({ uniqueId: 10000003 }) },
-    ];
-    mockCollectionGet.mockResolvedValue({ docs: identityDocs, empty: false });
-
-    await hardDeleteAccount(suspendedUser);
-
-    expect(mockDocUpdate).toHaveBeenCalledWith(
-      expect.stringContaining('identityMap/'),
-      expect.objectContaining({
-        deletionStanding: 'suspended',
-      }),
-    );
-  });
-
-  test('Step 10: deletes device bindings', async () => {
-    const bindingDocs = [{ id: 'device-abc', data: () => ({ uniqueId: 10000001 }) }];
-    mockCollectionGet.mockResolvedValue({ docs: bindingDocs, empty: false });
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    await hardDeleteAccount(testUser);
-
-    expect(mockCollection).toHaveBeenCalledWith('deviceBindings');
-  });
-
-  test('Step 11: deletes Firebase Auth user LAST', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    await hardDeleteAccount(testUser);
-
-    expect(auth.deleteUser).toHaveBeenCalledWith(`firebase-uid-${10000001}`);
-  });
-
-  test('Step 12: writes audit log with hashed uniqueId, zero PII', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-
-    await hardDeleteAccount(testUser);
-
-    expect(mockDocSet).toHaveBeenCalledWith(
-      expect.stringContaining('adminAuditLog/'),
-      expect.objectContaining({
-        action: 'account_deleted',
-        reason: 'self',
-        triggeredBy: 'system',
-        standing: 'clean',
-        // Exact-match assertion — the audit-log contract is a public surface
-        // (admin feed), so adding/removing entries is a deliberate decision
-        // that should force this test to update, not silently pass.
-        dataDeleted: [
-          'user',
-          'conversations',
-          'rooms',
-          'r2',
-          'reports',
-          'appeals',
-          'suggestions',
-          'votes',
-          'comments',
-          'subscriptions',
-          'notifications',
-          'auth',
-          'identity',
-          'deviceBindings',
-        ],
-      }),
-    );
-
-    // Verify NO PII in audit log
-    const auditCall = mockDocSet.mock.calls.find(([path]) => path.includes('adminAuditLog'));
-    if (auditCall) {
-      const auditData = auditCall[1];
-      expect(auditData).not.toHaveProperty('email');
-      expect(auditData).not.toHaveProperty('displayName');
-      expect(auditData.hashedUniqueId).toBeDefined();
+  test('caps processing at 10 accounts per run, leaving the overflow for the next tick', async () => {
+    for (let i = 0; i < 11; i++) {
+      await db
+        .doc(`users/${2000 + i}`)
+        .set({ deletionExecuteAt: now() - 1000, firebaseUid: `fb-${i}` });
     }
-  });
 
-  test('preserves device bans (never deletes them)', async () => {
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+    await accountDeletion();
 
-    await hardDeleteAccount(testUser);
+    expect((await db.collection('users').get()).size).toBe(1); // 10 deleted, 1 backlog
+  }, 60000);
 
-    // deviceBans and networkBans should NOT be in any delete call
-    const allDeletedPaths = mockDocDelete.mock.calls.map(([path]) => path);
-    expect(allDeletedPaths).not.toEqual(
-      expect.arrayContaining([expect.stringContaining('deviceBans')]),
-    );
-    expect(allDeletedPaths).not.toEqual(
-      expect.arrayContaining([expect.stringContaining('networkBans')]),
-    );
-  });
+  test('no-ops when there are no pending deletions', async () => {
+    await expect(accountDeletion()).resolves.toBeUndefined();
+    expect((await db.collection('adminAuditLog').get()).size).toBe(0);
+  }, 30000);
+
+  test('schedules an inactive account for deletion when inactivity deletion is enabled', async () => {
+    await db.doc('config/app').set({
+      inactiveAccountDeleteMonths: 6,
+      accountDeletionGracePeriodDays: 30,
+    });
+    const ts = now();
+    await db.doc('users/inactive').set({
+      lastActiveAt: ts - 7 * 30 * 86400000, // older than the 6-month cutoff
+      deletionScheduledAt: null,
+      isSuspended: false,
+    });
+
+    await accountDeletion();
+
+    const u = await docData('users/inactive');
+    expect(u.deletionReason).toBe('inactivity');
+    expect(typeof u.deletionScheduledAt).toBe('number');
+    expect(u.deletionExecuteAt).toBe(u.deletionScheduledAt + 30 * 86400000);
+  }, 30000);
+
+  test('does not schedule inactive accounts when the threshold is 0 (disabled)', async () => {
+    await db.doc('config/app').set({ inactiveAccountDeleteMonths: 0 });
+    await db.doc('users/inactive').set({
+      lastActiveAt: now() - 7 * 30 * 86400000,
+      deletionScheduledAt: null,
+      isSuspended: false,
+    });
+
+    await accountDeletion();
+
+    const u = await docData('users/inactive');
+    expect(u.deletionScheduledAt).toBeNull();
+    expect(u.deletionExecuteAt).toBeUndefined();
+  }, 30000);
+
+  test('skips suspended users when scheduling inactive accounts', async () => {
+    await db.doc('config/app').set({ inactiveAccountDeleteMonths: 6 });
+    await db.doc('users/suspended').set({
+      lastActiveAt: now() - 7 * 30 * 86400000,
+      deletionScheduledAt: null,
+      isSuspended: true,
+    });
+
+    await accountDeletion();
+
+    const u = await docData('users/suspended');
+    expect(u.deletionScheduledAt).toBeNull(); // suspended → not scheduled
+  }, 30000);
 });
 
-// ═══════════════════════════════════════════════════════════════════
-// Inactivity auto-delete
-// ═══════════════════════════════════════════════════════════════════
+describe('hardDeleteAccount — per-step real erasure', () => {
+  const { hardDeleteAccount } = accountDeletion;
 
-describe('inactivity auto-delete', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  test('Step 1: sends the deletion-complete email to the user (real Mailpit)', async () => {
+    const userDoc = await seedUserDoc();
 
-  test('schedules inactive accounts when enabled', async () => {
-    // No pending deletions
-    mockCollectionGet.mockResolvedValueOnce({ docs: [], empty: true });
+    await hardDeleteAccount(userDoc);
 
-    // Config with inactivity enabled
-    mockDocGet.mockImplementation((path) => {
-      if (path === 'config/app')
-        return Promise.resolve(makeConfigDoc({ inactiveAccountDeleteMonths: 6 }));
-      return Promise.resolve({ exists: false, data: () => null });
-    });
+    const msgs = await mailpitMessages();
+    const mine = msgs.filter((m) => (m.To || []).some((t) => t.Address === EMAIL));
+    expect(mine).toHaveLength(1);
+    expect(mine[0].Subject).toBe('Your ShyTalk account has been deleted');
+  }, 30000);
 
-    // Inactive users found
-    const inactiveUser = {
-      id: '10000005',
-      ref: { path: 'users/10000005' },
-      data: () => ({
-        uniqueId: 10000005,
-        lastActiveAt: Date.now() - 7 * 30 * 86400000, // 7 months ago
-        deletionScheduledAt: null,
-        isSuspended: false,
-        email: 'inactive@test.com',
-      }),
-    };
-    mockCollectionGet.mockResolvedValueOnce({
-      docs: [inactiveUser],
-      empty: false,
-    });
+  test('Step 1: sends no email when the user has no email address', async () => {
+    const userDoc = await seedUserDoc({ email: undefined });
 
-    await accountDeletion();
+    await hardDeleteAccount(userDoc);
 
-    // Should schedule deletion for the inactive user
-    expect(mockDocUpdate).toHaveBeenCalledWith(
-      expect.stringContaining('users/10000005'),
-      expect.objectContaining({
-        deletionReason: 'inactivity',
-      }),
-    );
-  });
+    expect(await mailpitMessages()).toHaveLength(0);
+  }, 30000);
 
-  test('skips inactivity check when disabled (threshold = 0)', async () => {
-    mockCollectionGet.mockResolvedValueOnce({ docs: [], empty: true });
-    mockDocGet.mockImplementation((path) => {
-      if (path === 'config/app')
-        return Promise.resolve(makeConfigDoc({ inactiveAccountDeleteMonths: 0 }));
-      return Promise.resolve({ exists: false, data: () => null });
-    });
+  test('Step 2: deletes R2 objects under all five user prefixes', async () => {
+    const keys = [
+      `profiles/${UID}/a.jpg`,
+      `covers/${UID}/b.jpg`,
+      `messages/${UID}/c.jpg`,
+      `groups/${UID}/d.jpg`,
+      `evidence/${UID}/e.jpg`,
+    ];
+    for (const k of keys) await putObj(k);
+    const foreign = 'profiles/9999/keep.jpg';
+    await putObj(foreign);
+    const userDoc = await seedUserDoc();
 
-    await accountDeletion();
+    await hardDeleteAccount(userDoc);
 
-    // Should only have been called once (for pending deletions), not for inactivity
-    expect(mockCollectionGet).toHaveBeenCalledTimes(1);
-  });
+    for (const k of keys) expect(await r2Exists(k)).toBe(false);
+    expect(await r2Exists(foreign)).toBe(true); // other users' media untouched
+  }, 30000);
 
-  test('skips suspended users for inactivity deletion', async () => {
-    mockCollectionGet.mockResolvedValueOnce({ docs: [], empty: true });
-    mockDocGet.mockImplementation((path) => {
-      if (path === 'config/app')
-        return Promise.resolve(makeConfigDoc({ inactiveAccountDeleteMonths: 6 }));
-      return Promise.resolve({ exists: false, data: () => null });
-    });
+  test('Step 3: deletes a 1-on-1 conversation and all its subcollections', async () => {
+    await db.doc('conversations/c1').set({ participantIds: [N, 2002] });
+    await db.doc('conversations/c1/messages/m1').set({ text: 'hi' });
+    await db.doc('conversations/c1/userSettings/s1').set({ userId: UID });
+    await db.doc(`conversations/c1/mutes/${UID}`).set({ muted: true });
+    const userDoc = await seedUserDoc();
 
-    mockCollectionGet.mockResolvedValueOnce({ docs: [], empty: true });
+    await hardDeleteAccount(userDoc);
 
-    await accountDeletion();
+    expect(await docExists('conversations/c1')).toBe(false);
+    expect(await docExists('conversations/c1/messages/m1')).toBe(false);
+    expect(await docExists('conversations/c1/userSettings/s1')).toBe(false);
+    expect(await docExists(`conversations/c1/mutes/${UID}`)).toBe(false);
+  }, 30000);
 
-    // The query should filter out suspended users
-    expect(mockWhere).toHaveBeenCalledWith('isSuspended', '==', false);
-  });
+  test('Step 3: removes the user from a group conversation and deletes only their subcollection rows', async () => {
+    await db.doc('conversations/g1').set({ participantIds: [N, 2002, 3003] });
+    await db.doc('conversations/g1/userSettings/mine').set({ userId: UID });
+    await db.doc('conversations/g1/userSettings/theirs').set({ userId: '2002' });
+    await db.doc(`conversations/g1/mutes/${UID}`).set({ muted: true });
+    await db.doc('conversations/g1/mutes/2002').set({ muted: true });
+    const userDoc = await seedUserDoc();
 
-  test('logs error when scheduling an individual inactive account fails', async () => {
-    // No pending deletions
-    mockCollectionGet.mockResolvedValueOnce({ docs: [], empty: true });
+    await hardDeleteAccount(userDoc);
 
-    // Config with inactivity enabled
-    mockDocGet.mockImplementation((path) => {
-      if (path === 'config/app')
-        return Promise.resolve(makeConfigDoc({ inactiveAccountDeleteMonths: 6 }));
-      return Promise.resolve({ exists: false, data: () => null });
-    });
+    expect(await docExists('conversations/g1')).toBe(true); // group kept
+    expect((await docData('conversations/g1')).participantIds).toEqual([2002, 3003]);
+    expect(await docExists('conversations/g1/userSettings/mine')).toBe(false);
+    expect(await docExists(`conversations/g1/mutes/${UID}`)).toBe(false);
+    expect(await docExists('conversations/g1/userSettings/theirs')).toBe(true);
+    expect(await docExists('conversations/g1/mutes/2002')).toBe(true);
+  }, 30000);
 
-    // Inactive user found
-    const inactiveUser = {
-      id: '10000006',
-      ref: { path: 'users/10000006' },
-      data: () => ({
-        uniqueId: 10000006,
-        lastActiveAt: Date.now() - 7 * 30 * 86400000,
-        deletionScheduledAt: null,
-        isSuspended: false,
-      }),
-    };
-    mockCollectionGet.mockResolvedValueOnce({
-      docs: [inactiveUser],
-      empty: false,
-    });
+  test('Step 4: deletes an owned room (with subcollections) and removes the user from a non-owned room', async () => {
+    await db.doc('rooms/owned').set({ participantIds: [N], ownerId: N });
+    await db.doc('rooms/owned/messages/m1').set({ text: 'x' });
+    await db.doc('rooms/owned/seatRequests/sr1').set({ uid: N });
+    await db.doc('rooms/other').set({ participantIds: [N, 2002], ownerId: 2002 });
+    const userDoc = await seedUserDoc();
 
-    // Make the update fail for this user
-    mockDocUpdate.mockRejectedValueOnce(new Error('Firestore write quota exceeded'));
+    await hardDeleteAccount(userDoc);
 
-    await accountDeletion();
+    expect(await docExists('rooms/owned')).toBe(false);
+    expect(await docExists('rooms/owned/messages/m1')).toBe(false);
+    expect(await docExists('rooms/owned/seatRequests/sr1')).toBe(false);
+    expect(await docExists('rooms/other')).toBe(true);
+    expect((await docData('rooms/other')).participantIds).toEqual([2002]);
+  }, 30000);
 
-    // Should log the error but not crash
-    expect(log.error).toHaveBeenCalledWith(
-      'cron',
-      'Failed to schedule inactive account',
-      expect.objectContaining({ uniqueId: '10000006' }),
-    );
-  });
-});
+  test('Step 5: removes the user from other users’ followerIds and followingIds arrays', async () => {
+    await db.doc('users/follower').set({ followerIds: [N, 7] });
+    await db.doc('users/following').set({ followingIds: [9, N] });
+    const userDoc = await seedUserDoc();
 
-// ═══════════════════════════════════════════════════════════════════
-// hardDeleteAccount — additional uncovered branches
-// ═══════════════════════════════════════════════════════════════════
+    await hardDeleteAccount(userDoc);
 
-describe('hardDeleteAccount — additional branches', () => {
-  const hardDeleteAccount = accountDeletion.hardDeleteAccount;
+    expect((await docData('users/follower')).followerIds).toEqual([7]);
+    expect((await docData('users/following')).followingIds).toEqual([9]);
+  }, 30000);
 
-  beforeEach(() => {
-    queryDocs.mockResolvedValue([]);
-    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-  });
+  test('Step 5b: deletes the user’s giftRankings entries', async () => {
+    await db.doc('giftRankings/gr1').set({ userId: UID });
+    await db.doc('giftRankings/gr2').set({ userId: '9999' });
+    const userDoc = await seedUserDoc();
 
-  test('Step 1: logs error when sending deletion email fails', async () => {
-    const userWithEmail = makeUserDoc(10000010, { email: 'fail-email@test.com' });
-    mockSendEmail.mockRejectedValueOnce(new Error('SMTP connection refused'));
+    await hardDeleteAccount(userDoc);
 
-    await hardDeleteAccount(userWithEmail);
+    expect(await docExists('giftRankings/gr1')).toBe(false);
+    expect(await docExists('giftRankings/gr2')).toBe(true);
+  }, 30000);
 
-    expect(log.error).toHaveBeenCalledWith(
-      'cron',
-      'Failed to send deletion complete email',
-      expect.objectContaining({ uniqueId: '10000010' }),
-    );
-    // Should continue with deletion despite email failure
-    expect(auth.deleteUser).toHaveBeenCalled();
-  });
+  test('Step 6: deletes reports/reportsArchive/suspensionAppeals by reportedUserId, reporterId (+ appeals userId)', async () => {
+    await db.doc('reports/r1').set({ reportedUserId: UID });
+    await db.doc('reports/r2').set({ reporterId: UID });
+    await db.doc('reportsArchive/a1').set({ reportedUserId: UID });
+    await db.doc('suspensionAppeals/ap1').set({ userId: UID });
+    await db.doc('reports/foreign').set({ reportedUserId: '9999' });
+    const userDoc = await seedUserDoc();
 
-  test('Step 2: logs error when R2 listObjects fails for a prefix', async () => {
-    const user = makeUserDoc(10000011);
-    mockListObjects.mockRejectedValueOnce(new Error('R2 service unavailable'));
+    await hardDeleteAccount(userDoc);
 
-    await hardDeleteAccount(user);
+    expect(await docExists('reports/r1')).toBe(false);
+    expect(await docExists('reports/r2')).toBe(false);
+    expect(await docExists('reportsArchive/a1')).toBe(false);
+    expect(await docExists('suspensionAppeals/ap1')).toBe(false);
+    expect(await docExists('reports/foreign')).toBe(true);
+  }, 30000);
 
-    expect(log.error).toHaveBeenCalledWith(
-      'cron',
-      'Failed to delete R2 prefix',
-      expect.objectContaining({ prefix: 'profiles/10000011/' }),
-    );
-    // Should continue with deletion despite R2 failure
-    expect(auth.deleteUser).toHaveBeenCalled();
-  });
+  test('Step 6b: anonymises the user’s own suggestions (submitterUid → 0, submitterDeleted flag)', async () => {
+    await db.doc('suggestions/s1').set({ submitterUid: N, title: 'idea', voteCount: 0 });
+    await db.doc('suggestions/foreign').set({ submitterUid: 9999, title: 'other' });
+    const userDoc = await seedUserDoc();
 
-  test('Step 3: deletes 1-on-1 conversations with subcollections', async () => {
-    const user = makeUserDoc(10000012);
+    await hardDeleteAccount(userDoc);
 
-    // Set up the conversation query to return a 1-on-1 conversation (2 participants)
-    const convDoc = {
-      id: 'conv-1on1',
-      data: () => ({ participantIds: [10000012, 10000099] }),
-    };
-    // conversations query
-    mockCollectionGet
-      .mockResolvedValueOnce({ docs: [convDoc], empty: false }) // Step 3: conversations
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 4: rooms
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5: followerIds
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5: followingIds
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5b: giftRankings
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6: reports reportedUserId
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6: reports reporterId
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6: reportsArchive reportedUserId
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6: reportsArchive reporterId
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6: suspensionAppeals reportedUserId
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6: suspensionAppeals reporterId
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6: suspensionAppeals userId
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 7: biometricKeys
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 7: purchaseReceipts
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 9: identityMap
-      .mockResolvedValueOnce({ docs: [], empty: true }); // Step 10: deviceBindings
+    const s1 = await docData('suggestions/s1');
+    expect(s1.submitterUid).toBe(0);
+    expect(s1.submitterDeleted).toBe(true);
+    expect(typeof s1.submitterDeletedAt).toBe('number');
+    expect(s1.title).toBe('idea'); // community content preserved
+    expect((await docData('suggestions/foreign')).submitterUid).toBe(9999);
+  }, 30000);
 
-    // queryDocs returns subcollection docs for the conversation
-    queryDocs
-      .mockResolvedValueOnce([{ id: 'msg-1' }]) // messages
-      .mockResolvedValueOnce([{ id: 'settings-1' }]) // userSettings
-      .mockResolvedValueOnce([{ id: 'mute-1' }]) // mutes
-      .mockResolvedValue([]); // all remaining
+  test('Step 6b: deletes the user’s votes via collectionGroup and decrements the parent voteCount', async () => {
+    await db.doc('suggestions/s1').set({ title: 'idea', voteCount: 5 });
+    await db.doc('suggestions/s1/votes/v1').set({ voterId: N, vote: 'up' });
+    await db.doc('suggestions/s1/votes/foreign').set({ voterId: 9999, vote: 'up' });
+    const userDoc = await seedUserDoc();
 
-    await hardDeleteAccount(user);
+    await hardDeleteAccount(userDoc);
 
-    // Should batch-delete conversation docs
-    expect(mockBatchDelete).toHaveBeenCalled();
-  });
+    expect(await docExists('suggestions/s1/votes/v1')).toBe(false);
+    expect(await docExists('suggestions/s1/votes/foreign')).toBe(true);
+    expect((await docData('suggestions/s1')).voteCount).toBe(4); // up → -1
+  }, 30000);
 
-  test('Step 3: removes user from group conversation and deletes user-specific subcollections', async () => {
-    const user = makeUserDoc(10000013);
+  test('Step 6b: a vote with a null vote field is deleted without changing voteCount', async () => {
+    await db.doc('suggestions/s1').set({ title: 'idea', voteCount: 3 });
+    await db.doc('suggestions/s1/votes/v1').set({ voterId: N, vote: null });
+    const userDoc = await seedUserDoc();
 
-    // Set up group conversation (3+ participants)
-    const groupConvDoc = {
-      id: 'conv-group',
-      data: () => ({ participantIds: [10000013, 10000098, 10000097] }),
-    };
-    mockCollectionGet
-      .mockResolvedValueOnce({ docs: [groupConvDoc], empty: false }) // Step 3: conversations
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 4: rooms
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5: followerIds
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5: followingIds
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5b: giftRankings
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 6
-      .mockResolvedValueOnce({ docs: [], empty: true })
-      .mockResolvedValueOnce({ docs: [], empty: true })
-      .mockResolvedValueOnce({ docs: [], empty: true })
-      .mockResolvedValueOnce({ docs: [], empty: true })
-      .mockResolvedValueOnce({ docs: [], empty: true })
-      .mockResolvedValueOnce({ docs: [], empty: true })
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 7: biometricKeys
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 7: purchaseReceipts
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 9: identityMap
-      .mockResolvedValueOnce({ docs: [], empty: true }); // Step 10: deviceBindings
+    await hardDeleteAccount(userDoc);
 
-    // queryDocs for group conv userSettings + mutes
-    queryDocs
-      .mockResolvedValueOnce([{ id: 'us-1', userId: '10000013' }]) // userSettings
-      .mockResolvedValueOnce([{ id: '10000013' }]) // mutes (id matches uniqueId)
-      .mockResolvedValue([]); // all remaining
+    expect(await docExists('suggestions/s1/votes/v1')).toBe(false);
+    expect((await docData('suggestions/s1')).voteCount).toBe(3); // delta 0
+  }, 30000);
 
-    await hardDeleteAccount(user);
+  test('Step 6b: ignores collectionGroup vote hits whose parent is not a suggestion (defensive guard)', async () => {
+    await db.doc('decoys/d1').set({ unrelated: true });
+    await db.doc('decoys/d1/votes/v1').set({ voterId: N, vote: 'up' });
+    const userDoc = await seedUserDoc();
 
-    // Should update conversation to remove user from participantIds
-    expect(mockDocUpdate).toHaveBeenCalledWith(
-      'conversations/conv-group',
-      expect.objectContaining({
-        participantIds: expect.stringContaining('arrayRemove'),
-      }),
-    );
-    // Should delete user-specific settings/mutes
-    expect(mockDocDelete).toHaveBeenCalledWith('conversations/conv-group/userSettings/us-1');
-    expect(mockDocDelete).toHaveBeenCalledWith('conversations/conv-group/mutes/10000013');
-  });
+    await hardDeleteAccount(userDoc);
 
-  test('Step 4: removes user from non-owned room participantIds', async () => {
-    const user = makeUserDoc(10000014);
+    expect(await docExists('decoys/d1/votes/v1')).toBe(true); // not under suggestions → untouched
+  }, 30000);
 
-    // Room owned by someone else
-    const roomDoc = {
-      id: 'room-other',
-      data: () => ({ ownerId: 10000099, participantIds: [10000014, 10000099] }),
-    };
-    mockCollectionGet
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 3: conversations
-      .mockResolvedValueOnce({ docs: [roomDoc], empty: false }) // Step 4: rooms
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5: followerIds
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5: followingIds
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 5b: giftRankings
-      .mockResolvedValueOnce({ docs: [], empty: true })
-      .mockResolvedValueOnce({ docs: [], empty: true })
-      .mockResolvedValueOnce({ docs: [], empty: true })
-      .mockResolvedValueOnce({ docs: [], empty: true })
-      .mockResolvedValueOnce({ docs: [], empty: true })
-      .mockResolvedValueOnce({ docs: [], empty: true })
-      .mockResolvedValueOnce({ docs: [], empty: true })
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 7: biometricKeys
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 7: purchaseReceipts
-      .mockResolvedValueOnce({ docs: [], empty: true }) // Step 9: identityMap
-      .mockResolvedValueOnce({ docs: [], empty: true }); // Step 10: deviceBindings
+  test('Step 6b: anonymises the user’s comments via collectionGroup by authorUid', async () => {
+    await db.doc('suggestions/s1').set({ title: 'idea' });
+    await db.doc('suggestions/s1/comments/c1').set({ authorUid: N, text: 'original' });
+    const userDoc = await seedUserDoc();
 
-    await hardDeleteAccount(user);
+    await hardDeleteAccount(userDoc);
 
-    // Should update room to remove user from participantIds (NOT delete the room)
-    expect(mockDocUpdate).toHaveBeenCalledWith(
-      'rooms/room-other',
-      expect.objectContaining({
-        participantIds: expect.stringContaining('arrayRemove'),
-      }),
-    );
-  });
+    const c1 = await docData('suggestions/s1/comments/c1');
+    expect(c1.authorUid).toBe(0);
+    expect(c1.authorDeleted).toBe(true);
+    expect(typeof c1.authorDeletedAt).toBe('number');
+    expect(c1.text).toBe('[Comment from deleted user]');
+  }, 30000);
 
-  test('Step 7: deletes OTP codes and email metrics when they exist', async () => {
-    const user = makeUserDoc(10000015, { email: 'otp-user@test.com' });
+  test('Step 6b: deletes the user’s subscription-preferences doc', async () => {
+    await db.doc(`subscriptions/${UID}`).set({ digest: 'weekly' });
+    const userDoc = await seedUserDoc();
 
-    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
-    mockDocGet.mockImplementation((path) => {
-      if (path === 'otpCodes/otp-user@test.com') return Promise.resolve({ exists: true });
-      if (path === 'emailMetrics/otp-user@test.com') return Promise.resolve({ exists: true });
-      return Promise.resolve({ exists: false, data: () => null });
-    });
+    await hardDeleteAccount(userDoc);
 
-    await hardDeleteAccount(user);
+    expect(await docExists(`subscriptions/${UID}`)).toBe(false);
+  }, 30000);
 
-    expect(mockDocDelete).toHaveBeenCalledWith('otpCodes/otp-user@test.com');
-    expect(mockDocDelete).toHaveBeenCalledWith('emailMetrics/otp-user@test.com');
-  });
+  test('Step 6b: deletes notifications matching uid OR recipientUid (deduped), keeping foreign ones', async () => {
+    await db.doc('notifications/both').set({ uid: N, recipientUid: N });
+    await db.doc('notifications/byUid').set({ uid: N, recipientUid: 9999 });
+    await db.doc('notifications/byRecipient').set({ uid: 9999, recipientUid: N });
+    await db.doc('notifications/foreign').set({ uid: 9999, recipientUid: 8888 });
+    const userDoc = await seedUserDoc();
 
-  test('Step 7: skips OTP/email metrics deletion when docs do not exist', async () => {
-    const user = makeUserDoc(10000016, { email: 'no-otp@test.com' });
+    await hardDeleteAccount(userDoc);
 
-    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
-    mockDocGet.mockImplementation((path) => {
-      if (path === 'otpCodes/no-otp@test.com') return Promise.resolve({ exists: false });
-      if (path === 'emailMetrics/no-otp@test.com') return Promise.resolve({ exists: false });
-      return Promise.resolve({ exists: false, data: () => null });
-    });
+    expect(await docExists('notifications/both')).toBe(false);
+    expect(await docExists('notifications/byUid')).toBe(false);
+    expect(await docExists('notifications/byRecipient')).toBe(false);
+    expect(await docExists('notifications/foreign')).toBe(true);
+  }, 30000);
 
-    await hardDeleteAccount(user);
+  test('Step 7: deletes biometricKeys + otp/emailMetrics, and marks purchaseReceipts for deletion', async () => {
+    await db.doc('biometricKeys/bk1').set({ uniqueId: N });
+    await db.doc(`otpCodes/${EMAIL}`).set({ code: '123456' });
+    await db.doc(`emailMetrics/${EMAIL}`).set({ sent: 3 });
+    await db.doc('purchaseReceipts/pr1').set({ userId: UID, markedForDeletion: false });
+    const userDoc = await seedUserDoc();
 
-    // Should NOT try to delete non-existent docs
-    expect(mockDocDelete).not.toHaveBeenCalledWith('otpCodes/no-otp@test.com');
-    expect(mockDocDelete).not.toHaveBeenCalledWith('emailMetrics/no-otp@test.com');
-  });
+    await hardDeleteAccount(userDoc);
 
-  test('Step 8: logs error when user doc deletion fails', async () => {
-    const user = makeUserDoc(10000017);
+    expect(await docExists('biometricKeys/bk1')).toBe(false);
+    expect(await docExists(`otpCodes/${EMAIL}`)).toBe(false);
+    expect(await docExists(`emailMetrics/${EMAIL}`)).toBe(false);
+    const pr = await docData('purchaseReceipts/pr1');
+    expect(pr.markedForDeletion).toBe(true);
+    expect(pr.deletionScheduledAt).toBeGreaterThan(now());
+  }, 30000);
 
-    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
-    // Make the user doc delete fail
-    mockDocDelete.mockImplementation((path) => {
-      if (path === 'users/10000017') return Promise.reject(new Error('Permission denied'));
-      return Promise.resolve();
-    });
+  test('Step 8: deletes the user doc and all of its subcollections', async () => {
+    for (const sub of ['backpack', 'giftWall', 'transactions', 'warnings', 'stalkers']) {
+      await db.doc(`users/${UID}/${sub}/x1`).set({ v: 1 });
+    }
+    const userDoc = await seedUserDoc();
 
-    await hardDeleteAccount(user);
+    await hardDeleteAccount(userDoc);
 
-    expect(log.error).toHaveBeenCalledWith(
-      'cron',
-      'Failed to delete user doc',
-      expect.objectContaining({ uniqueId: '10000017' }),
-    );
-    // Should continue with remaining steps
-    expect(auth.deleteUser).toHaveBeenCalled();
-  });
+    expect(await docExists(`users/${UID}`)).toBe(false);
+    for (const sub of ['backpack', 'giftWall', 'transactions', 'warnings', 'stalkers']) {
+      expect(await docExists(`users/${UID}/${sub}/x1`)).toBe(false);
+    }
+  }, 30000);
 
-  test('Step 11: logs error when Firebase Auth user deletion fails', async () => {
-    const user = makeUserDoc(10000018);
-    auth.deleteUser.mockRejectedValueOnce(new Error('Auth user not found'));
+  test('Step 9: soft-deletes identityMap entries with clean standing for a non-suspended user', async () => {
+    await db.doc('identityMap/im1').set({ uniqueId: N, unlinked: false });
+    const userDoc = await seedUserDoc({ isSuspended: false });
 
-    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+    await hardDeleteAccount(userDoc);
 
-    await hardDeleteAccount(user);
+    const im = await docData('identityMap/im1');
+    expect(im.unlinked).toBe(true);
+    expect(im.deletedAccount).toBe(true);
+    expect(im.deletionStanding).toBe('clean');
+    expect(typeof im.unlinkedAt).toBe('number');
+  }, 30000);
 
-    expect(log.error).toHaveBeenCalledWith(
-      'cron',
-      'Failed to delete Firebase Auth user',
-      expect.objectContaining({ uniqueId: '10000018' }),
-    );
-    // Should still write audit log after auth failure
-    expect(mockDocSet).toHaveBeenCalledWith(
-      expect.stringContaining('adminAuditLog/'),
-      expect.objectContaining({ action: 'account_deleted' }),
-    );
-  });
+  test('Step 9: records suspended standing in identityMap for a suspended user', async () => {
+    await db.doc('identityMap/im1').set({ uniqueId: N });
+    const userDoc = await seedUserDoc({ isSuspended: true });
 
-  test('Step 12: audit log records "unknown" when deletionReason is missing', async () => {
-    const user = makeUserDoc(10000019, { deletionReason: undefined });
+    await hardDeleteAccount(userDoc);
 
-    mockCollectionGet.mockResolvedValue({ docs: [], empty: true });
-    mockDocGet.mockResolvedValue({ exists: false, data: () => null });
+    expect((await docData('identityMap/im1')).deletionStanding).toBe('suspended');
+  }, 30000);
 
-    await hardDeleteAccount(user);
+  test('Step 10: deletes the user’s deviceBindings', async () => {
+    await db.doc('deviceBindings/db1').set({ uniqueId: N });
+    await db.doc('deviceBindings/foreign').set({ uniqueId: 9999 });
+    const userDoc = await seedUserDoc();
 
-    expect(mockDocSet).toHaveBeenCalledWith(
-      expect.stringContaining('adminAuditLog/'),
-      expect.objectContaining({
-        action: 'account_deleted',
-        reason: 'unknown',
-      }),
-    );
-  });
+    await hardDeleteAccount(userDoc);
+
+    expect(await docExists('deviceBindings/db1')).toBe(false);
+    expect(await docExists('deviceBindings/foreign')).toBe(true);
+  }, 30000);
+
+  test('Step 11: deletes the Firebase Auth user (real Auth emulator)', async () => {
+    await auth.createUser({ uid: 'fb-1001' });
+    const userDoc = await seedUserDoc({ firebaseUid: 'fb-1001' });
+
+    await hardDeleteAccount(userDoc);
+
+    await expect(auth.getUser('fb-1001')).rejects.toMatchObject({ code: 'auth/user-not-found' });
+  }, 30000);
+
+  test('Step 12: writes an audit log with a hashed uniqueId, zero PII, and the deletion reason', async () => {
+    const userDoc = await seedUserDoc({ deletionReason: 'user_request', isSuspended: false });
+
+    await hardDeleteAccount(userDoc);
+
+    const audit = (await db.collection('adminAuditLog').get()).docs;
+    expect(audit).toHaveLength(1);
+    const a = audit[0].data();
+    const expectedHash = crypto
+      .createHmac('sha256', process.env.AUDIT_HASH_SECRET || 'dev-audit-secret')
+      .update(UID)
+      .digest('hex');
+    expect(a.action).toBe('account_deleted');
+    expect(a.hashedUniqueId).toBe(expectedHash);
+    expect(a.triggeredBy).toBe('system');
+    expect(a.reason).toBe('user_request');
+    expect(a.standing).toBe('clean');
+    expect(a.dataDeleted).toEqual(expect.arrayContaining(['user', 'auth', 'suggestions', 'votes']));
+    // Zero PII: no raw identifiers or email anywhere in the audit record.
+    expect(a.uniqueId).toBeUndefined();
+    expect(a.email).toBeUndefined();
+    expect(a.firebaseUid).toBeUndefined();
+  }, 30000);
+
+  test('Step 12: audit reason falls back to "unknown" when deletionReason is missing', async () => {
+    const userDoc = await seedUserDoc();
+
+    await hardDeleteAccount(userDoc);
+
+    const a = (await db.collection('adminAuditLog').get()).docs[0].data();
+    expect(a.reason).toBe('unknown');
+  }, 30000);
+
+  test('preserves deviceBans — they are never deleted by account deletion', async () => {
+    await db.doc('deviceBans/ban1').set({ uniqueId: N, reason: 'abuse' });
+    const userDoc = await seedUserDoc();
+
+    await hardDeleteAccount(userDoc);
+
+    expect(await docExists('deviceBans/ban1')).toBe(true);
+  }, 30000);
 });
