@@ -61,11 +61,38 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      # EPIC-0003 / SHY-0120: provision the REAL R2 (MinIO) + email
+      # (Mailpit) backends the cron Jest tests exercise (expireDataExports,
+      # rotateLogs, orphanedStorage, backups, accountDeletion). Without
+      # these their beforeAll fails on a MinIO/Mailpit connection refusal.
+      # Same action the playwright/e2e/integration workflows use; mirrors
+      # local/docker-compose (MinIO 9002→9000 minioadmin; Mailpit 1025/8025).
+      # Started before the Firebase emulators so the image pulls overlap
+      # with emulator boot.
+      - uses: ./.github/actions/start-local-services
+
       # EPIC-0003 Phase 3: provision the REAL Firebase emulator stack
       # (Auth/Firestore/RTDB under projectId demo-shytalk — $0,
       # credential-free) so the express Jest suite runs against real
       # services instead of jest.mock(firebase). Caches emulator JARs.
       - uses: ./.github/actions/start-firebase-emulators
+
+      # Block until MinIO + Mailpit answer before running the suite — the
+      # cron tests hit both in beforeAll, so an unready container is a hard
+      # failure, not a flake.
+      - name: Wait for MinIO + Mailpit to be ready
+        shell: bash
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:9002/minio/health/live >/dev/null \
+               && curl -sf http://localhost:8025/api/v1/messages >/dev/null; then
+              echo "MinIO + Mailpit ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::MinIO/Mailpit did not become ready within 60s"
+          exit 1
 
       - name: Run Express API tests with coverage
         # `--experimental-vm-modules` lets Jest's CJS VM resolve dynamic

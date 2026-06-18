@@ -14,6 +14,12 @@ const WORKFLOWS = path.resolve(__dirname, '../../../.github/workflows');
 const read = (file) => fs.readFileSync(path.join(WORKFLOWS, file), 'utf8');
 
 const EMULATOR_ACTION = './.github/actions/start-firebase-emulators';
+// EPIC-0003 / SHY-0120: the cron Jest tests also need REAL R2 (MinIO) +
+// email (Mailpit), provisioned by this action. A future edit dropping it
+// would fail those suites in CI's beforeAll with a connection refusal.
+const LOCAL_SERVICES_ACTION = './.github/actions/start-local-services';
+const MINIO_HEALTH = 'http://localhost:9002/minio/health/live';
+const MAILPIT_HEALTH = 'http://localhost:8025/api/v1/messages';
 const JEST_INVOCATION = 'node_modules/.bin/jest';
 // The repo-wide SHA pin for actions/setup-java@v5 (see setup-jdk-gradle).
 const SETUP_JAVA_PIN = 'actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654';
@@ -47,6 +53,19 @@ describe('SHY-0109 — test-backend.yml provisions emulators before Jest', () =>
   test('raises the job timeout to absorb cold-cache emulator boot', () => {
     expect(yml).toMatch(/timeout-minutes:\s*15/);
   });
+
+  test('provisions the REAL R2 (MinIO) + email (Mailpit) services via start-local-services, before Jest', () => {
+    const svc = yml.indexOf(LOCAL_SERVICES_ACTION);
+    const jest = yml.indexOf(JEST_INVOCATION);
+    expect(svc).toBeGreaterThan(-1);
+    expect(svc).toBeLessThan(jest);
+  });
+
+  test('waits for MinIO + Mailpit readiness before Jest', () => {
+    expect(yml).toContain(MINIO_HEALTH);
+    expect(yml).toContain(MAILPIT_HEALTH);
+    expect(yml.indexOf(MINIO_HEALTH)).toBeLessThan(yml.indexOf(JEST_INVOCATION));
+  });
 });
 
 describe('SHY-0109 — sonarcloud.yml provisions emulators before Jest', () => {
@@ -72,5 +91,18 @@ describe('SHY-0109 — sonarcloud.yml provisions emulators before Jest', () => {
     const emu = yml.indexOf(EMULATOR_ACTION);
     expect(jdk).toBeGreaterThan(-1);
     expect(jdk).toBeLessThan(emu);
+  });
+
+  test('provisions the REAL R2 (MinIO) + email (Mailpit) services via start-local-services, before Jest', () => {
+    const svc = yml.indexOf(LOCAL_SERVICES_ACTION);
+    const jest = yml.indexOf(JEST_INVOCATION);
+    expect(svc).toBeGreaterThan(-1);
+    expect(svc).toBeLessThan(jest);
+  });
+
+  test('waits for MinIO + Mailpit readiness before Jest', () => {
+    expect(yml).toContain(MINIO_HEALTH);
+    expect(yml).toContain(MAILPIT_HEALTH);
+    expect(yml.indexOf(MINIO_HEALTH)).toBeLessThan(yml.indexOf(JEST_INVOCATION));
   });
 });
