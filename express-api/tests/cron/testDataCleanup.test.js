@@ -1,141 +1,130 @@
-const emptySnap = { empty: true, size: 0, docs: [] };
+/**
+ * testDataCleanup.test.js — EPIC-0003 / SHY-0120 slice 1.
+ *
+ * MIGRATED off the firebase + log Jest mocks (the prior 18 tests were mostly
+ * hollow `db.collection toHaveBeenCalledWith` / `ref.delete toHaveBeenCalled`
+ * assertions that could NOT catch the cron deleting the WRONG docs) onto the
+ * REAL Firestore emulator. Every test now seeds real state, runs the real cron,
+ * and asserts the real outcome by reading back: the correct docs deleted, the
+ * siblings/non-test docs retained — value-level, not "the mock was called".
+ *
+ * The real `log` runs unmocked (exercised, not asserted), proving the logging
+ * path does not throw against the real emulator.
+ *
+ * Isolation: testDataCleanup sweeps 11 top-level collections by `_testRun`
+ * prefix + their subcollections + linked bans + the startingScreens config doc
+ * + the uniqueId counter, so a clean slate across all of them is required in
+ * beforeEach (a leaked `test_`-tagged doc from a prior test would be collected
+ * by a later run and skew its assertions). See tests/helpers/firebase-emulator.js.
+ */
+const PRIOR_NODE_ENV = process.env.NODE_ENV;
+process.env.NODE_ENV = 'local';
 
-function makeDoc(id, data) {
-  const subcollections = {};
-  return {
-    id,
-    data: () => data,
-    ref: {
-      path: `col/${id}`,
-      delete: jest.fn().mockResolvedValue(undefined),
-      collection: jest.fn((name) => {
-        if (!subcollections[name]) {
-          subcollections[name] = {
-            limit: jest.fn().mockReturnValue({
-              get: jest.fn().mockResolvedValue(emptySnap),
-            }),
-          };
-        }
-        return subcollections[name];
-      }),
-    },
-  };
-}
-
-function makeDocWithSubcollectionData(id, data, subData) {
-  const subcollections = {};
-  return {
-    id,
-    data: () => data,
-    ref: {
-      path: `col/${id}`,
-      delete: jest.fn().mockResolvedValue(undefined),
-      collection: jest.fn((name) => {
-        if (!subcollections[name]) {
-          const subDocs = (subData[name] || []).map((subId) => ({
-            ref: { path: `col/${id}/${name}/${subId}` },
-          }));
-          subcollections[name] = {
-            limit: jest.fn().mockReturnValue({
-              get: jest.fn().mockResolvedValue({
-                empty: subDocs.length === 0,
-                size: subDocs.length,
-                docs: subDocs,
-              }),
-            }),
-          };
-        }
-        return subcollections[name];
-      }),
-    },
-  };
-}
-
-function makeSnapshot(docs) {
-  return { empty: docs.length === 0, size: docs.length, docs };
-}
-
-// Track all collection queries
-const collectionQueries = {};
-const mockOrderBy = jest.fn().mockReturnValue({
-  limit: jest.fn().mockReturnValue({
-    get: jest.fn().mockResolvedValue(emptySnap),
-  }),
-});
-const mockDocGet = jest.fn();
-const mockDocUpdate = jest.fn().mockResolvedValue(undefined);
-const mockDocSet = jest.fn().mockResolvedValue(undefined);
-const mockDoc = jest.fn().mockImplementation(() => ({
-  get: mockDocGet,
-  update: mockDocUpdate,
-  set: mockDocSet,
-}));
-const mockBatchDelete = jest.fn();
-const mockBatchCommit = jest.fn().mockResolvedValue(undefined);
-
-jest.mock('../../src/utils/firebase', () => ({
-  db: {
-    collection: jest.fn((name) => {
-      if (!collectionQueries[name]) {
-        collectionQueries[name] = [];
-      }
-      const chain = {
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnValue({
-          get: jest.fn().mockResolvedValue(emptySnap),
-        }),
-        orderBy: mockOrderBy,
-      };
-      collectionQueries[name].push(chain);
-      return chain;
-    }),
-    batch: jest.fn(() => ({
-      delete: mockBatchDelete,
-      commit: mockBatchCommit,
-    })),
-    doc: mockDoc,
-    runTransaction: jest.fn(),
-  },
-  FieldValue: {
-    delete: jest.fn(() => '__FIELD_DELETE__'),
-  },
-}));
-
-jest.mock('../../src/utils/log', () => ({
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-}));
-
-const testDataCleanup = require('../../src/cron/testDataCleanup');
 const { db } = require('../../src/utils/firebase');
-const log = require('../../src/utils/log');
+const testDataCleanup = require('../../src/cron/testDataCleanup');
+const {
+  assertEmulatorReachable,
+  clearCollection,
+  clearCollectionGroup,
+} = require('../helpers/firebase-emulator');
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  for (const key of Object.keys(collectionQueries)) {
-    delete collectionQueries[key];
+const HOUR_MS = 60 * 60 * 1000;
+
+// The 11 collections testDataCleanup.js tags + the two ban collections it sweeps.
+const TOP_COLLECTIONS = [
+  'users',
+  'rooms',
+  'gifts',
+  'conversations',
+  'banners',
+  'funFacts',
+  'reports',
+  'suspensionAppeals',
+  'alerts',
+  'deviceBindings',
+  'reportLocks',
+  'deviceBans',
+  'networkBans',
+];
+
+// Every subcollection name the cron deletes (users + conversations) plus the
+// phantom `extras` group used by the non-user/non-convo isolation test.
+const SUB_GROUPS = [
+  'warnings',
+  'transactions',
+  'backpack',
+  'stalkers',
+  'giftWall',
+  'messages',
+  'userSettings',
+  'mutes',
+  'settings',
+  'mod_log',
+  'extras',
+];
+
+// Per-test slate: the cron sweeps the 13 top-level collections + the
+// startingScreens config doc + the uniqueId counter, so those must be clean
+// each test (a leaked `test_`-tagged doc would be collected by a later run and
+// skew its assertions). Orphaned subcollection docs do NOT need clearing here —
+// the cron only reaches a subcollection via a parent doc it finds in the
+// `_testRun` query, so an orphan left under a deleted parent is unreachable;
+// the heavier collection-group drain runs once in afterAll for tidiness.
+async function clearSweptState() {
+  for (const c of TOP_COLLECTIONS) {
+    await clearCollection(db, c);
   }
-  // Default: mockDoc returns get/update/set
-  mockDocGet.mockResolvedValue({ exists: false });
+  await db.doc('config/startingScreens').delete();
+  await db.doc('counters/uniqueId').delete();
+}
+
+const seed = (path, data) => db.doc(path).set(data);
+const exists = async (path) => (await db.doc(path).get()).exists;
+const read = async (path) => {
+  const snap = await db.doc(path).get();
+  return snap.exists ? snap.data() : null;
+};
+
+beforeAll(async () => {
+  await assertEmulatorReachable();
 });
 
-describe('testDataCleanup cron', () => {
-  test('skips cleanup in production environment', async () => {
-    const originalEnv = process.env.NODE_ENV;
+beforeEach(async () => {
+  await clearSweptState();
+});
+
+afterAll(async () => {
+  await clearSweptState();
+  // Drain any subcollection docs seeded by the subcollection tests so the group
+  // is clean for the next suite.
+  for (const g of SUB_GROUPS) {
+    await clearCollectionGroup(db, g);
+  }
+  process.env.NODE_ENV = PRIOR_NODE_ENV;
+});
+
+describe('testDataCleanup (real Firestore emulator)', () => {
+  // --- production guard ---
+
+  test('does nothing in production — a stale test doc survives', async () => {
+    await seed('gifts/g1', { _testRun: 'test_run', createdAt: Date.now() - 2 * HOUR_MS });
+
     process.env.NODE_ENV = 'production';
-    await testDataCleanup();
-    expect(db.collection).not.toHaveBeenCalled();
-    process.env.NODE_ENV = originalEnv;
+    try {
+      await testDataCleanup();
+    } finally {
+      process.env.NODE_ENV = 'local';
+    }
+
+    // Early-returned before any query — the stale doc is untouched.
+    expect(await exists('gifts/g1')).toBe(true);
   });
 
-  test('queries all expected tagged collections', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
+  // --- collection sweep + value-level deletion ---
 
-    await testDataCleanup();
-
-    const expectedCollections = [
+  test('sweeps every tagged collection — stale test docs deleted, non-test docs retained', async () => {
+    const stale = Date.now() - 2 * HOUR_MS;
+    const tagged = [
       'users',
       'rooms',
       'gifts',
@@ -148,561 +137,229 @@ describe('testDataCleanup cron', () => {
       'deviceBindings',
       'reportLocks',
     ];
-    for (const col of expectedCollections) {
-      expect(db.collection).toHaveBeenCalledWith(col);
+    for (const col of tagged) {
+      await seed(`${col}/stale`, { _testRun: 'test_run', createdAt: stale });
     }
+    // A doc with NO _testRun must never be collected (range query excludes it).
+    await seed('gifts/keep-real', { createdAt: stale, name: 'a real gift' });
 
-    process.env.NODE_ENV = originalEnv;
+    await testDataCleanup();
+
+    for (const col of tagged) {
+      expect(await exists(`${col}/stale`)).toBe(false);
+    }
+    expect(await exists('gifts/keep-real')).toBe(true);
   });
 
-  test('filters stale docs by createdAt client-side', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
+  // --- createdAt cutoff boundary ---
+
+  test('createdAt cutoff — just-past-1h deleted, just-under-1h retained', async () => {
     const now = Date.now();
-    jest.spyOn(Date, 'now').mockReturnValue(now);
-
-    const freshDoc = makeDoc('fresh', { _testRun: 'test_abc', createdAt: now - 1000 });
-    const staleDoc = makeDoc('stale', {
-      _testRun: 'test_abc',
-      createdAt: now - 2 * 60 * 60 * 1000,
-    });
-
-    // Make first collection (users) return both docs
-    let callIdx = 0;
-    db.collection.mockImplementation((_name) => {
-      const chain = {
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnValue({
-          get: jest
-            .fn()
-            .mockResolvedValue(callIdx++ === 0 ? makeSnapshot([freshDoc, staleDoc]) : emptySnap),
-        }),
-        orderBy: mockOrderBy,
-      };
-      return chain;
-    });
+    await seed('gifts/old', { _testRun: 'test_run', createdAt: now - 61 * 60 * 1000 });
+    await seed('gifts/recent', { _testRun: 'test_run', createdAt: now - 59 * 60 * 1000 });
 
     await testDataCleanup();
 
-    // Only the stale doc should be deleted, not the fresh one
-    expect(staleDoc.ref.delete).toHaveBeenCalled();
-    expect(freshDoc.ref.delete).not.toHaveBeenCalled();
-
-    Date.now.mockRestore();
-    process.env.NODE_ENV = originalEnv;
+    expect(await exists('gifts/old')).toBe(false);
+    expect(await exists('gifts/recent')).toBe(true);
   });
 
-  test('deletes docs without createdAt (treated as stale)', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
+  test('a doc with no createdAt is treated as stale and deleted', async () => {
+    await seed('gifts/no-ts', { _testRun: 'test_run' });
 
-    const noCreatedAtDoc = makeDoc('no-ts', { _testRun: 'test_abc' }); // No createdAt
+    await testDataCleanup();
 
-    let callIdx = 0;
-    db.collection.mockImplementation((_name) => {
-      const chain = {
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnValue({
-          get: jest
-            .fn()
-            .mockResolvedValue(callIdx++ === 0 ? makeSnapshot([noCreatedAtDoc]) : emptySnap),
-        }),
-        orderBy: mockOrderBy,
-      };
-      return chain;
+    expect(await exists('gifts/no-ts')).toBe(false);
+  });
+
+  test('a doc with a non-numeric createdAt is treated as stale and deleted', async () => {
+    await seed('gifts/bad-ts', { _testRun: 'test_run', createdAt: 'not-a-number' });
+
+    await testDataCleanup();
+
+    expect(await exists('gifts/bad-ts')).toBe(false);
+  });
+
+  // --- _testRun prefix scoping ---
+
+  test('only the test_ prefix range is collected — prod_ tagged + untagged docs survive', async () => {
+    const stale = Date.now() - 2 * HOUR_MS;
+    await seed('gifts/test-doc', { _testRun: 'test_run', createdAt: stale });
+    await seed('gifts/prod-doc', { _testRun: 'prod_run', createdAt: stale }); // < 'test_' — out of range
+    await seed('gifts/untagged', { createdAt: stale }); // no _testRun field at all
+
+    await testDataCleanup();
+
+    expect(await exists('gifts/test-doc')).toBe(false);
+    expect(await exists('gifts/prod-doc')).toBe(true);
+    expect(await exists('gifts/untagged')).toBe(true);
+  });
+
+  // --- empty branch ---
+
+  test('an empty target set is a clean no-op (resolves, throws nothing)', async () => {
+    await expect(testDataCleanup()).resolves.toBeUndefined();
+  });
+
+  // --- user subcollection cleanup ---
+
+  test('deletes a user’s subcollections AND the user doc', async () => {
+    await seed('users/u1', { _testRun: 'test_run', createdAt: 0, uniqueId: 100000001 });
+    await seed('users/u1/warnings/w1', { reason: 'x' });
+    await seed('users/u1/transactions/t1', { amount: 5 });
+    await seed('users/u1/backpack/b1', { giftId: 'g' });
+
+    await testDataCleanup();
+
+    expect(await exists('users/u1')).toBe(false);
+    expect(await exists('users/u1/warnings/w1')).toBe(false);
+    expect(await exists('users/u1/transactions/t1')).toBe(false);
+    expect(await exists('users/u1/backpack/b1')).toBe(false);
+  });
+
+  // --- conversation subcollection cleanup ---
+
+  test('deletes a conversation’s subcollections AND the conversation doc', async () => {
+    await seed('conversations/c1', { _testRun: 'test_run', createdAt: 0 });
+    await seed('conversations/c1/messages/m1', { text: 'hi' });
+    await seed('conversations/c1/userSettings/us1', { muted: false });
+    await seed('conversations/c1/mod_log/ml1', { action: 'warn' });
+
+    await testDataCleanup();
+
+    expect(await exists('conversations/c1')).toBe(false);
+    expect(await exists('conversations/c1/messages/m1')).toBe(false);
+    expect(await exists('conversations/c1/userSettings/us1')).toBe(false);
+    expect(await exists('conversations/c1/mod_log/ml1')).toBe(false);
+  });
+
+  // --- non-user / non-conversation collections skip subcollection cleanup ---
+
+  test('a gift’s subcollection is NOT swept (only users/conversations get subcollection cleanup)', async () => {
+    await seed('gifts/g1', { _testRun: 'test_run', createdAt: 0 });
+    await seed('gifts/g1/extras/x1', { note: 'orphan-by-design' });
+
+    await testDataCleanup();
+
+    // The gift doc itself is deleted, but its subcollection doc is left intact
+    // (the cron only recurses into users + conversations subcollections).
+    expect(await exists('gifts/g1')).toBe(false);
+    expect(await exists('gifts/g1/extras/x1')).toBe(true);
+  });
+
+  // --- linked device/network ban cleanup ---
+
+  test('deletes deviceBans/networkBans linked to a deleted user (numeric + string uniqueId variants)', async () => {
+    await seed('users/u1', { _testRun: 'test_run', createdAt: 0, uniqueId: 100000099 });
+    await seed('deviceBans/db1', { linkedUniqueId: 100000099 }); // numeric variant
+    await seed('networkBans/nb1', { linkedUniqueId: '100000099' }); // string variant
+    await seed('deviceBans/keep', { linkedUniqueId: 200000000 }); // unrelated — must survive
+
+    await testDataCleanup();
+
+    expect(await exists('users/u1')).toBe(false);
+    expect(await exists('deviceBans/db1')).toBe(false);
+    expect(await exists('networkBans/nb1')).toBe(false);
+    expect(await exists('deviceBans/keep')).toBe(true);
+  });
+
+  test('falls back to doc.id as the uniqueId for ban cleanup when the field is missing', async () => {
+    // No uniqueId field → cron uses doc.id ('100000077') for linked-ban lookup.
+    await seed('users/100000077', { _testRun: 'test_run', createdAt: 0 });
+    await seed('deviceBans/db1', { linkedUniqueId: '100000077' });
+
+    await testDataCleanup();
+
+    expect(await exists('users/100000077')).toBe(false);
+    expect(await exists('deviceBans/db1')).toBe(false);
+  });
+
+  // --- starting-screens config cleanup ---
+
+  test('deletes only pw-/screen-/test- prefixed startingScreens keys, retains the rest', async () => {
+    await seed('config/startingScreens', {
+      // matches a prefix → deleted
+      'pw-screen-1': { url: '/t1' },
+      'screen-abc': { url: '/t2' },
+      'test-xyz': { url: '/t3' },
+      // no matching prefix → retained
+      'real-screen': { url: '/real' },
+      'password-reset': { url: '/pw-like' },
+      testing: { url: '/no-hyphen' },
+      screensaver: { url: '/no-hyphen2' },
+      'my-test-screen': { url: '/middle-match' },
     });
 
     await testDataCleanup();
 
-    // Doc without createdAt should be treated as stale (returns true)
-    expect(noCreatedAtDoc.ref.delete).toHaveBeenCalled();
-
-    process.env.NODE_ENV = originalEnv;
-  });
-
-  test('does not log when no documents are deleted', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-    await testDataCleanup();
-    expect(log.info).not.toHaveBeenCalled();
-    process.env.NODE_ENV = originalEnv;
-  });
-
-  test('logs deletion count when stale docs are removed', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    const doc1 = makeDoc('d1', { _testRun: 'test_abc', createdAt: 0 });
-    const doc2 = makeDoc('d2', { _testRun: 'test_abc', createdAt: 0 });
-
-    let callIdx = 0;
-    db.collection.mockImplementation((_name) => {
-      const chain = {
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnValue({
-          get: jest
-            .fn()
-            .mockResolvedValue(callIdx++ === 0 ? makeSnapshot([doc1, doc2]) : emptySnap),
-        }),
-        orderBy: mockOrderBy,
-      };
-      return chain;
-    });
-
-    await testDataCleanup();
-
-    expect(log.info).toHaveBeenCalledWith(
-      'cron',
-      'testDataCleanup: removed stale test data',
-      expect.objectContaining({ deleted: expect.any(Number) }),
+    const after = await read('config/startingScreens');
+    expect(Object.keys(after).sort()).toEqual(
+      ['my-test-screen', 'password-reset', 'real-screen', 'screensaver', 'testing'].sort(),
     );
-
-    process.env.NODE_ENV = originalEnv;
+    expect(after['pw-screen-1']).toBeUndefined();
+    expect(after['screen-abc']).toBeUndefined();
+    expect(after['test-xyz']).toBeUndefined();
   });
 
-  test('restores counter when test users are deleted', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
+  test('startingScreens cleanup is a no-op when the config doc is absent', async () => {
+    // clearAll already removed config/startingScreens.
+    await expect(testDataCleanup()).resolves.toBeUndefined();
+    expect(await exists('config/startingScreens')).toBe(false);
+  });
 
-    const testUser = makeDoc('u1', { _testRun: 'test_abc', createdAt: 0, uniqueId: 100000099 });
-
-    let callIdx = 0;
-    const counterSetMock = jest.fn().mockResolvedValue(undefined);
-    mockDoc.mockReturnValue({ get: mockDocGet, update: mockDocUpdate, set: counterSetMock });
-
-    // Counter restoration query: orderBy('uniqueId', 'desc').limit(1)
-    const maxUserDoc = makeDoc('real_user', { uniqueId: 100000050 });
-    mockOrderBy.mockReturnValue({
-      limit: jest.fn().mockReturnValue({
-        get: jest.fn().mockResolvedValue(makeSnapshot([maxUserDoc])),
-      }),
-    });
-
-    db.collection.mockImplementation((_name) => {
-      const chain = {
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnValue({
-          get: jest.fn().mockResolvedValue(callIdx++ === 0 ? makeSnapshot([testUser]) : emptySnap),
-        }),
-        orderBy: mockOrderBy,
-      };
-      return chain;
+  test('startingScreens cleanup leaves the doc untouched when no key matches a test prefix', async () => {
+    await seed('config/startingScreens', {
+      'real-screen-1': { url: '/r1' },
+      'production-screen': { url: '/prod' },
     });
 
     await testDataCleanup();
 
-    // Counter should be restored
-    expect(mockDoc).toHaveBeenCalledWith('counters/uniqueId');
-    expect(counterSetMock).toHaveBeenCalledWith({ value: 100000050 }, { merge: true });
-
-    process.env.NODE_ENV = originalEnv;
+    const after = await read('config/startingScreens');
+    expect(Object.keys(after).sort()).toEqual(['production-screen', 'real-screen-1']);
   });
 
-  // --- User subcollection cleanup (lines 38-40, 70-73) ---
+  test('startingScreens cleanup error is swallowed (best-effort) — a real invalid field-path update throws and is caught', async () => {
+    // `set` stores 'test-bad..key' as a LITERAL field name; the cron's
+    // `update({'test-bad..key': FieldValue.delete()})` parses it as a field
+    // PATH, where the empty `..` segment is rejected by Firestore → a REAL
+    // emulator error. The cron's try/catch must swallow it (best-effort) so the
+    // whole cron still resolves and the screen doc survives.
+    await seed('config/startingScreens', { 'test-bad..key': { url: '/x' } });
 
-  test('deletes user subcollections before deleting user doc', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
+    await expect(testDataCleanup()).resolves.toBeUndefined();
+    expect(await exists('config/startingScreens')).toBe(true);
+  });
 
-    const testUser = makeDocWithSubcollectionData(
-      'u1',
-      { _testRun: 'test_abc', createdAt: 0, uniqueId: 100000001 },
-      {
-        warnings: ['w1', 'w2'],
-        transactions: ['t1'],
-        backpack: [],
-        stalkers: [],
-        giftWall: [],
-      },
-    );
+  // --- counter restore ---
 
-    let callIdx = 0;
-    db.collection.mockImplementation((_name) => {
-      const chain = {
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnValue({
-          get: jest.fn().mockResolvedValue(callIdx++ === 0 ? makeSnapshot([testUser]) : emptySnap),
-        }),
-        orderBy: mockOrderBy,
-      };
-      return chain;
-    });
+  test('restores the uniqueId counter to the max surviving user after deleting test users', async () => {
+    await seed('users/tu1', { _testRun: 'test_run', createdAt: 0, uniqueId: 100000099 });
+    await seed('users/real1', { uniqueId: 100000050 }); // no _testRun → survives
 
     await testDataCleanup();
 
-    // Verify subcollections were queried
-    expect(testUser.ref.collection).toHaveBeenCalledWith('warnings');
-    expect(testUser.ref.collection).toHaveBeenCalledWith('transactions');
-    expect(testUser.ref.collection).toHaveBeenCalledWith('backpack');
-    expect(testUser.ref.collection).toHaveBeenCalledWith('stalkers');
-    expect(testUser.ref.collection).toHaveBeenCalledWith('giftWall');
-
-    // Batch delete should have been called for warnings (2 docs) and transactions (1 doc)
-    expect(mockBatchDelete).toHaveBeenCalledTimes(3); // w1, w2, t1
-    expect(mockBatchCommit).toHaveBeenCalled();
-
-    // User doc itself should be deleted
-    expect(testUser.ref.delete).toHaveBeenCalled();
-
-    process.env.NODE_ENV = originalEnv;
+    expect(await exists('users/tu1')).toBe(false);
+    expect(await exists('users/real1')).toBe(true);
+    expect(await read('counters/uniqueId')).toEqual({ value: 100000050 });
   });
 
-  // --- Conversation subcollection cleanup (lines 74-75) ---
-
-  test('deletes conversation subcollections before deleting conversation doc', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    const testConvo = makeDocWithSubcollectionData(
-      'conv1',
-      { _testRun: 'test_abc', createdAt: 0 },
-      {
-        messages: ['msg1', 'msg2'],
-        userSettings: ['us1'],
-        mutes: [],
-        settings: [],
-        mod_log: ['ml1'],
-      },
-    );
-
-    // conversations is the 4th collection in the list (index 3)
-    let callIdx = 0;
-    db.collection.mockImplementation((name) => {
-      const chain = {
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnValue({
-          get: jest
-            .fn()
-            .mockResolvedValue(
-              name === 'conversations' && callIdx++ === 0 ? makeSnapshot([testConvo]) : emptySnap,
-            ),
-        }),
-        orderBy: mockOrderBy,
-      };
-      return chain;
-    });
+  test('counter falls back to 100000000 when no users survive', async () => {
+    await seed('users/tu1', { _testRun: 'test_run', createdAt: 0, uniqueId: 100000099 });
 
     await testDataCleanup();
 
-    // Verify conversation subcollections were queried
-    expect(testConvo.ref.collection).toHaveBeenCalledWith('messages');
-    expect(testConvo.ref.collection).toHaveBeenCalledWith('userSettings');
-    expect(testConvo.ref.collection).toHaveBeenCalledWith('mutes');
-    expect(testConvo.ref.collection).toHaveBeenCalledWith('settings');
-    expect(testConvo.ref.collection).toHaveBeenCalledWith('mod_log');
-
-    // Batch delete for messages (2), userSettings (1), mod_log (1)
-    expect(mockBatchDelete).toHaveBeenCalledTimes(4);
-
-    // Conversation doc itself should be deleted
-    expect(testConvo.ref.delete).toHaveBeenCalled();
-
-    process.env.NODE_ENV = originalEnv;
+    expect(await exists('users/tu1')).toBe(false);
+    expect(await read('counters/uniqueId')).toEqual({ value: 100000000 });
   });
 
-  // --- Device/network ban cleanup (lines 88-104) ---
-
-  test('cleans up device and network bans linked to deleted test users', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    const testUser = makeDoc('u1', {
-      _testRun: 'test_abc',
-      createdAt: 0,
-      uniqueId: 100000099,
-    });
-
-    const banDoc1 = { ref: { path: 'deviceBans/b1' } };
-    const banDoc2 = { ref: { path: 'networkBans/b2' } };
-
-    let userCallIdx = 0;
-    let banCallCount = 0;
-
-    db.collection.mockImplementation((name) => {
-      if (name === 'deviceBans') {
-        // Called twice per user (for uid and String(uid))
-        const snap = banCallCount === 0 ? { empty: false, size: 1, docs: [banDoc1] } : emptySnap;
-        banCallCount++;
-        return {
-          where: jest.fn().mockReturnThis(),
-          limit: jest.fn().mockReturnValue({
-            get: jest.fn().mockResolvedValue(snap),
-          }),
-          orderBy: mockOrderBy,
-        };
-      }
-      if (name === 'networkBans') {
-        const snap = banCallCount === 2 ? { empty: false, size: 1, docs: [banDoc2] } : emptySnap;
-        banCallCount++;
-        return {
-          where: jest.fn().mockReturnThis(),
-          limit: jest.fn().mockReturnValue({
-            get: jest.fn().mockResolvedValue(snap),
-          }),
-          orderBy: mockOrderBy,
-        };
-      }
-      // For the user collection (first call)
-      const chain = {
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnValue({
-          get: jest
-            .fn()
-            .mockResolvedValue(
-              name === 'users' && userCallIdx++ === 0 ? makeSnapshot([testUser]) : emptySnap,
-            ),
-        }),
-        orderBy: mockOrderBy,
-      };
-      return chain;
-    });
+  test('does not touch the counter when no users were deleted', async () => {
+    // A stale non-user test doc is deleted, but no users → no counter write.
+    await seed('gifts/g1', { _testRun: 'test_run', createdAt: 0 });
 
     await testDataCleanup();
 
-    // Should query both deviceBans and networkBans
-    expect(db.collection).toHaveBeenCalledWith('deviceBans');
-    expect(db.collection).toHaveBeenCalledWith('networkBans');
-
-    // Should batch-delete the found bans
-    expect(mockBatchDelete).toHaveBeenCalled();
-    expect(mockBatchCommit).toHaveBeenCalled();
-
-    process.env.NODE_ENV = originalEnv;
-  });
-
-  // --- Starting screens cleanup (lines 107-125) ---
-
-  test('cleans up test starting screens from config document', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    // Implementation uses exactly these three prefixes: 'pw-', 'screen-', 'test-'
-    // Include edge-case keys that look similar but must NOT match
-    mockDocGet.mockResolvedValue({
-      exists: true,
-      data: () => ({
-        // Should be deleted (match prefixes: pw-, screen-, test-)
-        'pw-screen-1': { url: '/test1' },
-        'screen-abc': { url: '/test2' },
-        'test-xyz': { url: '/test3' },
-        // Should NOT be deleted (no matching prefix)
-        'real-screen': { url: '/real' },
-        'password-reset': { url: '/pw-like' },
-        testing: { url: '/no-hyphen' },
-        screensaver: { url: '/no-hyphen2' },
-        'my-test-screen': { url: '/middle-match' },
-      }),
-    });
-
-    await testDataCleanup();
-
-    // Should have called doc for config/startingScreens
-    expect(mockDoc).toHaveBeenCalledWith('config/startingScreens');
-
-    // Should have called update with FieldValue.delete() for the 3 test-prefixed screens
-    expect(mockDocUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        'pw-screen-1': '__FIELD_DELETE__',
-        'screen-abc': '__FIELD_DELETE__',
-        'test-xyz': '__FIELD_DELETE__',
-      }),
-    );
-
-    // Verify ONLY 3 keys were targeted — no false positives
-    const updateArg = mockDocUpdate.mock.calls[0][0];
-    expect(Object.keys(updateArg)).toHaveLength(3);
-    expect(updateArg['real-screen']).toBeUndefined();
-    expect(updateArg['password-reset']).toBeUndefined();
-    expect(updateArg['testing']).toBeUndefined();
-    expect(updateArg['screensaver']).toBeUndefined();
-    expect(updateArg['my-test-screen']).toBeUndefined();
-
-    process.env.NODE_ENV = originalEnv;
-  });
-
-  test('skips starting screens cleanup when config doc does not exist', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    mockDocGet.mockResolvedValue({ exists: false });
-
-    await testDataCleanup();
-
-    // update should not be called for starting screens
-    expect(mockDocUpdate).not.toHaveBeenCalled();
-
-    process.env.NODE_ENV = originalEnv;
-  });
-
-  test('skips starting screens cleanup when no test screen IDs found', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    mockDocGet.mockResolvedValue({
-      exists: true,
-      data: () => ({
-        'real-screen-1': { url: '/real1' },
-        'production-screen': { url: '/prod' },
-      }),
-    });
-
-    await testDataCleanup();
-
-    // update should not be called since no test prefixes match
-    expect(mockDocUpdate).not.toHaveBeenCalled();
-
-    process.env.NODE_ENV = originalEnv;
-  });
-
-  test('handles starting screens doc with null data', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    mockDocGet.mockResolvedValue({
-      exists: true,
-      data: () => null,
-    });
-
-    // Should not throw - ssData || {} handles null
-    await testDataCleanup();
-
-    // No update since there are no keys to filter
-    expect(mockDocUpdate).not.toHaveBeenCalled();
-
-    process.env.NODE_ENV = originalEnv;
-  });
-
-  test('handles starting screens cleanup error gracefully (best-effort)', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    mockDocGet.mockRejectedValue(new Error('Firestore permission denied'));
-
-    // Should not throw
-    await testDataCleanup();
-
-    // No crash - best-effort cleanup
-    process.env.NODE_ENV = originalEnv;
-  });
-
-  test('counts starting screen deletions in total', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    mockDocGet.mockResolvedValue({
-      exists: true,
-      data: () => ({
-        'pw-1': {},
-        'pw-2': {},
-        'test-3': {},
-      }),
-    });
-
-    await testDataCleanup();
-
-    // 3 test screens deleted -> totalDeleted = 3
-    expect(log.info).toHaveBeenCalledWith('cron', 'testDataCleanup: removed stale test data', {
-      deleted: 3,
-    });
-
-    process.env.NODE_ENV = originalEnv;
-  });
-
-  // --- Counter restoration edge cases ---
-
-  test('uses 100000000 as fallback when no users exist after cleanup', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    const testUser = makeDoc('u1', { _testRun: 'test_abc', createdAt: 0, uniqueId: 100000001 });
-
-    const counterSetMock = jest.fn().mockResolvedValue(undefined);
-    mockDoc.mockReturnValue({ get: mockDocGet, update: mockDocUpdate, set: counterSetMock });
-
-    mockOrderBy.mockReturnValue({
-      limit: jest.fn().mockReturnValue({
-        get: jest.fn().mockResolvedValue(emptySnap), // No users left
-      }),
-    });
-
-    let callIdx = 0;
-    db.collection.mockImplementation((_name) => {
-      const chain = {
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnValue({
-          get: jest.fn().mockResolvedValue(callIdx++ === 0 ? makeSnapshot([testUser]) : emptySnap),
-        }),
-        orderBy: mockOrderBy,
-      };
-      return chain;
-    });
-
-    await testDataCleanup();
-
-    expect(counterSetMock).toHaveBeenCalledWith({ value: 100000000 }, { merge: true });
-
-    process.env.NODE_ENV = originalEnv;
-  });
-
-  test('uses doc.id as uniqueId fallback when uniqueId field is missing', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    // User without uniqueId field - should use doc.id instead
-    const testUser = makeDoc('user-id-123', { _testRun: 'test_abc', createdAt: 0 });
-
-    let callIdx = 0;
-    db.collection.mockImplementation((_name) => {
-      const chain = {
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnValue({
-          get: jest.fn().mockResolvedValue(callIdx++ === 0 ? makeSnapshot([testUser]) : emptySnap),
-        }),
-        orderBy: mockOrderBy,
-      };
-      return chain;
-    });
-
-    await testDataCleanup();
-
-    // Should still trigger ban cleanup using doc.id as the uniqueId
-    // (deviceBans and networkBans are queried for 'user-id-123' and String('user-id-123'))
-    expect(db.collection).toHaveBeenCalledWith('deviceBans');
-    expect(db.collection).toHaveBeenCalledWith('networkBans');
-
-    process.env.NODE_ENV = originalEnv;
-  });
-
-  // --- Non-user collections don't trigger subcollection cleanup ---
-
-  test('does not attempt subcollection cleanup for non-user non-conversation collections', async () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    const giftDoc = makeDoc('g1', { _testRun: 'test_abc', createdAt: 0 });
-
-    let callIdx = 0;
-    db.collection.mockImplementation((name) => {
-      const chain = {
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnValue({
-          get: jest
-            .fn()
-            .mockResolvedValue(
-              name === 'gifts' && callIdx++ === 0 ? makeSnapshot([giftDoc]) : emptySnap,
-            ),
-        }),
-        orderBy: mockOrderBy,
-      };
-      return chain;
-    });
-
-    await testDataCleanup();
-
-    // Gift doc should be deleted directly, no subcollection queries
-    expect(giftDoc.ref.delete).toHaveBeenCalled();
-    expect(giftDoc.ref.collection).not.toHaveBeenCalled();
-
-    process.env.NODE_ENV = originalEnv;
+    expect(await exists('gifts/g1')).toBe(false);
+    expect(await exists('counters/uniqueId')).toBe(false);
   });
 });
