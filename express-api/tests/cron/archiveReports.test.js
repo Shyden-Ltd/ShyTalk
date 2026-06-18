@@ -1,271 +1,154 @@
 /**
- * Tests for cron/archiveReports.js
+ * archiveReports.test.js — EPIC-0003 / SHY-0120 (cron → real Firestore emulator).
  *
- * archiveReports():
- * - Queries 'reports' collection for resolved docs older than 6 months
- * - Copies each to 'reportsArchive/{id}', deletes original from 'reports'
- * - Processes in batches of 250 (each doc = 2 ops: set + delete)
- * - Skips pending reports (they are not returned by the Firestore query)
- * - Does nothing when the collection is empty
+ * MIGRATED off the firebase + log Jest mocks. The prior tests faked the query
+ * chain + the batch object and asserted "set was called with path
+ * reportsArchive/report-1" / introspected the `where` args — i.e. they checked
+ * HOW the SDK was called, not that a report actually moved. They could not
+ * catch a wrong field spread, a missing injected `id`, a half-committed batch,
+ * or the original surviving the delete.
+ *
+ * This suite drives the REAL cron against the live Firestore emulator: reports
+ * are seeded with `db.doc().set()` and the post-run state is read back — the
+ * archived doc's exact fields, and the original's deletion, are asserted.
+ *
+ * Both query clauses are proven by real excluded docs:
+ *   - `status == 'resolved'`        → an old `pending` report is left in place.
+ *   - `resolvedAt < sixMonthsAgo`   → a recently-resolved report is left in place.
+ *
+ * NOT covered (escape-hatch, EPIC-0003): the prior "propagates Firestore read /
+ * batch-commit errors" tests mocked a rejection. The cron has no catch (errors
+ * propagate by construction) and a real emulator read/commit failure is not
+ * inducible without a mock — so this is the documented escape-hatch, not a mock.
+ *
+ * Isolation: clears `reports` + `reportsArchive` in beforeEach.
  */
-
-// ─── Firebase mock ────────────────────────────────────────────────
-
-const mockBatchSet = jest.fn();
-const mockBatchDelete = jest.fn();
-const mockBatchCommit = jest.fn().mockResolvedValue();
-
-const makeDocRef = (path) => ({ _path: path });
-
-jest.mock('../../src/utils/firebase', () => ({
-  db: {
-    collection: jest.fn(() => ({
-      where: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
-      get: jest.fn(),
-    })),
-    doc: jest.fn((path) => makeDocRef(path)),
-    batch: jest.fn(() => ({
-      set: mockBatchSet,
-      delete: mockBatchDelete,
-      commit: mockBatchCommit,
-    })),
-  },
-}));
-
-jest.mock('../../src/utils/log', () => ({
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-}));
+const PRIOR_NODE_ENV = process.env.NODE_ENV;
+process.env.NODE_ENV = 'local';
 
 const { db } = require('../../src/utils/firebase');
-const log = require('../../src/utils/log');
 const archiveReports = require('../../src/cron/archiveReports');
+const { assertEmulatorReachable, clearCollection } = require('../helpers/firebase-emulator');
 
-// ─── Helpers ─────────────────────────────────────────────────────
+const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+const monthsAgo = (n) => Date.now() - n * MONTH_MS;
 
-function makeReportDoc(id, overrides = {}) {
-  return {
-    id,
-    data: () => ({
-      reportedUserId: 'user-abc',
-      reporterId: 'user-xyz',
-      reason: 'spam',
-      status: 'resolved',
-      resolvedAt: Date.now() - 7 * 30 * 24 * 60 * 60 * 1000, // 7 months ago
-      ...overrides,
-    }),
-  };
-}
+const seedReport = (id, fields) => db.doc(`reports/${id}`).set(fields);
+const reportExists = async (id) => (await db.doc(`reports/${id}`).get()).exists;
+const archived = async (id) => {
+  const snap = await db.doc(`reportsArchive/${id}`).get();
+  return snap.exists ? snap.data() : null;
+};
+const count = async (coll) => (await db.collection(coll).get()).size;
 
-beforeEach(() => {
-  jest.clearAllMocks();
-  mockBatchCommit.mockResolvedValue();
+// A resolved report old enough (7 months) to be archived.
+const resolvedOld = (over = {}) => ({
+  reportedUserId: 'user-abc',
+  reporterId: 'user-xyz',
+  reason: 'spam',
+  status: 'resolved',
+  resolvedAt: monthsAgo(7),
+  ...over,
 });
 
-// ─── Tests ───────────────────────────────────────────────────────
+beforeAll(async () => {
+  await assertEmulatorReachable();
+});
 
-describe('archiveReports', () => {
-  describe('when there are no resolved reports older than 6 months', () => {
-    it('does not create any batch operations', async () => {
-      db.collection.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
-      });
+beforeEach(async () => {
+  await clearCollection(db, 'reports');
+  await clearCollection(db, 'reportsArchive');
+});
 
-      await archiveReports();
+afterAll(async () => {
+  await clearCollection(db, 'reports');
+  await clearCollection(db, 'reportsArchive');
+  process.env.NODE_ENV = PRIOR_NODE_ENV;
+});
 
-      expect(mockBatchSet).not.toHaveBeenCalled();
-      expect(mockBatchDelete).not.toHaveBeenCalled();
-      expect(mockBatchCommit).not.toHaveBeenCalled();
+describe('archiveReports cron (real Firestore emulator)', () => {
+  test('archives a resolved report older than 6 months — copies all fields + injected id, then deletes the original', async () => {
+    const resolvedAt = monthsAgo(7); // pin once — Date.now() drifts between calls
+    await seedReport('report-1', {
+      reportedUserId: 'user-bad',
+      reporterId: 'user-good',
+      reason: 'harassment',
+      status: 'resolved',
+      resolvedAt,
     });
 
-    it('does not log an info message when snapshot is empty', async () => {
-      db.collection.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
-      });
+    await archiveReports();
 
-      await archiveReports();
-
-      expect(log.info).not.toHaveBeenCalled();
-    });
+    const arch = await archived('report-1');
+    expect(arch).not.toBeNull();
+    expect(arch.id).toBe('report-1'); // injected via { id: d.id, ...d.data() }
+    expect(arch.reportedUserId).toBe('user-bad');
+    expect(arch.reporterId).toBe('user-good');
+    expect(arch.reason).toBe('harassment');
+    expect(arch.status).toBe('resolved');
+    expect(arch.resolvedAt).toBe(resolvedAt);
+    // Original removed from the active collection.
+    expect(await reportExists('report-1')).toBe(false);
   });
 
-  describe('when resolved reports older than threshold exist', () => {
-    it('copies each report to reportsArchive collection', async () => {
-      const doc1 = makeReportDoc('report-1');
-      const doc2 = makeReportDoc('report-2');
+  test('excludes an old PENDING report (the status == resolved query clause)', async () => {
+    await seedReport('pending-old', resolvedOld({ status: 'pending' }));
 
-      db.collection.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: false, docs: [doc1, doc2] }),
-      });
+    await archiveReports();
 
-      await archiveReports();
-
-      expect(mockBatchSet).toHaveBeenCalledTimes(2);
-
-      // Verify each set targets the reportsArchive path
-      const setCalls = mockBatchSet.mock.calls;
-      expect(setCalls[0][0]._path).toBe('reportsArchive/report-1');
-      expect(setCalls[1][0]._path).toBe('reportsArchive/report-2');
-    });
-
-    it('deletes each report from the original reports collection', async () => {
-      const doc1 = makeReportDoc('report-1');
-      const doc2 = makeReportDoc('report-2');
-
-      db.collection.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: false, docs: [doc1, doc2] }),
-      });
-
-      await archiveReports();
-
-      expect(mockBatchDelete).toHaveBeenCalledTimes(2);
-
-      const deleteCalls = mockBatchDelete.mock.calls;
-      expect(deleteCalls[0][0]._path).toBe('reports/report-1');
-      expect(deleteCalls[1][0]._path).toBe('reports/report-2');
-    });
-
-    it('commits the batch after processing', async () => {
-      const doc1 = makeReportDoc('report-1');
-
-      db.collection.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: false, docs: [doc1] }),
-      });
-
-      await archiveReports();
-
-      expect(mockBatchCommit).toHaveBeenCalledTimes(1);
-    });
-
-    it('includes all original report fields when copying to archive', async () => {
-      const reportData = {
-        reportedUserId: 'user-bad',
-        reporterId: 'user-good',
-        reason: 'harassment',
-        status: 'resolved',
-        resolvedAt: Date.now() - 7 * 30 * 24 * 60 * 60 * 1000,
-      };
-      const doc1 = {
-        id: 'report-x',
-        data: () => reportData,
-      };
-
-      db.collection.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: false, docs: [doc1] }),
-      });
-
-      await archiveReports();
-
-      const setCall = mockBatchSet.mock.calls[0];
-      const archivedData = setCall[1];
-      // The archived doc includes the id field (added via spread) and original data fields
-      expect(archivedData.id).toBe('report-x');
-      expect(archivedData.reportedUserId).toBe('user-bad');
-      expect(archivedData.reason).toBe('harassment');
-      expect(archivedData.status).toBe('resolved');
-    });
-
-    it('logs the count of archived reports', async () => {
-      const docs = [makeReportDoc('r1'), makeReportDoc('r2'), makeReportDoc('r3')];
-
-      db.collection.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: false, docs }),
-      });
-
-      await archiveReports();
-
-      expect(log.info).toHaveBeenCalledWith(
-        'cron',
-        'archiveReports: archived old reports',
-        expect.objectContaining({ count: 3 }),
-      );
-    });
+    expect(await reportExists('pending-old')).toBe(true);
+    expect(await archived('pending-old')).toBeNull();
   });
 
-  describe('when there are more than 250 reports (chunked batch processing)', () => {
-    it('commits multiple batches for large result sets', async () => {
-      // Create 260 report docs to trigger the chunking path (250 per batch)
-      const docs = Array.from({ length: 260 }, (_, i) => makeReportDoc(`report-${i}`));
+  test('excludes a recently-resolved report (the resolvedAt < sixMonthsAgo clause)', async () => {
+    await seedReport('recent', resolvedOld({ resolvedAt: monthsAgo(2) }));
 
-      db.collection.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: false, docs }),
-      });
+    await archiveReports();
 
-      await archiveReports();
-
-      // 260 docs → 2 batches (250 + 10)
-      expect(mockBatchCommit).toHaveBeenCalledTimes(2);
-      // Each doc = 2 ops: set + delete
-      expect(mockBatchSet).toHaveBeenCalledTimes(260);
-      expect(mockBatchDelete).toHaveBeenCalledTimes(260);
-    });
+    expect(await reportExists('recent')).toBe(true);
+    expect(await archived('recent')).toBeNull();
   });
 
-  describe('when query returns pending reports', () => {
-    it('does not archive pending reports (they are excluded by the Firestore query)', async () => {
-      // The route uses .where('status', '==', 'resolved'), so pending reports
-      // are never returned. This test validates the query is built correctly.
-      const queryChain = {
-        whereArgs: [],
-        where: jest.fn(function (...args) {
-          this.whereArgs.push(args);
-          return this;
-        }),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: true, docs: [] }),
-      };
-      db.collection.mockReturnValueOnce(queryChain);
+  test('in a mixed run archives only the eligible report and leaves the pending + recent ones untouched', async () => {
+    await seedReport('eligible', resolvedOld());
+    await seedReport('pending-old', resolvedOld({ status: 'pending' }));
+    await seedReport('recent', resolvedOld({ resolvedAt: monthsAgo(1) }));
 
-      await archiveReports();
+    await archiveReports();
 
-      // Confirm the query filtered on status = resolved
-      const statusFilter = queryChain.whereArgs.find((args) => args[0] === 'status');
-      expect(statusFilter).toBeDefined();
-      expect(statusFilter[1]).toBe('==');
-      expect(statusFilter[2]).toBe('resolved');
-    });
+    // eligible moved
+    expect(await archived('eligible')).not.toBeNull();
+    expect(await reportExists('eligible')).toBe(false);
+    // the two excluded survive in place, none archived
+    expect(await reportExists('pending-old')).toBe(true);
+    expect(await reportExists('recent')).toBe(true);
+    expect(await archived('pending-old')).toBeNull();
+    expect(await archived('recent')).toBeNull();
+    expect(await count('reportsArchive')).toBe(1);
   });
 
-  describe('error handling', () => {
-    it('propagates Firestore read errors', async () => {
-      db.collection.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockRejectedValue(new Error('Firestore unavailable')),
-      });
+  test('does nothing when no report matches (snapshot.empty early return)', async () => {
+    await seedReport('recent', resolvedOld({ resolvedAt: monthsAgo(1) }));
 
-      await expect(archiveReports()).rejects.toThrow('Firestore unavailable');
-    });
+    await expect(archiveReports()).resolves.toBeUndefined();
 
-    it('propagates batch commit errors', async () => {
-      const doc1 = makeReportDoc('report-1');
-
-      db.collection.mockReturnValueOnce({
-        where: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        get: jest.fn().mockResolvedValue({ empty: false, docs: [doc1] }),
-      });
-      mockBatchCommit.mockRejectedValueOnce(new Error('Batch commit failed'));
-
-      await expect(archiveReports()).rejects.toThrow('Batch commit failed');
-    });
+    expect(await count('reportsArchive')).toBe(0);
+    expect(await count('reports')).toBe(1); // the recent one untouched
   });
+
+  test('chunks past the 250-per-batch boundary — archives and deletes all 260 eligible reports', async () => {
+    const total = 260;
+    const batch = db.batch();
+    for (let i = 0; i < total; i++) {
+      batch.set(db.doc(`reports/bulk-${i}`), resolvedOld());
+    }
+    await batch.commit();
+
+    await archiveReports();
+
+    // 260 > 250 forces two internal batch commits; the real outcome is that
+    // every doc moved — none dropped at the chunk boundary.
+    expect(await count('reportsArchive')).toBe(total);
+    expect(await count('reports')).toBe(0);
+  }, 30000);
 });
