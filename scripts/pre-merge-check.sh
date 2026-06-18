@@ -27,7 +27,12 @@ PR="${1:-}"
 SKIP_CI=false
 [ "${2:-}" = "--skip-ci-check" ] && SKIP_CI=true
 BASE_REF="${BASE_REF:-origin/main}"
+# STORY_RE: a SHY story file (has a `status:` to gate on).
 STORY_RE='^\.project/stories/SHY-[0-9]{4}-.*\.md$'
+# NEUTRAL_RE: a commit touching ONLY story-tracking docs (a SHY story, SHY-INDEX,
+# or an EPIC file — all under .project/stories/*.md) is review-neutral for Gate 3:
+# status flips, marker bumps + the index row that accompany them aren't code.
+NEUTRAL_RE='^\.project/stories/.*\.md$'
 
 fail() {
   echo "REFUSE: $*" >&2
@@ -62,7 +67,7 @@ while IFS= read -r rs; do
   [ -z "$rs" ] && continue
   while IFS= read -r c; do
     [ -z "$c" ] && continue
-    if git diff-tree --no-commit-id --name-only -r "$c" | grep -qvE "$STORY_RE"; then
+    if git diff-tree --no-commit-id --name-only -r "$c" | grep -qvE "$NEUTRAL_RE"; then
       UNREVIEWED=$((UNREVIEWED + 1))
       echo "  unreviewed commit since ${rs}: $(git log -1 --oneline "$c")" >&2
     fi

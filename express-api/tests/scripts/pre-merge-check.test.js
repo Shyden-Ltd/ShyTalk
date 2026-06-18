@@ -92,6 +92,18 @@ describe('SHY-0127 Gates 2+3 — pre-merge-check.sh', () => {
     expect(stdout).toContain('PRE-MERGE-CHECK: OK');
   });
 
+  test('a status-flip commit touching the story + SHY-INDEX.md is review-neutral', () => {
+    const { dir, b } = cleanRepo();
+    // The real "flip to In Review" commit touches the SHY story AND SHY-INDEX.md;
+    // both are story-tracking docs under .project/stories/ → review-neutral.
+    writeStory(dir, 'In Review', b);
+    fs.writeFileSync(path.join(dir, '.project/stories/SHY-INDEX.md'), '| SHY-0999 | In Review |\n');
+    commit(dir, 'flip status + index row (story docs only)');
+    const { code, stdout } = run(dir);
+    expect(code).toBe(0);
+    expect(stdout).toContain('PRE-MERGE-CHECK: OK');
+  });
+
   test('REFUSES when a code commit lands after the reviewed marker', () => {
     const { dir } = cleanRepo();
     fs.writeFileSync(path.join(dir, 'code2.js'), 'y\n');
@@ -149,6 +161,24 @@ describe('SHY-0127 Gates 2+3 — pre-merge-check.sh', () => {
     expect(stderr).toMatch(/In Review/);
   });
 
+  test('REFUSES on a Cancelled story', () => {
+    const dir = init();
+    writeStory(dir, 'Cancelled', 'deadbeef');
+    commit(dir, 'cancelled story');
+    const { code, stderr } = run(dir);
+    expect(code).not.toBe(0);
+    expect(stderr).toMatch(/In Review/);
+  });
+
+  test('REFUSES on a Draft story', () => {
+    const dir = init();
+    writeStory(dir, 'Draft', null);
+    commit(dir, 'draft story');
+    const { code, stderr } = run(dir);
+    expect(code).not.toBe(0);
+    expect(stderr).toMatch(/In Review/);
+  });
+
   test('checks EVERY story marker — refuses if any story has unreviewed commits (multi-story)', () => {
     const dir = init();
     const base = git(dir, ['rev-parse', 'HEAD']); // main commit (loose marker target)
@@ -159,9 +189,9 @@ describe('SHY-0127 Gates 2+3 — pre-merge-check.sh', () => {
       `---\nid: SHY-0998\nstatus: In Review\n---\n\n## Notes\nReviewed-up-to: P\n`,
     );
     const x = commit(dir, 'code + two stories'); // touches code.js (non-story)
-    // SHY-0999 (processed last) gets a TIGHT marker (clean); SHY-0998 a LOOSE one
-    // (base) that must catch the unreviewed code in commit X. Last-writer-wins
-    // would wrongly pass on SHY-0999's tight marker.
+    // SHY-0999 gets a TIGHT marker (x, clean); SHY-0998 a LOOSE one (base) that
+    // must catch the unreviewed code in commit X. A last-writer-wins check would
+    // honour only one marker and could wrongly pass; checking EVERY marker refuses.
     writeStory(dir, 'In Review', x);
     fs.writeFileSync(
       path.join(dir, '.project/stories/SHY-0998-y.md'),
