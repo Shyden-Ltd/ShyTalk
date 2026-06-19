@@ -21,11 +21,12 @@ class RoomRepositoryImpl(
 ) : RoomRepository {
     @Volatile private var prefetchedRooms: List<ChatRoom>? = null
 
-    override suspend fun prefetchActiveRooms() {
+    override suspend fun prefetchActiveRooms(cohort: String) {
         try {
             val snapshot =
                 firestore
                     .collection("rooms")
+                    .whereEqualTo("cohort", cohort)
                     .whereIn("state", listOf("ACTIVE", "OWNER_AWAY"))
                     .get()
                     .await()
@@ -42,7 +43,7 @@ class RoomRepositoryImpl(
     }
 
     // Real-time active rooms list from Firestore
-    override fun getActiveRooms(): Flow<List<ChatRoom>> =
+    override fun getActiveRooms(cohort: String): Flow<List<ChatRoom>> =
         callbackFlow {
             prefetchedRooms?.let {
                 trySend(it)
@@ -51,6 +52,7 @@ class RoomRepositoryImpl(
             val listener =
                 firestore
                     .collection("rooms")
+                    .whereEqualTo("cohort", cohort)
                     .whereIn("state", listOf("ACTIVE", "OWNER_AWAY"))
                     .addSnapshotListener { snapshot, error ->
                         if (error != null || snapshot == null) return@addSnapshotListener
@@ -313,11 +315,15 @@ class RoomRepositoryImpl(
             api.post("/api/rooms/$roomId/close")
         }
 
-    override suspend fun findActiveRoomByOwner(ownerId: String): String? =
+    override suspend fun findActiveRoomByOwner(
+        ownerId: String,
+        cohort: String,
+    ): String? =
         try {
             val snapshot =
                 firestore
                     .collection("rooms")
+                    .whereEqualTo("cohort", cohort)
                     .whereEqualTo("ownerId", ownerId)
                     .whereIn("state", listOf("ACTIVE", "OWNER_AWAY"))
                     .get()
@@ -340,14 +346,17 @@ class RoomRepositoryImpl(
 
     override suspend fun leaveAllRooms(
         userId: String,
+        cohort: String,
         exceptRoomId: String?,
     ): Resource<Unit> =
         firebaseCall("Failed to leave all rooms") {
             // Query stays client-side (reads allowed); each room's mutation
-            // routes through the server-authoritative /leave endpoint.
+            // routes through the server-authoritative /leave endpoint. SHY-0102 —
+            // the client query pins cohort to satisfy the rooms `list` rule.
             val snapshot =
                 firestore
                     .collection("rooms")
+                    .whereEqualTo("cohort", cohort)
                     .whereArrayContains("participantIds", userId)
                     .whereIn("state", listOf("ACTIVE", "OWNER_AWAY"))
                     .get()
@@ -365,13 +374,18 @@ class RoomRepositoryImpl(
             firestore.document("users/$userId").update("currentRoomId", null).await()
         }
 
-    override suspend fun closeAllRoomsByOwner(ownerId: String): Resource<Unit> =
+    override suspend fun closeAllRoomsByOwner(
+        ownerId: String,
+        cohort: String,
+    ): Resource<Unit> =
         firebaseCall("Failed to close rooms") {
             // Query stays client-side; each close routes through /close (which
-            // also clears participants' currentRoomId server-side).
+            // also clears participants' currentRoomId server-side). SHY-0102 —
+            // the client query pins cohort to satisfy the rooms `list` rule.
             val snapshot =
                 firestore
                     .collection("rooms")
+                    .whereEqualTo("cohort", cohort)
                     .whereEqualTo("ownerId", ownerId)
                     .whereIn("state", listOf("ACTIVE", "OWNER_AWAY"))
                     .get()
