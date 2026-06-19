@@ -1,6 +1,6 @@
 ---
 id: SHY-0102
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-06-15
 priority: P1
@@ -156,6 +156,9 @@ During the OkHttp-5 journey gauntlet (#1429) on a real Android device, persona R
 - Released in a `vX.Y.Z` cut with `released_in:` set.
 
 ## Notes (running log)
+
+- **Reviewed-up-to: `cb4b081323c`** (code-reviewer 2 rounds → zero findings). Status → In Review.
+
 
 - 2026-06-15 — Filed from OkHttp-5 journey gauntlet (#1429) finding. Root-caused to Firestore `list`-rule evaluation model (resource.data deref unsatisfiable for `list`); confirmed NOT OkHttp-related, NOT a claims gap, NOT an id-type mismatch (rooms). Observed on local with persona Raul (UID 50000050).
 - 2026-06-15 (later) — **DEV-CONFIRMED, not local-seed-only.** OkHttp-5 DEV gauntlet on real Android reproduced the rooms `list` denial with persona Alice (UID 50000010, cohort adult). Confirms environment-wide (local + dev) → priority stays P1. Conversations `list` path not re-reached on dev this cycle (room flow blocked upstream).
