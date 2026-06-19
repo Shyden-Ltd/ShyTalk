@@ -136,9 +136,16 @@ describe('SHY-0127 Gate 1 — story must be In Review before merge', () => {
     expect(run(dir).code).toBe(0);
   });
 
-  test('PASSES (Done / Cancelled are terminal-acceptable)', () => {
+  test('PASSES when the diffed story is Done', () => {
     const dir = makeRepo((d) =>
       fs.writeFileSync(path.join(d, '.project/stories/SHY-0999-x.md'), story('Done')),
+    );
+    expect(run(dir).code).toBe(0);
+  });
+
+  test('PASSES when the diffed story is Cancelled', () => {
+    const dir = makeRepo((d) =>
+      fs.writeFileSync(path.join(d, '.project/stories/SHY-0999-x.md'), story('Cancelled')),
     );
     expect(run(dir).code).toBe(0);
   });
