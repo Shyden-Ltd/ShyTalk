@@ -5,7 +5,7 @@ owner: claude
 created: 2026-06-13
 priority: P1
 title: No stubs/fakes/gaps — fully-operational, real-only test apparatus (every framework)
-child_shys: [SHY-0092, SHY-0093, SHY-0094, SHY-0095, SHY-0096, SHY-0101, SHY-0112, SHY-0113, SHY-0114, SHY-0115, SHY-0116, SHY-0117, SHY-0118, SHY-0119, SHY-0120, SHY-0121, SHY-0122, SHY-0123, SHY-0124]
+child_shys: [SHY-0092, SHY-0093, SHY-0094, SHY-0095, SHY-0096, SHY-0101, SHY-0112, SHY-0113, SHY-0114, SHY-0115, SHY-0116, SHY-0117, SHY-0118, SHY-0119, SHY-0120, SHY-0121, SHY-0122, SHY-0123, SHY-0124, SHY-0129]
 ---
 
 # EPIC-0003: No stubs/fakes/gaps — fully-operational, real-only test apparatus (every framework)
