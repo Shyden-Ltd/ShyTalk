@@ -55,7 +55,16 @@ class RoomRepositoryImpl(
                     .whereEqualTo("cohort", cohort)
                     .whereIn("state", listOf("ACTIVE", "OWNER_AWAY"))
                     .addSnapshotListener { snapshot, error ->
-                        if (error != null || snapshot == null) return@addSnapshotListener
+                        if (error != null) {
+                            // SHY-0102 — surface a denied/failed rooms listen to the
+                            // Flow (observeRooms' catch logs it) instead of silently
+                            // swallowing it, so a denial is distinguishable from an
+                            // empty list (Observability AC). Firestore has already
+                            // torn down the listener once it delivers an error.
+                            close(error)
+                            return@addSnapshotListener
+                        }
+                        if (snapshot == null) return@addSnapshotListener
                         val rooms =
                             snapshot.documents.mapNotNull { doc ->
                                 val data = doc.data ?: return@mapNotNull null

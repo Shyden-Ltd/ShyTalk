@@ -4,7 +4,9 @@ import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.EventListener
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.Transaction
@@ -16,6 +18,7 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -470,6 +473,15 @@ class RoomRepositoryImplTest {
             assertEquals("minor", cohortValue.captured)
         }
 
+    @Test
+    fun `leaveAllRooms returns Error on exception`() =
+        runTest {
+            every { mockQuery.get() } returns Tasks.forException(RuntimeException("Firestore fail"))
+
+            val result = repo.leaveAllRooms("user-1", "adult")
+            assertTrue(result is Resource.Error)
+        }
+
     // endregion
 
     // region closeAllRoomsByOwner
@@ -593,6 +605,30 @@ class RoomRepositoryImplTest {
             runCurrent()
 
             assertEquals(listOf("ACTIVE", "OWNER_AWAY"), stateValues.captured)
+            job.cancel()
+        }
+
+    @Test
+    fun `getActiveRooms surfaces a Firestore listener error to the flow`() =
+        runTest {
+            // SHY-0102 Observability — a denied/failed rooms listen must reach the
+            // flow's catch (so observeRooms logs it), not be silently swallowed.
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            every { mockQuery.addSnapshotListener(capture(listenerSlot)) } returns mockk(relaxed = true)
+            val errors = mutableListOf<Throwable>()
+
+            val job = launch { repo.getActiveRooms("adult").catch { errors.add(it) }.collect { } }
+            runCurrent()
+            listenerSlot.captured.onEvent(
+                null,
+                FirebaseFirestoreException("denied", FirebaseFirestoreException.Code.PERMISSION_DENIED),
+            )
+            runCurrent()
+
+            assertTrue(
+                "a listener error must surface to the flow, not be swallowed",
+                errors.isNotEmpty(),
+            )
             job.cancel()
         }
 

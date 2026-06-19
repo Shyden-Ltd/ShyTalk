@@ -906,6 +906,42 @@ class HomeViewModelTest {
         }
 
     @Test
+    fun `confirmReplaceRoom closes the owner rooms with the resolved adult cohort`() =
+        runTest {
+            // SHY-0102 — value-pin the cohort threaded into closeAllRoomsByOwner.
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(TestData.createTestUser(uid = currentUserId, cohort = "adult"))
+            coEvery { roomRepository.findActiveRoomByOwner(currentUserId, any()) } returns "existing-room-id"
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("new-id")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.createRoom("New Room")
+            advanceUntilIdle()
+            vm.confirmReplaceRoom()
+            advanceUntilIdle()
+
+            coVerify { roomRepository.closeAllRoomsByOwner(currentUserId, "adult") }
+        }
+
+    @Test
+    fun `confirmReplaceRoom fails closed to minor when the viewer cannot be resolved`() =
+        runTest {
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Error("no user")
+            coEvery { roomRepository.findActiveRoomByOwner(currentUserId, any()) } returns "existing-room-id"
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("new-id")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.createRoom("New Room")
+            advanceUntilIdle()
+            vm.confirmReplaceRoom()
+            advanceUntilIdle()
+
+            coVerify { roomRepository.closeAllRoomsByOwner(currentUserId, "minor") }
+        }
+
+    @Test
     fun `cancelReplaceRoom dismisses confirmation`() =
         runTest {
             val vm = createViewModel()
