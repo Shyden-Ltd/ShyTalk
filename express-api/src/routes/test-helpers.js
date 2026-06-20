@@ -203,6 +203,11 @@ router.post('/test/setup', async (req, res) => {
       const convData = {
         id: convId,
         participantIds,
+        // SHY-0132 — stamp false (the default) so the seeded thread matches the
+        // mobile clients' `crossCohortAtMigration == false` segregation filter; a
+        // segregation test can override with `crossCohortAtMigration: true` to seed
+        // a hidden migrated thread.
+        crossCohortAtMigration: convSpec.crossCohortAtMigration ?? false,
         createdAt: now,
         _testRun: testRunId,
       };
