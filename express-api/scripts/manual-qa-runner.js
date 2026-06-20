@@ -836,6 +836,7 @@ async function seedDirectConversation(ctx, p1Name, p2Name) {
   await ctx.db.doc(`conversations/${convId}`).set({
     type: 'DIRECT',
     participantIds: ids,
+    crossCohortAtMigration: false,
     createdAt: Date.now(),
   });
   return { conversationId: convId };
@@ -860,6 +861,7 @@ async function seedSystemPmFromOfficia(ctx, recipientPersonaName, key) {
   await ctx.db.doc(`conversations/${convId}`).set(
     {
       participantIds: [String(1), String(recipient.uniqueId)],
+      crossCohortAtMigration: false,
       type: 'SYSTEM',
       createdAt: Date.now(),
     },
@@ -6307,6 +6309,7 @@ const matchers = [
           id: convId,
           isGroup: false,
           participantIds: [sp.uniqueId, rp.uniqueId],
+          crossCohortAtMigration: false,
           lastMessage: {
             text: body,
             senderId: sp.uniqueId,
@@ -7559,6 +7562,7 @@ const matchers = [
       await ctx.db.doc(`conversations/${convId}`).set({
         id: convId,
         participantIds: [a.uniqueId, b.uniqueId],
+        crossCohortAtMigration: false,
         frozen: true,
         frozenAt: Date.now(),
       });
@@ -9297,6 +9301,7 @@ const matchers = [
       await ctx.db.doc(`conversations/${convId}`).set({
         id: convId,
         participantIds: sortedIds,
+        crossCohortAtMigration: false,
         createdAt: Date.now(),
       });
       return { ok: true };
@@ -10428,6 +10433,7 @@ const matchers = [
           id: convId,
           isGroup: false,
           participantIds: [recipientUid, SYSTEM_UID],
+          crossCohortAtMigration: false,
           lastMessage: {
             text: placeholderText,
             senderId: SYSTEM_UID,
@@ -12841,6 +12847,7 @@ const matchers = [
         id: convId,
         type: 'direct',
         participantIds: ids,
+        crossCohortAtMigration: false,
         createdAt: Date.now(),
       });
       return { ok: true };
