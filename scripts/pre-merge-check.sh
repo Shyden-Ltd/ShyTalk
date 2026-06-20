@@ -63,7 +63,7 @@ while IFS= read -r line; do
   FOUND_STORY=true
   status=$(grep -m1 '^status:' "$story" | sed 's/^status:[[:space:]]*//' | tr -d '\r')
   if [ "$code" = "A" ] && [ "$status" = "Draft" ]; then
-    echo "  filing exemption: $story newly-added Draft (SHY-0131 parity)" >&2
+    printf '  filing exemption: %s newly-added Draft (SHY-0131 parity)\n' "$story" >&2
     FILINGS=$((FILINGS + 1))
     continue
   fi
@@ -102,6 +102,13 @@ fi
 CI_LINE="verified"
 [ "$SKIP_CI" = "true" ] && CI_LINE="SKIPPED (--skip-ci-check)"
 REVIEWED_DISPLAY=$(echo "$MARKERS" | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+# Honest display when there are no implementation stories (a filing-only PR has
+# no markers → nothing to re-review).
+if [ -n "$REVIEWED_DISPLAY" ]; then
+  REVIEW_NOTE="Reviewed-up-to: $REVIEWED_DISPLAY"
+else
+  REVIEW_NOTE="filing only — no implementation story to re-review"
+fi
 
 STATUS_LINE="each changed story In Review"
 [ "$FILINGS" -gt 0 ] && STATUS_LINE="$STATUS_LINE (+ $FILINGS newly-added Draft filing(s) exempt — SHY-0131 parity)"
@@ -109,7 +116,7 @@ STATUS_LINE="each changed story In Review"
 cat <<EOF
 ── Pre-merge gate (SHY-0127) ──
   [x] $STATUS_LINE
-  [x] no unreviewed commits since last review (Reviewed-up-to: $REVIEWED_DISPLAY)
+  [x] no unreviewed commits since last review ($REVIEW_NOTE)
   [x] CI checks green: $CI_LINE
   Confirm the human-judgment items before merging:
   [ ] Definition of Done met
