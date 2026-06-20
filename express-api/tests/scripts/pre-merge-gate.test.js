@@ -24,23 +24,30 @@ function git(cwd, args) {
 }
 
 /**
- * Build a temp repo: main has a baseline story (In Review); a branch then makes
- * `changes`. Returns { dir }. `changes` is a function(dir) that mutates files.
+ * Build a temp repo: `baseChanges` are committed on `main`, then a `feature`
+ * branch applies `featureChanges`. This lets a test distinguish an ADDED story
+ * (no base) from a MODIFIED/RENAMED one (story committed on main first).
  */
-function makeRepo(changes) {
+function makeRepoBase(baseChanges, featureChanges) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shy0127-gate1-'));
   git(dir, ['init', '-q', '-b', 'main']);
   git(dir, ['config', 'user.email', 't@t.co']);
   git(dir, ['config', 'user.name', 'T']);
   fs.mkdirSync(path.join(dir, '.project/stories'), { recursive: true });
   fs.writeFileSync(path.join(dir, 'README.md'), 'base\n');
+  baseChanges(dir);
   git(dir, ['add', '-A']);
   git(dir, ['commit', '-qm', 'base']);
   git(dir, ['checkout', '-q', '-b', 'feature']);
-  changes(dir);
+  featureChanges(dir);
   git(dir, ['add', '-A']);
   git(dir, ['commit', '-qm', 'work']);
   return dir;
+}
+
+/** ADDED-only convenience: nothing on main, `changes` applied on feature. */
+function makeRepo(changes) {
+  return makeRepoBase(() => {}, changes);
 }
 
 const story = (status) =>
@@ -71,9 +78,53 @@ describe('SHY-0127 Gate 1 — story must be In Review before merge', () => {
     expect(stderr).toMatch(/In Review/);
   });
 
-  test('FAILS when a diffed story is still Draft', () => {
+  test('PASSES when a newly-ADDED story is Draft (SHY-0131 filing exemption)', () => {
+    // Filing a brand-new story is legitimately Draft — it has not been picked
+    // up for implementation, so it must be mergeable to the backlog.
     const dir = makeRepo((d) =>
       fs.writeFileSync(path.join(d, '.project/stories/SHY-0999-x.md'), story('Draft')),
+    );
+    expect(run(dir).code).toBe(0);
+  });
+
+  test('FAILS when an EXISTING (modified) story is still Draft (SHY-0131 — exemption is add-only)', () => {
+    // The add-only exemption must NOT apply to a modification: a Draft story
+    // already on main that a PR edits still trips the gate (no SHY-0120 hole).
+    const dir = makeRepoBase(
+      (d) => fs.writeFileSync(path.join(d, '.project/stories/SHY-0999-x.md'), story('Draft')),
+      (d) =>
+        fs.writeFileSync(
+          path.join(d, '.project/stories/SHY-0999-x.md'),
+          `${story('Draft')}\n- refined a line\n`,
+        ),
+    );
+    expect(run(dir).code).not.toBe(0);
+  });
+
+  test('FAILS when a newly-ADDED story is In Progress (only Draft is exempt at filing)', () => {
+    const dir = makeRepo((d) =>
+      fs.writeFileSync(path.join(d, '.project/stories/SHY-0999-x.md'), story('In Progress')),
+    );
+    expect(run(dir).code).not.toBe(0);
+  });
+
+  test('PASSES an added Draft but FAILS a co-added In-Progress story (mixed)', () => {
+    const dir = makeRepo((d) => {
+      fs.writeFileSync(path.join(d, '.project/stories/SHY-0999-x.md'), story('Draft'));
+      fs.writeFileSync(path.join(d, '.project/stories/SHY-0998-y.md'), story('In Progress'));
+    });
+    const { code, stderr } = run(dir);
+    expect(code).not.toBe(0);
+    expect(stderr).toMatch(/SHY-0998-y\.md/);
+  });
+
+  test('FAILS a RENAMED story left Draft (rename is not a fresh add)', () => {
+    const dir = makeRepoBase(
+      (d) => fs.writeFileSync(path.join(d, '.project/stories/SHY-0999-x.md'), story('In Review')),
+      (d) => {
+        git(d, ['mv', '.project/stories/SHY-0999-x.md', '.project/stories/SHY-0999-z.md']);
+        fs.writeFileSync(path.join(d, '.project/stories/SHY-0999-z.md'), story('Draft'));
+      },
     );
     expect(run(dir).code).not.toBe(0);
   });
@@ -85,9 +136,16 @@ describe('SHY-0127 Gate 1 — story must be In Review before merge', () => {
     expect(run(dir).code).toBe(0);
   });
 
-  test('PASSES (Done / Cancelled are terminal-acceptable)', () => {
+  test('PASSES when the diffed story is Done', () => {
     const dir = makeRepo((d) =>
       fs.writeFileSync(path.join(d, '.project/stories/SHY-0999-x.md'), story('Done')),
+    );
+    expect(run(dir).code).toBe(0);
+  });
+
+  test('PASSES when the diffed story is Cancelled', () => {
+    const dir = makeRepo((d) =>
+      fs.writeFileSync(path.join(d, '.project/stories/SHY-0999-x.md'), story('Cancelled')),
     );
     expect(run(dir).code).toBe(0);
   });

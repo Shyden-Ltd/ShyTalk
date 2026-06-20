@@ -8,6 +8,10 @@
  * silently skipped on SHY-0120. Skips (exit 0) when the diff contains no story
  * file (not applicable — e.g. a dependabot/infra PR) or when the PR is a draft.
  *
+ * SHY-0131 — a newly-ADDED story `.md` at status `Draft` is EXEMPT (filing a
+ * brand-new backlog story is legitimately Draft). The exemption is add-only: a
+ * MODIFIED/RENAMED story (the implementation case) must still reach In Review.
+ *
  * Read-only: never executes scanned files; spawns `git` with an arg array (no
  * shell); no network, no credentials.
  *
@@ -38,29 +42,36 @@ function main() {
   const base = process.env.BASE_SHA || 'origin/main';
   const head = process.env.HEAD_SHA || 'HEAD';
 
-  let changed;
+  let entries;
   try {
-    changed = execFileSync(
+    entries = execFileSync(
       'git',
-      ['diff', '--name-only', '--diff-filter=ACMR', `${base}...${head}`],
+      ['diff', '--name-status', '--diff-filter=ACMR', `${base}...${head}`],
       { encoding: 'utf8' },
     )
       .split('\n')
       .map((s) => s.trim())
-      .filter(Boolean);
+      .filter(Boolean)
+      .map((line) => {
+        // "A\tpath" | "M\tpath" | "R100\told\tnew" | "C75\told\tnew".
+        // First field's first char is the change code; the LAST tab-field is
+        // the (new) path — correct for renames/copies too.
+        const parts = line.split('\t');
+        return { code: parts[0][0], file: parts[parts.length - 1] };
+      });
   } catch (err) {
     fail(`pre-merge-gate: git diff ${base}...${head} failed: ${err.message}`);
     return 2;
   }
 
-  const stories = changed.filter((f) => STORY_RE.test(f));
+  const stories = entries.filter((e) => STORY_RE.test(e.file));
   if (stories.length === 0) {
     process.stdout.write('pre-merge-gate: no story .md in the diff — not applicable, skipping\n');
     return 0;
   }
 
   let bad = 0;
-  for (const file of stories) {
+  for (const { code, file } of stories) {
     let content;
     try {
       content = fs.readFileSync(path.resolve(process.cwd(), file), 'utf8');
@@ -73,6 +84,12 @@ function main() {
     const status = match ? match[1] : '(no status: field)';
     if (ALLOWED.has(status)) {
       process.stdout.write(`pre-merge-gate: ${file} status "${status}" OK\n`);
+    } else if (code === 'A' && status === 'Draft') {
+      // SHY-0131 — filing a brand-new story is legitimately Draft (not yet
+      // picked up for implementation). The exemption is ADD-only: a MODIFIED or
+      // RENAMED story (the implementation case) must still reach In Review, so
+      // the SHY-0120 protection is preserved.
+      process.stdout.write(`pre-merge-gate: ${file} newly-added Draft — filing exemption OK\n`);
     } else {
       fail(
         `pre-merge-gate: ${file} has status "${status}" — it must be "In Review" ` +
