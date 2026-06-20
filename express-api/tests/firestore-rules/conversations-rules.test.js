@@ -201,9 +201,21 @@ describe('conversations list (collection query) — SHY-0130 contract', () => {
     );
   });
 
-  // NOTE: the `crossCohortAtMigration` LIST-leak (the migration gate is enforced
-  // on `get` — see the get block above — but NOT on `list`) is a separate
-  // pre-existing OSA §17 security issue tracked under its own story; its harness
-  // tests (the leak proof + the `where('crossCohortAtMigration','==',false)` fix)
-  // are added there, not here. SHY-0130 is the id-type contract only.
+  // NOTE: the `crossCohortAtMigration` LIST-leak is a separate, pre-existing OSA
+  // §17 security issue tracked under its own story — NOT widened or fixed here.
+  // Subtle mechanics (proven on the emulator, lest a future reader misread the
+  // rule): the `!= true` clause IS present in the `list` rule text (firestore.rules
+  // L327-329, identical to `get`), BUT Firestore does NOT apply a `resource.data`
+  // field condition as a per-document FILTER on `list` — a list query returns every
+  // doc matching its EXPLICIT query constraints, and the engine does not silently
+  // drop docs that fail the rule's data condition. So an unconstrained
+  // `array-contains(string(uid))` query RETURNS the caller's `crossCohortAtMigration:
+  // true` threads (fail-OPEN leak of migrated cross-cohort thread metadata) even
+  // though `get` on the same doc is correctly denied. The fix lives in the security
+  // story: the client query must add `.where('crossCohortAtMigration','==', false)`
+  // AND an Admin-SDK backfill must stamp that field on EVERY conversation doc — a
+  // `==false` filter excludes docs where the field is ABSENT (proven: with the
+  // filter but no backfill, the query returns ZERO docs, not just the safe ones),
+  // so the backfill is mandatory and new docs must always stamp it. SHY-0130 is the
+  // id-type contract only; that leak proof + its fix are this story's companion.
 });

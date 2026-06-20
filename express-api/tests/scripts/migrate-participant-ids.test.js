@@ -120,4 +120,43 @@ describe('migrateParticipantIds — numeric → string (SHY-0130, real emulator)
       expect(result.skipped).toBe(1);
     });
   });
+
+  test('returns zero counts for an empty collection', async () => {
+    await withAdminDb(async (db) => {
+      // beforeEach clears Firestore — the `conversations` collection is empty,
+      // so the scan loop never executes.
+      const result = await migrateParticipantIds(db);
+      expect(result).toEqual({ total: 0, migrated: 0, skipped: 0 });
+    });
+  });
+
+  test('migrates a collection spanning multiple 500-doc write batches', async () => {
+    await withAdminDb(async (db) => {
+      // 501 docs forces the chunked-write loop (`slice(i, i + 500)`) to commit a
+      // SECOND batch — guards an off-by-one at the 500-doc Firestore batch limit.
+      const N = 501;
+      for (let i = 0; i < N; i += 500) {
+        const seed = db.batch();
+        for (let j = i; j < Math.min(i + 500, N); j++) {
+          seed.set(db.collection('conversations').doc(`b-${j}`), {
+            participantIds: [10000000 + j, 20000000 + j],
+          });
+        }
+        await seed.commit();
+      }
+
+      const result = await migrateParticipantIds(db);
+      expect(result.total).toBe(N);
+      expect(result.migrated).toBe(N);
+
+      // Every doc — including those written by the 2nd batch (index ≥ 500) —
+      // is now all-strings, proving the second commit actually landed.
+      const after = await db.collection('conversations').get();
+      expect(after.size).toBe(N);
+      const allStrings = after.docs.every((d) =>
+        d.data().participantIds.every((x) => typeof x === 'string'),
+      );
+      expect(allStrings).toBe(true);
+    });
+  });
 });
