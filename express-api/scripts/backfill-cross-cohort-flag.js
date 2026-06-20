@@ -19,6 +19,12 @@
  *
  * Safe to re-run — docs that already have the field (true or false) are skipped.
  * Verify a post-run count of remaining absent-field docs == 0.
+ *
+ * Scale: this does a single unbounded `.get()` of the `conversations` collection.
+ * It is a ONE-TIME op that runs BEFORE the client filter ships (i.e. pre-launch,
+ * when the collection is small), so a single in-memory pass is fine. If it ever
+ * needs to run against a large post-launch collection, switch the read to a
+ * cursor-paginated loop (`.limit(500).startAfter(last)`) to bound memory + reads.
  */
 
 async function backfillCrossCohortFlag(db) {
