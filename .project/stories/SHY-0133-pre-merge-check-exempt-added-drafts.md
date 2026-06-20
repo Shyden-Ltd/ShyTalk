@@ -1,6 +1,6 @@
 ---
 id: SHY-0133
-status: Draft
+status: In Review
 owner: claude
 created: 2026-06-20
 priority: P2
@@ -133,3 +133,6 @@ All existing tests (In Review OK, no-marker refuse, code-after-marker refuse, Do
 ## Notes (running log)
 
 - 2026-06-20 — **Filed (operator chose "fix the merge-gate" 2026-06-20).** Surfaced while judgment-merging the SHY-0132 spec PR #1486: `pre-merge-check.sh` REFUSED its added Draft while the CI `PR Gate` passed it — SHY-0131 updated the CI gate (`check-pr-story-status.js:87` `code === 'A' && status === 'Draft'`) but not the local sibling. This story closes that oversight: mirror the add-only, Draft-only exemption into `pre-merge-check.sh` and split the `REFUSES on a Draft story` test into added-Draft-EXEMPT + modified-to-Draft-REFUSE. Add-only + Draft-only keeps every other guard (modified-Draft, non-Draft adds, Done/Cancelled, unreviewed code) intact.
+- 2026-06-20 — **Implemented + reviewed (filed + built in one PR, SHY-0131 pattern).** RED: split the `REFUSES on a Draft story` test → added-Draft EXEMPT + modified-to-Draft REFUSE; GREEN: `pre-merge-check.sh` `--name-status` + add-only/Draft-only exemption. 17/17 Jest green (incl. mixed-PR, renamed-Draft R≠A, FILINGS=2 multi-filing); shellcheck/eslint/prettier/no-stubs clean. `code-reviewer`: pass 1 = 2 Important + 3 Minor (honest filing-only checklist, FILINGS=2 test, printf, DRY helper) → all fixed; pass 2 (re-review of the fix) = ZERO findings. Status → In Review.
+
+Reviewed-up-to: 30d86b3a641
