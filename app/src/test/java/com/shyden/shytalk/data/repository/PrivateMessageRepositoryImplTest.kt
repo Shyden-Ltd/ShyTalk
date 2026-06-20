@@ -118,7 +118,7 @@ class PrivateMessageRepositoryImplTest {
         }
 
     @Test
-    fun `getOrCreateConversation stores participantIds as Long values`() =
+    fun `getOrCreateConversation stores participantIds as String values`() =
         runTest {
             val dataSlot = slot<Map<String, Any>>()
             every { mockDocRef.set(capture(dataSlot)) } returns Tasks.forResult(null)
@@ -127,10 +127,14 @@ class PrivateMessageRepositoryImplTest {
             assertTrue(result is Resource.Success)
 
             val participantIds = dataSlot.captured["participantIds"] as List<*>
-            // Both values must be Long, not String
-            assertTrue("participantIds[0] should be Long", participantIds[0] is Long)
-            assertTrue("participantIds[1] should be Long", participantIds[1] is Long)
-            assertEquals(listOf(10000001L, 10000002L), participantIds)
+            // SHY-0130 — participantIds MUST be Strings: the canonical type the
+            // rule (`string(callerUniqueId()) in resource.data.participantIds`),
+            // the model (`List<String>`), iOS, and Express (`.map(String)`) all
+            // use. This test previously asserted Longs — it ENCODED the bug that
+            // made Android-created threads unreadable by the string gate.
+            assertTrue("participantIds[0] should be String", participantIds[0] is String)
+            assertTrue("participantIds[1] should be String", participantIds[1] is String)
+            assertEquals(listOf("10000001", "10000002"), participantIds)
         }
 
     @Test
