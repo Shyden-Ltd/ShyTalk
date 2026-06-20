@@ -8,8 +8,10 @@ import com.shyden.shytalk.core.model.MuteInfo
 import com.shyden.shytalk.core.model.PrivateMessage
 import com.shyden.shytalk.core.model.SystemMessageConfig
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.core.util.encodeUrlQueryComponent
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.firestore.dataMap
@@ -21,6 +23,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -726,30 +729,73 @@ class IosPrivateMessageRepositoryImpl(
 
     // ── Search ──────────────────────────────────────────────────
 
+    /**
+     * Search the caller's own cohort for a user by displayName prefix OR
+     * exact uniqueId.
+     *
+     * Routes through the cohort-gated Express endpoint `GET /api/users/search`
+     * (SHY-0137) instead of a raw Firestore `list` query. The old direct query
+     * carried only a `displayName` range and no `cohort` constraint, so the
+     * `users` read rule's `cohortMatchesCaller()` requirement could not be
+     * proven at query time \u2014 Firestore denied the whole `list` with
+     * `PERMISSION_DENIED`. It also searched by name only.
+     *
+     * The server auto-routes by query shape (numeric \u2192 exact uniqueId; else
+     * \u2192 cohort-gated displayName prefix), so "search by ID and name" stays
+     * server-enforced. A query below the server's minimum length is a
+     * guaranteed HTTP 400, so we short-circuit it to an empty list WITHOUT
+     * calling the API (the caller debounces typeahead; a transient short query
+     * must not surface as a hard error).
+     */
     override suspend fun searchUsers(
         query: String,
         currentUserId: String,
-    ): Resource<List<User>> =
-        firebaseCall("Failed to search users") {
-            val snapshot =
-                firestore
-                    .collection("users")
-                    .where {
-                        all(
-                            "displayName" greaterThanOrEqualTo query,
-                            "displayName" lessThan query + "\uf8ff",
-                        )
-                    }.get()
-            snapshot.documents.mapNotNull { doc ->
-                if (doc.id == currentUserId) return@mapNotNull null
+    ): Resource<List<User>> {
+        val trimmed = query.trim()
+        if (trimmed.length < Constants.USER_SEARCH_MIN_QUERY_CHARS) {
+            return Resource.Success(emptyList())
+        }
+        return firebaseCall("Failed to search users") {
+            val encoded = encodeUrlQueryComponent(trimmed)
+            val response = api.get("/api/users/search?q=$encoded")
+            val users = response["users"] as? JsonArray ?: JsonArray(emptyList())
+            users.mapNotNull { element ->
+                val obj = element as? JsonObject ?: return@mapNotNull null
+                val map = jsonObjectToMap(obj)
+                // The Firestore doc id (== uniqueId string) is the User.uid.
+                val uid = (map["uniqueId"] as? Number)?.toLong()?.toString() ?: return@mapNotNull null
+                if (uid == currentUserId) return@mapNotNull null
                 try {
-                    val data = doc.dataMap()
-                    User.fromMap(data, doc.id)
+                    User.fromMap(map, uid)
                 } catch (e: Exception) {
                     null
                 }
             }
         }
+    }
+
+    /**
+     * Flatten a single user JSON object from the search response into the
+     * `Map<String, Any?>` shape [User.fromMap] expects. Primitives are coerced
+     * to String / Long / Double / Boolean; nested objects/arrays are skipped
+     * (the search payload's user-card fields \u2014 displayName, uniqueId, photo,
+     * nationality \u2014 are all primitives, and [User.fromMap] tolerates the
+     * absent collection fields via its defaults).
+     */
+    private fun jsonObjectToMap(json: JsonObject): Map<String, Any?> =
+        json.entries
+            .mapNotNull { (key, value) ->
+                val primitive = value as? JsonPrimitive ?: return@mapNotNull null
+                val coerced: Any? =
+                    when {
+                        primitive is JsonNull -> null
+                        primitive.isString -> primitive.content
+                        primitive.content == "true" || primitive.content == "false" -> primitive.content.toBoolean()
+                        primitive.content.contains('.') -> primitive.content.toDoubleOrNull()
+                        else -> primitive.content.toLongOrNull() ?: primitive.content
+                    }
+                key to coerced
+            }.toMap()
 
     // ── Counting ────────────────────────────────────────────────
 

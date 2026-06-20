@@ -16,6 +16,7 @@ import com.google.firebase.firestore.WriteBatch
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -24,8 +25,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -598,6 +601,155 @@ class PrivateMessageRepositoryImplTest {
         runTest {
             val result = repo.transferOwnership("conv-1", "new-owner")
             assertTrue(result is Resource.Success)
+        }
+
+    // endregion
+
+    // region searchUsers — Express API (SHY-0137: cohort-gated, ID + name)
+
+    /** Builds a `{ users: [ ... ] }` response with the given user objects. */
+    private fun searchResponse(vararg users: JSONObject): JSONObject = JSONObject().apply { put("users", JSONArray(users.toList())) }
+
+    private fun userJson(
+        uniqueId: Long,
+        displayName: String,
+    ): JSONObject =
+        JSONObject().apply {
+            put("uniqueId", uniqueId)
+            put("displayName", displayName)
+        }
+
+    @Test
+    fun `searchUsers calls the cohort-gated search endpoint with the url-encoded query`() =
+        runTest {
+            val pathSlot = slot<String>()
+            coEvery { api.get(capture(pathSlot)) } returns searchResponse(userJson(10000002L, "Bob"))
+
+            repo.searchUsers("Bob Smith", "10000001")
+
+            // Same endpoint, query passed verbatim (URL-encoded). The space must
+            // be %20, NOT '+', so Express decodes it back to a literal space.
+            assertEquals("/api/users/search?q=Bob%20Smith", pathSlot.captured)
+        }
+
+    @Test
+    fun `searchUsers parses the users array into User models`() =
+        runTest {
+            coEvery { api.get(any()) } returns
+                searchResponse(
+                    userJson(10000002L, "Bob"),
+                    userJson(10000003L, "Carol"),
+                )
+
+            val result = repo.searchUsers("test", "10000001")
+
+            assertTrue(result is Resource.Success)
+            val users = (result as Resource.Success).data
+            assertEquals(2, users.size)
+            // uid is the stringified uniqueId (the Firestore doc id).
+            assertEquals("10000002", users[0].uid)
+            assertEquals(10000002L, users[0].uniqueId)
+            assertEquals("Bob", users[0].displayName)
+            assertEquals("10000003", users[1].uid)
+            assertEquals("Carol", users[1].displayName)
+        }
+
+    @Test
+    fun `searchUsers excludes the current user from results`() =
+        runTest {
+            coEvery { api.get(any()) } returns
+                searchResponse(
+                    userJson(10000001L, "Me"),
+                    userJson(10000002L, "Bob"),
+                )
+
+            val result = repo.searchUsers("test", "10000001")
+
+            assertTrue(result is Resource.Success)
+            val users = (result as Resource.Success).data
+            assertEquals(1, users.size)
+            assertEquals("10000002", users[0].uid)
+            assertFalse(users.any { it.uid == "10000001" })
+        }
+
+    @Test
+    fun `searchUsers routes a numeric uniqueId query through the same endpoint`() =
+        runTest {
+            val pathSlot = slot<String>()
+            coEvery { api.get(capture(pathSlot)) } returns searchResponse(userJson(10000002L, "Bob"))
+
+            val result = repo.searchUsers("10000002", "10000001")
+
+            // The client does NOT branch on shape — the server auto-routes.
+            // Numeric and name queries hit the identical endpoint.
+            assertEquals("/api/users/search?q=10000002", pathSlot.captured)
+            assertTrue(result is Resource.Success)
+            assertEquals(1, (result as Resource.Success).data.size)
+        }
+
+    @Test
+    fun `searchUsers routes a name query through the same endpoint`() =
+        runTest {
+            val pathSlot = slot<String>()
+            coEvery { api.get(capture(pathSlot)) } returns searchResponse(userJson(10000002L, "Bob"))
+
+            repo.searchUsers("Bob", "10000001")
+
+            assertEquals("/api/users/search?q=Bob", pathSlot.captured)
+        }
+
+    @Test
+    fun `searchUsers returns empty for a below-min-length query without calling the API`() =
+        runTest {
+            // SEARCH_MIN_QUERY_CHARS is 3 — a 2-char query is a guaranteed 400.
+            val result = repo.searchUsers("ab", "10000001")
+
+            assertTrue(result is Resource.Success)
+            assertTrue((result as Resource.Success).data.isEmpty())
+            coVerify(exactly = 0) { api.get(any()) }
+        }
+
+    @Test
+    fun `searchUsers returns empty for a blank query without calling the API`() =
+        runTest {
+            val result = repo.searchUsers("   ", "10000001")
+
+            assertTrue(result is Resource.Success)
+            assertTrue((result as Resource.Success).data.isEmpty())
+            coVerify(exactly = 0) { api.get(any()) }
+        }
+
+    @Test
+    fun `searchUsers returns Error when the API call fails`() =
+        runTest {
+            coEvery { api.get(any()) } throws RuntimeException("PERMISSION_DENIED")
+
+            val result = repo.searchUsers("Bob", "10000001")
+
+            assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `searchUsers returns an empty list when the server returns no users`() =
+        runTest {
+            coEvery { api.get(any()) } returns searchResponse()
+
+            val result = repo.searchUsers("nobody", "10000001")
+
+            assertTrue(result is Resource.Success)
+            assertTrue((result as Resource.Success).data.isEmpty())
+        }
+
+    @Test
+    fun `searchUsers url-encodes reserved characters in the query`() =
+        runTest {
+            val pathSlot = slot<String>()
+            coEvery { api.get(capture(pathSlot)) } returns searchResponse()
+
+            repo.searchUsers("a&b=c", "10000001")
+
+            // '&' and '=' must be percent-encoded so they don't split the query.
+            assertEquals("/api/users/search?q=a%26b%3Dc", pathSlot.captured)
         }
 
     // endregion

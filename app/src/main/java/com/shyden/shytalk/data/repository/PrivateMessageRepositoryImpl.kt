@@ -13,8 +13,11 @@ import com.shyden.shytalk.core.model.MuteInfo
 import com.shyden.shytalk.core.model.PrivateMessage
 import com.shyden.shytalk.core.model.SystemMessageConfig
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
+import com.shyden.shytalk.core.util.encodeUrlQueryComponent
 import com.shyden.shytalk.core.util.firebaseCall
+import com.shyden.shytalk.core.util.toMap
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -728,24 +731,47 @@ class PrivateMessageRepositoryImpl(
 
     // ===== Search =====
 
+    /**
+     * Search the caller's own cohort for a user by displayName prefix OR
+     * exact uniqueId.
+     *
+     * Routes through the cohort-gated Express endpoint `GET /api/users/search`
+     * (SHY-0137) instead of a raw Firestore `list` query. The old direct query
+     * carried only a `displayName` range and no `cohort` constraint, so the
+     * `users` read rule's `cohortMatchesCaller()` requirement could not be
+     * proven at query time \u2014 Firestore denied the whole `list` with
+     * `PERMISSION_DENIED`. It also searched by name only.
+     *
+     * The server auto-routes by query shape: a numeric `q` (a uniqueId) does an
+     * exact same-cohort lookup; anything else does a cohort-gated displayName
+     * prefix search \u2014 so "search by ID and name" comes for free and stays
+     * server-enforced. A query below the server's minimum length is a
+     * guaranteed HTTP 400, so we short-circuit it to an empty list WITHOUT
+     * calling the API (the caller debounces typeahead; a transient short query
+     * must not surface as a hard error).
+     */
     override suspend fun searchUsers(
         query: String,
         currentUserId: String,
-    ): Resource<List<User>> =
-        firebaseCall("Failed to search users") {
-            val snapshot =
-                firestore
-                    .collection("users")
-                    .whereGreaterThanOrEqualTo("displayName", query)
-                    .whereLessThan("displayName", query + "\uf8ff")
-                    .get()
-                    .await()
-            snapshot.documents.mapNotNull { doc ->
-                val data = doc.data ?: return@mapNotNull null
-                if (doc.id == currentUserId) return@mapNotNull null
-                User.fromMap(data, doc.id)
+    ): Resource<List<User>> {
+        val trimmed = query.trim()
+        if (trimmed.length < Constants.USER_SEARCH_MIN_QUERY_CHARS) {
+            return Resource.Success(emptyList())
+        }
+        return firebaseCall("Failed to search users") {
+            val encoded = encodeUrlQueryComponent(trimmed)
+            val response = api.get("/api/users/search?q=$encoded")
+            val users = response.optJSONArray("users") ?: JSONArray()
+            (0 until users.length()).mapNotNull { index ->
+                val obj = users.optJSONObject(index) ?: return@mapNotNull null
+                val map = obj.toMap()
+                // The Firestore doc id (== uniqueId string) is the User.uid.
+                val uid = (map["uniqueId"] as? Number)?.toLong()?.toString() ?: return@mapNotNull null
+                if (uid == currentUserId) return@mapNotNull null
+                User.fromMap(map, uid)
             }
         }
+    }
 
     // ===== Counting =====
 
