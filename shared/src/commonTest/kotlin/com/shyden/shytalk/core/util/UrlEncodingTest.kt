@@ -46,6 +46,14 @@ class UrlEncodingTest {
     }
 
     @Test
+    fun `percent-encodes a 4-byte utf8 emoji per byte`() {
+        // "😀" is U+1F600 → UTF-8 0xF0 0x9F 0x98 0x80 → "%F0%9F%98%80".
+        // A 4-byte code point spans a surrogate pair in Kotlin; the encoder
+        // must walk the UTF-8 bytes, not the UTF-16 chars.
+        assertEquals("%F0%9F%98%80", encodeUrlQueryComponent("😀"))
+    }
+
+    @Test
     fun `encodes an empty string to an empty string`() {
         assertEquals("", encodeUrlQueryComponent(""))
     }

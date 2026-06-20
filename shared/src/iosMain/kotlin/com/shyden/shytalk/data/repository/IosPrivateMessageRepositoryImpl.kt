@@ -23,7 +23,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -759,45 +758,15 @@ class IosPrivateMessageRepositoryImpl(
             val encoded = encodeUrlQueryComponent(trimmed)
             val response = api.get("/api/users/search?q=$encoded")
             val users = response["users"] as? JsonArray ?: JsonArray(emptyList())
-            users.mapNotNull { element ->
-                val obj = element as? JsonObject ?: return@mapNotNull null
-                val map = jsonObjectToMap(obj)
-                // The Firestore doc id (== uniqueId string) is the User.uid.
-                val uid = (map["uniqueId"] as? Number)?.toLong()?.toString() ?: return@mapNotNull null
-                if (uid == currentUserId) return@mapNotNull null
-                try {
-                    User.fromMap(map, uid)
-                } catch (e: Exception) {
-                    null
+            val rows =
+                users.mapNotNull { element ->
+                    (element as? JsonObject)?.let { jsonObjectToMap(it) }
                 }
-            }
+            mapUserSearchRows(rows, currentUserId)
         }
     }
 
-    /**
-     * Flatten a single user JSON object from the search response into the
-     * `Map<String, Any?>` shape [User.fromMap] expects. Primitives are coerced
-     * to String / Long / Double / Boolean; nested objects/arrays are skipped
-     * (the search payload's user-card fields \u2014 displayName, uniqueId, photo,
-     * nationality \u2014 are all primitives, and [User.fromMap] tolerates the
-     * absent collection fields via its defaults).
-     */
-    private fun jsonObjectToMap(json: JsonObject): Map<String, Any?> =
-        json.entries
-            .mapNotNull { (key, value) ->
-                val primitive = value as? JsonPrimitive ?: return@mapNotNull null
-                val coerced: Any? =
-                    when {
-                        primitive is JsonNull -> null
-                        primitive.isString -> primitive.content
-                        primitive.content == "true" || primitive.content == "false" -> primitive.content.toBoolean()
-                        primitive.content.contains('.') -> primitive.content.toDoubleOrNull()
-                        else -> primitive.content.toLongOrNull() ?: primitive.content
-                    }
-                key to coerced
-            }.toMap()
-
-    // ── Counting ────────────────────────────────────────────────
+    // ── Counting ──────────────────
 
     override suspend fun getOwnedGroupCount(userId: String): Resource<Int> =
         firebaseCall("Failed to get owned group count") {

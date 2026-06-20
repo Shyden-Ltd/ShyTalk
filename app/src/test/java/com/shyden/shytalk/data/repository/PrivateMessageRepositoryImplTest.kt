@@ -752,5 +752,69 @@ class PrivateMessageRepositoryImplTest {
             assertEquals("/api/users/search?q=a%26b%3Dc", pathSlot.captured)
         }
 
+    @Test
+    fun `searchUsers returns empty when the response has no users key at all`() =
+        runTest {
+            // A response shaped { } (no "users" key) must exercise the
+            // `?: JSONArray()` fallback and surface as Success(empty), NOT crash.
+            coEvery { api.get(any()) } returns JSONObject()
+
+            val result = repo.searchUsers("nobody", "10000001")
+
+            assertTrue(result is Resource.Success)
+            assertTrue((result as Resource.Success).data.isEmpty())
+        }
+
+    @Test
+    fun `searchUsers drops a row with an absent uniqueId while a valid row survives (end-to-end)`() =
+        runTest {
+            // A malformed API row (no uniqueId) cannot resolve a uid, so it is
+            // dropped; the valid row in the same batch must still come through.
+            val malformed = JSONObject().apply { put("displayName", "Ghost") }
+            coEvery { api.get(any()) } returns searchResponse(malformed, userJson(10000002L, "Bob"))
+
+            val result = repo.searchUsers("test", "10000001")
+
+            assertTrue(result is Resource.Success)
+            val users = (result as Resource.Success).data
+            assertEquals(1, users.size)
+            assertEquals("10000002", users[0].uid)
+            assertEquals("Bob", users[0].displayName)
+        }
+
+    @Test
+    fun `searchUsers drops a row with a non-numeric uniqueId while a valid row survives (end-to-end)`() =
+        runTest {
+            // uniqueId arriving as a String cannot be cast to Number, so the
+            // row is dropped; the valid row in the same batch must survive.
+            val malformed =
+                JSONObject().apply {
+                    put("uniqueId", "not-a-number")
+                    put("displayName", "BadId")
+                }
+            coEvery { api.get(any()) } returns searchResponse(malformed, userJson(10000002L, "Bob"))
+
+            val result = repo.searchUsers("test", "10000001")
+
+            assertTrue(result is Resource.Success)
+            val users = (result as Resource.Success).data
+            assertEquals(1, users.size)
+            assertEquals("10000002", users[0].uid)
+        }
+
+    @Test
+    fun `searchUsers reaches the API for a query of exactly the minimum length`() =
+        runTest {
+            // Boundary: USER_SEARCH_MIN_QUERY_CHARS == 3. A 3-char query is the
+            // first length that DOES hit the server (distinct from the 2-char
+            // blocked case, which must NOT call the API).
+            coEvery { api.get(any()) } returns searchResponse(userJson(10000002L, "Bob"))
+
+            val result = repo.searchUsers("abc", "10000001")
+
+            assertTrue(result is Resource.Success)
+            coVerify(exactly = 1) { api.get(any()) }
+        }
+
     // endregion
 }

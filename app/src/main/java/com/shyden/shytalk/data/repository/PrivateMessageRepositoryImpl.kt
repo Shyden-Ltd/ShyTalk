@@ -762,14 +762,11 @@ class PrivateMessageRepositoryImpl(
             val encoded = encodeUrlQueryComponent(trimmed)
             val response = api.get("/api/users/search?q=$encoded")
             val users = response.optJSONArray("users") ?: JSONArray()
-            (0 until users.length()).mapNotNull { index ->
-                val obj = users.optJSONObject(index) ?: return@mapNotNull null
-                val map = obj.toMap()
-                // The Firestore doc id (== uniqueId string) is the User.uid.
-                val uid = (map["uniqueId"] as? Number)?.toLong()?.toString() ?: return@mapNotNull null
-                if (uid == currentUserId) return@mapNotNull null
-                User.fromMap(map, uid)
-            }
+            val rows =
+                (0 until users.length()).mapNotNull { index ->
+                    users.optJSONObject(index)?.toMap()
+                }
+            mapUserSearchRows(rows, currentUserId)
         }
     }
 
