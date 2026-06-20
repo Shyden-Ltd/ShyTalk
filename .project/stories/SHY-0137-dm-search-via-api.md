@@ -23,7 +23,15 @@ The DM-recipient "Search All Users" flow runs a **raw Firestore `list` query** o
 
 Two secondary defects compound it: the query searches **by name only** (no way to find someone by their unique ID), and the denial surfaces to the user as a hard error via `NewMessageViewModel.searchAllUsers` (`shared/.../feature/messaging/NewMessageViewModel.kt:192`) → `Resource.Error`.
 
-The fix is to stop querying Firestore directly and route both platforms through the **already-correct, cohort-gated** Express endpoint **`GET /api/users/search?q=...`** (`express-api/src/routes/users.js:473`). That endpoint: (a) is gated server-side by `where('cohort','==',callerCohort)` (numeric branch uses `requireSameCohort`) — **fixing the permission error**; (b) **auto-routes by query shape** — a numeric `q` → exact `uniqueId` lookup, anything else → displayName prefix — **giving "search by ID AND name" for free**; (c) returns `{ "users": [ ... ] }`. This is the **first concrete instance** of a broader **"no direct client DB access — all reads/writes via the Express API"** initiative; an EPIC will track migrating the remaining direct-Firestore client reads/writes.
+The fix is to stop querying Firestore directly and route both platforms through the **already-correct, cohort-gated** Express endpoint **`GET /api/users/search?q=...`** (`express-api/src/routes/users.js:473`). That endpoint: (a) is gated server-side by `where('cohort','==',callerCohort)` (numeric branch uses `requireSameCohort`) — **fixing the permission error**; (b) **auto-routes by query shape** — a numeric `q` → exact `uniqueId` lookup, anything else → displayName match — **giving "search by ID AND name" for free**; (c) returns `{ "users": [ ... ] }`. This is the **first concrete instance** of a broader **"no direct client DB access — all reads/writes via the Express API"** initiative; an EPIC will track migrating the remaining direct-Firestore client reads/writes.
+
+### Device-testing follow-ups (2026-06-21)
+
+Real-device testing of the API-routed search surfaced **two follow-on issues**, both fixed under this story:
+
+- **(A) Search always returned empty (client dropped every result).** The endpoint correctly returns same-cohort users, but `stripSensitiveFields` (`users.js:70`, deletes `cohort` + `cohortOverride` at ~L86) removes the cohort field (adult/minor status is **OSA §17-sensitive** and must stay stripped). `NewMessageViewModel.searchAllUsers` then ran `viewerUser?.let { result.data.filterSameCohortAs(it) } ?: emptyList()` — but `filterSameCohortAs` (HIDE policy) reads each item's `cohort`, which `User.fromMap` defaults to `"minor"` when absent. For an **adult** viewer every cohort-less search row therefore looked cross-cohort and was **dropped → search always empty**. Because the Express endpoint is the **authoritative server-side cohort gate** (a tampered client cannot bypass it) and already excludes self, the client re-filter on these results is **both redundant AND broken**; the fix uses `result.data` directly. The sibling `availableUsers`/`recentUsers` filters (lines ~96/~133) are **left intact** — those come from `userRepository.getUsers(...)`, which reads **Firestore directly** (`whereIn(documentId, …)`) on both Android (`UserRepositoryImpl:134`) and iOS (`IosUserRepositoryImpl:90`), so the `cohort` field is present and the client filter is correct there.
+
+- **(B) Name search was case-SENSITIVE and PREFIX-only.** The displayName branch did `where('displayName','>=',q).where('displayName','<',q+sentinel)`, so `lfc` missed `LFC_UK` and `Bao` missed `[SEED] Bao (P-17 Teacher)`. It is changed to **case-insensitive SUBSTRING**: fetch up to `USER_SEARCH_SCAN_LIMIT` (200) same-cohort docs via the single-field `where('cohort','==',cohort)` (no new composite index) and keep only docs whose `displayName` contains `q` case-insensitively. Implemented by extending `respondWithSameCohortUsers` with an optional `filterPredicate(data)`; `/discover` passes none (unchanged). The numeric/uniqueId branch is unchanged. A dedicated search index is needed at scale — a follow-up SHY will track it.
 
 ## Acceptance Criteria
 
@@ -40,7 +48,11 @@ The fix is to stop querying Firestore directly and route both platforms through 
 - [ ] `currentUserId` is excluded from results even if the server includes the caller (defence-in-depth; the server already self-excludes).
 - [ ] An empty `users` array (no matches) → `Resource.Success(emptyList())`, not an error.
 - [ ] A query with reserved characters (`&`, `=`, `?`, space) is URL-encoded so it cannot corrupt the query string; a multi-byte UTF-8 name (e.g. `café`, `中`) is percent-encoded per byte and round-trips through Express.
-- [ ] The existing client-side same-cohort defence-in-depth filter in `NewMessageViewModel.searchAllUsers` (line ~203, `filterSameCohortAs`) is left intact and still applied to the API results.
+- [ ] **(A)** A search `Resource.Success` carrying **cohort-less** users (the endpoint strips `cohort`) is **NOT** re-filtered/dropped by the client — `searchAllUsers` sets `allUsersSearchResults = result.data` directly. An adult viewer sees the server's same-cohort rows (previously every row was dropped → empty).
+- [ ] **(A)** Search results surface even when `viewerUser` is not yet loaded (the old `?: emptyList()` fail-closed branch no longer discards results, since the server is the authoritative gate).
+- [ ] **(A)** The sibling `availableUsers` (line ~96) and `recentUsers` (line ~133) filters are **left as-is** — they consume `userRepository.getUsers(...)` which reads Firestore directly (cohort field present), so `filterSameCohortAs` is correct there.
+- [ ] **(B)** A lowercase query matches a mixed-case displayName (`lfc` → `LFC_UK`); a substring in the **middle** matches (`Bao` → `[SEED] Bao (P-17 Teacher)`); a non-matching substring returns empty; a `null`/missing `displayName` doc is tolerated (no throw) and excluded.
+- [ ] **(B)** The displayName branch scans at most `USER_SEARCH_SCAN_LIMIT` (200) same-cohort docs via a single-field `where('cohort','==',cohort)` (no composite index) and filters the substring match in JS; the numeric/uniqueId branch is unchanged (exact lookup + same-cohort gate); `/discover` behaviour is unchanged (no predicate).
 
 ### Performance
 - [ ] No client-side fan-out or N+1: one `GET /api/users/search` call per debounced query (the existing 300ms debounce in `searchAllUsers` is unchanged). The endpoint is backed by the existing cohort/displayName Firestore indexes (no new index needed — server already shipped).
@@ -90,6 +102,32 @@ The fix is to stop querying Firestore directly and route both platforms through 
 - **When** `searchUsers("a&b=c", myId)` runs
 - **Then** the request path is `GET /api/users/search?q=a%26b%3Dc` (reserved chars percent-encoded, space → `%20` not `+`)
 
+**Scenario: (A) cohort-less server results are not dropped by the client**
+- **Given** an **adult** viewer and a search `Resource.Success` of users with **no** `cohort` field (the endpoint stripped it; `User.fromMap` defaults them to `"minor"`)
+- **When** `searchAllUsers("lfc")` runs in search-all mode
+- **Then** `allUsersSearchResults` contains **every** server-returned user (none dropped by a client cohort re-filter)
+- **And** the previous behaviour discarded all of them, leaving the list empty
+
+**Scenario: (A) results surface before the viewer doc loads**
+- **Given** `userRepository.getUser` fails so `viewerUser` stays `null`
+- **When** `searchAllUsers("cha")` returns same-cohort users from the endpoint
+- **Then** `allUsersSearchResults` still contains those users (no fail-closed `emptyList()`)
+
+**Scenario: (B) lowercase query matches a mixed-case displayName**
+- **Given** an adult cohort containing a user named `LFC_UK`
+- **When** `GET /api/users/search?q=lfc` runs
+- **Then** the response `users` includes `LFC_UK` (case-insensitive substring), and the Firestore query used only `where('cohort','==','adult')` (no `displayName` range)
+
+**Scenario: (B) substring in the middle of a name matches**
+- **Given** an adult cohort containing `[SEED] Bao (P-17 Teacher)`
+- **When** `GET /api/users/search?q=Bao` runs
+- **Then** the response `users` includes that user (mid-string match), and the scan applied `.limit(200)` (`USER_SEARCH_SCAN_LIMIT`)
+
+**Scenario: (B) non-matching substring + numeric branch unchanged**
+- **Given** an adult cohort whose names do not contain `zzz`, and a same-cohort user with `uniqueId 10000200`
+- **When** `GET /api/users/search?q=zzz` then `GET /api/users/search?q=10000200` run
+- **Then** the first returns an empty `users` array, and the second returns exactly that one user via the unchanged exact-id + same-cohort path
+
 ## Test Plan
 
 **RED (failing-first), all in unit-test locations (mocks permitted there per the real-only ratchet):**
@@ -102,7 +140,11 @@ The fix is to stop querying Firestore directly and route both platforms through 
 - `app/src/main/java/com/shyden/shytalk/data/repository/PrivateMessageRepositoryImpl.kt` — `searchUsers` now short-circuits below-min, calls `api.get`, parses `{users:[...]}` via `JSONObject.toMap()` → `User.fromMap`, excludes `currentUserId`. `firestore` dependency retained for the other methods.
 - `shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosPrivateMessageRepositoryImpl.kt` — mirror via `IosApiClient.get` + a local `jsonObjectToMap` primitive flattener.
 
-**Gauntlet (per Pre-Merge Protocol — client change, no backend code change since the endpoint already exists):** Kotlin JVM unit (`testDevDebugUnitTest`) + shared JVM unit (`:shared:jvmTest`) + iOS shared compile (`:shared:compileKotlinIosArm64`) + detekt + ktlint + `node scripts/check-no-new-stubs.js` (ratchet stays green — a direct-Firestore read removed, an `api.get` added; the only new doubles are in `app/src/test/**`, an exempt unit-test location) + real-device check: "Search All Users" returns same-cohort results by name AND by unique ID on real Android + real iOS, local then dev.
+**Device-testing follow-ups RED→GREEN (2026-06-21):**
+- **(A) Kotlin** — `app/src/test/.../feature/messaging/NewMessageViewModelTest.kt`: `searchAllUsers keeps cohort-less server results for adult viewer (no client re-drop)` (adult viewer + cohort-less search rows → both survive in `allUsersSearchResults`) and `searchAllUsers surfaces results before viewerUser is loaded (no fail-closed empty)` (viewer-load fails → results still surface). **RED proof:** restoring the buggy `viewerUser?.let { result.data.filterSameCohortAs(it) } ?: emptyList()` made exactly these 2 (of 17) fail; the fixed `allUsersSearchResults = result.data` makes them pass. The existing `availableUsers`/`recentUsers` cohort-filter tests still pass (those paths unchanged — `getUsers` reads Firestore directly).
+- **(B) Express** — `express-api/tests/routes/users-discovery-filter.test.js` displayName branch updated to case-insensitive substring + new value-level cases: lowercase→mixed-case (`lfc`→`LFC_UK`), mid-string (`Bao`→`[SEED] Bao …`), non-matching substring → empty, null/missing-displayName tolerated + excluded, `USER_SEARCH_SCAN_LIMIT=200` applied, cohort symmetry + self-exclusion retained; numeric/uniqueId branch unchanged. Runner: `cd express-api && node --experimental-vm-modules node_modules/.bin/jest tests/routes/users-discovery-filter.test.js`.
+
+**Gauntlet (per Pre-Merge Protocol — client change + backend route change to the existing endpoint):** Kotlin JVM unit (`testDevDebugUnitTest`) + shared JVM unit (`:shared:jvmTest`) + iOS shared compile (`:shared:compileKotlinIosArm64`) + detekt + ktlint + Express Jest (`tests/routes/users*`) + eslint (`--max-warnings=0`) + prettier (`--check`) + `node scripts/check-no-new-stubs.js` (ratchet stays green — the only new doubles are in `app/src/test/**`, an exempt unit-test location; the Express test reuses the file's existing route-level mocks) + real-device check: "Search All Users" returns same-cohort results by name (case-insensitive, substring) AND by unique ID on real Android + real iOS, local then dev. **Because issue B changes `express-api/**`, the full device + all-browser matrix applies (backend = shared core).**
 
 ## Out of Scope
 
@@ -136,4 +178,5 @@ The fix is to stop querying Firestore directly and route both platforms through 
 
 ## Notes (running log)
 
+- 2026-06-21 — **Device-testing follow-ups fixed (A + B).** Real-device testing of the API-routed search surfaced two follow-ons. **(A)** Search always empty: the endpoint strips `cohort` (OSA §17) but `NewMessageViewModel.searchAllUsers` re-ran `filterSameCohortAs`, which treats every cohort-less row as cross-cohort and drops it for an adult viewer. Fix: use `result.data` directly (endpoint is the authoritative gate + self-excludes). **Line-133 audit:** `availableUsers` (~L96) and `recentUsers` (~L133) consume `userRepository.getUsers(...)`, which reads Firestore DIRECTLY (`whereIn(documentId, chunk)` — Android `UserRepositoryImpl:134`, iOS `IosUserRepositoryImpl:90`), so `cohort` is present and those client filters are CORRECT — left as-is. **(B)** Name search was case-sensitive prefix-only: changed the `users.js` displayName branch to case-insensitive SUBSTRING via a bounded `where('cohort','==',cohort).limit(USER_SEARCH_SCAN_LIMIT=200)` cohort scan + JS `String(displayName||'').toLowerCase().includes(q.toLowerCase())`; implemented by adding an optional `filterPredicate(data)` to `respondWithSameCohortUsers` (`/discover` passes none — unchanged). Removed `PREFIX_UPPER_SENTINEL`. Files: `express-api/src/routes/users.js`, `shared/.../feature/messaging/NewMessageViewModel.kt`, tests in `users-discovery-filter.test.js` + `NewMessageViewModelTest.kt`. Gates GREEN: Express Jest `tests/routes/users*` 144/144, eslint 0-warn, prettier clean, `NewMessageViewModelTest` 17/17 (RED proof: 2 fail on buggy revert), `:shared:jvmTest` green, `:shared:compileKotlinIosArm64` green, ktlint + detekt 0-findings, `check-no-new-stubs.js` clean. Follow-up SHY to track a dedicated search index at scale.
 - 2026-06-20 — **Filed + implementation started (operator-directed).** Confirmed bug: DM "Search All Users" runs a raw `users` Firestore `list` with a `displayName` range and **no `cohort` constraint`; the `users` read rule (`firestore.rules:51`) requires `cohortMatchesCaller()`, so Firestore denies the list with `PERMISSION_DENIED` — and it only searched by name. Fix routes both platforms through the existing cohort-gated `GET /api/users/search?q=...` (`express-api/src/routes/users.js:473`), which fixes the permission error AND adds unique-ID search server-side AND removes a direct client DB read. First concrete instance of the broader "no direct client DB access — all via Express API" initiative (EPIC to follow). Cross-platform: Android (`PrivateMessageRepositoryImpl`) + iOS (`IosPrivateMessageRepositoryImpl`); added shared `Constants.USER_SEARCH_MIN_QUERY_CHARS` + multiplatform `encodeUrlQueryComponent`. Tests: Android repo `searchUsers — Express API` region + shared `UrlEncodingTest` (both unit-test locations; ratchet-exempt).

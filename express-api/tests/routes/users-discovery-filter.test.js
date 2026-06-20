@@ -439,11 +439,13 @@ describe('GET /api/users/search — uniqueId numeric branch', () => {
   });
 });
 
-describe('GET /api/users/search — displayName prefix branch', () => {
-  test('string q: returns same-cohort displayName-prefix matches', async () => {
+describe('GET /api/users/search — displayName substring branch (case-insensitive)', () => {
+  test('string q: returns same-cohort case-insensitive substring matches', async () => {
+    // Both 'Alice' and 'Alicia' contain 'Ali'; 'Bob' does not.
     mockQueryResult([
       { uniqueId: 10000100, cohort: 'adult', displayName: 'Alice' },
-      { uniqueId: 10000101, cohort: 'adult', displayName: 'Alex' },
+      { uniqueId: 10000101, cohort: 'adult', displayName: 'Alicia' },
+      { uniqueId: 10000102, cohort: 'adult', displayName: 'Bob' },
     ]);
 
     const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
@@ -452,10 +454,78 @@ describe('GET /api/users/search — displayName prefix branch', () => {
     expect(res.status).toBe(200);
     expect(res.body.users.map((u) => u.uniqueId)).toEqual([10000100, 10000101]);
 
+    // Cohort gate is the ONLY Firestore where-clause now; the substring
+    // match runs in JS so no displayName range/composite index is used.
     expect(mockChain.where).toHaveBeenCalledWith('cohort', '==', 'adult');
-    // Prefix-range pattern: displayName >= 'Ali' AND < 'Ali'.
-    expect(mockChain.where).toHaveBeenCalledWith('displayName', '>=', 'Ali');
-    expect(mockChain.where).toHaveBeenCalledWith('displayName', '<', 'Ali');
+    expect(mockChain.where).not.toHaveBeenCalledWith('displayName', '>=', 'Ali');
+    expect(mockChain.where).not.toHaveBeenCalledWith('displayName', '<', 'Ali');
+  });
+
+  test('string q: lowercase query matches a mixed-case displayName (case-insensitive)', async () => {
+    // 'lfc' must match 'LFC_UK' — the pre-fix case-SENSITIVE prefix range missed it.
+    mockQueryResult([
+      { uniqueId: 10000100, cohort: 'adult', displayName: 'LFC_UK' },
+      { uniqueId: 10000101, cohort: 'adult', displayName: 'Arsenal' },
+    ]);
+
+    const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
+    const res = await request(app).get('/api/users/search?q=lfc');
+
+    expect(res.status).toBe(200);
+    expect(res.body.users.map((u) => u.uniqueId)).toEqual([10000100]);
+  });
+
+  test('string q: substring in the MIDDLE of a displayName matches (not just prefix)', async () => {
+    // 'Bao' must match '[SEED] Bao (P-17 Teacher)' — middle-of-string.
+    mockQueryResult([
+      { uniqueId: 10000100, cohort: 'adult', displayName: '[SEED] Bao (P-17 Teacher)' },
+      { uniqueId: 10000101, cohort: 'adult', displayName: 'Someone Else' },
+    ]);
+
+    const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
+    const res = await request(app).get('/api/users/search?q=Bao');
+
+    expect(res.status).toBe(200);
+    expect(res.body.users.map((u) => u.uniqueId)).toEqual([10000100]);
+  });
+
+  test('string q: non-matching substring returns empty (in-JS predicate excludes non-matches)', async () => {
+    // The cohort scan returns docs that do NOT contain the query substring;
+    // they must all be filtered out in JS.
+    mockQueryResult([
+      { uniqueId: 10000100, cohort: 'adult', displayName: 'Alice' },
+      { uniqueId: 10000101, cohort: 'adult', displayName: 'Bob' },
+    ]);
+
+    const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
+    const res = await request(app).get('/api/users/search?q=zzz');
+
+    expect(res.status).toBe(200);
+    expect(res.body.users).toEqual([]);
+  });
+
+  test('string q: doc with null/missing displayName is tolerated (no throw) and excluded', async () => {
+    mockQueryResult([
+      { uniqueId: 10000100, cohort: 'adult' }, // no displayName field
+      { uniqueId: 10000101, cohort: 'adult', displayName: null },
+      { uniqueId: 10000102, cohort: 'adult', displayName: 'Alice' },
+    ]);
+
+    const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
+    const res = await request(app).get('/api/users/search?q=Ali');
+
+    expect(res.status).toBe(200);
+    expect(res.body.users.map((u) => u.uniqueId)).toEqual([10000102]);
+  });
+
+  test('string q: bounded cohort scan limit (USER_SEARCH_SCAN_LIMIT=200) is applied', async () => {
+    mockQueryResult([]);
+
+    const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
+    await request(app).get('/api/users/search?q=Ali');
+
+    expect(mockChain.where).toHaveBeenCalledWith('cohort', '==', 'adult');
+    expect(mockChain.limit).toHaveBeenCalledWith(200);
   });
 
   test('string q: cohort symmetry — minor sees only minor matches', async () => {
@@ -471,7 +541,7 @@ describe('GET /api/users/search — displayName prefix branch', () => {
 
   test('string q: caller excluded from own displayName results', async () => {
     mockQueryResult([
-      { uniqueId: 10000001, cohort: 'adult', displayName: 'Me' },
+      { uniqueId: 10000001, cohort: 'adult', displayName: 'Mel' },
       { uniqueId: 10000200, cohort: 'adult', displayName: 'Mel' },
     ]);
 
@@ -528,13 +598,15 @@ describe('GET /api/users/search — displayName prefix branch', () => {
     expect(mockChain.where).toHaveBeenCalledWith('cohort', '==', 'minor');
   });
 
-  test('string q: limit applied (max 50)', async () => {
+  test('string q: bounded scan limit applied (USER_SEARCH_SCAN_LIMIT=200, not the 50 discovery cap)', async () => {
     mockQueryResult([]);
 
     const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
     await request(app).get('/api/users/search?q=Ali');
 
-    expect(mockChain.limit).toHaveBeenCalledWith(50);
+    // displayName substring branch scans up to USER_SEARCH_SCAN_LIMIT docs
+    // (single-field cohort where, no composite index) and filters in JS.
+    expect(mockChain.limit).toHaveBeenCalledWith(200);
   });
 });
 

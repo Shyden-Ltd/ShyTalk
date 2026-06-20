@@ -197,14 +197,22 @@ class NewMessageViewModel(
                 _uiState.update { it.copy(isSearchingAll = true) }
                 when (val result = pmRepository.searchUsers(query, currentUserId)) {
                     is Resource.Success -> {
-                        // Defence-in-depth cohort filter on search results
-                        // (server already filters via PR 5 — this is the
-                        // client mirror for tampered-build/stale-cache).
-                        val filtered = viewerUser?.let { result.data.filterSameCohortAs(it) } ?: emptyList()
+                        // SHY-0137 — use the endpoint results DIRECTLY. The
+                        // cohort-gated GET /api/users/search endpoint is the
+                        // AUTHORITATIVE server-side cohort gate (a tampered
+                        // client cannot bypass it) AND it already excludes
+                        // self. Crucially, the endpoint STRIPS the `cohort`
+                        // field (adult/minor is OSA §17-sensitive), so a
+                        // client cohort re-filter via filterSameCohortAs is
+                        // BOTH impossible (no cohort to read — every row
+                        // would default to "minor" and be dropped for an
+                        // adult viewer, the device-testing "search always
+                        // empty" bug) AND unnecessary (the server already
+                        // returned only same-cohort, non-self users).
                         _uiState.update {
                             it.copy(
                                 isSearchingAll = false,
-                                allUsersSearchResults = filtered,
+                                allUsersSearchResults = result.data,
                             )
                         }
                     }

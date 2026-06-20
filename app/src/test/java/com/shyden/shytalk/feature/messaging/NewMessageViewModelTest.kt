@@ -441,4 +441,77 @@ class NewMessageViewModelTest {
                     .none { it.uid == "minor-pal" },
             )
         }
+
+    // ===== SHY-0137 Issue A — search results must NOT be dropped by a
+    // client cohort re-filter. The cohort-gated GET /api/users/search
+    // endpoint strips `cohort` (OSA §17), so every search row arrives
+    // cohort-less (defaults to "minor" in User.fromMap). The previous
+    // client-side filterSameCohortAs treated those as cross-cohort and
+    // dropped EVERY result for an adult viewer → search always empty. =====
+
+    @Test
+    fun `searchAllUsers keeps cohort-less server results for adult viewer (no client re-drop)`() =
+        runTest {
+            // viewerUser is loaded as adult by the init loadAvailableUsers path.
+            val currentUser =
+                TestData.createTestUser(
+                    uid = "me",
+                    cohort = "adult",
+                )
+            coEvery { userRepository.getUser("me") } returns Resource.Success(currentUser)
+
+            // The endpoint strips `cohort`; the deserialised rows default
+            // to cohort = "minor" (User.fromMap default). Pre-fix, an adult
+            // viewer's filterSameCohortAs dropped all of these.
+            val serverRows =
+                listOf(
+                    TestData.createTestUser(uid = "100200", displayName = "LFC_UK", cohort = "minor"),
+                    TestData.createTestUser(uid = "100300", displayName = "Bao", cohort = "minor"),
+                )
+            coEvery { pmRepository.searchUsers("lfc", "me") } returns Resource.Success(serverRows)
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.toggleSearchAllMode()
+            vm.setSearchQuery("lfc")
+            advanceUntilIdle()
+
+            // Both server-returned users survive — the endpoint is the
+            // authoritative cohort gate; no client re-filter drops them.
+            assertEquals(
+                listOf("100200", "100300"),
+                vm.uiState.value.allUsersSearchResults
+                    .map { it.uid },
+            )
+            assertFalse(vm.uiState.value.isSearchingAll)
+        }
+
+    @Test
+    fun `searchAllUsers surfaces results before viewerUser is loaded (no fail-closed empty)`() =
+        runTest {
+            // viewerUser load fails → stays null. Pre-fix, the
+            // `viewerUser?.let { ... } ?: emptyList()` fail-closed branch
+            // discarded all search results when the viewer wasn't loaded.
+            coEvery { userRepository.getUser("me") } returns Resource.Error("offline")
+
+            val serverRows =
+                listOf(
+                    TestData.createTestUser(uid = "100400", displayName = "Charlie", cohort = "minor"),
+                )
+            coEvery { pmRepository.searchUsers("cha", "me") } returns Resource.Success(serverRows)
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            vm.toggleSearchAllMode()
+            vm.setSearchQuery("cha")
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("100400"),
+                vm.uiState.value.allUsersSearchResults
+                    .map { it.uid },
+            )
+        }
 }
