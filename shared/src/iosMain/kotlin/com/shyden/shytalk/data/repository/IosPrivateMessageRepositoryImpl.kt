@@ -44,8 +44,14 @@ class IosPrivateMessageRepositoryImpl(
             val snapshot =
                 firestore
                     .collection("conversations")
-                    .where { "participantIds" contains uid }
-                    .orderBy("lastMessageAt", Direction.DESCENDING)
+                    .where {
+                        all(
+                            "participantIds" contains uid,
+                            // SHY-0132 — exclude migrated cross-cohort threads (OSA §17);
+                            // the `list` rule doesn't enforce this, so the query must.
+                            "crossCohortAtMigration" equalTo false,
+                        )
+                    }.orderBy("lastMessageAt", Direction.DESCENDING)
                     .get()
             prefetchedConversations =
                 snapshot.documents.mapNotNull { doc ->
@@ -67,8 +73,13 @@ class IosPrivateMessageRepositoryImpl(
         // See prefetchConversations: participantIds is stored as strings.
         return firestore
             .collection("conversations")
-            .where { "participantIds" contains userId }
-            .orderBy("lastMessageAt", Direction.DESCENDING)
+            .where {
+                all(
+                    "participantIds" contains userId,
+                    // SHY-0132 — exclude migrated cross-cohort threads (OSA §17); see prefetch.
+                    "crossCohortAtMigration" equalTo false,
+                )
+            }.orderBy("lastMessageAt", Direction.DESCENDING)
             .snapshots
             .map { snapshot ->
                 snapshot.documents.mapNotNull { doc ->
@@ -100,6 +111,9 @@ class IosPrivateMessageRepositoryImpl(
                         // Strings (matches Express API + Firestore rules format)
                         "participantIds" to listOf(uid1, uid2).sorted(),
                         "isGroup" to false,
+                        // SHY-0132 — stamp false so the thread matches the segregation
+                        // filter `where('crossCohortAtMigration','==', false)`.
+                        "crossCohortAtMigration" to false,
                         "createdAt" to now,
                         "lastMessageAt" to now,
                         "isClosed" to false,
@@ -480,6 +494,9 @@ class IosPrivateMessageRepositoryImpl(
                     "isGroup" to true,
                     "groupName" to groupName,
                     "createdBy" to creatorId,
+                    // SHY-0132 — stamp false so the group matches the segregation filter
+                    // (cross-cohort growth is rejected per-add).
+                    "crossCohortAtMigration" to false,
                     "createdAt" to now,
                     "lastMessageAt" to now,
                     "isClosed" to false,

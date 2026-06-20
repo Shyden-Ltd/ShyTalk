@@ -44,6 +44,10 @@ class PrivateMessageRepositoryImpl(
                 firestore
                     .collection("conversations")
                     .whereArrayContains("participantIds", uid)
+                    // SHY-0132 — exclude migrated cross-cohort threads (OSA §17): the
+                    // `list` rule does NOT enforce crossCohortAtMigration as a filter, so
+                    // the query must. Requires the backfill to stamp false on legacy docs.
+                    .whereEqualTo("crossCohortAtMigration", false)
                     .orderBy("lastMessageAt", Query.Direction.DESCENDING)
                     .get()
                     .await()
@@ -69,6 +73,8 @@ class PrivateMessageRepositoryImpl(
                 firestore
                     .collection("conversations")
                     .whereArrayContains("participantIds", userId)
+                    // SHY-0132 — exclude migrated cross-cohort threads (OSA §17); see prefetch.
+                    .whereEqualTo("crossCohortAtMigration", false)
                     .orderBy("lastMessageAt", Query.Direction.DESCENDING)
                     .addSnapshotListener { snapshot, error ->
                         if (error != null) {
@@ -111,6 +117,10 @@ class PrivateMessageRepositoryImpl(
                         // Android-created threads unreadable by the rule's string gate.
                         "participantIds" to listOf(uid1, uid2).sorted(),
                         "isGroup" to false,
+                        // SHY-0132 — new threads are never cross-cohort (creation rejects
+                        // cross-cohort pairs); stamp false so they match the segregation
+                        // filter `where('crossCohortAtMigration','==', false)`.
+                        "crossCohortAtMigration" to false,
                         "createdAt" to now,
                         "lastMessageAt" to now,
                         "isClosed" to false,
@@ -490,6 +500,10 @@ class PrivateMessageRepositoryImpl(
                     "isGroup" to true,
                     "groupName" to groupName,
                     "createdBy" to creatorId,
+                    // SHY-0132 — stamp false so the group matches the segregation filter
+                    // `where('crossCohortAtMigration','==', false)`; cross-cohort growth is
+                    // rejected per-add, so a new group is never cross-cohort.
+                    "crossCohortAtMigration" to false,
                     "createdAt" to now,
                     "lastMessageAt" to now,
                     "isClosed" to false,

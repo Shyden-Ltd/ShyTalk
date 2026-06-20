@@ -137,6 +137,9 @@ class PrivateMessageRepositoryImplTest {
             assertTrue("participantIds[0] should be String", participantIds[0] is String)
             assertTrue("participantIds[1] should be String", participantIds[1] is String)
             assertEquals(listOf("10000001", "10000002"), participantIds)
+            // SHY-0132 — new DM threads are stamped crossCohortAtMigration:false so they
+            // match the segregation filter `where('crossCohortAtMigration','==', false)`.
+            assertEquals(false, dataSlot.captured["crossCohortAtMigration"])
         }
 
     @Test
@@ -173,12 +176,16 @@ class PrivateMessageRepositoryImplTest {
 
     /**
      * Wires `collection("conversations").whereArrayContains("participantIds", <captured>)
-     * .orderBy(...)` to a fresh relaxed Query, capturing the array-contains value into
-     * [uidSlot] so a test can assert it is a STRING (SHY-0130: never a Long).
+     * .whereEqualTo("crossCohortAtMigration", false).orderBy(...)` to a fresh relaxed
+     * Query, capturing the array-contains value into [uidSlot] so a test can assert it is
+     * a STRING (SHY-0130: never a Long). The chained `whereEqualTo` is the SHY-0132
+     * cross-cohort segregation filter — stubbed to return the same query so the chain
+     * continues, and asserted via `io.mockk.verify` in the filter tests.
      */
     private fun wireConversationsQuery(uidSlot: CapturingSlot<Any>): Query {
         val mockQuery = mockk<Query>(relaxed = true)
         every { mockCollRef.whereArrayContains(any<String>(), capture(uidSlot)) } returns mockQuery
+        every { mockQuery.whereEqualTo("crossCohortAtMigration", false) } returns mockQuery
         every { mockQuery.orderBy(any<String>(), any<Query.Direction>()) } returns mockQuery
         return mockQuery
     }
@@ -225,6 +232,8 @@ class PrivateMessageRepositoryImplTest {
             // SHY-0130 — the bug coerced this to a Long via toLongOrNull().
             assertTrue("array-contains value must be a String", uidSlot.captured is String)
             assertEquals("10000001", uidSlot.captured)
+            // SHY-0132 — the cross-cohort segregation filter is applied (OSA §17).
+            io.mockk.verify { mockQuery.whereEqualTo("crossCohortAtMigration", false) }
         }
 
     @Test
@@ -403,6 +412,8 @@ class PrivateMessageRepositoryImplTest {
             assertTrue("array-contains value must be a String", uidSlot.captured is String)
             assertEquals(1, emitted?.size)
             assertEquals("conv-live", (emitted?.get(0) as Conversation).conversationId)
+            // SHY-0132 — the cross-cohort segregation filter is applied (OSA §17).
+            io.mockk.verify { mockQuery.whereEqualTo("crossCohortAtMigration", false) }
             job.cancel()
         }
 
@@ -699,6 +710,9 @@ class PrivateMessageRepositoryImplTest {
                 )
             assertTrue(result is Resource.Success)
             assertEquals("minor", capturedData.captured["cohort"])
+            // SHY-0132 — a new group is stamped crossCohortAtMigration:false so it matches
+            // the segregation filter (cross-cohort growth is rejected per-add).
+            assertEquals(false, capturedData.captured["crossCohortAtMigration"])
         }
 
     @Test
