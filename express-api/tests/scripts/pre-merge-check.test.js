@@ -11,7 +11,7 @@
  * re-review (Gate 3) logic for real without needing a live PR; the CI leg
  * (Gate 2) is `gh pr checks` and is covered by live use, not unit-faked.
  */
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -49,6 +49,21 @@ function commit(dir, msg) {
   return git(dir, ['rev-parse', 'HEAD']);
 }
 
+/** A repo with `setup(dir)` committed on `main`, then checked out to `feature` —
+ * for tests that need a story to already EXIST on main (modified/renamed cases). */
+function mainThenFeature(setup) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shy0133-'));
+  git(dir, ['init', '-q', '-b', 'main']);
+  git(dir, ['config', 'user.email', 't@t.co']);
+  git(dir, ['config', 'user.name', 'T']);
+  fs.mkdirSync(path.join(dir, '.project/stories'), { recursive: true });
+  setup(dir);
+  git(dir, ['add', '-A']);
+  git(dir, ['commit', '-qm', 'base on main']);
+  git(dir, ['checkout', '-q', '-b', 'feature']);
+  return dir;
+}
+
 /** A fully-clean, reviewed branch: code reviewed up to commit B, then a
  * story-only marker-bump commit C on top. */
 function cleanRepo() {
@@ -63,16 +78,16 @@ function cleanRepo() {
 
 function run(dir, { skipCi = true } = {}) {
   const args = skipCi ? ['42', '--skip-ci-check'] : ['99999999'];
-  try {
-    const stdout = execFileSync('bash', [SCRIPT, ...args], {
-      cwd: dir,
-      encoding: 'utf8',
-      env: { ...process.env, BASE_REF: 'main' },
-    });
-    return { code: 0, stdout, stderr: '' };
-  } catch (e) {
-    return { code: e.status, stdout: String(e.stdout), stderr: String(e.stderr) };
-  }
+  // spawnSync captures BOTH stdout and stderr regardless of exit code — the
+  // success path emits a `filing exemption:` line on stderr (SHY-0133) that
+  // execFileSync (which only returns stdout, and surfaces stderr solely via the
+  // thrown error on non-zero exit) could not observe.
+  const r = spawnSync('bash', [SCRIPT, ...args], {
+    cwd: dir,
+    encoding: 'utf8',
+    env: { ...process.env, BASE_REF: 'main' },
+  });
+  return { code: r.status, stdout: String(r.stdout), stderr: String(r.stderr) };
 }
 
 describe('SHY-0127 Gates 2+3 — pre-merge-check.sh', () => {
@@ -170,12 +185,87 @@ describe('SHY-0127 Gates 2+3 — pre-merge-check.sh', () => {
     expect(stderr).toMatch(/In Review/);
   });
 
-  test('REFUSES on a Draft story', () => {
+  // SHY-0133 — a newly-ADDED Draft story is a legitimate spec filing and is
+  // EXEMPT (mirrors the SHY-0131 CI-gate exemption in check-pr-story-status.js).
+  test('EXEMPTS a newly-ADDED Draft story (filing — SHY-0131 parity)', () => {
     const dir = init();
-    writeStory(dir, 'Draft', null);
-    commit(dir, 'draft story');
+    writeStory(dir, 'Draft', null); // brand-new story file, added on the branch
+    commit(dir, 'file new draft story');
+    const { code, stdout, stderr } = run(dir);
+    expect(code).toBe(0);
+    expect(stdout).toContain('PRE-MERGE-CHECK: OK');
+    expect(stderr).toMatch(/filing exemption/i);
+    // UX AC — the checklist is honest for a filing-only PR: the status line names
+    // the exemption, and the re-review line does NOT show an empty marker.
+    expect(stdout).toContain('+ 1 newly-added Draft filing(s) exempt');
+    expect(stdout).toContain('filing only — no implementation story to re-review');
+    expect(stdout).not.toContain('Reviewed-up-to: )');
+  });
+
+  // SHY-0133 — multiple Draft filings in one PR (e.g. an EPIC's child stories):
+  // the FILINGS counter pluralises and every filing is exempt.
+  test('EXEMPTS multiple newly-added Draft filings (FILINGS=2)', () => {
+    const dir = init();
+    writeStory(dir, 'Draft', null); // SHY-0999-x.md
+    fs.writeFileSync(
+      path.join(dir, '.project/stories/SHY-0998-y.md'),
+      `---\nid: SHY-0998\nstatus: Draft\n---\n\n# SHY-0998\n\n## Notes\n`,
+    );
+    commit(dir, 'file two draft stories');
+    const { code, stdout } = run(dir);
+    expect(code).toBe(0);
+    expect(stdout).toContain('PRE-MERGE-CHECK: OK');
+    expect(stdout).toContain('+ 2 newly-added Draft filing(s) exempt');
+  });
+
+  // SHY-0133 — the exemption is ADD-ONLY: a story that already exists and is
+  // MODIFIED to Draft (a regression) is still refused.
+  test('REFUSES a story MODIFIED to Draft (add-only exemption)', () => {
+    const dir = mainThenFeature((d) => writeStory(d, 'In Review', 'deadbeef'));
+    writeStory(dir, 'Draft', null); // MODIFIED to Draft on the branch (code M)
+    commit(dir, 'regress story to draft');
     const { code, stderr } = run(dir);
     expect(code).not.toBe(0);
+    expect(stderr).toMatch(/In Review/);
+  });
+
+  // SHY-0133 — the exemption is PER-STORY: a co-changed In-Review implementation
+  // story is still fully gated (Gate 3) even when a Draft filing rides along.
+  test('EXEMPTS the filing but still gates a co-changed In-Review story', () => {
+    const dir = init();
+    const base = git(dir, ['rev-parse', 'HEAD']);
+    // Implementation story (In Review) + code, reviewed up to `base` (loose) so
+    // the later code commit is unreviewed; plus a brand-new Draft filing.
+    fs.writeFileSync(path.join(dir, 'code.js'), 'x\n');
+    fs.writeFileSync(
+      path.join(dir, '.project/stories/SHY-0998-impl.md'),
+      `---\nid: SHY-0998\nstatus: In Review\n---\n\n## Notes\nReviewed-up-to: ${base}\n`,
+    );
+    writeStory(dir, 'Draft', null); // SHY-0999-x.md added as a Draft filing
+    commit(dir, 'impl story + code + draft filing');
+    const { code, stdout, stderr } = run(dir);
+    expect(code).not.toBe(0);
+    expect(stdout).not.toContain('PRE-MERGE-CHECK: OK');
+    // Must refuse for the IN-REVIEW story's unreviewed code — proving the filing
+    // exemption did NOT short-circuit Gate-3 (before the fix it would refuse on
+    // the Draft status instead).
+    expect(stderr).toMatch(/unreviewed/i);
+  });
+
+  // SHY-0133 — a RENAMED Draft story has change-code R (not A), so it is NOT
+  // filing-exempt; it is gated like any other change. A `git mv` of unchanged
+  // content yields a deterministic R100 in --name-status.
+  test('a RENAMED Draft story is gated, not filing-exempt (rename != add)', () => {
+    const dir = mainThenFeature((d) =>
+      fs.writeFileSync(
+        path.join(d, '.project/stories/SHY-0997-old.md'),
+        `---\nid: SHY-0997\nstatus: Draft\n---\n\n# SHY-0997\n\n## Notes\n`,
+      ),
+    );
+    git(dir, ['mv', '.project/stories/SHY-0997-old.md', '.project/stories/SHY-0997-new.md']); // unchanged content → R100
+    commit(dir, 'rename story file');
+    const { code, stderr } = run(dir);
+    expect(code).not.toBe(0); // R + Draft is NOT the add-only exemption
     expect(stderr).toMatch(/In Review/);
   });
 

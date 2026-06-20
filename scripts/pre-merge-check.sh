@@ -41,14 +41,32 @@ fail() {
 
 [ -n "$PR" ] || fail "usage: pre-merge-check.sh <PR#> [--skip-ci-check]"
 
-STORIES=$(git diff --name-only --diff-filter=ACMR "${BASE_REF}...HEAD" | grep -E "$STORY_RE" || true)
-[ -n "$STORIES" ] || fail "no SHY story .md changed on this branch (BASE_REF=$BASE_REF) — nothing to gate"
+# name-status (not name-only): each line is "<code>\t<path>" — or for a rename,
+# "<code>\t<old>\t<new>". The change code (A/M/R…) lets us apply the SHY-0131
+# added-Draft filing exemption (a brand-new Draft story is a legitimate filing).
+STATUS_LINES=$(git diff --name-status --diff-filter=ACMR "${BASE_REF}...HEAD")
 
-# Validate each changed story: status In Review + a REAL Reviewed-up-to commit.
+# Validate each changed story: status In Review + a REAL Reviewed-up-to commit —
+# EXCEPT a newly-ADDED Draft (a spec filing), which is exempt to match the CI gate
+# (scripts/check-pr-story-status.js, SHY-0131). The exemption is add-only AND
+# Draft-only: a story MODIFIED to Draft, a non-Draft add, or a Done/Cancelled
+# story all still refuse (the local gate stays stricter than CI on terminals).
 MARKERS=""
-while IFS= read -r story; do
-  [ -z "$story" ] && continue
+FOUND_STORY=false
+FILINGS=0
+while IFS= read -r line; do
+  [ -z "$line" ] && continue
+  code=${line%%$'\t'*} # first tab-field (e.g. A, M, R100)
+  code=${code:0:1}     # leading char (A/M/D/R/C)
+  story=${line##*$'\t'} # last tab-field = the path (new path on a rename)
+  printf '%s\n' "$story" | grep -qE "$STORY_RE" || continue
+  FOUND_STORY=true
   status=$(grep -m1 '^status:' "$story" | sed 's/^status:[[:space:]]*//' | tr -d '\r')
+  if [ "$code" = "A" ] && [ "$status" = "Draft" ]; then
+    printf '  filing exemption: %s newly-added Draft (SHY-0131 parity)\n' "$story" >&2
+    FILINGS=$((FILINGS + 1))
+    continue
+  fi
   [ "$status" = "In Review" ] || fail "$story status is \"$status\" — must be \"In Review\" before merge"
   rs=$(grep -m1 '^Reviewed-up-to:' "$story" | sed 's/^Reviewed-up-to:[[:space:]]*//' | tr -d '\r')
   [ -n "$rs" ] || fail "$story has no 'Reviewed-up-to: <sha>' marker in its Notes — record the reviewed commit then re-run"
@@ -57,7 +75,8 @@ while IFS= read -r story; do
   git cat-file -e "${rs}^{commit}" 2>/dev/null ||
     fail "$story Reviewed-up-to: '$rs' is not a valid commit in this repo — record the actual reviewed SHA"
   MARKERS="${MARKERS}${rs}"$'\n'
-done <<< "$STORIES"
+done <<< "$STATUS_LINES"
+[ "$FOUND_STORY" = true ] || fail "no SHY story .md changed on this branch (BASE_REF=$BASE_REF) — nothing to gate"
 
 # Gate 3: for EVERY story's marker, a commit after it that touches anything other
 # than a story .md is unreviewed code. Checking every marker keeps multi-story PRs
@@ -83,11 +102,21 @@ fi
 CI_LINE="verified"
 [ "$SKIP_CI" = "true" ] && CI_LINE="SKIPPED (--skip-ci-check)"
 REVIEWED_DISPLAY=$(echo "$MARKERS" | tr '\n' ' ' | sed 's/[[:space:]]*$//')
+# Honest display when there are no implementation stories (a filing-only PR has
+# no markers → nothing to re-review).
+if [ -n "$REVIEWED_DISPLAY" ]; then
+  REVIEW_NOTE="Reviewed-up-to: $REVIEWED_DISPLAY"
+else
+  REVIEW_NOTE="filing only — no implementation story to re-review"
+fi
+
+STATUS_LINE="each changed story In Review"
+[ "$FILINGS" -gt 0 ] && STATUS_LINE="$STATUS_LINE (+ $FILINGS newly-added Draft filing(s) exempt — SHY-0131 parity)"
 
 cat <<EOF
 ── Pre-merge gate (SHY-0127) ──
-  [x] story status = In Review
-  [x] no unreviewed commits since last review (Reviewed-up-to: $REVIEWED_DISPLAY)
+  [x] $STATUS_LINE
+  [x] no unreviewed commits since last review ($REVIEW_NOTE)
   [x] CI checks green: $CI_LINE
   Confirm the human-judgment items before merging:
   [ ] Definition of Done met
