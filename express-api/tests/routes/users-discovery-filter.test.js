@@ -439,11 +439,13 @@ describe('GET /api/users/search — uniqueId numeric branch', () => {
   });
 });
 
-describe('GET /api/users/search — displayName prefix branch', () => {
-  test('string q: returns same-cohort displayName-prefix matches', async () => {
+describe('GET /api/users/search — displayName substring branch (case-insensitive)', () => {
+  test('string q: returns same-cohort case-insensitive substring matches', async () => {
+    // Both 'Alice' and 'Alicia' contain 'Ali'; 'Bob' does not.
     mockQueryResult([
       { uniqueId: 10000100, cohort: 'adult', displayName: 'Alice' },
-      { uniqueId: 10000101, cohort: 'adult', displayName: 'Alex' },
+      { uniqueId: 10000101, cohort: 'adult', displayName: 'Alicia' },
+      { uniqueId: 10000102, cohort: 'adult', displayName: 'Bob' },
     ]);
 
     const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
@@ -452,10 +454,81 @@ describe('GET /api/users/search — displayName prefix branch', () => {
     expect(res.status).toBe(200);
     expect(res.body.users.map((u) => u.uniqueId)).toEqual([10000100, 10000101]);
 
+    // Cohort gate is the ONLY Firestore where-clause now; the substring
+    // match runs in JS so no displayName range/composite index is used.
     expect(mockChain.where).toHaveBeenCalledWith('cohort', '==', 'adult');
-    // Prefix-range pattern: displayName >= 'Ali' AND < 'Ali'.
-    expect(mockChain.where).toHaveBeenCalledWith('displayName', '>=', 'Ali');
-    expect(mockChain.where).toHaveBeenCalledWith('displayName', '<', 'Ali');
+    expect(mockChain.where).not.toHaveBeenCalledWith('displayName', '>=', 'Ali');
+    expect(mockChain.where).not.toHaveBeenCalledWith('displayName', '<', 'Ali');
+  });
+
+  test('string q: lowercase query matches a mixed-case displayName (case-insensitive)', async () => {
+    // 'lfc' must match 'LFC_UK' — the pre-fix case-SENSITIVE prefix range missed it.
+    mockQueryResult([
+      { uniqueId: 10000100, cohort: 'adult', displayName: 'LFC_UK' },
+      { uniqueId: 10000101, cohort: 'adult', displayName: 'Arsenal' },
+    ]);
+
+    const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
+    const res = await request(app).get('/api/users/search?q=lfc');
+
+    expect(res.status).toBe(200);
+    expect(res.body.users.map((u) => u.uniqueId)).toEqual([10000100]);
+  });
+
+  test('string q: substring in the MIDDLE of a displayName matches (not just prefix)', async () => {
+    // 'Bao' must match '[SEED] Bao (P-17 Teacher)' — middle-of-string.
+    mockQueryResult([
+      { uniqueId: 10000100, cohort: 'adult', displayName: '[SEED] Bao (P-17 Teacher)' },
+      { uniqueId: 10000101, cohort: 'adult', displayName: 'Someone Else' },
+    ]);
+
+    const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
+    const res = await request(app).get('/api/users/search?q=Bao');
+
+    expect(res.status).toBe(200);
+    expect(res.body.users.map((u) => u.uniqueId)).toEqual([10000100]);
+  });
+
+  test('string q: non-matching substring returns empty (in-JS predicate excludes non-matches)', async () => {
+    // The cohort scan returns docs that do NOT contain the query substring;
+    // they must all be filtered out in JS.
+    mockQueryResult([
+      { uniqueId: 10000100, cohort: 'adult', displayName: 'Alice' },
+      { uniqueId: 10000101, cohort: 'adult', displayName: 'Bob' },
+    ]);
+
+    const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
+    const res = await request(app).get('/api/users/search?q=zzz');
+
+    expect(res.status).toBe(200);
+    expect(res.body.users).toEqual([]);
+  });
+
+  test('string q: doc with null/missing displayName is tolerated (no throw) and excluded', async () => {
+    mockQueryResult([
+      { uniqueId: 10000100, cohort: 'adult' }, // no displayName field
+      { uniqueId: 10000101, cohort: 'adult', displayName: null },
+      { uniqueId: 10000102, cohort: 'adult', displayName: 'Alice' },
+    ]);
+
+    const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
+    const res = await request(app).get('/api/users/search?q=Ali');
+
+    expect(res.status).toBe(200);
+    expect(res.body.users.map((u) => u.uniqueId)).toEqual([10000102]);
+  });
+
+  test('string q: bounded cohort scan limit is USER_SEARCH_SCAN_LIMIT=200, not the 50 discovery cap', async () => {
+    mockQueryResult([]);
+
+    const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
+    await request(app).get('/api/users/search?q=Ali');
+
+    expect(mockChain.where).toHaveBeenCalledWith('cohort', '==', 'adult');
+    expect(mockChain.limit).toHaveBeenCalledWith(200);
+    // Specifically NOT the DISCOVERY_LIMIT (50) used by /discover — the
+    // substring scan needs the wider 200-doc bound to filter in JS.
+    expect(mockChain.limit).not.toHaveBeenCalledWith(50);
   });
 
   test('string q: cohort symmetry — minor sees only minor matches', async () => {
@@ -471,7 +544,7 @@ describe('GET /api/users/search — displayName prefix branch', () => {
 
   test('string q: caller excluded from own displayName results', async () => {
     mockQueryResult([
-      { uniqueId: 10000001, cohort: 'adult', displayName: 'Me' },
+      { uniqueId: 10000001, cohort: 'adult', displayName: 'Mel' },
       { uniqueId: 10000200, cohort: 'adult', displayName: 'Mel' },
     ]);
 
@@ -528,13 +601,36 @@ describe('GET /api/users/search — displayName prefix branch', () => {
     expect(mockChain.where).toHaveBeenCalledWith('cohort', '==', 'minor');
   });
 
-  test('string q: limit applied (max 50)', async () => {
-    mockQueryResult([]);
+  test('string q: substring predicate only NARROWS the gated set — never widens it (OSA §17)', async () => {
+    // All three docs pass the cohort gate (same adult cohort as caller),
+    // are non-self, and are not blocked — so shapeForViewer KEEPS every
+    // one (proven by the matching-query branch below). The substring
+    // predicate is the ONLY additional filter, and it must be able to
+    // reduce this gated set to zero. Crucially the predicate can never
+    // ADD a user the cohort gate didn't already include — it only narrows.
+    const gatedDocs = [
+      { uniqueId: 10000300, cohort: 'adult', displayName: 'Strawberry' },
+      { uniqueId: 10000301, cohort: 'adult', displayName: 'Blueberry' },
+      { uniqueId: 10000302, cohort: 'adult', displayName: 'Blackberry' },
+    ];
+    mockQueryResult(gatedDocs);
 
-    const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
-    await request(app).get('/api/users/search?q=Ali');
+    // A query matching ALL three confirms they are gate-passing (shapeForViewer keeps them).
+    const matchRes = await request(createApp({ uniqueId: 10000001, cohort: 'adult' })).get(
+      '/api/users/search?q=berry',
+    );
+    expect(matchRes.status).toBe(200);
+    expect(matchRes.body.users.map((u) => u.uniqueId)).toEqual([10000300, 10000301, 10000302]);
 
-    expect(mockChain.limit).toHaveBeenCalledWith(50);
+    // The SAME gate-passing docs, a query matching NONE → the predicate
+    // drops all three even though the cohort gate would have kept them →
+    // narrows to []. This proves the predicate cannot widen read access.
+    const noneRes = await request(createApp({ uniqueId: 10000001, cohort: 'adult' })).get(
+      '/api/users/search?q=zzzNoMatch',
+    );
+    expect(noneRes.status).toBe(200);
+    expect(mockChain.where).toHaveBeenCalledWith('cohort', '==', 'adult');
+    expect(noneRes.body.users).toEqual([]);
   });
 });
 

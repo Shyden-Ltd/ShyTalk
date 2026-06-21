@@ -48,6 +48,11 @@ object Constants {
     const val PM_FLOOD_WINDOW_MS = 10_000L
     const val PM_FLOOD_MAX_MESSAGES = 5
 
+    // User search (DM "Search All Users" — SHY-0137). Mirrors the Express
+    // endpoint's SEARCH_MIN_QUERY_CHARS so a below-min query is short-circuited
+    // to an empty result client-side instead of firing a guaranteed HTTP 400.
+    const val USER_SEARCH_MIN_QUERY_CHARS = 3
+
     // Group chats
     const val MAX_GROUP_PARTICIPANTS = 50
     const val MAX_OWNED_GROUPS = 5

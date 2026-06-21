@@ -8,8 +8,10 @@ import com.shyden.shytalk.core.model.MuteInfo
 import com.shyden.shytalk.core.model.PrivateMessage
 import com.shyden.shytalk.core.model.SystemMessageConfig
 import com.shyden.shytalk.core.model.User
+import com.shyden.shytalk.core.util.Constants
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.core.util.encodeUrlQueryComponent
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.firestore.dataMap
@@ -743,32 +745,45 @@ class IosPrivateMessageRepositoryImpl(
 
     // ── Search ──────────────────────────────────────────────────
 
+    /**
+     * Search the caller's own cohort for a user by displayName prefix OR
+     * exact uniqueId.
+     *
+     * Routes through the cohort-gated Express endpoint `GET /api/users/search`
+     * (SHY-0137) instead of a raw Firestore `list` query. The old direct query
+     * carried only a `displayName` range and no `cohort` constraint, so the
+     * `users` read rule's `cohortMatchesCaller()` requirement could not be
+     * proven at query time \u2014 Firestore denied the whole `list` with
+     * `PERMISSION_DENIED`. It also searched by name only.
+     *
+     * The server auto-routes by query shape (numeric \u2192 exact uniqueId; else
+     * \u2192 cohort-gated displayName prefix), so "search by ID and name" stays
+     * server-enforced. A query below the server's minimum length is a
+     * guaranteed HTTP 400, so we short-circuit it to an empty list WITHOUT
+     * calling the API (the caller debounces typeahead; a transient short query
+     * must not surface as a hard error).
+     */
     override suspend fun searchUsers(
         query: String,
         currentUserId: String,
-    ): Resource<List<User>> =
-        firebaseCall("Failed to search users") {
-            val snapshot =
-                firestore
-                    .collection("users")
-                    .where {
-                        all(
-                            "displayName" greaterThanOrEqualTo query,
-                            "displayName" lessThan query + "\uf8ff",
-                        )
-                    }.get()
-            snapshot.documents.mapNotNull { doc ->
-                if (doc.id == currentUserId) return@mapNotNull null
-                try {
-                    val data = doc.dataMap()
-                    User.fromMap(data, doc.id)
-                } catch (e: Exception) {
-                    null
-                }
-            }
+    ): Resource<List<User>> {
+        val trimmed = query.trim()
+        if (trimmed.length < Constants.USER_SEARCH_MIN_QUERY_CHARS) {
+            return Resource.Success(emptyList())
         }
+        return firebaseCall("Failed to search users") {
+            val encoded = encodeUrlQueryComponent(trimmed)
+            val response = api.get("/api/users/search?q=$encoded")
+            val users = response["users"] as? JsonArray ?: JsonArray(emptyList())
+            val rows =
+                users.mapNotNull { element ->
+                    (element as? JsonObject)?.let { jsonObjectToMap(it) }
+                }
+            mapUserSearchRows(rows, currentUserId)
+        }
+    }
 
-    // ── Counting ────────────────────────────────────────────────
+    // ── Counting ──────────────────
 
     override suspend fun getOwnedGroupCount(userId: String): Resource<Int> =
         firebaseCall("Failed to get owned group count") {

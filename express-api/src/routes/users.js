@@ -51,8 +51,14 @@ const DISCOVERY_LIMIT = 50;
 // min-char does not alter end-user typeahead UX.
 const SEARCH_MIN_QUERY_CHARS = 3;
 const SEARCH_MAX_QUERY_CHARS = 50;
-// Highest BMP code point — canonical Firestore prefix-range upper bound.
-const PREFIX_UPPER_SENTINEL = '\uf8ff';
+// SHY-0137 — bounded per-search cohort scan for the case-insensitive
+// SUBSTRING displayName search. Firestore can't do case-insensitive or
+// mid-string `contains` natively, so the displayName branch fetches up to
+// this many same-cohort docs (a single-field `where('cohort','==',x)` — no
+// composite index needed) and filters the substring match in JS. 200 is an
+// acceptable bound pre-launch; a dedicated search index (lowercased token
+// field / Algolia / Typesense) is needed at scale — a follow-up SHY tracks it.
+const USER_SEARCH_SCAN_LIMIT = 200;
 
 /**
  * Strip fields that must never leave the server. Applied uniformly to
@@ -122,18 +128,28 @@ function shapeForViewer(callerUniqueId, callerCohort, data) {
  * duplication those routes would otherwise share.
  *
  * `queryBuilder` receives the users collection ref and the caller's
- * resolved cohort, returns a Firestore query (without `.limit()` — the
- * helper applies `DISCOVERY_LIMIT` consistently).
+ * resolved cohort, returns a Firestore query. The caller passes the
+ * `limit` it wants (`DISCOVERY_LIMIT` for discover; `USER_SEARCH_SCAN_LIMIT`
+ * for the bounded substring search scan) since the two surfaces need
+ * different bounds.
+ *
+ * Optional `filterPredicate(data)` is applied to each doc's raw data
+ * BEFORE shaping/stripping — returning falsey drops the doc. The
+ * displayName search passes the case-insensitive substring match here
+ * (Firestore can't do it server-side); `/discover` passes none (so its
+ * behaviour is unchanged). The cohort + self + block + effectiveCohort
+ * gates in `shapeForViewer` still run regardless of the predicate.
  */
-async function respondWithSameCohortUsers(req, res, queryBuilder) {
+async function respondWithSameCohortUsers(req, res, queryBuilder, options = {}) {
+  const { limit = DISCOVERY_LIMIT, filterPredicate = null } = options;
   const callerCohort = cohortFromClaim(req);
-  const snap = await queryBuilder(db.collection('users'), callerCohort)
-    .limit(DISCOVERY_LIMIT)
-    .get();
+  const snap = await queryBuilder(db.collection('users'), callerCohort).limit(limit).get();
 
   const users = [];
   for (const doc of snap.docs) {
-    const shaped = shapeForViewer(req.auth.uniqueId, callerCohort, doc.data());
+    const data = doc.data();
+    if (filterPredicate && !filterPredicate(data)) continue;
+    const shaped = shapeForViewer(req.auth.uniqueId, callerCohort, data);
     if (shaped) users.push(shaped);
   }
   res.json({ users });
@@ -507,13 +523,20 @@ router.get('/users/search', async (req, res) => {
       return res.json({ users: [target] });
     }
 
-    // displayName prefix branch.
-    await respondWithSameCohortUsers(req, res, (col, cohort) =>
-      col
-        .where('cohort', '==', cohort)
-        .where('displayName', '>=', q)
-        .where('displayName', '<', q + PREFIX_UPPER_SENTINEL),
-    );
+    // displayName branch — case-insensitive SUBSTRING match (SHY-0137).
+    // Firestore has no native case-insensitive or mid-string `contains`,
+    // so we scan up to USER_SEARCH_SCAN_LIMIT same-cohort docs (single-
+    // field cohort where — no composite index) and keep only those whose
+    // displayName contains `q` case-insensitively. `String(... || '')`
+    // tolerates a null/absent displayName without throwing.
+    const needle = q.toLowerCase();
+    await respondWithSameCohortUsers(req, res, (col, cohort) => col.where('cohort', '==', cohort), {
+      limit: USER_SEARCH_SCAN_LIMIT,
+      filterPredicate: (data) =>
+        String(data.displayName || '')
+          .toLowerCase()
+          .includes(needle),
+    });
   } catch (err) {
     log.error('users', 'GET /users/search failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
