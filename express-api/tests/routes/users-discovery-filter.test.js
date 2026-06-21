@@ -518,7 +518,7 @@ describe('GET /api/users/search — displayName substring branch (case-insensiti
     expect(res.body.users.map((u) => u.uniqueId)).toEqual([10000102]);
   });
 
-  test('string q: bounded cohort scan limit (USER_SEARCH_SCAN_LIMIT=200) is applied', async () => {
+  test('string q: bounded cohort scan limit is USER_SEARCH_SCAN_LIMIT=200, not the 50 discovery cap', async () => {
     mockQueryResult([]);
 
     const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
@@ -526,6 +526,9 @@ describe('GET /api/users/search — displayName substring branch (case-insensiti
 
     expect(mockChain.where).toHaveBeenCalledWith('cohort', '==', 'adult');
     expect(mockChain.limit).toHaveBeenCalledWith(200);
+    // Specifically NOT the DISCOVERY_LIMIT (50) used by /discover — the
+    // substring scan needs the wider 200-doc bound to filter in JS.
+    expect(mockChain.limit).not.toHaveBeenCalledWith(50);
   });
 
   test('string q: cohort symmetry — minor sees only minor matches', async () => {
@@ -598,15 +601,36 @@ describe('GET /api/users/search — displayName substring branch (case-insensiti
     expect(mockChain.where).toHaveBeenCalledWith('cohort', '==', 'minor');
   });
 
-  test('string q: bounded scan limit applied (USER_SEARCH_SCAN_LIMIT=200, not the 50 discovery cap)', async () => {
-    mockQueryResult([]);
+  test('string q: substring predicate only NARROWS the gated set — never widens it (OSA §17)', async () => {
+    // All three docs pass the cohort gate (same adult cohort as caller),
+    // are non-self, and are not blocked — so shapeForViewer KEEPS every
+    // one (proven by the matching-query branch below). The substring
+    // predicate is the ONLY additional filter, and it must be able to
+    // reduce this gated set to zero. Crucially the predicate can never
+    // ADD a user the cohort gate didn't already include — it only narrows.
+    const gatedDocs = [
+      { uniqueId: 10000300, cohort: 'adult', displayName: 'Strawberry' },
+      { uniqueId: 10000301, cohort: 'adult', displayName: 'Blueberry' },
+      { uniqueId: 10000302, cohort: 'adult', displayName: 'Blackberry' },
+    ];
+    mockQueryResult(gatedDocs);
 
-    const app = createApp({ uniqueId: 10000001, cohort: 'adult' });
-    await request(app).get('/api/users/search?q=Ali');
+    // A query matching ALL three confirms they are gate-passing (shapeForViewer keeps them).
+    const matchRes = await request(createApp({ uniqueId: 10000001, cohort: 'adult' })).get(
+      '/api/users/search?q=berry',
+    );
+    expect(matchRes.status).toBe(200);
+    expect(matchRes.body.users.map((u) => u.uniqueId)).toEqual([10000300, 10000301, 10000302]);
 
-    // displayName substring branch scans up to USER_SEARCH_SCAN_LIMIT docs
-    // (single-field cohort where, no composite index) and filters in JS.
-    expect(mockChain.limit).toHaveBeenCalledWith(200);
+    // The SAME gate-passing docs, a query matching NONE → the predicate
+    // drops all three even though the cohort gate would have kept them →
+    // narrows to []. This proves the predicate cannot widen read access.
+    const noneRes = await request(createApp({ uniqueId: 10000001, cohort: 'adult' })).get(
+      '/api/users/search?q=zzzNoMatch',
+    );
+    expect(noneRes.status).toBe(200);
+    expect(mockChain.where).toHaveBeenCalledWith('cohort', '==', 'adult');
+    expect(noneRes.body.users).toEqual([]);
   });
 });
 

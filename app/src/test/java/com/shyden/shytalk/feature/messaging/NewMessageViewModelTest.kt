@@ -10,6 +10,7 @@ import com.shyden.shytalk.data.repository.UserRepository
 import com.shyden.shytalk.testutil.MainDispatcherRule
 import com.shyden.shytalk.testutil.TestData
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -513,5 +514,141 @@ class NewMessageViewModelTest {
                 vm.uiState.value.allUsersSearchResults
                     .map { it.uid },
             )
+        }
+
+    // ===== SHY-0137 I-1 — searchAllUsers Resource.Error path. The error
+    // branch surfaces a Plain error + stops the spinner, and must NOT wipe
+    // results already shown from a prior successful search. =====
+
+    @Test
+    fun `searchAllUsers error path sets plain error, stops loading, keeps prior results`() =
+        runTest {
+            coEvery { userRepository.getUser("me") } returns
+                Resource.Success(TestData.createTestUser(uid = "me", cohort = "adult"))
+
+            val goodRows =
+                listOf(TestData.createTestUser(uid = "100600", displayName = "Kop", cohort = "minor"))
+            coEvery { pmRepository.searchUsers("kop", "me") } returns Resource.Success(goodRows)
+            coEvery { pmRepository.searchUsers("zzz", "me") } returns Resource.Error("search failed")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.toggleSearchAllMode()
+
+            // First search succeeds → results populated.
+            vm.setSearchQuery("kop")
+            advanceUntilIdle()
+            assertEquals(
+                listOf("100600"),
+                vm.uiState.value.allUsersSearchResults
+                    .map { it.uid },
+            )
+
+            // Second search fails → error surfaced, spinner off, prior results intact.
+            vm.setSearchQuery("zzz")
+            advanceUntilIdle()
+
+            assertFalse(vm.uiState.value.isSearchingAll)
+            val error = vm.uiState.value.error
+            assertTrue(error is UiText.Plain)
+            assertEquals("search failed", (error as UiText.Plain).text)
+            assertEquals(
+                listOf("100600"),
+                vm.uiState.value.allUsersSearchResults
+                    .map { it.uid },
+            )
+        }
+
+    // ===== SHY-0137 I-2 — rapid-fire setSearchQuery debounces: each new
+    // keystroke cancels the in-flight search job (300ms delay), so only the
+    // FINAL query reaches the repository. =====
+
+    @Test
+    fun `rapid-fire setSearchQuery cancels earlier searches and runs only the final query`() =
+        runTest {
+            coEvery { userRepository.getUser("me") } returns
+                Resource.Success(TestData.createTestUser(uid = "me", cohort = "adult"))
+            val finalRows =
+                listOf(TestData.createTestUser(uid = "100700", displayName = "Anfield", cohort = "minor"))
+            coEvery { pmRepository.searchUsers("lfc", "me") } returns Resource.Success(finalRows)
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.toggleSearchAllMode()
+
+            // Three queries fired before the virtual clock is advanced: each
+            // setSearchQuery cancels the previous in-flight search job, so the
+            // first two are cancelled before their 300ms debounce delay elapses
+            // (advanceUntilIdle below advances the clock only once, after the
+            // final query) → only "lfc" ever reaches the repository.
+            vm.setSearchQuery("l")
+            vm.setSearchQuery("lf")
+            vm.setSearchQuery("lfc")
+            advanceUntilIdle()
+
+            // Only the last query executed; the two earlier jobs were cancelled.
+            coVerify(exactly = 1) { pmRepository.searchUsers("lfc", "me") }
+            coVerify(exactly = 0) { pmRepository.searchUsers("l", "me") }
+            coVerify(exactly = 0) { pmRepository.searchUsers("lf", "me") }
+            assertEquals(
+                listOf("100700"),
+                vm.uiState.value.allUsersSearchResults
+                    .map { it.uid },
+            )
+        }
+
+    // ===== SHY-0137 I-3 — a blank/whitespace query in search-all mode still
+    // updates searchQuery but must NOT hit the search API (the isNotBlank
+    // guard), leaving the spinner off. =====
+
+    @Test
+    fun `setSearchQuery with blank query in search-all mode updates query but skips the API`() =
+        runTest {
+            coEvery { userRepository.getUser("me") } returns
+                Resource.Success(TestData.createTestUser(uid = "me"))
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.toggleSearchAllMode()
+
+            vm.setSearchQuery("   ")
+            advanceUntilIdle()
+
+            assertEquals("   ", vm.uiState.value.searchQuery)
+            assertFalse(vm.uiState.value.isSearchingAll)
+            coVerify(exactly = 0) { pmRepository.searchUsers(any(), any()) }
+        }
+
+    // ===== SHY-0137 I-4 — toggling search-all mode ON while a non-blank
+    // query is already typed must fire a search for that query (so the user
+    // doesn't have to retype to populate results). =====
+
+    @Test
+    fun `toggleSearchAllMode with a pre-set query triggers a search for that query`() =
+        runTest {
+            coEvery { userRepository.getUser("me") } returns
+                Resource.Success(TestData.createTestUser(uid = "me", cohort = "adult"))
+            val rows =
+                listOf(TestData.createTestUser(uid = "100800", displayName = "Zoe", cohort = "minor"))
+            coEvery { pmRepository.searchUsers("zoe", "me") } returns Resource.Success(rows)
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+
+            // Query typed BEFORE entering search-all mode → no search yet.
+            vm.setSearchQuery("zoe")
+            advanceUntilIdle()
+            coVerify(exactly = 0) { pmRepository.searchUsers(any(), any()) }
+
+            // Toggling the mode on with the query present fires the search.
+            vm.toggleSearchAllMode()
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf("100800"),
+                vm.uiState.value.allUsersSearchResults
+                    .map { it.uid },
+            )
+            coVerify(exactly = 1) { pmRepository.searchUsers("zoe", "me") }
         }
 }
