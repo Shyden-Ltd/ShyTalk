@@ -30,7 +30,7 @@
     "express-rate-limit": "^8.5.2",
     "firebase-admin": "^13.10.0",
     "helmet": "^8.2.0",
-    "livekit-server-sdk": "^2.15.3",
+    "livekit-server-sdk": "^2.15.5",
     "multer": "^2.2.0",
     "node-cron": "^4.2.1",
     "nodemailer": "^9.0.1",
