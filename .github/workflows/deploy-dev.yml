@@ -521,7 +521,7 @@ jobs:
 
       - name: Cache KMP shared framework
         id: kmp-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: shared/build/bin/iosArm64/releaseFramework
           key: kmp-ios-framework-${{ hashFiles('shared/src/**', 'shared/build.gradle.kts') }}
@@ -540,7 +540,7 @@ jobs:
           ./gradlew :shared:linkReleaseFrameworkIosArm64 :shared:linkDebugFrameworkIosArm64 --max-workers=1
 
       - name: Cache Xcode derived data
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/Library/Developer/Xcode/DerivedData
           key: xcode-derived-${{ hashFiles('iosApp/**', 'shared/build/bin/iosArm64/releaseFramework/**') }}
@@ -560,7 +560,7 @@ jobs:
       # arm64 variant). Those caches stay separate, scoped per
       # workflow.
       - name: Cache CocoaPods spec repos (~/.cocoapods/repos)
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cocoapods/repos
           key: cocoapods-repos-${{ runner.os }}-${{ hashFiles('iosApp/Podfile.lock') }}
@@ -569,7 +569,7 @@ jobs:
 
       - name: Cache iosApp/Pods
         id: pods-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: iosApp/Pods
           key: pods-${{ runner.os }}-${{ hashFiles('iosApp/Podfile.lock') }}
@@ -577,7 +577,7 @@ jobs:
             pods-${{ runner.os }}-
 
       - name: Cache SwiftPM packages (build/ios-spm-packages)
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build/ios-spm-packages
           key: ios-spm-${{ runner.os }}-${{ hashFiles('iosApp/**/Package.resolved', 'iosApp/**/Package.swift') }}

@@ -144,7 +144,7 @@ jobs:
       # bundle is cached keyed on the Xcode build, so it downloads once per
       # Xcode version and an Xcode bump re-fetches the matching toolchain.
       - name: Cache Metal toolchain bundle
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/metal-toolchain-export
           key: metal-toolchain-${{ runner.os }}-xcode-${{ steps.xcode.outputs.build }}
@@ -232,7 +232,7 @@ jobs:
       # cold runner re-clones the trunk over slow network (~1-3 min
       # before any actual pod download begins).
       - name: Cache CocoaPods spec repos (~/.cocoapods/repos)
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cocoapods/repos
           key: cocoapods-repos-${{ runner.os }}-${{ hashFiles('iosApp/Podfile.lock') }}
@@ -246,7 +246,7 @@ jobs:
       # Restore-keys provide partial warmth on Podfile changes.
       - name: Cache iosApp/Pods
         id: pods-cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: iosApp/Pods
           key: pods-${{ runner.os }}-${{ hashFiles('iosApp/Podfile.lock') }}
@@ -274,7 +274,7 @@ jobs:
       # Then the KMP simulator framework hash so KMP-source changes
       # invalidate too.
       - name: Cache Xcode DerivedData (build/ios-derived-data)
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build/ios-derived-data
           key: ios-derived-${{ runner.os }}-${{ hashFiles('iosApp/iosApp/**', 'iosApp/iosAppTests/**', 'iosApp/iosAppUITests/**', 'iosApp/iosApp.xcodeproj/**', 'iosApp/Podfile.lock', 'iosApp/Configurations/**', 'shared/build/bin/iosSimulatorArm64/**') }}
@@ -288,7 +288,7 @@ jobs:
       # so xcodebuild doesn't re-clone (e.g. github.com/firebase/...
       # ~400MB) every build.
       - name: Cache SwiftPM packages (build/ios-spm-packages)
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: build/ios-spm-packages
           key: ios-spm-${{ runner.os }}-${{ hashFiles('iosApp/**/Package.resolved', 'iosApp/**/Package.swift') }}
