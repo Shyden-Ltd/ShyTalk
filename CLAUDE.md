@@ -49,9 +49,11 @@ A dimension may carry `N/A — <one-line rationale>` if it genuinely doesn't app
 **Scenario: <short description>**
 - **Given** <preconditions>
 - **When** <action>
-- **Then** <observable outcome — exact exit code, stderr substring, etc>
+- **Then** <observable outcome — what the user sees/experiences>
 - **And** <additional observable>
 ```
+
+**Scenarios are NON-TECHNICAL (HARD RULE).** Every `Given`/`When`/`Then`/`And` must be readable by a **non-technical** stakeholder and describe observable **user behaviour** — what the user does and sees. **No** code identifiers, function/route/screen constant names (`Screen.Main`, `getIdToken(...)`, `startDestination`), collection names, or HTTP status codes in scenarios — those belong in `## Acceptance Criteria` + `## Test Plan` (which keep the engineering precision). Write "the app opens straight to the room list — no login screen, no loading screen", NOT "`startDestination = Screen.Main` and neither SignIn nor the splash is shown". Translate every mechanism to its user-visible effect ("confirmed they're allowed to see this group's content", not "cohort claim refreshed"). Code-hygiene checks (grep-clean, no orphaned strings, a `404`) are not user behaviour → assert them in AC/Test Plan, never as a BDD scenario. (Operator standard, 2026-07-01.)
 
 ### Stories born fully refined (NO skeletons) — HARD RULE
 
