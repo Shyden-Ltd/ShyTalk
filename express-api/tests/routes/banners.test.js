@@ -590,6 +590,18 @@ describe('POST /api/admin/banners/upload', () => {
     expect(res.status).toBe(400);
   });
 
+  it('returns 400 when a file is sent on an unexpected field (multer LIMIT_UNEXPECTED_FILE)', async () => {
+    // SHY-0152: a wrong multipart field name reaches singleFileUpload's generic
+    // branch → clean 400 'Unexpected field', not a 500 from the default handler.
+    const app = createApp({ isAdmin: true });
+    const res = await request(app)
+      .post('/api/admin/banners/upload')
+      .attach('photo', Buffer.from('img'), { filename: 'a.jpg', contentType: 'image/jpeg' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Unexpected field');
+  });
+
   it('uses correct file extension for WebP uploads', async () => {
     putObject.mockResolvedValueOnce(
       'https://images.shytalk.shyden.co.uk/banners/banner-id_12345.webp',

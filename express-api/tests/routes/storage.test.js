@@ -199,6 +199,21 @@ describe('POST /api/storage/upload', () => {
     expect(r2.putObject).not.toHaveBeenCalled();
   });
 
+  test('rejects a file on an unexpected field with 400 (multer LIMIT_UNEXPECTED_FILE)', async () => {
+    // SHY-0152: a wrong multipart field name reaches singleFileUpload's
+    // generic branch (a MulterError with no dedicated status) — must surface
+    // as a clean 400 'Unexpected field', not a 500 from Express's default handler.
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'profiles')
+      .attach('photo', Buffer.from('img'), { filename: 'a.jpg', contentType: 'image/jpeg' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Unexpected field');
+    expect(r2.putObject).not.toHaveBeenCalled();
+  });
+
   test('upload response includes originalSize and compressedSize', async () => {
     const app = createApp();
     const res = await request(app)

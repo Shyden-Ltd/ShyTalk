@@ -12,6 +12,7 @@
 
 const router = require('express').Router();
 const multer = require('multer');
+const { singleFileUpload } = require('../utils/upload');
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -231,17 +232,10 @@ router.post(
     if (await requireAdmin(req, res)) return;
     next();
   },
-  (req, res, next) => {
-    upload.single('file')(req, res, (err) => {
-      if (err) {
-        if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(413).json({ error: 'File too large (max 10 MB)' });
-        }
-        return res.status(400).json({ error: err.message });
-      }
-      next();
-    });
-  },
+  // Translate multer-layer errors into clean JSON (413 oversize / 400 else)
+  // instead of Express's default 500/HTML — shared with storage.js via
+  // utils/upload.js.
+  singleFileUpload(upload, 'file'),
   async (req, res) => {
     try {
       const file = req.file;

@@ -15,6 +15,7 @@ const r2 = require('../utils/r2');
 const { getExtension } = require('../utils/helpers');
 const log = require('../utils/log');
 const { compressImage, ImagePolicyError } = require('../utils/imageCompressor');
+const { singleFileUpload } = require('../utils/upload');
 
 const router = express.Router();
 // Bounded request body (reviewed safe, S5693): at most 1 file of ≤10 MB.
@@ -39,20 +40,10 @@ const ALLOWED_UPLOAD_PATHS = [
 // POST /api/storage/upload
 router.post(
   '/storage/upload',
-  // Translate multer-layer errors into clean JSON responses (mirrors
-  // banners.js). Without this wrapper multer calls next(err) and Express's
-  // default handler returns 500/HTML for LIMIT_FILE_SIZE + LIMIT_FILE_COUNT.
-  (req, res, next) => {
-    upload.single('file')(req, res, (err) => {
-      if (err) {
-        if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(413).json({ error: 'File too large (max 10 MB)' });
-        }
-        return res.status(400).json({ error: err.message });
-      }
-      next();
-    });
-  },
+  // Translate multer-layer errors into clean JSON (413 oversize / 400 else)
+  // instead of Express's default 500/HTML — shared with banners.js via
+  // utils/upload.js.
+  singleFileUpload(upload, 'file'),
   async (req, res) => {
     try {
       const file = req.file;
