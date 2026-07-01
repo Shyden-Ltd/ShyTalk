@@ -137,8 +137,8 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | -------------------------------------------------- | --- | ------ | ----- | ----------------------------------------------------------------------------------------------------- | ------------ | ----------- | -------------------------------------------------------- |
 | [SHY-0003](SHY-0003-convert-roadmap-to-stories.md) | P1  | L      | chore | Convert zero-gap roadmap to user stories (work shipped via #1036; story superseded by SHY-0032)       | ❌ Cancelled | G054        | [#1036](https://github.com/Shyden-Ltd/ShyTalk/pull/1036) |
 | [SHY-0089](SHY-0089-gradle-build-cache-kn-ios-link.md) | P2 | M | infra | Build-cache the 22-min Kotlin/Native iOS framework link — rejected (non-cacheable; evidence in story) | ❌ Cancelled | —           | —                                                        |
-| [SHY-0142](SHY-0142-finish-action-sha-upgrades.md) | P1 | XS | infra | Sync CI pin-tests to the dependabot-bumped action SHAs (setup-java v5.4.0, actions/cache v6.1.0) — finish pin-drift cleanup | 🚧 In Progress | claude | — |
-| [SHY-0152](SHY-0152-clear-sonar-new-code-gate.md) | P1 | S | bug | Clear the SonarCloud new-code quality gate — 2 bugs (un-awaited assertion, promise-in-try) + 2 upload content-length reviews; unblocks all pushes | 🚧 In Progress | claude | — |
+| [SHY-0142](SHY-0142-finish-action-sha-upgrades.md) | P1 | XS | infra | Sync CI pin-tests to the dependabot-bumped action SHAs (setup-java v5.4.0, actions/cache v6.1.0) — finish pin-drift cleanup | 👀 In Review | claude | — |
+| [SHY-0152](SHY-0152-clear-sonar-new-code-gate.md) | P1 | S | bug | Clear the SonarCloud new-code quality gate — 2 bugs (un-awaited assertion, promise-in-try) + 2 upload content-length reviews; unblocks all pushes | 👀 In Review | claude | — |
 
 ## Reserved (planned, not yet filed)
 
