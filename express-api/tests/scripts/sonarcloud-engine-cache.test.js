@@ -25,7 +25,7 @@ const AUTO_RETRY_YML = path.join(WORKFLOWS_DIR, 'sonarcloud-auto-retry.yml');
 
 // The repo's existing actions/cache pin — asserted EXACTLY so a future
 // SHA bump triggers a review of this cache contract too.
-const CACHE_ACTION_SHA = '27d5ce7f107fe9357f9df03efb73ab90386fccae';
+const CACHE_ACTION_SHA = '55cc8345863c7cc4c66a329aec7e433d2d1c52a9';
 
 const yml = () => fs.readFileSync(SONARCLOUD_YML, 'utf-8');
 

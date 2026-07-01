@@ -147,7 +147,7 @@ describe('deploy-dev.yml ↔ ios-tests.yml — shared iOS caches', () => {
     });
 
     test('exists in deploy-dev with same SHA as ios-tests', () => {
-      expect(step).toContain('actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae');
+      expect(step).toContain('actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9');
     });
 
     test('targets ~/.cocoapods/repos', () => {
@@ -182,7 +182,7 @@ describe('deploy-dev.yml ↔ ios-tests.yml — shared iOS caches', () => {
     });
 
     test('exists with same SHA as ios-tests', () => {
-      expect(step).toContain('actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae');
+      expect(step).toContain('actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9');
     });
 
     test('has `id: pods-cache` (required for Install CocoaPods skip-on-hit)', () => {
@@ -215,7 +215,7 @@ describe('deploy-dev.yml ↔ ios-tests.yml — shared iOS caches', () => {
     });
 
     test('exists with same SHA', () => {
-      expect(step).toContain('actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae');
+      expect(step).toContain('actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9');
     });
 
     test('targets build/ios-spm-packages (matches xcodebuild -clonedSourcePackagesDirPath)', () => {

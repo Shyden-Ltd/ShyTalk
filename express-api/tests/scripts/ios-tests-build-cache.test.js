@@ -632,9 +632,9 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
   });
 
   describe('CocoaPods spec-repos cache', () => {
-    test('pins actions/cache@v5.0.5 SHA', () => {
+    test('pins actions/cache@v6.1.0 SHA', () => {
       expect(cocoaPodsRepoCacheStep).toContain(
-        'actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae',
+        'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9',
       );
     });
     test('targets ~/.cocoapods/repos', () => {
@@ -663,8 +663,8 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
   });
 
   describe('iosApp/Pods cache (load-bearing — gates Install CocoaPods skip)', () => {
-    test('pins actions/cache@v5.0.5 SHA', () => {
-      expect(podsCacheStep).toContain('actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae');
+    test('pins actions/cache@v6.1.0 SHA', () => {
+      expect(podsCacheStep).toContain('actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9');
     });
     test('targets iosApp/Pods', () => {
       expect(podsCacheStep).toContain('path: iosApp/Pods');
@@ -695,9 +695,9 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
   });
 
   describe('Xcode DerivedData cache', () => {
-    test('pins actions/cache@v5.0.5 SHA', () => {
+    test('pins actions/cache@v6.1.0 SHA', () => {
       expect(derivedDataCacheStep).toContain(
-        'actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae',
+        'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9',
       );
     });
     test('targets build/ios-derived-data (matches xcodebuild -derivedDataPath)', () => {
@@ -739,8 +739,8 @@ describe('ios-tests.yml — build-ios cache + xcodebuild perf pins (PR #827)', (
   });
 
   describe('SwiftPM packages cache', () => {
-    test('pins actions/cache@v5.0.5 SHA', () => {
-      expect(swiftPmCacheStep).toContain('actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae');
+    test('pins actions/cache@v6.1.0 SHA', () => {
+      expect(swiftPmCacheStep).toContain('actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9');
     });
     test('targets build/ios-spm-packages (matches xcodebuild -clonedSourcePackagesDirPath)', () => {
       expect(swiftPmCacheStep).toContain('path: build/ios-spm-packages');

@@ -22,7 +22,7 @@ const MINIO_HEALTH = 'http://localhost:9002/minio/health/live';
 const MAILPIT_HEALTH = 'http://localhost:8025/api/v1/messages';
 const JEST_INVOCATION = 'node_modules/.bin/jest';
 // The repo-wide SHA pin for actions/setup-java@v5 (see setup-jdk-gradle).
-const SETUP_JAVA_PIN = 'actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654';
+const SETUP_JAVA_PIN = 'actions/setup-java@1bcf9fb12cf4aa7d266a90ae39939e61372fe520';
 
 describe('SHY-0109 — test-backend.yml provisions emulators before Jest', () => {
   const yml = read('test-backend.yml');
