@@ -17244,7 +17244,11 @@ describe('android-adb-driver — _advancePastLaunchGates / _tapByVisibleText / _
       return '';
     });
     const driver = await createAndroidDriver();
-    expect(await driver._tapByVisibleText('Later')).toBe(false);
+    // dumpWithRetry (SHY-0154) retries the throwing dump behind fake timers —
+    // drain the backoff sleeps so the (false) result settles.
+    const promise = driver._tapByVisibleText('Later');
+    await jest.runAllTimersAsync();
+    expect(await promise).toBe(false);
   });
 
   test('_tapByVisibleText: androidTap fails (adb error) → returns false (review Finding 5)', async () => {
@@ -17310,6 +17314,10 @@ describe('android-adb-driver — _advancePastLaunchGates / _tapByVisibleText / _
       return '';
     });
     const driver = await createAndroidDriver();
-    expect(await driver._dismissDailyRewardIfPresent()).toBe(false);
+    // dumpWithRetry (SHY-0154) retries the throwing dump behind fake timers;
+    // this method also polls — drain all timers so the (false) result settles.
+    const promise = driver._dismissDailyRewardIfPresent();
+    await jest.runAllTimersAsync();
+    expect(await promise).toBe(false);
   });
 });

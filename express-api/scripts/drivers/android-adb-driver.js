@@ -34,6 +34,7 @@
  * runner surfaces a finding listing the matcher and the missing call.
  */
 const { execSync } = require('child_process');
+const { dumpWithRetry } = require('./ui-dump-retry');
 
 function selectSerial(preferredSerial) {
   let devices;
@@ -274,14 +275,22 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // the raw XML string. Used by tag-targeted tap + assertion matchers
   // that scan for resource-id + bounds.
   driver.androidUiDump = async () => {
-    try {
+    // `uiautomator dump` exits non-zero (throws) while the UI is non-idle
+    // (app cold-start, animations). dumpWithRetry retries on the throw with a
+    // short backoff until a dump succeeds or the budget is spent — returning
+    // the first successful result (idle screens return on attempt 1). See
+    // ./ui-dump-retry.js.
+    const result = await dumpWithRetry(() => {
       adb(['shell', 'uiautomator', 'dump', '--compressed', '/sdcard/dump.xml']);
-      const xml = adb(['shell', 'cat', '/sdcard/dump.xml']);
-      return xml;
-    } catch (e) {
-      console.error(`[android-driver] androidUiDump failed: ${e.message}`);
+      return adb(['shell', 'cat', '/sdcard/dump.xml']);
+    });
+    if (!result.ok) {
+      console.error(
+        `[android-driver] androidUiDump failed after ${result.attempts} attempts: ${result.lastErr}`,
+      );
       return '';
     }
+    return result.xml;
   };
 
   // Tap at coordinate. Matchers compute (x, y) from the view dump's
