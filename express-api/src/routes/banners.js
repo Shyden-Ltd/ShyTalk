@@ -15,7 +15,10 @@ const multer = require('multer');
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 },
+  // Bounded request body (reviewed safe, S5693): at most 1 file of ≤10 MB.
+  // Admin-only single-image upload; the type allow-list below + a single
+  // 10 MB in-memory buffer is not a DoS surface.
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_IMAGE_TYPES.has(file.mimetype)) return cb(null, true);
     cb(new Error('Unsupported file type. Allowed: JPEG, PNG, WebP, GIF'));

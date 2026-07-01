@@ -41,10 +41,10 @@ describe('email.js local mode', () => {
     });
   });
 
-  test('throws when SMTP not configured in non-local mode', () => {
+  test('throws when SMTP not configured in non-local mode', async () => {
     process.env.NODE_ENV = 'production';
     const { sendEmail } = require('../../src/utils/email');
-    expect(sendEmail('a@b.com', 's', 'h')).rejects.toThrow('SMTP not configured');
+    await expect(sendEmail('a@b.com', 's', 'h')).rejects.toThrow('SMTP not configured');
   });
 
   test('_resetTransport clears local mode transport', async () => {

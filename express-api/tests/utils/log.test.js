@@ -67,4 +67,14 @@ describe('log utility', () => {
     });
     expect(() => log.info('test', 'msg')).not.toThrow();
   });
+
+  test('swallows async rejection from logger.log without surfacing (fire-and-forget)', async () => {
+    // SHY-0152: the `.catch` now lives OUTSIDE the try. A rejected logger.log
+    // promise must still be swallowed — no unhandled rejection, no throw.
+    mockLog.mockRejectedValueOnce(new Error('async boom'));
+    expect(() => log.info('test', 'msg')).not.toThrow();
+    // Drain the microtask queue so the .catch() runs; if the rejection had
+    // escaped, Jest would flag an unhandled rejection for this test.
+    await new Promise((resolve) => setImmediate(resolve));
+  });
 });

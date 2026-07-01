@@ -579,6 +579,17 @@ describe('POST /api/admin/banners/upload', () => {
     expect(res.body.error).toMatch(/file too large/i);
   });
 
+  it('returns 400 when more than one file is attached (multer LIMIT_FILE_COUNT)', async () => {
+    // SHY-0152: the `files: 1` bound is caught by the custom multer callback → 400.
+    const app = createApp({ isAdmin: true });
+    const res = await request(app)
+      .post('/api/admin/banners/upload')
+      .attach('file', Buffer.from('img1'), { filename: 'a.jpg', contentType: 'image/jpeg' })
+      .attach('file', Buffer.from('img2'), { filename: 'b.jpg', contentType: 'image/jpeg' });
+
+    expect(res.status).toBe(400);
+  });
+
   it('uses correct file extension for WebP uploads', async () => {
     putObject.mockResolvedValueOnce(
       'https://images.shytalk.shyden.co.uk/banners/banner-id_12345.webp',

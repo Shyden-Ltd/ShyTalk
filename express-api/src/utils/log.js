@@ -13,13 +13,20 @@
 const logger = require('./loggerInstance');
 
 function logEntry(level, source, message, context) {
+  let pending;
   try {
-    Promise.resolve(logger.log({ level, source, message, context })).catch(
-      () => {}, // Swallow async errors — never throw from logging
-    );
+    // Only the SYNCHRONOUS call is guarded here — a sync throw from
+    // logger.log() must never propagate to the caller.
+    pending = logger.log({ level, source, message, context });
   } catch {
     // Intentionally swallowed — logging must never throw to avoid masking the caller's real error
+    return;
   }
+  // Handle async rejection OUTSIDE the try: a promise inside a try is not
+  // caught by it (the try only guards the synchronous call above), so
+  // attaching .catch here is both correct and clears sonar's "promise in
+  // try without await" flag without making this fire-and-forget helper async.
+  Promise.resolve(pending).catch(() => {}); // Swallow async errors — never throw from logging
 }
 
 module.exports = {

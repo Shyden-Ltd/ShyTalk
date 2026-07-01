@@ -170,6 +170,35 @@ describe('POST /api/storage/upload', () => {
     expect(res.body.error).toMatch(/Missing file or path/);
   });
 
+  test('rejects more than one file with 400 (multer LIMIT_FILE_COUNT)', async () => {
+    // SHY-0152: the `files: 1` multer bound must surface as a clean 400,
+    // not a 500 from Express's default error handler.
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'profiles')
+      .attach('file', Buffer.from('img1'), { filename: 'a.jpg', contentType: 'image/jpeg' })
+      .attach('file', Buffer.from('img2'), { filename: 'b.jpg', contentType: 'image/jpeg' });
+
+    expect(res.status).toBe(400);
+    expect(r2.putObject).not.toHaveBeenCalled();
+  });
+
+  test('rejects a file over the 10 MB limit with 413 (multer LIMIT_FILE_SIZE)', async () => {
+    // SHY-0152: the pre-existing fileSize bound must surface as 413, not 500.
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/storage/upload')
+      .field('path', 'profiles')
+      .attach('file', Buffer.alloc(10 * 1024 * 1024 + 1, 'x'), {
+        filename: 'huge.jpg',
+        contentType: 'image/jpeg',
+      });
+
+    expect(res.status).toBe(413);
+    expect(r2.putObject).not.toHaveBeenCalled();
+  });
+
   test('upload response includes originalSize and compressedSize', async () => {
     const app = createApp();
     const res = await request(app)
