@@ -42,7 +42,7 @@
     "@firebase/rules-unit-testing": "^5.0.1",
     "eslint": "^10.5.0",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-sonarjs": "^4.0.3",
+    "eslint-plugin-sonarjs": "^4.1.0",
     "globals": "^17.7.0",
     "jest": "^30.4.2",
     "playwright": "^1.61.0",
