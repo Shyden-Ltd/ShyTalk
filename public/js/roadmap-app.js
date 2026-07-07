@@ -580,6 +580,10 @@
         return { icon: "\u2713", cls: "feature-status-icon--done" };
       case "in-progress":
         return { icon: "\u25C9", cls: "feature-status-icon--in-progress" };
+      case "in-testing":
+        // SHY-0161: In Testing (merged to develop, under the batch gauntlet) is
+        // active work, so render it with the active icon (not the planned default).
+        return { icon: "\u25C9", cls: "feature-status-icon--in-progress" };
       case "next":
         return { icon: "\u25C9", cls: "feature-status-icon--in-progress" };
       default:
@@ -705,7 +709,7 @@
       );
       for (var ifi = 0; ifi < ipFeatures.length; ifi++) {
         var ipStatus = ipFeatures[ifi].status;
-        if (ipStatus === "in-progress" || ipStatus === "next") {
+        if (ipStatus === "in-progress" || ipStatus === "next" || ipStatus === "in-testing") {
           inProgressItems.push({
             feature: ipFeatures[ifi],
             phaseTitle: phases[ip].title,
@@ -768,7 +772,8 @@
         if (s === "done") {
           phaseDone++;
           totalDone++;
-        } else if (s === "in-progress" || s === "next") {
+        } else if (s === "in-progress" || s === "next" || s === "in-testing") {
+          // SHY-0161: In Testing counts as active (in-progress) work in the donut.
           phaseIp++;
           totalIp++;
         } else {
@@ -830,8 +835,14 @@
 
       for (var fi = 0; fi < features.length; fi++) {
         var feat = features[fi];
-        // Skip in-progress items — they're shown in the top "In Progress" section
-        if (feat.status === "in-progress" || feat.status === "next") continue;
+        // Skip active items — they're shown in the top "In Progress" section
+        // (SHY-0161: In Testing is lifted there too, so skip it here as well).
+        if (
+          feat.status === "in-progress" ||
+          feat.status === "next" ||
+          feat.status === "in-testing"
+        )
+          continue;
         var statusInfo = getStatusIcon(feat.status);
         var featI18n = feat.i18n && feat.i18n[currentLang];
         var featName = (featI18n && featI18n.n) || feat.name;

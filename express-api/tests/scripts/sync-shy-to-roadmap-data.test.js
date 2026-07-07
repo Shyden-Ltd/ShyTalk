@@ -343,6 +343,9 @@ describe('scripts/sync-shy-to-roadmap-data.mjs', () => {
   describe('status → currentlyWorkingOn mapping', () => {
     test.each([
       ['In Progress', true],
+      // SHY-0161: In Testing (merged to develop, under the batch gauntlet) is
+      // active work — it belongs in currentlyWorkingOn alongside In Progress.
+      ['In Testing', true],
       ['Draft', false],
       ['Done', false],
       ['In Review', false],

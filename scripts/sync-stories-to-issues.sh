@@ -808,6 +808,7 @@ status_board_option() {
     draft)       echo "Todo" ;;
     in-progress) echo "In Progress" ;;
     in-review)   echo "In Review" ;;
+    in-testing)  echo "In Testing" ;;
     done)        echo "Done" ;;
     cancelled)   echo "Cancelled" ;;
     *)           echo "" ;;

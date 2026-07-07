@@ -42,7 +42,7 @@ REQ_FIELDS="id status owner created priority title"
 
 # Enums (space-separated; Bash 3.2 has no associative arrays).
 # status mirrors SHY lifecycle exactly per SHY-0037 spec Risk #5.
-VALID_STATUS="Draft|In Progress|In Review|Done|Cancelled"
+VALID_STATUS="Draft|In Progress|In Review|In Testing|Done|Cancelled"
 VALID_PRIORITY="P0|P1|P2|P3"
 
 # Required `##` body sections per SHY-0037 AC line 38.

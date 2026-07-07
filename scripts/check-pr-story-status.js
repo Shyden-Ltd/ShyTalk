@@ -26,7 +26,7 @@ const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const ALLOWED = new Set(['In Review', 'Done', 'Cancelled']);
+const ALLOWED = new Set(['In Review', 'In Testing', 'Done', 'Cancelled']);
 const STORY_RE = /\.project\/stories\/SHY-\d{4}-[^/]+\.md$/;
 
 function fail(msg) {

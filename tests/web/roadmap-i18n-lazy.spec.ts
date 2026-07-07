@@ -133,6 +133,26 @@ test.describe("English visitors pay zero translate cost", () => {
   });
 });
 
+test.describe("SHY-0161: In Testing renders as active work", () => {
+  test("an In Testing item lifts into the in-progress section with the active icon", async ({
+    page,
+  }) => {
+    // Isolated fixture (not the shared FIXTURE) so this can't perturb other
+    // specs' item counts. A single In Testing story is the whole roadmap.
+    const fixture = JSON.parse(JSON.stringify(FIXTURE));
+    fixture.phases[0].items = [ITEM("SHY-9161", "Story under test", "In Testing")];
+    await setupPage(page, { fixture });
+    const row = page.locator("#in-progress-section .feature-item", {
+      hasText: "Story under test",
+    });
+    // Lifted into the active "In Progress" section (planned items never are).
+    await expect(row).toHaveCount(1);
+    // Active icon (◉ / --in-progress), NOT the planned default (○ / --planned).
+    await expect(row.locator(".feature-status-icon--in-progress")).toHaveCount(1);
+    await expect(row.locator(".feature-status-icon--planned")).toHaveCount(0);
+  });
+});
+
 test.describe("non-English lazy translation", () => {
   test.use({ locale: "de" });
 

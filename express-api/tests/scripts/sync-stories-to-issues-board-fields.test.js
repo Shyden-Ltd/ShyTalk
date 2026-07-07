@@ -171,6 +171,8 @@ const STATUS_OPTIONS = {
   Todo: 'opt-st-todo',
   'In Progress': 'opt-st-inprog',
   'In Review': 'opt-st-inrev',
+  // SHY-0161: the 6th lifecycle status (git-flow — merged to develop, under test).
+  'In Testing': 'opt-st-intest',
   Done: 'opt-st-done',
   Cancelled: 'opt-st-cancel',
 };
@@ -760,8 +762,9 @@ describe('SHY-0082 v4: legacy DRAFT-backed board items are converted to typed is
 
 describe('SHY-0082 v4: create path — per-value board-field matrix (every type is a typed issue) (mock-gh)', () => {
   // SHY-0081 v3: every type (incl. bug) → a board draft card. Types cover all
-  // 7 values; statuses cover all 5 lifecycle values; the per-value matrix
-  // below proves each frontmatter value lands on the correct board field.
+  // 7 values; statuses cover 5 of the 6 lifecycle values (the 6th, In Testing,
+  // is pinned in its own SHY-0161 describe below); the per-value matrix below
+  // proves each frontmatter value lands on the correct board field.
   const MATRIX = [
     {
       id: 'SHY-9001',
@@ -1716,8 +1719,8 @@ describe('SHY-0082 v4: dry-run fires nothing but previews everything (mock-gh)',
 
 // ============================================================== validator contract (Layer 3)
 
-describe('SHY-0074: frontmatter validator pins the five-value status contract', () => {
-  test.each(['Draft', 'In Progress', 'In Review', 'Done', 'Cancelled'])(
+describe('SHY-0074 + SHY-0161: frontmatter validator pins the six-value status contract', () => {
+  test.each(['Draft', 'In Progress', 'In Review', 'In Testing', 'Done', 'Cancelled'])(
     'status "%s" is accepted',
     (status) => {
       const storiesDir = tempDir('stories74v-');
@@ -1727,7 +1730,7 @@ describe('SHY-0074: frontmatter validator pins the five-value status contract', 
     },
   );
 
-  test('status outside the five lifecycle values is rejected', () => {
+  test('status outside the six lifecycle values is rejected', () => {
     const storiesDir = tempDir('stories74v2-');
     const { filePath } = makeStory(storiesDir, { id: 'SHY-8802' });
     fs.writeFileSync(
@@ -1736,6 +1739,52 @@ describe('SHY-0074: frontmatter validator pins the five-value status contract', 
     );
     const res = spawnSync('bash', [VALIDATOR, filePath], { encoding: 'utf-8' });
     expect(res.status).not.toBe(0);
+  });
+});
+
+// ============================================================== SHY-0161 In Testing → board column
+
+describe('SHY-0161: In Testing (6th lifecycle status) maps to the In Testing board column (mock-gh)', () => {
+  const ID = 'SHY-9161';
+  const NODE = `I_node_${ID}`;
+  const ITEM = `ITEM_D${ID.slice(4)}`;
+  let lines;
+  let result;
+
+  beforeAll(() => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories161-');
+    makeStory(storiesDir, {
+      id: ID,
+      status: 'In Testing',
+      priority: 'P1',
+      effort: 'M',
+      type: 'infra',
+      roadmaps: '[]',
+    });
+    const rules = createPathRules(mock.dir);
+    writeResponse(mock.dir, `resp-ic-${ID}.json`, issueCreateResponse(NODE, 9161));
+    writeResponse(mock.dir, `resp-add-${ID}.json`, addItemResponse(ITEM));
+    writeRules(mock.dir, [
+      [`createIssue.*title=${ID}:`, `resp-ic-${ID}.json`, ''],
+      [`addProjectV2ItemById.*contentId=${NODE}`, `resp-add-${ID}.json`, ''],
+      ...rules,
+    ]);
+    result = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    lines = readRecording(mock.recording);
+  });
+
+  test('the In Testing story syncs successfully (1 created)', () => {
+    expect(result.code).toBe(0);
+    expect(result.stderr).toMatch(/Sync result: 1 created/);
+  });
+
+  test('SHY-9161 (status: In Testing) → Status option opt-st-intest on its board item', () => {
+    expect(fieldLine(lines, ITEM, 'field-status', 'optionId=opt-st-intest')).toBeDefined();
+  });
+
+  test('In Testing is non-terminal — the mirrored issue is NOT closed', () => {
+    expect(lines.filter((l) => l.includes('closeIssue'))).toEqual([]);
   });
 });
 

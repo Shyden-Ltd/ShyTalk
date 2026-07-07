@@ -214,7 +214,7 @@ describe('scripts/check-story-frontmatter.sh', () => {
       expect(stderr).toMatch(/^\//m);
     });
 
-    it('rejects status not in {Draft, In Progress, In Review, Done, Cancelled}', () => {
+    it('rejects status not in {Draft, In Progress, In Review, In Testing, Done, Cancelled}', () => {
       const mutated = setFrontmatterField(VALID_CONTENT, 'status', 'pending');
       const f = tempStoryFile(mutated);
       const { code, stderr } = runScript([f]);
@@ -223,6 +223,16 @@ describe('scripts/check-story-frontmatter.sh', () => {
       expect(stderr).toMatch(/Cancelled/);
       // UX AC: every failure message names the absolute file path.
       expect(stderr).toMatch(/^\//m);
+    });
+
+    // SHY-0161: "In Testing" is the 6th lifecycle status (git-flow — merged to
+    // develop, awaiting the batch gauntlet). It must validate like any other
+    // lifecycle value.
+    it('accepts status In Testing (SHY-0161 git-flow)', () => {
+      const mutated = setFrontmatterField(VALID_CONTENT, 'status', 'In Testing');
+      const f = tempStoryFile(mutated);
+      const { code } = runScript([f]);
+      expect(code).toBe(0);
     });
 
     it('rejects priority outside {P0, P1, P2, P3}', () => {

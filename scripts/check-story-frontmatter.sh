@@ -39,7 +39,7 @@ VERSION="1.0.0"
 REQ_FIELDS="id status owner created priority effort type roadmap_ids"
 
 # Enums (space-separated; Bash 3.2 has no associative arrays).
-VALID_STATUS="Draft|In Progress|In Review|Done|Cancelled"
+VALID_STATUS="Draft|In Progress|In Review|In Testing|Done|Cancelled"
 VALID_PRIORITY="P0|P1|P2|P3"
 VALID_EFFORT="XS|S|M|L|XL"
 VALID_TYPE="feature|bug|refactor|docs|infra|spike|chore"

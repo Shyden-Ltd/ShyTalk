@@ -2,7 +2,9 @@
 
 Live backlog of every piece of work captured under the Agile way of working ([[feedback-agile-user-stories]]). Each row maps one PR-bundle to one detailed story file at `.project/stories/SHY-XXXX-slug.md`. Every story is born fully refined per [[feedback-no-skeleton-stories-fully-refined]] — no skeleton placeholders allowed.
 
-**Status legend:** 📝 Draft · 🚧 In Progress · 👀 In Review · ✅ Done · ❌ Cancelled
+**Status legend:** 📝 Draft · 🚧 In Progress · 👀 In Review · 🧪 In Testing · ✅ Done · ❌ Cancelled
+
+_🧪 In Testing (SHY-0161 git-flow) = merged into `develop`, under the batch device/browser gauntlet, awaiting the `develop → main` promotion._
 
 **Sort order (Active section):** `priority` ascending, then `created` ascending (matches CLAUDE.md § Story ID + file layout). Within the same `priority` + `created`, the row order is operator-curated to reflect the **tier prioritisation** (Tier 1 unblocker → Tier 1 security → Tier 2 reliability → ...) — this is operator-validated signal beyond strict mechanical sort. P0 always tops; in-progress SHYs surface at the top of their priority band for immediate visibility.
 
@@ -10,6 +12,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 
 | ID                                                              | Pri | Effort | Type     | Title                                                                                            | Status         | Roadmap IDs      | PR  |
 | --------------------------------------------------------------- | --- | ------ | -------- | ------------------------------------------------------------------------------------------------ | -------------- | ---------------- | --- |
+| [SHY-0161](SHY-0161-develop-integration-branch-in-testing.md)   | P1  | M      | infra    | Adopt a `develop` integration branch + "In Testing" status (git-flow)                            | 🚧 In Progress | —                | —   |
 | [SHY-0091](SHY-0091-comprehensive-testing-merge-protocol.md)    | P0  | XL     | chore    | Adopt the comprehensive Pre-Merge Testing Protocol (codify + embed in every not-Done story)      | 👀 In Review   | —                | —   |
 | [SHY-0127](SHY-0127-pre-merge-gate-hardening.md)                | P1  | L      | infra    | Pre-merge gate hardening — enforce In-Review-before-merge + re-review + backend⇒full-gauntlet (follows SHY-0091) | 👀 In Review   | claude           | —   |
 | [SHY-0109](SHY-0109-emulator-in-ci-express-jest.md)             | P1  | M      | infra    | Provision Firebase Emulators in CI for the express Jest suite + PoC real-firebase migration (EPIC-0003 Phase 3 keystone) | 👀 In Review   | —                | [#1445](https://github.com/Shyden-Ltd/ShyTalk/pull/1445) |

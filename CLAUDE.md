@@ -21,7 +21,7 @@ Every piece of work is captured as ONE detailed user-story `.md` file at `.proje
 ### Frontmatter (9 required fields + 4 optional)
 
 - `id` — matches `^SHY-[0-9]{4}$`
-- `status` — one of `Draft` / `In Progress` / `In Review` / `Done` / `Cancelled`
+- `status` — one of `Draft` / `In Progress` / `In Review` / `In Testing` / `Done` / `Cancelled` (`In Testing` = merged into `develop`, under the batch gauntlet — SHY-0161 git-flow)
 - `owner` — string (`claude` or operator GitHub handle)
 - `created` — `YYYY-MM-DD`
 - `priority` — `P0` / `P1` / `P2` / `P3` (P0 = drop everything)
@@ -72,10 +72,14 @@ Every new SHY `.md` file is created **fully refined** at the moment of creation.
 
 ### Lifecycle (no backward transitions; Cancelled is terminal)
 
+**Git-flow (SHY-0161):** feature branches cut FROM `develop` and merge back INTO `develop`; `main` only ever receives batched `develop → main` promotions.
+
 - `Draft` → architect APPROVE / APPROVE-WITH-CHANGES + concerns applied → `In Progress`
-- `In Progress` → tests-first (all frameworks) + **LOCAL gauntlet 100% green** + `code-reviewer` 100% clean → push → CI green → `In Review`
-- `In Review` → **DEV gauntlet 100% green** (unmerged branch via Deploy-To-Dev `ref`) → **judgment-merge** (zero doubt, production-ready; NO auto-merge) → stays `In Review` (merged-not-released) → release cut + `released_in:` → `Done`
-- `*.md`-only stories: exempt from the device/browser gauntlet (validator + lint + review only); `In Review` → judgment-merge → `Done` on release
+- `In Progress` → tests-first (all frameworks) + **LOCAL gauntlet 100% green** + `code-reviewer` 100% clean → push → CI green on the feature→`develop` PR → `In Review`
+- `In Review` → code-review-clean + CI-green on the feature→`develop` PR → **judgment-merge into `develop`** (zero doubt; NO auto-merge) → `In Testing`
+- `In Testing` → the accumulated `develop` batch passes the **DEV gauntlet 100% green** (real Android + real iOS + browsers) → **judgment-promote `develop → main`** (zero doubt, production-ready; NO auto-merge) → stays `In Testing` (merged-not-released) → batched release cut + `released_in:` → `Done`
+- **Fix-forward:** a batch ticket that fails testing is fixed on its branch and re-merged to `develop`; the `develop → main` promotion waits until EVERY batch ticket is green. One batched release per promotion.
+- `*.md`-only stories: exempt from the device/browser gauntlet (validator + lint + review only); still flow feature→`develop`→`main`.
 - `spike`: Notes-recorded decision + follow-up SHYs filed → `Done` (no release needed)
 - any active → operator decides not to do → `Cancelled` (Notes captures why)
 
@@ -106,7 +110,7 @@ EPICs group related SHYs under a coherent theme for prioritisation + roadmap sur
 **Frontmatter (6 required + 1 optional):**
 
 - `id` — `^EPIC-[0-9]{4}$`
-- `status` — same lifecycle as SHY (`Draft` / `In Progress` / `In Review` / `Done` / `Cancelled`)
+- `status` — same lifecycle as SHY (`Draft` / `In Progress` / `In Review` / `In Testing` / `Done` / `Cancelled`)
 - `owner` — string
 - `created` — `YYYY-MM-DD`
 - `priority` — `P0` / `P1` / `P2` / `P3`
@@ -158,7 +162,7 @@ All audit signals — architect verdict, code-reviewer cycle count + verbatim fi
 - **Legacy migration:** `--rebuild` deletes every board item (`deleteProjectV2Item`) + every `story`-labeled issue (`deleteIssue`) then recreates every story as a typed issue. Gated on `REBUILD_CONFIRM=yes` (exit 2 without it); dispatchable via the sync workflow's `rebuild` input (the click IS the confirm). The incremental sync is a safety net: a story still backed by a v3 DRAFT has its draft item deleted + is recreated as a typed issue. `deleteIssue` permission gaps surface as loud actionable warnings; teardown continues.
 - **Body format:** content + footer `_Source: <absolute blob URL>_` + `_Status: <lifecycle>_` + `_Last synced: <UTC> from commit <sha> body-hash: <hex>_`. Bodies over GitHub's 65,536-char cap are line-truncated with an explicit `[spec truncated — N chars omitted…]` notice ahead of the intact footer.
 - **Labels (single-source):** the five families (`status:*` / `priority:*` / `effort:*` / `type:*` / `roadmap:*`) are DELETED repo-wide on every run (idempotent; foreign labels like `dependencies` untouched) — a fact lives in its board column only (Status / Pri / Effort / Type / Roadmap IDs). v4 applies exactly ONE marker label, `story`, to every story-issue (via `createIssue` labelIds; created once by `ensure_story_label` if absent) — it identifies corpus issues + lets `--rebuild` find them. The native issue TYPE replaces the old `type:` label.
-- **Board Status column:** story lifecycle maps 1:1 onto the board's built-in Status field — `Draft`→`Todo`, `In Progress`→`In Progress`, `In Review`→`In Review`, `Done`→`Done`, `Cancelled`→`Cancelled` — set on create AND update, ordered last (last-writer over GitHub's "Item added → Todo" automation).
+- **Board Status column:** story lifecycle maps 1:1 onto the board's built-in Status field — `Draft`→`Todo`, `In Progress`→`In Progress`, `In Review`→`In Review`, `In Testing`→`In Testing`, `Done`→`Done`, `Cancelled`→`Cancelled` — set on create AND update, ordered last (last-writer over GitHub's "Item added → Todo" automation). The `In Testing` board Status option is provisioned MANUALLY on the Project v2 board (the sync resolves it by name and warns-but-continues if absent; it never creates Status options).
 - **Items map + sidecar:** ONE paginated GraphQL query (100/page) loads every board item keyed by SHY ID at run start, feeding every create-vs-update decision; if it fails the run aborts exit-40 BEFORE any mutation. An empty read is retried once (`ITEMS_MAP_RETRY_BACKOFF`, Projects v2 lag guard) and the git-committed `.project/board-items.json` sidecar (SHY-0079) overlays a stale API read so an issue is never duplicated. Map merges pass JSON via stdin (`printf | jq -s`), never `--argjson` (SHY-0080 ARG_MAX fix).
 - **Change detection:** SHA-256 of the file body, stored in the footer's `_Last synced:` line. Commit-SHA alone is insufficient (mid-PR edits share the same commit) — body-hash is the canonical signal. Extraction anchors on the footer line, last match wins (embedded specs may legitimately contain the literal string `body-hash:`).
 - **PR `Closes #N` injection:** under v4 a story DOES have an issue, but its open/closed state is driven by the SYNC (terminal status → `closeIssue`), NOT by the PR — so story PRs still carry NO `Closes #N` (a `Closes` would close the issue on merge, pre-empting the Done-on-release flow). The `inject-pr-closes.yml` workflow is retained for the future user-bug-report intake.
@@ -168,8 +172,8 @@ All audit signals — architect verdict, code-reviewer cycle count + verbatim fi
 
 ### Board status lifecycle conventions (operator 2026-06-11)
 
-- **Columns track reality:** `Draft`/Todo (not started or paused) → `In Progress` (actively being built) → `In Review` (PR open / under code review / CI + journey/device testing, INCLUDING the release-gate protocol) → `Done` (released, with `released_in:`). Manual convention — set `status:` in the `.md` frontmatter as work moves; no auto-flip-on-PR.
-- **Merged-but-not-released stays `In Review`** until the release cut flips it to `Done` (resolves the "In Progress limbo" for merged-awaiting-release stories).
+- **Columns track reality (SHY-0161 git-flow):** `Draft`/Todo (not started or paused) → `In Progress` (actively being built on a feature branch off `develop`) → `In Review` (feature→`develop` PR open / under code review / CI green — **code review ONLY** now, not device testing) → `In Testing` (merged into `develop`; the batch device/browser gauntlet is running, INCLUDING the release-gate protocol) → `Done` (released, with `released_in:`). Manual convention — set `status:` in the `.md` frontmatter as work moves; no auto-flip-on-PR.
+- **Merged-into-`develop`-but-not-released stays `In Testing`** until the `develop → main` promotion + release cut flips it to `Done` (resolves the "In Progress limbo" for merged-awaiting-release stories).
 - **WIP = 1:** aim for only ONE story `In Progress` at a time. Everything else is Draft, In Review, or Done — keep the board honest (no In-Progress sprawl).
 
 ## Build & Test Commands
@@ -196,7 +200,8 @@ All audit signals — architect verdict, code-reviewer cycle count + verbatim fi
 - **NEVER commit directly to main** — always create a branch and PR
 - Before starting work, check for unfinished branches (`git branch -a`)
 - Commit AND push per task, with task name in message
-- **One active branch** at a time per contributor — finish (merge or cancel) the current branch before opening a new one (per [[feedback-one-active-branch-close-on-finish]] HARD rule). Soft-fail enforced by `.github/workflows/branch-discipline-check.yml`.
+- **Git-flow (SHY-0161):** cut feature branches FROM `develop` (not `main`); merge them back INTO `develop` via a PR; promote the verified `develop` batch to `main` via a `develop → main` PR. `main` only ever receives `develop → main` promotions — NEVER a direct feature merge.
+- **Multiple concurrent feature branches are EXPECTED under git-flow** — integrating several in-flight tickets on `develop` before promotion is the whole point, so the old "one active branch" rule ([[feedback-one-active-branch-close-on-finish]]) is RELAXED. Still close each branch on finish (`delete_branch_on_merge: true`). `.github/workflows/branch-discipline-check.yml` stays soft-fail (warn-only) and does not block.
 - **Close finished branches** — repo has `delete_branch_on_merge: true`; closed-not-merged PRs leave branches behind that should be manually deleted via `gh api -X DELETE /repos/Shyden-Ltd/ShyTalk/git/refs/heads/<name>`.
 - **No release branches** — releases are git tags ONLY (per [[feedback-no-release-branches-use-tags]]). `release/v*` branches are forbidden. `release.yml` (post SHY-0034 refactor) uses GitHub's GraphQL `createCommitOnBranch` mutation targeting `main` directly via the Release App's `bypass_actors` entry on ruleset 12613584. The release commit lands on main signed-by-App; `release-tag.yml` fires on the push event and creates the tag + GitHub Release. No intermediate branch, no PR, no orphans.
 - **Branch protection canonical layer: ruleset `12613584` (`name: main`)** — NOT classic branch protection (delivered by SHY-0066). All 5 rules (`deletion`, `non_fast_forward`, `pull_request`, `required_signatures`, `required_status_checks` with contexts `Detect Changes` + `Analyze JavaScript` + `PR Gate`) live in the ruleset. The Release App (App ID 29110) is in `bypass_actors` with `bypass_mode: always` — that's how `release.yml` + `sync-roadmap-data.yml` can write App-signed commits directly to `main` via GraphQL `createCommitOnBranch`. Classic branch protection still has `enforce_admins: true` as a no-op safety remnant; `required_status_checks` was migrated OUT of classic in SHY-0066 because classic protection has no `bypass_actors` concept and was silently blocking both main-mutating workflows. To add a new required check in the future: edit ruleset 12613584's `required_status_checks` rule via `gh api`, NOT classic protection (`gh api repos/.../branches/main/protection` would leave the bypass-actors waiver broken again).
@@ -256,6 +261,8 @@ When adding new background work: prefer event-driven (RTDB `onDisconnect`, write
 ## Pre-Merge Testing Protocol (HARD RULE — operator 2026-06-12)
 
 **Capstone principle:** you only ever consider merging when you genuinely believe the change is **production-ready**. Merging is an assertion of production-readiness, NOT "CI is green." **Any doubt → it must NOT merge.** There is **no auto-merge** for stories — merge is a manual, judgment-gated act taken only after BOTH gauntlets below are fully green. Claude merges autonomously when it has zero doubt and notifies the operator on each merge.
+
+**Git-flow adaptation (SHY-0161):** under the `develop` model the protocol maps as: Phase 1 (LOCAL gauntlet) + Phase 2 (review + CI) gate the **feature→`develop`** merge (flip `In Review` → `In Testing` on merge; this merge needs code-review-clean + CI-green, NOT yet the full device gauntlet); Phase 3 (DEV gauntlet) runs against the accumulated **`develop` batch**; Phase 4 (judgment gate) is the **`develop → main` promotion** (flip `In Testing` → `Done` at the batched release). "Merge" below means feature→`develop` for a single ticket and `develop → main` for the batch — both are judgment-gated, no auto-merge. The full device/browser gauntlet is batched on `develop` before promotion (fix-forward: the promotion waits for every batch ticket to pass).
 
 ### Tests-first across EVERY framework (true TDD)
 

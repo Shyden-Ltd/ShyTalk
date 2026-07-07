@@ -136,6 +136,15 @@ describe('SHY-0127 Gate 1 — story must be In Review before merge', () => {
     expect(run(dir).code).toBe(0);
   });
 
+  // SHY-0161: a develop→main promotion PR carries stories at In Testing
+  // (merged to develop, gauntlet-verified). The gate must let them through.
+  test('PASSES when the diffed story is In Testing (SHY-0161 promotion)', () => {
+    const dir = makeRepo((d) =>
+      fs.writeFileSync(path.join(d, '.project/stories/SHY-0999-x.md'), story('In Testing')),
+    );
+    expect(run(dir).code).toBe(0);
+  });
+
   test('PASSES when the diffed story is Done', () => {
     const dir = makeRepo((d) =>
       fs.writeFileSync(path.join(d, '.project/stories/SHY-0999-x.md'), story('Done')),

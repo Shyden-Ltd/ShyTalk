@@ -390,6 +390,13 @@ describe('scripts/check-epic-frontmatter.sh', () => {
       expect(code).toBe(0);
     });
 
+    // SHY-0161: EPICs share the six-value lifecycle enum with SHYs.
+    test('In Testing status accepted', () => {
+      const file = tempEpicFile(setFrontmatterField(VALID_CONTENT, 'status', 'In Testing'));
+      const { code } = runScript([file]);
+      expect(code).toBe(0);
+    });
+
     test('CRLF line endings normalised', () => {
       const file = tempEpicFile(VALID_CONTENT.replace(/\n/g, '\r\n'));
       const { code } = runScript([file]);

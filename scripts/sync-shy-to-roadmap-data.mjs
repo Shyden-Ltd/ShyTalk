@@ -298,7 +298,7 @@ function main() {
     if (s.epicId) item.epicId = s.epicId;
     if (s.prUrl) item.prUrl = s.prUrl;
     itemsByPhase.get(s.phase).push(item);
-    if (s.status === 'In Progress') currentlyWorkingOn.push(item);
+    if (s.status === 'In Progress' || s.status === 'In Testing') currentlyWorkingOn.push(item);
   }
 
   // 5. Compose output. Phase shell preserved (titles, i18n, status, progress);

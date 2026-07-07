@@ -67,7 +67,12 @@ while IFS= read -r line; do
     FILINGS=$((FILINGS + 1))
     continue
   fi
-  [ "$status" = "In Review" ] || fail "$story status is \"$status\" — must be \"In Review\" before merge"
+  # SHY-0161 (git-flow): In Review passes for feature→develop; In Testing passes
+  # for the develop→main promotion (stories are gauntlet-verified on develop).
+  case "$status" in
+  "In Review" | "In Testing") ;;
+  *) fail "$story status is \"$status\" — must be \"In Review\" or \"In Testing\" before merge" ;;
+  esac
   rs=$(grep -m1 '^Reviewed-up-to:' "$story" | sed 's/^Reviewed-up-to:[[:space:]]*//' | tr -d '\r')
   [ -n "$rs" ] || fail "$story has no 'Reviewed-up-to: <sha>' marker in its Notes — record the reviewed commit then re-run"
   # A bogus/placeholder SHA must NOT silently pass Gate 3 (rev-list would error

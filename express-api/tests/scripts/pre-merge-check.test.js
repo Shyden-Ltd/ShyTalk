@@ -167,13 +167,28 @@ describe('SHY-0127 Gates 2+3 — pre-merge-check.sh', () => {
     expect(stderr).toMatch(/not a valid commit/);
   });
 
-  test('REFUSES on a Done story (only In Review passes the local gate)', () => {
+  test('REFUSES on a Done story (only In Review / In Testing pass the local gate)', () => {
     const dir = init();
     writeStory(dir, 'Done', 'deadbeef');
     commit(dir, 'done story');
     const { code, stderr } = run(dir);
     expect(code).not.toBe(0);
     expect(stderr).toMatch(/In Review/);
+  });
+
+  // SHY-0161: a develop→main promotion carries stories at In Testing (merged to
+  // develop, gauntlet-verified). The local gate must accept them, exactly like
+  // In Review for a feature→develop merge.
+  test('emits OK on a clean In Testing story (SHY-0161 develop→main promotion)', () => {
+    const dir = init();
+    fs.writeFileSync(path.join(dir, 'code.js'), 'x\n');
+    writeStory(dir, 'In Testing', 'PLACEHOLDER');
+    const b = commit(dir, 'code + story');
+    writeStory(dir, 'In Testing', b); // record the reviewed sha
+    commit(dir, 'bump Reviewed-up-to marker');
+    const { code, stdout } = run(dir);
+    expect(code).toBe(0);
+    expect(stdout).toContain('PRE-MERGE-CHECK: OK');
   });
 
   test('REFUSES on a Cancelled story', () => {
