@@ -313,8 +313,13 @@ jobs:
       report_env: pr
     secrets: inherit
 
-  # SHY-0163: device E2E deferred off the per-PR gate — this job runs base-main
-  # only (skipped on feature→develop); the real-device batch is the release gate.
+  # SHY-0163: device E2E deferred OFF the required per-PR gate — the gate no
+  # longer waits on this job (see the `gate` job), so its emulator flake can't
+  # block a merge. The `base_ref == 'main'` guard below is forward-looking: this
+  # workflow currently triggers only on base=main PRs (so the guard is always
+  # true today); once SHY-0161 adds `develop` to the trigger it will skip this
+  # job on feature→develop and run it only on the develop→main promotion. Real
+  # devices verify at the end-of-batch gauntlet, not on this CI emulator.
   android-e2e:
     needs: [detect-changes, build-and-test, sonarcloud, test-backend]
     if: |
@@ -369,8 +374,13 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
 
-  # SHY-0163: device E2E deferred off the per-PR gate — this job runs base-main
-  # only (skipped on feature→develop); the real-device batch is the release gate.
+  # SHY-0163: device E2E deferred OFF the required per-PR gate — the gate no
+  # longer waits on this job (see the `gate` job), so its simulator flake can't
+  # block a merge. The `base_ref == 'main'` guard below is forward-looking: this
+  # workflow currently triggers only on base=main PRs (so the guard is always
+  # true today); once SHY-0161 adds `develop` to the trigger it will skip this
+  # job on feature→develop and run it only on the develop→main promotion. Real
+  # devices verify at the end-of-batch gauntlet, not on this CI simulator.
   ios-e2e:
     needs: [detect-changes, build-and-test, sonarcloud, test-backend]
     if: |
@@ -444,8 +454,9 @@ jobs:
     # mid-run — port 5554 refused, no JUnit results), so gating on it blocked
     # every merge. Under the MVP-sprint model, real-device verification is a
     # single end-of-batch gauntlet on REAL devices before the develop→main
-    # promotion; those two jobs run base-main only. Fast checks — including
-    # playwright-web (headless browsers) and integration-tests — stay per-PR.
+    # promotion; those two jobs are base-main-guarded (see their job comments).
+    # Fast checks — including playwright-web (headless browsers) and
+    # integration-tests — stay per-PR and still gate here.
     needs: [detect-changes, pre-merge-gate, lint, build-and-test, sonarcloud, test-backend, playwright-web, integration-tests, qa-runner-driver-checks]
     if: always()
     runs-on: ubuntu-latest
