@@ -313,10 +313,13 @@ jobs:
       report_env: pr
     secrets: inherit
 
+  # SHY-0163: device E2E deferred off the per-PR gate — this job runs base-main
+  # only (skipped on feature→develop); the real-device batch is the release gate.
   android-e2e:
     needs: [detect-changes, build-and-test, sonarcloud, test-backend]
     if: |
       always() &&
+      github.base_ref == 'main' &&
       needs.detect-changes.outputs.android_app_changed == 'true' &&
       needs.detect-changes.outputs.skip_android_e2e != 'true' &&
       needs.build-and-test.result == 'success' &&
@@ -366,10 +369,13 @@ jobs:
       ref: ${{ github.event.pull_request.head.sha }}
     secrets: inherit
 
+  # SHY-0163: device E2E deferred off the per-PR gate — this job runs base-main
+  # only (skipped on feature→develop); the real-device batch is the release gate.
   ios-e2e:
     needs: [detect-changes, build-and-test, sonarcloud, test-backend]
     if: |
       always() &&
+      github.base_ref == 'main' &&
       needs.detect-changes.outputs.ios_app_changed == 'true' &&
       needs.detect-changes.outputs.skip_ios_e2e != 'true' &&
       (needs.build-and-test.result == 'success' || needs.build-and-test.result == 'skipped') &&
@@ -433,7 +439,14 @@ jobs:
 
   gate:
     name: PR Gate
-    needs: [detect-changes, pre-merge-gate, lint, build-and-test, sonarcloud, test-backend, android-e2e, playwright-web, integration-tests, ios-e2e, qa-runner-driver-checks]
+    # SHY-0163: android-e2e + ios-e2e are DEFERRED off the required per-PR gate.
+    # The CI Android emulator flakes on infrastructure (emulator process death
+    # mid-run — port 5554 refused, no JUnit results), so gating on it blocked
+    # every merge. Under the MVP-sprint model, real-device verification is a
+    # single end-of-batch gauntlet on REAL devices before the develop→main
+    # promotion; those two jobs run base-main only. Fast checks — including
+    # playwright-web (headless browsers) and integration-tests — stay per-PR.
+    needs: [detect-changes, pre-merge-gate, lint, build-and-test, sonarcloud, test-backend, playwright-web, integration-tests, qa-runner-driver-checks]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -453,10 +466,8 @@ jobs:
             "${{ needs.build-and-test.result }}" \
             "${{ needs.sonarcloud.result }}" \
             "${{ needs.test-backend.result }}" \
-            "${{ needs.android-e2e.result }}" \
             "${{ needs.playwright-web.result }}" \
             "${{ needs.integration-tests.result }}" \
-            "${{ needs.ios-e2e.result }}" \
             "${{ needs.qa-runner-driver-checks.result }}"; do
             if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
               echo "Required check failed: $result"
