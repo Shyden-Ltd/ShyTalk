@@ -221,6 +221,9 @@ describe('scripts/check-story-frontmatter.sh', () => {
       expect(code).toBe(11);
       expect(stderr).toMatch(/Draft/);
       expect(stderr).toMatch(/Cancelled/);
+      // SHY-0161: the rejection message must enumerate the 6th value too, so a
+      // contributor sees In Testing is a legal status.
+      expect(stderr).toMatch(/In Testing/);
       // UX AC: every failure message names the absolute file path.
       expect(stderr).toMatch(/^\//m);
     });

@@ -1158,6 +1158,36 @@ describe('SHY-0082 v4: status transitions on issues — body marker + board colu
     expect(r.stderr).toMatch(/issues closed: 0/);
   });
 
+  test('SHY-0161: In Review → In Testing flip moves the column to opt-st-intest, NO close/reopen', () => {
+    const mock = makePatternMockGh();
+    const storiesDir = tempDir('stories161tr-');
+    const { content } = makeStory(storiesDir, {
+      id: 'SHY-9163',
+      status: 'In Testing',
+      type: 'infra',
+    });
+    // Stored marker says In Review; a pure status flip to In Testing. Both are
+    // non-terminal → the issue stays open, only the board Status column moves.
+    const body = existingBody(content, 'SHY-9163-fixture-story', 'In Review');
+    const items = itemsResponse([
+      issueNode('SHY-9163', 'ITEM_I9163', 9163, 'OPEN', 'SHY-9163: Fixture story', body),
+    ]);
+    writeRules(mock.dir, createPathRules(mock.dir, { items }));
+    const r = runScript(['--all'], baseEnv(mock.ghPath, storiesDir));
+    expect(r.code).toBe(0);
+    const lines = readRecording(mock.recording);
+    expect(
+      lines.find((l) => l.includes('updateIssue') && l.includes('id=I_node_9163')),
+    ).toBeDefined();
+    expect(readCaptures(mock.dir, 'graphql')[0]).toContain('_Status: In Testing_');
+    expect(fieldLine(lines, 'ITEM_I9163', 'field-status', 'optionId=opt-st-intest')).toBeDefined();
+    // Non-terminal → non-terminal: the issue must NOT be closed or reopened.
+    expect(lines.filter((l) => l.includes('closeIssue'))).toEqual([]);
+    expect(lines.filter((l) => l.includes('reopenIssue'))).toEqual([]);
+    expect(r.stderr).toMatch(/1 updated/);
+    expect(r.stderr).toMatch(/issues closed: 0/);
+  });
+
   test('transition to a TERMINAL status (Done) CLOSES the issue + moves the column', () => {
     const mock = makePatternMockGh();
     const storiesDir = tempDir('stories82tr2-');

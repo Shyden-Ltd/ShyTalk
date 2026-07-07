@@ -160,6 +160,41 @@ test.describe('roadmap renders SHY-derived items', () => {
     await expect(page.locator('#count-planned')).toHaveText(/2/);
   });
 
+  test('SHY-0161: an In Testing item counts as in-progress in the donut + lifts', async ({
+    page,
+  }) => {
+    // Isolated single-item fixture so the legend counts are deterministic:
+    // one In Testing item => in-progress 1, planned 0, done 0.
+    const fixture = JSON.parse(JSON.stringify(FIXTURE));
+    fixture.phases = [
+      {
+        title: 'Safety & Compliance',
+        titleI18n: {},
+        status: 'in-progress',
+        progress: 0,
+        features: [],
+        items: [
+          {
+            shyId: 'SHY-9161',
+            name: 'Story under test',
+            status: 'In Testing',
+            description: null,
+            i18n: {},
+          },
+        ],
+      },
+    ];
+    await gotoWithFixture(page, fixture);
+    // Donut legend: In Testing counts as ACTIVE (in-progress), not planned.
+    await expect(page.locator('#count-in-progress')).toHaveText(/1/);
+    await expect(page.locator('#count-planned')).toHaveText(/0/);
+    await expect(page.locator('#count-done')).toHaveText(/0/);
+    // And it lifts into the top In Progress section.
+    await expect(
+      page.locator('#in-progress-section .feature-item', { hasText: 'Story under test' }),
+    ).toHaveCount(1);
+  });
+
   test('a phase with only items renders with correct count', async ({ page }) => {
     await gotoWithFixture(page);
     const phase = page.locator('[data-testid="phase-card"]', { hasText: 'Items Only Phase' });

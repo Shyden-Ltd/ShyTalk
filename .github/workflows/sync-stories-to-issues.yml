@@ -19,7 +19,11 @@ name: Sync SHY Stories to GitHub Issues
 
 on:
   push:
-    branches: [main]
+    # SHY-0161 (git-flow): also fire on `develop` so a story's `In Review →
+    # In Testing` flip (which lands on `develop`) moves the board's Status
+    # column in real time. The sidecar commit-back step below is gated to
+    # `main` only (it hardcodes branch: main + an expectedHeadOid guard).
+    branches: [main, develop]
     # NOTE (SHY-0079): board-items.json is intentionally NOT a trigger path —
     # the sidecar commit-back must not re-fire the sync.
     paths:
@@ -106,14 +110,21 @@ jobs:
       # internal git-diff guard makes a no-change run a no-op.
       - name: Generate Release App token (signed sidecar commit-back)
         id: app-token
-        if: ${{ always() }}
+        # SHY-0161: sidecar commit-back is main-only (see the commit-back step);
+        # skip minting a token on develop runs where it would go unused.
+        if: ${{ always() && github.ref_name == 'main' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           client-id: ${{ secrets.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
       - name: Commit board-items.json sidecar via createCommitOnBranch
-        if: ${{ always() && steps.app-token.outputs.token != '' }}
+        # SHY-0161: main-only. The mutation hardcodes branch: "main" + guards on
+        # expectedHeadOid = HEAD; on a develop run HEAD is develop's tip, which
+        # would not match main and would fail the mutation. The develop run
+        # still mirrors In Testing to the board (the sync step above); it just
+        # skips persisting the sidecar (the API items-map + retry heal lag).
+        if: ${{ always() && steps.app-token.outputs.token != '' && github.ref_name == 'main' }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |

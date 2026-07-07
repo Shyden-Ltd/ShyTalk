@@ -6,7 +6,7 @@
 
 ## Pre-merge gate (SHY-0127)
 <!-- Run `scripts/pre-merge-check.sh <PR#>` before judgment-merge — it refuses unless these are satisfied. -->
-- [ ] Story flipped to **In Review** (the CI **Pre-Merge Gate** check enforces this)
+- [ ] Story status set for this PR's stage — **In Review** for a feature→`develop` PR, or **In Testing** for a `develop → main` promotion (the CI **Pre-Merge Gate** check enforces this; SHY-0161 git-flow)
 - [ ] Re-reviewed since the last code-review — `Reviewed-up-to: <sha>` in the story `## Notes` is current
 - [ ] Definition of Done met
 - [ ] Dev-verified on real devices, or N/A: <reason>

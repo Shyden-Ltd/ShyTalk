@@ -150,6 +150,11 @@ test.describe("SHY-0161: In Testing renders as active work", () => {
     // Active icon (◉ / --in-progress), NOT the planned default (○ / --planned).
     await expect(row.locator(".feature-status-icon--in-progress")).toHaveCount(1);
     await expect(row.locator(".feature-status-icon--planned")).toHaveCount(0);
+    // Rendered exactly ONCE (page-wide): the phase-list skip-guard must stop a
+    // second copy appearing in its own phase below the lifted section.
+    await expect(
+      page.locator(".feature-item", { hasText: "Story under test" }),
+    ).toHaveCount(1);
   });
 });
 
