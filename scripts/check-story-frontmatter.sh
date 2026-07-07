@@ -236,7 +236,7 @@ check_field_values() {
     fail "$abs" "invalid value" "id must match SHY-NNNN pattern (4-digit zero-padded)" "$E_INVALID_VALUE"
   fi
 
-  # status: one of the 5 allowed values
+  # status: one of the 6 allowed values
   verbose "value:status"
   if ! grep -qE "^status:[[:space:]]*(${VALID_STATUS})[[:space:]]*\$" "$fm"; then
     fail "$abs" "invalid value" "status must be one of: ${VALID_STATUS//|/, }" "$E_INVALID_VALUE"

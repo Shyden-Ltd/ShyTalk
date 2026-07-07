@@ -798,11 +798,14 @@ set_project_field_text() {
 }
 
 # SHY-0074: lifecycle status → built-in board Status option name. The five
-# option names were verified live against the ShyTalk Stories board on
-# 2026-06-10 (Todo / In Progress / In Review / Done / Cancelled — exact,
-# case-sensitive). Input is the lowercased-hyphenated PS_STATUS_LC form.
-# Unknown values echo empty (frontmatter validator prevents them upstream;
-# this is defense in depth).
+# original option names were verified live against the ShyTalk Stories board
+# on 2026-06-10 (Todo / In Progress / In Review / Done / Cancelled — exact,
+# case-sensitive). SHY-0161 (git-flow) adds a sixth, In Testing, provisioned
+# MANUALLY on the board — populate_project_fields resolves it by name and
+# warns-but-continues if the option is absent (it never creates Status
+# options). Input is the lowercased-hyphenated PS_STATUS_LC form. Unknown
+# values echo empty (frontmatter validator prevents them upstream; this is
+# defense in depth).
 status_board_option() {
   case "$1" in
     draft)       echo "Todo" ;;
