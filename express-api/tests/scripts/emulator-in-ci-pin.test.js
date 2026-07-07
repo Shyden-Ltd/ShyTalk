@@ -21,8 +21,10 @@ const LOCAL_SERVICES_ACTION = './.github/actions/start-local-services';
 const MINIO_HEALTH = 'http://localhost:9002/minio/health/live';
 const MAILPIT_HEALTH = 'http://localhost:8025/api/v1/messages';
 const JEST_INVOCATION = 'node_modules/.bin/jest';
-// The repo-wide SHA pin for actions/setup-java@v5 (see setup-jdk-gradle).
-const SETUP_JAVA_PIN = 'actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654';
+// SHY-0162: assert setup-java is SHA-PINNED (version-agnostic), not frozen to a
+// specific SHA — a frozen literal broke on the v5.2.0 → v5.4.0 Dependabot bump.
+const SETUP_JAVA_PREFIX = 'actions/setup-java@';
+const SETUP_JAVA_PINNED = /actions\/setup-java@[a-f0-9]{40}\b/;
 
 describe('SHY-0109 — test-backend.yml provisions emulators before Jest', () => {
   const yml = read('test-backend.yml');
@@ -32,7 +34,7 @@ describe('SHY-0109 — test-backend.yml provisions emulators before Jest', () =>
   });
 
   test('sets up a JVM via the SHA-pinned actions/setup-java', () => {
-    expect(yml).toContain(SETUP_JAVA_PIN);
+    expect(yml).toMatch(SETUP_JAVA_PINNED);
   });
 
   test('emulator start is ordered BEFORE the Jest run', () => {
@@ -44,7 +46,7 @@ describe('SHY-0109 — test-backend.yml provisions emulators before Jest', () =>
   });
 
   test('JVM setup is ordered BEFORE the emulator start (Firestore/RTDB are JVM-based)', () => {
-    const java = yml.indexOf(SETUP_JAVA_PIN);
+    const java = yml.indexOf(SETUP_JAVA_PREFIX);
     const emu = yml.indexOf(EMULATOR_ACTION);
     expect(java).toBeGreaterThan(-1);
     expect(java).toBeLessThan(emu);
