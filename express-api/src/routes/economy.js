@@ -34,6 +34,7 @@ const { verifyProductPurchase, verifySubscription } = require('../utils/playStor
 const { verifyApplePurchase } = require('../utils/appleStore');
 const { SUBSCRIPTION_TIERS } = require('../utils/subscriptionTiers');
 const { viewerIsBlocked, checkBlockRelationship } = require('../utils/block-check');
+const { checkFeatureAccess } = require('../safety/enforce');
 
 // ─── Constants ────────────────────────────────────────────────────
 
@@ -584,6 +585,12 @@ router.post('/economy/gacha', async (req, res) => {
     const userSnap = await db.doc(`users/${uniqueId}`).get();
     if (!userSnap.exists) return res.status(404).json({ error: 'User not found' });
     const user = userSnap.data();
+
+    // SHY-0060 — per-feature age gate. Inert unless the operator flag is ON;
+    // reuses the user doc already loaded above (no extra read). Gacha is
+    // loot-box spend → 18+ (jurisdictions with loot-box gambling laws).
+    const gachaGate = await checkFeatureAccess(db, 'GACHA_SPEND', user);
+    if (gachaGate) return res.status(gachaGate.status).json(gachaGate.body);
 
     const shyCoins = userField(user, 'shyCoins', 'shy_coins') || 0;
     if (shyCoins < cost) return res.status(402).json({ error: 'Insufficient coins' });
