@@ -33,7 +33,25 @@ async function auditRowsFor(userId) {
     .get();
   return snap.docs.map((d) => d.data());
 }
-const FILE_IDS = [67000001, 67000002, 67000003, 67000004];
+async function clearAuditFor(userId) {
+  const snap = await db
+    .collection(SAFETY_AUDIT_COLLECTION)
+    .where('userIdHash', '==', hashUserId(userId))
+    .get();
+  if (snap.empty) return;
+  const batch = db.batch();
+  for (const d of snap.docs) batch.delete(d.ref);
+  await batch.commit();
+}
+// The per-block audit write is fire-and-forget (enforce.js does not await it),
+// so a loop's writes land asynchronously — poll until `expected` have settled.
+async function waitForAuditCount(userId, expected, tries = 80, delayMs = 25) {
+  for (let i = 0; i < tries; i += 1) {
+    if ((await auditRowsFor(userId)).length >= expected) return;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+  }
+}
+const FILE_IDS = [67000001, 67000002, 67000003, 67000004, 67000005];
 async function clearEnumerationAlertsFor(userId) {
   const snap = await db.collection('alerts').where('type', '==', 'AGE_GATE_ENUMERATION').get();
   const mine = snap.docs.filter((d) => d.data().context?.userId === userId);
@@ -57,10 +75,12 @@ beforeEach(async () => {
   __resetGateRateLimit();
   await db.doc(SAFETY_DOC).delete();
   for (const id of FILE_IDS) await clearEnumerationAlertsFor(id);
+  for (const id of FILE_IDS) await clearAuditFor(id);
 });
 afterEach(async () => {
   await db.doc(SAFETY_DOC).delete();
   for (const id of FILE_IDS) await clearEnumerationAlertsFor(id);
+  for (const id of FILE_IDS) await clearAuditFor(id);
 });
 
 describe('checkFeatureAccess — gate-check rate limit (AC86)', () => {
@@ -73,10 +93,10 @@ describe('checkFeatureAccess — gate-check rate limit (AC86)', () => {
       expect(ok).toBeNull(); // adult → allowed, within budget
     }
 
-    // The rate-limit branch must return BEFORE the age-verdict audit write:
-    // safetyAudit records age-VERDICT blocks, not rate-limit breaches (which get
-    // the dedicated enumeration alert instead). Delta around the 429 call proves
-    // it — and guards against a future reorder that audits the rate-limited path.
+    // safetyAudit records age-VERDICT blocks, not rate-limit breaches (those get
+    // the dedicated enumeration alert). This case pins that an ALLOWED user's
+    // rate-limited call writes no audit row; the companion test below pins the
+    // stronger invariant for a would-be-BLOCKED user (the reorder guard).
     const auditBeforeLimit = await auditRowsFor(67000001);
     const limited = await checkFeatureAccess(db, 'GACHA_SPEND', user, NOW);
     expect(limited).toEqual({
@@ -93,6 +113,31 @@ describe('checkFeatureAccess — gate-check rate limit (AC86)', () => {
     expect(alerts[0].severity).toBe('critical');
     expect(alerts[0].context).toMatchObject({ userId: 67000001, count: MAX_PER_WINDOW + 1 });
   });
+
+  test('a rate-limited check writes NO audit row even for a user who WOULD be age-blocked', async () => {
+    await setFlag(true);
+    // Under 18 → GACHA_SPEND (18) blocks on the age verdict. Every within-budget
+    // check is allowed by the limiter but age-blocked → a fire-and-forget audit
+    // row. The (MAX+1)-th check is RATE-LIMITED, and the limiter must
+    // short-circuit BEFORE the verdict/audit — so it adds no row even though
+    // this user is blockable. This is the reorder guard the adult case can't be:
+    // an adult is Allowed regardless of check order, so only a blockable user
+    // exposes a verdict-audit-before-rate-limit reorder.
+    const minor = { uniqueId: 67000005, ageVerified: true, dateOfBirth: dobForAge(15) };
+
+    for (let i = 0; i < MAX_PER_WINDOW; i += 1) {
+      const blocked = await checkFeatureAccess(db, 'GACHA_SPEND', minor, NOW);
+      expect(blocked.status).toBe(403); // age-blocked, still within the rate budget
+    }
+    await waitForAuditCount(67000005, MAX_PER_WINDOW); // let the fire-and-forget writes settle
+    const before = (await auditRowsFor(67000005)).length;
+    expect(before).toBe(MAX_PER_WINDOW); // sanity: every in-budget block audited
+
+    const limited = await checkFeatureAccess(db, 'GACHA_SPEND', minor, NOW);
+    expect(limited.status).toBe(429);
+    await new Promise((resolve) => setTimeout(resolve, 100)); // give any stray write a chance to land
+    expect(await auditRowsFor(67000005)).toHaveLength(before); // the 429 audited nothing
+  }, 20000);
 
   test('the alert fires exactly once even as further checks stay limited', async () => {
     await setFlag(true);

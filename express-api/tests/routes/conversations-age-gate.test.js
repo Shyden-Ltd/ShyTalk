@@ -207,6 +207,7 @@ describe('DM age gate — mutually-followed (13+)', () => {
       feature: 'DIRECT_MESSAGE_WITH_STRANGER',
       verdict: 'BlockedUnderAge',
       threshold: 18,
+      requiredVerification: 'NONE', // verified sender → NONE, not REVERIFY (the guard downgraded them)
     });
   });
 });
@@ -247,9 +248,16 @@ describe('DM age gate — exemptions', () => {
   });
 });
 
-// Legacy conversations may store participantIds as NUMBERS. The gate's id
-// coercion must fire for those too — proving the fix isn't merely swapped from
-// "only Numbers work" to "only Strings work".
+// Legacy conversations may store participantIds as NUMBERS. The gate must fire
+// for those too — proving the fix isn't merely swapped from "only Numbers work"
+// to "only Strings work". The BLOCKED path is the strong guard: for a 15-year-old
+// to be age-blocked, the gate condition `dmRecipientIds.length === 1` must hold,
+// which for a Number-typed array REQUIRES the String coercion (without it the
+// Number senderId never filters out of the Number array → length 2 → the whole
+// age-gate block is skipped → no 403). An adult ALLOW-path test is deliberately
+// omitted: an adult verdict is `Allowed` whether the gate runs correctly OR is
+// skipped by broken coercion, so `not AGE_GATE_BLOCKED` would be a tautology —
+// it proves nothing the blocked case doesn't already prove.
 describe('POST messages — DM gate is robust to Number-typed participantIds (legacy)', () => {
   test('flag ON: a 15-year-old messaging a stranger in a Number-id conversation is blocked', async () => {
     await setFlag(true);
@@ -271,31 +279,8 @@ describe('POST messages — DM gate is robust to Number-typed participantIds (le
     expect(res.body.errorId).toBe('AGE_GATE_BLOCKED');
     expect(res.body.ageGate).toMatchObject({
       feature: 'DIRECT_MESSAGE_WITH_STRANGER',
+      verdict: 'BlockedUnderAge',
       threshold: 18,
     });
-  });
-
-  test('flag ON: a verified adult in a Number-id conversation passes the participant check (not age-blocked)', async () => {
-    // The allow path, not just the block path: proves the participant-check
-    // coercion (String(senderId) ∈ participantIds.map(String)) admits a
-    // legitimate sender on a legacy Number-typed conversation, so the message
-    // reaches the recipient-filter / notification path rather than 403-ing.
-    await setFlag(true);
-    const sender = await mintRealUser({
-      uniqueId: 63000041,
-      extraUserData: {
-        ageVerified: true,
-        dateOfBirth: dobForAge(30),
-        followingIds: [],
-        followerIds: [],
-      },
-    });
-    await db.doc('conversations/dm-numeric-2').set({
-      participantIds: [63000041, RECIPIENT], // Numbers, not Strings
-      isGroup: false,
-    });
-
-    const res = await sendMessage('dm-numeric-2', sender.headers);
-    expect(res.body.errorId).not.toBe('AGE_GATE_BLOCKED');
   });
 });
