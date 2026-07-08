@@ -229,15 +229,22 @@ function isClean(diff) {
   );
 }
 
+/**
+ * Pure serialization of an offenders map to the canonical baseline file text
+ * (stable key order + sorted arrays + trailing newline → deterministic). Split
+ * out so the write FORMAT can be tested read-only, without writeFileSync ever
+ * touching the real tracked baseline.
+ */
+function serializeBaseline(offenders) {
+  const ordered = {};
+  for (const cat of CATEGORIES) ordered[cat.key] = offenders[cat.key];
+  return `${JSON.stringify(ordered, null, 2)}\n`;
+}
+
 function generateBaseline({ cwd } = {}) {
   const root = cwd || process.cwd();
   const offenders = scanRepo({ cwd: root });
-  const ordered = {};
-  for (const cat of CATEGORIES) ordered[cat.key] = offenders[cat.key];
-  fs.writeFileSync(
-    path.join(root, BASELINE_REL),
-    `${JSON.stringify(ordered, null, 2)}\n`,
-  );
+  fs.writeFileSync(path.join(root, BASELINE_REL), serializeBaseline(offenders));
   return offenders;
 }
 
@@ -339,6 +346,7 @@ module.exports = {
   diffBaseline,
   isClean,
   loadBaseline,
+  serializeBaseline,
   generateBaseline,
   reportAndExit,
   main,

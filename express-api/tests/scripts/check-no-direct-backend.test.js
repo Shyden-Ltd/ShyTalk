@@ -223,7 +223,7 @@ describe('integration — real repo scan, baseline sync, and CLI exit-code contr
   const BASELINE = path.join(REPO, 'scripts', 'direct-backend-baseline.json');
   const {
     scanRepo,
-    generateBaseline,
+    serializeBaseline,
     gitTrackedFiles,
     reportAndExit,
     diffBaseline,
@@ -241,11 +241,11 @@ describe('integration — real repo scan, baseline sync, and CLI exit-code contr
     }
   });
 
-  test('generateBaseline is idempotent against the in-sync committed baseline', () => {
-    const before = fs.readFileSync(BASELINE, 'utf8');
-    const off = generateBaseline({ cwd: REPO });
-    expect(fs.readFileSync(BASELINE, 'utf8')).toBe(before); // in sync → byte-identical
-    expect(off.firestore.length).toBeGreaterThan(0);
+  // Read-only: the exact text generateBaseline would WRITE (via serializeBaseline)
+  // equals the committed baseline. Proves determinism + format WITHOUT ever
+  // writing to the real tracked file (no test side-effect).
+  test('serializeBaseline(scanRepo) equals the committed baseline byte-for-byte', () => {
+    expect(serializeBaseline(scanRepo({ cwd: REPO }))).toBe(fs.readFileSync(BASELINE, 'utf8'));
   });
 
   test('CLI: clean repo → exit 0', () => {
@@ -254,8 +254,10 @@ describe('integration — real repo scan, baseline sync, and CLI exit-code contr
     expect(r.stdout).toMatch(/no-direct-backend: clean/);
   });
 
-  test.each(['--help', '-h'])('CLI: %s → exit 0', (flag) => {
-    expect(runCli([flag], REPO).status).toBe(0);
+  test.each(['--help', '-h'])('CLI: %s → exit 0 and prints usage', (flag) => {
+    const r = runCli([flag], REPO);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/check-no-direct-backend\.js/); // the HELP banner, not just exit 0
   });
 
   test('CLI: non-git / no-baseline cwd → fail-closed exit 2', () => {
@@ -285,8 +287,8 @@ describe('integration — real repo scan, baseline sync, and CLI exit-code contr
     expect(code).toBe(0);
   });
 
-  test('gitTrackedFiles: a non-git directory throws (never a silent empty scan)', () => {
+  test('gitTrackedFiles: a non-git directory throws the git-failure error (never a silent empty scan)', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ndb-nogit-'));
-    expect(() => gitTrackedFiles(dir)).toThrow();
+    expect(() => gitTrackedFiles(dir)).toThrow(/git ls-files failed/i);
   });
 });
