@@ -21,8 +21,31 @@
 const { isAgeGatingEnabled } = require('./age-gating-flag');
 const { evaluateFeatureAccess, extractVerifiedAge, extractRegion } = require('./feature-access');
 const { logBlockedFeatureAttempt } = require('./safety-audit');
+const { recordGateCheck, MAX_PER_WINDOW, WINDOW_MS } = require('./gate-rate-limit');
 
 const BLOCK_ERROR_ID = 'AGE_GATE_BLOCKED';
+const RATE_LIMIT_ERROR_ID = 'AGE_GATE_RATE_LIMITED';
+
+/**
+ * Once-per-window T&S signal that a user is hammering the gate (likely scripting
+ * to enumerate thresholds). Fire-and-forget-safe (awaited but wrapped) — the
+ * 429 stands regardless. The alertManager singleton is lazy-required so this
+ * module's pure collaborators stay importable without booting firebase.
+ */
+async function fireGateEnumerationAlert(userData, feature, count) {
+  const alertManager = require('../utils/alertManagerInstance');
+  try {
+    await alertManager.createAlert(
+      'AGE_GATE_ENUMERATION',
+      'critical',
+      'Age-gate enumeration suspected',
+      `User exceeded ${MAX_PER_WINDOW} gate checks in ${WINDOW_MS / 1000}s (count ${count}).`,
+      { userId: userData?.uniqueId ?? null, feature, count },
+    );
+  } catch {
+    // Best-effort — a failed alert write must never mask the 429.
+  }
+}
 // Neutral English fallback only. The client renders the real, T&S-reviewed,
 // localized copy from the structured `ageGate` fields — the server never
 // ships user-facing wording (and never the engine's developer-facing reason
@@ -58,6 +81,19 @@ async function checkFeatureAccess(db, feature, userDataOrLoader, nowMs = Date.no
   if (!(await isAgeGatingEnabled(db))) return null;
   const userData =
     typeof userDataOrLoader === 'function' ? await userDataOrLoader() : userDataOrLoader;
+
+  // Rate-limit the gate check per user to blunt threshold enumeration (AC86).
+  // Alert T&S exactly once, on the first breach of the window.
+  const rate = recordGateCheck(userData?.uniqueId, nowMs);
+  if (!rate.allowed) {
+    if (rate.count === MAX_PER_WINDOW + 1)
+      await fireGateEnumerationAlert(userData, feature, rate.count);
+    return {
+      status: 429,
+      body: { error: 'Too many requests, please try again later.', errorId: RATE_LIMIT_ERROR_ID },
+    };
+  }
+
   const verdict = evaluateFeatureAccess(userData, feature, nowMs);
   if (verdict.type === 'Allowed') return null;
 
@@ -74,4 +110,4 @@ async function checkFeatureAccess(db, feature, userDataOrLoader, nowMs = Date.no
   return buildBlock(feature, verdict);
 }
 
-module.exports = { checkFeatureAccess, BLOCK_ERROR_ID };
+module.exports = { checkFeatureAccess, BLOCK_ERROR_ID, RATE_LIMIT_ERROR_ID };
