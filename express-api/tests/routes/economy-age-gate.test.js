@@ -35,6 +35,21 @@ const SAFETY_DOC = 'config/safety-test-economy';
 const dobForAge = (years) => Date.UTC(new Date().getUTCFullYear() - years, 0, 1);
 const setFlag = (enabled) => db.doc(SAFETY_DOC).set({ ageGatingEnabled: enabled });
 
+// A tampered claim fires a real alertManager alert (awaited before the 403), so
+// a single read is deterministic. `alerts` is shared → filter to the test id.
+async function tamperAlertsFor(userId) {
+  const snap = await db.collection('alerts').where('type', '==', 'AGE_CLAIM_TAMPER').get();
+  return snap.docs.map((d) => d.data()).filter((a) => a.context?.userId === userId);
+}
+async function clearTamperAlertsFor(userId) {
+  const snap = await db.collection('alerts').where('type', '==', 'AGE_CLAIM_TAMPER').get();
+  const mine = snap.docs.filter((d) => d.data().context?.userId === userId);
+  if (mine.length === 0) return;
+  const batch = db.batch();
+  for (const d of mine) batch.delete(d.ref);
+  await batch.commit();
+}
+
 function createApp() {
   const app = express();
   app.use(express.json());
@@ -281,5 +296,84 @@ describe('POST /api/economy/gift-batch — GIFTING_SEND (18) age gate', () => {
       .send({ recipientIds: [62000099], giftId: BATCH_GIFT_ID });
 
     expect(res.body.errorId).not.toBe('AGE_GATE_BLOCKED');
+  });
+});
+
+// AC60 / BDD143 — a forged client age claim on a spend request is rejected as
+// tamper (403 AGE_CLAIM_TAMPER) BEFORE the age gate, and fires a T&S alert.
+describe('economy — client age-claim tamper (AC60 / BDD143)', () => {
+  const TAMPER_IDS = [62000020, 62000021, 62000022, 62000023];
+  afterEach(async () => {
+    for (const id of TAMPER_IDS) await clearTamperAlertsFor(id);
+  });
+
+  test('BDD143: gift-send with a forged claimedAge 19 over a record of 15 → 403 + alert', async () => {
+    await setFlag(true);
+    const user = await mintRealUser({
+      uniqueId: 62000020,
+      extraUserData: { ageVerified: true, dateOfBirth: dobForAge(15) },
+    });
+
+    const res = await request(createApp())
+      .post('/api/economy/gift')
+      .set(user.headers)
+      .send({ ...NO_GIFT, claimedAge: 19 })
+      .expect(403);
+
+    expect(res.body.errorId).toBe('AGE_CLAIM_TAMPER');
+    const alerts = await tamperAlertsFor(62000020);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].severity).toBe('critical');
+    expect(alerts[0].context).toMatchObject({ userId: 62000020, claimedAge: 19, serverAge: 15 });
+  });
+
+  test('gacha: a forged claimedAge 25 over a record of 15 is rejected as tamper BEFORE the age gate', async () => {
+    await setFlag(true);
+    const user = await mintRealUser({
+      uniqueId: 62000021,
+      extraUserData: { ageVerified: true, dateOfBirth: dobForAge(15) },
+    });
+
+    const res = await request(createApp())
+      .post('/api/economy/gacha')
+      .set(user.headers)
+      .send({ pullCount: 1, claimedAge: 25 })
+      .expect(403);
+
+    // Tamper takes precedence over the plain under-age block.
+    expect(res.body.errorId).toBe('AGE_CLAIM_TAMPER');
+    expect(await tamperAlertsFor(62000021)).toHaveLength(1);
+  });
+
+  test('flag OFF: a forged claim is NOT tamper-rejected (engine inert)', async () => {
+    await setFlag(false);
+    const user = await mintRealUser({
+      uniqueId: 62000022,
+      extraUserData: { ageVerified: true, dateOfBirth: dobForAge(30) },
+    });
+
+    const res = await request(createApp())
+      .post('/api/economy/gift')
+      .set(user.headers)
+      .send({ ...NO_GIFT, claimedAge: 12 });
+
+    expect(res.body.errorId).not.toBe('AGE_CLAIM_TAMPER');
+    expect(await tamperAlertsFor(62000022)).toHaveLength(0);
+  });
+
+  test('flag ON: a truthful claim within tolerance passes the tamper check', async () => {
+    await setFlag(true);
+    const user = await mintRealUser({
+      uniqueId: 62000023,
+      extraUserData: { ageVerified: true, dateOfBirth: dobForAge(30) },
+    });
+
+    const res = await request(createApp())
+      .post('/api/economy/gift')
+      .set(user.headers)
+      .send({ ...NO_GIFT, claimedAge: 30 });
+
+    expect(res.body.errorId).not.toBe('AGE_CLAIM_TAMPER');
+    expect(await tamperAlertsFor(62000023)).toHaveLength(0);
   });
 });

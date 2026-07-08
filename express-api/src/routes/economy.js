@@ -35,6 +35,7 @@ const { verifyApplePurchase } = require('../utils/appleStore');
 const { SUBSCRIPTION_TIERS } = require('../utils/subscriptionTiers');
 const { viewerIsBlocked, checkBlockRelationship } = require('../utils/block-check');
 const { checkFeatureAccess } = require('../safety/enforce');
+const { checkAgeClaimTamper } = require('../safety/tamper-check');
 
 // ─── Constants ────────────────────────────────────────────────────
 
@@ -589,6 +590,13 @@ router.post('/economy/gacha', async (req, res) => {
     // SHY-0060 — per-feature age gate. Inert unless the operator flag is ON;
     // reuses the user doc already loaded above (no extra read). Gacha is
     // loot-box spend → 18+ (jurisdictions with loot-box gambling laws).
+    // SHY-0060 — reject a forged client age claim (403 + T&S alert) before the
+    // gate; a tampered request never reaches the capability check (AC60).
+    const gachaTamper = await checkAgeClaimTamper(db, {
+      claimedAge: req.body?.claimedAge,
+      userDataOrLoader: user,
+    });
+    if (gachaTamper) return res.status(gachaTamper.status).json(gachaTamper.body);
     const gachaGate = await checkFeatureAccess(db, 'GACHA_SPEND', user);
     if (gachaGate) return res.status(gachaGate.status).json(gachaGate.body);
 
@@ -799,6 +807,11 @@ router.post('/economy/gift', async (req, res) => {
     // SHY-0060 — gifting is real-money spend → 18+. Gate the sender first
     // (inert unless the operator flag is ON; reuses the sender doc loaded
     // above) so the age-capability check is authoritative over gift/backpack.
+    const giftTamper = await checkAgeClaimTamper(db, {
+      claimedAge: req.body?.claimedAge,
+      userDataOrLoader: sender,
+    });
+    if (giftTamper) return res.status(giftTamper.status).json(giftTamper.body);
     const giftGate = await checkFeatureAccess(db, 'GIFTING_SEND', sender);
     if (giftGate) return res.status(giftGate.status).json(giftGate.body);
 
@@ -957,6 +970,11 @@ router.post('/economy/gift-direct', async (req, res) => {
     const recipient = recipientSnap.exists ? recipientSnap.data() : null;
 
     // SHY-0060 — gifting is real-money spend → 18+ (gate the sender first).
+    const giftTamper = await checkAgeClaimTamper(db, {
+      claimedAge: req.body?.claimedAge,
+      userDataOrLoader: sender,
+    });
+    if (giftTamper) return res.status(giftTamper.status).json(giftTamper.body);
     const giftGate = await checkFeatureAccess(db, 'GIFTING_SEND', sender);
     if (giftGate) return res.status(giftGate.status).json(giftGate.body);
 
@@ -1109,6 +1127,11 @@ router.post('/economy/gift-batch', async (req, res) => {
     const sender = senderSnap.data();
 
     // SHY-0060 — gifting is real-money spend → 18+ (gate the sender).
+    const giftTamper = await checkAgeClaimTamper(db, {
+      claimedAge: req.body?.claimedAge,
+      userDataOrLoader: sender,
+    });
+    if (giftTamper) return res.status(giftTamper.status).json(giftTamper.body);
     const giftGate = await checkFeatureAccess(db, 'GIFTING_SEND', sender);
     if (giftGate) return res.status(giftGate.status).json(giftGate.body);
 
