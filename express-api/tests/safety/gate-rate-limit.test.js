@@ -14,6 +14,7 @@ const {
   __setSafetyConfigDocForTests,
 } = require('../../src/safety/age-gating-flag');
 const { __resetGateRateLimit, MAX_PER_WINDOW } = require('../../src/safety/gate-rate-limit');
+const { hashUserId, SAFETY_AUDIT_COLLECTION } = require('../../src/safety/safety-audit');
 
 const SAFETY_DOC = 'config/safety-test-ratelimit';
 const NOW = Date.UTC(2026, 6, 8);
@@ -24,6 +25,13 @@ const setFlag = (enabled) => db.doc(SAFETY_DOC).set({ ageGatingEnabled: enabled 
 async function enumerationAlertsFor(userId) {
   const snap = await db.collection('alerts').where('type', '==', 'AGE_GATE_ENUMERATION').get();
   return snap.docs.map((d) => d.data()).filter((a) => a.context?.userId === userId);
+}
+async function auditRowsFor(userId) {
+  const snap = await db
+    .collection(SAFETY_AUDIT_COLLECTION)
+    .where('userIdHash', '==', hashUserId(userId))
+    .get();
+  return snap.docs.map((d) => d.data());
 }
 const FILE_IDS = [67000001, 67000002, 67000003, 67000004];
 async function clearEnumerationAlertsFor(userId) {
@@ -65,6 +73,11 @@ describe('checkFeatureAccess — gate-check rate limit (AC86)', () => {
       expect(ok).toBeNull(); // adult → allowed, within budget
     }
 
+    // The rate-limit branch must return BEFORE the age-verdict audit write:
+    // safetyAudit records age-VERDICT blocks, not rate-limit breaches (which get
+    // the dedicated enumeration alert instead). Delta around the 429 call proves
+    // it — and guards against a future reorder that audits the rate-limited path.
+    const auditBeforeLimit = await auditRowsFor(67000001);
     const limited = await checkFeatureAccess(db, 'GACHA_SPEND', user, NOW);
     expect(limited).toEqual({
       status: 429,
@@ -73,6 +86,8 @@ describe('checkFeatureAccess — gate-check rate limit (AC86)', () => {
         errorId: 'AGE_GATE_RATE_LIMITED',
       },
     });
+    const auditAfterLimit = await auditRowsFor(67000001);
+    expect(auditAfterLimit).toHaveLength(auditBeforeLimit.length);
     const alerts = await enumerationAlertsFor(67000001);
     expect(alerts).toHaveLength(1);
     expect(alerts[0].severity).toBe('critical');

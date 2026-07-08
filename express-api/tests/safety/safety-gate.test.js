@@ -203,6 +203,22 @@ describe('SafetyGate.canAccess — the remaining features', () => {
       requiredVerification: VERIFICATION.REVERIFY,
     });
   });
+
+  test('GACHA_SPEND (18) — allowed at 18, blocked at 17, REVERIFY when unverified', () => {
+    expect(canAccess('GACHA_SPEND', 18, 'GB')).toEqual(ALLOWED);
+    expect(canAccess('GACHA_SPEND', 17, 'GB')).toEqual({
+      type: 'BlockedUnderAge',
+      threshold: 18,
+      actualAge: 17,
+      requiredVerification: VERIFICATION.NONE,
+    });
+    expect(canAccess('GACHA_SPEND', null, 'GB')).toEqual({
+      type: 'BlockedUnderAge',
+      threshold: 18,
+      actualAge: null,
+      requiredVerification: VERIFICATION.REVERIFY,
+    });
+  });
 });
 
 // Regions that carry NO override fall back to the base threshold (only DE + NL

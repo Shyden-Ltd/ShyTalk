@@ -189,6 +189,26 @@ describe('DM age gate — mutually-followed (13+)', () => {
     const res = await sendMessage('dm-followed-3', sender.headers).expect(403);
     expect(res.body.ageGate.feature).toBe('DIRECT_MESSAGE_WITH_STRANGER');
   });
+
+  test('flag ON: a verified sender whose followingIds/followerIds fields are ABSENT falls to STRANGER', async () => {
+    // Not empty arrays — the fields don't exist on the doc at all. The
+    // Array.isArray guard must fail SAFE to the stricter 18+ stranger tier
+    // (and this is a VERIFIED sender, so it's the guard — not REVERIFY — that
+    // downgrades them, unlike the unverified-stranger test above).
+    await setFlag(true);
+    const sender = await mintRealUser({
+      uniqueId: 63000023,
+      extraUserData: { ageVerified: true, dateOfBirth: dobForAge(15) }, // no followingIds/followerIds
+    });
+    await seedConversation('dm-followed-4', 63000023);
+
+    const res = await sendMessage('dm-followed-4', sender.headers).expect(403);
+    expect(res.body.ageGate).toMatchObject({
+      feature: 'DIRECT_MESSAGE_WITH_STRANGER',
+      verdict: 'BlockedUnderAge',
+      threshold: 18,
+    });
+  });
 });
 
 describe('DM age gate — exemptions', () => {
@@ -253,5 +273,29 @@ describe('POST messages — DM gate is robust to Number-typed participantIds (le
       feature: 'DIRECT_MESSAGE_WITH_STRANGER',
       threshold: 18,
     });
+  });
+
+  test('flag ON: a verified adult in a Number-id conversation passes the participant check (not age-blocked)', async () => {
+    // The allow path, not just the block path: proves the participant-check
+    // coercion (String(senderId) ∈ participantIds.map(String)) admits a
+    // legitimate sender on a legacy Number-typed conversation, so the message
+    // reaches the recipient-filter / notification path rather than 403-ing.
+    await setFlag(true);
+    const sender = await mintRealUser({
+      uniqueId: 63000041,
+      extraUserData: {
+        ageVerified: true,
+        dateOfBirth: dobForAge(30),
+        followingIds: [],
+        followerIds: [],
+      },
+    });
+    await db.doc('conversations/dm-numeric-2').set({
+      participantIds: [63000041, RECIPIENT], // Numbers, not Strings
+      isGroup: false,
+    });
+
+    const res = await sendMessage('dm-numeric-2', sender.headers);
+    expect(res.body.errorId).not.toBe('AGE_GATE_BLOCKED');
   });
 });
