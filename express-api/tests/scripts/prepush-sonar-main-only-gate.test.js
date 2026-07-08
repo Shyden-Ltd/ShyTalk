@@ -69,18 +69,24 @@ describe('SHY-0164: the SonarCloud pre-push scan is gated on branch == main', ()
   });
 
   test('on a feature branch, the scan is skipped and execution falls THROUGH', () => {
-    const r = runDecision('story/SHY-0164-prepush-sonar-main-only-gate');
+    const branch = 'story/SHY-0164-prepush-sonar-main-only-gate';
+    const r = runDecision(branch);
     expect(r.status).toBe(0);
     expect(r.stdout).not.toContain('__SCAN_RAN__');
     expect(r.stdout).toMatch(/skipping SonarCloud pre-push gate/i);
+    // The skip message names the branch (AC: "Feature branch (<name>) — …") so a
+    // regression that drops $CURRENT_BRANCH from the echo is caught.
+    expect(r.stdout).toContain(branch);
     // Falls through — a skipped feature push must still reach Playwright below.
     expect(r.stdout).toContain('__AFTER_GUARD__');
   });
 
   test('on develop, the scan is skipped (develop is not main)', () => {
     const r = runDecision('develop');
+    expect(r.status).toBe(0);
     expect(r.stdout).not.toContain('__SCAN_RAN__');
     expect(r.stdout).toMatch(/skipping SonarCloud pre-push gate/i);
+    expect(r.stdout).toContain('develop');
     expect(r.stdout).toContain('__AFTER_GUARD__');
   });
 
@@ -88,9 +94,25 @@ describe('SHY-0164: the SonarCloud pre-push scan is gated on branch == main', ()
     // Exact-match guard: only the literal `main` runs the scan. A prefix like
     // `main-hotfix` or `mainline` must skip (it is not the protected branch).
     const r = runDecision('main-hotfix');
+    expect(r.status).toBe(0);
     expect(r.stdout).not.toContain('__SCAN_RAN__');
     expect(r.stdout).toMatch(/skipping SonarCloud/i);
+    expect(r.stdout).toContain('main-hotfix');
+    expect(r.stdout).toContain('__AFTER_GUARD__');
   });
+
+  test.each(['HEAD', ''])(
+    'CURRENT_BRANCH=%p (detached HEAD / degenerate empty) skips — the documented safe direction',
+    (branch) => {
+      // `git rev-parse --abbrev-ref HEAD` returns the literal `HEAD` when
+      // detached (and a degenerate case could yield empty). Either way the exact
+      // `!= "main"` test must SKIP (never falsely gate as main) and fall through.
+      // Story Risks & Mitigations: skipping is the safe direction.
+      const r = runDecision(branch);
+      expect(r.stdout).not.toContain('__SCAN_RAN__');
+      expect(r.stdout).toContain('__AFTER_GUARD__');
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -137,6 +159,81 @@ describe('SHY-0164: the main-path Sonar gate keeps its teeth', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Behavioural: the main-path SONAR_TOKEN guard. Slice the hook's real
+// `if [ -z "$SONAR_TOKEN" ]; then … exit 1; fi` block and run it with the token
+// unset vs set. NOTE: no `set -u` here — the hook itself runs under a plain
+// `#!/usr/bin/env sh` with no `set -u`, and `[ -z "$SONAR_TOKEN" ]` on an unset
+// var must be exercised faithfully (set -u would abort on the unbound var).
+// ---------------------------------------------------------------------------
+function runTokenCheck(tokenValue) {
+  // Anchor on `]; then` (not just `if [ -z "$SONAR_TOKEN" ]`) so we match the
+  // in-guard token check, NOT the `.env` loader near the top of the hook
+  // (`if [ -z "$SONAR_TOKEN" ] && [ -f ".env" ]; then`), which has no `]; then`.
+  const start = PRE_PUSH.indexOf('if [ -z "$SONAR_TOKEN" ]; then');
+  if (start < 0) throw new Error('in-guard SONAR_TOKEN check not found in hook');
+  const afterStart = PRE_PUSH.slice(start);
+  const fiMatch = afterStart.match(/\n[ \t]*fi\b/);
+  if (!fiMatch) throw new Error("SONAR_TOKEN guard's closing `fi` not found");
+  const guard = afterStart.slice(0, fiMatch.index + fiMatch[0].length);
+  const harness = [
+    tokenValue === undefined ? 'unset SONAR_TOKEN' : `SONAR_TOKEN="${tokenValue}"`,
+    guard,
+    'echo "__TOKEN_OK__"',
+  ].join('\n');
+  return spawnSync('/bin/bash', ['-c', harness], { encoding: 'utf8' });
+}
+
+describe('SHY-0164: the main-path SONAR_TOKEN guard still blocks', () => {
+  test('an unset SONAR_TOKEN blocks the push (exit 1, no fall-through)', () => {
+    const r = runTokenCheck(undefined);
+    expect(r.status).toBe(1);
+    expect(r.stdout).toMatch(/SONAR_TOKEN not set — push blocked/);
+    expect(r.stdout).not.toContain('__TOKEN_OK__');
+  });
+
+  test('a set SONAR_TOKEN falls through to the scan', () => {
+    const r = runTokenCheck('dummy-token');
+    expect(r.status).toBe(0);
+    expect(r.stdout).toContain('__TOKEN_OK__');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Behavioural: the "No code changes" short-circuit ABOVE the guard is unchanged
+// — a push with no code changes exits 0 before ever reaching the branch guard,
+// regardless of branch. Slice the real `if [ "$HAS_CODE" = "false" ]; then …
+// exit 0; fi` block and drive it with HAS_CODE=false vs true.
+// ---------------------------------------------------------------------------
+function runNoCodeShortCircuit(hasCode) {
+  const start = PRE_PUSH.indexOf('if [ "$HAS_CODE" = "false" ]');
+  if (start < 0) throw new Error('HAS_CODE short-circuit not found in hook');
+  const afterStart = PRE_PUSH.slice(start);
+  const fiMatch = afterStart.match(/\n[ \t]*fi\b/);
+  if (!fiMatch) throw new Error("HAS_CODE short-circuit's closing `fi` not found");
+  const block = afterStart.slice(0, fiMatch.index + fiMatch[0].length);
+  const harness = ['set -u', `HAS_CODE="${hasCode}"`, block, 'echo "__PAST_SHORTCIRCUIT__"'].join(
+    '\n',
+  );
+  return spawnSync('/bin/bash', ['-c', harness], { encoding: 'utf8' });
+}
+
+describe('SHY-0164: the "No code changes" short-circuit is unchanged', () => {
+  test('no code changes → exits 0 before the branch guard', () => {
+    const r = runNoCodeShortCircuit('false');
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/No code changes/);
+    expect(r.stdout).not.toContain('__PAST_SHORTCIRCUIT__');
+  });
+
+  test('code changes → falls through to the branch guard', () => {
+    const r = runNoCodeShortCircuit('true');
+    expect(r.status).toBe(0);
+    expect(r.stdout).not.toMatch(/No code changes/);
+    expect(r.stdout).toContain('__PAST_SHORTCIRCUIT__');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Structural: command shape + anti-regression locks.
 // ---------------------------------------------------------------------------
 function sonarInvocation() {
@@ -168,13 +265,42 @@ describe('SHY-0164: structure locks', () => {
     expect(PRE_PUSH).not.toMatch(/-Dsonar\.branch\.name/);
   });
 
-  test('the gradle sonar gate sits INSIDE the main-only guard (else branch)', () => {
+  test('the ENTIRE scan body sits INSIDE the main-only guard (all four components bounded by its else…fi)', () => {
     const guardIdx = PRE_PUSH.indexOf('if [ "$CURRENT_BRANCH" != "main" ]');
     const elseIdx = PRE_PUSH.indexOf('\nelse', guardIdx);
-    const sonarIdx = PRE_PUSH.indexOf('./gradlew sonar');
+    // The guard's else ends with the "gate passed" echo, immediately before its
+    // own closing `fi`; that fi is the upper bound for every scan component.
+    const closingFiIdx = PRE_PUSH.indexOf(
+      '\nfi',
+      PRE_PUSH.indexOf('SonarCloud quality gate passed'),
+    );
     expect(guardIdx).toBeGreaterThanOrEqual(0);
     expect(elseIdx).toBeGreaterThan(guardIdx);
-    expect(sonarIdx).toBeGreaterThan(elseIdx);
+    expect(closingFiIdx).toBeGreaterThan(elseIdx);
+    // Both an UPPER and a lower bound for every part of the scan — the
+    // SONAR_TOKEN check, the Express-jest coverage feeder, the Kotlin-jvmTest
+    // coverage feeder, and the gradle sonar gate — so a future edit cannot hoist
+    // e.g. the Express-jest step (and its Firebase-emulator dependency) back
+    // above the guard while keeping the suite green (Performance AC).
+    const components = {
+      // `]; then` anchors the in-guard check, not the `.env` loader above.
+      'SONAR_TOKEN check': PRE_PUSH.indexOf('if [ -z "$SONAR_TOKEN" ]; then'),
+      'Express-jest feeder': PRE_PUSH.indexOf('Express tests with coverage'),
+      'Kotlin-jvmTest feeder': PRE_PUSH.indexOf('Kotlin JVM tests'),
+      'gradle sonar gate': PRE_PUSH.indexOf('./gradlew sonar'),
+    };
+    for (const [name, idx] of Object.entries(components)) {
+      expect({ name, position: 'after else', ok: idx > elseIdx }).toEqual({
+        name,
+        position: 'after else',
+        ok: true,
+      });
+      expect({ name, position: 'before guard fi', ok: idx < closingFiIdx }).toEqual({
+        name,
+        position: 'before guard fi',
+        ok: true,
+      });
+    }
   });
 
   test('Playwright runs OUTSIDE the main-only guard (feature branches still web-test)', () => {

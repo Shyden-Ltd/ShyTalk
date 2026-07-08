@@ -96,17 +96,19 @@ The workable fix (operator-approved 2026-07-08, "skip Sonar gate for feature bra
 **Classification: CI-config-only** (per CLAUDE.md `### Exemptions` exemption 2, delivered by SHY-0163). The diff is confined to `.husky/pre-push` (a git-hook / dev-tooling script), its structural + behavioural pin test, and this story `.md` — **no app / backend (`express-api/src`, `firestore.rules`) / website runtime surface**. So no device/browser gauntlet; the full relevant non-device gauntlet IS run.
 
 ### Red
-1. Rewrite `express-api/tests/scripts/prepush-sonar-main-only-gate.test.js` to encode the main-only contract by EXECUTING the hook's real bytes:
-   - **Behavioural (branch decision):** slice the hook's real `if [ "$CURRENT_BRANCH" != "main" ]` condition + skip branch, inject a concrete `CURRENT_BRANCH`, replace only the heavy scan body with a sentinel, and run it — assert `main` runs the scan; `develop`, a feature branch, and a `main`-prefixed name skip it; and all fall THROUGH a trailing sentinel (no `exit`).
+1. Rewrite `express-api/tests/scripts/prepush-sonar-main-only-gate.test.js` to encode the main-only contract by EXECUTING the hook's real bytes (18 pins across 5 harnesses):
+   - **Behavioural (branch decision):** slice the hook's real `if [ "$CURRENT_BRANCH" != "main" ]` condition + skip branch, inject a concrete `CURRENT_BRANCH`, replace only the heavy scan body with a sentinel, and run it — assert `main` runs the scan; `develop`, a feature branch, a `main`-prefixed name (`main-hotfix`), and the detached-HEAD/empty values (`HEAD`, ``) skip it; all fall THROUGH a trailing sentinel (no `exit`); and the skip message names the branch.
    - **Behavioural (gate teeth):** slice the gate's real failure handler (from `; then` through its own closing `fi`, indentation-tolerant) and drive `if ! <cmd>` with the `false`/`true` shell builtins — assert `false` ⇒ exit 1 + FAILED message + no fall-through; `true` ⇒ exit 0 + fall-through.
-   - **Structural locks:** `wait=true` retained; no `wait=false` anywhere; `sonar.branch.name` NOT reintroduced; the gate sits inside the main-only `else`; Playwright sits after the guard's closing `fi`.
-   Confirm RED against the pre-fix (branch-scoped) hook (8 of 12 fail — the guard/`CURRENT_BRANCH` don't exist and `sonar.branch.name` is still present).
+   - **Behavioural (SONAR_TOKEN guard):** slice the in-guard `if [ -z "$SONAR_TOKEN" ]; then … exit 1; fi` (anchored on `]; then` to avoid the `.env`-loader block) and run it — unset ⇒ exit 1 + "not set" message; set ⇒ fall-through. (No `set -u` — faithful to the hook's plain `sh`.)
+   - **Behavioural (no-code short-circuit):** slice the real `if [ "$HAS_CODE" = "false" ]; then … exit 0; fi` and drive it with `HAS_CODE=false`/`true` — false ⇒ exit 0 + "No code changes" before the guard; true ⇒ fall-through.
+   - **Structural locks:** `wait=true` retained; no `wait=false` anywhere; `sonar.branch.name` NOT reintroduced; the WHOLE scan body (token check + Express-jest + Kotlin-jvmTest + gate) is bounded between the guard's `else` and its own closing `fi` (upper AND lower bound); Playwright sits after that `fi`.
+   Confirm RED against the pre-fix (branch-scoped) hook (the guard/`CURRENT_BRANCH` don't exist and `sonar.branch.name` is still present).
 
 ### Green
-2. `.husky/pre-push`: add the `CURRENT_BRANCH` guard around the whole scan; remove `-Dsonar.branch.name`/`SONAR_BRANCH`; add the dated SHY-0164 comment; keep the Playwright block outside the guard. Test GREEN (12/12).
+2. `.husky/pre-push`: add the `CURRENT_BRANCH` guard around the whole scan; remove `-Dsonar.branch.name`/`SONAR_BRANCH`; add the dated SHY-0164 comment; keep the Playwright block outside the guard. Test GREEN (18/18).
 
 ### Verification
-- `cd express-api && npx jest tests/scripts/prepush-sonar-main-only-gate.test.js` → 12/12 green.
+- `cd express-api && npx jest tests/scripts/prepush-sonar-main-only-gate.test.js` → 18/18 green.
 - Full `tests/scripts/` meta-suite → 6961/6961 green (no regression; includes `check-node-version.test.js`, whose `Express tests with coverage` anchor moved but stays after the node-version guard).
 - `sh -n .husky/pre-push` + `bash -n .husky/pre-push` clean; eslint `--max-warnings=0` + prettier clean (bash invoked via absolute `/bin/bash` to satisfy `sonarjs/no-os-command-from-path` with no suppression).
 - **Behavioural — self-validating push:** the push that lands this branch runs the FIXED hook on a feature branch → the Sonar scan is skipped → the push succeeds with no local emulator and no `--no-verify`. That successful push is the end-to-end proof of the feature-branch skip.
@@ -130,7 +132,7 @@ The workable fix (operator-approved 2026-07-08, "skip Sonar gate for feature bra
 
 ## Definition of Done
 - [ ] `.husky/pre-push` gates the SonarCloud scan on `CURRENT_BRANCH == main`; feature branches skip with an explanatory echo; `-Dsonar.branch.name` removed; `wait=true` retained on the main path; Playwright outside the guard.
-- [ ] `prepush-sonar-main-only-gate.test.js` rewritten (RED-first → GREEN, 12/12), behavioural + structural.
+- [ ] `prepush-sonar-main-only-gate.test.js` rewritten (RED-first → GREEN, 18/18), behavioural + structural.
 - [ ] **CI-config-only non-device gauntlet green:** the meta-test + full `tests/scripts/` suite + eslint + prettier + `sh -n`/`bash -n` + story validator + `code-reviewer` 100% clean.
 - [ ] **Self-validating push succeeds** (feature-branch skip works; no emulator, no `--no-verify`) → merged into `develop`.
 - [ ] `released_in:` set after release cut; `status: Done`.
@@ -140,5 +142,6 @@ The workable fix (operator-approved 2026-07-08, "skip Sonar gate for feature bra
 - 2026-07-08 — **Branch-scoped approach (`sonar.branch.name`) proven UNSOUND and abandoned.** Committed a first attempt (`e4b5e534771`) that passed `-Dsonar.branch.name="$(git rev-parse --abbrev-ref HEAD)"`. Empirical test on a scratch branch: the analysis uploads (CE task SUCCESS) but the SonarCloud API returns **"Organization is not allowed to access data from non-main branches"** — a **free-plan limitation**, so `qualitygate.wait=true` cannot read a feature-branch gate and errors. Re-surfaced to the operator; chosen path: **skip the Sonar gate for feature branches** (main-only). Renamed branch + files `…-branch-scoped` → `…-main-only-gate` and re-refined this story to match.
 - 2026-07-08 — Implemented main-only gate via TDD: rewrote the test to EXECUTE the hook's real branch-decision + gate-failure bytes (12 pins, RED 8/12 against the old hook → GREEN 12/12). Wrapped the whole scan in `if [ "$CURRENT_BRANCH" != "main" ]`. Full `tests/scripts/` suite 6961/6961; `sh -n`/`bash -n`, eslint `--max-warnings=0`, prettier all clean. Targets `develop` (not main, per operator).
 - 2026-07-08 — **SHY-0165 candidate (follow-up):** on the main path the Express-jest + Kotlin-jvmTest steps are ungated (a failure does not `exit 1`, so it doesn't block the push) — pre-existing, reviewer-surfaced. Out of scope here; file as its own story.
+- 2026-07-08 — **code-reviewer round 1** (commit `5a5fa5c30b4`): shell logic verified 100% clean (balanced if/else/fi, POSIX, correct fall-through, no collateral change). 6 test-COVERAGE gaps found (2 Critical, 4 Important), all verified real via grep + trace, all fixed: (1) `SONAR_TOKEN`-unset had zero coverage repo-wide → added `runTokenCheck` (unset⇒exit 1, set⇒fall-through); (2) containment pinned only the gate's lower bound → now bounds all four scan components (token check + Express-jest + Kotlin-jvmTest + gate) between `else` and the guard's own `fi`, catching a hoist-the-emulator-step regression; (3) skip message branch-name unasserted → `toContain(branch)`; (4) develop/main-hotfix assertion parity → added status + fall-through; (5) detached-HEAD/empty untested → `test.each(['HEAD',''])`; (6) "No code changes" short-circuit untested → `runNoCodeShortCircuit`. Test 12→18 pins, all green; prettier + eslint `--max-warnings=0` clean. Fixing the `SONAR_TOKEN`/containment anchors also surfaced (and the executing-bytes tests caught) a first-occurrence collision with the `.env`-loader `if [ -z "$SONAR_TOKEN" ]` — re-anchored on `]; then`.
 
 Reviewed-up-to: PENDING_COMMIT_SHA
