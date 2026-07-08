@@ -45,7 +45,9 @@ async function clearAuditFor(userId) {
 }
 // The per-block audit write is fire-and-forget (enforce.js does not await it),
 // so a loop's writes land asynchronously — poll until `expected` have settled.
-async function waitForAuditCount(userId, expected, tries = 80, delayMs = 25) {
+// Generous ceiling (~5s, exits early) so shared-emulator contention under the
+// parallel workers can't flake the settle.
+async function waitForAuditCount(userId, expected, tries = 200, delayMs = 25) {
   for (let i = 0; i < tries; i += 1) {
     if ((await auditRowsFor(userId)).length >= expected) return;
     await new Promise((resolve) => setTimeout(resolve, delayMs));
