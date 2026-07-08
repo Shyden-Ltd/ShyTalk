@@ -165,10 +165,22 @@ cd ..
 echo "  → Kotlin JVM tests..."
 ./gradlew :shared:jvmTest --quiet 2>/dev/null
 
-# Run SonarCloud analysis with quality gate wait
+# Run SonarCloud analysis with quality gate wait.
+# SHY-0164 (2026-07-08): scope the analysis to the CURRENT branch. A local run
+# has no CI environment for the scanner to auto-detect a branch/PR from, so
+# WITHOUT `sonar.branch.name` SonarCloud grades the working tree against MAIN's
+# quality gate. That means a red main gate (pre-existing debt on main) blocks
+# EVERY feature-branch push even when the branch's own new code is clean — the
+# exact failure that motivated this fix. Passing the branch gates each push on
+# the code IT changed. NOTE: CI's own Sonar step is advisory-only
+# (`sonar.qualitygate.wait=false` in build.gradle.kts, free-plan), so THIS hook
+# is the ONLY place the quality gate actually blocks — keep `wait=true` below.
+# Uses the checked-out branch (the branch being pushed in the normal workflow).
 echo "  → SonarCloud analysis..."
+SONAR_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 if ! ./gradlew sonar \
   -Dsonar.token="$SONAR_TOKEN" \
+  -Dsonar.branch.name="$SONAR_BRANCH" \
   -Dsonar.qualitygate.wait=true \
   -x :app:sonar \
   --no-configuration-cache; then
