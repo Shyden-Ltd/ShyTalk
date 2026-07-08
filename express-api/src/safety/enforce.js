@@ -11,6 +11,11 @@
  *
  * Returns null when access is permitted — either the operator flag is OFF
  * (the shipped default → NO enforcement at all) or the verdict is Allowed.
+ *
+ * The third argument may be the already-loaded user doc OR a lazy loader
+ * `() => Promise<userData>`. The loader is awaited ONLY after the flag is
+ * confirmed ON, so an endpoint that would otherwise have no reason to read
+ * the user doc adds zero Firestore reads while the flag ships OFF.
  */
 
 const { isAgeGatingEnabled } = require('./age-gating-flag');
@@ -42,13 +47,16 @@ function buildBlock(feature, verdict) {
 /**
  * @param {FirebaseFirestore.Firestore} db Admin-SDK Firestore handle
  * @param {string} feature a Feature key (age-thresholds FEATURES)
- * @param {Object} userData the acting user's `users/<id>` doc data
+ * @param {Object|(() => Promise<Object>)} userDataOrLoader the acting user's
+ *   `users/<id>` doc data, or a lazy loader invoked only when the flag is ON
  * @param {number} [nowMs=Date.now()] clock for the age computation
  * @returns {Promise<null | { status: number, body: Object }>} null = allowed;
  *   otherwise the 403 status + structured body the caller sends verbatim.
  */
-async function checkFeatureAccess(db, feature, userData, nowMs = Date.now()) {
+async function checkFeatureAccess(db, feature, userDataOrLoader, nowMs = Date.now()) {
   if (!(await isAgeGatingEnabled(db))) return null;
+  const userData =
+    typeof userDataOrLoader === 'function' ? await userDataOrLoader() : userDataOrLoader;
   const verdict = evaluateFeatureAccess(userData, feature, nowMs);
   if (verdict.type === 'Allowed') return null;
   return buildBlock(feature, verdict);

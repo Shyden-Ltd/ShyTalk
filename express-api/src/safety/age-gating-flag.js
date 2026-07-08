@@ -25,7 +25,14 @@ const log = require('../utils/log');
 
 /** Mirrors alertManager's CONFIG_CACHE_TTL — 60s remote-config freshness. */
 const CONFIG_CACHE_TTL_MS = 60 * 1000;
-const SAFETY_CONFIG_DOC = 'config/safety';
+const DEFAULT_SAFETY_CONFIG_DOC = 'config/safety';
+
+// The doc the flag is read from. A `let` (not const) purely so real-emulator
+// tests can redirect it to an isolated per-file doc — Jest runs test FILES in
+// parallel workers that share ONE emulator, so multiple files toggling the
+// single production `config/safety` doc would race. Production never touches
+// the setter; it always reads config/safety.
+let safetyConfigDoc = DEFAULT_SAFETY_CONFIG_DOC;
 
 // Process-scoped cache. `null` = never successfully loaded (distinct from a
 // loaded `false`), so a cold process reads through instead of serving a
@@ -63,7 +70,7 @@ async function isAgeGatingEnabled(db, nowMs = Date.now()) {
     return cachedEnabled;
   }
   try {
-    const snap = await db.doc(SAFETY_CONFIG_DOC).get();
+    const snap = await db.doc(safetyConfigDoc).get();
     cachedEnabled = resolveAgeGatingEnabled(snap.exists ? snap.data() : null);
     cacheLoadedAt = nowMs;
   } catch (err) {
@@ -91,4 +98,18 @@ function __resetAgeGatingFlagCache() {
   cacheLoadedAt = 0;
 }
 
-module.exports = { resolveAgeGatingEnabled, isAgeGatingEnabled, __resetAgeGatingFlagCache };
+/**
+ * Test-only: redirect the flag read to an isolated doc so parallel Jest
+ * workers don't race on the single production `config/safety`. Call with no
+ * argument to restore the production default (do this in afterAll).
+ */
+function __setSafetyConfigDocForTests(docPath = DEFAULT_SAFETY_CONFIG_DOC) {
+  safetyConfigDoc = docPath;
+}
+
+module.exports = {
+  resolveAgeGatingEnabled,
+  isAgeGatingEnabled,
+  __resetAgeGatingFlagCache,
+  __setSafetyConfigDocForTests,
+};

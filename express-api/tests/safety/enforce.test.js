@@ -9,9 +9,16 @@ process.env.NODE_ENV = 'local';
 const { db } = require('../../src/utils/firebase');
 const { assertEmulatorReachable } = require('../helpers/firebase-emulator');
 const { checkFeatureAccess } = require('../../src/safety/enforce');
-const { __resetAgeGatingFlagCache } = require('../../src/safety/age-gating-flag');
+const {
+  __resetAgeGatingFlagCache,
+  __setSafetyConfigDocForTests,
+} = require('../../src/safety/age-gating-flag');
 
-const SAFETY_DOC = 'config/safety';
+// Isolated flag doc — this file toggles the flag, so it must NOT share the
+// production `config/safety` doc with age-gating-flag.test.js under parallel
+// Jest workers (they share one emulator). Plain kebab id — Firestore reserves
+// the `__*__` name pattern, so no leading/trailing double underscores.
+const SAFETY_DOC = 'config/safety-test-enforce';
 const NOW = Date.UTC(2026, 6, 8);
 const dobForAge = (years) => Date.UTC(2026 - years, 6, 8);
 const verified = (years, extra = {}) => ({
@@ -22,8 +29,12 @@ const verified = (years, extra = {}) => ({
 
 const setFlag = (enabled) => db.doc(SAFETY_DOC).set({ ageGatingEnabled: enabled });
 
-beforeAll(() => assertEmulatorReachable());
+beforeAll(async () => {
+  await assertEmulatorReachable();
+  __setSafetyConfigDocForTests(SAFETY_DOC);
+});
 afterAll(() => {
+  __setSafetyConfigDocForTests();
   process.env.NODE_ENV = PRIOR_NODE_ENV;
 });
 beforeEach(async () => {
@@ -102,5 +113,40 @@ describe('checkFeatureAccess — flag ON, blocked verdicts return a 403', () => 
     expect(block.status).toBe(403);
     expect(block.body.ageGate.threshold).toBe(18);
     expect(block.body.ageGate.feature).toBe('GACHA_SPEND');
+  });
+});
+
+describe('checkFeatureAccess — lazy userData loader (zero cost when flag OFF)', () => {
+  test('the loader is NOT invoked when the flag is OFF (no extra user-doc read)', async () => {
+    // Flag deleted in beforeEach → OFF. An endpoint that only loads the user
+    // doc for the gate can pass a loader; it must not fire when gating is off.
+    let calls = 0;
+    const loadUser = async () => {
+      calls += 1;
+      return verified(12);
+    };
+    const block = await checkFeatureAccess(db, 'DIRECT_MESSAGE_WITH_STRANGER', loadUser, NOW);
+    expect(block).toBeNull();
+    expect(calls).toBe(0);
+  });
+
+  test('the loader IS invoked and its result evaluated when the flag is ON', async () => {
+    await setFlag(true);
+    let calls = 0;
+    const loadUser = async () => {
+      calls += 1;
+      return verified(14);
+    };
+    const block = await checkFeatureAccess(db, 'DIRECT_MESSAGE_WITH_STRANGER', loadUser, NOW);
+    expect(calls).toBe(1);
+    expect(block.status).toBe(403);
+    expect(block.body.ageGate.verdict).toBe('BlockedUnderAge');
+  });
+
+  test('a loader returning an allowed user yields null (no block)', async () => {
+    await setFlag(true);
+    const loadUser = async () => verified(30);
+    const block = await checkFeatureAccess(db, 'DIRECT_MESSAGE_WITH_STRANGER', loadUser, NOW);
+    expect(block).toBeNull();
   });
 });
