@@ -1,7 +1,62 @@
-const { dumpWithRetry } = require('../../scripts/drivers/ui-dump-retry');
+const { dumpWithRetry, resolveDumpBackoffMs } = require('../../scripts/drivers/ui-dump-retry');
 
 const noSleep = () => Promise.resolve();
 const HIER = '<?xml version="1.0"?><hierarchy rotation="0"><node/></hierarchy>';
+
+describe('resolveDumpBackoffMs', () => {
+  // Jest sets JEST_WORKER_ID per worker; the override is honored ONLY under it,
+  // so a stray shell export can never reach a real device run. Tests simulate
+  // that runner env explicitly rather than mutating the process's own.
+  const JEST = { JEST_WORKER_ID: '1' };
+
+  test('defaults to 800ms when ANDROID_DUMP_BACKOFF_MS is absent', () => {
+    expect(resolveDumpBackoffMs({ ...JEST })).toBe(800);
+  });
+
+  test('honors ANDROID_DUMP_BACKOFF_MS=0 (under Jest) so error-path driver tests skip real backoff', () => {
+    expect(resolveDumpBackoffMs({ ...JEST, ANDROID_DUMP_BACKOFF_MS: '0' })).toBe(0);
+  });
+
+  test('honors a custom positive ANDROID_DUMP_BACKOFF_MS (under Jest)', () => {
+    expect(resolveDumpBackoffMs({ ...JEST, ANDROID_DUMP_BACKOFF_MS: '250' })).toBe(250);
+  });
+
+  test('trims a whitespace-padded numeric value', () => {
+    expect(resolveDumpBackoffMs({ ...JEST, ANDROID_DUMP_BACKOFF_MS: ' 5 ' })).toBe(5);
+  });
+
+  test('falls back to 800ms for an empty-string ANDROID_DUMP_BACKOFF_MS', () => {
+    expect(resolveDumpBackoffMs({ ...JEST, ANDROID_DUMP_BACKOFF_MS: '' })).toBe(800);
+  });
+
+  test('falls back to 800ms for a whitespace-only ANDROID_DUMP_BACKOFF_MS', () => {
+    expect(resolveDumpBackoffMs({ ...JEST, ANDROID_DUMP_BACKOFF_MS: '   ' })).toBe(800);
+  });
+
+  test('falls back to 800ms for a non-numeric ANDROID_DUMP_BACKOFF_MS', () => {
+    expect(resolveDumpBackoffMs({ ...JEST, ANDROID_DUMP_BACKOFF_MS: 'abc' })).toBe(800);
+  });
+
+  test('falls back to 800ms for a negative ANDROID_DUMP_BACKOFF_MS', () => {
+    expect(resolveDumpBackoffMs({ ...JEST, ANDROID_DUMP_BACKOFF_MS: '-5' })).toBe(800);
+  });
+
+  test('IGNORES the override outside the Jest runner — a real device never gets fast backoff', () => {
+    // No JEST_WORKER_ID, as in a manual-qa-runner process where a shell export leaked.
+    expect(resolveDumpBackoffMs({ ANDROID_DUMP_BACKOFF_MS: '0' })).toBe(800);
+  });
+
+  test('is null-safe: a null env falls back to process.env without throwing', () => {
+    const prev = process.env.ANDROID_DUMP_BACKOFF_MS;
+    delete process.env.ANDROID_DUMP_BACKOFF_MS; // this file never sets it; be explicit
+    try {
+      // process.env under Jest carries JEST_WORKER_ID but no override → default.
+      expect(resolveDumpBackoffMs(null)).toBe(800);
+    } finally {
+      if (prev !== undefined) process.env.ANDROID_DUMP_BACKOFF_MS = prev;
+    }
+  });
+});
 
 describe('dumpWithRetry', () => {
   test('returns the dump on the first attempt when it succeeds', async () => {

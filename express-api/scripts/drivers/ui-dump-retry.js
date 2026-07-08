@@ -47,4 +47,34 @@ async function dumpWithRetry(
   return { ok: false, xml: '', attempts: maxAttempts, lastErr };
 }
 
-module.exports = { dumpWithRetry };
+const DEFAULT_DUMP_BACKOFF_MS = 800;
+
+/**
+ * Resolve androidUiDump's inter-attempt backoff. Defaults to 800ms (≈ the
+ * observed app cold-start settle).
+ *
+ * The `ANDROID_DUMP_BACKOFF_MS` override exists ONLY so the driver's error-path
+ * unit tests can drop the real delay — each test mocks a persistent dump throw,
+ * so without it every one burns 7×800ms of real backoff and the driver suite
+ * balloons past 5 minutes. It is therefore honored ONLY under the Jest runner
+ * (`JEST_WORKER_ID` is set per worker; `manual-qa-runner` never sets it), so a
+ * stray shell export can never defeat the cold-start retry on a real device.
+ * Blank / whitespace-only / non-finite / negative values fall back to the
+ * default. Pure: `env` is injectable (defaults to `process.env`, null-safe).
+ *
+ * @param {NodeJS.ProcessEnv} [env] defaults to `process.env`
+ * @returns {number} backoff in ms
+ */
+function resolveDumpBackoffMs(env) {
+  const e = env || process.env;
+  // Test-only affordance: never let the override reach a real device run.
+  if (e.JEST_WORKER_ID === undefined) return DEFAULT_DUMP_BACKOFF_MS;
+  const raw = e.ANDROID_DUMP_BACKOFF_MS;
+  if (raw === undefined) return DEFAULT_DUMP_BACKOFF_MS;
+  const trimmed = String(raw).trim();
+  if (trimmed === '') return DEFAULT_DUMP_BACKOFF_MS;
+  const n = Number(trimmed);
+  return Number.isFinite(n) && n >= 0 ? n : DEFAULT_DUMP_BACKOFF_MS;
+}
+
+module.exports = { dumpWithRetry, resolveDumpBackoffMs };

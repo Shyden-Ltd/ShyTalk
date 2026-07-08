@@ -40,6 +40,49 @@ const { createAndroidDriver } = require(
   path.join(REPO_ROOT, 'express-api/scripts/drivers/android-adb-driver'),
 );
 
+// androidUiDump now retries the UI dump up to 8× on throw (ui-dump-retry.js).
+// Every error-path test below mocks a PERSISTENT adb throw, so without this
+// each would burn 7×800ms of REAL backoff (~5.6s) — dozens of them push this
+// suite past 5 minutes. Setting the backoff to 0 keeps the retry COUNT (the
+// behaviour under test) intact while removing the wall-clock delay. Saved +
+// restored so it can't leak to other suites in a shared worker.
+let _prevDumpBackoff;
+beforeAll(() => {
+  _prevDumpBackoff = process.env.ANDROID_DUMP_BACKOFF_MS;
+  process.env.ANDROID_DUMP_BACKOFF_MS = '0';
+});
+afterAll(() => {
+  if (_prevDumpBackoff === undefined) delete process.env.ANDROID_DUMP_BACKOFF_MS;
+  else process.env.ANDROID_DUMP_BACKOFF_MS = _prevDumpBackoff;
+});
+
+// Regression pin (SHY-0154 perf fix): prove androidUiDump actually THREADS the
+// resolved backoff into dumpWithRetry. Without this, dropping the call-site
+// `{ backoffMs: ... }` argument would leave every test green — maxAttempts=8 is
+// unchanged so nothing times out — while silently reverting the suite to >5 min.
+describe('androidUiDump backoff wiring', () => {
+  test('threads the resolved ANDROID_DUMP_BACKOFF_MS into the real retry sleep', async () => {
+    const prev = process.env.ANDROID_DUMP_BACKOFF_MS;
+    process.env.ANDROID_DUMP_BACKOFF_MS = '5'; // distinctive: non-zero, non-default
+    const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
+    try {
+      execSync.mockImplementation((cmd) => {
+        if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+        throw new Error('busy'); // every dump throws → retry exhausts, exercising the sleep
+      });
+      const driver = await createAndroidDriver();
+      const xml = await driver.androidUiDump();
+      expect(xml).toBe(''); // exhausted retry returns '' — behaviour preserved
+      // The wiring must pass the resolved 5ms, not dumpWithRetry's hardcoded 800ms default.
+      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 5);
+    } finally {
+      setTimeoutSpy.mockRestore();
+      if (prev === undefined) delete process.env.ANDROID_DUMP_BACKOFF_MS;
+      else process.env.ANDROID_DUMP_BACKOFF_MS = prev;
+    }
+  });
+});
+
 /**
  * Build a mock execSync responder driven by a cmd-substring → output
  * map. Each `pattern` is matched against the full shell-quoted
