@@ -19,7 +19,8 @@
  */
 
 const { isAgeGatingEnabled } = require('./age-gating-flag');
-const { evaluateFeatureAccess } = require('./feature-access');
+const { evaluateFeatureAccess, extractVerifiedAge, extractRegion } = require('./feature-access');
+const { logBlockedFeatureAttempt } = require('./safety-audit');
 
 const BLOCK_ERROR_ID = 'AGE_GATE_BLOCKED';
 // Neutral English fallback only. The client renders the real, T&S-reviewed,
@@ -59,6 +60,17 @@ async function checkFeatureAccess(db, feature, userDataOrLoader, nowMs = Date.no
     typeof userDataOrLoader === 'function' ? await userDataOrLoader() : userDataOrLoader;
   const verdict = evaluateFeatureAccess(userData, feature, nowMs);
   if (verdict.type === 'Allowed') return null;
+
+  // Fire-and-forget audit of the blocked attempt (AC53/AC79) — not awaited, so
+  // a slow/failed Firestore write can never delay or fail the gate response.
+  logBlockedFeatureAttempt(db, {
+    userId: userData?.uniqueId,
+    feature,
+    threshold: verdict.threshold,
+    userAge: extractVerifiedAge(userData, nowMs),
+    region: extractRegion(userData),
+  });
+
   return buildBlock(feature, verdict);
 }
 

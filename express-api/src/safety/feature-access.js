@@ -89,4 +89,4 @@ function evaluateFeatureAccess(userData, feature, nowMs = Date.now()) {
   return canAccess(feature, verifiedAgeYears, region);
 }
 
-module.exports = { ageFromDob, evaluateFeatureAccess };
+module.exports = { ageFromDob, evaluateFeatureAccess, extractVerifiedAge, extractRegion };
