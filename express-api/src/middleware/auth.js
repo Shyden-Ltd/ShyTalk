@@ -349,10 +349,17 @@ async function requireAdmin(req, res) {
 }
 
 function clearSuspensionCache(uniqueId) {
-  suspensionCache.delete(uniqueId);
-  // Also drop any inflight Promise so the NEXT caller refetches from
-  // Firestore (the inflight Promise was about to resolve to the OLD value).
-  suspensionInFlight.delete(uniqueId);
+  if (uniqueId) {
+    suspensionCache.delete(uniqueId);
+    // Also drop any inflight Promise so the NEXT caller refetches from
+    // Firestore (the inflight Promise was about to resolve to the OLD value).
+    suspensionInFlight.delete(uniqueId);
+  } else {
+    // No id → clear everything (mirrors clearUniqueIdCache/clearAdminClaimCache),
+    // so the no-arg clearAuthCaches() test-isolation helper actually empties it.
+    suspensionCache.clear();
+    suspensionInFlight.clear();
+  }
 }
 
 /**
