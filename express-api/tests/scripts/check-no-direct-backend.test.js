@@ -207,12 +207,15 @@ describe('fail-closed — malformed baseline throws (never a false green)', () =
   });
 });
 
-// Finding 4 — the 5 exports the first pass never touched (main, reportAndExit,
-// generateBaseline, scanRepo, gitTrackedFiles), incl. the drift-catching
-// "real scan == committed baseline" invariant (mirrors check-no-new-stubs.test).
-// node is spawned via process.execPath (absolute — no PATH lookup, so no
-// sonarjs/no-os-command-from-path); NO `git` is spawned from the test (the
-// git-needing paths use the real repo; the exit-2 path uses a non-git tmp dir).
+// Finding 4 — the 6 exports the first pass never touched (main, reportAndExit,
+// generateBaseline, serializeBaseline, scanRepo, gitTrackedFiles), incl. the
+// drift-catching "real scan == committed baseline" invariant (mirrors
+// check-no-new-stubs.test). node is spawned via process.execPath (absolute); git
+// via an ABSOLUTE resolved path (resolveGit) — both avoid a PATH lookup, so
+// sonarjs/no-os-command-from-path is satisfied WITHOUT an eslint-disable
+// (feedback-never-suppress-fix-or-upgrade). generateBaseline/--generate-baseline
+// run only against an ISOLATED temp git repo (makeTempRepo) — never the real
+// tracked baseline.
 describe('integration — real repo scan, baseline sync, and CLI exit-code contract', () => {
   const { spawnSync } = require('child_process');
   const fs = require('fs');
@@ -224,6 +227,7 @@ describe('integration — real repo scan, baseline sync, and CLI exit-code contr
   const {
     scanRepo,
     serializeBaseline,
+    generateBaseline,
     gitTrackedFiles,
     reportAndExit,
     diffBaseline,
@@ -232,6 +236,32 @@ describe('integration — real repo scan, baseline sync, and CLI exit-code contr
   const EMPTY = () => Object.fromEntries(CATEGORIES.map((c) => [c.key, []]));
   const runCli = (args, cwd) =>
     spawnSync(process.execPath, [SCRIPT, ...args], { cwd, encoding: 'utf8' });
+
+  // Resolve git to an ABSOLUTE path from PATH (no bare-name spawn → no
+  // sonarjs/no-os-command-from-path warning, no suppression). Fails loudly if
+  // git is truly absent rather than silently skipping.
+  const resolveGit = () => {
+    for (const d of (process.env.PATH || '').split(path.delimiter)) {
+      const p = path.join(d, 'git');
+      if (fs.existsSync(p)) return p;
+    }
+    return '/usr/bin/git';
+  };
+  const GIT = resolveGit();
+
+  // Isolated, disposable git repo seeded with `files` ({relPath: content}); the
+  // generateBaseline/CLI tests run here so they NEVER touch the real baseline.
+  const makeTempRepo = (files) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ndb-repo-'));
+    fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
+    for (const [rel, content] of Object.entries(files)) {
+      fs.mkdirSync(path.join(dir, path.dirname(rel)), { recursive: true });
+      fs.writeFileSync(path.join(dir, rel), content);
+    }
+    spawnSync(GIT, ['init', '-q'], { cwd: dir });
+    spawnSync(GIT, ['add', '-A'], { cwd: dir });
+    return dir;
+  };
 
   test('committed baseline == a fresh real-repo scanRepo() (drift is impossible to miss)', () => {
     const live = scanRepo({ cwd: REPO });
@@ -246,6 +276,52 @@ describe('integration — real repo scan, baseline sync, and CLI exit-code contr
   // writing to the real tracked file (no test side-effect).
   test('serializeBaseline(scanRepo) equals the committed baseline byte-for-byte', () => {
     expect(serializeBaseline(scanRepo({ cwd: REPO }))).toBe(fs.readFileSync(BASELINE, 'utf8'));
+  });
+
+  // Pins the CATEGORIES key-ordering CONTRACT with a deliberately scrambled,
+  // partial-key input — NOT the pre-ordered scanRepo output. Mutation check:
+  // replace the `ordered` remap with `JSON.stringify(offenders,...)` and this
+  // goes RED (the scanRepo test above would stay green — that's the tautology
+  // this closes, per feedback-test-must-fail-if-logic-skipped).
+  test('serializeBaseline emits keys in CATEGORIES order regardless of input order', () => {
+    const scrambled = { webData: ['w.js'], storage: [], firestore: ['a.kt'], rtdb: ['b.kt'] };
+    const parsedOrder = Object.keys(JSON.parse(serializeBaseline(scrambled)));
+    expect(parsedOrder).toEqual(['firestore', 'rtdb', 'storage', 'webData']);
+    expect(serializeBaseline(scrambled).endsWith('\n')).toBe(true);
+  });
+
+  // generateBaseline FUNCTION — writes the scanned offenders to
+  // <cwd>/scripts/direct-backend-baseline.json, in an ISOLATED temp git repo.
+  test('generateBaseline writes the serialized offenders into an isolated temp repo', () => {
+    const violation = 'shared/src/iosMain/kotlin/X.kt';
+    const dir = makeTempRepo({
+      [violation]: 'import dev.gitlive.firebase.firestore.firestore\nfirestore.collection("u")',
+      'shared/src/commonMain/kotlin/Clean.kt': 'class Clean',
+    });
+    const off = generateBaseline({ cwd: dir });
+    expect(off.firestore).toEqual([violation]);
+    const written = fs.readFileSync(
+      path.join(dir, 'scripts', 'direct-backend-baseline.json'),
+      'utf8',
+    );
+    expect(written).toBe(
+      serializeBaseline({ firestore: [violation], rtdb: [], storage: [], webData: [] }),
+    );
+    // the real repo baseline is untouched
+    expect(fs.readFileSync(BASELINE, 'utf8')).not.toContain(violation);
+  });
+
+  test('CLI: --generate-baseline → exit 0, prints "wrote", writes the file (isolated temp repo)', () => {
+    const dir = makeTempRepo({
+      'app/src/main/java/Y.kt': 'import com.google.firebase.database.FirebaseDatabase',
+    });
+    const r = runCli(['--generate-baseline'], dir);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/wrote/);
+    const written = JSON.parse(
+      fs.readFileSync(path.join(dir, 'scripts', 'direct-backend-baseline.json'), 'utf8'),
+    );
+    expect(written.rtdb).toEqual(['app/src/main/java/Y.kt']);
   });
 
   test('CLI: clean repo → exit 0', () => {
