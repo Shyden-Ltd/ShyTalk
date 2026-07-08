@@ -307,9 +307,12 @@ Before any production code, write **deep** tests — RED before GREEN — across
 - **Run the local gate before merging (HARD, SHY-0127 Gates 2+3):** `bash scripts/pre-merge-check.sh <PR#>` must emit `PRE-MERGE-CHECK: OK` — it refuses unless the story is In Review, every CI check is green by name, and there are no unreviewed commits since `Reviewed-up-to`. It also prints the human-judgment checklist (DoD met · dev-verified on real devices · backend⇒full-gauntlet-ran) for conscious sign-off.
 - Merge **only** when dev is fully green **and** you have **zero doubt** it is production-ready. No `--auto`. Notify the operator on each merge.
 
-### Exemption (the ONLY one)
+### Exemptions (the ONLY two)
 
-- **Only `*.md`-only PRs** skip the device/browser gauntlet. They still run their relevant non-device frameworks (story-frontmatter validator, lint) + `code-reviewer` + CI. ANY change touching code, workflows, or scripts runs the FULL protocol — even if it looks like it doesn't touch an app/web surface.
+1. **`*.md`-only PRs** skip the device/browser gauntlet. They still run their relevant non-device frameworks (story-frontmatter validator, lint) + `code-reviewer` + CI.
+2. **CI-config-only PRs** — changes confined to CI/CD plumbing with **no app, backend, or website runtime surface** — skip the device/browser gauntlet: there is no user-observable behaviour to walk, so the gauntlet would exercise nothing related to the change. **Scope:** `.github/workflows/**`, CI-only helper scripts, and the meta-tests that pin CI structure (e.g. `express-api/tests/scripts/pr-checks-*.test.js`). They STILL run the full relevant non-device gauntlet — the affected Jest script/structure tests, `actionlint`, `eslint` + `prettier` (`--max-warnings=0`), the story validator, `code-reviewer` 100%-clean, and CI green by name — and the story's `## Test Plan` MUST state the CI-config-only classification. **Tight boundary (anti-loophole):** if a PR touches ANY product runtime — app (`shared/**`, `app/**`, `iosApp/**`), backend (`express-api/src/**`, `firestore.rules`, `database.rules.json`, `storage.rules`), or website (`public/**`) — it is NOT CI-config-only and runs the FULL protocol. The backend⇒full-gauntlet rule (SHY-0127) is unchanged: a backend runtime change is never CI-config-only. Delivered by SHY-0163.
+
+**Everything else runs the FULL protocol** — ANY change touching product code (app / backend / website) runs the full device/browser gauntlet, even if it looks like it doesn't touch an app/web surface.
 
 ### After merge → Done
 
