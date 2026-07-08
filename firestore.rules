@@ -210,23 +210,23 @@ service cloud.firestore {
       // ownerLeft signals against this field; binding it to the
       // signed JWT uid here makes it unspoofable.
       //
-      // The `.get(field, request.auth.uid)` default is deliberate —
-      // legacy app versions (pre-cron-elim) don't write the field
-      // and we cannot break their createRoom path until Play Store
-      // and App Store rollout completes. Field-missing → default
-      // matches itself → passes; field-present-and-matching →
-      // passes; field-present-and-forged → fails. Forgery is closed
-      // in both branches; the orchestrator's legacy-fallback path
-      // handles rooms that arrive without the field. Follow-up PR
-      // (after rollout) tightens this to a strict
-      // `get('ownerFirebaseUid', '') == request.auth.uid`.
+      // SHY-0029 (2026-07-08) — TIGHTENED to strict present-and-matching. The
+      // default is '' (NOT request.auth.uid): a create that omits the field ->
+      // '' != auth.uid -> DENIED. Previously the request.auth.uid default let a
+      // field-missing create pass (default matched itself), producing a room
+      // with no ownerFirebaseUid and silently breaking the owner-left RTDB
+      // attestation that reads room.ownerFirebaseUid. Removed the legacy
+      // pre-cron-elim shim: safe now — pre-public (no legacy clients in the
+      // wild) and the current app always writes the field (HomeViewModel ->
+      // createRoom). Outcomes: absent -> deny; empty -> deny;
+      // present-and-forged -> deny; present-and-matching -> allow.
       allow create: if request.auth != null
         && request.resource.data.get('cohort', '')
             == request.auth.token.get('cohort', 'minor')
         && (request.resource.data.get('cohort', '') == 'adult'
             || request.resource.data.get('cohort', '') == 'minor')
         && string(callerUniqueId()) == request.resource.data.ownerId
-        && request.resource.data.get('ownerFirebaseUid', request.auth.uid)
+        && request.resource.data.get('ownerFirebaseUid', '')
             == request.auth.uid;
 
       // POST-LOCKDOWN (PR #858 server-authz cutover, this PR): client-side

@@ -325,10 +325,12 @@ class HomeViewModelTest {
             // Defensive: if currentFirebaseUid is somehow null (impossible
             // when authenticated — but defend in case AuthRepository's
             // implementation introduces a transient null window), the
-            // ViewModel substitutes empty string. The Firestore rule's
-            // `.get('ownerFirebaseUid', request.auth.uid)` default makes
-            // this still pass create-side; the orchestrator's user-doc
-            // fallback covers signal attestation.
+            // ViewModel substitutes empty string. Post-SHY-0029 the Firestore
+            // room-create rule (`.get('ownerFirebaseUid', '') == request.auth.uid`)
+            // DENIES such an empty-uid create — no unattributable-owner room is
+            // created (proven at the rules layer in room-rules.test.js). This
+            // VM-level unit test only asserts the empty string reaches the
+            // repository call; the deny happens server-side, not here.
             every { authRepository.currentFirebaseUid } returns null
             coEvery { userRepository.getUser(currentUserId) } returns
                 Resource.Success(TestData.createTestUser(uid = currentUserId).copy(cohort = "adult"))

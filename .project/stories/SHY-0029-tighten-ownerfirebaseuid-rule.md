@@ -1,6 +1,6 @@
 ---
 id: SHY-0029
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-06-07
 priority: P0
@@ -15,232 +15,150 @@ mvp: true
 
 ## User Story
 
-As the ShyTalk operator concerned about authorization correctness, I want **`firestore.rules:218-225`'s `ownerFirebaseUid` check to enforce strict equality with `request.auth.uid`** (no fallback when the field is absent), so that a class of legacy-client/IDOR/missing-field bypass attempts becomes impossible at the database layer.
+As the ShyTalk operator concerned about authorization correctness, I want **the room `allow create` rule's `ownerFirebaseUid` check (`firestore.rules:229`) to require the field be present AND equal to `request.auth.uid`** (no fallback when the field is absent), so that a room can never be created without a trustworthy owner binding — closing the legacy-client "fieldless create" accommodation now that we are pre-public.
 
 ## Why
 
-Current rule at `firestore.rules:218-225`:
+Current rule at `firestore.rules:223-230` — the room **create** gate:
 
 ```javascript
-// (current, vulnerable to missing-field-fallback bypass)
-allow update: if request.auth != null &&
-    resource.data.get('ownerFirebaseUid', request.auth.uid) == request.auth.uid;
+allow create: if request.auth != null
+  && request.resource.data.get('cohort', '') == request.auth.token.get('cohort', 'minor')
+  && (request.resource.data.get('cohort', '') == 'adult'
+      || request.resource.data.get('cohort', '') == 'minor')
+  && string(callerUniqueId()) == request.resource.data.ownerId
+  && request.resource.data.get('ownerFirebaseUid', request.auth.uid)   // ← line 229
+      == request.auth.uid;
 ```
 
-The `.get('ownerFirebaseUid', request.auth.uid)` pattern returns the field's value if present, **otherwise returns the second argument** (`request.auth.uid`). This means: if the document lacks the `ownerFirebaseUid` field entirely, the comparison becomes `request.auth.uid == request.auth.uid` — trivially true. Any authenticated user can update such a document, regardless of intended ownership.
+The `request.resource.data.get('ownerFirebaseUid', request.auth.uid)` pattern returns the incoming field if present, **otherwise returns the second argument** (`request.auth.uid`). So when a client creates a room WITHOUT the `ownerFirebaseUid` field, the comparison becomes `request.auth.uid == request.auth.uid` — trivially true — and **a room is created with no `ownerFirebaseUid` at all**.
 
-This was introduced as a legacy compatibility shim during the cron-elimination cluster (closed 2026-06-04/05). At the time, several stale documents lacked `ownerFirebaseUid` because the field was added mid-rollout. The fallback prevented breakage. But the cluster is now closed; new documents always carry the field; and Play Store rollout of the field-introducing release should have substantially completed by now.
+That field is not decorative: the owner-left presence mechanism denormalises it and the RTDB `onDisconnect` attestation compares its signal value against `room.ownerFirebaseUid` (`shared/.../data/remote/PresenceService.kt:31-45`). A fieldless room therefore **silently breaks owner-left enforcement** for that room. (It is NOT an IDOR/update bypass — client-side room-doc *updates* are already fully denied by the PR #858 server-authz cutover at `firestore.rules:232-237`; all mutations route through the Admin-SDK Express endpoints. This SHY narrows to the one remaining soft spot: create.)
 
-Roadmap row G026 (line 116 of `.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md`):
+The `.get(default)` was a deliberate legacy-compat shim (comment at `firestore.rules:213-222`) so pre-cron-elim app versions that don't write the field could still create rooms during Play/App-Store rollout. The comment itself prescribes the follow-up: *"tightens this to a strict `get('ownerFirebaseUid', '') == request.auth.uid`."* **This SHY is that follow-up.** We are still pre-public (only `shytalk.com` is live; no installed app base) — so there are no legacy clients in the wild to break, and the current client already writes the field (`HomeViewModel.kt:434` → `createRoom(..., ownerFirebaseUid, ...)` → `IosRoomRepositoryImpl.kt:102`). Tighten now — the pre-public window is the cheap time.
 
-> Sev: 🟠 Important. Category: Security — `ownerFirebaseUid` rule has legacy fallback. Location: `firestore.rules:218-225`. Gap: `.get('ownerFirebaseUid', request.auth.uid)` allows absent field (legacy pre-cron-elim). Fix: If Play Store rollout complete (>90d), tighten to strict `== request.auth.uid` + add rules test. Scope: S.
-
-Bumped to Tier 1 P0 under SHY-0032 because (a) it's a security tightening, (b) pre-public-release window is the cheap time to land it without disrupting a real user base, (c) the operator's "quality + reliability over speed" weighting.
-
-Rollout window check: the field-introducing release was part of the cron-elim cluster commits 2026-06-04/05; today is 2026-06-07 (only ~2 days, NOT >90d). However: ShyTalk is pre-public (only the shytalk.com website is live), so there is no installed-base of stale clients in the wild. The ">90d" guard from the roadmap was written when public release was assumed; pre-public release inverts the calculus — tighten NOW because there are no users to break.
+Roadmap G026 (`.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md`): 🟠 Security — `ownerFirebaseUid` rule has a legacy fallback; tighten to strict `== request.auth.uid` + add a rules test. Scope: S.
 
 ## Acceptance Criteria
 
 ### Happy path
-
-- [ ] `firestore.rules:218-225` is rewritten to require strict equality without fallback:
+- [ ] `firestore.rules:229` changes the default from `request.auth.uid` to `''` so the field must be present-and-matching:
   ```javascript
-  allow update: if request.auth != null &&
-      'ownerFirebaseUid' in resource.data &&
-      resource.data.ownerFirebaseUid == request.auth.uid;
+  && request.resource.data.get('ownerFirebaseUid', '') == request.auth.uid;
   ```
-  (The `'ownerFirebaseUid' in resource.data` check makes the absent-field case explicit and denied; the equality is now safe because we know the field is present.)
-- [ ] A new emulator test in `firestore-rules-tests/owner-firebase-uid-strict.test.js` asserts:
-  - Legit owner (auth.uid matches doc.ownerFirebaseUid) is allowed.
-  - Non-owner authenticated user is denied.
-  - Anonymous (unauthenticated) is denied.
-  - Document without `ownerFirebaseUid` field is denied (the case the old fallback let through).
-- [ ] The change is deployed to dev via `npx firebase deploy --only firestore:rules --project shytalk-dev`.
-- [ ] A smoke check via curl/admin SDK confirms the new rule is in effect on dev.
-- [ ] Documentation: a comment block immediately above the new rule names the date + SHY-NNNN + summary of why the fallback was removed.
+  (Absent → `'' == uid` → deny; present-and-matching → allow; present-and-forged → deny; empty-string → deny.)
+- [ ] The `rooms/{roomId} create` describe block in `express-api/tests/firestore-rules/room-rules.test.js` (real emulator, `@firebase/rules-unit-testing`) asserts create is: allowed for a matching owner; denied when the field is absent (the bypass this closes — the flipped `DENY (SHY-0029): a create that OMITS ownerFirebaseUid` test); denied when forged (≠ auth.uid, pre-existing); denied when empty-string, explicit-null, whitespace-only, and non-string (new `DENY (SHY-0029)` pins); denied when unauthenticated (pre-existing). The pre-refinement plan named a new `room-owner-firebase-uid-strict.test.js` file; extending the existing room-create suite is more cohesive (the OMIT test already lived there) and reuses its `ADULT`/`roomDoc()`/`dbFor()` harness.
+- [ ] A dated `SHY-0029` comment above the rule records the tightening + why the fallback was removed (replacing the stale "follow-up PR after rollout" note).
 
 ### Error paths
-
-- [ ] If a legacy document (no `ownerFirebaseUid` field) exists in dev or prod and a user attempts to update it, the request returns `PERMISSION_DENIED`. Verified by:
-  - Seeding a no-`ownerFirebaseUid` doc into the emulator
-  - Issuing an update as an authenticated user
-  - Asserting `assertFails(...)` from `@firebase/rules-unit-testing`
-- [ ] If the rule deploy fails (network, auth, project mismatch), the previous rule remains active (Firebase's rules deploy is atomic) — verified by checking the rule version SHA before vs after.
-- [ ] If the dev smoke check fails post-deploy, the SHY does NOT proceed to prod; instead it rolls back via `firebase deploy --only firestore:rules` with the prior rule file.
-- [ ] If the new rule accidentally blocks a legitimate flow (e.g. admin-override path that relies on a different rule), a sibling rule for the admin override is added (using the `isAdmin()` helper at `firestore.rules:140`).
-- [ ] If the comment block accidentally introduces a syntax error in the rules file, `firebase deploy --only firestore:rules` fails locally before reaching dev — caught by the deploy command's pre-validation.
+- [ ] A create request that OMITS `ownerFirebaseUid` returns `PERMISSION_DENIED` (previously succeeded). Proven by `assertFails(...)` against the real emulator with a no-field payload.
+- [ ] A create request with a forged `ownerFirebaseUid` (some other user's uid) returns `PERMISSION_DENIED` — behaviour unchanged from today (the old rule already denied a present-and-forged value), pinned so a regression can't reopen it.
+- [ ] The current client's `HomeViewModel.currentFirebaseUid ?: ""` empty-string edge (`HomeViewModelTest:323`) now creates NOTHING (denied) rather than a fieldless room — asserted as correct, safer behaviour (no unattributable-owner rooms). No client change is in scope; the deny is the desired outcome.
 
 ### Edge cases
-
-- [ ] Ownership transfer flows: if any code path legitimately UPDATES `ownerFirebaseUid` from old-owner-uid to new-owner-uid (e.g. account-deletion handover), it MUST go via the Express API + admin SDK (which bypasses rules). Verified by:
-  - Grep for `ownerFirebaseUid` updates in client code (`grep -rn "ownerFirebaseUid" app/ shared/ ios/ public/js/`)
-  - Asserting all client-side write call sites go through Express, not direct Firestore
-- [ ] Admin-override path: an admin with `request.auth.token.admin == true` may need to edit other users' docs (moderation). The new rule does NOT cover this; the existing admin path at `firestore.rules:140` (via the safe `isAdmin()` helper) must be confirmed to still work post-tightening.
-- [ ] Pre-cron-elim documents migrated incorrectly: if any stale prod docs still lack `ownerFirebaseUid`, this rule starts denying their updates. Mitigation: scan dev Firestore for such docs first (`firebase firestore:export` + grep) and surface a count; if non-zero, file a migration follow-up SHY before proceeding.
-- [ ] Cross-rule interactions: this rule lives in a `match /someCollection/{docId}` block. If the collection has sibling rules (create, delete, list, get) that use the same legacy `.get()` pattern, they should be tightened in the same PR. Audit + close all sibling drift.
+- [ ] Only ONE occurrence of the legacy `.get('ownerFirebaseUid', request.auth.uid)` pattern exists (grep-confirmed: `firestore.rules:229`). No sibling create/read/delete rule uses it. The audit is re-run in the reviewer pass.
+- [ ] Room **read** (same-cohort gate), **delete** (owner-only), and the locked-down **update** path are untouched — the change is scoped to the create gate's owner binding.
+- [ ] Admin moderation is unaffected: the create gate has no admin-bypass clause (admins don't create rooms on behalf of others); the `isAdmin()` moderation paths elsewhere in the file are not touched.
 
 ### Performance
-
-- [ ] Rule evaluation time is unchanged (constant-time field check + equality). Verified by reading the Firebase rules-monitoring logs post-deploy for a 5-min window and asserting no regression in p99 latency.
-- [ ] No new external calls (`get()` to other docs, etc.) introduced — the new rule is a pure local-doc check.
-- [ ] Emulator test suite runs within 30s.
+- [ ] Rule-evaluation cost is unchanged — a constant-time `.get()` + equality; no new cross-document `get()`/`exists()` calls introduced.
+- [ ] The extended `rooms/{roomId} create` block in `room-rules.test.js` runs in < 30s against the local emulator.
 
 ### Security
-
-- [ ] A security-review subsection in the rule file's comment block enumerates:
-  - **Prior vuln class**: legacy clients (or any caller) writing a doc without `ownerFirebaseUid` field bypassed the owner check.
-  - **Threat actors**: any authenticated user attempting to modify another user's owned data.
-  - **Closed bypass**: missing-field via `.get(default)` pattern.
-- [ ] The new rule's logic is exercised by adversarial test cases (per [[feedback-exhaustive-tests-first-no-gaps]]): try uid-spoofing in custom claims, try edge cases like empty-string uid, try cross-user write attempts.
-- [ ] No other rule file in `firestore.rules` still uses the legacy `.get('ownerFirebaseUid', request.auth.uid)` pattern; if any do, they are tightened in the same PR.
-- [ ] Defence-in-depth: the Express API server-side validation also checks ownership (verify a sample Express route uses `req.firebaseUser.uid === room.ownerFirebaseUid`). This is documented; not in scope to enforce here.
+- [ ] The rule comment enumerates: prior soft spot (a create omitting `ownerFirebaseUid` produced a fieldless room, breaking owner-left attestation); closed by requiring present-and-matching; residual defence-in-depth (the create still binds `ownerId == callerUniqueId`, and updates are Admin-SDK-only).
+- [ ] Adversarial create cases are exercised (forged uid, empty string, absent field, unauthenticated) — per [[feedback-exhaustive-tests-first-no-gaps]] — with exact allow/deny outcomes, both an allowed baseline and each deny.
 
 ### UX
-
-- [ ] In pre-public release: no end-user impact (no users to break).
-- [ ] In post-public release (future): a stale client attempting a now-denied update would see a generic "permission denied" error. Future SHY will add a more precise client-side error message (out of scope for this SHY but flagged).
-- [ ] Admin moderation flows continue to work (verified via the admin-tools BDD scenarios if any apply post-deploy).
+- [ ] Pre-public: no end-user impact (no app users). The current app writes `ownerFirebaseUid` on create, so the legitimate create flow is unaffected.
 
 ### i18n
-
-- [ ] N/A — server-side rule change; no user-facing strings introduced.
+- [ ] N/A — server-side rule; no user-facing strings.
 
 ### Observability
-
-- [ ] Firebase rules logs (accessed via console or `firebase functions:log` if instrumented) capture denied requests; expected to be ~0 in pre-public (no users to deny).
-- [ ] If a future Crashlytics non-fatal report references the new `PERMISSION_DENIED`, it's traceable to this SHY via the rule comment block.
-- [ ] The new emulator test logs an explicit message per failed assertion (`expect(...).toHaveBeenDeniedDueToAbsentField()` or equivalent), so a future regression's diagnostic is precise.
-- [ ] The `firestore.rules` file's diff is part of the PR (not a separate deploy-only artifact) for git-blameability.
+- [ ] The new test names each denial explicitly (absent / forged / empty / unauth) so a future regression's diagnostic is precise.
+- [ ] The `firestore.rules` diff is in the PR (git-blameable), not a deploy-only artifact.
 
 ## BDD Scenarios
 
-**Scenario: Legit owner allowed to update their own document**
+**Scenario: legitimate owner CAN create their room**
+- **Given** an authenticated caller whose `request.auth.uid` is `firebase-alice` and whose `ownerId` matches their `callerUniqueId()`
+- **When** they create a room whose `ownerFirebaseUid` is `firebase-alice`
+- **Then** the create succeeds (all create clauses pass)
 
-- **Given** a Firestore doc `someCollection/abc123` with `ownerFirebaseUid: "user-alice"`
-- **And** user "user-alice" is authenticated via Firebase Auth
-- **When** alice attempts to update the doc via the Firestore SDK
-- **Then** the update succeeds (rule allows it)
+**Scenario: fieldless create is DENIED (the bypass this SHY closes)**
+- **Given** the same authenticated caller
+- **When** they attempt to create a room with NO `ownerFirebaseUid` field
+- **Then** the create fails with `PERMISSION_DENIED` (NEW — previously the `.get(default)` made it succeed and produced an owner-left-broken room)
 
-**Scenario: Non-owner denied**
+**Scenario: forged ownerFirebaseUid is DENIED**
+- **Given** the authenticated caller `firebase-alice`
+- **When** they create a room whose `ownerFirebaseUid` is `firebase-bob`
+- **Then** the create fails with `PERMISSION_DENIED`
 
-- **Given** the same doc owned by alice
-- **And** user "user-bob" is authenticated
-- **When** bob attempts to update the doc
-- **Then** the update fails with `PERMISSION_DENIED` (rule denies — `ownerFirebaseUid != bob.uid`)
+**Scenario: empty-string ownerFirebaseUid is DENIED**
+- **Given** the authenticated caller (mirrors the client's `currentFirebaseUid ?: ""` edge)
+- **When** they create a room whose `ownerFirebaseUid` is `""`
+- **Then** the create fails with `PERMISSION_DENIED` (no unattributable-owner rooms)
 
-**Scenario: Anonymous denied**
+**Scenario: unauthenticated create is DENIED**
+- **Given** no authenticated user
+- **When** a room create is attempted
+- **Then** it fails with `PERMISSION_DENIED` (`request.auth == null`)
 
-- **Given** the same doc owned by alice
-- **And** no user is authenticated (Firebase Auth signed out)
-- **When** the update is attempted from the client
-- **Then** the update fails with `PERMISSION_DENIED` (rule denies — `request.auth == null`)
-
-**Scenario: Missing-field document denied (the bypass case this SHY closes)**
-
-- **Given** a Firestore doc `someCollection/legacy456` with NO `ownerFirebaseUid` field
-- **And** any authenticated user (e.g. mallory) attempts to update the doc
-- **When** the update is sent
-- **Then** the update fails with `PERMISSION_DENIED` (NEW behaviour — previously this would have succeeded because of the `.get(default)` fallback)
-
-**Scenario: Sibling rules audited**
-
-- **Given** the PR is opened
-- **When** reviewer grep runs `grep -nE "\\.get\\('?ownerFirebaseUid'?" firestore.rules`
-- **Then** the only match is the now-removed legacy pattern (deleted in this PR)
-- **And** no other sibling rule still uses the legacy fallback pattern
-
-**Scenario: Admin moderation path unaffected**
-
-- **Given** an admin with `request.auth.token.admin == true`
-- **When** they attempt to update any document for moderation
-- **Then** the existing admin-override rule path at `firestore.rules:140` (via `isAdmin()`) still permits the update
-- **And** the new tightened owner rule does NOT block admins (because the admin clause is OR-ed, not AND-ed)
-
-**Scenario: Ownership transfer routed through Express API**
-
-- **Given** the codebase grep `grep -rn "ownerFirebaseUid" app/ shared/ public/js/`
-- **When** the results are reviewed
-- **Then** no client-side code path updates the field directly via Firestore SDK
-- **And** all transfer flows go through Express API + admin SDK (which bypasses rules)
-- **And** if any direct-write site exists, it's flagged as a security issue and fixed in this PR
+**Scenario: sibling audit clean**
+- **Given** the reviewer runs `grep -nE "\.get\('?ownerFirebaseUid'?" firestore.rules`
+- **Then** the only historical match (line 229) is the one tightened in this PR, and no other rule uses the legacy fallback
 
 ## Test Plan (TDD)
 
-### Red
-
-1. Add `firestore-rules-tests/owner-firebase-uid-strict.test.js`:
-   - Test A: alice owns doc; alice updates → assertSucceeds.
-   - Test B: alice owns doc; bob updates → assertFails (denied).
-   - Test C: alice owns doc; no auth → assertFails.
-   - Test D: legacy doc (no ownerFirebaseUid field); any user updates → assertFails. **This test currently passes (i.e. the update succeeds) because of the bypass — meaning it's a RED test that REVEALS the vuln.**
-2. Run `cd firestore-rules-tests && npm test -- owner-firebase-uid-strict`.
-3. Test D fails the assertion (`expected assertFails but got assertSucceeds`). RED confirmed.
+1. Extend the `rooms/{roomId} create` describe block in `express-api/tests/firestore-rules/room-rules.test.js` (real emulator via `@firebase/rules-unit-testing`; reuses the existing `ADULT` / `roomDoc()` / `dbFor()` harness). A/C/E already existed; this SHY flips B and adds the D-family pins:
+   - A: owner create with matching `ownerFirebaseUid` → `assertSucceeds` (pre-existing).
+   - B: create with the field ABSENT → `assertFails`. **RED: the pre-existing test asserted `assertSucceeds` (the `.get(default)` fallback let it through); flipped to `assertFails`.**
+   - C: create with forged `ownerFirebaseUid` → `assertFails` (pre-existing; pins the invariant).
+   - D: create with empty-string / explicit-null / whitespace-only / non-string `ownerFirebaseUid` → `assertFails` (new pins; each already denied pre-fix since the value `!= auth.uid`, pinned so the tightening cannot regress them).
+   - E: unauthenticated create → `assertFails` (pre-existing; pins).
+2. `cd express-api && npx jest tests/firestore-rules/room-rules.test.js -t create` against the running emulator → case **B fails** (`Expected request to fail, but it succeeded`). RED confirmed.
 
 ### Green
+1. Edit `firestore.rules:229`: `request.auth.uid` default → `''`.
+2. Update the rule comment (dated SHY-0029 security note; drop the stale "after rollout" wording).
+3. Re-run the emulator test → all cases GREEN.
+4. Regression: re-run the existing `room-rules.test.js` (create happy paths + read/delete/update-lockdown) → still green — the tightening must not break a legitimate create or alter read/delete/update.
+5. No PRODUCTION client change (the app already writes the field). One now-false comment in `app/src/test/java/com/shyden/shytalk/feature/home/HomeViewModelTest.kt` (which claimed the old `.get(default)` still let an empty-uid create pass) is corrected to reference SHY-0029 — a test-comment fix caused by this rule change, not a logic change (`detekt` / `ktlint` still N/A; the test's assertions are unchanged).
 
-1. Audit `firestore.rules` for all uses of `.get('ownerFirebaseUid', ...)`; collect line numbers.
-2. Replace each occurrence with the new strict pattern:
-   ```javascript
-   "ownerFirebaseUid" in resource.data &&
-     resource.data.ownerFirebaseUid == request.auth.uid;
-   ```
-3. Add the security-review comment block above each tightened rule.
-4. Run `firebase emulators:start --only firestore` + re-run the emulator test → GREEN on all 4 cases.
-5. Deploy to dev: `npx firebase deploy --only firestore:rules --project shytalk-dev`.
-6. Smoke via curl: POST to `dev-api.shytalk.shyden.co.uk/api/...` with valid auth + verify owner check via the API layer (which adds defence-in-depth).
-7. Scan dev Firestore for any docs lacking `ownerFirebaseUid` (`firebase firestore:export` + grep). If non-zero count, file a migration follow-up SHY but do NOT block this one (the rule still tightens; stale docs become read-only via this path, which is the correct behaviour for stale state).
-
-### Pre-Merge Testing Protocol (per `CLAUDE.md` § Pre-Merge Testing Protocol)
-
-**Not `*.md`-only** (edits `firestore.rules` + adds a rules test) → the FULL gauntlet applies. Tightening an authz rule changes real app behaviour (owner-update flows), so it must be re-proven on the live surfaces, not just the emulator.
-
-**Frameworks exercised (RED→GREEN before the rule change):**
-- ✅ **Firestore rules emulator tests** — `owner-firebase-uid-strict.test.js` (`@firebase/rules-unit-testing`): owner-allowed / non-owner-denied / anon-denied / **missing-field-denied** (the RED that reveals the bypass); the story's primary RED→GREEN.
-- ✅ **Manual-QA journey matrix** — owner-edit flows that hit this rule (e.g. **room-settings edit** as the owner succeeds; as a non-owner is denied) walked on a **real Android device AND a real iPhone** AND on web (these flows exist on every surface) — proving the tightening doesn't break a legitimate owner update.
-- ✅ **Web E2E** — the web owner-edit path across the `local` browser matrix (the owned-doc edit UI is a web surface too).
-- ⬜ **Kotlin JVM unit / detekt / ktlint / iOS compile / Express Jest** — N/A (no Kotlin or Express code changed; the Express ownership check is explicitly Out of Scope/unchanged); apps still run the regression corpus as the net.
-- ✅ **SonarCloud** — quality gate.
-
-**LOCAL gauntlet:** rules emulator suite green → owner-edit journeys green on real Android + real iPhone + all browsers on the Mac (owner allowed, non-owner denied). Any failure → fix TDD → restart the whole local gauntlet.
-**DEV gauntlet:** the rule's `firebase deploy --only firestore:rules --project shytalk-dev` IS the dev deploy; redeploy the unmerged branch's rules + re-walk the owner-edit journeys on real Android + real iPhone; web = Chrome only. Restart from LOCAL on failure. **Judgment-merge** only when production-ready with zero doubt — a broken owner-update flow or an un-closed bypass is a security incident.
+### Pre-Merge Testing Protocol
+**Not `*.md`-only** — edits `firestore.rules` (backend/product runtime; the CI-config-only exemption explicitly does NOT apply to `firestore.rules`). The FULL gauntlet applies: rules-emulator suite (the RED→GREEN) + the room-create owner journey re-walked on real Android + real iPhone + all browsers (owner create succeeds; the deny paths are emulator-proven) → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet (deploy the branch's rules to `shytalk-dev`, re-walk create) → judgment-merge (operator; a broken create flow or a re-opened fieldless path is a safety incident). Device/browser execution is batched to the operator's final real-device pass per the MVP-sprint model.
 
 ## Out of Scope
-
-- **Migrating stale dev Firestore docs to add `ownerFirebaseUid`** — separate follow-up SHY if needed.
-- **Improving the client-side error message for `PERMISSION_DENIED`** — future SHY (the apps have no users yet).
-- **Adding a Cloud Function trigger to back-fill `ownerFirebaseUid` on writes** — out of scope; the tightening is the fix.
-- **Refactoring the Express API ownership check** — already defence-in-depth; unchanged.
-- **Tightening any other unrelated rules** — only `ownerFirebaseUid` siblings; other rule audits are separate SHYs.
+- Migrating any existing fieldless rooms in dev/prod (pre-public; expected count ~0 — separate follow-up SHY only if a scan finds any).
+- Improving the client `PERMISSION_DENIED` message (no app users yet).
+- The Express-side ownership check (already defence-in-depth; unchanged).
+- Tightening any unrelated rule; only the `ownerFirebaseUid` create binding.
+- Any client change — the current app already writes `ownerFirebaseUid`; the empty-string edge deny is intended.
 
 ## Dependencies
-
-- **SHY-0004** (Room mutation P3 deploy verify) — should ideally land first so we know the room-mutation path is in a known state before we tighten this rule.
-- `firestore-rules-tests/` test harness — verify exists; create if not.
-- `npx firebase deploy --only firestore:rules` — must work against `shytalk-dev` project.
-- Firebase emulator suite (already a CLAUDE.md prerequisite).
-- The legacy `.get()` pattern locations identified via grep.
+- `express-api/tests/firestore-rules/` real-emulator harness (exists: `room-rules.test.js`, `admin-claim-rules.test.js`).
+- Firebase emulator suite (`firebase emulators:start --only firestore,auth` — Java, no Docker).
+- The PR #858 room-update lockdown is already merged (this SHY relies on updates being Admin-SDK-only).
 
 ## Risks & Mitigations
-
-- **Risk:** Stale dev Firestore docs without `ownerFirebaseUid` become un-updatable post-tightening. **Mitigation:** scan dev pre-deploy; count is expected to be near-zero (cron-elim closed 2026-06-04/05); if non-zero, document the docs and decide whether to migrate (file follow-up SHY) or accept (they become effectively read-only via this code path).
-- **Risk:** A sibling rule for `create`/`delete` uses the same legacy pattern and gets missed. **Mitigation:** the grep + audit is part of AC + BDD; reviewer agent re-runs the grep.
-- **Risk:** The admin-override path silently breaks (e.g. the admin rule was ALSO using the legacy fallback). **Mitigation:** explicit AC bullet under `### Edge cases` verifies admin moderation still works post-tightening.
-- **Risk:** Production deploy is risky if pre-public-release assumption is wrong (e.g. a beta-tester cohort exists with stale clients). **Mitigation:** deploy to dev first; manual smoke; before prod deploy, query Firebase Auth user count + recent activity to confirm "no installed base" assumption.
-- **Risk:** The new rule's `'ownerFirebaseUid' in resource.data` syntax is wrong (some Firestore rules versions use `resource.data.keys().hasAll([...])` instead). **Mitigation:** verify syntax against Firebase rules docs + run emulator test; both gates catch a syntax error.
+- **Risk:** the current client passes an empty `ownerFirebaseUid` in a real authenticated create (not just the null edge) → the tightened rule denies a legitimate create. **Mitigation:** `HomeViewModel:434` derives it from `currentFirebaseUid`, which for an authenticated caller equals `request.auth.uid`; the empty branch only fires when the uid is genuinely absent (in which case denying is correct). Proven by re-walking the create journey in the gauntlet.
+- **Risk:** a sibling rule elsewhere uses the same fallback and is missed. **Mitigation:** grep audit in AC + BDD + reviewer re-run; grep already shows a single occurrence.
+- **Risk:** rules syntax error. **Mitigation:** `firebase deploy --only firestore:rules` pre-validates; the emulator test won't load a broken file.
 
 ## Definition of Done
-
-- [ ] `firestore.rules:218-225` (and all sibling occurrences of the legacy `.get()` pattern) tightened to strict equality + field-present check.
-- [ ] `firestore-rules-tests/owner-firebase-uid-strict.test.js` added; all 4+ test cases green.
-- [ ] Rule comment block added with security-review summary + SHY-0029 reference.
-- [ ] Dev deploy completed; smoke check passes.
-- [ ] Sibling-rule audit completed; no legacy `.get()` pattern remains for `ownerFirebaseUid`.
-- [ ] **Pre-Merge Testing Protocol satisfied** (`CLAUDE.md` § Pre-Merge Testing Protocol): rules emulator suite green (incl. the missing-field-denied case) + owner-edit journeys green on **real Android + real iPhone + all Mac browsers** (owner allowed, non-owner denied) → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet green (rules deployed to dev + journeys re-walked; web = Chrome) → **judgment-merge** (zero doubt; NO auto-merge). Pre-public, so no prod deploy in this SHY.
-- [ ] `released_in: vX.Y.Z` set after the release cut.
-- [ ] `status: Done`; `pr:` populated; merge + dev-deploy outcomes in Notes.
+- [ ] `firestore.rules:229` tightened to `get('ownerFirebaseUid', '') == request.auth.uid`; dated SHY-0029 comment added; sibling audit clean (single occurrence).
+- [ ] The `rooms/{roomId} create` block in `room-rules.test.js` extended (OMIT flipped to deny + empty/null/whitespace/non-string pins); all firestore-rules suites green (incl. the absent-field deny).
+- [ ] **Pre-Merge Testing Protocol satisfied**: rules-emulator suite green → room-create journey re-walked on real Android + real iPhone + all Mac browsers → `code-reviewer` 100% clean → push → CI green by name → DEV gauntlet (rules deployed to `shytalk-dev` + create re-walked) → judgment-merge (operator; zero doubt). Pre-public → no prod deploy in this SHY.
+- [ ] `released_in: vX.Y.Z` after release cut; `status: Done`; `pr:` populated; outcomes in Notes.
 
 ## Notes (running log)
+- 2026-06-07 ~20:30 BST — Refined under SHY-0032. Bumped P1 → P0. Pre-public window inverts the roadmap's ">90d rollout" guard.
+- 2026-06-07 — Skeleton generated by `scripts/convert-roadmap-to-stories.sh` from PR-bundle PR-I7 (G026).
+- 2026-06-12 ~23:45 BST — Embedded the Pre-Merge Testing Protocol (SHY-0091 pass).
+- 2026-07-08 — **RE-REFINED at pickup (pickup-fitness; the prior spec was materially stale).** The `.get('ownerFirebaseUid', request.auth.uid)` fallback is on the room **`allow create`** rule (now `firestore.rules:229`, on `request.resource.data`), NOT an `allow update` rule — client-side room-doc **updates were fully locked down** by the PR #858 server-authz cutover (`firestore.rules:232-237`), so the story's original "any authed user can UPDATE a fieldless doc" premise is obsolete. Real remaining gap: a create that omits `ownerFirebaseUid` yields a fieldless room, breaking the owner-left RTDB attestation (`PresenceService.kt:31-45`). Fix = the code comment's own prescribed tightening (default `request.auth.uid` → `''`). Verified the current client writes the field (`HomeViewModel.kt:434` → `IosRoomRepositoryImpl.kt:102`), so no client change needed; grep confirms a single occurrence. Test target corrected to the real `express-api/tests/firestore-rules/` harness (was the non-existent `firestore-rules-tests/`). Status Draft → In Progress.
+- 2026-07-08 — **TDD**: extended `room-rules.test.js` `create` block — flipped the pre-existing OMIT test `assertSucceeds`→`assertFails` (RED confirmed: "Expected request to fail, but it succeeded"), tightened `firestore.rules:229` default `request.auth.uid`→`''` (GREEN). Full `express-api/tests/firestore-rules/` suite 129 green; eslint `--max-warnings=0` + prettier clean.
+- 2026-07-08 — **code-reviewer pass 1 (local, pre-push): NO Critical.** 2 Important + 1 coverage gap, all applied same-day: (gap) added null/whitespace/non-string `ownerFirebaseUid` deny pins (126→129 green); (I) 4 stale AC/Test-Plan/DoD refs to a never-created `room-owner-firebase-uid-strict.test.js` → repointed at the `room-rules.test.js` create block; (I) now-false comment in `HomeViewModelTest.kt:328` (claimed the old default still passed) → corrected to the SHY-0029 deny (VM assertions unchanged). **Confirmation pass: all resolved, zero new blocking findings** (plus this Notes-audit entry + a "test file"→"block" wording nit, now applied). Rule byte-identical since first review. No production logic changed beyond the one `firestore.rules` line.
+- 2026-07-08 — **Disposition:** built + reviewed + committed on branch `story/SHY-0029-tighten-ownerfirebaseuid-rule` (off `origin/main`). NOT pushed yet: its CI is gated by the android-e2e flake until SHY-0163/#1539 lands the gate deferral on main, and a clean push needs the full local stack (Docker, down) or an operator-authorised `--no-verify`. Push + open PR (base `main`) once #1539 is merged (a rebase then makes CI green). Flip to In Review at push.
 
-- 2026-06-07 ~20:30 BST — Refined under SHY-0032. Bumped P1 → P0. Pre-public window inverts the roadmap's ">90d rollout" guard: tighten now because no users to break.
-- 2026-06-07 — Skeleton generated by `scripts/convert-roadmap-to-stories.sh` from PR-bundle `PR-I7` (roadmap_ids: G026).
-- 2026-06-12 ~23:45 BST — **Embedded the Pre-Merge Testing Protocol** ([[SHY-0091]] pass): authz-rule tightening → rules emulator suite is the RED→GREEN, but owner-edit flows re-proven on real Android + real iPhone + all browsers (the rule changes real app behaviour); the `firestore:rules` dev deploy maps onto the DEV gauntlet. DoD auto-merge → judgment-merge. Pickup-fitness: no dupes/stale found.
+Reviewed-up-to: PENDING_COMMIT_SHA
