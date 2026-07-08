@@ -41,7 +41,9 @@ describe('clearSuspensionCache — no-arg clears the whole suspension cache', ()
   test('after a no-arg clear, a since-un-suspended user is allowed (stale entry dropped)', async () => {
     const user = await mintRealUser({ uniqueId: 69000001, isSuspended: true });
 
-    await hit(user.headers).expect(403); // suspended → 403, caches isSuspended:true
+    const blocked = await hit(user.headers); // suspended → 403, caches isSuspended:true
+    expect(blocked.status).toBe(403);
+    expect(blocked.body).toEqual({ error: 'Account suspended' });
     await db.doc('users/69000001').update({ isSuspended: false });
     await hit(user.headers).expect(403); // STILL 403 — stale cache (well within the 5-min TTL)
 
@@ -50,6 +52,24 @@ describe('clearSuspensionCache — no-arg clears the whole suspension cache', ()
     const res = await hit(user.headers); // next check re-reads Firestore → not suspended
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ ok: true });
+  });
+
+  test('a no-arg clear empties MULTIPLE cached entries at once (not just one)', async () => {
+    // Two distinct suspended users cached, then a single no-arg clear must drop
+    // BOTH — a "clear only the first/oldest entry" mis-implementation would leave
+    // the second cached and fail here.
+    const a = await mintRealUser({ uniqueId: 69000004, isSuspended: true });
+    const b = await mintRealUser({ uniqueId: 69000005, isSuspended: true });
+
+    await hit(a.headers).expect(403); // caches A suspended
+    await hit(b.headers).expect(403); // caches B suspended
+    await db.doc('users/69000004').update({ isSuspended: false });
+    await db.doc('users/69000005').update({ isSuspended: false });
+
+    clearSuspensionCache(); // no argument → must empty EVERY entry
+
+    await hit(a.headers).expect(200); // A re-reads → not suspended
+    await hit(b.headers).expect(200); // B re-reads → not suspended (proves all entries cleared)
   });
 
   test('a targeted clearSuspensionCache(id) still evicts only that id (unchanged)', async () => {

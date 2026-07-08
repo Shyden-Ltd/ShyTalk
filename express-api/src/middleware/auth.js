@@ -349,16 +349,25 @@ async function requireAdmin(req, res) {
 }
 
 function clearSuspensionCache(uniqueId) {
-  if (uniqueId) {
+  // Guard on `=== undefined` (a genuine no-arg call), NOT truthiness: unlike the
+  // string uids the sibling helpers take, uniqueId can arrive as Number(badId) →
+  // NaN (e.g. identity-graph.js), and `if (NaN)` truthiness would wrongly wipe
+  // the whole cache. A passed 0/NaN/null falls to the targeted delete (a safe
+  // no-op) instead.
+  if (uniqueId === undefined) {
+    // No id → clear everything (mirrors clearUniqueIdCache/clearAdminClaimCache),
+    // so the no-arg clearAuthCaches() test-isolation helper actually empties it.
+    // suspensionInFlight is cleared for mirror-consistency; the no-arg path runs
+    // between requests (test isolation) so there is no in-flight entry to drop —
+    // the production ban/unban-during-traffic case goes through the targeted
+    // branch below.
+    suspensionCache.clear();
+    suspensionInFlight.clear();
+  } else {
     suspensionCache.delete(uniqueId);
     // Also drop any inflight Promise so the NEXT caller refetches from
     // Firestore (the inflight Promise was about to resolve to the OLD value).
     suspensionInFlight.delete(uniqueId);
-  } else {
-    // No id → clear everything (mirrors clearUniqueIdCache/clearAdminClaimCache),
-    // so the no-arg clearAuthCaches() test-isolation helper actually empties it.
-    suspensionCache.clear();
-    suspensionInFlight.clear();
   }
 }
 
