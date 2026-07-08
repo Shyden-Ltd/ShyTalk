@@ -7,11 +7,14 @@
 
 | Bucket | Count | Meaning |
 |---|---|---|
-| **DONE-IN-CODE** | 13 (29%) | Deliverable already in the code → reclassified (see below). |
+| **DONE-IN-CODE → reclassified** | 10 (22%) | Deliverable already in the code + verified against the story's AC → Done/In Review/Cancelled. |
+| **PARTIAL (Android-only, iOS gap) → kept Draft** | 3 (7%) | Tests exist but in the wrong source set/framework vs the AC → real Tri-Platform gap surfaced. |
 | **OPEN** | 26 (58%) | Genuinely not done → stays Draft; broken down by *gate* below. |
 | **CANT-TELL** | 6 (13%) | Needs a runtime/dispatch/repo-var check → stays Draft. |
 
-**The MVP backlog is ~29% smaller than the board showed.** Of the 26 genuinely-open, only **7 are fully local-autonomous**; the rest are gated on real devices, the web stack, upstream releases, or an operator decision.
+**~22% of the MVP-Draft backlog was already delivered and mislabelled** (another 7% partially). Of the 26 genuinely-open, only **7 are fully local-autonomous**; the rest are gated on real devices, the web stack, upstream releases, or an operator decision.
+
+> **Correction (post code-reviewer verification):** the initial pass counted 13 DONE-IN-CODE, but SHY-0010/0012/0042's ViewModel tests, though present, live in `app/src/test` (JUnit4 + MockK, Android-only) not `shared/commonTest` (kotlin.test) as their AC requires — so the cross-platform ViewModels have **zero iOS test-execution proof**. Those 3 were reverted to Draft with the gap documented rather than marked delivered. A wrong "Done" hides a gap; the audit's job is to surface it.
 
 ## Board corrections applied (SHY-0167)
 
@@ -22,16 +25,23 @@
 | 0044 | → **Done** | v0.97.15 | `firestore.rules` uses `isAdmin()` (def @38, 27 sites); direct `token.admin` only a comment @33 |
 | 0045 | → **Done** | v0.97.15 | `manual-qa-matrix.yml` actions SHA-pinned (0 floating `@vN`) |
 | 0053 | → **Done** | v0.97.15 | `sonarcloud.yml` Jest coverage step: `|| true` removed (its cited G036 target) |
-| 0055 | → **Done** | v0.97.15 | `CLAUDE.md` "48 files, ~235 scenarios" (was stale "33") |
-| 0010 | → **In Review** | — | `HomeViewModelTest.kt` + `GachaViewModelTest.kt` present (develop, post-v0.97.15) |
-| 0012 | → **In Review** | — | all 10 ViewModel test files present (develop, post-v0.97.15) |
+| 0055 | → **Done** | v0.97.15 | `CLAUDE.md` "48 files, ~235 scenarios" (was stale "33"). Minor: AC's optional `<!-- last verified -->` comment not added — micro-follow-up, not blocking. |
 | 0025 | → **In Review** | — | `compose-resources-locale-parity.test.js` upgraded to key-set (no-missing/no-extra) |
-| 0042 | → **In Review** | — | VM-coverage tracker satisfied (0010/0011/0012 tests all present) |
 | 0051 | → **In Review** | — | `suggestions-board.spec.ts` skip → real mouse-drag (Closes G034); 0 skips |
-| 0052 | → **In Review** | — | `admin-suggestions.spec.ts` isMobile skips → viewport sizing (G035) |
+| 0052 | → **In Review** | — | `admin-suggestions.spec.ts` isMobile skips → viewport sizing (G035); 9 remaining skips are unrelated data/platform guards |
 | 0050 | → **Cancelled** | — | Moot: SHY-0005 moved biometric to stable, so no alpha pin to annotate |
 
 *Done stories carry `released_in: v0.97.15` = a **verified-containing** release (`git show v0.97.15:<path>`); the earliest-containing release was not back-traced. In-Review = delivered on develop, awaiting the next release cut (same state as SHY-0060/0165/0166).*
+
+### PARTIAL — kept Draft (code-reviewer found an AC-deviation gap)
+
+| SHY | Verdict | Gap |
+|---|---|---|
+| 0010 | **kept Draft** | `HomeViewModelTest.kt`/`GachaViewModelTest.kt` exist but at `app/src/test/java/…` (JUnit4 + MockK, Android-only), not `shared/commonTest` (kotlin.test) as the AC requires. ViewModels are in `shared/commonMain` → **zero iOS test-execution proof**. |
+| 0012 | **kept Draft** | all 10 ViewModel test files exist, same `app/src/test` + MockK deviation → iOS-uncovered. |
+| 0042 | **kept Draft** | VM-coverage tracker: its tracked tests exist but Android-only (same deviation), so the cross-platform coverage goal is unmet on iOS. |
+
+**These 3 are a live Tri-Platform gap** (all 15 G003 P0 ViewModels have Android-JVM proof only). **Operator decision needed:** accept `app/src/test`+MockK as the standard and rewrite these ACs, OR file a follow-up to relocate/reimplement in `shared/commonTest` for real iOS execution. Kept Draft (not marked delivered) so the gap stays visible.
 
 ## What's genuinely left — 26 OPEN, by gate
 
@@ -61,8 +71,11 @@
 0016 (StickerStorage: JVM test exists, no iOS test / KMP contract), 0027 (CodeQL-Kotlin gated on repo-var `ENABLE_CODEQL_KOTLIN` — value not in code), 0028 (gradle deprecation — needs a `--warning-mode all` run), 0030 (ios_parity_navigation.feature freshness vs SharedNavGraph — not statically decidable), 0054 (allure `continue-on-error` — documented, but no `::warning::` + can't confirm post-story), 0062 (migrate ~95 legacy roadmap features — EPIC-0002 meta-coordinator, gated on SHY-0072/0073).
 
 ## Follow-up findings surfaced by the audit (each needs its own ticket)
-1. **SHY-0053 residual:** `sonarcloud.yml:150` — the gradle/Kotlin-coverage step still carries `|| true` (a *different* step from the fixed Jest one), a live silent-failure against [[feedback-warnings-are-failures]]. Trivial CI fix; deserves a follow-up story.
-2. **SHY-0070:** `errors`-counting design decision (above) — parked on the story + `docs/SHY-0070-pickup-blocker-note`.
+1. **G003 ViewModel iOS-coverage gap (operator decision):** SHY-0010/0012/0042's ViewModel tests live in `app/src/test` (JUnit4 + MockK) not `shared/commonTest`, so the 15 cross-platform P0 ViewModels have no iOS test-execution proof. Decide: accept the Android-module location as standard (rewrite ACs) OR relocate to `commonTest`. Highest-value follow-up.
+2. **SHY-0053 residual:** `sonarcloud.yml:150` — the gradle/Kotlin-coverage step still carries `|| true` (a *different* step from the fixed Jest one), a live silent-failure against [[feedback-warnings-are-failures]]. Trivial CI fix; deserves a follow-up story.
+3. **SHY-0070:** `errors`-counting design decision — parked on the story + `docs/SHY-0070-pickup-blocker-note`.
+4. **Stale comment (nit):** `manual-qa-matrix.yml:66-70` claims the checkout step is "a plain @v4 tag (not SHA-pinned)" but line 71 is a real 40-hex SHA pin (`@9c091bb… # v7.0.0`) — the comment now says the opposite of the code. Cosmetic; fold into the next `manual-qa-matrix.yml` edit.
+5. **SHY-0055 sub-bullet (nit):** the optional `<!-- last verified: … -->` comment its AC mentions was never added to `CLAUDE.md`; the substantive count is correct + released, so 0055 is Done, but the convention is unfulfilled.
 
 ## Recommended next autonomous pick
 **SHY-0013** (P0, host-JVM `RoomLifecycleManagerTest` for the `awaitLeaveCompletion` race) — highest-priority item in the fully-autonomous queue, closes the last third of a P0, no device/stack. Then SHY-0056 (trivial docs) and the infra scripts (0049/0019/0020/0031/0071).

@@ -98,7 +98,7 @@ The `SHY-INDEX.md` + board statuses had drifted: a fitness pass on pickup found 
 
 ## Definition of Done
 
-- 13 stories reclassified (6 Done, 6 In Review, 1 Cancelled) with evidence Notes; all pass the validator.
+- 10 stories reclassified (6 Done, 3 In Review, 1 Cancelled) with evidence Notes; 3 more (0010/0012/0042) kept Draft with a documented iOS-coverage gap; all pass the validator.
 - Audit report committed with the full 45-row table + remaining-scope-by-gate breakdown.
 - `SHY-INDEX.md` refreshed to match.
 - `code-reviewer` 100% clean; PR to **develop**; judgment-merge (`.md`-only).
@@ -106,4 +106,5 @@ The `SHY-INDEX.md` + board statuses had drifted: a fitness pass on pickup found 
 
 ## Notes (running log)
 
-- 2026-07-09 — Reconciliation run. Verified all 45 `mvp:true` Draft stories vs current code (fitness greps + `git show v0.97.15` for released-vs-develop). Result: **13 DONE-IN-CODE** (→ 6 Done+released_in, 6 In Review, 1 Cancelled), **26 OPEN**, **6 CANT-TELL**. Full evidence + remaining-scope breakdown in `.project/audit/mvp-backlog-reconciliation-2026-07-08.md`. Follow-ups filed to the report: SHY-0053 residual gradle `|| true` (sonarcloud.yml:150); SHY-0070 `errors`-counting design question (already documented on that story + `docs/SHY-0070-pickup-blocker-note`).
+- 2026-07-09 — Reconciliation run. Verified all 45 `mvp:true` Draft stories vs current code (fitness greps + `git show v0.97.15` for released-vs-develop). Full evidence + remaining-scope breakdown in `.project/audit/mvp-backlog-reconciliation-2026-07-08.md`.
+- 2026-07-09 — **code-reviewer verification of the flips → 1 Critical + 3 Important, all applied.** Reviewer re-derived every flip against current code and caught that **SHY-0010/0012/0042's ViewModel tests, though present, are at `app/src/test` (JUnit4 + MockK, Android-only) not `shared/commonTest` (kotlin.test)** as their AC requires → the cross-platform ViewModels have zero iOS test-execution proof (I'd verified filename existence, not AC-satisfaction — the reconciliation analogue of [[feedback-test-must-fail-if-logic-skipped]]). **Reverted those 3 from In Review → Draft** with the gap documented; result is now **10 reclassified (6 Done, 3 In Review, 1 Cancelled) + 3 kept-Draft-with-gap**, 26 OPEN, 6 CANT-TELL. Also applied: stripped pre-existing tool-artifact corruption (`</content>`/`</invoke>`) from SHY-0005/0050/0043 (drive-by); noted SHY-0055's unmet optional `<!-- last verified -->` sub-bullet (Done stands on the correct+released count); recorded the stale `manual-qa-matrix.yml:66-70` comment as a nit follow-up. Verified the reviewer's Critical myself before acting (tests are in `app/src/test/java/**` importing `io.mockk`; VMs in `shared/commonMain`; no `commonTest`/`iosTest` for them). Follow-ups (in the report): G003 iOS-coverage decision, SHY-0053 residual, SHY-0070 errors-semantics, + 2 nits.
