@@ -1,6 +1,6 @@
 ---
 id: SHY-0029
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-06-07
 priority: P0
@@ -160,5 +160,6 @@ Roadmap G026 (`.project/test-plans/exhaustive/2026-06-05-zero-gap-roadmap.md`): 
 - 2026-07-08 — **TDD**: extended `room-rules.test.js` `create` block — flipped the pre-existing OMIT test `assertSucceeds`→`assertFails` (RED confirmed: "Expected request to fail, but it succeeded"), tightened `firestore.rules:229` default `request.auth.uid`→`''` (GREEN). Full `express-api/tests/firestore-rules/` suite 129 green; eslint `--max-warnings=0` + prettier clean.
 - 2026-07-08 — **code-reviewer pass 1 (local, pre-push): NO Critical.** 2 Important + 1 coverage gap, all applied same-day: (gap) added null/whitespace/non-string `ownerFirebaseUid` deny pins (126→129 green); (I) 4 stale AC/Test-Plan/DoD refs to a never-created `room-owner-firebase-uid-strict.test.js` → repointed at the `room-rules.test.js` create block; (I) now-false comment in `HomeViewModelTest.kt:328` (claimed the old default still passed) → corrected to the SHY-0029 deny (VM assertions unchanged). **Confirmation pass: all resolved, zero new blocking findings** (plus this Notes-audit entry + a "test file"→"block" wording nit, now applied). Rule byte-identical since first review. No production logic changed beyond the one `firestore.rules` line.
 - 2026-07-08 — **Disposition:** built + reviewed + committed on branch `story/SHY-0029-tighten-ownerfirebaseuid-rule` (off `origin/main`). NOT pushed yet: its CI is gated by the android-e2e flake until SHY-0163/#1539 lands the gate deferral on main, and a clean push needs the full local stack (Docker, down) or an operator-authorised `--no-verify`. Push + open PR (base `main`) once #1539 is merged (a rebase then makes CI green). Flip to In Review at push.
+- 2026-07-08 — **Landed via develop (SHY-0164 unblocked the push).** SHY-0164 (merged to develop) made the pre-push Sonar gate main-only, so feature→develop pushes no longer need the local emulator or `--no-verify`. Rebased this branch onto `develop` (clean replay, no conflicts; SHAs `ee7052101e7`→`40fe9499f68`, content byte-identical → the prior 100%-clean review still holds — nothing new to re-review). Re-verified the full `express-api/tests/firestore-rules/` suite **129/129 green** against the live Firestore emulator. Retargeted from `main` to `develop` per the sprint. Backend⇒full device/browser gauntlet DEFERRED to the operator's final real-device batch at the develop→main promotion (sprint's device-E2E deferral). Status → In Review. Pre-existing follow-up noted (not this SHY): the firestore-rules suites lack `afterAll(testEnv.cleanup())` → jest "worker failed to exit gracefully" warning across all 4 suites; separate test-hygiene story.
 
-Reviewed-up-to: ee7052101e7e80e3314da37f16f71ea799cf9c33
+Reviewed-up-to: 40fe9499f68
