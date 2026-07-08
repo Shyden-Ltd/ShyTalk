@@ -74,9 +74,10 @@ describe('SHY-0164: the SonarCloud pre-push scan is gated on branch == main', ()
     expect(r.status).toBe(0);
     expect(r.stdout).not.toContain('__SCAN_RAN__');
     expect(r.stdout).toMatch(/skipping SonarCloud pre-push gate/i);
-    // The skip message names the branch (AC: "Feature branch (<name>) — …") so a
-    // regression that drops $CURRENT_BRANCH from the echo is caught.
-    expect(r.stdout).toContain(branch);
+    // Assert the PARENTHESISED interpolation (not the bare name), so a
+    // regression that drops $CURRENT_BRANCH from the echo (AC: "Feature branch
+    // (<name>) — …") is caught.
+    expect(r.stdout).toContain(`Feature branch (${branch})`);
     // Falls through — a skipped feature push must still reach Playwright below.
     expect(r.stdout).toContain('__AFTER_GUARD__');
   });
@@ -86,7 +87,11 @@ describe('SHY-0164: the SonarCloud pre-push scan is gated on branch == main', ()
     expect(r.status).toBe(0);
     expect(r.stdout).not.toContain('__SCAN_RAN__');
     expect(r.stdout).toMatch(/skipping SonarCloud pre-push gate/i);
-    expect(r.stdout).toContain('develop');
+    // Assert the PARENTHESISED interpolation, NOT bare 'develop' — the word
+    // 'develop' also appears unconditionally in the static "develop→main
+    // promotion" suffix, so toContain('develop') would pass even if the
+    // $CURRENT_BRANCH interpolation were broken (reviewer round-2 catch).
+    expect(r.stdout).toContain('Feature branch (develop)');
     expect(r.stdout).toContain('__AFTER_GUARD__');
   });
 
@@ -97,7 +102,7 @@ describe('SHY-0164: the SonarCloud pre-push scan is gated on branch == main', ()
     expect(r.status).toBe(0);
     expect(r.stdout).not.toContain('__SCAN_RAN__');
     expect(r.stdout).toMatch(/skipping SonarCloud/i);
-    expect(r.stdout).toContain('main-hotfix');
+    expect(r.stdout).toContain('Feature branch (main-hotfix)');
     expect(r.stdout).toContain('__AFTER_GUARD__');
   });
 
