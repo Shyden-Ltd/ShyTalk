@@ -132,3 +132,154 @@ describe('POST /api/economy/gacha — GACHA_SPEND (18) age gate', () => {
     expect(res.body.ageGate.requiredVerification).toBe('REVERIFY');
   });
 });
+
+// A gift request with a non-existent giftId 404s AFTER the gate on /gift and
+// /gift-direct (gate sits before the gift lookup) — so 404 is the "passed the
+// gate" signal, no gift seeding needed.
+const NO_GIFT = { recipientId: 62000099, giftId: 'no-such-gift' };
+
+describe('POST /api/economy/gift — GIFTING_SEND (18) age gate', () => {
+  test('flag OFF: an under-18 sender is NOT age-blocked (falls through to gift lookup)', async () => {
+    await setFlag(false);
+    const user = await mintRealUser({
+      uniqueId: 62000010,
+      extraUserData: { ageVerified: true, dateOfBirth: dobForAge(16) },
+    });
+
+    const res = await request(createApp())
+      .post('/api/economy/gift')
+      .set(user.headers)
+      .send(NO_GIFT);
+
+    expect(res.status).toBe(404); // past the gate → gift not found
+    expect(res.body.errorId).toBeUndefined();
+  });
+
+  test('flag ON: an under-18 sender is blocked (403 AGE_GATE_BLOCKED / GIFTING_SEND)', async () => {
+    await setFlag(true);
+    const user = await mintRealUser({
+      uniqueId: 62000011,
+      extraUserData: { ageVerified: true, dateOfBirth: dobForAge(17) },
+    });
+
+    const res = await request(createApp())
+      .post('/api/economy/gift')
+      .set(user.headers)
+      .send(NO_GIFT)
+      .expect(403);
+
+    expect(res.body.errorId).toBe('AGE_GATE_BLOCKED');
+    expect(res.body.ageGate).toMatchObject({
+      feature: 'GIFTING_SEND',
+      verdict: 'BlockedUnderAge',
+      threshold: 18,
+    });
+  });
+
+  test('flag ON: a verified adult passes the gate (falls through to gift lookup)', async () => {
+    await setFlag(true);
+    const user = await mintRealUser({
+      uniqueId: 62000012,
+      extraUserData: { ageVerified: true, dateOfBirth: dobForAge(30) },
+    });
+
+    const res = await request(createApp())
+      .post('/api/economy/gift')
+      .set(user.headers)
+      .send(NO_GIFT);
+
+    expect(res.status).toBe(404);
+  });
+
+  test('flag ON: an unverified sender is blocked with REVERIFY', async () => {
+    await setFlag(true);
+    const user = await mintRealUser({
+      uniqueId: 62000013,
+      extraUserData: { ageVerified: false, dateOfBirth: dobForAge(30) },
+    });
+
+    const res = await request(createApp())
+      .post('/api/economy/gift')
+      .set(user.headers)
+      .send(NO_GIFT)
+      .expect(403);
+
+    expect(res.body.ageGate.requiredVerification).toBe('REVERIFY');
+  });
+});
+
+describe('POST /api/economy/gift-direct — GIFTING_SEND (18) age gate', () => {
+  test('flag ON: an under-18 sender is blocked (403 / GIFTING_SEND)', async () => {
+    await setFlag(true);
+    const user = await mintRealUser({
+      uniqueId: 62000014,
+      extraUserData: { ageVerified: true, dateOfBirth: dobForAge(15) },
+    });
+
+    const res = await request(createApp())
+      .post('/api/economy/gift-direct')
+      .set(user.headers)
+      .send(NO_GIFT)
+      .expect(403);
+
+    expect(res.body.ageGate).toMatchObject({ feature: 'GIFTING_SEND', threshold: 18 });
+  });
+
+  test('flag OFF: an under-18 sender falls through to gift lookup (404)', async () => {
+    await setFlag(false);
+    const user = await mintRealUser({
+      uniqueId: 62000015,
+      extraUserData: { ageVerified: true, dateOfBirth: dobForAge(15) },
+    });
+
+    const res = await request(createApp())
+      .post('/api/economy/gift-direct')
+      .set(user.headers)
+      .send(NO_GIFT);
+
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /api/economy/gift-batch — GIFTING_SEND (18) age gate', () => {
+  // gift-batch confirms the gift exists BEFORE loading the sender, so the gate
+  // sits after a real gift — seed one so the request reaches the gate.
+  const BATCH_GIFT_ID = 'age-gate-batch-gift';
+  beforeEach(async () => {
+    await db.doc(`gifts/${BATCH_GIFT_ID}`).set({ name: 'Batch', coinValue: 10, showInStore: true });
+  });
+  afterEach(async () => {
+    await db.doc(`gifts/${BATCH_GIFT_ID}`).delete();
+  });
+
+  test('flag ON: an under-18 sender is blocked (403 / GIFTING_SEND)', async () => {
+    await setFlag(true);
+    const user = await mintRealUser({
+      uniqueId: 62000016,
+      extraUserData: { ageVerified: true, dateOfBirth: dobForAge(17) },
+    });
+
+    const res = await request(createApp())
+      .post('/api/economy/gift-batch')
+      .set(user.headers)
+      .send({ recipientIds: [62000099], giftId: BATCH_GIFT_ID })
+      .expect(403);
+
+    expect(res.body.ageGate).toMatchObject({ feature: 'GIFTING_SEND', threshold: 18 });
+  });
+
+  test('flag OFF: an under-18 sender is NOT age-blocked (past the gate)', async () => {
+    await setFlag(false);
+    const user = await mintRealUser({
+      uniqueId: 62000017,
+      extraUserData: { ageVerified: true, dateOfBirth: dobForAge(17) },
+    });
+
+    const res = await request(createApp())
+      .post('/api/economy/gift-batch')
+      .set(user.headers)
+      .send({ recipientIds: [62000099], giftId: BATCH_GIFT_ID });
+
+    expect(res.body.errorId).not.toBe('AGE_GATE_BLOCKED');
+  });
+});

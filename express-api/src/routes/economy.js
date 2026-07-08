@@ -796,6 +796,12 @@ router.post('/economy/gift', async (req, res) => {
     const sender = senderSnap.exists ? senderSnap.data() : null;
     const recipient = recipientSnap.exists ? recipientSnap.data() : null;
 
+    // SHY-0060 — gifting is real-money spend → 18+. Gate the sender first
+    // (inert unless the operator flag is ON; reuses the sender doc loaded
+    // above) so the age-capability check is authoritative over gift/backpack.
+    const giftGate = await checkFeatureAccess(db, 'GIFTING_SEND', sender);
+    if (giftGate) return res.status(giftGate.status).json(giftGate.body);
+
     if (!gift) return res.status(404).json({ error: 'Gift not found' });
     if (!bpItem || (bpItem.quantity || 0) < quantity)
       return res.status(402).json({ error: 'Insufficient items in backpack' });
@@ -950,6 +956,10 @@ router.post('/economy/gift-direct', async (req, res) => {
     const sender = senderSnap.exists ? senderSnap.data() : null;
     const recipient = recipientSnap.exists ? recipientSnap.data() : null;
 
+    // SHY-0060 — gifting is real-money spend → 18+ (gate the sender first).
+    const giftGate = await checkFeatureAccess(db, 'GIFTING_SEND', sender);
+    if (giftGate) return res.status(giftGate.status).json(giftGate.body);
+
     if (!gift) return res.status(404).json({ error: 'Gift not found' });
     // UK OSA #17 PR 9 — cohort gate. Collapses missing-recipient and
     // cross-cohort branches into a byte-identical 404 'Not found'.
@@ -1097,6 +1107,10 @@ router.post('/economy/gift-batch', async (req, res) => {
     const senderSnap = await db.doc(`users/${uniqueId}`).get();
     if (!senderSnap.exists) return res.status(404).json({ error: 'Sender not found' });
     const sender = senderSnap.data();
+
+    // SHY-0060 — gifting is real-money spend → 18+ (gate the sender).
+    const giftGate = await checkFeatureAccess(db, 'GIFTING_SEND', sender);
+    if (giftGate) return res.status(giftGate.status).json(giftGate.body);
 
     const coinValue = gift.coinValue || gift.coin_value || 0;
     const totalQty = quantity * recipientIds.length;
