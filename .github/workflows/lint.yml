@@ -119,6 +119,14 @@ jobs:
       - name: No NEW in-process test doubles (EPIC-0003 ratchet)
         run: node scripts/check-no-new-stubs.js
 
+      # SHY-0168 (EPIC-0006): ratchet guard — direct client→backend-service
+      # access (Firestore / RTDB / Storage) may only SHRINK. Clients must go
+      # through the Express API (the authz layer). Fails on any NEW direct
+      # Firebase-SDK reference in shipped client code (both the Android-native
+      # and the iOS-gitlive namespaces) not in scripts/direct-backend-baseline.json.
+      - name: No NEW direct client→backend access (EPIC-0006 ratchet)
+        run: node scripts/check-no-direct-backend.js
+
       # SHY-0035: reject any file >5MB added in the diff vs main. Fetch
       # origin/main explicitly because actions/checkout above checks out
       # a single ref (no main reference). The fetch is cheap (commit graph
