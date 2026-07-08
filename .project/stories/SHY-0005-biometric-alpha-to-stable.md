@@ -1,6 +1,6 @@
 ---
 id: SHY-0005
-status: Draft
+status: Done
 owner: claude
 created: 2026-06-07
 priority: P0
@@ -9,6 +9,7 @@ type: infra
 roadmap_ids: [G002]
 pr:
 mvp: true
+released_in: v0.97.15
 ---
 
 # SHY-0005: Biometric alpha → stable (downgrade)
@@ -187,3 +188,4 @@ This is Tier 1 P0 because:
 - 2026-06-12 ~23:20 BST — **Narrowed to downgrade-only** (operator dedup decision, [[SHY-0091]] pass). Path B (keep-alpha-with-rationale-comment) removed and delegated entirely to [[SHY-0050]] (G032); the two stories are now complementary with non-overlapping ownership. Embedded the full **Pre-Merge Testing Protocol** Test Plan (biometric = Android-only: real-device biometric journey + iOS shared compile-check + full regression corpus; web N/A except as the regression net). DoD updated: auto-merge → **judgment-merge**.
 </content>
 </invoke>
+- 2026-07-09 — **Reconciled in the MVP-Draft backlog audit ([[SHY-0167]]):** status Draft → Done. biometric = "1.1.0" (stable) in gradle/libs.versions.toml — no alpha remaining; present at v0.97.15. Full evidence table: `.project/audit/mvp-backlog-reconciliation-2026-07-08.md`.

@@ -1,6 +1,6 @@
 ---
 id: SHY-0042
-status: Draft
+status: In Review
 owner: claude
 created: 2026-06-08
 priority: P0
@@ -133,3 +133,4 @@ This SHY-0042 exists purely so the G003 top-level identifier resolves to a SHY w
 
 - 2026-06-08 ~12:58 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 28 (G003 parent). Per Edge-case AC in SHY-0036, this is the tracker pattern for G-IDs whose implementation is split into pre-existing sub-SHYs.
 - 2026-06-12 ~23:50 BST — **Recorded the gauntlet exemption** ([[SHY-0091]] pass): `*.md`-only tracker → validator + review only, no device gauntlet; no implementation PR (flips to Done on the sub-SHY sweep). Pickup-fitness: fixed a stale validator invocation in the Test Plan Red (`--story SHY-0042` is not a real flag → file-path form). No dupes found.
+- 2026-07-09 — **Reconciled in the MVP-Draft backlog audit ([[SHY-0167]]):** status Draft → In Review. VM-coverage tracker: all tracked ViewModel tests (SHY-0010/0011/0012) present; tracker satisfied; develop, post-v0.97.15. Full evidence table: `.project/audit/mvp-backlog-reconciliation-2026-07-08.md`.

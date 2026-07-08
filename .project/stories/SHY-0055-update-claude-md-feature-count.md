@@ -1,6 +1,6 @@
 ---
 id: SHY-0055
-status: Draft
+status: Done
 owner: claude
 created: 2026-06-08
 priority: P2
@@ -9,6 +9,7 @@ type: docs
 roadmap_ids: [G040]
 pr:
 mvp: true
+released_in: v0.97.15
 ---
 
 # SHY-0055: Update CLAUDE.md stale feature-file count (33 → 47)
@@ -123,3 +124,4 @@ This is a tiny but real correctness gap. CLAUDE.md is read by every Claude sessi
 
 - 2026-06-08 ~13:22 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 105 (G040). Reserved ID SHY-0055.
 - 2026-06-13 ~01:24 BST — **Embedded the Pre-Merge Testing Protocol (exemption form)** ([[SHY-0091]] pass): `*.md`-only (CLAUDE.md count line + date stamp) → device/browser gauntlet EXEMPT — the sole exemption. The exemption still requires REAL evidence: the file/scenario counts come from a live `ls`/`grep` against the real features dir, never assumed ([[feedback-no-stubs-mocks-fakes-real-only]] applied to a doc fact). DoD swaps the stale Reviewer-ZERO line for protocol-satisfied(exempt) + judgment-merge + released_in + `pr:`. Pickup-fitness: AC current; the stale source numbers ("33 files" vs the now-claimed 47) MUST be re-counted live at pickup — the count has likely drifted again since 2026-06-08, and the Scenario-Outline counting convention should be decided then.
+- 2026-07-09 — **Reconciled in the MVP-Draft backlog audit ([[SHY-0167]]):** status Draft → Done. CLAUDE.md feature-file count refreshed to "48 files, ~235 scenarios" (was stale "33"); present at v0.97.15. Full evidence table: `.project/audit/mvp-backlog-reconciliation-2026-07-08.md`.
