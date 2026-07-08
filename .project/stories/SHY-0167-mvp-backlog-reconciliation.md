@@ -62,9 +62,15 @@ The `SHY-INDEX.md` + board statuses had drifted: a fitness pass on pickup found 
 - **And** its Notes cite the current-code evidence
 
 **Scenario: a delivered-but-unreleased story is marked In Review not Done**
-- **Given** SHY-0010, whose ViewModel tests exist on develop but are absent from the v0.97.15 release
+- **Given** SHY-0025, whose locale-parity key-set test upgrade exists on develop but is absent from the v0.97.15 release
 - **When** the backlog is reconciled
-- **Then** SHY-0010 is marked In Review (not Done), matching the merged-not-released lifecycle rule
+- **Then** SHY-0025 is marked In Review (not Done), matching the merged-not-released lifecycle rule
+
+**Scenario: a story whose delivered work doesn't meet its own AC keeps Draft, gap surfaced**
+- **Given** SHY-0010, whose ViewModel tests exist but in the Android app module (MockK) rather than the shared cross-platform test set its AC requires — so the ViewModels have no iOS test-execution proof
+- **When** the backlog is reconciled
+- **Then** SHY-0010 stays Draft (not marked delivered)
+- **And** the iOS-coverage gap is recorded for an operator decision, not hidden under a delivered-looking status
 
 **Scenario: a superseded story is cancelled**
 - **Given** SHY-0050 (add a rationale comment for the biometric *alpha* pin)
@@ -108,3 +114,4 @@ The `SHY-INDEX.md` + board statuses had drifted: a fitness pass on pickup found 
 
 - 2026-07-09 — Reconciliation run. Verified all 45 `mvp:true` Draft stories vs current code (fitness greps + `git show v0.97.15` for released-vs-develop). Full evidence + remaining-scope breakdown in `.project/audit/mvp-backlog-reconciliation-2026-07-08.md`.
 - 2026-07-09 — **code-reviewer verification of the flips → 1 Critical + 3 Important, all applied.** Reviewer re-derived every flip against current code and caught that **SHY-0010/0012/0042's ViewModel tests, though present, are at `app/src/test` (JUnit4 + MockK, Android-only) not `shared/commonTest` (kotlin.test)** as their AC requires → the cross-platform ViewModels have zero iOS test-execution proof (I'd verified filename existence, not AC-satisfaction — the reconciliation analogue of [[feedback-test-must-fail-if-logic-skipped]]). **Reverted those 3 from In Review → Draft** with the gap documented; result is now **10 reclassified (6 Done, 3 In Review, 1 Cancelled) + 3 kept-Draft-with-gap**, 26 OPEN, 6 CANT-TELL. Also applied: stripped pre-existing tool-artifact corruption (`</content>`/`</invoke>`) from SHY-0005/0050/0043 (drive-by); noted SHY-0055's unmet optional `<!-- last verified -->` sub-bullet (Done stands on the correct+released count); recorded the stale `manual-qa-matrix.yml:66-70` comment as a nit follow-up. Verified the reviewer's Critical myself before acting (tests are in `app/src/test/java/**` importing `io.mockk`; VMs in `shared/commonMain`; no `commonTest`/`iosTest` for them). Follow-ups (in the report): G003 iOS-coverage decision, SHY-0053 residual, SHY-0070 errors-semantics, + 2 nits.
+- 2026-07-09 — **code-reviewer round-2 (tight confirm): all 4 round-1 findings verified resolved; 1 new Important — fixed.** Reviewer independently re-derived the VM-test location claim (tests at `app/src/test/java/**` importing `io.mockk`; `shared/commonTest/.../gacha` empty) and confirmed the reverts, corruption-strip (zero `</…>` left corpus-wide), 0055 disclosure, YAML nit, and count arithmetic (10+3+26+6=45). New finding: this story's own BDD scenario still named SHY-0010 as the "In Review" example — a self-contradiction with the corrected DoD/Notes. **Fixed:** swapped that scenario to SHY-0025 (a genuine In Review) + added a 4th scenario for the kept-Draft-with-gap outcome (SHY-0010). Verified: no stale "0010/0012/0042 → In Review" refs remain, SHY-0167 validates, 4 scenarios. Reviewer pre-cleared the merge bar contingent on exactly this edit. **Reviewed-up-to: (this commit).** `.md`-only → PR to develop → judgment-merge.
