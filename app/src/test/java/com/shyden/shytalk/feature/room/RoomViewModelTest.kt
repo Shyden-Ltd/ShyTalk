@@ -1635,6 +1635,35 @@ class RoomViewModelTest {
         }
 
     @Test
+    fun `joinRoom leaves other rooms pinned to the resolved cohort`() =
+        roomTest {
+            // SHY-0102 — leaveAllRooms in the join flow is a rooms `list`, so it
+            // pins the caller's cohort. Value-pin the threaded cohort.
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(TestData.createTestUser(uid = currentUserId, cohort = "adult"))
+            viewModel = createViewModel()
+            emitRoomAsOwner(
+                TestData.createTestRoom(ownerId = currentUserId, seats = TestData.createDefaultSeats()),
+            )
+            advanceUntilIdle()
+
+            coVerify { roomRepository.leaveAllRooms(currentUserId, "adult", exceptRoomId = any()) }
+        }
+
+    @Test
+    fun `joinRoom leaveAllRooms fails closed to minor when the user is unresolved`() =
+        roomTest {
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Error("no user")
+            viewModel = createViewModel()
+            emitRoomAsOwner(
+                TestData.createTestRoom(ownerId = currentUserId, seats = TestData.createDefaultSeats()),
+            )
+            advanceUntilIdle()
+
+            coVerify { roomRepository.leaveAllRooms(currentUserId, "minor", exceptRoomId = any()) }
+        }
+
+    @Test
     fun `attendee joining room also joins voice as audience`() =
         roomTest {
             viewModel = createViewModel()

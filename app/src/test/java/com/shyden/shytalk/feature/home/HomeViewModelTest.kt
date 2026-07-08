@@ -15,6 +15,7 @@ import io.mockk.coVerify
 import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -61,10 +62,10 @@ class HomeViewModelTest {
     fun setup() {
         every { authRepository.currentUserId } returns currentUserId
         every { authRepository.currentFirebaseUid } returns currentFirebaseUid
-        every { roomRepository.getActiveRooms() } returns roomsFlow
+        every { roomRepository.getActiveRooms(any()) } returns roomsFlow
         every { userRepository.userUpdates } returns MutableSharedFlow()
         coEvery { userRepository.getBlockedUserIds(currentUserId) } returns Resource.Success(emptySet())
-        coEvery { roomRepository.findActiveRoomByOwner(any()) } returns null
+        coEvery { roomRepository.findActiveRoomByOwner(any(), any()) } returns null
         // UK OSA #17 PR 12 — the cohort gate fails closed when the viewer's
         // User doc cannot be resolved. Provide a baseline mock so every test
         // sees a same-cohort viewer by default; tests can `coEvery` override
@@ -90,6 +91,48 @@ class HomeViewModelTest {
             userRepository = userRepository,
             bannerRepository = bannerRepository,
         ).also { activeViewModels.add(it) }
+
+    // region SHY-0102 — cohort threaded into the rooms `list` queries
+
+    @Test
+    fun `observeRooms requests rooms for the viewer's resolved cohort`() =
+        runTest {
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(TestData.createTestUser(uid = currentUserId, cohort = "adult"))
+
+            createViewModel()
+            advanceUntilIdle()
+
+            verify { roomRepository.getActiveRooms("adult") }
+        }
+
+    @Test
+    fun `observeRooms falls closed to minor when the viewer cannot be resolved`() =
+        runTest {
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Error("no user")
+
+            createViewModel()
+            advanceUntilIdle()
+
+            verify { roomRepository.getActiveRooms("minor") }
+        }
+
+    @Test
+    fun `createRoom resolves the cohort for the owner-dedup query`() =
+        runTest {
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(TestData.createTestUser(uid = currentUserId, cohort = "adult"))
+            coEvery { roomRepository.findActiveRoomByOwner(currentUserId, any()) } returns null
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.createRoom("My Room")
+            advanceUntilIdle()
+
+            coVerify { roomRepository.findActiveRoomByOwner(currentUserId, "adult") }
+        }
+
+    // endregion
 
     @Test
     fun `room owned by blocked user is excluded`() =
@@ -158,7 +201,7 @@ class HomeViewModelTest {
             vm.createRoom("My Room")
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { roomRepository.closeAllRoomsByOwner(any()) }
+            coVerify(exactly = 0) { roomRepository.closeAllRoomsByOwner(any(), any()) }
             coVerify { roomRepository.createRoom("My Room", currentUserId, currentFirebaseUid, "adult") }
             assertEquals("new-room-id", vm.uiState.value.createdRoomId)
         }
@@ -714,7 +757,7 @@ class HomeViewModelTest {
                 kotlinx.coroutines.flow.flow<List<ChatRoom>> {
                     throw RuntimeException("stream failed")
                 }
-            every { roomRepository.getActiveRooms() } returns errorFlow
+            every { roomRepository.getActiveRooms(any()) } returns errorFlow
 
             val vm = createViewModel()
             advanceUntilIdle()
@@ -810,7 +853,7 @@ class HomeViewModelTest {
         runTest {
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.findActiveRoomByOwner(currentUserId) } returns "existing-room-id"
+            coEvery { roomRepository.findActiveRoomByOwner(currentUserId, any()) } returns "existing-room-id"
 
             vm.createRoom("New Room")
             advanceUntilIdle()
@@ -826,7 +869,7 @@ class HomeViewModelTest {
         runTest {
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.findActiveRoomByOwner(currentUserId) } returns null
+            coEvery { roomRepository.findActiveRoomByOwner(currentUserId, any()) } returns null
             coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("new-room-id")
 
             vm.createRoom("New Room")
@@ -841,7 +884,7 @@ class HomeViewModelTest {
         runTest {
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.findActiveRoomByOwner(currentUserId) } returns "existing-room-id"
+            coEvery { roomRepository.findActiveRoomByOwner(currentUserId, any()) } returns "existing-room-id"
             coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("new-id")
 
             // First, createRoom shows confirmation
@@ -850,14 +893,14 @@ class HomeViewModelTest {
             assertTrue(vm.uiState.value.showReplaceRoomConfirmation)
 
             // Reset findActiveRoomByOwner so doCreateRoom doesn't loop
-            coEvery { roomRepository.findActiveRoomByOwner(currentUserId) } returns null
+            coEvery { roomRepository.findActiveRoomByOwner(currentUserId, any()) } returns null
 
             // User confirms — closes old and creates new
             vm.confirmReplaceRoom()
             advanceUntilIdle()
 
             coVerifyOrder {
-                roomRepository.closeAllRoomsByOwner(currentUserId)
+                roomRepository.closeAllRoomsByOwner(currentUserId, any())
                 roomRepository.createRoom("New Room", currentUserId, currentFirebaseUid, any())
             }
             assertFalse(vm.uiState.value.showReplaceRoomConfirmation)
@@ -865,11 +908,47 @@ class HomeViewModelTest {
         }
 
     @Test
+    fun `confirmReplaceRoom closes the owner rooms with the resolved adult cohort`() =
+        runTest {
+            // SHY-0102 — value-pin the cohort threaded into closeAllRoomsByOwner.
+            coEvery { userRepository.getUser(currentUserId) } returns
+                Resource.Success(TestData.createTestUser(uid = currentUserId, cohort = "adult"))
+            coEvery { roomRepository.findActiveRoomByOwner(currentUserId, any()) } returns "existing-room-id"
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("new-id")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.createRoom("New Room")
+            advanceUntilIdle()
+            vm.confirmReplaceRoom()
+            advanceUntilIdle()
+
+            coVerify { roomRepository.closeAllRoomsByOwner(currentUserId, "adult") }
+        }
+
+    @Test
+    fun `confirmReplaceRoom fails closed to minor when the viewer cannot be resolved`() =
+        runTest {
+            coEvery { userRepository.getUser(currentUserId) } returns Resource.Error("no user")
+            coEvery { roomRepository.findActiveRoomByOwner(currentUserId, any()) } returns "existing-room-id"
+            coEvery { roomRepository.createRoom(any(), any(), any(), any()) } returns Resource.Success("new-id")
+
+            val vm = createViewModel()
+            advanceUntilIdle()
+            vm.createRoom("New Room")
+            advanceUntilIdle()
+            vm.confirmReplaceRoom()
+            advanceUntilIdle()
+
+            coVerify { roomRepository.closeAllRoomsByOwner(currentUserId, "minor") }
+        }
+
+    @Test
     fun `cancelReplaceRoom dismisses confirmation`() =
         runTest {
             val vm = createViewModel()
             advanceUntilIdle()
-            coEvery { roomRepository.findActiveRoomByOwner(currentUserId) } returns "existing-room-id"
+            coEvery { roomRepository.findActiveRoomByOwner(currentUserId, any()) } returns "existing-room-id"
 
             vm.createRoom("New Room")
             advanceUntilIdle()
