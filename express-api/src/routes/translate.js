@@ -129,7 +129,11 @@ async function verifyParticipant(messagePath, uniqueId) {
   const parentSnap = await db.doc(parentPath).get();
   if (!parentSnap.exists) return false;
   const participantIds = parentSnap.data().participantIds || [];
-  return participantIds.includes(uniqueId);
+  // participantIds are stored as STRINGS on both conversations (the app +
+  // firestore.rules) and rooms (room-mutations.js writes String(uniqueId)), but
+  // req.auth.uniqueId is a NUMBER — coerce both sides, the same pattern
+  // conversations.js uses, so the cache gate isn't a silent false-negative.
+  return participantIds.map(String).includes(String(uniqueId));
 }
 
 /** Check translation cache on the message doc. */
