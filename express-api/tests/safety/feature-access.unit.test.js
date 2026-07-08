@@ -198,3 +198,20 @@ describe('evaluateFeatureAccess — fail-fast on an unknown feature', () => {
     );
   });
 });
+
+// A corrupted/future DOB (born "after" now) yields a negative age. It must fail
+// SAFE — treated as under-age and blocked, never coerced into an adult.
+describe('feature-access — an anomalous future DOB is treated as under-age', () => {
+  test('ageFromDob returns a negative age for a date of birth in the future', () => {
+    expect(ageFromDob(dobForAge(-1), NOW)).toBe(-1);
+  });
+
+  test('a verified user with a future DOB is blocked under-age, never allowed', () => {
+    expect(evaluateFeatureAccess(verified(-1), 'DIRECT_MESSAGE_WITH_STRANGER', NOW)).toEqual({
+      type: 'BlockedUnderAge',
+      threshold: 18,
+      actualAge: -1,
+      requiredVerification: VERIFICATION.NONE,
+    });
+  });
+});

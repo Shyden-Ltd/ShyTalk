@@ -85,6 +85,14 @@ describe('AgeThresholds (JS mirror) — validate', () => {
     const errors = validate(BASE, { DE: { SIGNUP: 25 } });
     expect(errors.some((e) => e.includes('DE') && e.includes('25'))).toBe(true);
   });
+
+  test('accepts a threshold at exactly the sanity max of 21 (inclusive boundary)', () => {
+    expect(validate({ ...BASE, GACHA_SPEND: 21 })).toEqual([]);
+  });
+
+  test('accepts a threshold at exactly the COPPA floor of 13 (inclusive boundary)', () => {
+    expect(validate({ ...BASE, GACHA_SPEND: 13 })).toEqual([]);
+  });
 });
 
 // --- Parity pin: the JS mirror MUST equal the Kotlin source of truth ---

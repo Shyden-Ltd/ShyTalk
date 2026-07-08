@@ -42,7 +42,14 @@ function createApp() {
 }
 
 async function seedConversation(convId, senderId, { isGroup = false } = {}) {
-  await db.doc(`conversations/${convId}`).set({ participantIds: [senderId, RECIPIENT], isGroup });
+  // Production shape: participantIds are STRINGS (firestore.rules requires
+  // `string(callerUniqueId()) in participantIds`; the app + the existing
+  // routes in this file store/compare them as strings). followingIds stay
+  // NUMBERS (how the follow route writes them) — the gate must bridge both.
+  await db.doc(`conversations/${convId}`).set({
+    participantIds: [String(senderId), String(RECIPIENT)],
+    isGroup,
+  });
 }
 
 function sendMessage(convId, headers) {
@@ -217,5 +224,34 @@ describe('DM age gate — exemptions', () => {
 
     const res = await sendMessage('dm-group-1', sender.headers);
     expect(res.body.errorId).not.toBe('AGE_GATE_BLOCKED');
+  });
+});
+
+// Legacy conversations may store participantIds as NUMBERS. The gate's id
+// coercion must fire for those too — proving the fix isn't merely swapped from
+// "only Numbers work" to "only Strings work".
+describe('POST messages — DM gate is robust to Number-typed participantIds (legacy)', () => {
+  test('flag ON: a 15-year-old messaging a stranger in a Number-id conversation is blocked', async () => {
+    await setFlag(true);
+    const sender = await mintRealUser({
+      uniqueId: 63000040,
+      extraUserData: {
+        ageVerified: true,
+        dateOfBirth: dobForAge(15),
+        followingIds: [],
+        followerIds: [],
+      },
+    });
+    await db.doc('conversations/dm-numeric-1').set({
+      participantIds: [63000040, RECIPIENT], // Numbers, not Strings
+      isGroup: false,
+    });
+
+    const res = await sendMessage('dm-numeric-1', sender.headers).expect(403);
+    expect(res.body.errorId).toBe('AGE_GATE_BLOCKED');
+    expect(res.body.ageGate).toMatchObject({
+      feature: 'DIRECT_MESSAGE_WITH_STRANGER',
+      threshold: 18,
+    });
   });
 });

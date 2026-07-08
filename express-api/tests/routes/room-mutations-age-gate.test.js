@@ -149,4 +149,40 @@ describe('accept-invite — VOICE_ROOM_ACTIVE_SPEAKING (16) age gate', () => {
     const res = await acceptInvite(user.headers);
     expect(res.body.errorId).not.toBe('AGE_GATE_BLOCKED');
   });
+
+  test('flag ON: a 16-year-old accepting a seat invite is NOT age-blocked', async () => {
+    await setFlag(true);
+    const user = await mintRealUser({
+      uniqueId: 64000008,
+      extraUserData: { ageVerified: true, dateOfBirth: dobForAge(16) },
+    });
+
+    const res = await acceptInvite(user.headers);
+    expect(res.body.errorId).not.toBe('AGE_GATE_BLOCKED');
+  });
+
+  test('flag ON: a verified adult accepting a seat invite is NOT age-blocked', async () => {
+    await setFlag(true);
+    const user = await mintRealUser({
+      uniqueId: 64000009,
+      extraUserData: { ageVerified: true, dateOfBirth: dobForAge(30) },
+    });
+
+    const res = await acceptInvite(user.headers);
+    expect(res.body.errorId).not.toBe('AGE_GATE_BLOCKED');
+  });
+
+  test('flag ON: an unverified caller accepting a seat invite is blocked with REVERIFY', async () => {
+    await setFlag(true);
+    const user = await mintRealUser({
+      uniqueId: 64000010,
+      extraUserData: { ageVerified: false, dateOfBirth: dobForAge(30) },
+    });
+
+    const res = await acceptInvite(user.headers).expect(403);
+    expect(res.body.ageGate).toMatchObject({
+      feature: 'VOICE_ROOM_ACTIVE_SPEAKING',
+      requiredVerification: 'REVERIFY',
+    });
+  });
 });

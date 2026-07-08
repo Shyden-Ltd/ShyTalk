@@ -52,4 +52,19 @@ describe('isAgeClaimTampered — non-numeric inputs never trip', () => {
   test('a string claim is not tamper', () => {
     expect(isAgeClaimTampered('19', 15)).toBe(false);
   });
+
+  // Non-finite claims are treated as "no valid claim", not tamper. They cannot
+  // arrive through the wired path anyway — JSON.parse never yields Infinity/NaN
+  // — and the gate ignores claimedAge regardless, so nothing is bypassed.
+  test('a positive-infinity claim is not tamper (treated as no valid claim)', () => {
+    expect(isAgeClaimTampered(Number.POSITIVE_INFINITY, 15)).toBe(false);
+  });
+
+  test('a negative-infinity claim is not tamper', () => {
+    expect(isAgeClaimTampered(Number.NEGATIVE_INFINITY, 15)).toBe(false);
+  });
+
+  test('an infinite server age is not tamper (nothing sane to compare)', () => {
+    expect(isAgeClaimTampered(19, Number.POSITIVE_INFINITY)).toBe(false);
+  });
 });
