@@ -28,7 +28,7 @@ The operator's 2026-07-09 directive is "never ever repeat this mistake again …
 
 - [ ] `scripts/check-no-direct-backend.js` scans production client code — `app/src/main/**/*.kt`, `shared/src/{commonMain,androidMain,iosMain}/**/*.kt`, `public/js/**/*.js`, `public/**/*.html` — for direct backend-service references and exits non-zero when a file exceeds its baseline count.
 - [ ] It matches BOTH Kotlin SDK namespaces — `com.google.firebase.{firestore,database,storage}` (Android native) AND `dev.gitlive.firebase.{firestore,database,storage}` (iOS/KMP) — and web data usage (`getFirestore`, `firebase.firestore(`, `firebase.database(`, `firebase.storage(`, `onSnapshot`, `.collection(`). Both namespaces matter or half the violations pass.
-- [ ] A committed baseline (`scripts/direct-backend-baseline.json`, per-file violation counts) exempts the current known sites; the ratchet fails on (a) a NEW file with any violation, or (b) an existing file whose count INCREASES. Counts may only go DOWN (remediation) — a decrease auto-updates or prints the stale-baseline diff to trim.
+- [ ] A committed baseline (`scripts/direct-backend-baseline.json`, per-category arrays of file paths) exempts the current known sites; the ratchet is **file-presence**-based (matching the proven `check-no-new-stubs.js` pattern): it fails on a NEW file that references a backend SDK but is absent from the baseline. An already-baselined file stays flagged (regardless of how many calls it holds) until ALL its direct access is removed — at which point it becomes a STALE baseline entry to trim (`--generate-baseline`). The set of tracked files may only SHRINK.
 - [ ] A new `lint.yml` step runs the ratchet; failure blocks the PR (surfaces under a required check).
 - [ ] CLAUDE.md gains an "API-only backend access" rule (Architecture + Pre-Merge Testing Protocol) stating clients never touch Firestore/RTDB/Storage directly — everything via the Express API; `code-reviewer` treats a violation as blocking.
 
@@ -79,9 +79,9 @@ The operator's 2026-07-09 directive is "never ever repeat this mistake again …
 - **Then** it exits zero (baseline-exempted) — remediation isn't blocked by pre-existing debt
 
 **Scenario: remediating a file and forgetting to trim the baseline is surfaced, not silently passed**
-- **Given** a file's direct-access calls are removed but its baseline entry remains
+- **Given** a file's direct-access calls are removed (remediated) but its baseline entry remains
 - **When** the ratchet runs
-- **Then** it still passes (count went down) but prints the stale baseline entry to trim toward zero
+- **Then** it FAILS, naming the now-stale baseline entry to remove (run `--generate-baseline`) — the ratchet only tightens, so the baseline must stay honest
 
 **Scenario: the iOS gitlive namespace is caught too**
 - **Given** a new `dev.gitlive.firebase.firestore` reference in `shared/src/iosMain`

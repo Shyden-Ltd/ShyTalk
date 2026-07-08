@@ -216,6 +216,10 @@ All audit signals — architect verdict, code-reviewer cycle count + verbatim fi
 - Seasonal events: `public/events/events.json` (registry), `public/js/seasonal-theme.js` (web), `SeasonalTheme.kt` (app)
 - 20 locales: ar, de, es, fr, hi, id, it, ja, km, ko, nl, pl, pt, ru, sv, th, tr, uk, vi, zh
 
+### API-only backend access — no direct client→Firestore/RTDB/Storage (HARD GLOBAL, operator 2026-07-09)
+
+**Clients (Android, iOS, web) MUST NEVER touch a backend service — Firestore, the Realtime Database, or Cloud Storage — directly. Every backend operation goes through the Express API**, which is the single authorization chokepoint that decides *who can do what, and how*. Direct client→Firestore access relies on client-side rules with no server-side arbiter — a critical, launch-blocking security risk (a minors-facing app). This is a **blocking `code-reviewer` finding**: any direct backend-service reference in shipped client code (`app/src/main/**`, `shared/src/{commonMain,androidMain,iosMain}/**`, `public/**`) — Android-native `com.google.firebase.{firestore,database,storage}` OR iOS-gitlive `dev.gitlive.firebase.{firestore,database,storage}` OR web `getFirestore()`/`onSnapshot()`/`firebase.{firestore,database,storage}()` — must be routed through an authz'd Express endpoint instead. The `express-api/**` Admin SDK is the sanctioned server channel; Firebase **Auth** token-minting on the client is a separate ruling, not a data-plane violation. Enforced by the `scripts/check-no-direct-backend.js` CI ratchet (`lint.yml`) — the debt may only SHRINK toward zero. Remediation is tracked by **EPIC-0006** (generalizes the old "Room mutations → server-side authz" plan to all backend access). Rule: `[[feedback-no-direct-backend-all-via-api]]`.
+
 ### Cron-elimination architecture (closed 2026-06-04/05)
 
 Five scheduled crons removed in the cron-elim cluster — replaced with event-driven or lazy-on-access patterns to stay $0 on the Firebase free tier:

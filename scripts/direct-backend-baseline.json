@@ -1,0 +1,40 @@
+{
+  "firestore": [
+    "app/src/main/java/com/shyden/shytalk/core/di/AppKoinModule.kt",
+    "app/src/main/java/com/shyden/shytalk/data/repository/BannerRepositoryImpl.kt",
+    "app/src/main/java/com/shyden/shytalk/data/repository/DeviceRepositoryImpl.kt",
+    "app/src/main/java/com/shyden/shytalk/data/repository/EconomyRepositoryImpl.kt",
+    "app/src/main/java/com/shyden/shytalk/data/repository/FunFactRepositoryImpl.kt",
+    "app/src/main/java/com/shyden/shytalk/data/repository/GiftRepositoryImpl.kt",
+    "app/src/main/java/com/shyden/shytalk/data/repository/MessageRepositoryImpl.kt",
+    "app/src/main/java/com/shyden/shytalk/data/repository/NotificationRepositoryImpl.kt",
+    "app/src/main/java/com/shyden/shytalk/data/repository/PrivateMessageRepositoryImpl.kt",
+    "app/src/main/java/com/shyden/shytalk/data/repository/RoomRepositoryImpl.kt",
+    "app/src/main/java/com/shyden/shytalk/data/repository/SeatRequestRepositoryImpl.kt",
+    "app/src/main/java/com/shyden/shytalk/data/repository/UserRepositoryImpl.kt",
+    "shared/src/iosMain/kotlin/com/shyden/shytalk/core/di/IosPlatformModule.kt",
+    "shared/src/iosMain/kotlin/com/shyden/shytalk/core/di/KoinHelper.kt",
+    "shared/src/iosMain/kotlin/com/shyden/shytalk/data/firestore/DocumentSnapshotIosExt.kt",
+    "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosEconomyGiftRepositories.kt",
+    "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosMessageRepositoryImpl.kt",
+    "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosPrivateMessageRepositoryImpl.kt",
+    "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosRoomRepositoryImpl.kt",
+    "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosSeatRequestRepositoryImpl.kt",
+    "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosSmallRepositories.kt",
+    "shared/src/iosMain/kotlin/com/shyden/shytalk/data/repository/IosUserRepositoryImpl.kt"
+  ],
+  "rtdb": [
+    "app/src/main/java/com/shyden/shytalk/core/di/AppKoinModule.kt",
+    "app/src/main/java/com/shyden/shytalk/data/remote/RtdbConversationService.kt",
+    "app/src/main/java/com/shyden/shytalk/data/remote/RtdbPresenceService.kt",
+    "app/src/main/java/com/shyden/shytalk/data/repository/RtdbTypingRepository.kt",
+    "shared/src/iosMain/kotlin/com/shyden/shytalk/core/di/IosPlatformModule.kt",
+    "shared/src/iosMain/kotlin/com/shyden/shytalk/core/di/KoinHelper.kt",
+    "shared/src/iosMain/kotlin/com/shyden/shytalk/data/remote/IosRtdbServices.kt"
+  ],
+  "storage": [],
+  "webData": [
+    "public/admin/js/main.js",
+    "public/portal/portal.js"
+  ]
+}
