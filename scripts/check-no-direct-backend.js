@@ -84,15 +84,25 @@ const CATEGORIES = [
     applies: isKt,
   },
   {
-    // Web data-plane: getFirestore()/onSnapshot() or firebase.firestore()/
-    // .database()/.storage(). A call-paren is REQUIRED (`\s*\(`) so a comment
-    // or a variable name that merely mentions "onSnapshot" is not a false hit —
-    // only an actual SDK call counts. Deliberately excludes firebase.auth() —
-    // Auth is an operator ruling, not a data-plane violation.
+    // Web data-plane, THREE signals (recall over precision — a security
+    // ratchet must not MISS a real call):
+    //   1. A modular import from a firebase data module — `from '…firebase[-/]
+    //      {firestore,database,storage}…'` (matches both `firebase/firestore`
+    //      and the gstatic `…/firebase-firestore.js` CDN form).
+    //   2. Compat calls — `firebase.{firestore,database,storage}(`.
+    //   3. Modular SDK calls — the entry points `get{Firestore,Database,
+    //      Storage}(` AND the read/write ops `onSnapshot/onValue/getDocs/getDoc/
+    //      addDoc/setDoc/updateDoc/deleteDoc(`. NO `\b` left-anchor: `_` is a
+    //      word char, so `\b` wrongly excluded the DI-renamed accessors this
+    //      codebase actually uses (`_onSnapshot(`, `_getDocs(` in the admin
+    //      tabs). The call-paren (`\s*\(`) is what gives precision — a bare
+    //      mention or a `= null` declaration has no paren, so it still won't hit.
+    // Deliberately excludes firebase.auth()/getAuth( — Auth is an operator
+    // ruling, not a data-plane violation.
     key: 'webData',
     label: 'web Firebase data access (direct)',
     regex:
-      /\bgetFirestore\s*\(|\bonSnapshot\s*\(|\bfirebase\.(firestore|database|storage)\s*\(/,
+      /from\s*['"][^'"]*firebase[-/](firestore|database|storage)|firebase\.(firestore|database|storage)\s*\(|(getFirestore|getDatabase|getStorage|onSnapshot|onValue|getDocs|getDoc|addDoc|setDoc|updateDoc|deleteDoc)\s*\(/,
     applies: isWeb,
   },
 ];

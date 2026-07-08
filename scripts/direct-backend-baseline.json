@@ -35,6 +35,9 @@
   "storage": [],
   "webData": [
     "public/admin/js/main.js",
+    "public/admin/js/tabs/logs.js",
+    "public/admin/js/tabs/reports.js",
+    "public/admin/js/tabs/spin-monitor.js",
     "public/portal/portal.js"
   ]
 }

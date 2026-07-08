@@ -79,6 +79,42 @@ describe('detection — classifyContent matches BOTH SDK namespaces', () => {
     expect(classifyContent('let _onSnapshot = null;').webData).toBe(false);
     expect(classifyContent(' * @param deps.firestoreFns { onSnapshot }').webData).toBe(false);
   });
+
+  // RECALL over precision (security ratchet): a DI-renamed accessor is a REAL
+  // call and MUST be caught. The `_`-prefix is the established admin-console DI
+  // idiom (logs.js:669 `_onSnapshot(`, spin-monitor.js:376 `_getDocs(`). A `\b`
+  // left-anchor wrongly excluded these because `_` is a word char — the paren
+  // (`\s*\(`) already gives the precision, so no boundary is needed.
+  test('DI-renamed accessor _onSnapshot( / _getDocs( IS a hit (Finding 1 regression)', () => {
+    expect(classifyContent('liveUnsub = _onSnapshot(q, cb);').webData).toBe(true);
+    expect(classifyContent('const s = await _getDocs(_collection(db, "gifts"));').webData).toBe(
+      true,
+    );
+  });
+
+  test('modular web RTDB/Storage getters ARE hits (Finding 2 — both namespaces on web too)', () => {
+    expect(classifyContent('const db = getDatabase(app);').webData).toBe(true);
+    expect(classifyContent('onValue(ref(db, "x"), cb);').webData).toBe(true);
+    expect(classifyContent('const st = getStorage(app);').webData).toBe(true);
+  });
+
+  test('modular Firestore reads getDocs(/getDoc( ARE hits, even without getFirestore/onSnapshot (Finding 3)', () => {
+    expect(classifyContent('const snap = await getDocs(collection(db, "reports"));').webData).toBe(
+      true,
+    );
+    expect(classifyContent('const d = await getDoc(doc(db, "u", id));').webData).toBe(true);
+  });
+
+  test('a modular import from a firebase data module IS a hit (import-source signal)', () => {
+    expect(classifyContent("import { getFirestore } from 'firebase/firestore';").webData).toBe(
+      true,
+    );
+    expect(
+      classifyContent(
+        "import { getDatabase } from 'https://www.gstatic.com/firebasejs/10.0.0/firebase-database.js';",
+      ).webData,
+    ).toBe(true);
+  });
 });
 
 describe('scoping — isClientProductionCode (include-list of shipped client source sets)', () => {
@@ -168,5 +204,89 @@ describe('fail-closed — malformed baseline throws (never a false green)', () =
     const path = require('path');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ndb-'));
     expect(() => loadBaseline({ cwd: dir })).toThrow(/not found/i);
+  });
+});
+
+// Finding 4 — the 5 exports the first pass never touched (main, reportAndExit,
+// generateBaseline, scanRepo, gitTrackedFiles), incl. the drift-catching
+// "real scan == committed baseline" invariant (mirrors check-no-new-stubs.test).
+// node is spawned via process.execPath (absolute — no PATH lookup, so no
+// sonarjs/no-os-command-from-path); NO `git` is spawned from the test (the
+// git-needing paths use the real repo; the exit-2 path uses a non-git tmp dir).
+describe('integration — real repo scan, baseline sync, and CLI exit-code contract', () => {
+  const { spawnSync } = require('child_process');
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const REPO = path.resolve(__dirname, '../../..');
+  const SCRIPT = path.join(REPO, 'scripts', 'check-no-direct-backend.js');
+  const BASELINE = path.join(REPO, 'scripts', 'direct-backend-baseline.json');
+  const {
+    scanRepo,
+    generateBaseline,
+    gitTrackedFiles,
+    reportAndExit,
+    diffBaseline,
+    CATEGORIES,
+  } = require('../../../scripts/check-no-direct-backend.js');
+  const EMPTY = () => Object.fromEntries(CATEGORIES.map((c) => [c.key, []]));
+  const runCli = (args, cwd) =>
+    spawnSync(process.execPath, [SCRIPT, ...args], { cwd, encoding: 'utf8' });
+
+  test('committed baseline == a fresh real-repo scanRepo() (drift is impossible to miss)', () => {
+    const live = scanRepo({ cwd: REPO });
+    const committed = JSON.parse(fs.readFileSync(BASELINE, 'utf8'));
+    for (const cat of CATEGORIES) {
+      expect((committed[cat.key] || []).slice().sort()).toEqual(live[cat.key].slice().sort());
+    }
+  });
+
+  test('generateBaseline is idempotent against the in-sync committed baseline', () => {
+    const before = fs.readFileSync(BASELINE, 'utf8');
+    const off = generateBaseline({ cwd: REPO });
+    expect(fs.readFileSync(BASELINE, 'utf8')).toBe(before); // in sync → byte-identical
+    expect(off.firestore.length).toBeGreaterThan(0);
+  });
+
+  test('CLI: clean repo → exit 0', () => {
+    const r = runCli([], REPO);
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/no-direct-backend: clean/);
+  });
+
+  test.each(['--help', '-h'])('CLI: %s → exit 0', (flag) => {
+    expect(runCli([flag], REPO).status).toBe(0);
+  });
+
+  test('CLI: non-git / no-baseline cwd → fail-closed exit 2', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ndb-cli-'));
+    expect(runCli([], dir).status).toBe(2);
+  });
+
+  test('reportAndExit: a new offender → returns 1 and names the file', () => {
+    const off = { ...EMPTY(), firestore: ['shared/src/iosMain/New.kt'] };
+    const orig = process.stderr.write;
+    let captured = '';
+    process.stderr.write = (s) => {
+      captured += s;
+      return true;
+    };
+    const code = reportAndExit(diffBaseline(off, EMPTY()), EMPTY());
+    process.stderr.write = orig;
+    expect(code).toBe(1);
+    expect(captured).toMatch(/New\.kt/);
+  });
+
+  test('reportAndExit: clean diff → returns 0', () => {
+    const orig = process.stdout.write;
+    process.stdout.write = () => true;
+    const code = reportAndExit(diffBaseline(EMPTY(), EMPTY()), EMPTY());
+    process.stdout.write = orig;
+    expect(code).toBe(0);
+  });
+
+  test('gitTrackedFiles: a non-git directory throws (never a silent empty scan)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ndb-nogit-'));
+    expect(() => gitTrackedFiles(dir)).toThrow();
   });
 });

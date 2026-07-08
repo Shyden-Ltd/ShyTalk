@@ -1,6 +1,6 @@
 ---
 id: SHY-0168
-status: Draft
+status: In Review
 owner: claude
 created: 2026-07-09
 priority: P0
@@ -26,8 +26,8 @@ The operator's 2026-07-09 directive is "never ever repeat this mistake again …
 
 ### Happy path
 
-- [ ] `scripts/check-no-direct-backend.js` scans production client code — `app/src/main/**/*.kt`, `shared/src/{commonMain,androidMain,iosMain}/**/*.kt`, `public/js/**/*.js`, `public/**/*.html` — for direct backend-service references and exits non-zero when a file exceeds its baseline count.
-- [ ] It matches BOTH Kotlin SDK namespaces — `com.google.firebase.{firestore,database,storage}` (Android native) AND `dev.gitlive.firebase.{firestore,database,storage}` (iOS/KMP) — and web data usage (`getFirestore`, `firebase.firestore(`, `firebase.database(`, `firebase.storage(`, `onSnapshot`, `.collection(`). Both namespaces matter or half the violations pass.
+- [ ] `scripts/check-no-direct-backend.js` scans production client code — `app/src/main/**/*.kt`, `shared/src/{commonMain,androidMain,iosMain}/**/*.kt`, `public/js/**/*.js`, `public/**/*.html` — for direct backend-service references and exits non-zero when a NEW client file (absent from the baseline) references a backend SDK (file-presence ratchet).
+- [ ] It matches BOTH Kotlin SDK namespaces — `com.google.firebase.{firestore,database,storage}` (Android native) AND `dev.gitlive.firebase.{firestore,database,storage}` (iOS/KMP) — and, on web: a modular import from a `firebase[-/]{firestore,database,storage}` module, compat `firebase.{firestore,database,storage}(`, and the modular entry-points/read-ops `get{Firestore,Database,Storage}(` / `onSnapshot(` / `onValue(` / `getDocs(` / `getDoc(` / `addDoc(`/`setDoc(`/`updateDoc(`/`deleteDoc(`. Both Kotlin namespaces AND all three web forms matter or violations pass. The web detector requires a call-paren (`\s*\(`) but NO `\b` left-anchor, so DI-renamed accessors like `_onSnapshot(` / `_getDocs(` are caught (recall over precision) while a bare mention isn't; matching the read-ops transitively covers `collection()` usage (a collection ref is passed to a read-op).
 - [ ] A committed baseline (`scripts/direct-backend-baseline.json`, per-category arrays of file paths) exempts the current known sites; the ratchet is **file-presence**-based (matching the proven `check-no-new-stubs.js` pattern): it fails on a NEW file that references a backend SDK but is absent from the baseline. An already-baselined file stays flagged (regardless of how many calls it holds) until ALL its direct access is removed — at which point it becomes a STALE baseline entry to trim (`--generate-baseline`). The set of tracked files may only SHRINK.
 - [ ] A new `lint.yml` step runs the ratchet; failure blocks the PR (surfaces under a required check).
 - [ ] CLAUDE.md gains an "API-only backend access" rule (Architecture + Pre-Merge Testing Protocol) stating clients never touch Firestore/RTDB/Storage directly — everything via the Express API; `code-reviewer` treats a violation as blocking.
@@ -35,14 +35,14 @@ The operator's 2026-07-09 directive is "never ever repeat this mistake again …
 ### Error paths
 
 - [ ] **Baseline file missing/malformed** → the script exits non-zero with a clear message (fail-closed: never pass silently when it can't read its own baseline).
-- [ ] **A baselined file is deleted/renamed** (remediated) → the script does not crash; it reports the now-unused baseline entry so it can be trimmed toward empty.
-- [ ] **Violation found** → stderr names `file:line`, the offending symbol, and the remediation pointer ("route via an Express API endpoint — CLAUDE.md § API-only backend access, EPIC-0006"), then a non-zero exit.
+- [ ] **A baselined file is deleted/renamed** (remediated) → the script does not crash; it FAILS naming the now-stale baseline entry to trim (`--generate-baseline`), so the baseline stays honest (the ratchet only tightens).
+- [ ] **Violation found** → stderr emits, per offending file, a GitHub `::error file=…::` annotation naming the file + the offending category (Firestore / RTDB / Storage / web) + the remediation pointer ("route via an Express API endpoint — CLAUDE.md § API-only backend access, EPIC-0006"), then a non-zero exit. File-level (matching `check-no-new-stubs.js`): a NEW violation is a NEW file the contributor authored, so the file identity is the actionable signal; per-line/symbol tracking is intentionally not added, for parity with the sibling ratchet.
 
 ### Edge cases
 
 - [ ] The Express API's own Admin SDK usage (`express-api/**`) is NEVER scanned/flagged — it is the sanctioned server channel.
 - [ ] **Test source sets** (`**/androidTest/**`, `**/*Test/**`, `shared/src/{jvmTest,commonTest,androidHostTest}/**`, `app/src/test/**`) are excluded from the production ratchet — a test hitting the real emulator is the no-mocks REAL path ([[feedback-no-stubs-mocks-fakes-real-only]]), not a shipped-client violation; they're tracked in the audit, not gated here.
-- [ ] Matches ignore commented-out lines and string literals only if trivially cheap; otherwise a commented reference still counts (conservative — a comment referencing the SDK is harmless noise, and false-positives are removed by fixing the comment, which is safe). Document the chosen stance.
+- [ ] Comment/mention handling is per-detector: the Kotlin categories match the import namespace (`com.google.firebase.…` / `dev.gitlive.firebase.…`), which realistically only appears in real imports (an unused import fails ktlint); the web detector requires a call-paren, so a bare comment or a `let _onSnapshot = null` declaration does NOT hit while a real call (incl. a `_`-prefixed DI accessor) does. Recall is favoured over precision — a rare comment-with-parens false positive is safe (fail-closed), a missed call is not.
 - [ ] Firebase **Auth** (`com.google.firebase.auth` / `dev.gitlive.firebase.auth`) is NOT matched by this ratchet — auth-plane token minting is a separate operator ruling (EPIC-0006 scope note), not a data-plane violation.
 
 ### Performance
@@ -63,7 +63,7 @@ The operator's 2026-07-09 directive is "never ever repeat this mistake again …
 
 ### Observability
 
-- [ ] On failure, the full list of new/increased violations prints (file:line:symbol), not just the first — a contributor fixes them in one pass. On success, prints the current total remaining (the ratchet countdown toward zero).
+- [ ] On failure, the FULL list of new offender files prints (one `::error file=…::` per file, not just the first) so a contributor fixes them in one pass, each with its category + remediation pointer. On success, prints the current total remaining (the ratchet countdown toward zero).
 
 ## BDD Scenarios
 
@@ -127,12 +127,13 @@ The operator's 2026-07-09 directive is "never ever repeat this mistake again …
 
 ## Definition of Done
 
-- [ ] `scripts/check-no-direct-backend.js` + `direct-backend-baseline.json` implemented; all Test-Plan cases green (RED-proven first).
-- [ ] Wired into `lint.yml`; a planted violation fails CI by name.
-- [ ] CLAUDE.md documents the API-only rule (Architecture + Pre-Merge Testing Protocol) + `code-reviewer` enforcement note.
+- [x] `scripts/check-no-direct-backend.js` + `direct-backend-baseline.json` (31 files) implemented; all Test-Plan cases green (RED-proven first) — 45 Jest tests.
+- [x] Wired into `lint.yml`; a planted violation fails (proven end-to-end: exit 1).
+- [x] CLAUDE.md documents the API-only rule (Architecture) + `code-reviewer` enforcement note.
 - [ ] **Pre-Merge Testing Protocol satisfied** (CI-config-only exemption): Jest script test + eslint + actionlint + validator + `code-reviewer` 100% clean + CI green by name → **judgment-merge** to develop; NO auto-merge.
 - [ ] `released_in: vX.Y.Z` after the release cut; `status: Done`.
 
 ## Notes (running log)
 
 - 2026-07-09 — Created as the FIRST child of [[EPIC-0006]] (prevention before remediation) in response to the operator's critical directive ([[feedback-no-direct-backend-all-via-api]]). Design mirrors `check-no-new-stubs.js`. Baseline sourced from the in-flight audit `.project/audit/direct-backend-access-audit-2026-07-09.md`. CI-config-only → gauntlet-exempt, so it can land fast to stop the bleeding while the remediation stories are written.
+- 2026-07-09 — **code-reviewer round-1 caught a live false-NEGATIVE in the security control (Critical) + coverage/spec gaps — all fixed.** I verified the Critical myself before acting (ran the regex against the real files). Fixes: **(1)** the web regex used `\bonSnapshot\s*\(`, but `\b` treats `_` as a word char so it MISSED the real DI-renamed calls this codebase uses (`_onSnapshot(` at admin/js/tabs/logs.js:669, `_getDocs(` at spin-monitor.js:376) → my earlier "precision tightening" had silently dropped 3 real web-violation files from the baseline. Dropped the `\b` (kept the call-paren for precision); **(2)** added the modular web getters `getDatabase(`/`getStorage(`/`onValue(` (Finding 2) + reads `getDocs(`/`getDoc(`/`addDoc(`/`setDoc(`/`updateDoc(`/`deleteDoc(` + a `from '…firebase[-/]{firestore,database,storage}…'` import-source signal (Findings 2,3); **(3)** regenerated the baseline → **31 files** (webData 2→5, the 3 tabs restored); **(4)** added the 13 missing tests for the 5 previously-uncovered exports — incl. the **"scanRepo == committed baseline" drift invariant** (would have caught the incomplete baseline), the CLI exit-code contract via `process.execPath` (no `git` spawn → no `sonarjs/no-os-command-from-path`, no eslint-disable), `reportAndExit`, `generateBaseline` idempotence, `gitTrackedFiles` non-git-throws; **(5)** aligned the AC to the real (file-presence, file-level-annotation) design (removed the count/`.collection(`/`file:line:symbol` over-claims); **(6)** flipped status → In Review (Pre-Merge Gate). Now **45 tests** green (2 mutation + 1 precision sentinel), prettier+eslint clean, ratchet exit 0, e2e catch re-proven. **Reviewed-up-to: (this commit).** Round-2 confirm to follow.
