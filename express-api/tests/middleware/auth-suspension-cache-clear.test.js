@@ -86,4 +86,28 @@ describe('clearSuspensionCache — no-arg clears the whole suspension cache', ()
     await hit(a.headers).expect(200); // A re-reads Firestore → not suspended
     await hit(b.headers).expect(403); // B untouched → still cached suspended
   });
+
+  test('a NaN / 0 / null argument is a targeted no-op — it must NOT wipe the whole cache', async () => {
+    // Guards the `=== undefined` hardening: production callers pass Number(id),
+    // and a malformed id yields NaN (identity-graph.js:175, reports.js). Under a
+    // naive `if (uniqueId)` truthiness guard, NaN/0/null are all falsy → clear-all
+    // → the whole cache is wiped. `=== undefined` sends them to the targeted
+    // delete (a safe no-op). This test goes RED if the guard is ever reverted to
+    // truthiness. See [[feedback-test-must-fail-if-logic-skipped]].
+    const a = await mintRealUser({ uniqueId: 69000006, isSuspended: true });
+    const b = await mintRealUser({ uniqueId: 69000007, isSuspended: true });
+
+    await hit(a.headers).expect(403); // caches A suspended
+    await hit(b.headers).expect(403); // caches B suspended
+    await db.doc('users/69000006').update({ isSuspended: false });
+    await db.doc('users/69000007').update({ isSuspended: false });
+
+    clearSuspensionCache(Number('not-a-number')); // NaN — mirrors identity-graph.js:175 Number(badId)
+    clearSuspensionCache(0);
+    clearSuspensionCache(null);
+
+    // A truthiness guard would have cleared-all above → both would re-read → 200.
+    await hit(a.headers).expect(403); // A still cached suspended (not wiped)
+    await hit(b.headers).expect(403); // B still cached suspended (not wiped)
+  });
 });
