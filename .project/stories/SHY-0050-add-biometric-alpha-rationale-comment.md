@@ -1,6 +1,6 @@
 ---
 id: SHY-0050
-status: Draft
+status: Cancelled
 owner: claude
 created: 2026-06-08
 priority: P2
@@ -137,4 +137,4 @@ So this story's path is determined by [[SHY-0005]]'s outcome at pickup time.
 
 - 2026-06-08 ~13:15 BST — Spec created by SHY-0036 batch fill. Source: zero-gap roadmap line 108 (G032). Reserved ID SHY-0050.
 - 2026-06-12 ~23:25 BST — **Realigned as the SOLE owner of the rationale comment** (operator dedup decision, [[SHY-0091]] pass). [[SHY-0005]] was narrowed to downgrade-only and no longer adds any comment, so the old "0005 might add the comment too" framing was removed; this story's path (COMMENT / CANCEL) is now cleanly determined by 0005's downgrade outcome. Embedded the **Pre-Merge Testing Protocol** at its comment-only floor (not `*.md`-only since it edits `.toml`: build/compile + full regression corpus prove no behaviour change). DoD: → **judgment-merge**.
-</content>
+- 2026-07-09 — **Reconciled in the MVP-Draft backlog audit ([[SHY-0167]]):** status Draft → Cancelled. Deliverable moot: SHY-0005 moved biometric to stable 1.1.0, so there is no alpha pin to add a rationale comment for. Superseded. Full evidence table: `.project/audit/mvp-backlog-reconciliation-2026-07-08.md`.
