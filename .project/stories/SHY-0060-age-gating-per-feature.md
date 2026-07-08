@@ -1,6 +1,6 @@
 ---
 id: SHY-0060
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-06-08
 priority: P0
@@ -274,3 +274,5 @@ This SHY captures the FULL per-feature age-gating design as the source-of-truth 
   - **[Important FIXED] the 429-no-audit guard used an ADULT (never audited), so it couldn't catch a verdict-audit-before-rate-limit REORDER** (an adult is `Allowed` in any order). Kept the adult case (it pins the blunt "unconditional audit in the rate-limit branch" mutation) + softened its comment, and ADDED a companion: a would-be-BLOCKED under-age user driven through the full budget (each in-budget check age-blocks → a fire-and-forget audit row; poll-until-settled to `MAX_PER_WINDOW`), then the `(MAX+1)`-th call is rate-limited (429) and must add NO row — failing loudly if a reorder audited the 429 path.
   - **[Important FIXED] the absent-follow-fields test didn't assert its own distinguishing claim** (`requiredVerification: 'NONE'`, not `REVERIFY`). Pinned it.
   - 15 touched tests green; lint clean. **Reviewed-up-to bumps to the round-3-fix commit; round 4 confirms the clean baseline before the In-Review flip + push.**
+- 2026-07-09 — **code-reviewer round 4 (tight confirm, reviewed `50d6f64286e`): ZERO Critical / ZERO Important — CLEAN. Merge baseline reached.** Reviewer independently re-derived all three round-3 fixes from the production code: the tautology removal is clean + `dm-numeric-1` is a genuine guard (traced: reverting `conversations.js:317` `.map(String)` → `dmRecipientIds.length===2` → gate skipped → 404, `.expect(403)` fails); the 429 companion catches a verdict-audit-before-rate-limit reorder (traced vs `enforce.js:80-111`); `requiredVerification:'NONE'` verified vs `safety-gate.js`. No stubs/mocks, no `==`/eslint-disable, no `.only/.skip`, exact-value assertions, no isolation leak, rate-limiter concurrency-safe by construction. **One visibility-only note (NOT a blocker):** the Number-typed WRITE path `conversations.js:339` has no real-200 integration test — PRE-EXISTING (line predates this diff), out-of-scope by design (a real 200 needs cross-cohort + recipient seeding), and the only 200-path test (`conversations.test.js`) uses a mocked db → already in EPIC-0003's mock-migration inventory, not a new SHY.
+  - **PRE-PUSH GATE (real emulator, run locally per [[feedback-workflow-verify-by-running]]):** full SHY-0060 surface `tests/safety/ + *age-gate* + conversations-cohort + conversations + economy-age-gate` = **16 suites / 206 tests, EXIT 0**. Earlier full express-api suite = **12,843 pass / 0 fail**. **Reviewed-up-to: 50d6f64286e.** Status → **In Review**. Pushing → PR to **develop** (device/browser gauntlet deferred to MVP real-device batch: flag ships OFF ⇒ no user-observable behaviour to walk).
