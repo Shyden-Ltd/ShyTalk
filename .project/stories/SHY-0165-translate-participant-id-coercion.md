@@ -1,6 +1,6 @@
 ---
 id: SHY-0165
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-09
 priority: P2
@@ -139,3 +139,5 @@ This is the same String/Number class as the SHY-0060 DM-gate Critical; it was fo
   - **[Important FIXED] module-load-time date flake.** `quotaSpent.translationDate` was frozen at require-time; the route computes `today` per request, so a UTC-midnight straddle would desync → quota-reset → fall through to the LIVE provider (breaking the provider-free claim + writing to the shared `data/translation-cache.json`). Now `spentQuota()` computes the date fresh per call; the env-path override also isolates any stray write to a tmp dir.
   - **[Important FIXED] vacuous assertion** — `expect(res.body.cached).not.toBe(true)` on a 429 body that never has a `cached` key (always `undefined`, passes regardless — exactly the [[feedback-test-must-fail-if-logic-skipped]] trap). Now asserts the exact 429 contract `{error, limit, upgradePrompt}`.
   - 57/57 across all translate suites; lint clean. **Reviewed-up-to: <review-fix commit>.** Re-review before push.
+- 2026-07-09 — **code-reviewer round 2 (tight confirm, reviewed `c60dcd220c2`): ZERO findings on the diff — merge bar cleared.** Reviewer independently re-derived the RED mapping (revert fix → 3 failed/2 passed), confirmed all 3 round-1 fixes genuinely resolved (write test non-tautological + RED-provable, env/tmp lifecycle ordered+cleaned with no cross-file leak, cache-key match, `spentQuota()` closes the date flake, exact 429 `toEqual`), real-only, no `==`/eslint-disable/`.only`, ids 68000001-5 collision-free. **Reviewed-up-to: c60dcd220c2.** Status → **In Review**; pushing → PR to develop.
+  - **Pre-existing OUT-OF-SCOPE finding (own follow-up SHY):** `auth.js:351 clearSuspensionCache(uid)` lacks the "clear all" (`else suspensionCache.clear()`) branch its siblings `clearUniqueIdCache`/`clearAdminClaimCache` have, so `real-auth.js clearAuthCaches()` (calls it with no arg) does `suspensionCache.delete(undefined)` — a no-op, not a real clear. Harmless to SHY-0165 (all its users `isSuspended:false` → first-touch miss). Confidence ~90. → follow-up bug SHY (test-isolation helper correctness).
