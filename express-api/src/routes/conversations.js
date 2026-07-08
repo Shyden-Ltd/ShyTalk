@@ -12,6 +12,8 @@ const { sendFcmToTokens, cleanupInvalidTokens } = require('../utils/fcm');
 const { requireSameCohort } = require('../middleware/sameCohort');
 const { isLiveAdmin } = require('../middleware/auth');
 const { auditAdminFlagBypass } = require('../utils/segregation-audit');
+const { isAgeGatingEnabled } = require('../safety/age-gating-flag');
+const { checkFeatureAccess } = require('../safety/enforce');
 const log = require('../utils/log');
 
 /**
@@ -295,6 +297,27 @@ router.post('/conversations/:id/messages', async (req, res) => {
     const participantIds = convDoc.participantIds || [];
     if (!participantIds.includes(senderId)) {
       return res.status(403).json({ error: 'Not a participant of this conversation' });
+    }
+
+    // SHY-0060 — per-feature age gate on 1:1 DMs (inert unless the operator
+    // flag is ON). A DM with a mutually-followed user is 13+ (bidirectional
+    // consent); a DM with anyone else is 18+ (the stranger predator-vector).
+    // Group conversations are moderated multi-user spaces — out of scope. The
+    // flag is checked first so the sender doc is loaded only when gating is on.
+    const dmRecipientIds = participantIds.filter((pid) => pid !== senderId);
+    if (!convDoc.isGroup && dmRecipientIds.length === 1 && (await isAgeGatingEnabled(db))) {
+      const senderData = (await db.doc(`users/${senderId}`).get()).data() || {};
+      const recipientId = dmRecipientIds[0];
+      const mutualFollow =
+        Array.isArray(senderData.followingIds) &&
+        Array.isArray(senderData.followerIds) &&
+        senderData.followingIds.includes(recipientId) &&
+        senderData.followerIds.includes(recipientId);
+      const dmFeature = mutualFollow
+        ? 'DIRECT_MESSAGE_WITH_FOLLOWED_USER'
+        : 'DIRECT_MESSAGE_WITH_STRANGER';
+      const dmBlock = await checkFeatureAccess(db, dmFeature, senderData);
+      if (dmBlock) return res.status(dmBlock.status).json(dmBlock.body);
     }
 
     if (await gateCrossCohortConversation(req, res, convDoc)) return;
