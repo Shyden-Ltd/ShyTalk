@@ -1,6 +1,6 @@
 ---
 id: SHY-0164
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-08
 priority: P0
@@ -143,5 +143,6 @@ The workable fix (operator-approved 2026-07-08, "skip Sonar gate for feature bra
 - 2026-07-08 — Implemented main-only gate via TDD: rewrote the test to EXECUTE the hook's real branch-decision + gate-failure bytes (12 pins, RED 8/12 against the old hook → GREEN 12/12). Wrapped the whole scan in `if [ "$CURRENT_BRANCH" != "main" ]`. Full `tests/scripts/` suite 6961/6961; `sh -n`/`bash -n`, eslint `--max-warnings=0`, prettier all clean. Targets `develop` (not main, per operator).
 - 2026-07-08 — **SHY-0165 candidate (follow-up):** on the main path the Express-jest + Kotlin-jvmTest steps are ungated (a failure does not `exit 1`, so it doesn't block the push) — pre-existing, reviewer-surfaced. Out of scope here; file as its own story.
 - 2026-07-08 — **code-reviewer round 1** (commit `5a5fa5c30b4`): shell logic verified 100% clean (balanced if/else/fi, POSIX, correct fall-through, no collateral change). 6 test-COVERAGE gaps found (2 Critical, 4 Important), all verified real via grep + trace, all fixed: (1) `SONAR_TOKEN`-unset had zero coverage repo-wide → added `runTokenCheck` (unset⇒exit 1, set⇒fall-through); (2) containment pinned only the gate's lower bound → now bounds all four scan components (token check + Express-jest + Kotlin-jvmTest + gate) between `else` and the guard's own `fi`, catching a hoist-the-emulator-step regression; (3) skip message branch-name unasserted → `toContain(branch)`; (4) develop/main-hotfix assertion parity → added status + fall-through; (5) detached-HEAD/empty untested → `test.each(['HEAD',''])`; (6) "No code changes" short-circuit untested → `runNoCodeShortCircuit`. Test 12→18 pins, all green; prettier + eslint `--max-warnings=0` clean. Fixing the `SONAR_TOKEN`/containment anchors also surfaced (and the executing-bytes tests caught) a first-occurrence collision with the `.env`-loader `if [ -z "$SONAR_TOKEN" ]` — re-anchored on `]; then`.
+- 2026-07-08 — **code-reviewer round 2** (commit `15da3c570c5` → fix `5a1dbc00011`): confirmed all 6 round-1 fixes closed; found 1 new weak-assertion bug — the `develop` skip test used `toContain('develop')`, which coincidentally passes off the static "develop→main promotion" suffix even if `$CURRENT_BRANCH` interpolation broke. Fixed all three skip tests to assert the parenthesised `Feature branch (<name>)` form (proves interpolation-in-parens, not bare presence). **Round-3 re-review: 100% CLEAN — zero findings** across hook + test + story. jest 18/18; prettier + eslint clean.
 
-Reviewed-up-to: PENDING_COMMIT_SHA
+Reviewed-up-to: 5a1dbc00011
