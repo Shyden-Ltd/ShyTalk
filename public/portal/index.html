@@ -246,6 +246,36 @@
     </div>
   </section>
 
+  <!-- Ban screen. The server's ban gate answers /api/portal/me with 403
+       { code:'banned', reason, expiresAt } — portal.js renders THIS instead of
+       silently signing the person out (SHY-0149). -->
+  <section id="banned-section" class="portal-section portal-section--narrow" hidden>
+    <div class="portal-card portal-card--suspended">
+      <div class="suspended-icon" aria-hidden="true">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+        </svg>
+      </div>
+      <h1 class="portal-heading" data-i18n="banned_heading">Your account has been banned</h1>
+      <p id="banned-reason" class="portal-subtitle" data-i18n="banned_reason">Your account has been banned for violating our community guidelines.</p>
+      <p id="banned-end-date" class="suspended-date" hidden>
+        <span data-i18n="banned_until">Ban ends:</span>
+        <span id="banned-end-value"></span>
+      </p>
+
+      <button type="button" id="banned-appeal-btn" class="btn btn--primary">
+        <span data-i18n="suspended_appeal">Submit an Appeal</span>
+      </button>
+
+      <a id="banned-contact-link" href="#" class="portal-link" data-i18n="suspended_contact">Contact Support</a>
+
+      <button type="button" id="banned-signout-btn" class="btn btn--outline">
+        <span data-i18n="suspended_signout">Sign Out</span>
+      </button>
+    </div>
+  </section>
+
   <!-- No account (download prompt) -->
   <section id="no-account-section" class="portal-section portal-section--narrow" hidden>
     <div class="portal-card">

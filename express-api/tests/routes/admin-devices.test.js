@@ -566,6 +566,21 @@ describe('POST /api/admin/devices — all branches', () => {
     expect(res.body.error).toBe('deviceId and uniqueId are required');
   });
 
+  test.each([
+    ['null', null],
+    ['false', false],
+    ['empty string', ''],
+    ['array', []],
+  ])('rejects uniqueId: %s (all coerce to account 0 via Number())', async (_label, value) => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/devices')
+      .send({ deviceId: 'dev-coerce', uniqueId: value })
+      .expect(400);
+    expect(res.body.error).toContain('required');
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
   test('rejects uniqueId: null (would silently become account 0)', async () => {
     const app = createApp();
     const res = await request(app)

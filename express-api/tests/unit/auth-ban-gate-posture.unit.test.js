@@ -159,6 +159,10 @@ describe('a failing ban lookup must not confiscate the rights a ban itself spare
       .set('Authorization', 'Bearer live-token');
 
     expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: 'Authentication failed' });
+    // The 401 must come from the gate running and failing — not from the route
+    // being unreachable for some unrelated reason (reviewer R6-I4).
+    expect(mockCheckUserBans).toHaveBeenCalled();
   });
 
   test('an exempt path does not even PERFORM the ban lookup (no wasted read)', async () => {

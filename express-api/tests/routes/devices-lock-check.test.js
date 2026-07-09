@@ -481,14 +481,19 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
   test('a rollback never releases a binding that now belongs to someone else', async () => {
     const { rollbackBindingIfOverCap } = require('../../src/utils/bans');
     await fillBindingsToCap('6031');
-    // Over cap for 6031, but the device was re-claimed by a different account.
-    await seedBinding('lck-stolen', { uniqueId: '6031', boundAt: 1 });
+    // A SIBLING binding keeps 6031 over the cap, so the rollback really enters
+    // its transaction. Without it the count is back at the cap and the
+    // function short-circuits, never reaching the ownership guard (R6-C1).
+    await seedBinding('lck-6031-extra', { uniqueId: '6031', boundAt: 1 });
+    // …and the device this rollback targets was re-claimed by someone else.
     await seedBinding('lck-stolen', { uniqueId: '6032', boundAt: 2 });
 
     await rollbackBindingIfOverCap('6031', 'lck-stolen');
 
     // The concurrent winner keeps it — the rollback released nothing.
     expect((await readBinding('lck-stolen')).uniqueId).toBe('6032');
+    // …and the caller's own sibling binding is untouched.
+    expect((await readBinding('lck-6031-extra')).uniqueId).toBe('6031');
   });
 
   test('concurrent lock-check calls on distinct new devices cannot exceed the cap', async () => {

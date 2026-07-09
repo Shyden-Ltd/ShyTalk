@@ -495,6 +495,45 @@ describe('the portal double-gate (as mounted in production)', () => {
     await request(app).post('/api/portal/sign-out').set(caller.headers).send({}).expect(200);
   });
 
+  test('a caller who is BOTH suspended and banned: the ban wins on /portal/me', async () => {
+    // /portal/me is suspension-exempt but not ban-exempt, so the suspension
+    // check waves them through and the ban gate refuses them. Asserted so a
+    // future reorder of the two checks is caught (reviewer R6-I2).
+    const caller = await mintRealUser({ uniqueId: '5120', isSuspended: true });
+    await seedDeviceBan('abg-dev-both-1', { linkedUniqueId: '5120', reason: 'both states' });
+
+    const res = await request(createPortalStackApp())
+      .get('/api/portal/me')
+      .set(caller.headers)
+      .expect(403);
+    expect(res.body).toMatchObject({ code: 'banned', reason: 'both states' });
+  });
+
+  test('a caller who is BOTH suspended and banned: suspension wins on a non-exempt route', async () => {
+    // Neither exemption applies, and the suspension check runs first — by
+    // design. Pinned so the ordering is a decision, not an accident.
+    const caller = await mintRealUser({ uniqueId: '5121', isSuspended: true });
+    await seedDeviceBan('abg-dev-both-2', { linkedUniqueId: '5121' });
+
+    const res = await request(createPortalStackApp())
+      .post('/api/portal/revoke-all-sessions')
+      .set(caller.headers)
+      .send({})
+      .expect(403);
+    expect(res.body).toEqual({ error: 'Account suspended' });
+  });
+
+  test('a caller who is BOTH suspended and banned can still sign out', async () => {
+    const caller = await mintRealUser({ uniqueId: '5122', isSuspended: true });
+    await seedDeviceBan('abg-dev-both-3', { linkedUniqueId: '5122' });
+
+    await request(createPortalStackApp())
+      .post('/api/portal/sign-out')
+      .set(caller.headers)
+      .send({})
+      .expect(200);
+  });
+
   test('a banned user is still refused on a non-exempt portal action', async () => {
     const caller = await mintRealUser({ uniqueId: '5112' });
     await seedDeviceBan('abg-dev-portal-2', { linkedUniqueId: '5112' });

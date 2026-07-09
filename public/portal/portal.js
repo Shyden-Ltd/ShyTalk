@@ -260,6 +260,15 @@
           return;
         }
 
+        // The server's ban gate refuses /portal/me for a banned account and
+        // returns the ban itself — reason and expiry included. Render it.
+        // Signing the person out here (the old "other 403" path) told them
+        // nothing at all about why they were locked out (SHY-0149).
+        if (errorBody.code === 'banned') {
+          renderBan(errorBody);
+          return;
+        }
+
         // Other 403 — show login
         await signOut();
         return;
@@ -673,6 +682,38 @@
     }
 
     showSection('suspended-section');
+  }
+
+  /**
+   * Render the ban screen from the gate's 403 body:
+   * { code:'banned', banType, reason, expiresAt }.
+   * `expiresAt` is null for a permanent ban.
+   */
+  function renderBan(ban) {
+    var reasonEl = $('banned-reason');
+    if (reasonEl && ban.reason) reasonEl.textContent = ban.reason;
+
+    var endDateEl = $('banned-end-date');
+    var endValueEl = $('banned-end-value');
+    if (endDateEl && endValueEl && ban.expiresAt) {
+      try {
+        var date = new Date(ban.expiresAt);
+        endValueEl.textContent = date.toLocaleDateString(getCurrentLang(), {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        endDateEl.hidden = false;
+      } catch (_e) {
+        endDateEl.hidden = true;
+      }
+    } else if (endDateEl) {
+      endDateEl.hidden = true; // permanent ban — no end date to show
+    }
+
+    showSection('banned-section');
   }
 
   // ─── Dashboard Rendering ────────────────────────────────────
@@ -1274,6 +1315,31 @@
     var contactLink = $('suspended-contact-link');
     if (contactLink) {
       contactLink.addEventListener('click', function (e) {
+        e.preventDefault();
+        window.open('mailto:support@shytalk.dev', '_blank');
+      });
+    }
+
+    // Ban screen — the same three affordances a suspended user gets. A ban
+    // must never trap someone in a session, and it must never remove their
+    // right to appeal (SHY-0149).
+    var bannedSignOutBtn = $('banned-signout-btn');
+    if (bannedSignOutBtn) {
+      bannedSignOutBtn.addEventListener('click', function () {
+        signOut();
+      });
+    }
+
+    var bannedAppealBtn = $('banned-appeal-btn');
+    if (bannedAppealBtn) {
+      bannedAppealBtn.addEventListener('click', function () {
+        showMessageModal('Submit an Appeal', 'To appeal your ban, please contact support at support@shytalk.dev with your account details.');
+      });
+    }
+
+    var bannedContactLink = $('banned-contact-link');
+    if (bannedContactLink) {
+      bannedContactLink.addEventListener('click', function (e) {
         e.preventDefault();
         window.open('mailto:support@shytalk.dev', '_blank');
       });

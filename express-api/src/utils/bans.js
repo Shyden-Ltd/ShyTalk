@@ -427,23 +427,38 @@ async function countBoundDevices(uniqueId) {
  * below the cap. The device keeps its telemetry; it merely goes back to being
  * unclaimed, which is exactly the at-cap state.
  *
- * @returns {Promise<boolean>} true if the binding was rolled back
+ * @returns {Promise<boolean>} true when the caller was over the cap (so the
+ *   route must refuse), regardless of whether a doc was actually released —
+ *   a concurrent actor may have deleted or re-claimed it first.
  */
 async function rollbackBindingIfOverCap(uniqueId, deviceId) {
   if ((await countBoundDevices(uniqueId)) <= MAX_BOUND_DEVICES) return false;
 
   const ref = db.doc(`deviceBindings/${deviceId}`);
-  await db.runTransaction(async (tx) => {
+  const released = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
-    if (!snap.exists) return;
+    if (!snap.exists) return false; // someone deleted it first
     const data = snap.data() || {};
     const owner = data.uniqueId ?? data.userId ?? null;
     // Never release someone else's claim — a concurrent winner may hold it.
-    if (owner === null || String(owner) !== String(uniqueId)) return;
+    if (owner === null || String(owner) !== String(uniqueId)) return false;
     tx.update(ref, { uniqueId: FieldValue.delete(), boundAt: FieldValue.delete() });
+    return true;
   }, BINDING_TRANSACTION_OPTIONS);
 
-  log.warn('bans', 'binding released — cap exceeded by a concurrent bind', { uniqueId, deviceId });
+  // Log only what actually happened — an operator reading "binding released"
+  // during an incident must be able to trust it (reviewer R6-I3).
+  if (released) {
+    log.warn('bans', 'binding released — cap exceeded by a concurrent bind', {
+      uniqueId,
+      deviceId,
+    });
+  } else {
+    log.warn('bans', 'over cap, but the target binding was already gone or reclaimed', {
+      uniqueId,
+      deviceId,
+    });
+  }
   clearBanCache(uniqueId);
   return true;
 }
