@@ -143,7 +143,11 @@
       auth = firebase.auth();
       // Connect to Auth emulator in local dev mode
       if (isLocal && !auth._emulatorConnected) {
-        auth.useEmulator('http://localhost:9099');
+        // `disableWarnings` suppresses the SDK's position-fixed emulator banner,
+        // which otherwise overlays the bottom of the viewport and intercepts
+        // clicks on the language switcher at mobile heights. Same setting the
+        // portal uses (public/portal/portal.js).
+        auth.useEmulator('http://localhost:9099', { disableWarnings: true });
         auth._emulatorConnected = true;
       }
     } catch (err) {

@@ -36,14 +36,24 @@ const COLLECTION_FAKES = {
 jest.mock('../../src/utils/firebase', () => ({
   db: {
     doc: jest.fn((path) => ({ _path: path, get: () => mockDocGet(path) })),
-    // networkBans is now read WITHOUT a `where` (isBanActive is the sole
-    // arbiter — see R8-C1), while deviceBans/deviceBindings still filter.
-    collection: jest.fn((name) => ({
-      limit: jest.fn(() => ({ get: () => COLLECTION_FAKES[name]() })),
-      where: jest.fn(() => ({
+    // networkBans is now PAGED and unfiltered (`isBanActive` is the sole
+    // arbiter — R8-C1; paged + fail-closed — R9-C2), while deviceBans and
+    // deviceBindings still filter by owner.
+    collection: jest.fn((name) => {
+      const paged = () => ({
+        limit: jest.fn(() => ({
+          get: () => COLLECTION_FAKES[name](),
+          startAfter: jest.fn((cursor) => ({ get: () => COLLECTION_FAKES[name](cursor) })),
+        })),
+      });
+      return {
+        orderBy: jest.fn(paged),
         limit: jest.fn(() => ({ get: () => COLLECTION_FAKES[name]() })),
-      })),
-    })),
+        where: jest.fn(() => ({
+          limit: jest.fn(() => ({ get: () => COLLECTION_FAKES[name]() })),
+        })),
+      };
+    }),
   },
 }));
 
@@ -116,72 +126,56 @@ describe('checkBans is fail-open (sign-in ban REPORT, not the gate)', () => {
   });
 });
 
-describe('network-ban truncation warning', () => {
-  test(`warns when the active-ban query returns exactly ${NETWORK_BANS_QUERY_LIMIT} rows`, async () => {
-    const bans = Array.from({ length: NETWORK_BANS_QUERY_LIMIT }, (_, i) => ({
-      type: 'ip',
-      value: `10.0.${Math.floor(i / 250)}.${i % 250}`,
-      expiresAt: null,
-    }));
-    mockNetworkBansGet.mockResolvedValue(networkBansSnap(bans));
+describe('the network-ban scan is paged and fails CLOSED rather than guessing', () => {
+  const LIMIT = NETWORK_BANS_QUERY_LIMIT;
 
-    await checkBans('dev-3', '198.51.100.1', null);
+  /** A page of `n` permanent bans, ids prefixed so the cursor advances. */
+  const page = (prefix, n, extra = {}) =>
+    snap(
+      Array.from({ length: n }, (_, i) => ({
+        id: `${prefix}-${i}`,
+        type: 'ip',
+        value: `10.0.0.${i}`,
+        expiresAt: null,
+        ...extra,
+      })),
+    );
 
-    expect(log.warn).toHaveBeenCalledWith(
+  test('an active ban on the SECOND page is still enforced (a full page is not the end)', async () => {
+    // The old design filtered expired docs server-side, so the 500-doc budget
+    // held only active bans. It now holds active + not-yet-reaped expired ones,
+    // so a single page can silently omit an active ban (reviewer R9-C2).
+    const target = { id: 'p2-target', type: 'ip', value: '203.0.113.5', expiresAt: null };
+    mockNetworkBansGet
+      .mockResolvedValueOnce(page('p1', LIMIT)) // full page → keep going
+      .mockResolvedValueOnce(snap([target])); // short page → done
+
+    const result = await checkBans('dev-1', '203.0.113.5', null);
+    expect(result).toMatchObject({ isBanned: true, banType: 'network_ip' });
+    expect(mockNetworkBansGet).toHaveBeenCalledTimes(2);
+  });
+
+  test('a collection larger than the page budget throws — the gate must not guess', async () => {
+    mockNetworkBansGet.mockResolvedValue(page('endless', LIMIT)); // every page is full
+
+    // checkBans is the fail-OPEN sign-in report: it absorbs the throw.
+    await expect(checkBans('dev-2', '1.2.3.4', null)).resolves.toMatchObject({ isBanned: false });
+    expect(log.error).toHaveBeenCalledWith(
       'bans',
-      expect.stringContaining('truncation'),
-      expect.objectContaining({ limit: NETWORK_BANS_QUERY_LIMIT }),
+      expect.stringContaining('failing closed'),
+      expect.any(Object),
     );
+
+    // checkUserBans is the fail-CLOSED gate: the rejection reaches the caller,
+    // which turns it into a 401 in authMiddleware.
+    clearBanCache();
+    await expect(checkUserBans('9001', '1.2.3.4')).rejects.toThrow(/truncated/i);
   });
 
-  test('does not warn below the limit', async () => {
-    mockNetworkBansGet.mockResolvedValue(
-      networkBansSnap([{ type: 'ip', value: '10.0.0.1', expiresAt: null }]),
-    );
-
-    await checkBans('dev-4', '198.51.100.1', null);
-    expect(log.warn).not.toHaveBeenCalled();
-  });
-});
-
-describe('expired network bans are lazily reaped, corrupt ones never are', () => {
-  test('a genuinely expired ban is deleted on the next refresh; an active one is not', async () => {
-    const past = new Date(Date.now() - 60_000).toISOString();
-    mockNetworkBansGet.mockResolvedValue(
-      snap([
-        { id: 'expired', type: 'ip', value: '1.1.1.1', expiresAt: past },
-        { id: 'active', type: 'ip', value: '2.2.2.2', expiresAt: null },
-      ]),
-    );
-
-    const result = await checkBans('dev-1', '2.2.2.2', null);
-    expect(result).toMatchObject({ isBanned: true, banType: 'network_ip' });
-
-    await Promise.resolve(); // let the fire-and-forget reap settle
-    expect(mockDelete).toHaveBeenCalledTimes(1); // only the expired one
-  });
-
-  test('a ban with a CORRUPT expiry is kept in force and never reaped', async () => {
-    mockNetworkBansGet.mockResolvedValue(
-      snap([{ id: 'corrupt', type: 'ip', value: '3.3.3.3', expiresAt: '' }]),
-    );
-
-    const result = await checkBans('dev-2', '3.3.3.3', null);
-    expect(result).toMatchObject({ isBanned: true, banType: 'network_ip' });
-
-    await Promise.resolve();
-    expect(mockDelete).not.toHaveBeenCalled();
-  });
-
-  test('a reap failure never fails the request', async () => {
-    mockDelete.mockRejectedValueOnce(new Error('firestore down'));
-    mockNetworkBansGet.mockResolvedValue(
-      snap([
-        { id: 'expired', type: 'ip', value: '4.4.4.4', expiresAt: '2000-01-01T00:00:00.000Z' },
-      ]),
-    );
-
-    await expect(checkBans('dev-3', '9.9.9.9', null)).resolves.toMatchObject({ isBanned: false });
+  test('a single short page is one query — no needless paging', async () => {
+    mockNetworkBansGet.mockResolvedValue(snap([]));
+    await checkBans('dev-3', '1.2.3.4', null);
+    expect(mockNetworkBansGet).toHaveBeenCalledTimes(1);
   });
 });
 

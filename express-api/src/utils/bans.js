@@ -36,7 +36,7 @@
  */
 
 const { db, FieldValue } = require('./firebase');
-const { Filter } = require('firebase-admin/firestore');
+const { Filter, FieldPath } = require('firebase-admin/firestore');
 const log = require('./log');
 
 // Bound per-request network-ban reads to keep Spark-tier quota safe if
@@ -44,6 +44,10 @@ const log = require('./log');
 // cron used; 500 simultaneously-active network bans is far above any
 // realistic ShyTalk-scale value.
 const NETWORK_BANS_QUERY_LIMIT = 500;
+// How many pages of that size the gate will walk before refusing to guess.
+// 5,000 network bans is far beyond any realistic ShyTalk-scale value, and the
+// lazy reaper keeps the steady state at roughly the active count.
+const NETWORK_BANS_MAX_PAGES = 10;
 
 // How many devices one account may bind. Enforced at WRITE time by the two
 // binding-minting routes (/api/devices/lock-check and /api/device-info).
@@ -181,8 +185,12 @@ function idForms(uniqueId) {
 
 /**
  * Fetch the currently-active network bans, through the process-wide cache.
- * Expired bans are excluded server-side (Filter.or on expiresAt) — the
- * cron-less expiry design from the cron-elimination cluster.
+ *
+ * There is NO server-side expiry filter: `isBanActive` is the sole arbiter, in
+ * JS (a Firestore range filter compares ISO strings by codepoint, which is not
+ * an expiry check — see the note above). The scan is paged and fails CLOSED if
+ * the collection outgrows its page budget, and genuinely-lapsed docs are lazily
+ * reaped on the way through — the on-access reaping that retired `expireBans`.
  */
 async function getActiveNetworkBans() {
   if (networkBansCache && Date.now() < networkBansCache.expiresAt) {
@@ -203,22 +211,43 @@ async function getActiveNetworkBans() {
       // docs are lazily reaped below, so the collection stays small and the
       // limit is not consumed by history — the same on-access reaping the
       // cron-elimination cluster used to retire `expireBans`.
-      const snap = await db.collection('networkBans').limit(NETWORK_BANS_QUERY_LIMIT).get();
-
-      if (snap.size === NETWORK_BANS_QUERY_LIMIT) {
-        log.warn('bans', 'networkBans hit query limit — possible truncation', {
-          limit: NETWORK_BANS_QUERY_LIMIT,
-        });
-      }
-
+      // The 500-doc budget now covers ACTIVE + not-yet-reaped EXPIRED docs, so a
+      // single page can silently omit an active ban → fail-open. Page through
+      // the whole collection, and if it is bigger than we are willing to scan,
+      // FAIL CLOSED — exactly what the device-ban scan below does. A truncated
+      // scan cannot prove the caller is unbanned (reviewer R9-C2).
       const active = [];
       const expired = [];
-      for (const doc of snap.docs) {
-        const ban = doc.data();
-        if (isBanActive(ban)) active.push(ban);
-        else expired.push(doc.ref);
+      let cursor = null;
+
+      for (let page = 0; ; page++) {
+        if (page >= NETWORK_BANS_MAX_PAGES) {
+          log.error('bans', 'networkBans scan exceeded its page budget — failing closed', {
+            pages: NETWORK_BANS_MAX_PAGES,
+            perPage: NETWORK_BANS_QUERY_LIMIT,
+          });
+          throw new Error('networkBans scan truncated; cannot determine standing');
+        }
+
+        let query = db
+          .collection('networkBans')
+          .orderBy(FieldPath.documentId())
+          .limit(NETWORK_BANS_QUERY_LIMIT);
+        if (cursor) query = query.startAfter(cursor);
+        const snap = await query.get();
+
+        for (const doc of snap.docs) {
+          const ban = doc.data();
+          if (isBanActive(ban)) active.push(ban);
+          else expired.push(doc.ref);
+        }
+
+        if (snap.size < NETWORK_BANS_QUERY_LIMIT) break; // last page
+        cursor = snap.docs[snap.docs.length - 1].id;
       }
 
+      // Drain the whole expired backlog we just walked, so the next scan is one
+      // page again and the page budget is never consumed by history.
       reapExpiredNetworkBans(expired);
 
       networkBansCache = { bans: active, expiresAt: Date.now() + CACHE_TTL };

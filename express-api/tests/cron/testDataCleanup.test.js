@@ -19,6 +19,15 @@
  */
 const PRIOR_NODE_ENV = process.env.NODE_ENV;
 process.env.NODE_ENV = 'local';
+// This suite WIPES 13 shared top-level collections — `users`, `deviceBindings`,
+// `deviceBans` and `networkBans` among them — so it runs against its own
+// emulator project. Otherwise it deletes documents a parallel Jest worker just
+// seeded (SHY-0171; reproduced against tests/cron/accountDeletion.test.js).
+// Safe here: this suite never touches Auth, and Auth is the only thing a
+// namespaced project breaks (the emulator resolves ID tokens against the
+// project it was STARTED with). Jest gives every test FILE its own cloned
+// `process.env`, so this cannot reach another file.
+process.env.FIRESTORE_TEST_NAMESPACE = 'testdata';
 
 const { db } = require('../../src/utils/firebase');
 const testDataCleanup = require('../../src/cron/testDataCleanup');

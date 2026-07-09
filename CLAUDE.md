@@ -224,7 +224,7 @@ All audit signals — architect verdict, code-reviewer cycle count + verbatim fi
 
 Five scheduled crons removed in the cron-elim cluster — replaced with event-driven or lazy-on-access patterns to stay $0 on the Firebase free tier:
 
-- **expireBans** → server-side `Filter.or(expiresAt==null, expiresAt>now)` in `checkBans` (no separate cron)
+- **expireBans** → read-time `isBanActive()` in `utils/bans.js` + lazy on-access reaping of lapsed network bans (no separate cron). **Never** a Firestore range filter on `expiresAt`: it compares ISO strings by codepoint, so a corrupt expiry silently retires the ban (SHY-0149). The predicate fails closed on an unparseable value, and the paged scan fails closed rather than guess.
 - **dispatchNotifications** → inline `dispatchNotificationInline` + `Promise.allSettled` in `roadmap-notify.js`
 - **staleRooms** → RTDB `onDisconnect` + lazy-reap at mutation chokepoint (`inRoomTransaction`); reaper in `express-api/src/utils/stale-room-reap.js`
 - **sweep-bans** / **sweep-stale-rooms endpoints** → deleted (404s in prod)
