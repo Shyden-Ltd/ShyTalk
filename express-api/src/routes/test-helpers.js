@@ -433,6 +433,12 @@ router.post('/test/write/:collection', async (req, res) => {
       // [[feedback-test-isolation-no-leaks]]: never leak state between
       // tests). admin-maintenance.spec.ts:58 was the first caller.
       'deviceBindings',
+      // SHY-0149: the web anti-abuse specs must seed a REAL ban and prove
+      // the server-side gate refuses a banned user — a route-mocked ban
+      // would prove nothing (§ No Stubs). Teardown sweeps both by
+      // linkedUniqueId (see deleteTestData).
+      'deviceBans',
+      'networkBans',
     ];
     if (!ALLOWED_COLLECTIONS.includes(collection)) {
       return res.status(400).json({ error: 'Collection not allowed' });
@@ -450,6 +456,13 @@ router.post('/test/write/:collection', async (req, res) => {
       writeData._testRun = data._testRun;
     }
     await db.doc(`${collection}/${docId}`).set(writeData, { merge: true });
+
+    // A ban seeded directly into Firestore bypasses the admin routes that
+    // normally invalidate the gate's caches — clear them here so the very
+    // next request sees the seeded ban (SHY-0149).
+    if (collection === 'deviceBans' || collection === 'networkBans') {
+      clearBanCache();
+    }
 
     res.json({ success: true, id: docId });
   } catch (err) {

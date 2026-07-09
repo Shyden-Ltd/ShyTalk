@@ -119,8 +119,18 @@
       return;
     }
 
-    // Skip Firebase init if the API key is obviously fake (local/CI test env)
-    if (!firebaseConfig.apiKey || firebaseConfig.apiKey.indexOf('fake') !== -1 || firebaseConfig.apiKey.indexOf('placeholder') !== -1) {
+    // A fake/placeholder API key means there is no real Firebase project to
+    // talk to — EXCEPT on the local stack, where the Auth emulator IS the
+    // real backend and accepts any key (it is also started by CI's
+    // playwright-tests.yml). Skipping init there left `window.shytalkAuth`
+    // permanently without its sign-in methods, so no local or CI web test
+    // could ever exercise a signed-in user — which is why the anti-abuse
+    // specs sat empty. `auth.useEmulator` below does the wiring. (SHY-0149)
+    var hasRealKey =
+      firebaseConfig.apiKey &&
+      firebaseConfig.apiKey.indexOf('fake') === -1 &&
+      firebaseConfig.apiKey.indexOf('placeholder') === -1;
+    if (!hasRealKey && !isLocal) {
       authStateKnown = true;
       renderAuthUI();
       return;
