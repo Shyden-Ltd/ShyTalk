@@ -25,17 +25,24 @@ This EPIC **generalizes** the older, partial "Room mutations → server-side aut
   3. **Tests** — the ratchet has its own tests (fixture with a planted violation must fail; clean fixture must pass), and each remediation story proves the new API path against the real local emulator stack.
 - **Architectural decision** for real-time reads (Firestore `.snapshots()` / RTDB listeners): request/response APIs can't stream, so live updates need SSE / websocket / short-poll. This is the hardest sub-problem and needs an operator/architect decision — captured as its own spike before the read-side remediation stories.
 
+**Operator decisions (2026-07-09, via AskUserQuestion):**
+- **Real-time reads → SPIKE FIRST.** Don't pick a transport cold; SHY-0169 trials SSE vs WebSocket vs short-poll against our real constraints ($0 hosting, the Oracle-Cloud Express API, iOS+Android+web parity, minors-safety, RTDB presence/`onDisconnect`) and returns a recommendation for the operator to ratify before the read-side remediation stories are written.
+- **Firebase Auth → ALLOWED EXCEPTION** (auth plane, not data plane): client sign-in / ID-token minting stays client-side — it is how the client proves identity *to* the API, on which all API authz depends. The `check-no-direct-backend.js` ratchet already excludes `*.firebase.auth` / `getAuth(` / `firebase.auth(`; keep it excluded.
+- **Staff admin console → its own authz'd admin-API.** `public/admin/js/**` + `public/portal/portal.js` get dedicated staff-authenticated API endpoints (no direct Firestore), same principle as the app — lower urgency (staff-only, smaller blast radius) but in scope, its own remediation story.
+
 **Out of scope:**
 - The Express API's OWN use of the Firebase Admin SDK — that IS the sanctioned server-side channel, not a violation.
-- Firebase **Auth** token minting on the client (sign-in) — flagged separately for an operator ruling (auth plane vs data plane); not assumed to be a violation.
+- Firebase **Auth** token minting on the client — ruled an allowed exception (above).
 - Rewriting `firestore.rules` — the rules stay as defence-in-depth (deny-by-default once clients no longer connect), tightened in a later story, not removed here.
 
 ## Child SHYs
 
-Populated as each is refined (the audit's "remediation grouping" drives the split). Planned:
-- **SHY-0168** — Prevention: CI ratchet + reviewer rule + tests that block any NEW direct-backend access (built FIRST — stops the bleeding before remediation churn).
-- **SHY-0169** — Spike: real-time-read transport decision (SSE / websocket / poll) for Firestore `.snapshots()` + RTDB listeners.
-- **SHY-01xx** (post-audit) — remediation stories grouped by feature/collection (rooms · users · device-binding · presence/RTDB · storage uploads · fun-facts/banners · web), each: move the operation behind an authz'd Express endpoint, migrate Android + iOS `actual` impls, prove on the real emulator stack, tighten the corresponding rule.
+Populated as each is refined (the audit's 10-cluster remediation grouping A–H + P + R drives the split). Planned:
+- **SHY-0168** — ✅ **Done-in-develop (#1548)** — Prevention: CI ratchet + reviewer rule + 48 tests that block any NEW direct-backend access (built FIRST — stops the bleeding before remediation churn).
+- **SHY-0169** — **NEXT** — Spike: real-time-read transport decision (SSE vs WebSocket vs poll) for the ~50 Firestore `.snapshots()` + RTDB listeners, incl. an RTDB-presence/`onDisconnect` server-side replacement. Blocks the read-side remediation stories.
+- **SHY-01xx write-path remediation** (decision-INDEPENDENT — can proceed in parallel with the spike): the audit's write-tail clusters — profile edits, block-list, `currentRoomId`, conversation/group settings + moderation writes, seat approve/deny, device-binding, room-chat message writes — each: move behind an authz'd Express endpoint, migrate Android + iOS `actual` impls (1:1 mirrors), prove on the real emulator stack, tighten the corresponding rule.
+- **SHY-01xx read-path remediation** (gated on SHY-0169): one-shot reads (request/response) + the real-time listeners (per the ratified transport).
+- **SHY-01xx admin-console** — dedicated staff-authenticated admin-API for `public/admin/js/**` + `portal.js` (operator-ruled its own surface).
 
 ## DoD at Epic Level
 
