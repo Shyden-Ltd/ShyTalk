@@ -21,14 +21,24 @@
  */
 
 const mockDocGet = jest.fn();
-const mockCollectionGet = jest.fn();
+// One fake per collection: checkUserBans touches networkBans, deviceBans and
+// deviceBindings, and the cache assertions below count queries per collection.
+const mockNetworkBansGet = jest.fn();
+const mockLinkedBansGet = jest.fn();
+const mockBindingsGet = jest.fn();
+
+const COLLECTION_FAKES = {
+  networkBans: (...a) => mockNetworkBansGet(...a),
+  deviceBans: (...a) => mockLinkedBansGet(...a),
+  deviceBindings: (...a) => mockBindingsGet(...a),
+};
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
     doc: jest.fn((path) => ({ _path: path, get: () => mockDocGet(path) })),
-    collection: jest.fn(() => ({
+    collection: jest.fn((name) => ({
       where: jest.fn(() => ({
-        limit: jest.fn(() => ({ get: () => mockCollectionGet() })),
+        limit: jest.fn(() => ({ get: () => COLLECTION_FAKES[name]() })),
       })),
     })),
   },
@@ -43,24 +53,32 @@ jest.mock('../../src/utils/log', () => ({
 const log = require('../../src/utils/log');
 const {
   checkBans,
+  checkUserBans,
   clearBanCache,
   isBanActive,
   networkBanMatches,
   isIpInSubnet,
   NETWORK_BANS_QUERY_LIMIT,
+  MAX_CACHE_SIZE,
 } = require('../../src/utils/bans');
 
-function networkBansSnap(bans) {
-  return { size: bans.length, docs: bans.map((b) => ({ data: () => b })) };
+/** Firestore query-snapshot shape: `.size` + `.docs[].data()` (+ `.id`). */
+function snap(docs) {
+  return { size: docs.length, docs: docs.map((d, i) => ({ id: d.id ?? `d${i}`, data: () => d })) };
 }
+const networkBansSnap = snap;
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockDocGet.mockReset();
-  mockCollectionGet.mockReset();
-  clearBanCache(); // the module caches the network-ban list process-wide
+  mockNetworkBansGet.mockReset();
+  mockLinkedBansGet.mockReset();
+  mockBindingsGet.mockReset();
+  clearBanCache(); // the module caches ban state process-wide
   mockDocGet.mockResolvedValue({ exists: false });
-  mockCollectionGet.mockResolvedValue(networkBansSnap([]));
+  mockNetworkBansGet.mockResolvedValue(snap([]));
+  mockLinkedBansGet.mockResolvedValue(snap([]));
+  mockBindingsGet.mockResolvedValue(snap([]));
 });
 
 describe('checkBans is fail-open (sign-in ban REPORT, not the gate)', () => {
@@ -78,7 +96,7 @@ describe('checkBans is fail-open (sign-in ban REPORT, not the gate)', () => {
   });
 
   test('a thrown network-ban query returns noBan (not a crash)', async () => {
-    mockCollectionGet.mockRejectedValue(new Error('query exploded'));
+    mockNetworkBansGet.mockRejectedValue(new Error('query exploded'));
 
     const result = await checkBans('dev-2', '1.2.3.4', null);
     expect(result.isBanned).toBe(false);
@@ -92,7 +110,7 @@ describe('network-ban truncation warning', () => {
       value: `10.0.${Math.floor(i / 250)}.${i % 250}`,
       expiresAt: null,
     }));
-    mockCollectionGet.mockResolvedValue(networkBansSnap(bans));
+    mockNetworkBansGet.mockResolvedValue(networkBansSnap(bans));
 
     await checkBans('dev-3', '198.51.100.1', null);
 
@@ -104,7 +122,7 @@ describe('network-ban truncation warning', () => {
   });
 
   test('does not warn below the limit', async () => {
-    mockCollectionGet.mockResolvedValue(
+    mockNetworkBansGet.mockResolvedValue(
       networkBansSnap([{ type: 'ip', value: '10.0.0.1', expiresAt: null }]),
     );
 
@@ -155,6 +173,105 @@ describe('isIpInSubnet — CIDR edges', () => {
 
   test('an IPv6 caller address never matches an IPv4 subnet', () => {
     expect(isIpInSubnet('::ffff:203.0.113.9', '203.0.113.0/24')).toBe(false);
+  });
+});
+
+describe('the active-networkBans list is fetched once, not per request', () => {
+  test('N concurrent checkBans calls issue exactly ONE networkBans query (in-flight dedup)', async () => {
+    // The deferred must exist BEFORE the calls start — checkBans awaits a doc
+    // read first, so the query is not invoked in the same tick.
+    let resolveQuery;
+    const pending = new Promise((resolve) => {
+      resolveQuery = () => resolve(networkBansSnap([]));
+    });
+    mockNetworkBansGet.mockReturnValue(pending);
+
+    const inFlight = Promise.all([
+      checkBans('d1', '1.2.3.4', null),
+      checkBans('d2', '1.2.3.4', null),
+      checkBans('d3', '1.2.3.4', null),
+    ]);
+    await Promise.resolve(); // let all three reach getActiveNetworkBans
+    resolveQuery();
+    await inFlight;
+
+    expect(mockNetworkBansGet).toHaveBeenCalledTimes(1);
+  });
+
+  test('a subsequent call is served from the cache, and clearBanCache() forces a re-read', async () => {
+    mockNetworkBansGet.mockResolvedValue(networkBansSnap([]));
+
+    await checkBans('d1', '1.2.3.4', null);
+    await checkBans('d2', '1.2.3.4', null);
+    expect(mockNetworkBansGet).toHaveBeenCalledTimes(1); // cached
+
+    clearBanCache();
+    await checkBans('d3', '1.2.3.4', null);
+    expect(mockNetworkBansGet).toHaveBeenCalledTimes(2); // re-read after clear
+  });
+
+  test('a REJECTED networkBans query is never cached — the next call retries', async () => {
+    mockNetworkBansGet.mockRejectedValueOnce(new Error('transient'));
+    await checkBans('d1', '1.2.3.4', null); // fail-open, nothing cached
+
+    mockNetworkBansGet.mockResolvedValue(
+      networkBansSnap([{ type: 'ip', value: '1.2.3.4', expiresAt: null }]),
+    );
+    const result = await checkBans('d2', '1.2.3.4', null);
+    expect(result).toMatchObject({ isBanned: true, banType: 'network_ip' });
+  });
+});
+
+describe('userBanCache is bounded, and a recently-used entry is not evicted (LRU)', () => {
+  test('a repeatedly-used key survives a flood of cold keys; a stale one is evicted', async () => {
+    // Each distinct uniqueId costs one deviceBans query on a cache MISS, so
+    // query counts are the observable proxy for "was it still cached?".
+    await checkUserBans('hot-key', '1.2.3.4'); // cached
+    await checkUserBans('cold-first', '1.2.3.4'); // cached, never touched again
+
+    for (let i = 0; i < MAX_CACHE_SIZE; i++) {
+      await checkUserBans(`filler-${i}`, '1.2.3.4');
+      await checkUserBans('hot-key', '1.2.3.4'); // keep it hot (LRU refresh)
+    }
+
+    // Hot key still cached → no additional query.
+    const beforeHot = mockLinkedBansGet.mock.calls.length;
+    await checkUserBans('hot-key', '1.2.3.4');
+    expect(mockLinkedBansGet.mock.calls.length).toBe(beforeHot);
+
+    // The never-touched key was evicted by the flood → it must re-query.
+    const beforeCold = mockLinkedBansGet.mock.calls.length;
+    await checkUserBans('cold-first', '1.2.3.4');
+    expect(mockLinkedBansGet.mock.calls.length).toBe(beforeCold + 1);
+  });
+
+  test('N concurrent gate checks for the SAME caller issue exactly one deviceBans query', async () => {
+    let release;
+    const pending = new Promise((resolve) => {
+      release = () => resolve(snap([]));
+    });
+    mockLinkedBansGet.mockReturnValue(pending);
+
+    const inFlight = Promise.all([
+      checkUserBans('dedup-me', '1.2.3.4'),
+      checkUserBans('dedup-me', '1.2.3.4'),
+      checkUserBans('dedup-me', '1.2.3.4'),
+    ]);
+    await Promise.resolve();
+    release();
+    await inFlight;
+
+    expect(mockLinkedBansGet).toHaveBeenCalledTimes(1);
+  });
+
+  test('a REJECTED standing lookup is never cached and never pins a stuck in-flight entry', async () => {
+    mockLinkedBansGet.mockRejectedValueOnce(new Error('transient'));
+    // Fail-closed: the gate propagates rather than returning "not banned".
+    await expect(checkUserBans('retry-me', '1.2.3.4')).rejects.toThrow('transient');
+
+    mockLinkedBansGet.mockResolvedValue(snap([{ reason: 'now banned', expiresAt: null }]));
+    const result = await checkUserBans('retry-me', '1.2.3.4');
+    expect(result).toMatchObject({ isBanned: true, banType: 'device', reason: 'now banned' });
   });
 });
 

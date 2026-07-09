@@ -33,8 +33,13 @@ jest.mock('../../src/utils/log', () => ({
 }));
 
 // The ban engine has its own suites (unit + real-emulator); stub it benign.
+// `countBoundDevices` returns 0 so the device-binding cap (SHY-0149 C1) never
+// trips here — the cap itself is proven against the real emulator in
+// tests/routes/devices-lock-check.test.js.
 jest.mock('../../src/utils/bans', () => ({
   checkBans: async () => ({ isBanned: false, banType: null, reason: null, expiresAt: null }),
+  countBoundDevices: async () => 0,
+  MAX_BOUND_DEVICES: 20,
 }));
 
 const express = require('express');

@@ -2,6 +2,7 @@ const express = require('express');
 const { db } = require('../utils/firebase');
 const { now } = require('../utils/helpers');
 const { isValidDeviceId } = require('../utils/deviceId');
+const { countBoundDevices, MAX_BOUND_DEVICES } = require('../utils/bans');
 const log = require('../utils/log');
 
 const router = express.Router();
@@ -58,10 +59,26 @@ router.post('/devices/lock-check', async (req, res) => {
       // Unbound + an existing user (has a uniqueId) → claim it now. A not-yet-
       // registered caller (uniqueId null) must never bind a device.
       if (boundUniqueId === null && caller !== null) {
+        // Cap binding creation. Unbounded bindings let an attacker bury a
+        // hardware-banned device beneath decoys until the ban gate's scan no
+        // longer reached it — and this route is ban-exempt (SHY-0149 C1).
+        // Re-using an ALREADY-owned device never lands here, so a capped
+        // account keeps working on the devices it has.
+        if ((await countBoundDevices(caller, tx)) >= MAX_BOUND_DEVICES) {
+          return { status: 'device_limit' };
+        }
         tx.set(ref, { uniqueId: caller, boundAt: now() }, { merge: true });
       }
       return { status: 'allowed', boundToOther: false };
     });
+
+    if (result.status === 'device_limit') {
+      log.warn('devices', 'device-binding cap reached', { caller, deviceId });
+      return res.status(403).json({
+        error: 'Device limit reached for this account',
+        code: 'device_limit',
+      });
+    }
 
     log.info('devices', 'device lock-check', {
       deviceId,

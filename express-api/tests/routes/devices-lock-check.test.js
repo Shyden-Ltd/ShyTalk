@@ -290,3 +290,85 @@ describe('POST /api/device-info — binding reconcile (real emulator)', () => {
     expect(binding.boundAt).toBeDefined();
   });
 });
+
+/**
+ * SHY-0149 / reviewer C1: unbounded device binding let an attacker bury a
+ * hardware-banned device under decoy bindings until the ban gate's scan
+ * window no longer reached it. Binding creation is therefore capped — and the
+ * cap must hold on BOTH binding-minting routes, since /devices/lock-check and
+ * /api/device-info are each exempt from the ban gate itself.
+ */
+describe('a device binding cannot be minted without limit (ban-evasion cap)', () => {
+  const { MAX_BOUND_DEVICES } = require('../../src/utils/bans');
+
+  async function fillBindingsToCap(uniqueId) {
+    await Promise.all(
+      Array.from({ length: MAX_BOUND_DEVICES }, (_, i) =>
+        seedBinding(`cap-${uniqueId}-${String(i).padStart(3, '0')}`, { uniqueId, boundAt: 1 }),
+      ),
+    );
+  }
+
+  test('lock-check refuses to bind device number MAX+1 for the same account', async () => {
+    const caller = await mintRealUser({ uniqueId: '6001' });
+    await fillBindingsToCap('6001');
+
+    const res = await request(createApp())
+      .post('/api/devices/lock-check')
+      .set(caller.headers)
+      .send({ deviceId: 'one-too-many' })
+      .expect(403);
+
+    expect(res.body).toMatchObject({ code: 'device_limit' });
+    expect(await readBinding('one-too-many')).toBeNull(); // nothing was written
+  });
+
+  test('device-info refuses to bind device number MAX+1 for the same account', async () => {
+    const caller = await mintRealUser({ uniqueId: '6002' });
+    await fillBindingsToCap('6002');
+
+    const res = await request(createDeviceInfoApp())
+      .post('/api/device-info')
+      .set(caller.headers)
+      .send({ deviceId: 'di-one-too-many' })
+      .expect(403);
+
+    expect(res.body).toMatchObject({ code: 'device_limit' });
+    expect(await readBinding('di-one-too-many')).toBeNull();
+  });
+
+  test('a caller UNDER the cap still binds normally, and re-using an owned device never counts again', async () => {
+    const caller = await mintRealUser({ uniqueId: '6003' });
+    await Promise.all(
+      Array.from({ length: MAX_BOUND_DEVICES - 1 }, (_, i) =>
+        seedBinding(`room-6003-${i}`, { uniqueId: '6003', boundAt: 1 }),
+      ),
+    );
+
+    // The last free slot.
+    await request(createApp())
+      .post('/api/devices/lock-check')
+      .set(caller.headers)
+      .send({ deviceId: 'last-slot' })
+      .expect(200);
+    expect((await readBinding('last-slot')).uniqueId).toBe('6003');
+
+    // At the cap now — but an ALREADY-owned device must keep working forever.
+    await request(createApp())
+      .post('/api/devices/lock-check')
+      .set(caller.headers)
+      .send({ deviceId: 'last-slot' })
+      .expect(200);
+  });
+
+  test('the cap is per-account: another user may still bind their own devices', async () => {
+    await fillBindingsToCap('6004');
+    const other = await mintRealUser({ uniqueId: '6005' });
+
+    await request(createApp())
+      .post('/api/devices/lock-check')
+      .set(other.headers)
+      .send({ deviceId: 'other-users-phone' })
+      .expect(200);
+  });
+});

@@ -9,7 +9,7 @@ const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { now } = require('../utils/helpers');
 const { isValidDeviceId } = require('../utils/deviceId');
-const { checkBans } = require('../utils/bans');
+const { checkBans, countBoundDevices, MAX_BOUND_DEVICES } = require('../utils/bans');
 const log = require('../utils/log');
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -95,6 +95,21 @@ router.post('/device-info', async (req, res) => {
     const docRef = db.doc(`deviceBindings/${deviceId}`);
     const existing = await docRef.get();
     if (!existing.exists) {
+      // Cap binding creation here too — this route also mints bindings and is
+      // likewise exempt from the ban gate, so without the cap it reopens the
+      // decoy-flood hardware-ban evasion that lock-check now blocks
+      // (SHY-0149 C1). Telemetry updates to devices the caller already owns
+      // take the `else` branch and are never capped.
+      if ((await countBoundDevices(req.auth.uniqueId)) >= MAX_BOUND_DEVICES) {
+        log.warn('device-info', 'device-binding cap reached', {
+          uniqueId: req.auth.uniqueId,
+          deviceId,
+        });
+        return res.status(403).json({
+          error: 'Device limit reached for this account',
+          code: 'device_limit',
+        });
+      }
       deviceDoc.firstSeen = timestamp;
       deviceDoc.boundAt = timestamp;
     } else {

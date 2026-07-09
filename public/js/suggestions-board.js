@@ -218,8 +218,12 @@
               throw err;
             });
         }
-        // A 200 on an auth-gated call means the gate let us through.
-        if (token) clearStanding();
+        // A 200 clears our standing ONLY if the ban gate actually ran on this
+        // request. Several suggestion reads are auth-exempt on the server
+        // (public browsing) and answer 200 even for a banned user — treating
+        // those as proof of good standing would make the blocked banner
+        // vanish the moment they sorted or searched. Call sites opt in.
+        if (token && options.gated) clearStanding();
         return res.json();
       });
     });
@@ -405,6 +409,7 @@
     apiFetch("/api/suggestions/" + suggestionId + "/vote", {
       method: method,
       body: body,
+      gated: true,
     })
       .then(function (data) {
         if (method === "DELETE") {
@@ -442,6 +447,7 @@
         language: lang,
         contactOptIn: contactOptIn,
       },
+      gated: true,
     });
   }
 
@@ -459,17 +465,21 @@
     return apiFetch("/api/suggestions/" + suggestionId + "/comments", {
       method: "POST",
       body: { text: text },
+      gated: true,
     });
   }
 
+  // `gated: true` marks the routes the server runs the ban gate on, so a 200
+  // from them is real evidence of good standing (see apiFetch).
   function fetchSubscriptionPrefs() {
-    return apiFetch("/api/subscriptions/me");
+    return apiFetch("/api/subscriptions/me", { gated: true });
   }
 
   function saveSubscriptionPrefs(prefs) {
     return apiFetch("/api/subscriptions/me", {
       method: "PUT",
       body: prefs,
+      gated: true,
     });
   }
 
@@ -477,6 +487,7 @@
     return apiFetch("/api/subscriptions/me/watch", {
       method: "POST",
       body: { suggestionId: suggestionId },
+      gated: true,
     });
   }
 

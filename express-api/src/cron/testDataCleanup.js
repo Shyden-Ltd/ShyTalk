@@ -8,6 +8,7 @@
  */
 
 const { db, FieldValue } = require('../utils/firebase');
+const { clearBanCache } = require('../utils/bans');
 const log = require('../utils/log');
 
 const TEST_PREFIX = 'test_';
@@ -99,6 +100,9 @@ async function cleanupLinkedBans(deletedUserUniqueIds) {
       }
     }
   }
+  // Any deleted ban must stop gating immediately — the per-request ban gate
+  // caches verdicts for 5 minutes otherwise (SHY-0149).
+  if (deleted > 0) clearBanCache();
   return deleted;
 }
 

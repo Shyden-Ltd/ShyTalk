@@ -48,7 +48,8 @@ const { db } = require('../../src/utils/firebase');
 const { assertEmulatorReachable, clearCollection } = require('../helpers/firebase-emulator');
 const { mintRealUser, mintTokenWithoutUserDoc, clearAuthCaches } = require('../helpers/real-auth');
 const authModule = require('../../src/middleware/auth');
-const { authMiddleware, clearBanCache } = authModule;
+const { authMiddleware, authMiddlewareStrict, clearBanCache } = authModule;
+const { BINDINGS_SCAN_LIMIT } = require('../../src/utils/bans');
 const deviceInfoRouter = require('../../src/routes/device-info');
 const suggestionsRouter = require('../../src/routes/suggestions');
 const adminBansRouter = require('../../src/routes/admin-bans');
@@ -84,6 +85,21 @@ function createRouterApp(router) {
   app.use(express.json());
   app.use('/api', authMiddleware);
   app.use('/api', router);
+  return app;
+}
+
+/**
+ * The STRICT middleware guards every /api/portal/* route. Its ban block is a
+ * near-duplicate of authMiddleware's, so it needs its own real proof — a
+ * duplicated security branch that no test executes is unverified.
+ */
+function createStrictProbeApp() {
+  const app = express();
+  app.set('trust proxy', 1);
+  app.use(express.json());
+  app.use('/api', authMiddlewareStrict);
+  app.post('/api/portal/revoke-all-sessions', (req, res) => res.json({ ok: true }));
+  app.get('/api/portal/me', (req, res) => res.json({ ok: true, via: 'portal-me' }));
   return app;
 }
 
@@ -203,6 +219,46 @@ describe('device bans are enforced per-request, from any client', () => {
     await db.doc(`${DEVICE_BINDINGS}/dev-legacy-owner-1`).set({ userId: 5013, boundAt: 1 });
     await seedDeviceBan('dev-legacy-owner-1');
     await probeAs(caller).expect(403);
+  });
+
+  test('a hardware ban cannot be hidden by flooding the account with decoy device bindings', async () => {
+    // C1 (reviewer, 2026-07-09): the gate resolved hardware bans by scanning
+    // the caller's deviceBindings with a small .limit(). deviceIds are
+    // attacker-chosen strings and Firestore orders by document id, so binding
+    // 20+ decoys that sort BEFORE the banned device pushed it out of the
+    // window — and /devices/lock-check, which mints those bindings, is itself
+    // ban-exempt. The banned device must be found regardless of decoy count.
+    const caller = await mintRealUser({ uniqueId: '5015' });
+    const bannedDeviceId = 'zzz-banned-device'; // sorts LAST among the decoys
+    await db.doc(`${DEVICE_BINDINGS}/${bannedDeviceId}`).set({ uniqueId: '5015', boundAt: 1 });
+    await seedDeviceBan(bannedDeviceId, { reason: 'hardware ban' }); // no linkedUniqueId
+
+    await Promise.all(
+      Array.from({ length: 24 }, (_, i) =>
+        db
+          .doc(`${DEVICE_BINDINGS}/decoy-${String(i).padStart(3, '0')}`)
+          .set({ uniqueId: '5015', boundAt: 1 }),
+      ),
+    );
+
+    const res = await probeAs(caller).expect(403);
+    expect(res.body).toMatchObject({ code: 'banned', banType: 'device', reason: 'hardware ban' });
+  });
+
+  test('a caller whose bindings exceed the scannable window is refused (fail-closed, never silently unbanned)', async () => {
+    // Beyond the write-time cap the gate cannot prove the caller is clean, so
+    // it must refuse rather than log a warning and let them through.
+    const caller = await mintRealUser({ uniqueId: '5016' });
+    await Promise.all(
+      Array.from({ length: BINDINGS_SCAN_LIMIT }, (_, i) =>
+        db
+          .doc(`${DEVICE_BINDINGS}/flood-${String(i).padStart(4, '0')}`)
+          .set({ uniqueId: '5016', boundAt: 1 }),
+      ),
+    );
+
+    const res = await probeAs(caller).expect(401);
+    expect(res.body).toEqual({ error: 'Authentication failed' });
   });
 
   test('the 403 body leaks nothing beyond the contract (no linkedUniqueId / createdBy)', async () => {
@@ -329,6 +385,115 @@ describe('a ban issued mid-session bites on the very next request', () => {
 
     // No cache clearing by the test: the admin route itself must invalidate.
     await probeAs(caller).expect(403);
+  });
+});
+
+// ─── The strict middleware carries the same authority ────────────
+
+describe('authMiddlewareStrict enforces the same ban gate (portal routes)', () => {
+  test('a banned portal user is refused with the same 403 contract', async () => {
+    const caller = await mintRealUser({ uniqueId: '5080' });
+    await seedDeviceBan('dev-strict-1', { linkedUniqueId: '5080', reason: 'portal ban' });
+
+    const res = await request(createStrictProbeApp())
+      .post('/api/portal/revoke-all-sessions')
+      .set(caller.headers)
+      .send({})
+      .expect(403);
+    expect(res.body).toEqual({
+      error: 'Account banned',
+      code: 'banned',
+      banType: 'device',
+      reason: 'portal ban',
+      expiresAt: null,
+    });
+  });
+
+  test('a banned portal user may still reach /portal/me (the strict exempt path)', async () => {
+    const caller = await mintRealUser({ uniqueId: '5081' });
+    await seedDeviceBan('dev-strict-2', { linkedUniqueId: '5081' });
+
+    const res = await request(createStrictProbeApp())
+      .get('/api/portal/me')
+      .set(caller.headers)
+      .expect(200);
+    expect(res.body).toEqual({ ok: true, via: 'portal-me' });
+  });
+
+  test('an unbanned portal user passes through untouched', async () => {
+    const caller = await mintRealUser({ uniqueId: '5082' });
+    await request(createStrictProbeApp())
+      .post('/api/portal/revoke-all-sessions')
+      .set(caller.headers)
+      .send({})
+      .expect(200);
+  });
+});
+
+// ─── Every ban mutation path invalidates the gate's caches ───────
+
+describe('each admin ban mutation reaches the gate on the next request', () => {
+  /** Sign in, cache a verdict, run the admin mutation, then re-probe. */
+  async function adminPost(admin, path, body) {
+    return request(createRouterApp(adminBansRouter))
+      .post(path)
+      .set(admin.headers)
+      .send(body)
+      .expect(200);
+  }
+
+  test('issuing a NETWORK ban blocks the caller on their next request', async () => {
+    const caller = await mintRealUser({ uniqueId: '5090' });
+    await probeAs(caller, { xff: EDGE_IP }).expect(200); // caches "clean" + the ban list
+
+    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    await adminPost(admin, '/api/admin/bans/network', {
+      type: 'ip',
+      value: EDGE_IP,
+      reason: 'net mid-session',
+    });
+
+    await probeAs(caller, { xff: EDGE_IP }).expect(403);
+  });
+
+  test('UNBANNING a device lifts the block on the next request', async () => {
+    const caller = await mintRealUser({ uniqueId: '5091' });
+    await seedDeviceBan('dev-unban-1', { linkedUniqueId: '5091' });
+    await probeAs(caller).expect(403); // caches "banned"
+
+    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    await request(createRouterApp(adminBansRouter))
+      .delete('/api/admin/bans/device/dev-unban-1')
+      .set(admin.headers)
+      .expect(200);
+
+    await probeAs(caller).expect(200);
+  });
+
+  test('UNBANNING a network lifts the block on the next request', async () => {
+    const caller = await mintRealUser({ uniqueId: '5092' });
+    await seedNetworkBan('nb-unban-1', { value: EDGE_IP });
+    await probeAs(caller, { xff: EDGE_IP }).expect(403);
+
+    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    await request(createRouterApp(adminBansRouter))
+      .delete('/api/admin/bans/network/nb-unban-1')
+      .set(admin.headers)
+      .expect(200);
+
+    await probeAs(caller, { xff: EDGE_IP }).expect(200);
+  });
+
+  test('UNBAN-ALL for a user lifts both their device and network bans at once', async () => {
+    const caller = await mintRealUser({ uniqueId: '5093' });
+    await seedDeviceBan('dev-unban-all-1', { linkedUniqueId: '5093' });
+    await seedNetworkBan('nb-unban-all-1', { value: EDGE_IP, linkedUniqueId: '5093' });
+    await probeAs(caller, { xff: EDGE_IP }).expect(403);
+
+    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    await adminPost(admin, '/api/admin/bans/unban-all/5093', {});
+
+    await probeAs(caller, { xff: EDGE_IP }).expect(200);
   });
 });
 

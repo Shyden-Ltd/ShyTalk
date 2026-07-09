@@ -19,6 +19,8 @@ import { createTestUser, roadmapLogin } from './helpers/roadmap-auth';
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:3000';
 const TEST_API_KEY = process.env.TEST_API_KEY || 'local-test-key';
 const BAN_REASON = 'SHY-0149 web anti-abuse spec';
+// The ban reason is admin-authored and rendered into the blocked banner.
+const XSS_REASON = '<img src=x id="xss-probe" onerror="window.__xss=1">';
 
 interface StandingUser {
   uid: string;
@@ -47,7 +49,11 @@ async function testWrite(collection: string, doc: Record<string, unknown>): Prom
  * `isSuspended` profile — never an intercepted route), then sign them in on
  * the roadmap page. The server-side gate is what the assertions observe.
  */
-async function signInWithStanding(page: Page, standing: 'banned' | 'suspended') {
+async function signInWithStanding(
+  page: Page,
+  standing: 'banned' | 'suspended',
+  reason: string = BAN_REASON,
+) {
   // `test_`-prefixed: /api/test/teardown only accepts run ids in that
   // namespace, and deleteTestData() sweeps users + their linked bans by it.
   const stamp = `${standing}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -73,7 +79,7 @@ async function signInWithStanding(page: Page, standing: 'banned' | 'suspended') 
     await testWrite('deviceBans', {
       id: deviceId,
       deviceId,
-      reason: BAN_REASON,
+      reason,
       duration: 'permanent',
       expiresAt: null,
       linkedUniqueId: String(uniqueId),
@@ -228,6 +234,41 @@ test.describe('Anti-Abuse', () => {
     expect(result.status).toBe(403);
     expect(result.body.code).toBe('banned');
     expect(result.body.reason).toBe(BAN_REASON);
+
+    await teardownStanding(user);
+  });
+
+  test('banned user: browsing the board does not make the ban banner disappear', async ({
+    page,
+  }) => {
+    // Public suggestion reads are auth-exempt server-side and answer 200 even
+    // to a banned user. If the page treated any 200 as proof of good standing,
+    // a single sort/search click would restore the write controls.
+    const user = await signInWithStanding(page, 'banned');
+    await expect(page.getByTestId('standing-banner')).toBeVisible({ timeout: 15_000 });
+
+    await page.getByTestId('suggestions-search-input').fill('voice');
+    await page.waitForTimeout(1500); // debounce + refetch of the public list
+
+    await expect(page.getByTestId('standing-banner')).toBeVisible();
+    await expect(page.getByTestId('suggest-btn')).toHaveCount(0);
+    await expect(page.locator('.sg-vote-btn')).toHaveCount(0);
+
+    await teardownStanding(user);
+  });
+
+  test('banned user: a hostile ban reason renders as inert text, never as markup', async ({
+    page,
+  }) => {
+    const user = await signInWithStanding(page, 'banned', XSS_REASON);
+    const reason = page.getByTestId('standing-reason');
+    await expect(reason).toBeVisible({ timeout: 15_000 });
+
+    // The payload survives as literal text…
+    await expect(reason).toContainText(XSS_REASON);
+    // …and injects no element into the document.
+    expect(await page.locator('#xss-probe').count()).toBe(0);
+    expect(await reason.locator('img').count()).toBe(0);
 
     await teardownStanding(user);
   });

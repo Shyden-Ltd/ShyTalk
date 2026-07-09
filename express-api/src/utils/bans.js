@@ -44,11 +44,25 @@ const log = require('./log');
 // cron used; 500 simultaneously-active network bans is far above any
 // realistic ShyTalk-scale value.
 const NETWORK_BANS_QUERY_LIMIT = 500;
-// A caller with more linked bans / bound devices than this is truncation-
-// warned; the gate still decides on the fetched window (bounded lookups
-// per the SHY-0149 performance AC).
-const LINKED_BANS_QUERY_LIMIT = 10;
-const BINDINGS_QUERY_LIMIT = 20;
+
+// How many devices one account may bind. Enforced at WRITE time by the two
+// binding-minting routes (/api/devices/lock-check and /api/device-info).
+//
+// This is a security control, not a product limit. A hardware ban is resolved
+// by scanning the caller's deviceBindings; deviceIds are attacker-chosen
+// strings and Firestore paginates by document id, so WITHOUT a cap an
+// attacker could bind decoy devices that sort ahead of the banned one until
+// it fell outside the scan window — and both minting routes are exempt from
+// the ban gate, so a banned account could do it too. (Reviewer C1, SHY-0149.)
+const MAX_BOUND_DEVICES = 20;
+
+// The gate scans generously beyond the write-time cap, so a legitimate caller
+// is never truncated. Hitting the limit means the cap was bypassed or predates
+// it: the gate then cannot PROVE the caller is unbanned, so it fails closed
+// (the query throws → authMiddleware's outer catch → 401) rather than logging
+// a warning and letting them through.
+const BINDINGS_SCAN_LIMIT = MAX_BOUND_DEVICES * 5;
+const LINKED_BANS_SCAN_LIMIT = MAX_BOUND_DEVICES * 5;
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes — mirrors middleware/auth.js
 const MAX_CACHE_SIZE = 500;
@@ -185,7 +199,15 @@ async function getUserDeviceStanding(uniqueId) {
   const key = String(uniqueId);
 
   const cached = userBanCache.get(key);
-  if (cached && Date.now() < cached.expiresAt) return cached.standing;
+  if (cached && Date.now() < cached.expiresAt) {
+    // Re-insert to move this key to the back of the Map's insertion order, so
+    // `evictOldest` drops the least-recently-USED entry rather than the
+    // least-recently-inserted one. Without this, a hot caller can be evicted
+    // ahead of a cold one and pay a Firestore read (reviewer I4).
+    userBanCache.delete(key);
+    userBanCache.set(key, cached);
+    return cached.standing;
+  }
 
   const existing = userBanInFlight.get(key);
   if (existing) return existing;
@@ -198,7 +220,7 @@ async function getUserDeviceStanding(uniqueId) {
         db
           .collection('deviceBans')
           .where(Filter.or(...forms.map((f) => Filter.where('linkedUniqueId', '==', f))))
-          .limit(LINKED_BANS_QUERY_LIMIT)
+          .limit(LINKED_BANS_SCAN_LIMIT)
           .get(),
         db
           .collection('deviceBindings')
@@ -208,21 +230,21 @@ async function getUserDeviceStanding(uniqueId) {
               ...forms.map((f) => Filter.where('userId', '==', f)),
             ),
           )
-          .limit(BINDINGS_QUERY_LIMIT)
+          .limit(BINDINGS_SCAN_LIMIT)
           .get(),
       ]);
 
-      if (linkedSnap.size === LINKED_BANS_QUERY_LIMIT) {
-        log.warn('bans', 'linked deviceBans hit query limit — possible truncation', {
+      // Fail CLOSED on truncation. A partial scan cannot prove the caller is
+      // unbanned, and the un-scanned tail is exactly where an evader would
+      // hide their ban (reviewer C1). Refuse rather than assume innocence:
+      // this rejection reaches authMiddleware's outer catch → 401.
+      if (linkedSnap.size >= LINKED_BANS_SCAN_LIMIT || bindingsSnap.size >= BINDINGS_SCAN_LIMIT) {
+        log.error('bans', 'ban lookup truncated — failing closed', {
           uniqueId: key,
-          limit: LINKED_BANS_QUERY_LIMIT,
+          linkedBans: linkedSnap.size,
+          bindings: bindingsSnap.size,
         });
-      }
-      if (bindingsSnap.size === BINDINGS_QUERY_LIMIT) {
-        log.warn('bans', 'deviceBindings hit query limit — possible truncation', {
-          uniqueId: key,
-          limit: BINDINGS_QUERY_LIMIT,
-        });
+        throw new Error('Ban lookup truncated; cannot determine standing');
       }
 
       let deviceBan = linkedSnap.docs.map((d) => d.data()).find(isBanActive) || null;
@@ -269,6 +291,15 @@ async function getUserDeviceStanding(uniqueId) {
 async function checkUserBans(uniqueId, ip) {
   let asns = [];
 
+  // A caller with no `users` doc yet (uniqueId null) has no deviceBindings, so
+  // there is nothing to resolve a DEVICE ban against — only network bans can
+  // apply. This is a structural limit, not an oversight: the server cannot
+  // attest which physical device a token came from unless the client tells it.
+  // Two other controls cover that gap — /api/devices/lock-check refuses a new
+  // account on a device already bound to someone else (SHY-0170), and
+  // platform attestation (DeviceCheck / Play Integrity) makes a device ban
+  // survive a reinstall (SHY-0151, this epic). A modified client that never
+  // registers its device is SHY-0151's problem, by design.
   if (uniqueId !== null && uniqueId !== undefined) {
     const standing = await getUserDeviceStanding(uniqueId);
     // Re-check activity on the cached ban: a short-lived ban may expire
@@ -327,6 +358,37 @@ async function checkBans(deviceId, ip, asn) {
 }
 
 /**
+ * How many devices this account already has bound. Used by the two
+ * binding-minting routes to enforce MAX_BOUND_DEVICES at WRITE time — the
+ * other half of the C1 fix, and the reason the gate's scan limit can never
+ * be reached by a legitimate caller.
+ *
+ * Reads at most MAX_BOUND_DEVICES + 1 docs (we only need to know whether the
+ * cap is reached, not the exact count).
+ *
+ * @param {string|number|null} uniqueId
+ * @param {FirebaseFirestore.Transaction} [tx] read through the caller's
+ *   transaction so a burst of concurrent binds cannot each observe a
+ *   pre-cap count and all commit (lock-check reads before it writes).
+ * @returns {Promise<number>} count, saturating at MAX_BOUND_DEVICES + 1
+ */
+async function countBoundDevices(uniqueId, tx) {
+  if (uniqueId === null || uniqueId === undefined) return 0;
+  const forms = idForms(uniqueId);
+  const query = db
+    .collection('deviceBindings')
+    .where(
+      Filter.or(
+        ...forms.map((f) => Filter.where('uniqueId', '==', f)),
+        ...forms.map((f) => Filter.where('userId', '==', f)),
+      ),
+    )
+    .limit(MAX_BOUND_DEVICES + 1);
+  const snap = tx ? await tx.get(query) : await query.get();
+  return snap.size;
+}
+
+/**
  * Invalidate ban caches. With a uniqueId: that caller only (both id forms
  * share the String key). Without: EVERYTHING, including the network-ban
  * list — the admin ban routes call this form on every ban mutation, so a
@@ -346,9 +408,13 @@ module.exports = {
   checkBans,
   checkUserBans,
   clearBanCache,
+  countBoundDevices,
   isBanActive,
   buildBanResult,
   networkBanMatches,
   isIpInSubnet,
   NETWORK_BANS_QUERY_LIMIT,
+  MAX_BOUND_DEVICES,
+  BINDINGS_SCAN_LIMIT,
+  MAX_CACHE_SIZE,
 };
