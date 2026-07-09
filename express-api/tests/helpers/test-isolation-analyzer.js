@@ -127,16 +127,65 @@ function patternBinds(pattern, name) {
   return false;
 }
 
-/** The `const`/`let` declarator for `name` directly inside this block, if any. */
+/**
+ * The block-scoped (`const`/`let`) declarator for `name` directly inside this
+ * block, if any. `var` is deliberately excluded — it is function-scoped, and is
+ * handled by `functionScopedVarBinds` at the enclosing function instead.
+ */
 function blockDeclarationOf(node, name) {
   if (node.type !== 'BlockStatement' && node.type !== 'Program') return null;
   for (const statement of node.body) {
-    if (statement.type !== 'VariableDeclaration') continue;
-    for (const declarator of statement.declarations) {
-      if (patternBinds(declarator.id, name)) return declarator;
+    if (statement.type === 'VariableDeclaration' && statement.kind !== 'var') {
+      for (const declarator of statement.declarations) {
+        if (patternBinds(declarator.id, name)) return declarator;
+      }
+    }
+    if (
+      (statement.type === 'FunctionDeclaration' || statement.type === 'ClassDeclaration') &&
+      statement.id?.name === name
+    ) {
+      // A function or class cannot name a Firestore collection. Report rather
+      // than let an outer same-named constant be wrongly attributed.
+      return { init: statement };
     }
   }
   return null;
+}
+
+/**
+ * Does a `var` anywhere inside this function (but not inside a NESTED function)
+ * bind `name`? `var` hoists to the whole function body, so
+ *
+ *     function setup() {
+ *       if (cond) { var SEG = 'other'; }
+ *       clearCollection(db, SEG);          // 'other' or undefined — never the outer const
+ *     }
+ *
+ * shadows an outer `const SEG` for the entire body, including lines above the
+ * declaration. Its value at the wipe call depends on `cond`, so report it.
+ *
+ * The repo bans `var` (`no-var: error`), so this cannot fire today. It exists so
+ * that relaxing that lint rule cannot silently reintroduce a wrong answer.
+ */
+function functionScopedVarBinds(functionNode, name) {
+  const body = functionNode.type === 'Program' ? functionNode : functionNode.body;
+  if (!body || typeof body !== 'object') return false;
+  let found = false;
+  const visit = (node) => {
+    if (found || node === null || typeof node !== 'object') return;
+    if (Array.isArray(node)) return node.forEach(visit);
+    if (FUNCTION_TYPES.has(node.type)) return; // a nested function has its own var scope
+    if (node.type === 'VariableDeclaration' && node.kind === 'var') {
+      if (node.declarations.some((d) => patternBinds(d.id, name))) found = true;
+      return;
+    }
+    for (const key of Object.keys(node)) {
+      if (SKIP_KEYS.has(key)) continue;
+      visit(node[key]);
+    }
+  };
+  visit(body);
+  return found;
 }
 
 /**
@@ -168,6 +217,12 @@ function resolveBinding(ancestors, name) {
     }
     if (node.type === 'CatchClause' && patternBinds(node.param, name)) {
       return { shadowedBy: 'CatchClause parameter' };
+    }
+    if (
+      (FUNCTION_TYPES.has(node.type) || node.type === 'Program') &&
+      functionScopedVarBinds(node, name)
+    ) {
+      return { shadowedBy: 'hoisted var declaration' };
     }
     const declarator = blockDeclarationOf(node, name);
     if (declarator) return { declarator };
@@ -269,6 +324,52 @@ function referencedSegmentsFromAst(ast) {
   return segments;
 }
 
+const FIRESTORE_PATH_FNS = new Set(['doc', 'collection', 'collectionGroup']);
+
+/**
+ * Firestore paths whose leading collection name the analyzer cannot read.
+ *
+ * `db.doc(`${ROOMS}/${id}`)` names `rooms` through an identifier: the template's
+ * own text is `''` and `'/'`. `referencedSegments` catches it today only because
+ * `const ROOMS = 'rooms'` also happens to be a string literal somewhere in the
+ * file — luck, not design. Were `ROOMS` imported from a shared constants module,
+ * the file would silently stop counting as a user of `rooms`, and a sibling's
+ * wholesale wipe of it would go unreported. Under-approximating the VICTIM side
+ * is the one direction `findWipeCollisions` cannot tolerate.
+ *
+ * So: resolve the leading identifier through the same scope machinery the wiper
+ * side uses, and REPORT the ones that stay unknown. The guard fails on a
+ * non-empty list, exactly as it does for an unresolvable wipe.
+ */
+function unresolvedSegmentsFromAst(ast) {
+  const unresolved = [];
+  walk(ast.program, (node, ancestors) => {
+    if (node.type !== 'CallExpression') return;
+    const { callee } = node;
+    if (callee.type !== 'MemberExpression' || callee.property.type !== 'Identifier') return;
+    if (!FIRESTORE_PATH_FNS.has(callee.property.name)) return;
+
+    const arg = node.arguments[0];
+    if (arg?.type !== 'TemplateLiteral') return;
+    if (arg.quasis[0]?.value.cooked !== '') return; // path starts with literal text — readable
+    const head = arg.expressions[0];
+    if (head?.type !== 'Identifier') return;
+
+    const { declarator, shadowedBy } = resolveBinding(ancestors, head.name);
+    if (declarator?.init?.type === 'StringLiteral') return; // resolvable — nothing to report
+    // A PARAMETER is fine: its arguments are supplied at call sites inside this
+    // file, as string literals, which `referencedSegments` already scans. Only a
+    // binding whose value lives OUTSIDE the file (an import, or nothing at all)
+    // hides a collection name from the victim side.
+    if (shadowedBy?.endsWith('parameter')) return;
+    unresolved.push(
+      `db.${callee.property.name}(\`\${${head.name}}/…\`): '${head.name}' is not a local string ` +
+        'constant, so this file cannot be counted as a user of the collection it names',
+    );
+  });
+  return unresolved;
+}
+
 /** An ASSIGNMENT claims the namespace. Merely naming the variable does not. */
 function isNamespacedFromAst(ast) {
   let found = false;
@@ -356,6 +457,7 @@ function analyze(file, source) {
     wipes,
     unresolvedWipes: unresolved,
     segments: referencedSegmentsFromAst(ast),
+    unresolvedSegments: unresolvedSegmentsFromAst(ast),
     doublesFirebase: doubled,
     touchesEmulator: touchesRealEmulatorFromAst(ast, doubled),
     resolvesTokens: resolvesIdTokensFromAst(ast),
@@ -396,6 +498,7 @@ module.exports = {
   doublesFirebase: fromSource(doublesFirebaseFromAst),
   isNamespaced: fromSource(isNamespacedFromAst),
   referencedSegments: fromSource(referencedSegmentsFromAst),
+  unresolvedSegments: fromSource(unresolvedSegmentsFromAst),
   resolvesIdTokens: fromSource(resolvesIdTokensFromAst),
   touchesRealEmulator: fromSource(touchesRealEmulatorFromAst),
   wipedCollections: fromSource(wipedCollectionsFromAst),

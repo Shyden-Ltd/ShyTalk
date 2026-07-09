@@ -33,6 +33,7 @@ const {
   referencedSegments,
   resolvesIdTokens,
   touchesRealEmulator,
+  unresolvedSegments,
   wipedCollections,
   wipesDefaultAuthProject,
 } = require('../helpers/test-isolation-analyzer');
@@ -103,6 +104,45 @@ describe('isolation analyzer — the detector sees every form a violation can ta
     const source = fixture('doubles-firebase-via-domock.js.txt');
     expect(doublesFirebase(source)).toBe(true);
     expect(touchesRealEmulator(source)).toBe(false);
+  });
+
+  test('a Firestore path whose leading name is a LOCAL constant needs no report', () => {
+    // `const ROOMS = 'rooms'` is itself a string literal, so `referencedSegments`
+    // already counts this file as a user of `rooms`. Nothing is hidden.
+    const source = ["const ROOMS = 'rooms';", 'db.doc(`${ROOMS}/${roomId}`).set({});'].join('\n');
+    expect(referencedSegments(source).has('rooms')).toBe(true);
+    expect(unresolvedSegments(source)).toEqual([]);
+  });
+
+  test('a Firestore path whose leading name is a FUNCTION PARAMETER needs no report', () => {
+    // Its arguments are supplied at call sites in this file, as string literals.
+    const source = [
+      'function seedParent(collection, id) {',
+      '  return db.doc(`${collection}/${id}`).set({});',
+      '}',
+      "seedParent('conversations', 'c1');",
+    ].join('\n');
+    expect(referencedSegments(source).has('conversations')).toBe(true);
+    expect(unresolvedSegments(source)).toEqual([]);
+  });
+
+  test('REPORTS: a Firestore path whose leading name is IMPORTED — the victim side would go blind', () => {
+    // Under-approximating the victim side is the one direction findWipeCollisions
+    // cannot tolerate: a sibling's wholesale wipe of this collection would pass.
+    const source = [
+      "const { ROOMS } = require('./collection-names');",
+      'db.doc(`${ROOMS}/${roomId}`).set({});',
+    ].join('\n');
+    expect(referencedSegments(source).has('rooms')).toBe(false); // the name appears nowhere
+    expect(unresolvedSegments(source)).toEqual([
+      expect.stringMatching(/'ROOMS' is not a local string constant/),
+    ]);
+  });
+
+  test('REPORTS: a Firestore path whose leading name is never declared', () => {
+    expect(unresolvedSegments('db.collection(`${MYSTERY}/${id}`).get();')).toEqual([
+      expect.stringMatching(/'MYSTERY' is not a local string constant/),
+    ]);
   });
 
   test('a collection name inside a route path counts as a use (deliberate over-approximation)', () => {
@@ -320,6 +360,45 @@ describe('wipedCollections — every branch resolves or reports, none silently i
     expect(unresolved).toEqual([expect.stringMatching(/'ALL' is not a literal array constant/)]);
   });
 
+  test('REPORTS: a hoisted `var` shadowing an outer constant, from a nested block', () => {
+    // `var` is function-scoped: a `var SEG` inside an `if` shadows an outer
+    // `const SEG` for the WHOLE function body, including lines above it, and its
+    // value depends on the branch. The repo bans `var`, so this cannot fire
+    // today — the test exists so relaxing `no-var` cannot silently reintroduce
+    // a wrong answer.
+    const { wipes, unresolved } = analyseBody(
+      [
+        "const SEG = 'segregationEvents';",
+        'function setup() {',
+        "  if (cond) { var SEG = 'other'; }",
+        '  clearCollection(db, SEG);',
+        '}',
+        'setup();',
+      ].join('\n'),
+    );
+    expect([...wipes]).toEqual([]); // NOT 'segregationEvents'
+    expect(unresolved).toEqual([
+      expect.stringMatching(/'SEG' is shadowed by a hoisted var declaration/),
+    ]);
+  });
+
+  test('REPORTS: a function declaration shadowing a same-named outer constant', () => {
+    const { wipes, unresolved } = analyseBody(
+      [
+        "const NAME = 'users';",
+        'function outer() {',
+        '  function NAME() {}',
+        '  clearCollection(db, NAME);',
+        '}',
+        'outer();',
+      ].join('\n'),
+    );
+    expect([...wipes]).toEqual([]); // NOT 'users'
+    expect(unresolved).toEqual([
+      expect.stringMatching(/'NAME' is declared, but not as a string literal/),
+    ]);
+  });
+
   test('RESOLVES: doubling the Admin SDK itself counts as doubling firebase', () => {
     expect(doublesFirebase("jest.mock('firebase-admin', () => ({}));")).toBe(true);
     expect(doublesFirebase("jest.doMock('firebase-admin/firestore', () => ({}));")).toBe(true);
@@ -358,6 +437,15 @@ describe('test-isolation guard — a wholesale wipe requires an exclusive emulat
 
   test('no non-namespaced suite wipes a collection another non-namespaced suite uses', () => {
     expect(findWipeCollisions(analyses)).toEqual([]);
+  });
+
+  test('every Firestore path in the corpus names a collection the guard can read', () => {
+    // A path like `db.doc(`${IMPORTED}/${id}`)` hides which collection this file
+    // uses, so a sibling's wipe of it would not be reported as a collision.
+    const blind = analyses
+      .filter((a) => a.unresolvedSegments.length > 0)
+      .map((a) => `${a.file}: ${a.unresolvedSegments.join('; ')}`);
+    expect(blind).toEqual([]);
   });
 
   test('every wipe in the corpus is statically resolvable — the guard never guesses', () => {
