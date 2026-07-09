@@ -198,36 +198,54 @@ describe('wipedCollections — every branch resolves or reports, none silently i
     expect(unresolved).toEqual([expect.stringMatching(/no collection argument/)]);
   });
 
-  test('REPORTS: an array constant declared twice — which one binds is unknowable', () => {
+  test('RESOLVES: two constants of one name — the NEAREST binding wins, exactly', () => {
+    // Not "ambiguous": JS forbids two declarations in one block, so the nearest
+    // enclosing one is the only thing the wipe can refer to. Answer, don't report.
     const { wipes, unresolved } = analyseBody(
       [
         "const COLLECTIONS = ['users'];",
         'function elsewhere() {',
         "  const COLLECTIONS = ['scratch'];",
-        '  return COLLECTIONS;',
+        '  for (const c of COLLECTIONS) clearCollection(db, c);',
         '}',
-        'beforeEach(async () => {',
-        '  for (const c of COLLECTIONS) await clearCollection(db, c);',
+        'elsewhere();',
+      ].join('\n'),
+    );
+    expect([...wipes]).toEqual(['scratch']); // NOT 'users' — the outer one is shadowed
+    expect(unresolved).toEqual([]);
+  });
+
+  test('RESOLVES: a block-scoped redeclaration of the loop variable', () => {
+    // `for (const c of WIPED) { { const c = 'other'; clear(db, c) } }` clears
+    // 'other'. Name-only matching confidently reports WIPED's contents instead.
+    const { wipes, unresolved } = analyseBody(
+      [
+        "const WIPED = ['users'];",
+        'beforeEach(() => {',
+        '  for (const c of WIPED) {',
+        "    { const c = 'other'; clearCollection(db, c); }",
+        '  }',
         '});',
       ].join('\n'),
     );
-    expect([...wipes]).toEqual([]); // NOT ['users'], and NOT ['scratch']
-    expect(unresolved).toEqual([expect.stringMatching(/'COLLECTIONS' is declared more than once/)]);
+    expect([...wipes]).toEqual(['other']);
+    expect(unresolved).toEqual([]);
   });
 
-  test('REPORTS: a string constant declared twice', () => {
+  test('REPORTS: a constant that is declared, but not as a string literal', () => {
     const { wipes, unresolved } = analyseBody(
-      [
-        "const NAME = 'users';",
-        'function elsewhere() {',
-        "  const NAME = 'scratch';",
-        '  return NAME;',
-        '}',
-        'beforeEach(async () => { await clearCollection(db, NAME); });',
-      ].join('\n'),
+      ['const NAME = buildName();', 'beforeEach(() => clearCollection(db, NAME));'].join('\n'),
     );
     expect([...wipes]).toEqual([]);
-    expect(unresolved).toEqual([expect.stringMatching(/'NAME' is declared more than once/)]);
+    expect(unresolved).toEqual([
+      expect.stringMatching(/'NAME' is declared, but not as a string literal/),
+    ]);
+  });
+
+  test('REPORTS: a for-of over an identifier that is never declared at all', () => {
+    const { wipes, unresolved } = analyseBody('for (const c of NEVER) clearCollection(db, c);');
+    expect([...wipes]).toEqual([]);
+    expect(unresolved).toEqual([expect.stringMatching(/'NEVER' is not a declared array constant/)]);
   });
 
   test('REPORTS: a loop variable shadowed by a callback parameter — never a wrong answer', () => {
@@ -245,7 +263,7 @@ describe('wipedCollections — every branch resolves or reports, none silently i
     );
     expect([...wipes]).toEqual([]);
     expect(unresolved).toEqual([
-      expect.stringMatching(/'c' is shadowed by a ArrowFunctionExpression binding/),
+      expect.stringMatching(/'c' is shadowed by a ArrowFunctionExpression parameter/),
     ]);
   });
 
@@ -261,7 +279,7 @@ describe('wipedCollections — every branch resolves or reports, none silently i
       ].join('\n'),
     );
     expect([...wipes]).toEqual([]);
-    expect(unresolved).toEqual([expect.stringMatching(/shadowed by a CatchClause binding/)]);
+    expect(unresolved).toEqual([expect.stringMatching(/shadowed by a CatchClause parameter/)]);
   });
 
   test('REPORTS: a destructuring loop binding, which names no single collection', () => {
@@ -269,9 +287,7 @@ describe('wipedCollections — every branch resolves or reports, none silently i
       'for (const [k, v] of Object.entries({})) clearCollection(db, k);',
     );
     expect([...wipes]).toEqual([]);
-    expect(unresolved).toEqual([
-      expect.stringMatching(/'k' is neither a loop variable nor a string constant/),
-    ]);
+    expect(unresolved).toEqual([expect.stringMatching(/shadowed by a ArrayPattern loop binding/)]);
   });
 
   test('REPORTS: an identifier that is neither a loop variable nor any constant', () => {

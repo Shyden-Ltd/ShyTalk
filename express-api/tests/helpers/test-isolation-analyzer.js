@@ -92,39 +92,6 @@ const isJestDoubleOf = (node, matcher) =>
   node.arguments[0]?.type === 'StringLiteral' &&
   matcher.test(node.arguments[0].value);
 
-/**
- * `const NAME = ['a', 'b']` declarations, name → values. A name declared more
- * than once is recorded as ambiguous: without full scope analysis we cannot say
- * which one a use refers to, so we decline to pick.
- */
-function stringArrayConstants(ast) {
-  const consts = new Map();
-  const ambiguous = new Set();
-  walk(ast.program, (node) => {
-    if (node.type !== 'VariableDeclarator') return;
-    if (node.id.type !== 'Identifier' || node.init?.type !== 'ArrayExpression') return;
-    if (consts.has(node.id.name)) ambiguous.add(node.id.name);
-    consts.set(node.id.name, node.init.elements);
-  });
-  return { consts, ambiguous };
-}
-
-/**
- * `const NAME = 'users'` declarations, name → value. Same ambiguity rule as the
- * array constants: a name declared twice is unknowable, so we decline to pick.
- */
-function stringConstants(ast) {
-  const consts = new Map();
-  const ambiguous = new Set();
-  walk(ast.program, (node) => {
-    if (node.type !== 'VariableDeclarator') return;
-    if (node.id.type !== 'Identifier' || node.init?.type !== 'StringLiteral') return;
-    if (consts.has(node.id.name)) ambiguous.add(node.id.name);
-    consts.set(node.id.name, node.init.value);
-  });
-  return { consts, ambiguous };
-}
-
 /** Every element is a plain string, or the array is not statically knowable. */
 function stringValues(elements) {
   const values = [];
@@ -143,51 +110,67 @@ const FUNCTION_TYPES = new Set([
   'ClassMethod',
 ]);
 
-/**
- * Does this node bind `name` in a way the analyzer cannot see through?
- *
- * Only FUNCTION and CATCH parameters qualify. A `const NAME = …` declaration is
- * not a shadow — it is precisely what `stringConstants`/`stringArrayConstants`
- * resolve, and duplicates among them are caught by their `ambiguous` sets.
- */
-function bindsName(node, name) {
-  const patternBinds = (pattern) => {
-    if (!pattern) return false;
-    if (pattern.type === 'Identifier') return pattern.name === name;
-    if (pattern.type === 'AssignmentPattern') return patternBinds(pattern.left);
-    if (pattern.type === 'RestElement') return patternBinds(pattern.argument);
-    if (pattern.type === 'ArrayPattern') return pattern.elements.some(patternBinds);
-    if (pattern.type === 'ObjectPattern') {
-      return pattern.properties.some((p) =>
-        p.type === 'RestElement' ? patternBinds(p.argument) : patternBinds(p.value),
-      );
-    }
-    return false;
-  };
-
-  if (FUNCTION_TYPES.has(node.type)) return node.params.some(patternBinds);
-  if (node.type === 'CatchClause') return patternBinds(node.param);
+/** Does `pattern` bind `name`? Handles destructuring, defaults and rest. */
+function patternBinds(pattern, name) {
+  if (!pattern) return false;
+  if (pattern.type === 'Identifier') return pattern.name === name;
+  if (pattern.type === 'AssignmentPattern') return patternBinds(pattern.left, name);
+  if (pattern.type === 'RestElement') return patternBinds(pattern.argument, name);
+  if (pattern.type === 'ArrayPattern') return pattern.elements.some((e) => patternBinds(e, name));
+  if (pattern.type === 'ObjectPattern') {
+    return pattern.properties.some((prop) =>
+      prop.type === 'RestElement'
+        ? patternBinds(prop.argument, name)
+        : patternBinds(prop.value, name),
+    );
+  }
   return false;
 }
 
+/** The `const`/`let` declarator for `name` directly inside this block, if any. */
+function blockDeclarationOf(node, name) {
+  if (node.type !== 'BlockStatement' && node.type !== 'Program') return null;
+  for (const statement of node.body) {
+    if (statement.type !== 'VariableDeclaration') continue;
+    for (const declarator of statement.declarations) {
+      if (patternBinds(declarator.id, name)) return declarator;
+    }
+  }
+  return null;
+}
+
 /**
- * Resolve `name` at a wipe call site by walking its ancestors innermost-out.
+ * Resolve `name` at a wipe call site: walk its ancestors innermost-out and let
+ * the NEAREST binding decide. Anything else is a silent wrong answer.
  *
- * Returns the enclosing `for (const <name> of X)` — but ONLY if nothing binds
- * `name` more tightly first. A callback parameter that reuses the loop
- * variable's name (`for (const c of WIPED) list.forEach((c) => clear(db, c))`)
- * refers to the callback's `c`, not the loop's; resolving it to the loop's array
- * would be a SILENT WRONG ANSWER — the one outcome this analyzer must never
- * produce. Report the shadowing instead and let the guard fail loudly.
+ * Three binders matter, and which one is nearest is the whole question:
+ *   - the `for (const name of X)` we want to expand;
+ *   - a function or catch PARAMETER, whose value we cannot see → report;
+ *   - a `const`/`let` declaration, which may be the string constant we want.
+ *
+ * `for (const c of WIPED) other.forEach((c) => clear(db, c))` clears the
+ * callback's `c`; `for (const c of WIPED) { const c = 'x'; clear(db, c) }`
+ * clears `'x'`. Matching on name alone confidently reports WIPED for both.
  */
-function resolveLoopVariable(ancestors, name) {
+function resolveBinding(ancestors, name) {
   for (let i = ancestors.length - 1; i >= 0; i--) {
     const node = ancestors[i];
+
     if (node.type === 'ForOfStatement') {
       const decl = node.left.type === 'VariableDeclaration' ? node.left.declarations[0] : null;
-      if (decl?.id.type === 'Identifier' && decl.id.name === name) return { loop: node };
+      if (decl && patternBinds(decl.id, name)) {
+        if (decl.id.type !== 'Identifier') return { shadowedBy: `${decl.id.type} loop binding` };
+        return { loop: node };
+      }
     }
-    if (bindsName(node, name)) return { shadowedBy: node.type };
+    if (FUNCTION_TYPES.has(node.type) && node.params.some((p) => patternBinds(p, name))) {
+      return { shadowedBy: `${node.type} parameter` };
+    }
+    if (node.type === 'CatchClause' && patternBinds(node.param, name)) {
+      return { shadowedBy: 'CatchClause parameter' };
+    }
+    const declarator = blockDeclarationOf(node, name);
+    if (declarator) return { declarator };
   }
   return {};
 }
@@ -198,8 +181,6 @@ function resolveLoopVariable(ancestors, name) {
  * so two loops reusing one variable name cannot shadow each other.
  */
 function wipedCollectionsFromAst(ast) {
-  const { consts, ambiguous } = stringArrayConstants(ast);
-  const { consts: strings, ambiguous: ambiguousStrings } = stringConstants(ast);
   const wipes = new Set();
   const unresolved = [];
 
@@ -211,50 +192,48 @@ function wipedCollectionsFromAst(ast) {
     const describe = (why) => unresolved.push(`${node.callee.name}(db, …): ${why}`);
 
     if (!target) return describe('no collection argument');
-
-    if (target.type === 'StringLiteral') {
-      wipes.add(target.value);
-      return;
-    }
+    if (target.type === 'StringLiteral') return void wipes.add(target.value);
     if (target.type !== 'Identifier') {
       return describe(`target is a ${target.type}, which cannot be resolved statically`);
     }
 
-    const { loop, shadowedBy } = resolveLoopVariable(ancestors, target.name);
-    if (shadowedBy) {
-      return describe(
-        `'${target.name}' is shadowed by a ${shadowedBy} binding; its source is unknowable`,
-      );
-    }
-    if (!loop) {
-      // Not a loop variable: it may be a plain `const SEG_EVENTS = 'segregationEvents'`.
-      if (ambiguousStrings.has(target.name)) {
-        return describe(`'${target.name}' is declared more than once; which one is unknowable`);
-      }
-      const value = strings.get(target.name);
-      if (value === undefined) {
-        return describe(`'${target.name}' is neither a loop variable nor a string constant`);
-      }
-      wipes.add(value);
-      return;
-    }
+    const { loop, shadowedBy, declarator } = resolveBinding(ancestors, target.name);
 
-    if (loop.right.type === 'ArrayExpression') {
-      const values = stringValues(loop.right.elements);
+    if (shadowedBy) {
+      return describe(`'${target.name}' is shadowed by a ${shadowedBy}; its source is unknowable`);
+    }
+    if (declarator) {
+      // Nearest binding is a declaration — a plain `const SEG = 'segregationEvents'`?
+      if (declarator.init?.type !== 'StringLiteral') {
+        return describe(`'${target.name}' is declared, but not as a string literal`);
+      }
+      return void wipes.add(declarator.init.value);
+    }
+    if (!loop) return describe(`'${target.name}' is neither a loop variable nor a string constant`);
+
+    // Resolve the loop's iterable through the SAME ancestor chain, so a
+    // block-scoped array constant binds ahead of a file-level one of the name.
+    const iterable = loop.right;
+    if (iterable.type === 'ArrayExpression') {
+      const values = stringValues(iterable.elements);
       if (!values) return describe(`inline array for '${target.name}' is not all string literals`);
       for (const value of values) wipes.add(value);
       return;
     }
-    if (loop.right.type !== 'Identifier') {
-      return describe(`'${target.name}' iterates a ${loop.right.type}`);
+    if (iterable.type !== 'Identifier') {
+      return describe(`'${target.name}' iterates a ${iterable.type}`);
     }
-    if (ambiguous.has(loop.right.name)) {
-      return describe(`'${loop.right.name}' is declared more than once; which one is unknowable`);
+
+    const source = resolveBinding(ancestors, iterable.name);
+    if (source.shadowedBy) {
+      return describe(`'${iterable.name}' is shadowed by a ${source.shadowedBy}`);
     }
-    const elements = consts.get(loop.right.name);
-    if (!elements) return describe(`'${loop.right.name}' is not a literal array constant`);
-    const values = stringValues(elements);
-    if (!values) return describe(`'${loop.right.name}' is built from spreads or expressions`);
+    if (!source.declarator) return describe(`'${iterable.name}' is not a declared array constant`);
+    if (source.declarator.init?.type !== 'ArrayExpression') {
+      return describe(`'${iterable.name}' is not a literal array constant`);
+    }
+    const values = stringValues(source.declarator.init.elements);
+    if (!values) return describe(`'${iterable.name}' is built from spreads or expressions`);
     for (const value of values) wipes.add(value);
   });
 
