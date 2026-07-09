@@ -23,6 +23,19 @@ jest.mock('../../src/utils/firebase', () => ({
   db: {
     doc: jest.fn((path) => ({ _path: path, get: () => mockDocGet(path), set: mockSet })),
     collection: jest.fn(),
+    // The route's binding write runs inside a transaction (SHY-0149 C-NEW-2).
+    // The fake buffers writes and commits them after the callback, exactly as
+    // Firestore does — so a rejecting `mockSet` still fails the transaction
+    // (and the route still answers 500), and assertions keep reading
+    // `mockSet.mock.calls[0][0]` as the written document.
+    runTransaction: async (fn) => {
+      const writes = [];
+      await fn({
+        get: (refOrQuery) => mockDocGet(refOrQuery?._path),
+        set: (_ref, data, opts) => writes.push([data, opts]),
+      });
+      for (const [data, opts] of writes) await mockSet(data, opts);
+    },
   },
 }));
 
@@ -39,6 +52,7 @@ jest.mock('../../src/utils/log', () => ({
 jest.mock('../../src/utils/bans', () => ({
   checkBans: async () => ({ isBanned: false, banType: null, reason: null, expiresAt: null }),
   countBoundDevices: async () => 0,
+  clearBanCache: () => {},
   MAX_BOUND_DEVICES: 20,
 }));
 

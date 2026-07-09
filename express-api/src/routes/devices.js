@@ -2,7 +2,7 @@ const express = require('express');
 const { db } = require('../utils/firebase');
 const { now } = require('../utils/helpers');
 const { isValidDeviceId } = require('../utils/deviceId');
-const { countBoundDevices, MAX_BOUND_DEVICES } = require('../utils/bans');
+const { countBoundDevices, clearBanCache, MAX_BOUND_DEVICES } = require('../utils/bans');
 const log = require('../utils/log');
 
 const router = express.Router();
@@ -68,8 +68,9 @@ router.post('/devices/lock-check', async (req, res) => {
           return { status: 'device_limit' };
         }
         tx.set(ref, { uniqueId: caller, boundAt: now() }, { merge: true });
+        return { status: 'allowed', boundToOther: false, bound: true };
       }
-      return { status: 'allowed', boundToOther: false };
+      return { status: 'allowed', boundToOther: false, bound: false };
     });
 
     if (result.status === 'device_limit') {
@@ -80,13 +81,20 @@ router.post('/devices/lock-check', async (req, res) => {
       });
     }
 
+    // A newly-claimed device can carry a hardware ban, which changes the
+    // caller's standing. Drop their cached verdict so the ban bites on their
+    // very next request rather than after the cache TTL (SHY-0149).
+    if (result.bound) clearBanCache(caller);
+
     log.info('devices', 'device lock-check', {
       deviceId,
       caller,
       status: result.status,
       boundToOther: result.boundToOther,
     });
-    return res.json(result);
+    // `bound` is an internal signal for cache invalidation, not part of the
+    // client contract — the app only ever reads status/boundToOther.
+    return res.json({ status: result.status, boundToOther: result.boundToOther });
   } catch (err) {
     log.error('devices', 'lock-check failed', { error: err.message });
     return res.status(500).json({ error: 'Internal server error' });

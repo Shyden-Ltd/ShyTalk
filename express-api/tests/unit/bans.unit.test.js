@@ -223,26 +223,37 @@ describe('the active-networkBans list is fetched once, not per request', () => {
 });
 
 describe('userBanCache is bounded, and a recently-used entry is not evicted (LRU)', () => {
-  test('a repeatedly-used key survives a flood of cold keys; a stale one is evicted', async () => {
+  test('a key USED once mid-flood survives; the same key would be evicted under FIFO', async () => {
     // Each distinct uniqueId costs one deviceBans query on a cache MISS, so
     // query counts are the observable proxy for "was it still cached?".
-    await checkUserBans('hot-key', '1.2.3.4'); // cached
-    await checkUserBans('cold-first', '1.2.3.4'); // cached, never touched again
+    //
+    // The construction must DISTINGUISH LRU from FIFO. Touching the hot key on
+    // every iteration does not: eviction only begins near the end, and a FIFO
+    // eviction is immediately undone by the very next miss-and-reinsert. So:
+    // insert `hot` FIRST, touch it exactly ONCE at the midpoint, then flood
+    // hard enough that ~10 evictions occur. Under FIFO `hot` sits at insertion
+    // position 0 and is the first thing evicted; under LRU the mid-flood touch
+    // moved it to the tail, so the fillers go first.
+    const half = MAX_CACHE_SIZE / 2;
 
-    for (let i = 0; i < MAX_CACHE_SIZE; i++) {
-      await checkUserBans(`filler-${i}`, '1.2.3.4');
-      await checkUserBans('hot-key', '1.2.3.4'); // keep it hot (LRU refresh)
-    }
+    await checkUserBans('hot-key', '1.2.3.4'); // insertion position 0
+    for (let i = 0; i < half; i++) await checkUserBans(`early-${i}`, '1.2.3.4');
 
-    // Hot key still cached → no additional query.
+    await checkUserBans('hot-key', '1.2.3.4'); // the single LRU refresh
+
+    // Enough inserts to overflow the bound and force ~10 evictions.
+    for (let i = 0; i < half + 10; i++) await checkUserBans(`late-${i}`, '1.2.3.4');
+
+    // Sanity: eviction really happened — the oldest filler is gone (a MISS).
+    const beforeEarly = mockLinkedBansGet.mock.calls.length;
+    await checkUserBans('early-0', '1.2.3.4');
+    expect(mockLinkedBansGet.mock.calls.length).toBe(beforeEarly + 1);
+
+    // The refreshed key survived: still a cache HIT, no new query. Under FIFO
+    // it would have been evicted before `early-0` and this would fail.
     const beforeHot = mockLinkedBansGet.mock.calls.length;
     await checkUserBans('hot-key', '1.2.3.4');
     expect(mockLinkedBansGet.mock.calls.length).toBe(beforeHot);
-
-    // The never-touched key was evicted by the flood → it must re-query.
-    const beforeCold = mockLinkedBansGet.mock.calls.length;
-    await checkUserBans('cold-first', '1.2.3.4');
-    expect(mockLinkedBansGet.mock.calls.length).toBe(beforeCold + 1);
   });
 
   test('N concurrent gate checks for the SAME caller issue exactly one deviceBans query', async () => {

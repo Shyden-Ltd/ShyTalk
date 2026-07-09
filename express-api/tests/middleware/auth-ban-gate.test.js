@@ -51,8 +51,10 @@ const authModule = require('../../src/middleware/auth');
 const { authMiddleware, authMiddlewareStrict, clearBanCache } = authModule;
 const { BINDINGS_SCAN_LIMIT } = require('../../src/utils/bans');
 const deviceInfoRouter = require('../../src/routes/device-info');
+const devicesRouter = require('../../src/routes/devices');
 const suggestionsRouter = require('../../src/routes/suggestions');
 const adminBansRouter = require('../../src/routes/admin-bans');
+const adminDevicesRouter = require('../../src/routes/admin-devices');
 
 const DEVICE_BANS = 'deviceBans';
 const NETWORK_BANS = 'networkBans';
@@ -131,6 +133,17 @@ async function seedNetworkBan(banId, data = {}) {
     createdBy: 'test-admin',
     ...data,
   });
+}
+
+/** Bind enough devices to the caller to push the gate's scan past its limit. */
+async function floodBindings(uniqueId) {
+  await Promise.all(
+    Array.from({ length: BINDINGS_SCAN_LIMIT }, (_, i) =>
+      db
+        .doc(`${DEVICE_BINDINGS}/flood-${String(i).padStart(4, '0')}`)
+        .set({ uniqueId, boundAt: 1 }),
+    ),
+  );
 }
 
 /** POST the sensitive probe as `caller`, with an optional forged/edge XFF chain. */
@@ -249,16 +262,23 @@ describe('device bans are enforced per-request, from any client', () => {
     // Beyond the write-time cap the gate cannot prove the caller is clean, so
     // it must refuse rather than log a warning and let them through.
     const caller = await mintRealUser({ uniqueId: '5016' });
-    await Promise.all(
-      Array.from({ length: BINDINGS_SCAN_LIMIT }, (_, i) =>
-        db
-          .doc(`${DEVICE_BINDINGS}/flood-${String(i).padStart(4, '0')}`)
-          .set({ uniqueId: '5016', boundAt: 1 }),
-      ),
-    );
+    await floodBindings('5016');
 
     const res = await probeAs(caller).expect(401);
     expect(res.body).toEqual({ error: 'Authentication failed' });
+  });
+
+  test('…but that caller keeps their appeal and data-export rights (fail-closed ≠ rightless)', async () => {
+    // Truncation is a PERMANENT state, unlike a transient outage. If the
+    // fail-closed rejection also sealed the exempt paths, the account could
+    // never appeal and never exercise its GDPR Art.15 export (reviewer
+    // C-NEW-1).
+    const caller = await mintRealUser({ uniqueId: '5017' });
+    await floodBindings('5017');
+
+    const app = createProbeApp();
+    await request(app).post('/api/users/5017/appeal').set(caller.headers).send({}).expect(200);
+    await request(app).get('/api/users/5017/data-export').set(caller.headers).expect(200);
   });
 
   test('the 403 body leaks nothing beyond the contract (no linkedUniqueId / createdBy)', async () => {
@@ -494,6 +514,73 @@ describe('each admin ban mutation reaches the gate on the next request', () => {
     await adminPost(admin, '/api/admin/bans/unban-all/5093', {});
 
     await probeAs(caller, { xff: EDGE_IP }).expect(200);
+  });
+});
+
+// ─── A new binding can pull a hardware ban into scope ────────────
+
+describe('binding a device re-evaluates the caller’s standing on the next request', () => {
+  test('claiming a hardware-banned device via lock-check blocks the caller immediately', async () => {
+    const caller = await mintRealUser({ uniqueId: '5100' });
+    await seedDeviceBan('dev-hw-banned-1', { reason: 'hardware ban' }); // unlinked
+
+    await probeAs(caller).expect(200); // clean, and now cached as clean
+
+    // The device is unbound, so lock-check hands it to the caller — which
+    // brings the hardware ban into their standing. A stale cache would let
+    // them keep acting for the full TTL.
+    await request(createRouterApp(devicesRouter))
+      .post('/api/devices/lock-check')
+      .set(caller.headers)
+      .send({ deviceId: 'dev-hw-banned-1' })
+      .expect(200);
+
+    await probeAs(caller).expect(403);
+  });
+
+  test('the same holds when device-info is what creates the binding', async () => {
+    const caller = await mintRealUser({ uniqueId: '5101' });
+    await seedDeviceBan('dev-hw-banned-2', { reason: 'hardware ban' });
+
+    await probeAs(caller).expect(200);
+
+    await request(createRouterApp(deviceInfoRouter))
+      .post('/api/device-info')
+      .set(caller.headers)
+      .send({ deviceId: 'dev-hw-banned-2' })
+      .expect(200);
+
+    await probeAs(caller).expect(403);
+  });
+
+  test('an admin REMOVING the binding lifts the hardware ban on the next request', async () => {
+    const caller = await mintRealUser({ uniqueId: '5102' });
+    await db.doc(`${DEVICE_BINDINGS}/dev-hw-banned-3`).set({ uniqueId: '5102', boundAt: 1 });
+    await seedDeviceBan('dev-hw-banned-3', { reason: 'hardware ban' });
+    await probeAs(caller).expect(403); // caches "banned"
+
+    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    await request(createRouterApp(adminDevicesRouter))
+      .delete('/api/admin/devices/dev-hw-banned-3')
+      .set(admin.headers)
+      .expect(200);
+
+    await probeAs(caller).expect(200);
+  });
+
+  test('an admin CREATING a binding to a banned device blocks the owner on their next request', async () => {
+    const caller = await mintRealUser({ uniqueId: '5103' });
+    await seedDeviceBan('dev-hw-banned-4', { reason: 'hardware ban' });
+    await probeAs(caller).expect(200); // caches "clean"
+
+    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    await request(createRouterApp(adminDevicesRouter))
+      .post('/api/admin/devices')
+      .set(admin.headers)
+      .send({ deviceId: 'dev-hw-banned-4', uniqueId: 5103 })
+      .expect(200);
+
+    await probeAs(caller).expect(403);
   });
 });
 

@@ -299,7 +299,7 @@ describe('POST /api/device-info — binding reconcile (real emulator)', () => {
  * /api/device-info are each exempt from the ban gate itself.
  */
 describe('a device binding cannot be minted without limit (ban-evasion cap)', () => {
-  const { MAX_BOUND_DEVICES } = require('../../src/utils/bans');
+  const { MAX_BOUND_DEVICES, countBoundDevices } = require('../../src/utils/bans');
 
   async function fillBindingsToCap(uniqueId) {
     await Promise.all(
@@ -323,18 +323,100 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
     expect(await readBinding('one-too-many')).toBeNull(); // nothing was written
   });
 
-  test('device-info refuses to bind device number MAX+1 for the same account', async () => {
+  test('device-info stores telemetry for device MAX+1 but leaves it UNBOUND', async () => {
     const caller = await mintRealUser({ uniqueId: '6002' });
     await fillBindingsToCap('6002');
+
+    // Refusing outright would blank the ban screen this endpoint feeds, so it
+    // succeeds — it just never claims the device for the capped account.
+    const res = await request(createDeviceInfoApp())
+      .post('/api/device-info')
+      .set(caller.headers)
+      .send({ deviceId: 'di-one-too-many', model: 'pixel' })
+      .expect(200);
+    expect(res.body.success).toBe(true);
+
+    const binding = await readBinding('di-one-too-many');
+    expect(binding.model).toBe('pixel'); // telemetry recorded…
+    expect(binding.uniqueId).toBeUndefined(); // …but NOT bound to the caller
+    expect(binding.boundAt).toBeUndefined();
+  });
+
+  test('an unbound over-cap doc cannot be used as a ban-hiding decoy (it has no owner)', async () => {
+    const caller = await mintRealUser({ uniqueId: '6006' });
+    await fillBindingsToCap('6006');
+    await request(createDeviceInfoApp())
+      .post('/api/device-info')
+      .set(caller.headers)
+      .send({ deviceId: 'di-decoy' })
+      .expect(200);
+
+    // countBoundDevices only counts docs owned by the caller, so the unbound
+    // doc never inflates their binding set.
+    expect(await countBoundDevices('6006')).toBe(MAX_BOUND_DEVICES);
+  });
+
+  test('a BANNED caller at the cap still receives banStatus from device-info (ban screen preserved)', async () => {
+    const caller = await mintRealUser({ uniqueId: '6007' });
+    await fillBindingsToCap('6007');
+    await db.doc('deviceBans/di-banned-at-cap').set({
+      deviceId: 'di-banned-at-cap',
+      reason: 'at-cap ban screen',
+      expiresAt: null,
+    });
 
     const res = await request(createDeviceInfoApp())
       .post('/api/device-info')
       .set(caller.headers)
-      .send({ deviceId: 'di-one-too-many' })
-      .expect(403);
+      .send({ deviceId: 'di-banned-at-cap' })
+      .expect(200);
 
-    expect(res.body).toMatchObject({ code: 'device_limit' });
-    expect(await readBinding('di-one-too-many')).toBeNull();
+    expect(res.body.banStatus).toMatchObject({
+      isBanned: true,
+      banType: 'device',
+      reason: 'at-cap ban screen',
+    });
+  });
+
+  test('concurrent device-info calls on distinct new devices cannot exceed the cap', async () => {
+    const caller = await mintRealUser({ uniqueId: '6008' });
+    // One free slot; fire six racers at it.
+    await Promise.all(
+      Array.from({ length: MAX_BOUND_DEVICES - 1 }, (_, i) =>
+        seedBinding(`race-di-${i}`, { uniqueId: '6008', boundAt: 1 }),
+      ),
+    );
+
+    await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        request(createDeviceInfoApp())
+          .post('/api/device-info')
+          .set(caller.headers)
+          .send({ deviceId: `di-racer-${i}` }),
+      ),
+    );
+
+    expect(await countBoundDevices('6008')).toBeLessThanOrEqual(MAX_BOUND_DEVICES);
+  });
+
+  test('concurrent lock-check calls on distinct new devices cannot exceed the cap', async () => {
+    const caller = await mintRealUser({ uniqueId: '6009' });
+    await Promise.all(
+      Array.from({ length: MAX_BOUND_DEVICES - 1 }, (_, i) =>
+        seedBinding(`race-lc-${i}`, { uniqueId: '6009', boundAt: 1 }),
+      ),
+    );
+
+    await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        request(createApp())
+          .post('/api/devices/lock-check')
+          .set(caller.headers)
+          .send({ deviceId: `lc-racer-${i}` }),
+      ),
+    );
+
+    expect(await countBoundDevices('6009')).toBeLessThanOrEqual(MAX_BOUND_DEVICES);
   });
 
   test('a caller UNDER the cap still binds normally, and re-using an owned device never counts again', async () => {
@@ -370,5 +452,41 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
       .set(other.headers)
       .send({ deviceId: 'other-users-phone' })
       .expect(200);
+  });
+
+  test('the admin binding route honours the cap too (support tooling cannot flood an account)', async () => {
+    await fillBindingsToCap('6010');
+    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const app = express();
+    app.use(express.json());
+    app.use('/api', authMiddleware);
+    app.use('/api', require('../../src/routes/admin-devices'));
+
+    const res = await request(app)
+      .post('/api/admin/devices')
+      .set(admin.headers)
+      .send({ deviceId: 'admin-one-too-many', uniqueId: 6010 })
+      .expect(403);
+
+    expect(res.body).toMatchObject({ code: 'device_limit' });
+    expect(await readBinding('admin-one-too-many')).toBeNull();
+  });
+
+  test('the admin route may still RE-SEED a binding that already exists at the cap', async () => {
+    await fillBindingsToCap('6011');
+    const existingId = 'cap-6011-000'; // one of the capped bindings
+    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const app = express();
+    app.use(express.json());
+    app.use('/api', authMiddleware);
+    app.use('/api', require('../../src/routes/admin-devices'));
+
+    await request(app)
+      .post('/api/admin/devices')
+      .set(admin.headers)
+      .send({ deviceId: existingId, uniqueId: 6011, model: 'reseeded' })
+      .expect(200);
+
+    expect((await readBinding(existingId)).model).toBe('reseeded');
   });
 });

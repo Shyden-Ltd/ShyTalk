@@ -9,7 +9,7 @@ const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { now } = require('../utils/helpers');
 const { isValidDeviceId } = require('../utils/deviceId');
-const { checkBans, countBoundDevices, MAX_BOUND_DEVICES } = require('../utils/bans');
+const { checkBans, clearBanCache, countBoundDevices, MAX_BOUND_DEVICES } = require('../utils/bans');
 const log = require('../utils/log');
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ router.post('/device-info', async (req, res) => {
 
     // Build device doc
     const timestamp = now();
-    const deviceDoc = {
+    const baseDoc = {
       deviceId,
       uniqueId: req.auth.uniqueId,
       manufacturer: body.manufacturer || null,
@@ -91,42 +91,65 @@ router.post('/device-info', async (req, res) => {
       lastSeenAt: timestamp,
     };
 
-    // Check if doc already exists to set firstSeen/boundAt
     const docRef = db.doc(`deviceBindings/${deviceId}`);
-    const existing = await docRef.get();
-    if (!existing.exists) {
-      // Cap binding creation here too — this route also mints bindings and is
-      // likewise exempt from the ban gate, so without the cap it reopens the
-      // decoy-flood hardware-ban evasion that lock-check now blocks
-      // (SHY-0149 C1). Telemetry updates to devices the caller already owns
-      // take the `else` branch and are never capped.
-      if ((await countBoundDevices(req.auth.uniqueId)) >= MAX_BOUND_DEVICES) {
-        log.warn('device-info', 'device-binding cap reached', {
-          uniqueId: req.auth.uniqueId,
-          deviceId,
-        });
-        return res.status(403).json({
-          error: 'Device limit reached for this account',
-          code: 'device_limit',
-        });
+
+    // Atomic read → decide → write. The binding cap must be enforced against
+    // a snapshot that a concurrent sign-in cannot invalidate: three separate
+    // calls (get → count → set) let N parallel requests each observe a
+    // pre-cap count and all commit, defeating the cap (reviewer C-NEW-2).
+    // The transaction body is retried on contention, so it rebuilds its doc
+    // from `baseDoc` each attempt rather than mutating shared state.
+    let capped = false;
+    let bound = false;
+    await db.runTransaction(async (tx) => {
+      const deviceDoc = { ...baseDoc };
+      capped = false;
+      bound = false;
+
+      const existing = await tx.get(docRef);
+      if (!existing.exists) {
+        // This route mints bindings too, and is likewise exempt from the ban
+        // gate — without a cap it reopens the decoy-flood hardware-ban
+        // evasion that lock-check blocks (SHY-0149 C1). At the cap we record
+        // the telemetry but do NOT bind: an unowned doc carries no uniqueId,
+        // so it can never be used as a decoy, and the response below still
+        // carries `banStatus` — refusing outright would blank the very ban
+        // screen this endpoint exists to feed.
+        if ((await countBoundDevices(req.auth.uniqueId, tx)) >= MAX_BOUND_DEVICES) {
+          capped = true;
+          delete deviceDoc.uniqueId;
+          deviceDoc.firstSeen = timestamp;
+        } else {
+          deviceDoc.firstSeen = timestamp;
+          deviceDoc.boundAt = timestamp;
+          bound = true;
+        }
+      } else {
+        // SHY-0170: device-info updates telemetry on every launch, but must NEVER
+        // silently re-bind a device already owned by another account to the caller
+        // — that would defeat the device-lock (see /api/devices/lock-check). The
+        // uniqueId binding is owned by lock-check; here we only re-affirm it when it
+        // is unset or already the caller's, never overwrite a foreign owner.
+        const data = existing.data() || {};
+        const owner = data.uniqueId ?? data.userId ?? null;
+        if (owner !== null && String(owner) !== String(req.auth.uniqueId)) {
+          delete deviceDoc.uniqueId;
+        }
       }
-      deviceDoc.firstSeen = timestamp;
-      deviceDoc.boundAt = timestamp;
-    } else {
-      // SHY-0170: device-info updates telemetry on every launch, but must NEVER
-      // silently re-bind a device already owned by another account to the caller
-      // — that would defeat the device-lock (see /api/devices/lock-check). The
-      // uniqueId binding is owned by lock-check; here we only re-affirm it when it
-      // is unset or already the caller's, never overwrite a foreign owner.
-      const data = existing.data() || {};
-      const owner = data.uniqueId ?? data.userId ?? null;
-      if (owner !== null && String(owner) !== String(req.auth.uniqueId)) {
-        delete deviceDoc.uniqueId;
-      }
+
+      tx.set(docRef, deviceDoc, { merge: true });
+    });
+
+    if (capped) {
+      log.warn('device-info', 'device-binding cap reached — telemetry stored unbound', {
+        uniqueId: req.auth.uniqueId,
+        deviceId,
+      });
     }
 
-    // Write to Firestore
-    await docRef.set(deviceDoc, { merge: true });
+    // A newly-bound device can carry a hardware ban, changing the caller's
+    // standing — drop their cached verdict so the gate sees it immediately.
+    if (bound) clearBanCache(req.auth.uniqueId);
 
     // Check bans
     const banStatus = await checkBans(deviceId, ip, geo.asn || null);

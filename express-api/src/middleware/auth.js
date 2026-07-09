@@ -202,22 +202,30 @@ async function authMiddleware(req, res, next) {
 
     // Per-request ban gate (SHY-0149): device + network bans, matched on
     // the REAL edge IP. Runs on every auth-gated request so the web,
-    // direct-API, modified-client, and mid-session bypasses are all
-    // closed. A lookup failure rejects into the catch below (fail-closed).
-    const ban = await checkUserBans(uniqueId, req.ip);
-    if (ban.isBanned && !isBanExemptPath(req)) {
-      log.warn('auth', 'Request denied: banned', {
-        path: req.path,
-        uniqueId,
-        banType: ban.banType,
-      });
-      return res.status(403).json({
-        error: 'Account banned',
-        code: 'banned',
-        banType: ban.banType,
-        reason: ban.reason,
-        expiresAt: ban.expiresAt,
-      });
+    // direct-API, modified-client, and mid-session bypasses are all closed.
+    //
+    // The exemption is tested BEFORE the lookup, never after. An exempt path
+    // is reachable by a banned user by definition, so its verdict is already
+    // known — and a lookup FAILURE (fail-closed, rejects into the catch → 401)
+    // must not confiscate the appeal / GDPR-export / ban-screen rights a ban
+    // itself spares. Ordering this the other way locked those paths out of a
+    // permanently-truncating account for good (reviewer C-NEW-1).
+    if (!isBanExemptPath(req)) {
+      const ban = await checkUserBans(uniqueId, req.ip);
+      if (ban.isBanned) {
+        log.warn('auth', 'Request denied: banned', {
+          path: req.path,
+          uniqueId,
+          banType: ban.banType,
+        });
+        return res.status(403).json({
+          error: 'Account banned',
+          code: 'banned',
+          banType: ban.banType,
+          reason: ban.reason,
+          expiresAt: ban.expiresAt,
+        });
+      }
     }
 
     req.auth = { uid, uniqueId, token: decoded };
@@ -306,21 +314,24 @@ async function authMiddlewareStrict(req, res, next) {
 
     // Per-request ban gate (SHY-0149) — same authority as authMiddleware,
     // same strict-variant exemptions as the suspension check (portal
-    // self-service + appeal). Fail-closed via the catch below.
-    const ban = await checkUserBans(uniqueId, req.ip);
-    if (ban.isBanned && !isStrictExempt) {
-      log.warn('auth', 'Request denied: banned (strict)', {
-        path: req.path,
-        uniqueId,
-        banType: ban.banType,
-      });
-      return res.status(403).json({
-        error: 'Account banned',
-        code: 'banned',
-        banType: ban.banType,
-        reason: ban.reason,
-        expiresAt: ban.expiresAt,
-      });
+    // self-service + appeal). Exemption is checked BEFORE the lookup so a
+    // fail-closed rejection cannot strip those rights (reviewer C-NEW-1).
+    if (!isStrictExempt) {
+      const ban = await checkUserBans(uniqueId, req.ip);
+      if (ban.isBanned) {
+        log.warn('auth', 'Request denied: banned (strict)', {
+          path: req.path,
+          uniqueId,
+          banType: ban.banType,
+        });
+        return res.status(403).json({
+          error: 'Account banned',
+          code: 'banned',
+          banType: ban.banType,
+          reason: ban.reason,
+          expiresAt: ban.expiresAt,
+        });
+      }
     }
 
     req.auth = { uid, uniqueId, token: decoded };

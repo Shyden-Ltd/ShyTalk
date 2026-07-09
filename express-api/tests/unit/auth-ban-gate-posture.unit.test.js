@@ -62,6 +62,11 @@ function appWith(middleware) {
   app.use(express.json());
   app.use('/api', middleware);
   app.post('/api/probe/sensitive', (req, res) => res.json({ ok: true }));
+  // The rights a ban (or a failed ban lookup) must never take away.
+  app.post('/api/users/:id/appeal', (req, res) => res.json({ ok: true, via: 'appeal' }));
+  app.get('/api/users/:id/data-export', (req, res) => res.json({ ok: true, via: 'export' }));
+  app.post('/api/device-info', (req, res) => res.json({ ok: true, via: 'device-info' }));
+  app.get('/api/portal/me', (req, res) => res.json({ ok: true, via: 'portal-me' }));
   return app;
 }
 
@@ -104,6 +109,50 @@ describe('ban-lookup failure is fail-closed', () => {
 
     expect(res.status).toBe(401);
     expect(res.body).toEqual({ error: 'Authentication failed' });
+  });
+});
+
+describe('a failing ban lookup must not confiscate the rights a ban itself spares', () => {
+  // Reviewer C-NEW-1: the fail-closed throw propagated straight to the 401
+  // catch, past the exemption list — so a user whose lookup truncates (a
+  // PERMANENT state, unlike a transient outage) could never appeal, never
+  // export their data (GDPR Art. 15), and never receive the ban screen.
+  test.each([
+    ['POST', '/api/users/9001/appeal', 'appeal'],
+    ['GET', '/api/users/9001/data-export', 'export'],
+    ['POST', '/api/device-info', 'device-info'],
+  ])('authMiddleware: %s %s stays reachable when the ban lookup throws', async (method, path) => {
+    mockCheckUserBans.mockRejectedValue(new Error('Ban lookup truncated'));
+
+    const req = request(appWith(authMiddleware));
+    const res = await (method === 'GET' ? req.get(path) : req.post(path).send({})).set(
+      'Authorization',
+      'Bearer live-token',
+    );
+
+    expect(res.status).toBe(200);
+  });
+
+  test('authMiddlewareStrict: /portal/me stays reachable when the ban lookup throws', async () => {
+    mockCheckUserBans.mockRejectedValue(new Error('Ban lookup truncated'));
+
+    const res = await request(appWith(authMiddlewareStrict))
+      .get('/api/portal/me')
+      .set('Authorization', 'Bearer live-token');
+
+    expect(res.status).toBe(200);
+  });
+
+  test('an exempt path does not even PERFORM the ban lookup (no wasted read)', async () => {
+    mockCheckUserBans.mockResolvedValue({ isBanned: false, banType: null, reason: null });
+
+    await request(appWith(authMiddleware))
+      .post('/api/users/9001/appeal')
+      .set('Authorization', 'Bearer live-token')
+      .send({})
+      .expect(200);
+
+    expect(mockCheckUserBans).not.toHaveBeenCalled();
   });
 });
 

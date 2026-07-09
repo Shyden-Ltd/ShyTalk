@@ -49,6 +49,17 @@ jest.mock('../../src/utils/system-pm', () => ({
   sendSystemPm: jest.fn().mockResolvedValue(),
 }));
 
+// The admin binding routes now enforce the per-account device cap and clear
+// the ban gate's cache (SHY-0149). Both behaviours are proven against the
+// REAL emulator in tests/routes/devices-lock-check.test.js and
+// tests/middleware/auth-ban-gate.test.js; here they are stubbed benign so
+// this suite keeps testing the admin route's own branches.
+jest.mock('../../src/utils/bans', () => ({
+  countBoundDevices: async () => 0,
+  clearBanCache: () => {},
+  MAX_BOUND_DEVICES: 20,
+}));
+
 // ─── App setup ───────────────────────────────────────────────────
 
 const adminDevicesRouter = require('../../src/routes/admin-devices');

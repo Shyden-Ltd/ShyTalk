@@ -11,6 +11,7 @@
 const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { requireAdmin } = require('../middleware/auth');
+const { clearBanCache, countBoundDevices, MAX_BOUND_DEVICES } = require('../utils/bans');
 const { generateId, now } = require('../utils/helpers');
 const { sendSystemPm } = require('../utils/system-pm');
 const log = require('../utils/log');
@@ -68,6 +69,18 @@ router.post('/admin/devices', async (req, res) => {
       return res.status(400).json({ error: 'deviceId and uniqueId are required' });
     }
 
+    // The same per-account cap the client routes enforce (SHY-0149 C1). An
+    // uncapped admin write could push an account past the ban gate's scan
+    // limit, and support tooling should not be able to do that by accident —
+    // delete a stale binding first. Existing bindings are re-seeded freely.
+    const existing = await db.doc(`deviceBindings/${deviceId}`).get();
+    if (!existing.exists && (await countBoundDevices(uniqueId)) >= MAX_BOUND_DEVICES) {
+      return res.status(403).json({
+        error: 'Device limit reached for this account',
+        code: 'device_limit',
+      });
+    }
+
     const bindingData = {
       deviceId,
       uniqueId: Number(uniqueId),
@@ -79,6 +92,8 @@ router.post('/admin/devices', async (req, res) => {
     };
 
     await db.doc(`deviceBindings/${deviceId}`).set(bindingData);
+    // A binding change alters which hardware bans reach this account.
+    clearBanCache(uniqueId);
 
     res.json({ id: deviceId, ...bindingData });
   } catch (err) {
@@ -147,6 +162,13 @@ router.delete('/admin/devices/:deviceId', async (req, res) => {
     const deviceData = snap.data();
 
     await db.doc(`deviceBindings/${deviceId}`).delete();
+    // Removing a binding can lift a hardware ban that reached the owner
+    // through it — clear their cached standing (SHY-0149). An owner-less
+    // binding falls back to the full clear (clearBanCache() with no argument),
+    // which is the conservative choice.
+    const owner = deviceData.uniqueId ?? deviceData.userId;
+    if (owner === null || owner === undefined) clearBanCache();
+    else clearBanCache(owner);
 
     // Audit log
     await db.doc(`adminAuditLog/${generateId()}`).set({
