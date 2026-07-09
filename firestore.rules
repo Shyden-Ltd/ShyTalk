@@ -518,18 +518,15 @@ service cloud.firestore {
     // exposing every device↔user binding to any authed user (useful
     // for device-fingerprinting / ban-evasion correlation). Now
     // gated to the device's owner OR an admin.
+    // deviceBindings — SERVER-ONLY (SHY-0170, EPIC-0006). The device-lock
+    // (anti-abuse / ban-evasion) binding is owned entirely by the Express API
+    // (POST /api/devices/lock-check + /api/device-info) via the Admin SDK, which
+    // BYPASSES these rules. No client reads or writes it directly — not the app
+    // (migrated to the API) nor the admin console (reads via /api/admin/devices).
+    // Deny ALL client access so a tampered client cannot read or forge a binding
+    // to bypass the device lock. This is defence-in-depth behind the API authz.
     match /deviceBindings/{deviceId} {
-      allow read: if request.auth != null
-        && (resource.data.userId == string(callerUniqueId())
-            || resource.data.uniqueId == string(callerUniqueId())
-            || isAdmin());
-      allow create: if request.auth != null
-        && (request.resource.data.userId == string(callerUniqueId())
-            || request.resource.data.uniqueId == string(callerUniqueId()));
-      allow update: if request.auth != null
-        && (resource.data.userId == string(callerUniqueId())
-            || resource.data.uniqueId == string(callerUniqueId()));
-      allow delete: if false;
+      allow read, write: if false;
     }
 
     // ── Gift catalog — auth read, server write ───────────────────

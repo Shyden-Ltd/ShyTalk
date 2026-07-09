@@ -254,6 +254,7 @@ app.use('/api', require('./routes/admin-logs'));
 app.use('/api', require('./routes/admin-log-config'));
 app.use('/api', require('./routes/storage'));
 app.use('/api', require('./routes/device-info'));
+app.use('/api', require('./routes/devices'));
 app.use('/api', require('./routes/admin-bans'));
 app.use('/api', require('./routes/admin-devices'));
 app.use('/api', require('./routes/admin-temp-id'));

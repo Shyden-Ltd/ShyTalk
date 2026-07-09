@@ -109,6 +109,17 @@ router.post('/device-info', async (req, res) => {
     if (!existing.exists) {
       deviceDoc.firstSeen = timestamp;
       deviceDoc.boundAt = timestamp;
+    } else {
+      // SHY-0170: device-info updates telemetry on every launch, but must NEVER
+      // silently re-bind a device already owned by another account to the caller
+      // — that would defeat the device-lock (see /api/devices/lock-check). The
+      // uniqueId binding is owned by lock-check; here we only re-affirm it when it
+      // is unset or already the caller's, never overwrite a foreign owner.
+      const data = existing.data() || {};
+      const owner = data.uniqueId ?? data.userId ?? null;
+      if (owner !== null && String(owner) !== String(req.auth.uniqueId)) {
+        delete deviceDoc.uniqueId;
+      }
     }
 
     // Write to Firestore
