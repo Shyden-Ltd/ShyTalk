@@ -45,11 +45,7 @@ process.env.NODE_ENV = 'local';
 const express = require('express');
 const request = require('supertest');
 const { db } = require('../../src/utils/firebase');
-const {
-  assertEmulatorReachable,
-  clearCollection,
-  clearPrefixed,
-} = require('../helpers/firebase-emulator');
+const { assertEmulatorReachable, clearPrefixed } = require('../helpers/firebase-emulator');
 const { mintRealUser, mintTokenWithoutUserDoc, clearAuthCaches } = require('../helpers/real-auth');
 const authModule = require('../../src/middleware/auth');
 const { authMiddleware, authMiddlewareStrict, clearBanCache } = authModule;
@@ -109,6 +105,7 @@ function createStrictProbeApp() {
   app.use(express.json());
   app.use('/api', authMiddlewareStrict);
   app.post('/api/portal/revoke-all-sessions', (req, res) => res.json({ ok: true }));
+  app.post('/api/portal/sign-out', (req, res) => res.json({ ok: true, via: 'sign-out' }));
   app.get('/api/portal/me', (req, res) => res.json({ ok: true, via: 'portal-me' }));
   return app;
 }
@@ -530,9 +527,35 @@ describe('authMiddlewareStrict enforces the same ban gate (portal routes)', () =
     });
   });
 
-  test('a banned portal user may still reach /portal/me (the strict exempt path)', async () => {
+  test('a banned portal user is refused on /portal/me by the STRICT middleware too', async () => {
+    // The strict middleware must make the same subtraction the outer gate
+    // does: /portal/me is suspension-exempt but NOT ban-exempt, because
+    // portal.js has no ban branch and would answer with a normal dashboard.
+    // The outer gate masks a divergence here, so this asserts the strict
+    // middleware's own contract (reviewer R5-C1).
     const caller = await mintRealUser({ uniqueId: '5081' });
-    await seedDeviceBan('abg-dev-strict-2', { linkedUniqueId: '5081' });
+    await seedDeviceBan('abg-dev-strict-2', { linkedUniqueId: '5081', reason: 'strict ban' });
+
+    const res = await request(createStrictProbeApp())
+      .get('/api/portal/me')
+      .set(caller.headers)
+      .expect(403);
+    expect(res.body).toMatchObject({ code: 'banned', reason: 'strict ban' });
+  });
+
+  test('a banned portal user may still SIGN OUT through the strict middleware', async () => {
+    const caller = await mintRealUser({ uniqueId: '5083' });
+    await seedDeviceBan('abg-dev-strict-3', { linkedUniqueId: '5083' });
+
+    await request(createStrictProbeApp())
+      .post('/api/portal/sign-out')
+      .set(caller.headers)
+      .send({})
+      .expect(200);
+  });
+
+  test('a SUSPENDED portal user still reaches /portal/me through the strict middleware', async () => {
+    const caller = await mintRealUser({ uniqueId: '5084', isSuspended: true });
 
     const res = await request(createStrictProbeApp())
       .get('/api/portal/me')
@@ -749,7 +772,12 @@ describe('real sensitive routes inherit the gate with zero per-route changes', (
     clearBanCache();
     const clean = await mintRealUser({ uniqueId: '5071' });
     const resClean = await request(app).post('/api/suggestions').set(clean.headers).send(body);
-    expect(resClean.status).toBe(201);
-    await clearCollection(db, SUGGESTIONS);
+    try {
+      expect(resClean.status).toBe(201);
+    } finally {
+      // Delete only what this test created — a collection-wide wipe races the
+      // other workers, and an inline cleanup leaks whenever the expect throws.
+      if (resClean.body?.id) await db.doc(`${SUGGESTIONS}/${resClean.body.id}`).delete();
+    }
   });
 });

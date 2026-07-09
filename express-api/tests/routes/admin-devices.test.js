@@ -566,6 +566,16 @@ describe('POST /api/admin/devices — all branches', () => {
     expect(res.body.error).toBe('deviceId and uniqueId are required');
   });
 
+  test('rejects uniqueId: null (would silently become account 0)', async () => {
+    const app = createApp();
+    const res = await request(app)
+      .post('/api/admin/devices')
+      .send({ deviceId: 'dev-null', uniqueId: null })
+      .expect(400);
+    expect(res.body.error).toContain('required');
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
   test('allows uniqueId of 0 (falsy but not undefined)', async () => {
     const app = createApp();
     const res = await request(app)

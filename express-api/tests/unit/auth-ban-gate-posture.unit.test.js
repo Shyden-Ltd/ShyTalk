@@ -67,6 +67,7 @@ function appWith(middleware) {
   app.get('/api/users/:id/data-export', (req, res) => res.json({ ok: true, via: 'export' }));
   app.post('/api/device-info', (req, res) => res.json({ ok: true, via: 'device-info' }));
   app.get('/api/portal/me', (req, res) => res.json({ ok: true, via: 'portal-me' }));
+  app.post('/api/portal/sign-out', (req, res) => res.json({ ok: true, via: 'sign-out' }));
   return app;
 }
 
@@ -133,14 +134,31 @@ describe('a failing ban lookup must not confiscate the rights a ban itself spare
     expect(res.status).toBe(200);
   });
 
-  test('authMiddlewareStrict: /portal/me stays reachable when the ban lookup throws', async () => {
+  test('authMiddlewareStrict: /portal/sign-out stays reachable when the ban lookup throws', async () => {
+    // Sign-out is ban-exempt, so no lookup runs and a broken lookup cannot
+    // trap the caller in a session.
+    mockCheckUserBans.mockRejectedValue(new Error('Ban lookup truncated'));
+
+    const res = await request(appWith(authMiddlewareStrict))
+      .post('/api/portal/sign-out')
+      .set('Authorization', 'Bearer live-token')
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(mockCheckUserBans).not.toHaveBeenCalled();
+  });
+
+  test('authMiddlewareStrict: /portal/me is NOT ban-exempt, so a failing lookup fails closed', async () => {
+    // /portal/me is suspension-exempt but not ban-exempt (portal.js has no ban
+    // branch). The gate therefore runs, and a lookup it cannot complete must
+    // refuse rather than serve a dashboard (reviewer R5-C1 + C-NEW-1).
     mockCheckUserBans.mockRejectedValue(new Error('Ban lookup truncated'));
 
     const res = await request(appWith(authMiddlewareStrict))
       .get('/api/portal/me')
       .set('Authorization', 'Bearer live-token');
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
   });
 
   test('an exempt path does not even PERFORM the ban lookup (no wasted read)', async () => {

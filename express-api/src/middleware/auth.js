@@ -321,20 +321,27 @@ async function authMiddlewareStrict(req, res, next) {
     // Check suspension (only if user exists)
     const isSuspended = await checkSuspension(uniqueId);
 
-    const isStrictExempt =
+    const isStrictSuspensionExempt =
       req.path === '/portal/me' ||
       req.path === '/portal/sign-out' ||
       /^\/users\/[^/]+\/appeal$/.test(req.path);
 
-    if (isSuspended && !isStrictExempt) {
+    if (isSuspended && !isStrictSuspensionExempt) {
       return res.status(403).json({ error: 'Account suspended' });
     }
 
-    // Per-request ban gate (SHY-0149) — same authority as authMiddleware,
-    // same strict-variant exemptions as the suspension check (portal
-    // self-service + appeal). Exemption is checked BEFORE the lookup so a
-    // fail-closed rejection cannot strip those rights (reviewer C-NEW-1).
-    if (!isStrictExempt) {
+    // A BAN exempts strictly less than a suspension does. `/portal/me` is
+    // reachable while suspended (portal.js answers with an `isSuspended`
+    // payload) but NOT while banned — portal.js has no ban branch, so a banned
+    // caller would receive a normal-looking dashboard. This is the same
+    // subtraction `isBanExemptPath` makes for the outer gate. The two lists
+    // must agree: today the outer gate reaches every /portal/* request first
+    // and masks a divergence here (reviewer R5-C1).
+    const isStrictBanExempt = isStrictSuspensionExempt && req.path !== '/portal/me';
+
+    // Per-request ban gate (SHY-0149). Exemption is checked BEFORE the lookup
+    // so a fail-closed rejection cannot strip those rights (reviewer C-NEW-1).
+    if (!isStrictBanExempt) {
       const ban = await checkUserBans(uniqueId, req.ip);
       if (ban.isBanned) {
         log.warn('auth', 'Request denied: banned (strict)', {

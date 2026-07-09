@@ -385,13 +385,17 @@ async function checkBans(deviceId, ip, asn) {
  * Reads at most MAX_BOUND_DEVICES + 1 docs (we only need to know whether the
  * cap is reached, not the exact count).
  *
+ * NEVER call this from inside a binding transaction. It issues a QUERY read,
+ * and a query read inside those transactions widens the conflict set and
+ * defeats the document-level conflict detection the device-lock relies on —
+ * two concurrent sign-ins on one fresh device could both commit `allowed`.
+ * The cap is deliberately enforced around the transaction instead (pre-check
+ * here + `rollbackBindingIfOverCap` after). See BINDING_TRANSACTION_OPTIONS.
+ *
  * @param {string|number|null} uniqueId
- * @param {FirebaseFirestore.Transaction} [tx] read through the caller's
- *   transaction so a burst of concurrent binds cannot each observe a
- *   pre-cap count and all commit (lock-check reads before it writes).
  * @returns {Promise<number>} count, saturating at MAX_BOUND_DEVICES + 1
  */
-async function countBoundDevices(uniqueId, tx) {
+async function countBoundDevices(uniqueId) {
   if (uniqueId === null || uniqueId === undefined) return 0;
   const forms = idForms(uniqueId);
   const query = db
@@ -403,7 +407,7 @@ async function countBoundDevices(uniqueId, tx) {
       ),
     )
     .limit(MAX_BOUND_DEVICES + 1);
-  const snap = tx ? await tx.get(query) : await query.get();
+  const snap = await query.get();
   return snap.size;
 }
 

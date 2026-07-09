@@ -71,7 +71,10 @@ router.post('/admin/devices', async (req, res) => {
 
     const { deviceId, uniqueId, manufacturer, model, lastIp, isp } = req.body;
 
-    if (!deviceId || uniqueId === undefined) {
+    // Reject BOTH null and undefined. Accepting null let
+    // `Number(null)` coerce to account 0, while `clearBanCache(null)` then
+    // evicted the cache key 'null' rather than account 0's (reviewer R5-I4).
+    if (!deviceId || uniqueId === null || uniqueId === undefined) {
       return res.status(400).json({ error: 'deviceId and uniqueId are required' });
     }
 

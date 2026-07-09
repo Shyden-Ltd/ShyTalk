@@ -462,6 +462,35 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
     expect(await countBoundDevices('6008')).toBeLessThanOrEqual(MAX_BOUND_DEVICES);
   });
 
+  test('a rollback whose target vanished mid-flight is a safe no-op', async () => {
+    // Between the over-cap detection and the rollback's own transaction, an
+    // admin unbind (or another request) can delete the doc. The ownership
+    // guard must make that a no-op rather than a throw (reviewer R5-I5).
+    // The account stays over cap (a sibling binding holds the extra slot), so
+    // the rollback really does enter its transaction and find nothing.
+    const { rollbackBindingIfOverCap } = require('../../src/utils/bans');
+    await fillBindingsToCap('6030');
+    await seedBinding('lck-extra-slot', { uniqueId: '6030', boundAt: 1 }); // cap + 1
+
+    await expect(rollbackBindingIfOverCap('6030', 'lck-vanished')).resolves.toBe(true);
+    expect(await readBinding('lck-vanished')).toBeNull(); // never existed
+    // A doc the rollback does not target is never touched.
+    expect((await readBinding('lck-extra-slot')).uniqueId).toBe('6030');
+  });
+
+  test('a rollback never releases a binding that now belongs to someone else', async () => {
+    const { rollbackBindingIfOverCap } = require('../../src/utils/bans');
+    await fillBindingsToCap('6031');
+    // Over cap for 6031, but the device was re-claimed by a different account.
+    await seedBinding('lck-stolen', { uniqueId: '6031', boundAt: 1 });
+    await seedBinding('lck-stolen', { uniqueId: '6032', boundAt: 2 });
+
+    await rollbackBindingIfOverCap('6031', 'lck-stolen');
+
+    // The concurrent winner keeps it — the rollback released nothing.
+    expect((await readBinding('lck-stolen')).uniqueId).toBe('6032');
+  });
+
   test('concurrent lock-check calls on distinct new devices cannot exceed the cap', async () => {
     const caller = await mintRealUser({ uniqueId: '6009' });
     await Promise.all(
