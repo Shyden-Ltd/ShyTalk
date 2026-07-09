@@ -457,10 +457,15 @@ router.post('/test/write/:collection', async (req, res) => {
     }
     await db.doc(`${collection}/${docId}`).set(writeData, { merge: true });
 
-    // A ban seeded directly into Firestore bypasses the admin routes that
-    // normally invalidate the gate's caches — clear them here so the very
-    // next request sees the seeded ban (SHY-0149).
-    if (collection === 'deviceBans' || collection === 'networkBans') {
+    // A ban — or a binding, which decides WHICH hardware bans reach an
+    // account — seeded directly into Firestore bypasses the routes that
+    // normally invalidate the gate's caches. Clear them here so the very next
+    // request sees the seeded state (SHY-0149).
+    if (
+      collection === 'deviceBans' ||
+      collection === 'networkBans' ||
+      collection === 'deviceBindings'
+    ) {
       clearBanCache();
     }
 

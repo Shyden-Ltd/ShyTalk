@@ -11,7 +11,13 @@
 const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { requireAdmin } = require('../middleware/auth');
-const { clearBanCache, countBoundDevices, MAX_BOUND_DEVICES } = require('../utils/bans');
+const {
+  clearBanCache,
+  countBoundDevices,
+  rollbackBindingIfOverCap,
+  MAX_BOUND_DEVICES,
+  BINDING_TRANSACTION_OPTIONS,
+} = require('../utils/bans');
 const { generateId, now } = require('../utils/helpers');
 const { sendSystemPm } = require('../utils/system-pm');
 const log = require('../utils/log');
@@ -78,18 +84,6 @@ router.post('/admin/devices', async (req, res) => {
     // slot: a brand-new device, or an existing one being reassigned away from
     // its current owner. Re-seeding a device's own metadata (same owner) is
     // free (reviewer R3-I2).
-    const existing = await db.doc(`deviceBindings/${deviceId}`).get();
-    const currentOwner = existing.exists
-      ? (existing.data()?.uniqueId ?? existing.data()?.userId ?? null)
-      : null;
-    const costsASlot = currentOwner === null || String(currentOwner) !== String(uniqueId);
-    if (costsASlot && (await countBoundDevices(uniqueId)) >= MAX_BOUND_DEVICES) {
-      return res.status(403).json({
-        error: 'Device limit reached for this account',
-        code: 'device_limit',
-      });
-    }
-
     const bindingData = {
       deviceId,
       uniqueId: Number(uniqueId),
@@ -100,13 +94,44 @@ router.post('/admin/devices', async (req, res) => {
       boundAt: now(),
     };
 
-    await db.doc(`deviceBindings/${deviceId}`).set(bindingData);
+    // Doc-only transaction, cap pre-checked outside and reconciled after — a
+    // query read inside would break the device-lock's conflict detection (see
+    // BINDING_TRANSACTION_OPTIONS).
+    const docRef = db.doc(`deviceBindings/${deviceId}`);
+    const capReached = (await countBoundDevices(uniqueId)) >= MAX_BOUND_DEVICES;
+    const outcome = await db.runTransaction(async (tx) => {
+      const existing = await tx.get(docRef);
+      const currentOwner = existing.exists
+        ? (existing.data()?.uniqueId ?? existing.data()?.userId ?? null)
+        : null;
+      const costsASlot = currentOwner === null || String(currentOwner) !== String(uniqueId);
+
+      if (costsASlot && capReached) {
+        return { blocked: true };
+      }
+
+      // merge:true — a real binding carries ~20 telemetry fields written by
+      // /api/device-info; a full replace would silently wipe them (R4-I3).
+      tx.set(docRef, bindingData, { merge: true });
+      return { blocked: false, currentOwner, bound: costsASlot };
+    }, BINDING_TRANSACTION_OPTIONS);
+
+    if (
+      outcome.blocked ||
+      (outcome.bound && (await rollbackBindingIfOverCap(uniqueId, deviceId)))
+    ) {
+      return res.status(403).json({
+        error: 'Device limit reached for this account',
+        code: 'device_limit',
+      });
+    }
+
     // A binding change alters which hardware bans reach an account — clear the
     // new owner, and the previous one too when the device changed hands (they
     // just lost a device that may have been carrying their ban).
     clearBanCache(uniqueId);
-    if (currentOwner !== null && String(currentOwner) !== String(uniqueId)) {
-      clearBanCache(currentOwner);
+    if (outcome.currentOwner !== null && String(outcome.currentOwner) !== String(uniqueId)) {
+      clearBanCache(outcome.currentOwner);
     }
 
     res.json({ id: deviceId, ...bindingData });

@@ -36,13 +36,17 @@ const express = require('express');
 const request = require('supertest');
 const { db } = require('../../src/utils/firebase');
 const { authMiddleware } = require('../../src/middleware/auth');
-const { assertEmulatorReachable, clearCollection } = require('../helpers/firebase-emulator');
+const { assertEmulatorReachable, clearPrefixed } = require('../helpers/firebase-emulator');
 const { mintRealUser, mintTokenWithoutUserDoc, clearAuthCaches } = require('../helpers/real-auth');
 const devicesRouter = require('../../src/routes/devices');
 const deviceInfoRouter = require('../../src/routes/device-info');
 
+// Every document this file creates is namespaced so its cleanup can be scoped:
+// Jest runs files in parallel workers against ONE emulator project, and a
+// collection-wide wipe deletes what another worker just seeded.
+const ID_PREFIX = 'lck-';
+
 const DEVICE_BINDINGS = 'deviceBindings';
-const USERS = 'users';
 
 /** App with the REAL auth middleware ahead of the router (no faked req.auth). */
 function createApp() {
@@ -77,8 +81,7 @@ beforeAll(() => {
 
 beforeEach(async () => {
   clearAuthCaches();
-  await clearCollection(db, DEVICE_BINDINGS);
-  await clearCollection(db, USERS);
+  await clearPrefixed(db, DEVICE_BINDINGS, ID_PREFIX);
 });
 
 afterAll(() => {
@@ -87,7 +90,7 @@ afterAll(() => {
 
 describe('POST /api/devices/lock-check', () => {
   test('device bound to a DIFFERENT user → locked, and the binding is NOT overwritten', async () => {
-    const deviceId = 'dev-locked-1';
+    const deviceId = 'lck-dev-locked-1';
     await seedBinding(deviceId, { uniqueId: '1001', boundAt: 111 });
     const caller = await mintRealUser({ uniqueId: '2002' });
 
@@ -103,7 +106,7 @@ describe('POST /api/devices/lock-check', () => {
   });
 
   test('unbound device + existing caller → allowed AND atomically bound to the caller', async () => {
-    const deviceId = 'dev-fresh-1';
+    const deviceId = 'lck-dev-fresh-1';
     const caller = await mintRealUser({ uniqueId: '3003' });
 
     const res = await request(createApp())
@@ -119,7 +122,7 @@ describe('POST /api/devices/lock-check', () => {
   });
 
   test('device already bound to the SAME caller → allowed, boundAt unchanged (no churn)', async () => {
-    const deviceId = 'dev-same-1';
+    const deviceId = 'lck-dev-same-1';
     await seedBinding(deviceId, { uniqueId: '4004', boundAt: 42 });
     const caller = await mintRealUser({ uniqueId: '4004' });
 
@@ -134,7 +137,7 @@ describe('POST /api/devices/lock-check', () => {
   });
 
   test('new user (token, no users doc) on a bound device → locked (blocks account creation)', async () => {
-    const deviceId = 'dev-newblocked-1';
+    const deviceId = 'lck-dev-newblocked-1';
     await seedBinding(deviceId, { uniqueId: '5005', boundAt: 1 });
     const newcomer = await mintTokenWithoutUserDoc({});
 
@@ -148,7 +151,7 @@ describe('POST /api/devices/lock-check', () => {
   });
 
   test('new user on an UNBOUND device → allowed AND the device is left UNBOUND', async () => {
-    const deviceId = 'dev-newfree-1';
+    const deviceId = 'lck-dev-newfree-1';
     const newcomer = await mintTokenWithoutUserDoc({});
 
     const res = await request(createApp())
@@ -165,7 +168,7 @@ describe('POST /api/devices/lock-check', () => {
   test('unauthenticated (no token) → 401', async () => {
     await request(createApp())
       .post('/api/devices/lock-check')
-      .send({ deviceId: 'dev-noauth' })
+      .send({ deviceId: 'lck-dev-noauth' })
       .expect(401);
   });
 
@@ -211,7 +214,7 @@ describe('POST /api/devices/lock-check', () => {
   test('a binding doc with BOTH uniqueId AND a disagreeing userId → uniqueId wins (?? precedence pinned)', async () => {
     // Legacy migration edge: if both fields exist, the modern uniqueId is
     // authoritative. Seed uniqueId=owner, userId=someone-else; the owner is allowed.
-    const deviceId = 'dev-bothfields-1';
+    const deviceId = 'lck-dev-bothfields-1';
     await seedBinding(deviceId, { uniqueId: '7700', userId: '9999', boundAt: 3 });
     const owner = await mintRealUser({ uniqueId: '7700' });
 
@@ -225,7 +228,7 @@ describe('POST /api/devices/lock-check', () => {
   });
 
   test('concurrent bind race on one unbound device → exactly ONE binding wins', async () => {
-    const deviceId = 'dev-race-1';
+    const deviceId = 'lck-dev-race-1';
     const a = await mintRealUser({ uniqueId: '7007' });
     const b = await mintRealUser({ uniqueId: '8008' });
     const app = createApp();
@@ -242,7 +245,7 @@ describe('POST /api/devices/lock-check', () => {
   });
 
   test('legacy { userId }-only binding (old client shape) is honoured for the same user', async () => {
-    const deviceId = 'dev-legacy-1';
+    const deviceId = 'lck-dev-legacy-1';
     await seedBinding(deviceId, { userId: '9009', boundAt: 7 }); // no uniqueId field
     const caller = await mintRealUser({ uniqueId: '9009' });
 
@@ -260,7 +263,7 @@ describe('POST /api/devices/lock-check', () => {
 // .set() can't prove `merge:true` actually leaves the existing uniqueId untouched.
 describe('POST /api/device-info — binding reconcile (real emulator)', () => {
   test('does NOT rebind a device already owned by another account, but DOES update telemetry', async () => {
-    const deviceId = 'dev-di-reconcile-1';
+    const deviceId = 'lck-dev-di-reconcile-1';
     await seedBinding(deviceId, { uniqueId: '1111', boundAt: 5, model: 'old-model' });
     const intruder = await mintRealUser({ uniqueId: '2222' });
 
@@ -276,7 +279,7 @@ describe('POST /api/device-info — binding reconcile (real emulator)', () => {
   });
 
   test('binds uniqueId on a genuinely NEW device (first-write path preserved)', async () => {
-    const deviceId = 'dev-di-fresh-1';
+    const deviceId = 'lck-dev-di-fresh-1';
     const caller = await mintRealUser({ uniqueId: '3333' });
 
     await request(createDeviceInfoApp())
@@ -304,7 +307,7 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
   async function fillBindingsToCap(uniqueId) {
     await Promise.all(
       Array.from({ length: MAX_BOUND_DEVICES }, (_, i) =>
-        seedBinding(`cap-${uniqueId}-${String(i).padStart(3, '0')}`, { uniqueId, boundAt: 1 }),
+        seedBinding(`lck-cap-${uniqueId}-${String(i).padStart(3, '0')}`, { uniqueId, boundAt: 1 }),
       ),
     );
   }
@@ -316,11 +319,11 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
     const res = await request(createApp())
       .post('/api/devices/lock-check')
       .set(caller.headers)
-      .send({ deviceId: 'one-too-many' })
+      .send({ deviceId: 'lck-one-too-many' })
       .expect(403);
 
     expect(res.body).toMatchObject({ code: 'device_limit' });
-    expect(await readBinding('one-too-many')).toBeNull(); // nothing was written
+    expect(await readBinding('lck-one-too-many')).toBeNull(); // nothing was written
   });
 
   test('device-info stores telemetry for device MAX+1 but leaves it UNBOUND', async () => {
@@ -332,11 +335,11 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
     const res = await request(createDeviceInfoApp())
       .post('/api/device-info')
       .set(caller.headers)
-      .send({ deviceId: 'di-one-too-many', model: 'pixel' })
+      .send({ deviceId: 'lck-di-one-too-many', model: 'pixel' })
       .expect(200);
     expect(res.body.success).toBe(true);
 
-    const binding = await readBinding('di-one-too-many');
+    const binding = await readBinding('lck-di-one-too-many');
     expect(binding.model).toBe('pixel'); // telemetry recorded…
     expect(binding.uniqueId).toBeUndefined(); // …but NOT bound to the caller
     expect(binding.boundAt).toBeUndefined();
@@ -348,7 +351,7 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
     await request(createDeviceInfoApp())
       .post('/api/device-info')
       .set(caller.headers)
-      .send({ deviceId: 'di-decoy' })
+      .send({ deviceId: 'lck-di-decoy' })
       .expect(200);
 
     // countBoundDevices only counts docs owned by the caller, so the unbound
@@ -368,12 +371,30 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
       await request(createDeviceInfoApp())
         .post('/api/device-info')
         .set(caller.headers)
-        .send({ deviceId: 'di-recall' })
+        .send({ deviceId: 'lck-di-recall' })
         .expect(200);
     }
 
-    expect((await readBinding('di-recall')).uniqueId).toBeUndefined();
+    expect((await readBinding('lck-di-recall')).uniqueId).toBeUndefined();
     expect(await countBoundDevices('6012')).toBe(MAX_BOUND_DEVICES);
+  });
+
+  test('a not-yet-registered caller (no users doc) never binds a device via device-info', async () => {
+    // Mirrors lock-check's rule ("a not-yet-registered caller must never bind
+    // a device"). Without the guard, device-info stored a literal
+    // `uniqueId: null` with a boundAt, and fired clearBanCache(null).
+    const newcomer = await mintTokenWithoutUserDoc();
+
+    await request(createDeviceInfoApp())
+      .post('/api/device-info')
+      .set(newcomer.headers)
+      .send({ deviceId: 'lck-di-newcomer', model: 'pixel' })
+      .expect(200);
+
+    const binding = await readBinding('lck-di-newcomer');
+    expect(binding.model).toBe('pixel'); // telemetry still recorded
+    expect(binding.uniqueId).toBeUndefined(); // …but the device is NOT claimed
+    expect(binding.boundAt).toBeUndefined();
   });
 
   test('a device left unbound while at the cap IS claimed once a slot frees up', async () => {
@@ -384,25 +405,25 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
     await request(createDeviceInfoApp())
       .post('/api/device-info')
       .set(caller.headers)
-      .send({ deviceId: 'di-later' })
+      .send({ deviceId: 'lck-di-later' })
       .expect(200);
-    expect((await readBinding('di-later')).uniqueId).toBeUndefined();
+    expect((await readBinding('lck-di-later')).uniqueId).toBeUndefined();
 
-    await db.doc(`${DEVICE_BINDINGS}/cap-6013-000`).delete(); // a slot frees up
+    await db.doc(`${DEVICE_BINDINGS}/lck-cap-6013-000`).delete(); // a slot frees up
 
     await request(createDeviceInfoApp())
       .post('/api/device-info')
       .set(caller.headers)
-      .send({ deviceId: 'di-later' })
+      .send({ deviceId: 'lck-di-later' })
       .expect(200);
-    expect((await readBinding('di-later')).uniqueId).toBe('6013');
+    expect((await readBinding('lck-di-later')).uniqueId).toBe('6013');
   });
 
   test('a BANNED caller at the cap still receives banStatus from device-info (ban screen preserved)', async () => {
     const caller = await mintRealUser({ uniqueId: '6007' });
     await fillBindingsToCap('6007');
-    await db.doc('deviceBans/di-banned-at-cap').set({
-      deviceId: 'di-banned-at-cap',
+    await db.doc('deviceBans/lck-di-banned-at-cap').set({
+      deviceId: 'lck-di-banned-at-cap',
       reason: 'at-cap ban screen',
       expiresAt: null,
     });
@@ -410,7 +431,7 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
     const res = await request(createDeviceInfoApp())
       .post('/api/device-info')
       .set(caller.headers)
-      .send({ deviceId: 'di-banned-at-cap' })
+      .send({ deviceId: 'lck-di-banned-at-cap' })
       .expect(200);
 
     expect(res.body.banStatus).toMatchObject({
@@ -425,7 +446,7 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
     // One free slot; fire six racers at it.
     await Promise.all(
       Array.from({ length: MAX_BOUND_DEVICES - 1 }, (_, i) =>
-        seedBinding(`race-di-${i}`, { uniqueId: '6008', boundAt: 1 }),
+        seedBinding(`lck-race-di-${i}`, { uniqueId: '6008', boundAt: 1 }),
       ),
     );
 
@@ -434,7 +455,7 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
         request(createDeviceInfoApp())
           .post('/api/device-info')
           .set(caller.headers)
-          .send({ deviceId: `di-racer-${i}` }),
+          .send({ deviceId: `lck-di-racer-${i}` }),
       ),
     );
 
@@ -445,7 +466,7 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
     const caller = await mintRealUser({ uniqueId: '6009' });
     await Promise.all(
       Array.from({ length: MAX_BOUND_DEVICES - 1 }, (_, i) =>
-        seedBinding(`race-lc-${i}`, { uniqueId: '6009', boundAt: 1 }),
+        seedBinding(`lck-race-lc-${i}`, { uniqueId: '6009', boundAt: 1 }),
       ),
     );
 
@@ -454,7 +475,7 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
         request(createApp())
           .post('/api/devices/lock-check')
           .set(caller.headers)
-          .send({ deviceId: `lc-racer-${i}` }),
+          .send({ deviceId: `lck-lc-racer-${i}` }),
       ),
     );
 
@@ -465,7 +486,7 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
     const caller = await mintRealUser({ uniqueId: '6003' });
     await Promise.all(
       Array.from({ length: MAX_BOUND_DEVICES - 1 }, (_, i) =>
-        seedBinding(`room-6003-${i}`, { uniqueId: '6003', boundAt: 1 }),
+        seedBinding(`lck-room-6003-${i}`, { uniqueId: '6003', boundAt: 1 }),
       ),
     );
 
@@ -473,15 +494,15 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
     await request(createApp())
       .post('/api/devices/lock-check')
       .set(caller.headers)
-      .send({ deviceId: 'last-slot' })
+      .send({ deviceId: 'lck-last-slot' })
       .expect(200);
-    expect((await readBinding('last-slot')).uniqueId).toBe('6003');
+    expect((await readBinding('lck-last-slot')).uniqueId).toBe('6003');
 
     // At the cap now — but an ALREADY-owned device must keep working forever.
     await request(createApp())
       .post('/api/devices/lock-check')
       .set(caller.headers)
-      .send({ deviceId: 'last-slot' })
+      .send({ deviceId: 'lck-last-slot' })
       .expect(200);
   });
 
@@ -492,7 +513,7 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
     await request(createApp())
       .post('/api/devices/lock-check')
       .set(other.headers)
-      .send({ deviceId: 'other-users-phone' })
+      .send({ deviceId: 'lck-other-users-phone' })
       .expect(200);
   });
 
@@ -517,7 +538,7 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
   test('the admin route cannot REASSIGN a device to an account that is at the cap', async () => {
     // Re-seeding is free only when the owner is unchanged; handing the device
     // to a different account costs THAT account a slot (reviewer R3-I2).
-    await seedBinding('someone-elses-phone', { uniqueId: '6098', boundAt: 1 });
+    await seedBinding('lck-someone-elses-phone', { uniqueId: '6098', boundAt: 1 });
     await fillBindingsToCap('6099');
     const admin = await mintTokenWithoutUserDoc({ admin: true });
     const app = express();
@@ -528,16 +549,73 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
     const res = await request(app)
       .post('/api/admin/devices')
       .set(admin.headers)
-      .send({ deviceId: 'someone-elses-phone', uniqueId: 6099 })
+      .send({ deviceId: 'lck-someone-elses-phone', uniqueId: 6099 })
       .expect(403);
 
     expect(res.body).toMatchObject({ code: 'device_limit' });
-    expect((await readBinding('someone-elses-phone')).uniqueId).toBe('6098'); // untouched
+    expect((await readBinding('lck-someone-elses-phone')).uniqueId).toBe('6098'); // untouched
+  });
+
+  test('an admin re-seed preserves the telemetry a real binding carries', async () => {
+    // A binding written by /api/device-info holds ~20 fields; the admin route
+    // sends 7. A full replace would silently wipe the rest (reviewer R4-I3).
+    await seedBinding('lck-rich-device', {
+      uniqueId: '6020',
+      boundAt: 1,
+      firstSeen: 111,
+      osVersion: '15',
+      country: 'Sweden',
+      asn: 'AS64500',
+    });
+    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const app = express();
+    app.use(express.json());
+    app.use('/api', authMiddleware);
+    app.use('/api', require('../../src/routes/admin-devices'));
+
+    await request(app)
+      .post('/api/admin/devices')
+      .set(admin.headers)
+      .send({ deviceId: 'lck-rich-device', uniqueId: 6020, model: 'corrected' })
+      .expect(200);
+
+    const binding = await readBinding('lck-rich-device');
+    expect(binding.model).toBe('corrected'); // the admin's correction landed…
+    expect(binding).toMatchObject({
+      firstSeen: 111, // …and none of the telemetry was lost
+      osVersion: '15',
+      country: 'Sweden',
+      asn: 'AS64500',
+    });
+  });
+
+  test('concurrent admin binds cannot exceed the cap either', async () => {
+    await Promise.all(
+      Array.from({ length: MAX_BOUND_DEVICES - 1 }, (_, i) =>
+        seedBinding(`lck-race-admin-${i}`, { uniqueId: '6021', boundAt: 1 }),
+      ),
+    );
+    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const app = express();
+    app.use(express.json());
+    app.use('/api', authMiddleware);
+    app.use('/api', require('../../src/routes/admin-devices'));
+
+    await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        request(app)
+          .post('/api/admin/devices')
+          .set(admin.headers)
+          .send({ deviceId: `lck-admin-racer-${i}`, uniqueId: 6021 }),
+      ),
+    );
+
+    expect(await countBoundDevices('6021')).toBeLessThanOrEqual(MAX_BOUND_DEVICES);
   });
 
   test('the admin route may still RE-SEED a binding that already exists at the cap', async () => {
     await fillBindingsToCap('6011');
-    const existingId = 'cap-6011-000'; // one of the capped bindings
+    const existingId = 'lck-cap-6011-000'; // one of the capped bindings
     const admin = await mintTokenWithoutUserDoc({ admin: true });
     const app = express();
     app.use(express.json());

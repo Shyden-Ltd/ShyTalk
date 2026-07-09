@@ -269,8 +269,17 @@ function isSuspensionExemptPath(req) {
  * the sign-in flow. Gating those would replace the ban screen with a
  * generic error while enforcing nothing (both are telemetry/verdict
  * endpoints, not abuse-capable actions).
+ *
+ * ONE deliberate subtraction: `/portal/me`. A SUSPENDED user reaches it and
+ * portal.js answers with an explicit `isSuspended` payload — but portal.js
+ * has no ban branch at all, so exempting a BANNED user would hand them a
+ * normal-looking dashboard with no hint they are banned. The gate's own 403
+ * (`code: 'banned'` + reason + expiresAt) IS the ban notice, and it is the
+ * same shape every other client already renders. Signing out, by contrast,
+ * must always work — a ban is not a reason to trap someone in a session.
  */
 function isBanExemptPath(req) {
+  if (req.path === '/portal/me') return false;
   return (
     isSuspensionExemptPath(req) || req.path === '/device-info' || req.path === '/devices/lock-check'
   );

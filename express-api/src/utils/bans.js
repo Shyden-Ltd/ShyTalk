@@ -35,7 +35,7 @@
  * mutation so a mid-session ban bites on the target's very next request.
  */
 
-const { db } = require('./firebase');
+const { db, FieldValue } = require('./firebase');
 const { Filter } = require('firebase-admin/firestore');
 const log = require('./log');
 
@@ -63,6 +63,25 @@ const MAX_BOUND_DEVICES = 20;
 // a warning and letting them through.
 const BINDINGS_SCAN_LIMIT = MAX_BOUND_DEVICES * 5;
 const LINKED_BANS_SCAN_LIMIT = MAX_BOUND_DEVICES * 5;
+
+/**
+ * Options for the binding-minting transactions (lock-check, device-info, admin
+ * create). Those transactions contain DOCUMENT reads only — never a query.
+ *
+ * A `tx.get(query)` widens a transaction's conflict set to every document the
+ * query matches, and under the Firestore emulator it also proved to break the
+ * document-level conflict detection the device-lock depends on: with a cap
+ * query inside the bind transaction, two concurrent sign-ins on ONE fresh
+ * device could BOTH commit `allowed`, collapsing SHY-0170's
+ * one-device-one-account invariant. That invariant outranks the cap, so the
+ * cap is enforced around the transaction instead (see enforceBindingCap /
+ * rollbackBindingIfOverCap) and the transaction stays doc-only.
+ *
+ * The raised attempt budget still helps: concurrent sign-ins on the same
+ * device legitimately contend, and exhausting Firestore's default 5 surfaces
+ * as a 500 on a routine race.
+ */
+const BINDING_TRANSACTION_OPTIONS = Object.freeze({ maxAttempts: 15 });
 
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes — mirrors middleware/auth.js
 const MAX_CACHE_SIZE = 500;
@@ -389,6 +408,43 @@ async function countBoundDevices(uniqueId, tx) {
 }
 
 /**
+ * Compensating half of the binding cap. Call AFTER a transaction has claimed
+ * `deviceId` for `uniqueId`.
+ *
+ * The pre-check before the transaction stops the ordinary over-cap bind. It
+ * cannot stop a RACE: N concurrent requests can each observe a pre-cap count
+ * and all commit. We cannot close that inside the transaction, because a
+ * count needs a query read and a query read breaks the device-lock's
+ * conflict detection (see BINDING_TRANSACTION_OPTIONS). So we close it after:
+ * re-count, and if the account now exceeds the cap, release the binding this
+ * request just took — and only that one, and only while we still own it.
+ *
+ * Racing requests each release their own claim, so the account settles at or
+ * below the cap. The device keeps its telemetry; it merely goes back to being
+ * unclaimed, which is exactly the at-cap state.
+ *
+ * @returns {Promise<boolean>} true if the binding was rolled back
+ */
+async function rollbackBindingIfOverCap(uniqueId, deviceId) {
+  if ((await countBoundDevices(uniqueId)) <= MAX_BOUND_DEVICES) return false;
+
+  const ref = db.doc(`deviceBindings/${deviceId}`);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return;
+    const data = snap.data() || {};
+    const owner = data.uniqueId ?? data.userId ?? null;
+    // Never release someone else's claim — a concurrent winner may hold it.
+    if (owner === null || String(owner) !== String(uniqueId)) return;
+    tx.update(ref, { uniqueId: FieldValue.delete(), boundAt: FieldValue.delete() });
+  }, BINDING_TRANSACTION_OPTIONS);
+
+  log.warn('bans', 'binding released — cap exceeded by a concurrent bind', { uniqueId, deviceId });
+  clearBanCache(uniqueId);
+  return true;
+}
+
+/**
  * Invalidate ban caches. With a uniqueId: that caller only (both id forms
  * share the String key). Without: EVERYTHING, including the network-ban
  * list — the admin ban routes call this form on every ban mutation, so a
@@ -409,6 +465,7 @@ module.exports = {
   checkUserBans,
   clearBanCache,
   countBoundDevices,
+  rollbackBindingIfOverCap,
   isBanActive,
   buildBanResult,
   networkBanMatches,
@@ -416,5 +473,6 @@ module.exports = {
   NETWORK_BANS_QUERY_LIMIT,
   MAX_BOUND_DEVICES,
   BINDINGS_SCAN_LIMIT,
+  BINDING_TRANSACTION_OPTIONS,
   MAX_CACHE_SIZE,
 };

@@ -9,7 +9,14 @@ const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { now } = require('../utils/helpers');
 const { isValidDeviceId } = require('../utils/deviceId');
-const { checkBans, clearBanCache, countBoundDevices, MAX_BOUND_DEVICES } = require('../utils/bans');
+const {
+  checkBans,
+  clearBanCache,
+  countBoundDevices,
+  rollbackBindingIfOverCap,
+  MAX_BOUND_DEVICES,
+  BINDING_TRANSACTION_OPTIONS,
+} = require('../utils/bans');
 const log = require('../utils/log');
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -93,12 +100,20 @@ router.post('/device-info', async (req, res) => {
 
     const docRef = db.doc(`deviceBindings/${deviceId}`);
 
-    // Atomic read → decide → write. The binding cap must be enforced against
-    // a snapshot that a concurrent sign-in cannot invalidate: three separate
-    // calls (get → count → set) let N parallel requests each observe a
-    // pre-cap count and all commit, defeating the cap (reviewer C-NEW-2).
-    // The transaction body is retried on contention, so it rebuilds its doc
-    // from `baseDoc` each attempt rather than mutating shared state.
+    // The cap check runs OUTSIDE the transaction: a count needs a query read,
+    // and a query read inside a bind transaction breaks the document-level
+    // conflict detection the device-lock depends on (see
+    // BINDING_TRANSACTION_OPTIONS). A race can slip past this pre-check —
+    // `rollbackBindingIfOverCap` below closes that window.
+    //
+    // At the cap this route does NOT refuse: it records the telemetry but never
+    // claims the device. An unowned doc carries no uniqueId, so it can never be
+    // a decoy, and the response still carries `banStatus` — refusing outright
+    // would blank the very ban screen this endpoint exists to feed.
+    const caller = req.auth.uniqueId;
+    const callerRegistered = caller !== null && caller !== undefined;
+    const atCap = callerRegistered && (await countBoundDevices(caller)) >= MAX_BOUND_DEVICES;
+
     let capped = false;
     let bound = false;
     await db.runTransaction(async (tx) => {
@@ -116,44 +131,45 @@ router.post('/device-info', async (req, res) => {
         // SHY-0170: device-info updates telemetry on every launch, but must NEVER
         // silently re-bind a device already owned by another account to the caller
         // — that would defeat the device-lock (see /api/devices/lock-check). An
-        // already-owned device needs no cap check: claiming it costs the caller
-        // no new binding.
-        if (String(owner) !== String(req.auth.uniqueId)) delete deviceDoc.uniqueId;
+        // already-owned device needs no cap check: claiming it costs no new slot.
+        if (String(owner) !== String(caller)) delete deviceDoc.uniqueId;
+      } else if (!callerRegistered) {
+        // A not-yet-registered caller (valid token, no users doc yet) must never
+        // claim a device — the rule /devices/lock-check already enforces.
+        // Otherwise the doc stored a literal `uniqueId: null` alongside a
+        // boundAt, implying an ownership that can never resolve.
+        delete deviceDoc.uniqueId;
+      } else if (atCap) {
+        // UNOWNED and the caller is full: record telemetry, claim nothing.
+        // Keyed on ownership, not existence — an unowned doc this route wrote
+        // earlier must not be bindable for free on a second call (R3-C1).
+        capped = true;
+        delete deviceDoc.uniqueId;
       } else {
-        // UNOWNED — a brand-new doc, or one this route left unbound earlier
-        // because the caller was at the cap. Both need the cap check: keying
-        // it on `!existing.exists` alone let a simple second call to the same
-        // deviceId bind it for free (reviewer R3-C1).
-        //
-        // This route mints bindings and is exempt from the ban gate, so an
-        // uncapped bind reopens the decoy-flood hardware-ban evasion that
-        // lock-check blocks (SHY-0149 C1). At the cap we record the telemetry
-        // but do NOT claim the device: an unowned doc carries no uniqueId, so
-        // it can never be a decoy, and the response still carries `banStatus`
-        // — refusing outright would blank the very ban screen this endpoint
-        // exists to feed.
-        if ((await countBoundDevices(req.auth.uniqueId, tx)) >= MAX_BOUND_DEVICES) {
-          capped = true;
-          delete deviceDoc.uniqueId;
-        } else {
-          deviceDoc.boundAt = timestamp;
-          bound = true;
-        }
+        deviceDoc.boundAt = timestamp;
+        bound = true;
       }
 
       tx.set(docRef, deviceDoc, { merge: true });
-    });
+    }, BINDING_TRANSACTION_OPTIONS);
+
+    if (bound && (await rollbackBindingIfOverCap(caller, deviceId))) {
+      // A concurrent bind pushed the account past the cap; the claim was
+      // released. Telemetry stays; the device is simply unclaimed.
+      bound = false;
+      capped = true;
+    }
 
     if (capped) {
       log.warn('device-info', 'device-binding cap reached — telemetry stored unbound', {
-        uniqueId: req.auth.uniqueId,
+        uniqueId: caller,
         deviceId,
       });
     }
 
     // A newly-bound device can carry a hardware ban, changing the caller's
     // standing — drop their cached verdict so the gate sees it immediately.
-    if (bound) clearBanCache(req.auth.uniqueId);
+    if (bound) clearBanCache(caller);
 
     // Check bans
     const banStatus = await checkBans(deviceId, ip, geo.asn || null);

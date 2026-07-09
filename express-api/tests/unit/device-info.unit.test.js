@@ -52,6 +52,7 @@ jest.mock('../../src/utils/log', () => ({
 jest.mock('../../src/utils/bans', () => ({
   checkBans: async () => ({ isBanned: false, banType: null, reason: null, expiresAt: null }),
   countBoundDevices: async () => 0,
+  rollbackBindingIfOverCap: async () => false,
   clearBanCache: () => {},
   MAX_BOUND_DEVICES: 20,
 }));

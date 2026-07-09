@@ -31,6 +31,19 @@ jest.mock('../../src/utils/firebase', () => ({
   db: {
     doc: (...args) => mockDoc(...args),
     collection: (...args) => mockCollection(...args),
+    // The binding write is transactional (SHY-0149 R4-I2). The fake buffers
+    // writes and commits them after the callback, exactly as Firestore does,
+    // so a rejecting `mockSet` still fails the transaction and existing
+    // assertions keep reading `mockSet`'s payload.
+    runTransaction: async (fn) => {
+      const writes = [];
+      const result = await fn({
+        get: () => mockDocGet(),
+        set: (_ref, data, opts) => writes.push([data, opts]),
+      });
+      for (const [data, opts] of writes) await mockSet(data, opts);
+      return result;
+    },
   },
 }));
 
@@ -56,6 +69,7 @@ jest.mock('../../src/utils/system-pm', () => ({
 // this suite keeps testing the admin route's own branches.
 jest.mock('../../src/utils/bans', () => ({
   countBoundDevices: async () => 0,
+  rollbackBindingIfOverCap: async () => false,
   clearBanCache: () => {},
   MAX_BOUND_DEVICES: 20,
 }));
@@ -508,11 +522,14 @@ describe('POST /api/admin/devices — all branches', () => {
     expect(res.body.lastIp).toBe('1.2.3.4');
     expect(res.body.isp).toBe('BT');
     expect(mockDoc).toHaveBeenCalledWith('deviceBindings/dev-new');
+    // merge:true — a real binding carries ~20 telemetry fields written by
+    // /api/device-info; a full replace would silently wipe them (R4-I3).
     expect(mockSet).toHaveBeenCalledWith(
       expect.objectContaining({
         deviceId: 'dev-new',
         uniqueId: 10000001,
       }),
+      { merge: true },
     );
   });
 

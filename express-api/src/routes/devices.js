@@ -2,7 +2,13 @@ const express = require('express');
 const { db } = require('../utils/firebase');
 const { now } = require('../utils/helpers');
 const { isValidDeviceId } = require('../utils/deviceId');
-const { countBoundDevices, clearBanCache, MAX_BOUND_DEVICES } = require('../utils/bans');
+const {
+  countBoundDevices,
+  clearBanCache,
+  rollbackBindingIfOverCap,
+  MAX_BOUND_DEVICES,
+  BINDING_TRANSACTION_OPTIONS,
+} = require('../utils/bans');
 const log = require('../utils/log');
 
 const router = express.Router();
@@ -10,6 +16,14 @@ const router = express.Router();
 /** Normalise a uniqueId (which may be stored as String or Number) to a string, or null. */
 function normUniqueId(value) {
   return value === undefined || value === null ? null : String(value);
+}
+
+/** Is this binding already owned by `caller`? (An owned device costs no slot.) */
+async function isBoundTo(ref, caller) {
+  const snap = await ref.get();
+  if (!snap.exists) return false;
+  const data = snap.data() || {};
+  return normUniqueId(data.uniqueId ?? data.userId) === caller;
 }
 
 /**
@@ -45,8 +59,31 @@ router.post('/devices/lock-check', async (req, res) => {
     const caller = normUniqueId(req.auth?.uniqueId);
     const ref = db.doc(`deviceBindings/${deviceId}`);
 
+    // Cap binding creation. Unbounded bindings let an attacker bury a
+    // hardware-banned device beneath decoys until the ban gate's scan no longer
+    // reached it — and this route is ban-exempt (SHY-0149 C1).
+    //
+    // The check sits OUTSIDE the transaction on purpose: a count needs a query
+    // read, and a query read inside this transaction breaks the document-level
+    // conflict detection the device-lock depends on (see
+    // BINDING_TRANSACTION_OPTIONS). A concurrent race can therefore slip past
+    // this pre-check — `rollbackBindingIfOverCap` below closes that window.
+    // Re-using an ALREADY-owned device never reaches the bind branch, so a
+    // capped account keeps working on the devices it has.
+    if (caller !== null && (await countBoundDevices(caller)) >= MAX_BOUND_DEVICES) {
+      const boundToCaller = await isBoundTo(ref, caller);
+      if (!boundToCaller) {
+        log.warn('devices', 'device-binding cap reached', { caller, deviceId });
+        return res.status(403).json({
+          error: 'Device limit reached for this account',
+          code: 'device_limit',
+        });
+      }
+    }
+
     // Atomic read → decide → conditional-bind: two concurrent sign-ins on a fresh
-    // device cannot both claim it (exactly one wins the transaction).
+    // device cannot both claim it (exactly one wins the transaction). DOC READS
+    // ONLY — see BINDING_TRANSACTION_OPTIONS.
     const result = await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const data = snap.exists ? snap.data() : null;
@@ -59,32 +96,26 @@ router.post('/devices/lock-check', async (req, res) => {
       // Unbound + an existing user (has a uniqueId) → claim it now. A not-yet-
       // registered caller (uniqueId null) must never bind a device.
       if (boundUniqueId === null && caller !== null) {
-        // Cap binding creation. Unbounded bindings let an attacker bury a
-        // hardware-banned device beneath decoys until the ban gate's scan no
-        // longer reached it — and this route is ban-exempt (SHY-0149 C1).
-        // Re-using an ALREADY-owned device never lands here, so a capped
-        // account keeps working on the devices it has.
-        if ((await countBoundDevices(caller, tx)) >= MAX_BOUND_DEVICES) {
-          return { status: 'device_limit' };
-        }
         tx.set(ref, { uniqueId: caller, boundAt: now() }, { merge: true });
         return { status: 'allowed', boundToOther: false, bound: true };
       }
       return { status: 'allowed', boundToOther: false, bound: false };
-    });
+    }, BINDING_TRANSACTION_OPTIONS);
 
-    if (result.status === 'device_limit') {
-      log.warn('devices', 'device-binding cap reached', { caller, deviceId });
-      return res.status(403).json({
-        error: 'Device limit reached for this account',
-        code: 'device_limit',
-      });
+    if (result.bound) {
+      // Close the race the pre-check cannot: if concurrent binds pushed this
+      // account past the cap, release the claim this request just took.
+      if (await rollbackBindingIfOverCap(caller, deviceId)) {
+        return res.status(403).json({
+          error: 'Device limit reached for this account',
+          code: 'device_limit',
+        });
+      }
+      // A newly-claimed device can carry a hardware ban, which changes the
+      // caller's standing. Drop their cached verdict so the ban bites on their
+      // very next request rather than after the cache TTL (SHY-0149).
+      clearBanCache(caller);
     }
-
-    // A newly-claimed device can carry a hardware ban, which changes the
-    // caller's standing. Drop their cached verdict so the ban bites on their
-    // very next request rather than after the cache TTL (SHY-0149).
-    if (result.bound) clearBanCache(caller);
 
     log.info('devices', 'device lock-check', {
       deviceId,
