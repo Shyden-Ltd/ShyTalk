@@ -1,6 +1,6 @@
 ---
 id: SHY-0170
-status: Draft
+status: In Review
 owner: claude
 created: 2026-07-09
 priority: P0
@@ -137,12 +137,13 @@ Moving the decision server-side fixes the vulnerability AND reconciles both defe
 
 ## Definition of Done
 
-- [ ] Server endpoint + `device-info` reconcile + rules tighten implemented TDD (RED→GREEN); all Test-Plan layers green against the REAL emulator.
-- [ ] Android + iOS repo impls call the API with zero Firestore access; both files gone from `direct-backend-baseline.json`; the ratchet passes at the lower baseline.
-- [ ] AuthViewModel drives the lock decision from server-returned state; no behaviour regression (same lock screen when locked, same block-new-account).
+- [x] Server endpoint + `device-info` reconcile + rules tighten implemented TDD (RED→GREEN); all Test-Plan layers green against the REAL emulator (9 lock-check + 8 rules + 2 device-info reconcile).
+- [x] Android + iOS repo impls call the API with zero Firestore access; the **Android** `DeviceRepositoryImpl.kt` leaves `direct-backend-baseline.json` (34→33); the **iOS** `IosSmallRepositories.kt` stays (its Banner/FunFact/Notification repos are other clusters — device usage removed); the ratchet passes at the lower baseline.
+- [x] AuthViewModel drives the lock decision from server-returned state via `resolveDeviceLockOrBlock()`; no behaviour regression (same lock screen when locked, same block-new-account) — proven by 4 new commonTest cases (JVM + iOS).
 - [ ] **Pre-Merge Testing Protocol satisfied** (full; device-lock journey batched to the real-device gauntlet) → `code-reviewer` 100% clean → judgment-merge to develop.
 - [ ] `released_in: vX.Y.Z` after the release cut; `status: Done`.
 
 ## Notes (running log)
 
 - 2026-07-09 — Created as the FIRST write-path remediation of [[EPIC-0006]] (operator: "start write-path remediation"). Chosen as the pilot (smallest write cluster, decision-independent). **Investigation upgraded it from a mechanical migration to a security-bug fix:** the device-lock/ban-evasion decision is currently client-side and bypassable (`AuthViewModel.kt:303-355` reads `deviceBindings` directly + decides on-device); the server `/api/device-info` already binds (`device-info.js:107-115`) but unconditionally, and the client `bindDevice` writes an inconsistent `{userId}` shape. Design: a server-authoritative `lock-check` endpoint (atomic read→decide→conditional-bind) replacing both client ops; reconcile `/device-info`'s rebind; tighten rules. Full evidence + call-sites in the [[project-applock-pin-appears-unwired-finding]]-adjacent handoff + the audit §3.8/§4. Establishes the migration pattern (endpoint + client twin migration + ratchet shrink + rule tighten + real-emulator TDD) reused by the remaining clusters.
+- 2026-07-09 — **Implemented, TDD, two increments (server `917f46949d5`, client `183573dd0c7`), pushed.** Server (RED→GREEN, real Firestore/Auth emulator): `POST /api/devices/lock-check` (atomic `runTransaction` read→decide→conditional-bind; identity from `req.auth.uniqueId`, never body; `{status,boundToOther}`) — 9 tests incl. concurrent-race one-winner + legacy `{userId}`; `device-info` no longer unconditionally rebinds a foreign-owned device (2 tests); `firestore.rules deviceBindings` → `allow read, write: if false` (8 real-emulator rules tests: user/admin/anon read + create/update/delete all denied). Client: `DeviceRepository` → `resolveDeviceLock(deviceId): Resource<DeviceLockStatus>` (enum ALLOWED/LOCKED); `AuthViewModel.resolveDeviceLockOrBlock()` unifies both branches (LOCKED→signout+isDeviceLocked; Error→lenient); Android impl drops FirebaseFirestore (baseline 34→33); iOS impl drops the firestore param + DI updated. Tests: **4 new device-lock cases in commonTest (JVM AND iOS)** + rewritten `DeviceRepositoryImplTest` (API-mapping via WorkerApiClient double) + migrated mockk stubs + androidTest fake/journey. **Investigation reconfirmed the security value:** the old flow read `deviceBindings` on-device and let the CLIENT decide the lock — bypassable; now the API decides. Verified: `:shared:jvmTest` 31 green · `:app` device+auth unit green · `:shared:compileKotlinIosArm64` clean · ktlint+detekt clean · 48 ratchet tests green. **Admin console confirmed already server-side** (`/api/admin/devices`) so the rules full-deny is safe. NEXT: `code-reviewer` on `55aa8b900f4..183573dd0c7` → PR develop → full gauntlet (device-lock sign-in journey batched to real-device) → judgment-merge.
