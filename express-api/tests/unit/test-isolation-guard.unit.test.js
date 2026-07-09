@@ -163,6 +163,154 @@ describe('isolation analyzer — the detector sees every form a violation can ta
   });
 });
 
+/**
+ * Every outcome `wipedCollections` can produce, one case each. Sources are inline
+ * because each is 3-6 lines and lives or dies by one syntactic detail; a reader
+ * comparing two rows should not have to open two files. (The richer, more
+ * file-shaped scenarios stay in `tests/fixtures/isolation-guard/`.)
+ *
+ * The contract: RESOLVE what is statically knowable, REPORT what is not. Never
+ * return an empty set for a wipe that happened.
+ */
+describe('wipedCollections — every branch resolves or reports, none silently ignores', () => {
+  const preamble = [
+    "const { db } = require('../../src/utils/firebase');",
+    "const { clearCollection, clearCollectionGroup } = require('../helpers/firebase-emulator');",
+  ].join('\n');
+  const analyseBody = (body) => wipedCollections(`${preamble}\n${body}`);
+
+  test('RESOLVES: an inline array of string literals', () => {
+    const { wipes, unresolved } = analyseBody(
+      "for (const c of ['users', 'rooms']) clearCollection(db, c);",
+    );
+    expect([...wipes].sort()).toEqual(['rooms', 'users']);
+    expect(unresolved).toEqual([]);
+  });
+
+  test('RESOLVES: `let` loop bindings, not just `const`', () => {
+    const { wipes } = analyseBody("for (let c of ['users']) clearCollection(db, c);");
+    expect([...wipes]).toEqual(['users']);
+  });
+
+  test('REPORTS: a wipe call with no collection argument', () => {
+    const { wipes, unresolved } = analyseBody('clearCollection(db);');
+    expect([...wipes]).toEqual([]);
+    expect(unresolved).toEqual([expect.stringMatching(/no collection argument/)]);
+  });
+
+  test('REPORTS: an array constant declared twice — which one binds is unknowable', () => {
+    const { wipes, unresolved } = analyseBody(
+      [
+        "const COLLECTIONS = ['users'];",
+        'function elsewhere() {',
+        "  const COLLECTIONS = ['scratch'];",
+        '  return COLLECTIONS;',
+        '}',
+        'beforeEach(async () => {',
+        '  for (const c of COLLECTIONS) await clearCollection(db, c);',
+        '});',
+      ].join('\n'),
+    );
+    expect([...wipes]).toEqual([]); // NOT ['users'], and NOT ['scratch']
+    expect(unresolved).toEqual([expect.stringMatching(/'COLLECTIONS' is declared more than once/)]);
+  });
+
+  test('REPORTS: a string constant declared twice', () => {
+    const { wipes, unresolved } = analyseBody(
+      [
+        "const NAME = 'users';",
+        'function elsewhere() {',
+        "  const NAME = 'scratch';",
+        '  return NAME;',
+        '}',
+        'beforeEach(async () => { await clearCollection(db, NAME); });',
+      ].join('\n'),
+    );
+    expect([...wipes]).toEqual([]);
+    expect(unresolved).toEqual([expect.stringMatching(/'NAME' is declared more than once/)]);
+  });
+
+  test('REPORTS: a loop variable shadowed by a callback parameter — never a wrong answer', () => {
+    // `for (const c of WIPED) other.forEach((c) => clear(db, c))` clears the
+    // CALLBACK's `c`, not the loop's. Resolving it to WIPED would be a silent
+    // wrong answer — the one outcome this analyzer must never produce.
+    const { wipes, unresolved } = analyseBody(
+      [
+        "const WIPED = ['users'];",
+        "const other = ['scratch'];",
+        'beforeEach(async () => {',
+        '  for (const c of WIPED) other.forEach((c) => clearCollection(db, c));',
+        '});',
+      ].join('\n'),
+    );
+    expect([...wipes]).toEqual([]);
+    expect(unresolved).toEqual([
+      expect.stringMatching(/'c' is shadowed by a ArrowFunctionExpression binding/),
+    ]);
+  });
+
+  test('REPORTS: a loop variable shadowed by a catch parameter', () => {
+    const { wipes, unresolved } = analyseBody(
+      [
+        "const WIPED = ['users'];",
+        'beforeEach(async () => {',
+        '  for (const c of WIPED) {',
+        '    try { boom(); } catch (c) { clearCollection(db, c); }',
+        '  }',
+        '});',
+      ].join('\n'),
+    );
+    expect([...wipes]).toEqual([]);
+    expect(unresolved).toEqual([expect.stringMatching(/shadowed by a CatchClause binding/)]);
+  });
+
+  test('REPORTS: a destructuring loop binding, which names no single collection', () => {
+    const { wipes, unresolved } = analyseBody(
+      'for (const [k, v] of Object.entries({})) clearCollection(db, k);',
+    );
+    expect([...wipes]).toEqual([]);
+    expect(unresolved).toEqual([
+      expect.stringMatching(/'k' is neither a loop variable nor a string constant/),
+    ]);
+  });
+
+  test('REPORTS: an identifier that is neither a loop variable nor any constant', () => {
+    const { wipes, unresolved } = analyseBody('beforeEach(() => clearCollection(db, mystery));');
+    expect([...wipes]).toEqual([]);
+    expect(unresolved).toEqual([
+      expect.stringMatching(/'mystery' is neither a loop variable nor a string constant/),
+    ]);
+  });
+
+  test('REPORTS: an inline array holding a non-literal element', () => {
+    const { wipes, unresolved } = analyseBody(
+      "for (const c of ['users', someVar]) clearCollection(db, c);",
+    );
+    expect([...wipes]).toEqual([]);
+    expect(unresolved).toEqual([expect.stringMatching(/is not all string literals/)]);
+  });
+
+  test('REPORTS: a for-of over a call expression', () => {
+    const { wipes, unresolved } = analyseBody('for (const c of listOf()) clearCollection(db, c);');
+    expect([...wipes]).toEqual([]);
+    expect(unresolved).toEqual([expect.stringMatching(/'c' iterates a CallExpression/)]);
+  });
+
+  test('REPORTS: a for-of over an identifier that is not a literal array constant', () => {
+    const { wipes, unresolved } = analyseBody(
+      ['const ALL = buildList();', 'for (const c of ALL) clearCollection(db, c);'].join('\n'),
+    );
+    expect([...wipes]).toEqual([]);
+    expect(unresolved).toEqual([expect.stringMatching(/'ALL' is not a literal array constant/)]);
+  });
+
+  test('RESOLVES: doubling the Admin SDK itself counts as doubling firebase', () => {
+    expect(doublesFirebase("jest.mock('firebase-admin', () => ({}));")).toBe(true);
+    expect(doublesFirebase("jest.doMock('firebase-admin/firestore', () => ({}));")).toBe(true);
+    expect(doublesFirebase("jest.mock('firebase-admin-lookalike', () => ({}));")).toBe(false);
+  });
+});
+
 describe('test-isolation guard — a wholesale wipe requires an exclusive emulator project', () => {
   // A corpus check passes trivially once no wipers remain, so pin the POPULATION
   // by name: a known real-emulator suite must be in it, a known doubled suite

@@ -31,6 +31,8 @@ const { parse } = require('@babel/parser');
 const WIPE_FNS = new Set(['clearCollection', 'clearCollectionGroup']);
 const TOKEN_RESOLVERS = /verifyIdToken|mintRealUser|createCustomToken|mintTokenWithoutUserDoc/;
 const FIREBASE_MODULE = /src\/utils\/firebase$/;
+/** Doubling the Admin SDK itself doubles everything `src/utils/firebase` exposes. */
+const ADMIN_SDK = /^firebase-admin(\/|$)/;
 /** Any production module: it reaches Firestore transitively even if the test does not. */
 const PRODUCTION_MODULE = /(^|\/)src\//;
 
@@ -133,15 +135,61 @@ function stringValues(elements) {
   return values;
 }
 
-/** The nearest enclosing `for (const <name> of X)`, searching innermost-out. */
-function enclosingForOf(ancestors, name) {
+const FUNCTION_TYPES = new Set([
+  'ArrowFunctionExpression',
+  'FunctionExpression',
+  'FunctionDeclaration',
+  'ObjectMethod',
+  'ClassMethod',
+]);
+
+/**
+ * Does this node bind `name` in a way the analyzer cannot see through?
+ *
+ * Only FUNCTION and CATCH parameters qualify. A `const NAME = …` declaration is
+ * not a shadow — it is precisely what `stringConstants`/`stringArrayConstants`
+ * resolve, and duplicates among them are caught by their `ambiguous` sets.
+ */
+function bindsName(node, name) {
+  const patternBinds = (pattern) => {
+    if (!pattern) return false;
+    if (pattern.type === 'Identifier') return pattern.name === name;
+    if (pattern.type === 'AssignmentPattern') return patternBinds(pattern.left);
+    if (pattern.type === 'RestElement') return patternBinds(pattern.argument);
+    if (pattern.type === 'ArrayPattern') return pattern.elements.some(patternBinds);
+    if (pattern.type === 'ObjectPattern') {
+      return pattern.properties.some((p) =>
+        p.type === 'RestElement' ? patternBinds(p.argument) : patternBinds(p.value),
+      );
+    }
+    return false;
+  };
+
+  if (FUNCTION_TYPES.has(node.type)) return node.params.some(patternBinds);
+  if (node.type === 'CatchClause') return patternBinds(node.param);
+  return false;
+}
+
+/**
+ * Resolve `name` at a wipe call site by walking its ancestors innermost-out.
+ *
+ * Returns the enclosing `for (const <name> of X)` — but ONLY if nothing binds
+ * `name` more tightly first. A callback parameter that reuses the loop
+ * variable's name (`for (const c of WIPED) list.forEach((c) => clear(db, c))`)
+ * refers to the callback's `c`, not the loop's; resolving it to the loop's array
+ * would be a SILENT WRONG ANSWER — the one outcome this analyzer must never
+ * produce. Report the shadowing instead and let the guard fail loudly.
+ */
+function resolveLoopVariable(ancestors, name) {
   for (let i = ancestors.length - 1; i >= 0; i--) {
     const node = ancestors[i];
-    if (node.type !== 'ForOfStatement') continue;
-    const decl = node.left.type === 'VariableDeclaration' ? node.left.declarations[0] : null;
-    if (decl?.id.type === 'Identifier' && decl.id.name === name) return node;
+    if (node.type === 'ForOfStatement') {
+      const decl = node.left.type === 'VariableDeclaration' ? node.left.declarations[0] : null;
+      if (decl?.id.type === 'Identifier' && decl.id.name === name) return { loop: node };
+    }
+    if (bindsName(node, name)) return { shadowedBy: node.type };
   }
-  return null;
+  return {};
 }
 
 /**
@@ -172,7 +220,12 @@ function wipedCollectionsFromAst(ast) {
       return describe(`target is a ${target.type}, which cannot be resolved statically`);
     }
 
-    const loop = enclosingForOf(ancestors, target.name);
+    const { loop, shadowedBy } = resolveLoopVariable(ancestors, target.name);
+    if (shadowedBy) {
+      return describe(
+        `'${target.name}' is shadowed by a ${shadowedBy} binding; its source is unknowable`,
+      );
+    }
     if (!loop) {
       // Not a loop variable: it may be a plain `const SEG_EVENTS = 'segregationEvents'`.
       if (ambiguousStrings.has(target.name)) {
@@ -214,9 +267,16 @@ function wipedCollectionsFromAst(ast) {
  * subcollection is not hidden by its position in a path.
  *
  * This deliberately OVER-approximates, exactly as `touchesRealEmulator` does: a
- * route path `'/api/users'` or a URL counts as a use of `users`. A false
- * positive costs one unnecessary namespace; a false negative costs a silent,
- * scheduling-dependent flake that takes a day to find. Err toward flagging.
+ * route path `'/api/users'` or a URL counts as a use of `users`.
+ *
+ * Be honest about what a false positive costs. It does NOT land on the file that
+ * triggered it. `findWipeCollisions` pairs the new file against whichever
+ * EXISTING non-namespaced wiper clears that collection, so an unrelated PR can
+ * be blocked by a guard failure whose fix lives in a file its author never
+ * touched — with the violation message naming both files. That is the price of
+ * never missing a real collision, which costs a silent, scheduling-dependent
+ * flake that takes a day to find. Err toward flagging, and keep the message
+ * explicit enough that the reader knows where to go.
  */
 function referencedSegmentsFromAst(ast) {
   const segments = new Set();
@@ -251,7 +311,7 @@ function isNamespacedFromAst(ast) {
 function doublesFirebaseFromAst(ast) {
   let doubled = false;
   walk(ast.program, (node) => {
-    if (isJestDoubleOf(node, FIREBASE_MODULE)) doubled = true;
+    if (isJestDoubleOf(node, FIREBASE_MODULE) || isJestDoubleOf(node, ADMIN_SDK)) doubled = true;
   });
   return doubled;
 }
@@ -271,14 +331,14 @@ function doublesFirebaseFromAst(ast) {
  * guard separately asserts that no doubling file wipes, closing the loophole
  * where a wiper hides behind a double.
  */
-function touchesRealEmulatorFromAst(ast) {
+function touchesRealEmulatorFromAst(ast, doubled = doublesFirebaseFromAst(ast)) {
   let usesProductionCode = false;
   walk(ast.program, (node) => {
     if (isRequireOf(node, FIREBASE_MODULE) || isRequireOf(node, PRODUCTION_MODULE)) {
       usesProductionCode = true;
     }
   });
-  return usesProductionCode && !doublesFirebaseFromAst(ast);
+  return usesProductionCode && !doubled;
 }
 
 /** Does the suite resolve ID tokens? Such a suite can never be namespaced. */
@@ -310,14 +370,15 @@ function wipesDefaultAuthProjectFromAst(ast) {
 function analyze(file, source) {
   const ast = parseSource(source);
   const { wipes, unresolved } = wipedCollectionsFromAst(ast);
+  const doubled = doublesFirebaseFromAst(ast);
   return {
     file,
     namespaced: isNamespacedFromAst(ast),
     wipes,
     unresolvedWipes: unresolved,
     segments: referencedSegmentsFromAst(ast),
-    doublesFirebase: doublesFirebaseFromAst(ast),
-    touchesEmulator: touchesRealEmulatorFromAst(ast),
+    doublesFirebase: doubled,
+    touchesEmulator: touchesRealEmulatorFromAst(ast, doubled),
     resolvesTokens: resolvesIdTokensFromAst(ast),
     wipesDefaultAuthProject: wipesDefaultAuthProjectFromAst(ast),
   };
