@@ -1,6 +1,6 @@
 ---
 id: SHY-0149
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-07-01
 priority: P1
@@ -131,3 +131,4 @@ Touches `express-api/**` (shared auth middleware + IP derivation + sensitive rou
 
 ## Notes (running log)
 - 2026-07-01 — **CREATED fully-refined** ([[feedback-no-skeleton-stories-fully-refined]]) under [[EPIC-0005-ban-enforcement-hardening]] from the adversarial bypass-surface map. The core fix: bans checked in exactly one place (app sign-in) → move enforcement server-side, per-request, in `authMiddleware`, with the real edge IP. Closes vectors 1 (web/API), 2 (XFF), 3 (direct-API), 4 (mid-session) + fills the empty security skeleton tests. `type: bug`, `mvp: true` (operator 2026-07-01). Authoritative counterpart to [[SHY-0143]]'s client pre-routing gate. Non-technical BDD per [[feedback-non-technical-bdd]].
+- 2026-07-09 — **PICKED UP** (`In Progress`, branch `story/SHY-0149`). Pickup-fitness review vs current develop: all four bypasses re-verified live (`checkBans` still single-call at `device-info.js:135`; leftmost-XFF at `device-info.js:81-82`; skeletons still empty; `device-info.test.js` still mocked). Refinements from intervening work: (1) uid→ban resolution rides SHY-0170's `deviceBindings` ownership + the existing `deviceBans.linkedUniqueId` field (String + legacy Number via `Filter.or`) — this is what blocks a device-banned account on the web; (2) ASN network-bans match the caller's STORED binding `asn` (no per-request geo call); (3) error posture = **fail-closed**, matching the suspension check's structural posture (rejection → authMiddleware outer catch → 401); (4) gate exemptions = suspension-exempt list + `/device-info` + `/devices/lock-check` (the ban-delivery/binding channels — gating them would replace the app's ban screen with a generic error); (5) per-uid ban cache mirrors `suspensionCache` (TTL/eviction/in-flight dedup) + global active-networkBans cache; admin-bans routes must invalidate on issue/lift; (6) Test Plan's per-PR device gauntlet superseded by the MVP pivot (SHY-0163) — device E2E joins the end-of-sprint REAL-DEVICE batch; Jest+Playwright+lint run per-PR in full. **RED verified via canonical `npm test`: 24 specs — 17 fail for missing-feature reasons exactly, 7 pass pre-gate as designed** (`tests/middleware/auth-ban-gate.test.js` real-emulator + `auth-ban-gate-posture.test.js` unit posture/audit).
