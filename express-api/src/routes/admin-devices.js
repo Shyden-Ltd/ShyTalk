@@ -16,8 +16,14 @@ const router = require('express').Router();
  * turns '   ', '' and null into 0, and accepts '1e3', -1 and 1.5.
  */
 function isNonNegativeIntegerId(value) {
-  if (typeof value === 'number') return Number.isInteger(value) && value >= 0;
-  if (typeof value === 'string') return /^\d+$/.test(value);
+  // Beyond MAX_SAFE_INTEGER, `Number()` silently rounds — two different 20-digit
+  // ids can collide on one float and reassign a binding's owner (R8-I2).
+  if (typeof value === 'number') {
+    return Number.isInteger(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER;
+  }
+  if (typeof value === 'string') {
+    return /^\d+$/.test(value) && Number(value) <= Number.MAX_SAFE_INTEGER;
+  }
   return false;
 }
 const { db } = require('../utils/firebase');

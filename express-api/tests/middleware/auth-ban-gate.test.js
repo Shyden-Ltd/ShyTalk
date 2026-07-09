@@ -355,6 +355,25 @@ describe('network bans match the real edge IP — ip, subnet, asn', () => {
     expect(res.body).toMatchObject({ code: 'banned', banType: 'network_asn' });
   });
 
+  test.each([
+    ['empty string', ''],
+    ['a date that sorts BELOW now', '1999-13-45'],
+    ['a date that sorts ABOVE now', 'garbage'],
+  ])(
+    'a network ban with an unparseable expiry (%s) still blocks — the query must not drop it',
+    async (_label, expiresAt) => {
+      // `isBanActive` fails closed on an unparseable expiry, but that is inert
+      // if Firestore's `expiresAt > nowIso` range filter drops the doc before
+      // the predicate ever sees it. String ordering is not a security check:
+      // '' and '1999-…' sort BELOW now, and '2026-13-45' sorts below it from
+      // 2027 onward — a time bomb. (reviewer R8-C1)
+      const caller = await mintRealUser({ uniqueId: `512${expiresAt.length}` });
+      await seedNetworkBan(`abg-nb-corrupt-${expiresAt.length}`, { value: EDGE_IP, expiresAt });
+
+      await probeAs(caller, { xff: EDGE_IP }).expect(403);
+    },
+  );
+
   test('an EXPIRED network ban no longer blocks', async () => {
     const caller = await mintRealUser({ uniqueId: '5023' });
     await seedNetworkBan('abg-nb-expired-1', {

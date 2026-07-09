@@ -23,7 +23,7 @@ router.use('/admin/bans', _adminGuardWrapper);
 
 const { generateId, now } = require('../utils/helpers');
 const { sendSystemPm } = require('../utils/system-pm');
-const { clearBanCache } = require('../utils/bans');
+const { clearBanCache, isBanActive } = require('../utils/bans');
 const log = require('../utils/log');
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -49,15 +49,15 @@ router.get('/admin/bans', async (req, res) => {
       db.collection('networkBans').get(),
     ]);
 
-    const nowMs = Date.now();
-
-    const deviceBans = deviceSnap.docs
-      .map((d) => ({ ...d.data(), id: d.id }))
-      .filter((b) => !b.expiresAt || new Date(b.expiresAt).getTime() > nowMs);
+    // ONE definition of "active" — the same predicate the gate enforces with.
+    // These filters used to inline `new Date(x).getTime() > now`, which for a
+    // corrupt expiry is `NaN > now === false`: the console would show a ban as
+    // gone while the gate was still enforcing it (reviewer R8-I1).
+    const deviceBans = deviceSnap.docs.map((d) => ({ ...d.data(), id: d.id })).filter(isBanActive);
 
     const networkBans = networkSnap.docs
       .map((d) => ({ ...d.data(), id: d.id }))
-      .filter((b) => !b.expiresAt || new Date(b.expiresAt).getTime() > nowMs);
+      .filter(isBanActive);
 
     res.json({ deviceBans, networkBans });
   } catch (err) {

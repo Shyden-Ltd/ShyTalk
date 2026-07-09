@@ -22,6 +22,10 @@
  */
 const PRIOR_NODE_ENV = process.env.NODE_ENV;
 process.env.NODE_ENV = 'local';
+// This suite WIPES the shared `users` collection, so it runs against its own
+// emulator project — otherwise it deletes documents another parallel Jest
+// worker just seeded (SHY-0171). Safe here: no Auth tokens are minted.
+process.env.FIRESTORE_TEST_NAMESPACE = 'subs';
 
 const { db } = require('../../src/utils/firebase');
 const subscriptions = require('../../src/cron/subscriptions');

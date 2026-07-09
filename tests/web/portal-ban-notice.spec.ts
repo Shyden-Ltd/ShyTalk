@@ -161,6 +161,35 @@ test.describe('Portal — a banned user is told they are banned', () => {
     await teardown(testRunId);
   });
 
+  test('a broken locale tag degrades gracefully instead of crashing the ban screen', async ({
+    page,
+  }) => {
+    // `toLocaleDateString('!!bad!!')` throws RangeError. `renderBan` keeps a
+    // try/catch for exactly this, and nothing exercised it (reviewer R8-I4).
+    //
+    // The reachable path is the DEGRADED one: `getCurrentLang()` validates
+    // through `ShyTalkLanguage.get()` when language-selector.js loads, and only
+    // falls back to the raw `localStorage` value when it does not. Simulate
+    // that script failing to load — an environment failure, not a mock of the
+    // code under test — and plant an unusable tag.
+    await page.addInitScript(() => {
+      window.localStorage.setItem('shytalk_language', '!!bad!!');
+      Object.defineProperty(window, 'ShyTalkLanguage', {
+        get: () => undefined,
+        set: () => {},
+        configurable: false,
+      });
+    });
+    const expiresAt = new Date(Date.now() + 86_400_000).toISOString();
+    const { testRunId } = await signInBannedPortalUser(page, expiresAt);
+
+    await expect(page.locator('#banned-section')).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator('#banned-reason')).toHaveText(BAN_REASON);
+    await expect(page.locator('#banned-end-date')).toBeHidden();
+
+    await teardown(testRunId);
+  });
+
   test('a malformed expiry shows no end date rather than the words "Invalid Date"', async ({
     page,
   }) => {

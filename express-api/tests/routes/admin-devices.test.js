@@ -580,6 +580,11 @@ describe('POST /api/admin/devices — all branches', () => {
     ['NaN string', 'NaN'],
     ['Infinity', Infinity],
     ['NaN', NaN],
+    ['true', true],
+    ['plain object', {}],
+    ['oversized numeral string', '99999999999999999999'],
+    ['oversized number', 1e20],
+    ['above MAX_SAFE_INTEGER', Number.MAX_SAFE_INTEGER + 2],
   ])('rejects uniqueId: %s — a uniqueId is a non-negative integer', async (_label, value) => {
     const app = createApp();
     const res = await request(app)
@@ -600,13 +605,28 @@ describe('POST /api/admin/devices — all branches', () => {
     expect(mockSet).not.toHaveBeenCalled();
   });
 
-  test('accepts a numeric STRING uniqueId (what the admin console posts)', async () => {
+  test('accepts a numeric STRING uniqueId (support tooling and test fixtures post strings)', async () => {
     const app = createApp();
     await request(app)
       .post('/api/admin/devices')
       .send({ deviceId: 'dev-strid', uniqueId: '10000042' })
       .expect(200);
     expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ uniqueId: 10000042 }), {
+      merge: true,
+    });
+  });
+
+  test.each([
+    ['string zero', '0', 0],
+    ['leading zeros', '007', 7],
+    ['MAX_SAFE_INTEGER', Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
+  ])('accepts uniqueId: %s', async (_label, input, stored) => {
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/devices')
+      .send({ deviceId: `dev-ok-${String(input)}`, uniqueId: input })
+      .expect(200);
+    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ uniqueId: stored }), {
       merge: true,
     });
   });

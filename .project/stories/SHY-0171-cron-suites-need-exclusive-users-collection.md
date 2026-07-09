@@ -1,6 +1,6 @@
 ---
 id: SHY-0171
-status: Draft
+status: Cancelled
 owner: claude
 created: 2026-07-09
 priority: P2
@@ -108,5 +108,9 @@ Touches `express-api/tests/**` only → no product runtime surface; the device/b
 - [ ] `code-reviewer` 100% clean → In Review → CI green by name → merge → `released_in:` on the next cut.
 
 ## Notes (running log)
+
+- 2026-07-10 — **CANCELLED — the work landed inside [[SHY-0149]] instead.** The collision stopped being theoretical: during SHY-0149's round-8 full-suite run, `tests/middleware/auth-suspension-cache-clear.test.js` failed with a suspended user reading as unsuspended (403 expected, 200 received) — a cron worker's `clearCollection(db, 'users')` had deleted the minted user mid-test. The file passes alone (4/4). With this PR's own test signal at stake, deferring was no longer defensible.
+- **The fix** is narrower than this story assumed. The blocker was believed to be "these suites need an empty collection, so they can't be prefix-scoped." True — but they do not need **Auth**, and Auth is the only thing per-project namespacing breaks (the emulator resolves tokens against the project it was started with). So `src/utils/firebase.js` now honours an opt-in `FIRESTORE_TEST_NAMESPACE` env var under `NODE_ENV=local`, and each of the four suites claims its own project (`subs` / `exports` / `storage` / `backups`) before requiring the module. Their wholesale `users` wipes now hit an isolated project; the "empty users collection is a clean no-op" assertion keeps its exact meaning. Verified: the previously-colliding set passes 77/77 across three consecutive parallel runs.
+- **The general lesson** is in [[reference-emulator-parallel-test-isolation]]: per-worker projectId fails for Auth-minting suites, but per-FILE project namespacing is fine for Firestore-only suites. Two different tools for two different constraints.
 
 - 2026-07-09 — **CREATED fully-refined** from the SHY-0149 round-5 review (reviewer finding R5-C3). SHY-0149 fixed the same defect class for `deviceBindings`/`deviceBans`/`networkBans` via per-file id prefixes + `clearPrefixed`, and removed its own `users` wipes — but the four cron suites still wipe `users` wholesale, and cannot simply be prefix-scoped because they assert on an empty collection. Filed rather than folded into SHY-0149: it needs a scheduling/config decision (serial project vs lock), touches files outside that story's scope, and its RED step is a reproduction harness, not a code change. Per-worker `projectId` is already ruled out with evidence (Auth emulator 401s — see [[reference-emulator-parallel-test-isolation]]).

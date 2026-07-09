@@ -192,29 +192,56 @@ async function getActiveNetworkBans() {
 
   networkBansInFlight = (async () => {
     try {
-      const nowIso = new Date().toISOString();
-      const snap = await db
-        .collection('networkBans')
-        .where(
-          Filter.or(Filter.where('expiresAt', '==', null), Filter.where('expiresAt', '>', nowIso)),
-        )
-        .limit(NETWORK_BANS_QUERY_LIMIT)
-        .get();
+      // NO server-side expiry filter. The obvious `where('expiresAt', '>', nowIso)`
+      // compares ISO strings LEXICOGRAPHICALLY, which is not an expiry check: a
+      // corrupt `expiresAt` of '' or '1999-13-45' sorts BELOW now and is dropped
+      // before `isBanActive` can fail closed on it, and '2026-13-45' sorts above
+      // now only until the calendar passes 2026 — a time bomb. String ordering
+      // must never decide whether a safety control applies (reviewer R8-C1).
+      //
+      // `isBanActive` is therefore the sole arbiter, in JS. Genuinely-expired
+      // docs are lazily reaped below, so the collection stays small and the
+      // limit is not consumed by history — the same on-access reaping the
+      // cron-elimination cluster used to retire `expireBans`.
+      const snap = await db.collection('networkBans').limit(NETWORK_BANS_QUERY_LIMIT).get();
 
       if (snap.size === NETWORK_BANS_QUERY_LIMIT) {
-        log.warn('bans', 'active networkBans hit query limit — possible truncation', {
+        log.warn('bans', 'networkBans hit query limit — possible truncation', {
           limit: NETWORK_BANS_QUERY_LIMIT,
         });
       }
 
-      const bans = snap.docs.map((doc) => doc.data());
-      networkBansCache = { bans, expiresAt: Date.now() + CACHE_TTL };
-      return bans;
+      const active = [];
+      const expired = [];
+      for (const doc of snap.docs) {
+        const ban = doc.data();
+        if (isBanActive(ban)) active.push(ban);
+        else expired.push(doc.ref);
+      }
+
+      reapExpiredNetworkBans(expired);
+
+      networkBansCache = { bans: active, expiresAt: Date.now() + CACHE_TTL };
+      return active;
     } finally {
       networkBansInFlight = null;
     }
   })();
   return networkBansInFlight;
+}
+
+/**
+ * Delete network bans that have genuinely lapsed (a parseable expiry in the
+ * past — never a corrupt one, which `isBanActive` keeps in force). Fire and
+ * forget: reaping is housekeeping, and a failure must never fail a request.
+ */
+function reapExpiredNetworkBans(refs) {
+  if (refs.length === 0) return;
+  Promise.all(refs.map((ref) => ref.delete()))
+    .then(() => log.info('bans', 'reaped expired network bans', { count: refs.length }))
+    .catch((err) =>
+      log.warn('bans', 'reaping expired network bans failed', { error: err.message }),
+    );
 }
 
 /**

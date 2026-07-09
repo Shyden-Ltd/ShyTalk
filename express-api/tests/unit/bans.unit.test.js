@@ -36,7 +36,10 @@ const COLLECTION_FAKES = {
 jest.mock('../../src/utils/firebase', () => ({
   db: {
     doc: jest.fn((path) => ({ _path: path, get: () => mockDocGet(path) })),
+    // networkBans is now read WITHOUT a `where` (isBanActive is the sole
+    // arbiter — see R8-C1), while deviceBans/deviceBindings still filter.
     collection: jest.fn((name) => ({
+      limit: jest.fn(() => ({ get: () => COLLECTION_FAKES[name]() })),
       where: jest.fn(() => ({
         limit: jest.fn(() => ({ get: () => COLLECTION_FAKES[name]() })),
       })),
@@ -62,9 +65,18 @@ const {
   MAX_CACHE_SIZE,
 } = require('../../src/utils/bans');
 
-/** Firestore query-snapshot shape: `.size` + `.docs[].data()` (+ `.id`). */
+/** Firestore query-snapshot shape: `.size` + `.docs[].data()` (+ `.id`, `.ref`). */
+const mockDelete = jest.fn().mockResolvedValue();
 function snap(docs) {
-  return { size: docs.length, docs: docs.map((d, i) => ({ id: d.id ?? `d${i}`, data: () => d })) };
+  return {
+    size: docs.length,
+    docs: docs.map((d, i) => ({
+      id: d.id ?? `d${i}`,
+      data: () => d,
+      // The expired-ban reaper deletes through the doc ref.
+      ref: { delete: mockDelete },
+    })),
+  };
 }
 const networkBansSnap = snap;
 
@@ -74,6 +86,7 @@ beforeEach(() => {
   mockNetworkBansGet.mockReset();
   mockLinkedBansGet.mockReset();
   mockBindingsGet.mockReset();
+  mockDelete.mockClear();
   clearBanCache(); // the module caches ban state process-wide
   mockDocGet.mockResolvedValue({ exists: false });
   mockNetworkBansGet.mockResolvedValue(snap([]));
@@ -128,6 +141,47 @@ describe('network-ban truncation warning', () => {
 
     await checkBans('dev-4', '198.51.100.1', null);
     expect(log.warn).not.toHaveBeenCalled();
+  });
+});
+
+describe('expired network bans are lazily reaped, corrupt ones never are', () => {
+  test('a genuinely expired ban is deleted on the next refresh; an active one is not', async () => {
+    const past = new Date(Date.now() - 60_000).toISOString();
+    mockNetworkBansGet.mockResolvedValue(
+      snap([
+        { id: 'expired', type: 'ip', value: '1.1.1.1', expiresAt: past },
+        { id: 'active', type: 'ip', value: '2.2.2.2', expiresAt: null },
+      ]),
+    );
+
+    const result = await checkBans('dev-1', '2.2.2.2', null);
+    expect(result).toMatchObject({ isBanned: true, banType: 'network_ip' });
+
+    await Promise.resolve(); // let the fire-and-forget reap settle
+    expect(mockDelete).toHaveBeenCalledTimes(1); // only the expired one
+  });
+
+  test('a ban with a CORRUPT expiry is kept in force and never reaped', async () => {
+    mockNetworkBansGet.mockResolvedValue(
+      snap([{ id: 'corrupt', type: 'ip', value: '3.3.3.3', expiresAt: '' }]),
+    );
+
+    const result = await checkBans('dev-2', '3.3.3.3', null);
+    expect(result).toMatchObject({ isBanned: true, banType: 'network_ip' });
+
+    await Promise.resolve();
+    expect(mockDelete).not.toHaveBeenCalled();
+  });
+
+  test('a reap failure never fails the request', async () => {
+    mockDelete.mockRejectedValueOnce(new Error('firestore down'));
+    mockNetworkBansGet.mockResolvedValue(
+      snap([
+        { id: 'expired', type: 'ip', value: '4.4.4.4', expiresAt: '2000-01-01T00:00:00.000Z' },
+      ]),
+    );
+
+    await expect(checkBans('dev-3', '9.9.9.9', null)).resolves.toMatchObject({ isBanned: false });
   });
 });
 
