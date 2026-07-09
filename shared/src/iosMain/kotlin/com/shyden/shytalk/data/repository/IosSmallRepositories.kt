@@ -27,25 +27,22 @@ import kotlinx.serialization.json.jsonPrimitive
 
 class IosDeviceRepositoryImpl(
     private val api: IosApiClient,
-    private val firestore: FirebaseFirestore,
 ) : DeviceRepository {
-    override suspend fun getDeviceBinding(deviceId: String): Resource<String?> =
-        firebaseCall("Failed to check device binding") {
-            val doc = firestore.collection("deviceBindings").document(deviceId).get()
-            if (!doc.exists) return@firebaseCall null
-            val data = doc.dataMap()
-            (data["uniqueId"] ?: data["userId"])?.toString()
-        }
-
-    override suspend fun bindDevice(
-        deviceId: String,
-        userId: String,
-    ): Resource<Unit> =
-        firebaseCall("Failed to bind device") {
-            firestore
-                .collection("deviceBindings")
-                .document(deviceId)
-                .set(mapOf("userId" to userId, "boundAt" to currentTimeMillis()))
+    override suspend fun resolveDeviceLock(deviceId: String): Resource<DeviceLockStatus> =
+        try {
+            val body = JsonObject(mapOf("deviceId" to JsonPrimitive(deviceId)))
+            val response = api.post("/api/devices/lock-check", body)
+            val status =
+                if (response["status"]?.jsonPrimitive?.contentOrNull == "locked") {
+                    DeviceLockStatus.LOCKED
+                } else {
+                    DeviceLockStatus.ALLOWED
+                }
+            Resource.Success(status)
+        } catch (e: Exception) {
+            // Lenient: a lock-check outage must not lock out real users (logged).
+            logW("DeviceRepository", "Device lock-check failed, allowing through: ${e.message}")
+            Resource.Error("Device lock-check failed: ${e.message}")
         }
 
     override suspend fun checkBanStatus(deviceId: String): Resource<BanStatus> =

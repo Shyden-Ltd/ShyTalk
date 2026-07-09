@@ -1,11 +1,8 @@
 package com.shyden.shytalk.data.repository
 
-import com.google.firebase.firestore.FirebaseFirestore
 import com.shyden.shytalk.core.util.Resource
-import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.remote.WorkerApiClient
-import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
 
 private fun JSONObject.optStringOrNull(key: String): String? {
@@ -14,29 +11,23 @@ private fun JSONObject.optStringOrNull(key: String): String? {
 }
 
 class DeviceRepositoryImpl(
-    private val firestore: FirebaseFirestore,
     private val workerApiClient: WorkerApiClient,
 ) : DeviceRepository {
-    override suspend fun getDeviceBinding(deviceId: String): Resource<String?> =
-        firebaseCall("Failed to check device binding") {
-            val doc = firestore.document("deviceBindings/$deviceId").get().await()
-            val data = doc.data ?: return@firebaseCall null
-            (data["uniqueId"] ?: data["userId"])?.toString()
-        }
-
-    override suspend fun bindDevice(
-        deviceId: String,
-        userId: String,
-    ): Resource<Unit> =
-        firebaseCall("Failed to bind device") {
-            firestore
-                .document("deviceBindings/$deviceId")
-                .set(
-                    mapOf(
-                        "userId" to userId,
-                        "boundAt" to System.currentTimeMillis(),
-                    ),
-                ).await()
+    override suspend fun resolveDeviceLock(deviceId: String): Resource<DeviceLockStatus> =
+        try {
+            val body = JSONObject().apply { put("deviceId", deviceId) }
+            val response = workerApiClient.post("/api/devices/lock-check", body)
+            val status =
+                if (response.optString("status") == "locked") {
+                    DeviceLockStatus.LOCKED
+                } else {
+                    DeviceLockStatus.ALLOWED
+                }
+            Resource.Success(status)
+        } catch (e: Exception) {
+            // Lenient: a lock-check outage must not lock out real users (logged for debugging).
+            logW("DeviceRepository", "Device lock-check failed, allowing through: ${e.message}")
+            Resource.Error(e.message ?: "Device lock-check failed")
         }
 
     override suspend fun checkBanStatus(deviceId: String): Resource<BanStatus> =

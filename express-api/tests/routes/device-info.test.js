@@ -142,6 +142,18 @@ describe('POST /api/device-info', () => {
     expect(res.body.error).toBe('deviceId is required');
   });
 
+  test('rejects a deviceId containing "/" (400 invalid) — no Firestore path redirection (SHY-0170)', async () => {
+    const app = createApp();
+
+    const res = await request(app)
+      .post('/api/device-info')
+      .send({ deviceId: 'a/b/c', manufacturer: 'Samsung' })
+      .expect(400);
+
+    expect(res.body.error).toBe('deviceId is invalid');
+    expect(mockDoc).not.toHaveBeenCalledWith('deviceBindings/a/b/c');
+  });
+
   test('returns banStatus.isBanned = false when no bans', async () => {
     // Device ban doc doesn't exist
     mockDocGet.mockResolvedValue({ exists: false });
@@ -428,6 +440,54 @@ describe('POST /api/device-info', () => {
     const secondCallDoc = mockSet.mock.calls[0][0];
     expect(secondCallDoc).not.toHaveProperty('firstSeen');
     expect(secondCallDoc).not.toHaveProperty('boundAt');
+  });
+
+  test('does NOT rebind uniqueId when the device is already bound to a DIFFERENT user (SHY-0170)', async () => {
+    // Security reconcile: device-info updates telemetry on every launch, but must
+    // never silently re-bind a device already owned by another account to the
+    // caller — that would defeat the device-lock the lock-check endpoint enforces.
+    let n = 0;
+    mockDocGet.mockImplementation(() => {
+      n++;
+      // 1st get = deviceBindings existence check (bound to someone else)
+      if (n === 1)
+        return Promise.resolve({ exists: true, data: () => ({ uniqueId: 'otheruser' }) });
+      // 2nd get = deviceBans check (none)
+      return Promise.resolve({ exists: false });
+    });
+
+    const app = createApp(); // req.auth.uniqueId = 'user123'
+    await request(app)
+      .post('/api/device-info')
+      .set('x-forwarded-for', '203.0.113.1')
+      .send(validBody)
+      .expect(200);
+
+    const written = mockSet.mock.calls[0][0];
+    // Telemetry still updates …
+    expect(written).toMatchObject({ deviceId: 'abc-xyz', model: 'Galaxy S24' });
+    // … but the caller must NOT steal the binding (uniqueId not overwritten).
+    expect(written.uniqueId).toBeUndefined();
+  });
+
+  test('DOES set uniqueId when the device is already bound to the SAME caller', async () => {
+    // The reconcile only suppresses uniqueId on a foreign binding; re-affirming
+    // your own binding is fine (and keeps the field present for new-device writes).
+    let n = 0;
+    mockDocGet.mockImplementation(() => {
+      n++;
+      if (n === 1) return Promise.resolve({ exists: true, data: () => ({ uniqueId: 'user123' }) });
+      return Promise.resolve({ exists: false });
+    });
+
+    const app = createApp(); // req.auth.uniqueId = 'user123'
+    await request(app)
+      .post('/api/device-info')
+      .set('x-forwarded-for', '203.0.113.1')
+      .send(validBody)
+      .expect(200);
+
+    expect(mockSet.mock.calls[0][0].uniqueId).toBe('user123');
   });
 
   // ─── Additional branch coverage tests ───────────────────────────

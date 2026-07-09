@@ -14,6 +14,7 @@ import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BiometricRepository
+import com.shyden.shytalk.data.repository.DeviceLockStatus
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
 import com.shyden.shytalk.data.repository.SignInResult
@@ -310,24 +311,9 @@ class AuthViewModel(
                         identityRepository.forceRefreshToken()
 
                         if (!bypassDeviceChecks) {
-                            when (val binding = deviceRepository.getDeviceBinding(deviceId)) {
-                                is Resource.Success -> {
-                                    val boundUserId = binding.data
-                                    if (boundUserId != null && boundUserId != uniqueIdStr) {
-                                        logW(TAG, "Device locked for uniqueId=${signInResult.uniqueId}")
-                                        authRepository.signOut()
-                                        _uiState.update { it.copy(isLoading = false, isBackendUnreachable = false, isDeviceLocked = true) }
-                                        return
-                                    }
-                                    if (boundUserId == null) {
-                                        deviceRepository.bindDevice(deviceId, uniqueIdStr)
-                                    }
-                                }
-
-                                is Resource.Error -> { /* lenient */ }
-
-                                is Resource.Loading -> Unit
-                            }
+                            // Server-authoritative device-lock (SHY-0170): the API
+                            // decides + binds; a locked device signs out here.
+                            if (!resolveDeviceLockOrBlock()) return
                             checkAndApplyBan()
                         } else {
                             logI(TAG, "Device checks bypassed (debug build)")
@@ -338,21 +324,9 @@ class AuthViewModel(
                     is SignInResult.NotFound -> {
                         logI(TAG, "Identity not found — new user")
                         if (!bypassDeviceChecks) {
-                            when (val binding = deviceRepository.getDeviceBinding(deviceId)) {
-                                is Resource.Success -> {
-                                    val boundUserId = binding.data
-                                    if (boundUserId != null) {
-                                        logW(TAG, "Device bound — blocking new account creation")
-                                        authRepository.signOut()
-                                        _uiState.update { it.copy(isLoading = false, isBackendUnreachable = false, isDeviceLocked = true) }
-                                        return
-                                    }
-                                }
-
-                                is Resource.Error -> { /* lenient */ }
-
-                                is Resource.Loading -> Unit
-                            }
+                            // A device already bound to another account cannot spawn
+                            // a new account — the API makes that call (SHY-0170).
+                            if (!resolveDeviceLockOrBlock()) return
                             checkAndApplyBan()
                         }
                         _uiState.update {
@@ -461,6 +435,36 @@ class AuthViewModel(
             _uiState.update { it.copy(isLoading = false, isBackendUnreachable = true) }
         }
     }
+
+    /**
+     * Server-authoritative device-lock check (SHY-0170). Asks the API whether
+     * this device is locked to another account (the API also binds an unbound
+     * device to an existing caller). Returns `true` to proceed, or `false` when
+     * the device is LOCKED — in which case it has already signed the caller out
+     * and set `isDeviceLocked`. On an API error it is lenient (returns `true`),
+     * preserving the prior availability-over-strictness posture.
+     */
+    private suspend fun resolveDeviceLockOrBlock(): Boolean =
+        when (val lock = deviceRepository.resolveDeviceLock(deviceId)) {
+            is Resource.Success -> {
+                if (lock.data == DeviceLockStatus.LOCKED) {
+                    logW(TAG, "Device locked by the API — blocking")
+                    authRepository.signOut()
+                    _uiState.update {
+                        it.copy(isLoading = false, isBackendUnreachable = false, isDeviceLocked = true)
+                    }
+                    false
+                } else {
+                    true
+                }
+            }
+
+            // Lenient: a lock-check outage (Error) or a pending state (Loading)
+            // must not lock out real users — proceed.
+            is Resource.Error -> true
+
+            is Resource.Loading -> true
+        }
 
     /**
      * Checks device/network ban status via the API.
