@@ -16,16 +16,31 @@
  * This guard fails LOUDLY at test time rather than letting the next wholesale
  * wipe become a mystery flake, which is SHY-0171's observability requirement.
  *
- * Scope: only suites that reach a REAL emulator. Pure unit tests (`*.unit.test.js`)
- * double Firebase and never touch one, so they are exempt — including this file,
- * whose own assertions necessarily name the very patterns it forbids.
+ * Two halves. The FIXTURES half proves the analyzer actually detects each form
+ * of violation — a guard whose detector is blind is worse than none, because it
+ * launders the absence of evidence into evidence of absence. The CORPUS half
+ * then runs that detector over every real test file.
  */
 
 const fs = require('fs');
 const path = require('path');
 
+const {
+  analyze,
+  findWipeCollisions,
+  isNamespaced,
+  referencedSegments,
+  resolvesIdTokens,
+  touchesRealEmulator,
+  wipedCollections,
+  wipesDefaultAuthProject,
+} = require('../helpers/test-isolation-analyzer');
+
 const TESTS_ROOT = path.join(__dirname, '..');
+const FIXTURES = path.join(TESTS_ROOT, 'fixtures', 'isolation-guard');
 const rel = (f) => path.relative(path.join(TESTS_ROOT, '..'), f);
+
+const fixture = (name) => fs.readFileSync(path.join(FIXTURES, name), 'utf8');
 
 function allTestFiles(dir = TESTS_ROOT, acc = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -36,109 +51,113 @@ function allTestFiles(dir = TESTS_ROOT, acc = []) {
   return acc;
 }
 
-/** Drop a trailing `//` comment, but never the `//` of a `http://` URL. */
-function stripLineComment(line) {
-  for (let i = line.indexOf('//'); i !== -1; i = line.indexOf('//', i + 2)) {
-    if (i === 0 || line[i - 1] !== ':') return line.slice(0, i);
-  }
-  return line;
-}
+const analyses = allTestFiles().map((f) => analyze(rel(f), fs.readFileSync(f, 'utf8')));
+const emulatorSuites = analyses.filter((a) => a.touchesEmulator);
 
-/**
- * Comments describe the rules; only code obeys or breaks them. Strip both
- * comment forms before matching, or a docblock explaining the invariant reads
- * as a violation of it.
- */
-function stripComments(source) {
-  return source
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .split('\n')
-    .map(stripLineComment)
-    .join('\n');
-}
+describe('isolation analyzer — the detector sees every form a violation can take', () => {
+  test('a wipe driven by an arbitrarily-named array constant is detected', () => {
+    // A hardcoded whitelist of constant names would miss `COLLECTIONS_TO_WIPE`.
+    const wiped = wipedCollections(fixture('wipes-via-array-const.js.txt'));
+    expect([...wiped].sort()).toEqual(['deviceBans', 'rooms', 'users']);
+  });
 
-const WIPE_LIST_CONSTS = ['TOP_COLLECTIONS', 'TOP_LEVEL', 'GROUPS', 'SUB_GROUPS'];
+  test('a direct string wipe is detected, for both collections and groups', () => {
+    const wiped = wipedCollections(fixture('wipes-directly.js.txt'));
+    expect([...wiped].sort()).toEqual(['backpack', 'users']);
+  });
 
-/**
- * Collections a file wipes wholesale: the literal `clearCollection(db, 'users')`
- * plus the indirect `for (const c of TOP_LEVEL) clearCollection(db, c)`, resolved
- * by expanding the string-array constants those loops read from.
- */
-function wipedCollections(code) {
-  const wiped = new Set(
-    [...code.matchAll(/clearCollection(?:Group)?\(db,\s*'([^']+)'/g)].map((m) => m[1]),
-  );
-  if (/clearCollection(?:Group)?\(db,\s*[a-z]/.test(code)) {
-    for (const m of code.matchAll(/const\s+([A-Z_]+)\s*=\s*\[([^\]]*)\]/g)) {
-      if (!WIPE_LIST_CONSTS.includes(m[1])) continue;
-      for (const s of m[2].matchAll(/'([^']+)'/g)) wiped.add(s[1]);
-    }
-  }
-  return wiped;
-}
+  test('a subcollection buried mid-path in a template literal counts as a use', () => {
+    // `users/${uid}/backpack/${id}` — a quote-anchored scan never sees `backpack`.
+    const segments = referencedSegments(fixture('uses-subcollection-midpath.js.txt'));
+    expect(segments.has('backpack')).toBe(true);
+    expect(segments.has('users')).toBe(true);
+  });
 
-/** An ASSIGNMENT claims the namespace. Merely naming the variable does not. */
-const isNamespaced = (code) => /process\.env\.FIRESTORE_TEST_NAMESPACE\s*=/.test(code);
+  test('comments never register as code, and code inside strings never registers as a comment', () => {
+    // Contains: a docblock naming clearCollection; a string holding `a // b`;
+    // a regex literal `/https?:\/\//`; and one real wipe.
+    const source = fixture('comments-and-lookalikes.js.txt');
+    expect([...wipedCollections(source)]).toEqual(['rooms']);
+    expect(isNamespaced(source)).toBe(false);
+    expect(wipesDefaultAuthProject(source)).toBe(true); // the URL string survives
+  });
 
-/** A file "uses" a collection if it names it as a string or a path segment. */
-function usesCollection(code, collection) {
-  const esc = collection.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`['"\`]${esc}[/'"\`]`).test(code);
-}
+  test('a real-emulator suite is recognised even when named like a unit test', () => {
+    // The `.unit.test.js` naming convention must not be an escape hatch.
+    expect(touchesRealEmulator(fixture('real-emulator-suite.js.txt'))).toBe(true);
+  });
 
-/** Suites that hit a real emulator — the only ones this invariant governs. */
-const emulatorFiles = allTestFiles()
-  .filter((f) => !f.endsWith('.unit.test.js'))
-  .map((f) => ({ file: rel(f), code: stripComments(fs.readFileSync(f, 'utf8')) }));
+  test('a suite that doubles firebase is NOT an emulator suite', () => {
+    expect(touchesRealEmulator(fixture('mocks-firebase.js.txt'))).toBe(false);
+  });
+
+  test('namespacing is recognised by assignment, not by mention', () => {
+    expect(isNamespaced(fixture('mentions-namespace-only.js.txt'))).toBe(false);
+    expect(isNamespaced(fixture('wipes-via-array-const.js.txt'))).toBe(true);
+  });
+
+  test('token resolution is detected through both bare and member calls', () => {
+    expect(resolvesIdTokens(fixture('real-emulator-suite.js.txt'))).toBe(true);
+    expect(resolvesIdTokens(fixture('wipes-directly.js.txt'))).toBe(false);
+  });
+
+  test('findWipeCollisions reports a genuine collision and stays silent on a namespaced one', () => {
+    const wiper = analyze('wiper.test.js', fixture('wipes-directly.js.txt'));
+    const victim = analyze('victim.test.js', fixture('uses-subcollection-midpath.js.txt'));
+    // The victim's `users/${uid}/backpack/${id}` path uses BOTH collections the
+    // wiper clears, so both collide; violations are reported collection-sorted.
+    expect(findWipeCollisions([wiper, victim])).toEqual([
+      expect.stringContaining("wiper.test.js wipes 'backpack'"),
+      expect.stringContaining("wiper.test.js wipes 'users'"),
+    ]);
+
+    const namespacedWiper = analyze('wiper.test.js', fixture('wipes-via-array-const.js.txt'));
+    expect(findWipeCollisions([namespacedWiper, victim])).toEqual([]);
+  });
+});
 
 describe('test-isolation guard — a wholesale wipe requires an exclusive emulator project', () => {
-  test('the scan sees real emulator suites, including wipers (the guard is not vacuous)', () => {
-    expect(emulatorFiles.length).toBeGreaterThan(100);
-    expect(
-      emulatorFiles.filter(({ code }) => wipedCollections(code).size > 0).length,
-    ).toBeGreaterThan(5);
-    expect(emulatorFiles.filter(({ code }) => isNamespaced(code)).length).toBeGreaterThan(5);
+  // A corpus check passes trivially once no wipers remain, so pin the POPULATION
+  // by name: a known real-emulator suite must be in it, a known doubled suite
+  // must not, and known wipers must be seen as wiping the collections they wipe.
+  test('the population is real: named suites land on the correct side of the line', () => {
+    const byName = (needle) => analyses.find((a) => a.file.endsWith(needle));
+
+    expect(byName('middleware/auth-ban-gate.test.js').touchesEmulator).toBe(true);
+    expect(byName('unit/bans.unit.test.js').touchesEmulator).toBe(false);
+
+    const testData = byName('cron/testDataCleanup.test.js');
+    expect(testData.namespaced).toBe(true);
+    expect([...testData.wipes]).toEqual(expect.arrayContaining(['users', 'deviceBans']));
+
+    const accountDeletion = byName('cron/accountDeletion.test.js');
+    expect(accountDeletion.namespaced).toBe(true);
+    expect(accountDeletion.wipesDefaultAuthProject).toBe(false);
+  });
+
+  test('the scan sees emulator suites, wipers and namespaced suites (not vacuous)', () => {
+    expect(emulatorSuites.length).toBeGreaterThan(50);
+    expect(emulatorSuites.filter((a) => a.wipes.size > 0).length).toBeGreaterThan(5);
+    expect(emulatorSuites.filter((a) => a.namespaced).length).toBeGreaterThan(5);
+    // Doubled suites exist and are correctly excluded from the population.
+    expect(analyses.length).toBeGreaterThan(emulatorSuites.length);
   });
 
   test('no non-namespaced suite wipes a collection another non-namespaced suite uses', () => {
-    const violations = [];
-
-    for (const { file, code } of emulatorFiles) {
-      if (isNamespaced(code)) continue;
-      for (const collection of [...wipedCollections(code)].sort()) {
-        const collaterals = emulatorFiles
-          .filter((o) => o.file !== file && !isNamespaced(o.code))
-          .filter((o) => usesCollection(o.code, collection))
-          .map((o) => o.file);
-        if (collaterals.length > 0) {
-          violations.push(
-            `${file} wipes '${collection}', also used by ${collaterals.length} other file(s): ` +
-              `${collaterals.slice(0, 3).join(', ')}${collaterals.length > 3 ? ', …' : ''}`,
-          );
-        }
-      }
-    }
-
-    expect(violations).toEqual([]);
+    expect(findWipeCollisions(analyses)).toEqual([]);
   });
 
   test('no suite wipes the Auth accounts of the shared default project', () => {
     // `DELETE /emulator/v1/projects/demo-shytalk/accounts` deletes the Firebase
     // users behind every ID token a sibling suite just minted. A suite that
     // needs this must claim its own project and derive the URL from it.
-    const offenders = emulatorFiles
-      .filter(({ code }) => /projects\/demo-shytalk\/accounts/.test(code))
-      .map(({ file }) => file);
-
-    expect(offenders).toEqual([]);
+    expect(analyses.filter((a) => a.wipesDefaultAuthProject).map((a) => a.file)).toEqual([]);
   });
 
   test('a namespaced suite never resolves ID tokens (the one thing a namespace breaks)', () => {
-    const offenders = emulatorFiles
-      .filter(({ code }) => isNamespaced(code))
-      .filter(({ code }) => /verifyIdToken|mintRealUser|createCustomToken/.test(code))
-      .map(({ file }) => file);
-
+    const offenders = emulatorSuites
+      .filter((a) => a.namespaced && a.resolvesTokens)
+      .map((a) => a.file);
     expect(offenders).toEqual([]);
   });
 });

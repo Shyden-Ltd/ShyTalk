@@ -220,21 +220,15 @@ async function getActiveNetworkBans() {
       const expired = [];
       let cursor = null;
 
-      for (let page = 0; ; page++) {
-        if (page >= NETWORK_BANS_MAX_PAGES) {
-          log.error('bans', 'networkBans scan exceeded its page budget — failing closed', {
-            pages: NETWORK_BANS_MAX_PAGES,
-            perPage: NETWORK_BANS_QUERY_LIMIT,
-          });
-          throw new Error('networkBans scan truncated; cannot determine standing');
-        }
-
-        let query = db
-          .collection('networkBans')
-          .orderBy(FieldPath.documentId())
-          .limit(NETWORK_BANS_QUERY_LIMIT);
+      /** One page of ids, or — with a size of 1 — a probe for "is there more?". */
+      const pageQuery = (size) => {
+        let query = db.collection('networkBans').orderBy(FieldPath.documentId()).limit(size);
         if (cursor) query = query.startAfter(cursor);
-        const snap = await query.get();
+        return query.get();
+      };
+
+      for (let pagesRead = 1; ; pagesRead++) {
+        const snap = await pageQuery(NETWORK_BANS_QUERY_LIMIT);
 
         for (const doc of snap.docs) {
           const ban = doc.data();
@@ -242,8 +236,22 @@ async function getActiveNetworkBans() {
           else expired.push(doc.ref);
         }
 
-        if (snap.size < NETWORK_BANS_QUERY_LIMIT) break; // last page
+        if (snap.size < NETWORK_BANS_QUERY_LIMIT) break; // short page → the end
         cursor = snap.docs[snap.docs.length - 1].id;
+
+        if (pagesRead >= NETWORK_BANS_MAX_PAGES) {
+          // The budget is a DOCUMENT budget, not a page-index one. Having read
+          // MAX_PAGES full pages says we scanned MAX_PAGES x LIMIT documents —
+          // NOT that more exist. Only a probe distinguishes the two, and a
+          // collection of exactly the budget was scanned completely (R10-I1).
+          if ((await pageQuery(1)).size === 0) break;
+
+          log.error('bans', 'networkBans scan exceeded its document budget — failing closed', {
+            pages: NETWORK_BANS_MAX_PAGES,
+            perPage: NETWORK_BANS_QUERY_LIMIT,
+          });
+          throw new Error('networkBans scan truncated; cannot determine standing');
+        }
       }
 
       // Drain the whole expired backlog we just walked, so the next scan is one
@@ -557,6 +565,7 @@ module.exports = {
   networkBanMatches,
   isIpInSubnet,
   NETWORK_BANS_QUERY_LIMIT,
+  NETWORK_BANS_MAX_PAGES,
   MAX_BOUND_DEVICES,
   BINDINGS_SCAN_LIMIT,
   BINDING_TRANSACTION_OPTIONS,

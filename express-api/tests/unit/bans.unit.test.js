@@ -72,6 +72,7 @@ const {
   networkBanMatches,
   isIpInSubnet,
   NETWORK_BANS_QUERY_LIMIT,
+  NETWORK_BANS_MAX_PAGES,
   MAX_CACHE_SIZE,
 } = require('../../src/utils/bans');
 
@@ -170,6 +171,47 @@ describe('the network-ban scan is paged and fails CLOSED rather than guessing', 
     // which turns it into a 401 in authMiddleware.
     clearBanCache();
     await expect(checkUserBans('9001', '1.2.3.4')).rejects.toThrow(/truncated/i);
+  });
+
+  // The budget is a DOCUMENT budget (MAX_PAGES x LIMIT), not a page-index
+  // budget. A collection of exactly MAX_PAGES full pages was fully scanned —
+  // failing it closed locks every caller out of a collection the code claims to
+  // support. Only MORE than the budget is unprovable (reviewer R10-I1).
+  test('a collection of exactly the budget is scanned COMPLETELY, not failed closed', async () => {
+    for (let i = 0; i < NETWORK_BANS_MAX_PAGES; i++) {
+      mockNetworkBansGet.mockResolvedValueOnce(page(`full${i}`, LIMIT));
+    }
+    mockNetworkBansGet.mockResolvedValueOnce(snap([])); // probe: nothing beyond the budget
+
+    await expect(checkUserBans('9101', '198.51.100.7')).resolves.toMatchObject({ isBanned: false });
+    expect(log.error).not.toHaveBeenCalled();
+  });
+
+  test('a ban on the LAST page of an exactly-budget-sized collection is still enforced', async () => {
+    const target = { id: 'last-target', type: 'ip', value: '198.51.100.9', expiresAt: null };
+    for (let i = 0; i < NETWORK_BANS_MAX_PAGES - 1; i++) {
+      mockNetworkBansGet.mockResolvedValueOnce(page(`full${i}`, LIMIT));
+    }
+    // Final full page carries the ban; ids stay distinct so the cursor advances.
+    const finalPage = page('final', LIMIT - 1);
+    finalPage.docs.push({ id: target.id, data: () => target, ref: { delete: mockDelete } });
+    finalPage.size = LIMIT;
+    mockNetworkBansGet.mockResolvedValueOnce(finalPage);
+    mockNetworkBansGet.mockResolvedValueOnce(snap([])); // probe
+
+    await expect(checkUserBans('9102', '198.51.100.9')).resolves.toMatchObject({
+      isBanned: true,
+      banType: 'network_ip',
+    });
+  });
+
+  test('one document BEYOND the budget fails closed — that scan cannot be proven complete', async () => {
+    for (let i = 0; i < NETWORK_BANS_MAX_PAGES; i++) {
+      mockNetworkBansGet.mockResolvedValueOnce(page(`full${i}`, LIMIT));
+    }
+    mockNetworkBansGet.mockResolvedValueOnce(page('overflow', 1)); // probe finds one more
+
+    await expect(checkUserBans('9103', '1.2.3.4')).rejects.toThrow(/truncated/i);
   });
 
   test('a single short page is one query — no needless paging', async () => {
