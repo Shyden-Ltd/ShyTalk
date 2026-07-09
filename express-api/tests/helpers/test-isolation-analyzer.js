@@ -327,48 +327,148 @@ function referencedSegmentsFromAst(ast) {
 const FIRESTORE_PATH_FNS = new Set(['doc', 'collection', 'collectionGroup']);
 
 /**
- * Firestore paths whose leading collection name the analyzer cannot read.
- *
- * `db.doc(`${ROOMS}/${id}`)` names `rooms` through an identifier: the template's
- * own text is `''` and `'/'`. `referencedSegments` catches it today only because
- * `const ROOMS = 'rooms'` also happens to be a string literal somewhere in the
- * file — luck, not design. Were `ROOMS` imported from a shared constants module,
- * the file would silently stop counting as a user of `rooms`, and a sibling's
- * wholesale wipe of it would go unreported. Under-approximating the VICTIM side
- * is the one direction `findWipeCollisions` cannot tolerate.
- *
- * So: resolve the leading identifier through the same scope machinery the wiper
- * side uses, and REPORT the ones that stay unknown. The guard fails on a
- * non-empty list, exactly as it does for an unresolvable wipe.
+ * The module specifier behind `const { X } = require('./mod')`, or null.
+ * Only relative requires: a package's constants are not this repo's collections.
  */
-function unresolvedSegmentsFromAst(ast) {
+function relativeRequireSpecifier(declarator) {
+  const init = declarator?.init;
+  if (init?.type !== 'CallExpression') return null;
+  if (init.callee.type !== 'Identifier' || init.callee.name !== 'require') return null;
+  const spec = init.arguments[0];
+  if (spec?.type !== 'StringLiteral' || !spec.value.startsWith('.')) return null;
+  return spec.value;
+}
+
+/** A top-level `const NAME = '<literal>'` exported by a module's source, or null. */
+function exportedStringConstant(moduleSource, name) {
+  let ast;
+  try {
+    ast = parseSource(moduleSource);
+  } catch {
+    return null;
+  }
+  for (const statement of ast.program.body) {
+    if (statement.type !== 'VariableDeclaration') continue;
+    for (const declarator of statement.declarations) {
+      if (declarator.id.type === 'Identifier' && declarator.id.name === name) {
+        return declarator.init?.type === 'StringLiteral' ? declarator.init.value : null;
+      }
+    }
+  }
+  return null;
+}
+
+/** Does this literal path text carry an actual name, not just separators? */
+const hasNameText = (text) => String(text).split('/').some(Boolean);
+
+/** An in-file array of string literals: its names are scanned by `referencedSegments`. */
+function arrayOfStringLiterals(node, ancestors) {
+  if (node.type === 'ArrayExpression') return stringValues(node.elements) !== null;
+  if (node.type !== 'Identifier') return false;
+  const { declarator } = resolveBinding(ancestors, node.name);
+  if (declarator?.init?.type !== 'ArrayExpression') return false;
+  return stringValues(declarator.init.elements) !== null;
+}
+
+/**
+ * Can the analyzer see the collection name this Firestore path names?
+ *
+ * "Readable" means the name appears somewhere in this file as a string literal,
+ * so `referencedSegments` counts the file as a user of that collection. It does
+ * NOT mean we compute the name here — the blanket literal scan already does.
+ *
+ * Readable: a literal; a template with literal name text before its first
+ * interpolation; an identifier bound to a local string constant, to such a
+ * template, to a function/catch PARAMETER (its arguments are literals at in-file
+ * call sites), or to a `for…of` over an in-file array of string literals.
+ *
+ * Everything else — an imported constant, an undeclared name, a concatenation, a
+ * call result — is UNREADABLE. Say so. Do not quietly return nothing: an
+ * under-counted victim lets a sibling's wholesale wipe pass unreported, and that
+ * is the one direction `findWipeCollisions` cannot tolerate.
+ */
+function pathIsReadable(node, ancestors, ctx) {
+  if (!node) return { readable: false, why: 'no path argument' };
+
+  if (node.type === 'StringLiteral') return { readable: true };
+
+  if (node.type === 'TemplateLiteral') {
+    if (hasNameText(node.quasis[0]?.value.cooked ?? '')) return { readable: true };
+    const head = node.expressions[0];
+    if (head?.type !== 'Identifier') {
+      return { readable: false, why: `the path begins with a ${head?.type ?? 'nothing'}` };
+    }
+    return pathIsReadable(head, ancestors, ctx);
+  }
+
+  if (node.type === 'Identifier') {
+    const { declarator, shadowedBy, loop } = resolveBinding(ancestors, node.name);
+    if (shadowedBy?.endsWith('parameter')) return { readable: true };
+    if (loop) {
+      if (arrayOfStringLiterals(loop.right, ancestors)) return { readable: true };
+      return { readable: false, why: `'${node.name}' iterates names this file never spells out` };
+    }
+    const init = declarator?.init;
+    if (init?.type === 'StringLiteral') return { readable: true };
+    if (init?.type === 'TemplateLiteral') return pathIsReadable(init, ancestors, ctx);
+
+    // `const { SAFETY_AUDIT_COLLECTION } = require('../../src/safety/safety-audit')`
+    // names a collection whose literal lives in ANOTHER file. Follow the require:
+    // the name must reach `segments`, or this file silently stops counting as a
+    // user of that collection and a sibling's wipe of it goes unreported.
+    const specifier = relativeRequireSpecifier(declarator);
+    if (specifier && ctx?.readModule) {
+      const moduleSource = ctx.readModule(specifier);
+      const value = moduleSource && exportedStringConstant(moduleSource, node.name);
+      if (value) {
+        ctx.importedNames.add(value);
+        return { readable: true };
+      }
+      return {
+        readable: false,
+        why: `'${node.name}' is imported from '${specifier}' but is not a string constant there`,
+      };
+    }
+    return { readable: false, why: `'${node.name}' is not a local string constant` };
+  }
+
+  return { readable: false, why: `the path is a ${node.type}` };
+}
+
+/**
+ * Firestore paths whose collection name the analyzer cannot read.
+ *
+ * `db.doc(`${ROOMS}/${id}`)` and `db.doc(SAFETY_DOC)` both name a collection
+ * through an identifier. Today every such identifier in this repo happens to be
+ * a local `const X = '<literal>'`, so the blanket literal scan sees the name —
+ * luck, not design. Centralise those constants into a shared import and the file
+ * silently stops counting as a user of the collection, and a sibling's wipe of
+ * it passes unreported. The guard fails on a non-empty list, exactly as it does
+ * for an unresolvable wipe.
+ */
+function firestorePathsFromAst(ast, readModule) {
   const unresolved = [];
+  const importedNames = new Set();
+  const ctx = { readModule, importedNames };
+
   walk(ast.program, (node, ancestors) => {
     if (node.type !== 'CallExpression') return;
     const { callee } = node;
     if (callee.type !== 'MemberExpression' || callee.property.type !== 'Identifier') return;
     if (!FIRESTORE_PATH_FNS.has(callee.property.name)) return;
 
-    const arg = node.arguments[0];
-    if (arg?.type !== 'TemplateLiteral') return;
-    if (arg.quasis[0]?.value.cooked !== '') return; // path starts with literal text — readable
-    const head = arg.expressions[0];
-    if (head?.type !== 'Identifier') return;
-
-    const { declarator, shadowedBy } = resolveBinding(ancestors, head.name);
-    if (declarator?.init?.type === 'StringLiteral') return; // resolvable — nothing to report
-    // A PARAMETER is fine: its arguments are supplied at call sites inside this
-    // file, as string literals, which `referencedSegments` already scans. Only a
-    // binding whose value lives OUTSIDE the file (an import, or nothing at all)
-    // hides a collection name from the victim side.
-    if (shadowedBy?.endsWith('parameter')) return;
+    const { readable, why } = pathIsReadable(node.arguments[0], ancestors, ctx);
+    if (readable) return;
     unresolved.push(
-      `db.${callee.property.name}(\`\${${head.name}}/…\`): '${head.name}' is not a local string ` +
-        'constant, so this file cannot be counted as a user of the collection it names',
+      `db.${callee.property.name}(…): ${why}, so this file cannot be counted as a user ` +
+        'of the collection it names',
     );
   });
-  return unresolved;
+  return { unresolved, importedNames };
 }
+
+const unresolvedSegmentsFromAst = (ast, readModule) =>
+  firestorePathsFromAst(ast, readModule).unresolved;
 
 /** An ASSIGNMENT claims the namespace. Merely naming the variable does not. */
 function isNamespacedFromAst(ast) {
@@ -447,17 +547,20 @@ function wipesDefaultAuthProjectFromAst(ast) {
 }
 
 /** All facts for one file. Parsed ONCE. */
-function analyze(file, source) {
+function analyze(file, source, readModule) {
   const ast = parseSource(source);
   const { wipes, unresolved } = wipedCollectionsFromAst(ast);
   const doubled = doublesFirebaseFromAst(ast);
+  const paths = firestorePathsFromAst(ast, readModule);
+  const segments = referencedSegmentsFromAst(ast);
+  for (const name of paths.importedNames) segments.add(name);
   return {
     file,
     namespaced: isNamespacedFromAst(ast),
     wipes,
     unresolvedWipes: unresolved,
-    segments: referencedSegmentsFromAst(ast),
-    unresolvedSegments: unresolvedSegmentsFromAst(ast),
+    segments,
+    unresolvedSegments: paths.unresolved,
     doublesFirebase: doubled,
     touchesEmulator: touchesRealEmulatorFromAst(ast, doubled),
     resolvesTokens: resolvesIdTokensFromAst(ast),
@@ -498,7 +601,8 @@ module.exports = {
   doublesFirebase: fromSource(doublesFirebaseFromAst),
   isNamespaced: fromSource(isNamespacedFromAst),
   referencedSegments: fromSource(referencedSegmentsFromAst),
-  unresolvedSegments: fromSource(unresolvedSegmentsFromAst),
+  unresolvedSegments: (source, readModule) =>
+    unresolvedSegmentsFromAst(parseSource(source), readModule),
   resolvesIdTokens: fromSource(resolvesIdTokensFromAst),
   touchesRealEmulator: fromSource(touchesRealEmulatorFromAst),
   wipedCollections: fromSource(wipedCollectionsFromAst),

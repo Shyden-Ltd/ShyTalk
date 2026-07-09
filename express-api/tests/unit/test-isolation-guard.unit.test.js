@@ -53,7 +53,33 @@ function allTestFiles(dir = TESTS_ROOT, acc = []) {
   return acc;
 }
 
-const analyses = allTestFiles().map((f) => analyze(rel(f), fs.readFileSync(f, 'utf8')));
+/**
+ * Follow a relative `require` so a collection name that lives in another module
+ * (`const { SAFETY_AUDIT_COLLECTION } = require('../../src/safety/safety-audit')`)
+ * still counts this file as a user of that collection. Cached: the corpus scan
+ * would otherwise re-read and re-parse the same handful of modules hundreds of
+ * times. Only the analyzer's `unresolvedSegments` path uses it, and only for
+ * relative specifiers.
+ */
+const moduleCache = new Map();
+const readModuleFrom = (testFile) => (specifier) => {
+  const base = path.resolve(path.dirname(testFile), specifier);
+  for (const candidate of [base, `${base}.js`, path.join(base, 'index.js')]) {
+    if (!moduleCache.has(candidate)) {
+      const exists = fs.existsSync(candidate) && fs.statSync(candidate).isFile();
+      moduleCache.set(candidate, exists ? fs.readFileSync(candidate, 'utf8') : null);
+    }
+    // A cached `null` means "this candidate path is not a file" — try the next
+    // extension, never return it as the answer.
+    const source = moduleCache.get(candidate);
+    if (source !== null) return source;
+  }
+  return null;
+};
+
+const analyses = allTestFiles().map((f) =>
+  analyze(rel(f), fs.readFileSync(f, 'utf8'), readModuleFrom(f)),
+);
 const emulatorSuites = analyses.filter((a) => a.touchesEmulator);
 
 describe('isolation analyzer — the detector sees every form a violation can take', () => {
@@ -136,6 +162,61 @@ describe('isolation analyzer — the detector sees every form a violation can ta
     expect(referencedSegments(source).has('rooms')).toBe(false); // the name appears nowhere
     expect(unresolvedSegments(source)).toEqual([
       expect.stringMatching(/'ROOMS' is not a local string constant/),
+    ]);
+  });
+
+  test('REPORTS: a bare-Identifier Firestore path whose name is IMPORTED and unreadable', () => {
+    // The commonest shape by far — `db.doc(SAFETY_DOC)` — and the one the first
+    // version of this check never looked at (reviewer R14-C1).
+    const source = [
+      "const { SAFETY_DOC } = require('./collection-names');",
+      'db.doc(SAFETY_DOC).get();',
+    ].join('\n');
+    expect(unresolvedSegments(source)).toEqual([
+      expect.stringMatching(/'SAFETY_DOC' is not a local string constant/),
+    ]);
+  });
+
+  test('RESOLVES: an imported name, when the module can be read', () => {
+    const readModule = (spec) =>
+      spec === './collection-names' ? "const SAFETY_DOC = 'safetyAudit';" : null;
+    const source = [
+      "const { SAFETY_DOC } = require('./collection-names');",
+      'db.doc(SAFETY_DOC).get();',
+    ].join('\n');
+    expect(unresolvedSegments(source, readModule)).toEqual([]);
+  });
+
+  test('REPORTS: a leading-slash template — a separator is not a collection name', () => {
+    // `quasis[0].cooked === '/'` is non-empty, so a naive "starts with literal
+    // text" check short-circuits past an unreadable identifier (reviewer R14-C1).
+    const source = [
+      "const { ROOMS } = require('./collection-names');",
+      'db.doc(`/${ROOMS}/${id}`).get();',
+    ].join('\n');
+    expect(unresolvedSegments(source)).toEqual([
+      expect.stringMatching(/'ROOMS' is not a local string constant/),
+    ]);
+  });
+
+  test('REPORTS: a path built by concatenation, and any other unhandled shape', () => {
+    // Fail closed on shapes the analyzer does not understand, exactly as the
+    // wipe side does — an allowlist is how the victim side went blind.
+    expect(unresolvedSegments("const R = 'rooms'; db.doc(R + '/' + id).get();")).toEqual([
+      expect.stringMatching(/the path is a BinaryExpression/),
+    ]);
+    expect(unresolvedSegments('db.collection(namesFor(x)).get();')).toEqual([
+      expect.stringMatching(/the path is a CallExpression/),
+    ]);
+  });
+
+  test('REPORTS: a loop over names this file never spells out', () => {
+    const source = [
+      "const { NAMES } = require('./collection-names');",
+      'for (const c of NAMES) db.collection(c).get();',
+    ].join('\n');
+    expect(unresolvedSegments(source)).toEqual([
+      expect.stringMatching(/'c' iterates names this file never spells out/),
     ]);
   });
 
@@ -399,6 +480,23 @@ describe('wipedCollections — every branch resolves or reports, none silently i
     ]);
   });
 
+  test('REPORTS: a class declaration shadowing a same-named outer constant', () => {
+    const { wipes, unresolved } = analyseBody(
+      [
+        "const NAME = 'users';",
+        'function outer() {',
+        '  class NAME {}',
+        '  clearCollection(db, NAME);',
+        '}',
+        'outer();',
+      ].join('\n'),
+    );
+    expect([...wipes]).toEqual([]);
+    expect(unresolved).toEqual([
+      expect.stringMatching(/'NAME' is declared, but not as a string literal/),
+    ]);
+  });
+
   test('RESOLVES: doubling the Admin SDK itself counts as doubling firebase', () => {
     expect(doublesFirebase("jest.mock('firebase-admin', () => ({}));")).toBe(true);
     expect(doublesFirebase("jest.doMock('firebase-admin/firestore', () => ({}));")).toBe(true);
@@ -439,13 +537,24 @@ describe('test-isolation guard — a wholesale wipe requires an exclusive emulat
     expect(findWipeCollisions(analyses)).toEqual([]);
   });
 
-  test('every Firestore path in the corpus names a collection the guard can read', () => {
-    // A path like `db.doc(`${IMPORTED}/${id}`)` hides which collection this file
-    // uses, so a sibling's wipe of it would not be reported as a collision.
-    const blind = analyses
+  test('every Firestore path in an emulator suite names a collection the guard can read', () => {
+    // A path like `db.doc(SAFETY_DOC)` or `db.doc(`${IMPORTED}/${id}`)` hides
+    // which collection this file uses, so a sibling's wipe of it would not be
+    // reported as a collision. Doubled suites are exempt: their `db.collection()`
+    // is a mock and reads no real data.
+    const blind = emulatorSuites
       .filter((a) => a.unresolvedSegments.length > 0)
       .map((a) => `${a.file}: ${a.unresolvedSegments.join('; ')}`);
     expect(blind).toEqual([]);
+  });
+
+  test('a collection name imported from another module still counts as a use', () => {
+    // `tests/safety/safety-audit.test.js` never spells 'safetyAudit' — it imports
+    // SAFETY_AUDIT_COLLECTION from src/safety/safety-audit.js. Before the analyzer
+    // followed that require, the file was invisible as a user of the collection.
+    const safetyAudit = analyses.find((a) => a.file.endsWith('safety/safety-audit.test.js'));
+    expect(safetyAudit.segments.has('safetyAudit')).toBe(true);
+    expect(safetyAudit.unresolvedSegments).toEqual([]);
   });
 
   test('every wipe in the corpus is statically resolvable — the guard never guesses', () => {
