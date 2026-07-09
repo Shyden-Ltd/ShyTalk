@@ -142,6 +142,18 @@ describe('POST /api/device-info', () => {
     expect(res.body.error).toBe('deviceId is required');
   });
 
+  test('rejects a deviceId containing "/" (400 invalid) — no Firestore path redirection (SHY-0170)', async () => {
+    const app = createApp();
+
+    const res = await request(app)
+      .post('/api/device-info')
+      .send({ deviceId: 'a/b/c', manufacturer: 'Samsung' })
+      .expect(400);
+
+    expect(res.body.error).toBe('deviceId is invalid');
+    expect(mockDoc).not.toHaveBeenCalledWith('deviceBindings/a/b/c');
+  });
+
   test('returns banStatus.isBanned = false when no bans', async () => {
     // Device ban doc doesn't exist
     mockDocGet.mockResolvedValue({ exists: false });

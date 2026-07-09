@@ -9,6 +9,7 @@ const router = require('express').Router();
 const { db } = require('../utils/firebase');
 const { Filter } = require('firebase-admin/firestore');
 const { now } = require('../utils/helpers');
+const { isValidDeviceId } = require('../utils/deviceId');
 const log = require('../utils/log');
 
 // Bound per-request network-ban reads to keep Spark-tier quota safe if
@@ -67,6 +68,11 @@ router.post('/device-info', async (req, res) => {
     const body = req.body;
     if (!body?.deviceId) {
       return res.status(400).json({ error: 'deviceId is required' });
+    }
+    if (!isValidDeviceId(body.deviceId)) {
+      // Reject `/` (path redirection), whitespace, over-length, non-string —
+      // deviceId is used directly as a Firestore doc id (SHY-0170).
+      return res.status(400).json({ error: 'deviceId is invalid' });
     }
 
     const { deviceId } = body;

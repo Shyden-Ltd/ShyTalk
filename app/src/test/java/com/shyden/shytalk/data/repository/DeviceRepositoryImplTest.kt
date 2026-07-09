@@ -3,6 +3,7 @@ package com.shyden.shytalk.data.repository
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.data.remote.WorkerApiClient
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
@@ -80,6 +81,23 @@ class DeviceRepositoryImplTest {
             val result = repo.resolveDeviceLock("device-1")
 
             assertTrue(result is Resource.Error)
+        }
+
+    @Test
+    fun `resolveDeviceLock POSTs to the lock-check path with the deviceId in the body`() =
+        runTest {
+            // Pins the exact endpoint + payload — a regression to a wrong path or
+            // body key would otherwise slip through the any()-matched stubs above.
+            coEvery { workerApiClient.post(any(), any()) } returns JSONObject().apply { put("status", "allowed") }
+
+            repo.resolveDeviceLock("device-xyz")
+
+            coVerify {
+                workerApiClient.post(
+                    "/api/devices/lock-check",
+                    match { it.getString("deviceId") == "device-xyz" },
+                )
+            }
         }
 
     // endregion

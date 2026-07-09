@@ -322,10 +322,14 @@ class AuthViewModelIdentityTest {
     private class FakeDeviceRepository : DeviceRepository {
         var lockResult: Resource<DeviceLockStatus> = Resource.Success(DeviceLockStatus.ALLOWED)
         var banResult: Resource<BanStatus> = Resource.Success(BanStatus())
+        var checkBanStatusCalls = 0
 
         override suspend fun resolveDeviceLock(deviceId: String) = lockResult
 
-        override suspend fun checkBanStatus(deviceId: String) = banResult
+        override suspend fun checkBanStatus(deviceId: String): Resource<BanStatus> {
+            checkBanStatusCalls++
+            return banResult
+        }
     }
 
     // ─── Tests ───────────────────────────────────────────────────────
@@ -429,6 +433,8 @@ class AuthViewModelIdentityTest {
             assertTrue(state.isDeviceLocked, "API said LOCKED → the device-locked screen must show")
             assertFalse(state.isAuthenticated, "A locked device must NOT end authenticated (signed out)")
             assertFalse(state.hasProfile, "Locked before profile resolution")
+            // A LOCKED result short-circuits — the ban check must NOT run afterward.
+            assertEquals(0, deviceRepo.checkBanStatusCalls, "checkBanStatus must not be reached after LOCKED")
         }
 
     @Test
@@ -506,6 +512,45 @@ class AuthViewModelIdentityTest {
             val state = vm.uiState.value
             assertFalse(state.isDeviceLocked, "A lock-check ERROR must not lock the device (lenient)")
             assertTrue(state.isAuthenticated, "Lenient error → the user still proceeds")
+        }
+
+    @Test
+    fun signIn_newUser_deviceAllowedByApi_proceedsToProfileCreation() =
+        runTest {
+            // A genuinely new user on an unbound device, WITH the check enabled
+            // (not bypassed) → allowed → reaches the profile-creation state.
+            val identityRepo =
+                FakeIdentityRepository().apply { resolveResult = Resource.Success(SignInResult.NotFound) }
+            val authRepo = FakeAuthRepository(firebaseUid = null, isAuthenticated = false, currentUserEmail = "new@gmail.com")
+            val deviceRepo = FakeDeviceRepository().apply { lockResult = Resource.Success(DeviceLockStatus.ALLOWED) }
+
+            val vm = AuthViewModel(authRepo, FakeUserRepository(), deviceRepo, identityRepo, "device-1", bypassDeviceChecks = false)
+            advanceUntilIdle()
+            vm.signInWithGoogle("fake-id-token")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertFalse(state.isDeviceLocked, "ALLOWED → not locked")
+            assertTrue(state.isAuthenticated, "New user proceeds")
+            assertFalse(state.hasProfile, "New user still needs profile creation")
+        }
+
+    @Test
+    fun signIn_newUser_lockCheckError_isLenientAndProceeds() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply { resolveResult = Resource.Success(SignInResult.NotFound) }
+            val authRepo = FakeAuthRepository(firebaseUid = null, isAuthenticated = false, currentUserEmail = "new@gmail.com")
+            val deviceRepo = FakeDeviceRepository().apply { lockResult = Resource.Error("network down") }
+
+            val vm = AuthViewModel(authRepo, FakeUserRepository(), deviceRepo, identityRepo, "device-1", bypassDeviceChecks = false)
+            advanceUntilIdle()
+            vm.signInWithGoogle("fake-id-token")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertFalse(state.isDeviceLocked, "New user + lock-check ERROR → not locked (lenient)")
+            assertTrue(state.isAuthenticated, "Lenient error → new user proceeds")
         }
 
     @Test

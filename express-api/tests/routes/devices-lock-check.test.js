@@ -39,6 +39,7 @@ const { authMiddleware } = require('../../src/middleware/auth');
 const { assertEmulatorReachable, clearCollection } = require('../helpers/firebase-emulator');
 const { mintRealUser, mintTokenWithoutUserDoc, clearAuthCaches } = require('../helpers/real-auth');
 const devicesRouter = require('../../src/routes/devices');
+const deviceInfoRouter = require('../../src/routes/device-info');
 
 const DEVICE_BINDINGS = 'deviceBindings';
 const USERS = 'users';
@@ -49,6 +50,15 @@ function createApp() {
   app.use(express.json());
   app.use('/api', authMiddleware);
   app.use('/api', devicesRouter);
+  return app;
+}
+
+/** App for the sibling /api/device-info route (binding-reconcile proof). */
+function createDeviceInfoApp() {
+  const app = express();
+  app.use(express.json());
+  app.use('/api', authMiddleware);
+  app.use('/api', deviceInfoRouter);
   return app;
 }
 
@@ -168,6 +178,52 @@ describe('POST /api/devices/lock-check', () => {
       .expect(400);
   });
 
+  test('a deviceId containing "/" is rejected (400) — validation precedes any Firestore access', async () => {
+    // The 400 is the guarantee: deviceId validation runs BEFORE the transaction,
+    // so a `/`-bearing value can never reach `db.doc(...)` and redirect the path.
+    const caller = await mintRealUser({ uniqueId: '6106' });
+    const res = await request(createApp())
+      .post('/api/devices/lock-check')
+      .set(caller.headers)
+      .send({ deviceId: 'a/b/c' })
+      .expect(400);
+    expect(res.body.error).toBe('deviceId is invalid');
+  });
+
+  test('a whitespace-only deviceId is rejected (400)', async () => {
+    const caller = await mintRealUser({ uniqueId: '6206' });
+    await request(createApp())
+      .post('/api/devices/lock-check')
+      .set(caller.headers)
+      .send({ deviceId: '   ' })
+      .expect(400);
+  });
+
+  test('a non-string deviceId is rejected (400) — never stringified into a doc path', async () => {
+    const caller = await mintRealUser({ uniqueId: '6306' });
+    await request(createApp())
+      .post('/api/devices/lock-check')
+      .set(caller.headers)
+      .send({ deviceId: { evil: true } })
+      .expect(400);
+  });
+
+  test('a binding doc with BOTH uniqueId AND a disagreeing userId → uniqueId wins (?? precedence pinned)', async () => {
+    // Legacy migration edge: if both fields exist, the modern uniqueId is
+    // authoritative. Seed uniqueId=owner, userId=someone-else; the owner is allowed.
+    const deviceId = 'dev-bothfields-1';
+    await seedBinding(deviceId, { uniqueId: '7700', userId: '9999', boundAt: 3 });
+    const owner = await mintRealUser({ uniqueId: '7700' });
+
+    const res = await request(createApp())
+      .post('/api/devices/lock-check')
+      .set(owner.headers)
+      .send({ deviceId })
+      .expect(200);
+
+    expect(res.body).toMatchObject({ status: 'allowed', boundToOther: false });
+  });
+
   test('concurrent bind race on one unbound device → exactly ONE binding wins', async () => {
     const deviceId = 'dev-race-1';
     const a = await mintRealUser({ uniqueId: '7007' });
@@ -197,5 +253,40 @@ describe('POST /api/devices/lock-check', () => {
       .expect(200);
 
     expect(res.body).toMatchObject({ status: 'allowed', boundToOther: false });
+  });
+});
+
+// SHY-0170 reconcile, proven against REAL Firestore merge semantics — a mocked
+// .set() can't prove `merge:true` actually leaves the existing uniqueId untouched.
+describe('POST /api/device-info — binding reconcile (real emulator)', () => {
+  test('does NOT rebind a device already owned by another account, but DOES update telemetry', async () => {
+    const deviceId = 'dev-di-reconcile-1';
+    await seedBinding(deviceId, { uniqueId: '1111', boundAt: 5, model: 'old-model' });
+    const intruder = await mintRealUser({ uniqueId: '2222' });
+
+    await request(createDeviceInfoApp())
+      .post('/api/device-info')
+      .set(intruder.headers)
+      .send({ deviceId, model: 'new-model' })
+      .expect(200);
+
+    const binding = await readBinding(deviceId);
+    expect(binding.uniqueId).toBe('1111'); // owner preserved — intruder did NOT steal it
+    expect(binding.model).toBe('new-model'); // telemetry still updated (merge)
+  });
+
+  test('binds uniqueId on a genuinely NEW device (first-write path preserved)', async () => {
+    const deviceId = 'dev-di-fresh-1';
+    const caller = await mintRealUser({ uniqueId: '3333' });
+
+    await request(createDeviceInfoApp())
+      .post('/api/device-info')
+      .set(caller.headers)
+      .send({ deviceId, model: 'pixel' })
+      .expect(200);
+
+    const binding = await readBinding(deviceId);
+    expect(binding.uniqueId).toBe('3333'); // new device → bound to the caller
+    expect(binding.boundAt).toBeDefined();
   });
 });

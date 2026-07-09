@@ -1,6 +1,7 @@
 const express = require('express');
 const { db } = require('../utils/firebase');
 const { now } = require('../utils/helpers');
+const { isValidDeviceId } = require('../utils/deviceId');
 const log = require('../utils/log');
 
 const router = express.Router();
@@ -31,8 +32,13 @@ function normUniqueId(value) {
 router.post('/devices/lock-check', async (req, res) => {
   try {
     const deviceId = req.body?.deviceId;
-    if (!deviceId) {
+    if (!deviceId || typeof deviceId !== 'string') {
       return res.status(400).json({ error: 'deviceId is required' });
+    }
+    if (!isValidDeviceId(deviceId)) {
+      // Reject `/` (path redirection), whitespace, over-length — never let an
+      // unvalidated client value shape the Firestore doc path.
+      return res.status(400).json({ error: 'deviceId is invalid' });
     }
 
     const caller = normUniqueId(req.auth?.uniqueId);
