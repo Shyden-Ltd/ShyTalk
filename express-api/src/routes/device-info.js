@@ -107,33 +107,37 @@ router.post('/device-info', async (req, res) => {
       bound = false;
 
       const existing = await tx.get(docRef);
-      if (!existing.exists) {
-        // This route mints bindings too, and is likewise exempt from the ban
-        // gate — without a cap it reopens the decoy-flood hardware-ban
-        // evasion that lock-check blocks (SHY-0149 C1). At the cap we record
-        // the telemetry but do NOT bind: an unowned doc carries no uniqueId,
-        // so it can never be used as a decoy, and the response below still
-        // carries `banStatus` — refusing outright would blank the very ban
-        // screen this endpoint exists to feed.
+      const data = existing.exists ? existing.data() || {} : null;
+      const owner = data ? (data.uniqueId ?? data.userId ?? null) : null;
+
+      if (!existing.exists) deviceDoc.firstSeen = timestamp;
+
+      if (owner !== null) {
+        // SHY-0170: device-info updates telemetry on every launch, but must NEVER
+        // silently re-bind a device already owned by another account to the caller
+        // — that would defeat the device-lock (see /api/devices/lock-check). An
+        // already-owned device needs no cap check: claiming it costs the caller
+        // no new binding.
+        if (String(owner) !== String(req.auth.uniqueId)) delete deviceDoc.uniqueId;
+      } else {
+        // UNOWNED — a brand-new doc, or one this route left unbound earlier
+        // because the caller was at the cap. Both need the cap check: keying
+        // it on `!existing.exists` alone let a simple second call to the same
+        // deviceId bind it for free (reviewer R3-C1).
+        //
+        // This route mints bindings and is exempt from the ban gate, so an
+        // uncapped bind reopens the decoy-flood hardware-ban evasion that
+        // lock-check blocks (SHY-0149 C1). At the cap we record the telemetry
+        // but do NOT claim the device: an unowned doc carries no uniqueId, so
+        // it can never be a decoy, and the response still carries `banStatus`
+        // — refusing outright would blank the very ban screen this endpoint
+        // exists to feed.
         if ((await countBoundDevices(req.auth.uniqueId, tx)) >= MAX_BOUND_DEVICES) {
           capped = true;
           delete deviceDoc.uniqueId;
-          deviceDoc.firstSeen = timestamp;
         } else {
-          deviceDoc.firstSeen = timestamp;
           deviceDoc.boundAt = timestamp;
           bound = true;
-        }
-      } else {
-        // SHY-0170: device-info updates telemetry on every launch, but must NEVER
-        // silently re-bind a device already owned by another account to the caller
-        // — that would defeat the device-lock (see /api/devices/lock-check). The
-        // uniqueId binding is owned by lock-check; here we only re-affirm it when it
-        // is unset or already the caller's, never overwrite a foreign owner.
-        const data = existing.data() || {};
-        const owner = data.uniqueId ?? data.userId ?? null;
-        if (owner !== null && String(owner) !== String(req.auth.uniqueId)) {
-          delete deviceDoc.uniqueId;
         }
       }
 

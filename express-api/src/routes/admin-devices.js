@@ -72,9 +72,18 @@ router.post('/admin/devices', async (req, res) => {
     // The same per-account cap the client routes enforce (SHY-0149 C1). An
     // uncapped admin write could push an account past the ban gate's scan
     // limit, and support tooling should not be able to do that by accident —
-    // delete a stale binding first. Existing bindings are re-seeded freely.
+    // delete a stale binding first.
+    //
+    // The cap applies whenever this write would COST the target a new binding
+    // slot: a brand-new device, or an existing one being reassigned away from
+    // its current owner. Re-seeding a device's own metadata (same owner) is
+    // free (reviewer R3-I2).
     const existing = await db.doc(`deviceBindings/${deviceId}`).get();
-    if (!existing.exists && (await countBoundDevices(uniqueId)) >= MAX_BOUND_DEVICES) {
+    const currentOwner = existing.exists
+      ? (existing.data()?.uniqueId ?? existing.data()?.userId ?? null)
+      : null;
+    const costsASlot = currentOwner === null || String(currentOwner) !== String(uniqueId);
+    if (costsASlot && (await countBoundDevices(uniqueId)) >= MAX_BOUND_DEVICES) {
       return res.status(403).json({
         error: 'Device limit reached for this account',
         code: 'device_limit',
@@ -92,8 +101,13 @@ router.post('/admin/devices', async (req, res) => {
     };
 
     await db.doc(`deviceBindings/${deviceId}`).set(bindingData);
-    // A binding change alters which hardware bans reach this account.
+    // A binding change alters which hardware bans reach an account — clear the
+    // new owner, and the previous one too when the device changed hands (they
+    // just lost a device that may have been carrying their ban).
     clearBanCache(uniqueId);
+    if (currentOwner !== null && String(currentOwner) !== String(uniqueId)) {
+      clearBanCache(currentOwner);
+    }
 
     res.json({ id: deviceId, ...bindingData });
   } catch (err) {

@@ -248,7 +248,16 @@ function isSuspensionExemptPath(req) {
     /^\/users\/[^/]+\/cancel-delete$/.test(req.path) ||
     /^\/users\/[^/]+\/deletion-status$/.test(req.path) ||
     /^\/users\/[^/]+\/data-export/.test(req.path) ||
-    (req.method === 'POST' && req.path === '/appeals')
+    (req.method === 'POST' && req.path === '/appeals') ||
+    // Portal self-service. portal.js mounts `authMiddlewareStrict` per-route,
+    // and that middleware carves these two out — but EVERY /api request runs
+    // through THIS middleware first (index.js mounts it globally), so without
+    // the same carve-out here the strict exemption was unreachable: a
+    // suspended user could not view their own portal profile or even sign
+    // out. Pre-existing for suspension; the ban gate would have inherited it
+    // (reviewer R3-C2).
+    req.path === '/portal/me' ||
+    req.path === '/portal/sign-out'
   );
 }
 

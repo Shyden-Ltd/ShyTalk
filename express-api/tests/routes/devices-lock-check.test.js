@@ -356,6 +356,48 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
     expect(await countBoundDevices('6006')).toBe(MAX_BOUND_DEVICES);
   });
 
+  test('re-submitting the SAME over-cap device does not quietly bind it (the cap is not a one-shot check)', async () => {
+    // Reviewer R3-C1: the cap only ran on the `!existing.exists` branch. The
+    // first call created an unowned doc; the second call took the `else`
+    // branch, saw `owner === null`, and bound it — with no cap check, and
+    // without clearing the ban cache.
+    const caller = await mintRealUser({ uniqueId: '6012' });
+    await fillBindingsToCap('6012');
+
+    for (let i = 0; i < 2; i++) {
+      await request(createDeviceInfoApp())
+        .post('/api/device-info')
+        .set(caller.headers)
+        .send({ deviceId: 'di-recall' })
+        .expect(200);
+    }
+
+    expect((await readBinding('di-recall')).uniqueId).toBeUndefined();
+    expect(await countBoundDevices('6012')).toBe(MAX_BOUND_DEVICES);
+  });
+
+  test('a device left unbound while at the cap IS claimed once a slot frees up', async () => {
+    // The unowned doc is not poisoned — it is simply unclaimed. Under the cap
+    // the very next call binds it normally.
+    const caller = await mintRealUser({ uniqueId: '6013' });
+    await fillBindingsToCap('6013');
+    await request(createDeviceInfoApp())
+      .post('/api/device-info')
+      .set(caller.headers)
+      .send({ deviceId: 'di-later' })
+      .expect(200);
+    expect((await readBinding('di-later')).uniqueId).toBeUndefined();
+
+    await db.doc(`${DEVICE_BINDINGS}/cap-6013-000`).delete(); // a slot frees up
+
+    await request(createDeviceInfoApp())
+      .post('/api/device-info')
+      .set(caller.headers)
+      .send({ deviceId: 'di-later' })
+      .expect(200);
+    expect((await readBinding('di-later')).uniqueId).toBe('6013');
+  });
+
   test('a BANNED caller at the cap still receives banStatus from device-info (ban screen preserved)', async () => {
     const caller = await mintRealUser({ uniqueId: '6007' });
     await fillBindingsToCap('6007');
@@ -470,6 +512,27 @@ describe('a device binding cannot be minted without limit (ban-evasion cap)', ()
 
     expect(res.body).toMatchObject({ code: 'device_limit' });
     expect(await readBinding('admin-one-too-many')).toBeNull();
+  });
+
+  test('the admin route cannot REASSIGN a device to an account that is at the cap', async () => {
+    // Re-seeding is free only when the owner is unchanged; handing the device
+    // to a different account costs THAT account a slot (reviewer R3-I2).
+    await seedBinding('someone-elses-phone', { uniqueId: '6098', boundAt: 1 });
+    await fillBindingsToCap('6099');
+    const admin = await mintTokenWithoutUserDoc({ admin: true });
+    const app = express();
+    app.use(express.json());
+    app.use('/api', authMiddleware);
+    app.use('/api', require('../../src/routes/admin-devices'));
+
+    const res = await request(app)
+      .post('/api/admin/devices')
+      .set(admin.headers)
+      .send({ deviceId: 'someone-elses-phone', uniqueId: 6099 })
+      .expect(403);
+
+    expect(res.body).toMatchObject({ code: 'device_limit' });
+    expect((await readBinding('someone-elses-phone')).uniqueId).toBe('6098'); // untouched
   });
 
   test('the admin route may still RE-SEED a binding that already exists at the cap', async () => {

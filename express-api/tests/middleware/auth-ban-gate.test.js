@@ -410,6 +410,66 @@ describe('a ban issued mid-session bites on the very next request', () => {
 
 // ─── The strict middleware carries the same authority ────────────
 
+/**
+ * PRODUCTION TOPOLOGY. index.js mounts the non-strict `authMiddleware`
+ * globally on /api, and portal.js then applies `authMiddlewareStrict`
+ * per-route — so every portal request is gated TWICE. Mounting the strict
+ * middleware alone (as the suites did) hid the fact that the outer gate
+ * refused banned/suspended users before the strict exemption could run
+ * (reviewer R3-C2). These tests replicate the real order.
+ */
+function createPortalStackApp() {
+  const app = express();
+  app.set('trust proxy', 1);
+  app.use(express.json());
+  app.use('/api', (req, res, next) => {
+    // Mirrors index.js's bypass for the unauthenticated recovery routes.
+    if (req.path.startsWith('/portal/totp-recovery/')) return next();
+    return authMiddleware(req, res, next);
+  });
+  const portalRouter = express.Router();
+  portalRouter.get('/portal/me', authMiddlewareStrict, (req, res) => res.json({ via: 'me' }));
+  portalRouter.post('/portal/sign-out', authMiddlewareStrict, (req, res) =>
+    res.json({ via: 'sign-out' }),
+  );
+  portalRouter.post('/portal/revoke-all-sessions', authMiddlewareStrict, (req, res) =>
+    res.json({ via: 'revoke' }),
+  );
+  app.use('/api', portalRouter);
+  return app;
+}
+
+describe('the portal double-gate (as mounted in production)', () => {
+  test('a BANNED user can still view their portal profile and sign out', async () => {
+    const caller = await mintRealUser({ uniqueId: '5110' });
+    await seedDeviceBan('dev-portal-1', { linkedUniqueId: '5110' });
+
+    const app = createPortalStackApp();
+    await request(app).get('/api/portal/me').set(caller.headers).expect(200);
+    await request(app).post('/api/portal/sign-out').set(caller.headers).send({}).expect(200);
+  });
+
+  test('a SUSPENDED user can still view their portal profile and sign out', async () => {
+    const caller = await mintRealUser({ uniqueId: '5111', isSuspended: true });
+
+    const app = createPortalStackApp();
+    await request(app).get('/api/portal/me').set(caller.headers).expect(200);
+    await request(app).post('/api/portal/sign-out').set(caller.headers).send({}).expect(200);
+  });
+
+  test('a banned user is still refused on a non-exempt portal action', async () => {
+    const caller = await mintRealUser({ uniqueId: '5112' });
+    await seedDeviceBan('dev-portal-2', { linkedUniqueId: '5112' });
+
+    const res = await request(createPortalStackApp())
+      .post('/api/portal/revoke-all-sessions')
+      .set(caller.headers)
+      .send({})
+      .expect(403);
+    expect(res.body.code).toBe('banned');
+  });
+});
+
 describe('authMiddlewareStrict enforces the same ban gate (portal routes)', () => {
   test('a banned portal user is refused with the same 403 contract', async () => {
     const caller = await mintRealUser({ uniqueId: '5080' });
