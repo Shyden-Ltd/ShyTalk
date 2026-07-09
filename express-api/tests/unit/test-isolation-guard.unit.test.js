@@ -27,6 +27,7 @@ const path = require('path');
 
 const {
   analyze,
+  doublesFirebase,
   findWipeCollisions,
   isNamespaced,
   referencedSegments,
@@ -57,13 +58,59 @@ const emulatorSuites = analyses.filter((a) => a.touchesEmulator);
 describe('isolation analyzer — the detector sees every form a violation can take', () => {
   test('a wipe driven by an arbitrarily-named array constant is detected', () => {
     // A hardcoded whitelist of constant names would miss `COLLECTIONS_TO_WIPE`.
-    const wiped = wipedCollections(fixture('wipes-via-array-const.js.txt'));
-    expect([...wiped].sort()).toEqual(['deviceBans', 'rooms', 'users']);
+    const { wipes, unresolved } = wipedCollections(fixture('wipes-via-array-const.js.txt'));
+    expect([...wipes].sort()).toEqual(['deviceBans', 'rooms', 'users']);
+    expect(unresolved).toEqual([]);
   });
 
   test('a direct string wipe is detected, for both collections and groups', () => {
-    const wiped = wipedCollections(fixture('wipes-directly.js.txt'));
-    expect([...wiped].sort()).toEqual(['backpack', 'users']);
+    const { wipes } = wipedCollections(fixture('wipes-directly.js.txt'));
+    expect([...wipes].sort()).toEqual(['backpack', 'users']);
+  });
+
+  test('a wipe target held in a plain string constant is resolved', () => {
+    // Neither an inline literal nor a loop variable. Both earlier versions of
+    // this analyzer were blind to it, and three real suites use this shape.
+    const { wipes, unresolved } = wipedCollections(fixture('wipes-via-string-const.js.txt'));
+    expect([...wipes]).toEqual(['segregationEvents']);
+    expect(unresolved).toEqual([]);
+  });
+
+  test('two for-of loops sharing a variable name do not shadow each other', () => {
+    // A file-global name→array map lets the LAST declaration win, hiding the wipe.
+    const { wipes, unresolved } = wipedCollections(fixture('wipes-with-shadowed-loop-var.js.txt'));
+    expect([...wipes].sort()).toEqual(['rooms', 'users']);
+    expect(wipes.has('scratch')).toBe(false);
+    expect(unresolved).toEqual([]);
+  });
+
+  test('an unresolvable wipe target is REPORTED, never silently ignored', () => {
+    const { wipes, unresolved } = wipedCollections(fixture('wipes-unresolvable-target.js.txt'));
+    expect([...wipes]).toEqual([]);
+    expect(unresolved).toEqual([expect.stringMatching(/MemberExpression.*cannot be resolved/)]);
+  });
+
+  test('a spread-built wipe list is REPORTED, never silently ignored', () => {
+    const { wipes, unresolved } = wipedCollections(fixture('wipes-via-spread-array.js.txt'));
+    expect([...wipes]).toEqual([]);
+    expect(unresolved).toEqual([
+      expect.stringMatching(/'ALL' is built from spreads or expressions/),
+    ]);
+  });
+
+  test('a suite that doubles firebase with jest.doMock is NOT an emulator suite', () => {
+    // `jest.doMock` (scoped) doubles just as surely as the hoisted `jest.mock`.
+    const source = fixture('doubles-firebase-via-domock.js.txt');
+    expect(doublesFirebase(source)).toBe(true);
+    expect(touchesRealEmulator(source)).toBe(false);
+  });
+
+  test('a collection name inside a route path counts as a use (deliberate over-approximation)', () => {
+    // Documented trade-off: a false positive costs one namespace; a false
+    // negative costs a scheduling-dependent flake.
+    expect(referencedSegments(fixture('uses-collection-name-in-url.js.txt')).has('users')).toBe(
+      true,
+    );
   });
 
   test('a subcollection buried mid-path in a template literal counts as a use', () => {
@@ -77,7 +124,7 @@ describe('isolation analyzer — the detector sees every form a violation can ta
     // Contains: a docblock naming clearCollection; a string holding `a // b`;
     // a regex literal `/https?:\/\//`; and one real wipe.
     const source = fixture('comments-and-lookalikes.js.txt');
-    expect([...wipedCollections(source)]).toEqual(['rooms']);
+    expect([...wipedCollections(source).wipes]).toEqual(['rooms']);
     expect(isNamespaced(source)).toBe(false);
     expect(wipesDefaultAuthProject(source)).toBe(true); // the URL string survives
   });
@@ -125,6 +172,8 @@ describe('test-isolation guard — a wholesale wipe requires an exclusive emulat
 
     expect(byName('middleware/auth-ban-gate.test.js').touchesEmulator).toBe(true);
     expect(byName('unit/bans.unit.test.js').touchesEmulator).toBe(false);
+    // Doubles firebase only via `jest.doMock` — previously misclassified as real.
+    expect(byName('utils/loggerInstance.test.js').touchesEmulator).toBe(false);
 
     const testData = byName('cron/testDataCleanup.test.js');
     expect(testData.namespaced).toBe(true);
@@ -145,6 +194,22 @@ describe('test-isolation guard — a wholesale wipe requires an exclusive emulat
 
   test('no non-namespaced suite wipes a collection another non-namespaced suite uses', () => {
     expect(findWipeCollisions(analyses)).toEqual([]);
+  });
+
+  test('every wipe in the corpus is statically resolvable — the guard never guesses', () => {
+    // A wipe the analyzer cannot resolve is a hole in the guard. Fail loudly and
+    // make the author either simplify the wipe or teach the analyzer the shape.
+    const blind = analyses
+      .filter((a) => a.unresolvedWipes.length > 0)
+      .map((a) => `${a.file}: ${a.unresolvedWipes.join('; ')}`);
+    expect(blind).toEqual([]);
+  });
+
+  test('no doubled suite wipes — a wiper cannot hide behind a firebase double', () => {
+    // Doubled suites are excluded from the collision scan, so a wiper among them
+    // would go unchecked. There are none; keep it that way.
+    const hidden = analyses.filter((a) => a.doublesFirebase && a.wipes.size > 0).map((a) => a.file);
+    expect(hidden).toEqual([]);
   });
 
   test('no suite wipes the Auth accounts of the shared default project', () => {

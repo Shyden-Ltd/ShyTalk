@@ -7,17 +7,23 @@
  * does it wipe, what does it use, does it claim its own emulator project, and
  * does it reach a real emulator at all.
  *
- * It parses with `@babel/parser` rather than matching regexes against raw text.
- * That is not fastidiousness — a text scan gets the following wrong, and each
- * one was a real finding against the first version of this guard:
+ * Two design rules, both learned the hard way.
+ *
+ * **It parses, it does not pattern-match.** A text scan gets all of the
+ * following wrong, and each was a real finding against an earlier version:
  *   - a docblock *describing* the rule reads as a violation of it;
  *   - `"a // b"` inside a string literal looks like a trailing comment;
  *   - a regex literal `/https?:\/\//` looks like a comment;
- *   - `for (const c of SOME_OTHER_NAME) clearCollection(db, c)` is invisible
- *     unless the constant's name happens to be on a hardcoded whitelist;
- *   - `users/${uid}/backpack/${id}` hides `backpack` behind a `/`, so a
- *     quote-anchored "does this file use collection X" check never sees it.
- * The AST has none of these ambiguities.
+ *   - `for (const c of SOME_NAME) clearCollection(db, c)` is invisible unless
+ *     the constant's name happens to sit on a hardcoded whitelist;
+ *   - `users/${uid}/backpack/${id}` hides `backpack` behind a `/`.
+ *
+ * **It refuses to guess.** Every wipe target it cannot resolve statically —
+ * a member expression, a spread-built array, a loop variable with no enclosing
+ * `for…of`, an ambiguous same-named constant — is reported in `unresolved`
+ * rather than silently contributing nothing. The guard fails on a non-empty
+ * `unresolved` list. A detector that quietly sees nothing is worse than no
+ * detector: it launders absence of evidence into evidence of absence.
  */
 
 const { parse } = require('@babel/parser');
@@ -28,25 +34,37 @@ const FIREBASE_MODULE = /src\/utils\/firebase$/;
 /** Any production module: it reaches Firestore transitively even if the test does not. */
 const PRODUCTION_MODULE = /(^|\/)src\//;
 
-function parseSource(source) {
-  return parse(source, {
+const parseSource = (source) =>
+  parse(source, {
     sourceType: 'unambiguous',
     allowReturnOutsideFunction: true,
     errorRecovery: true,
   });
-}
 
-/** Depth-first walk over every AST node, ignoring `loc`/`comments` noise. */
-function walk(node, visit) {
-  if (node === null || typeof node !== 'object') return;
-  if (Array.isArray(node)) {
-    for (const child of node) walk(child, visit);
-    return;
-  }
-  if (typeof node.type === 'string') visit(node);
-  for (const key of Object.keys(node)) {
-    if (key === 'loc' || key === 'leadingComments' || key === 'trailingComments') continue;
-    walk(node[key], visit);
+const SKIP_KEYS = new Set(['loc', 'leadingComments', 'trailingComments', 'innerComments']);
+
+/**
+ * Iterative depth-first walk. `visit(node, ancestors)` receives the node and the
+ * chain of nodes above it, innermost last — that chain is what makes scope-aware
+ * resolution possible. Iterative rather than recursive so a pathologically deep
+ * AST cannot overflow the stack.
+ */
+function walk(root, visit) {
+  const stack = [{ node: root, ancestors: [] }];
+  while (stack.length > 0) {
+    const { node, ancestors } = stack.pop();
+    if (node === null || typeof node !== 'object') continue;
+    if (Array.isArray(node)) {
+      for (const child of node) stack.push({ node: child, ancestors });
+      continue;
+    }
+    const isNode = typeof node.type === 'string';
+    if (isNode) visit(node, ancestors);
+    const childAncestors = isNode ? [...ancestors, node] : ancestors;
+    for (const key of Object.keys(node)) {
+      if (SKIP_KEYS.has(key)) continue;
+      stack.push({ node: node[key], ancestors: childAncestors });
+    }
   }
 }
 
@@ -57,72 +75,150 @@ const isRequireOf = (node, matcher) =>
   node.arguments[0]?.type === 'StringLiteral' &&
   matcher.test(node.arguments[0].value);
 
-const isJestMockOf = (node, matcher) =>
+/**
+ * `jest.mock` (hoisted, whole-file) and `jest.doMock` (scoped, used with
+ * `resetModules`) both replace the module with a double. Missing `doMock`
+ * misclassified `tests/utils/loggerInstance.test.js` as a real-emulator suite.
+ */
+const isJestDoubleOf = (node, matcher) =>
   node.type === 'CallExpression' &&
   node.callee.type === 'MemberExpression' &&
   node.callee.object.type === 'Identifier' &&
   node.callee.object.name === 'jest' &&
   node.callee.property.type === 'Identifier' &&
-  node.callee.property.name === 'mock' &&
+  (node.callee.property.name === 'mock' || node.callee.property.name === 'doMock') &&
   node.arguments[0]?.type === 'StringLiteral' &&
   matcher.test(node.arguments[0].value);
 
-/** Every `const NAME = ['a', 'b']` in the file, as name → string values. */
+/**
+ * `const NAME = ['a', 'b']` declarations, name → values. A name declared more
+ * than once is recorded as ambiguous: without full scope analysis we cannot say
+ * which one a use refers to, so we decline to pick.
+ */
 function stringArrayConstants(ast) {
   const consts = new Map();
+  const ambiguous = new Set();
   walk(ast.program, (node) => {
     if (node.type !== 'VariableDeclarator') return;
     if (node.id.type !== 'Identifier' || node.init?.type !== 'ArrayExpression') return;
-    const values = node.init.elements
-      .filter((el) => el?.type === 'StringLiteral')
-      .map((el) => el.value);
-    if (values.length > 0) consts.set(node.id.name, values);
+    if (consts.has(node.id.name)) ambiguous.add(node.id.name);
+    consts.set(node.id.name, node.init.elements);
   });
-  return consts;
+  return { consts, ambiguous };
 }
 
 /**
- * Collections the file wipes wholesale: `clearCollection(db, 'users')` directly,
- * plus `for (const c of ANY_CONST) clearCollection(db, c)` — the loop variable is
- * resolved back to its `for…of` source array by name, with no whitelist.
+ * `const NAME = 'users'` declarations, name → value. Same ambiguity rule as the
+ * array constants: a name declared twice is unknowable, so we decline to pick.
  */
-function wipedCollections(source) {
-  const ast = parseSource(source);
-  const consts = stringArrayConstants(ast);
-  const wiped = new Set();
-
-  // loop variable name → the array constant it iterates
-  const loopVarSource = new Map();
+function stringConstants(ast) {
+  const consts = new Map();
+  const ambiguous = new Set();
   walk(ast.program, (node) => {
-    if (node.type !== 'ForOfStatement') return;
-    const decl = node.left.type === 'VariableDeclaration' ? node.left.declarations[0] : null;
-    if (decl?.id.type === 'Identifier' && node.right.type === 'Identifier') {
-      loopVarSource.set(decl.id.name, node.right.name);
-    }
+    if (node.type !== 'VariableDeclarator') return;
+    if (node.id.type !== 'Identifier' || node.init?.type !== 'StringLiteral') return;
+    if (consts.has(node.id.name)) ambiguous.add(node.id.name);
+    consts.set(node.id.name, node.init.value);
   });
+  return { consts, ambiguous };
+}
 
-  walk(ast.program, (node) => {
+/** Every element is a plain string, or the array is not statically knowable. */
+function stringValues(elements) {
+  const values = [];
+  for (const element of elements) {
+    if (element?.type !== 'StringLiteral') return null; // spread, call, hole, …
+    values.push(element.value);
+  }
+  return values;
+}
+
+/** The nearest enclosing `for (const <name> of X)`, searching innermost-out. */
+function enclosingForOf(ancestors, name) {
+  for (let i = ancestors.length - 1; i >= 0; i--) {
+    const node = ancestors[i];
+    if (node.type !== 'ForOfStatement') continue;
+    const decl = node.left.type === 'VariableDeclaration' ? node.left.declarations[0] : null;
+    if (decl?.id.type === 'Identifier' && decl.id.name === name) return node;
+  }
+  return null;
+}
+
+/**
+ * Collections a file wipes wholesale, plus everything it could not resolve.
+ * The loop variable is resolved from the wipe call's OWN enclosing `for…of`,
+ * so two loops reusing one variable name cannot shadow each other.
+ */
+function wipedCollectionsFromAst(ast) {
+  const { consts, ambiguous } = stringArrayConstants(ast);
+  const { consts: strings, ambiguous: ambiguousStrings } = stringConstants(ast);
+  const wipes = new Set();
+  const unresolved = [];
+
+  walk(ast.program, (node, ancestors) => {
     if (node.type !== 'CallExpression') return;
     if (node.callee.type !== 'Identifier' || !WIPE_FNS.has(node.callee.name)) return;
+
     const target = node.arguments[1];
-    if (!target) return;
+    const describe = (why) => unresolved.push(`${node.callee.name}(db, …): ${why}`);
+
+    if (!target) return describe('no collection argument');
+
     if (target.type === 'StringLiteral') {
-      wiped.add(target.value);
-    } else if (target.type === 'Identifier') {
-      const arrayName = loopVarSource.get(target.name);
-      for (const value of consts.get(arrayName) ?? []) wiped.add(value);
+      wipes.add(target.value);
+      return;
     }
+    if (target.type !== 'Identifier') {
+      return describe(`target is a ${target.type}, which cannot be resolved statically`);
+    }
+
+    const loop = enclosingForOf(ancestors, target.name);
+    if (!loop) {
+      // Not a loop variable: it may be a plain `const SEG_EVENTS = 'segregationEvents'`.
+      if (ambiguousStrings.has(target.name)) {
+        return describe(`'${target.name}' is declared more than once; which one is unknowable`);
+      }
+      const value = strings.get(target.name);
+      if (value === undefined) {
+        return describe(`'${target.name}' is neither a loop variable nor a string constant`);
+      }
+      wipes.add(value);
+      return;
+    }
+
+    if (loop.right.type === 'ArrayExpression') {
+      const values = stringValues(loop.right.elements);
+      if (!values) return describe(`inline array for '${target.name}' is not all string literals`);
+      for (const value of values) wipes.add(value);
+      return;
+    }
+    if (loop.right.type !== 'Identifier') {
+      return describe(`'${target.name}' iterates a ${loop.right.type}`);
+    }
+    if (ambiguous.has(loop.right.name)) {
+      return describe(`'${loop.right.name}' is declared more than once; which one is unknowable`);
+    }
+    const elements = consts.get(loop.right.name);
+    if (!elements) return describe(`'${loop.right.name}' is not a literal array constant`);
+    const values = stringValues(elements);
+    if (!values) return describe(`'${loop.right.name}' is built from spreads or expressions`);
+    for (const value of values) wipes.add(value);
   });
-  return wiped;
+
+  return { wipes, unresolved };
 }
 
 /**
- * Every `/`-delimited segment of every string and template literal in the file.
- * `db.doc(`users/${uid}/backpack/${id}`)` contributes `users` and `backpack`, so
- * a subcollection is not hidden by its position in a path.
+ * Every `/`-delimited segment of every string and template literal.
+ * `users/${uid}/backpack/${id}` contributes `users` and `backpack`, so a
+ * subcollection is not hidden by its position in a path.
+ *
+ * This deliberately OVER-approximates, exactly as `touchesRealEmulator` does: a
+ * route path `'/api/users'` or a URL counts as a use of `users`. A false
+ * positive costs one unnecessary namespace; a false negative costs a silent,
+ * scheduling-dependent flake that takes a day to find. Err toward flagging.
  */
-function referencedSegments(source) {
-  const ast = parseSource(source);
+function referencedSegmentsFromAst(ast) {
   const segments = new Set();
   const addAll = (value) => {
     for (const part of String(value).split('/')) if (part) segments.add(part);
@@ -135,8 +231,7 @@ function referencedSegments(source) {
 }
 
 /** An ASSIGNMENT claims the namespace. Merely naming the variable does not. */
-function isNamespaced(source) {
-  const ast = parseSource(source);
+function isNamespacedFromAst(ast) {
   let found = false;
   walk(ast.program, (node) => {
     if (node.type !== 'AssignmentExpression') return;
@@ -152,6 +247,15 @@ function isNamespaced(source) {
   return found;
 }
 
+/** Is the Admin SDK replaced by a double anywhere in this file? */
+function doublesFirebaseFromAst(ast) {
+  let doubled = false;
+  walk(ast.program, (node) => {
+    if (isJestDoubleOf(node, FIREBASE_MODULE)) doubled = true;
+  });
+  return doubled;
+}
+
 /**
  * A suite reaches a real emulator when it exercises production code without
  * doubling the Admin SDK. Two deliberate choices:
@@ -163,24 +267,22 @@ function isNamespaced(source) {
  *   firebase itself, yet its documents are just as destroyable by a sibling's
  *   wholesale wipe. Over-approximating the victim set errs toward flagging.
  *
- * A wiper, by contrast, always needs `db`, so it always lands in this set too.
+ * A wiper always needs a real `db`, so it always lands in this set too — and the
+ * guard separately asserts that no doubling file wipes, closing the loophole
+ * where a wiper hides behind a double.
  */
-function touchesRealEmulator(source) {
-  const ast = parseSource(source);
+function touchesRealEmulatorFromAst(ast) {
   let usesProductionCode = false;
-  let mocksFirebase = false;
   walk(ast.program, (node) => {
-    if (isJestMockOf(node, FIREBASE_MODULE)) mocksFirebase = true;
-    else if (isRequireOf(node, FIREBASE_MODULE) || isRequireOf(node, PRODUCTION_MODULE)) {
+    if (isRequireOf(node, FIREBASE_MODULE) || isRequireOf(node, PRODUCTION_MODULE)) {
       usesProductionCode = true;
     }
   });
-  return usesProductionCode && !mocksFirebase;
+  return usesProductionCode && !doublesFirebaseFromAst(ast);
 }
 
 /** Does the suite resolve ID tokens? Such a suite can never be namespaced. */
-function resolvesIdTokens(source) {
-  const ast = parseSource(source);
+function resolvesIdTokensFromAst(ast) {
   let found = false;
   walk(ast.program, (node) => {
     if (node.type === 'Identifier' && TOKEN_RESOLVERS.test(node.name)) found = true;
@@ -192,8 +294,7 @@ function resolvesIdTokens(source) {
 }
 
 /** Wiping the DEFAULT project's Auth accounts deletes every sibling's users. */
-function wipesDefaultAuthProject(source) {
-  const ast = parseSource(source);
+function wipesDefaultAuthProjectFromAst(ast) {
   let found = false;
   const check = (value) => {
     if (/projects\/demo-shytalk\/accounts/.test(String(value))) found = true;
@@ -205,16 +306,20 @@ function wipesDefaultAuthProject(source) {
   return found;
 }
 
-/** All facts for one file, parsed once. */
+/** All facts for one file. Parsed ONCE. */
 function analyze(file, source) {
+  const ast = parseSource(source);
+  const { wipes, unresolved } = wipedCollectionsFromAst(ast);
   return {
     file,
-    namespaced: isNamespaced(source),
-    wipes: wipedCollections(source),
-    segments: referencedSegments(source),
-    touchesEmulator: touchesRealEmulator(source),
-    resolvesTokens: resolvesIdTokens(source),
-    wipesDefaultAuthProject: wipesDefaultAuthProject(source),
+    namespaced: isNamespacedFromAst(ast),
+    wipes,
+    unresolvedWipes: unresolved,
+    segments: referencedSegmentsFromAst(ast),
+    doublesFirebase: doublesFirebaseFromAst(ast),
+    touchesEmulator: touchesRealEmulatorFromAst(ast),
+    resolvesTokens: resolvesIdTokensFromAst(ast),
+    wipesDefaultAuthProject: wipesDefaultAuthProjectFromAst(ast),
   };
 }
 
@@ -242,13 +347,17 @@ function findWipeCollisions(analyses) {
   return violations;
 }
 
+// Source-taking wrappers, for callers holding a string rather than an AST.
+const fromSource = (fn) => (source) => fn(parseSource(source));
+
 module.exports = {
   analyze,
   findWipeCollisions,
-  isNamespaced,
-  referencedSegments,
-  resolvesIdTokens,
-  touchesRealEmulator,
-  wipedCollections,
-  wipesDefaultAuthProject,
+  doublesFirebase: fromSource(doublesFirebaseFromAst),
+  isNamespaced: fromSource(isNamespacedFromAst),
+  referencedSegments: fromSource(referencedSegmentsFromAst),
+  resolvesIdTokens: fromSource(resolvesIdTokensFromAst),
+  touchesRealEmulator: fromSource(touchesRealEmulatorFromAst),
+  wipedCollections: fromSource(wipedCollectionsFromAst),
+  wipesDefaultAuthProject: fromSource(wipesDefaultAuthProjectFromAst),
 };
