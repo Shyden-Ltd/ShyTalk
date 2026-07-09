@@ -252,6 +252,22 @@ test.describe('Portal — i18n: Data Attributes', () => {
     }
   });
 
+  test('banned section has data-i18n attributes', async ({ page }) => {
+    // The banned section must not reuse the suspended section's keys: every
+    // `toHaveCount(1)` here is also an assertion that no other section borrows
+    // them. SHY-0149 first shipped `#banned-section` reusing suspended_appeal /
+    // suspended_contact / suspended_signout, which turned this file's suspended
+    // test red — and would have shown a banned user copy written for a
+    // suspended one.
+    const expectedKeys = [
+      'banned_heading', 'banned_reason', 'banned_until',
+      'banned_appeal', 'banned_contact', 'banned_signout',
+    ];
+    for (const key of expectedKeys) {
+      await expect(page.locator(`[data-i18n="${key}"]`)).toHaveCount(1);
+    }
+  });
+
   test('no-account section has data-i18n attributes', async ({ page }) => {
     const expectedKeys = [
       'no_account_heading', 'no_account_subtitle',
