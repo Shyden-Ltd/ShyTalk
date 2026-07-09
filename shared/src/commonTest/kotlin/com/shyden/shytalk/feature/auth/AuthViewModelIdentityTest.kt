@@ -7,6 +7,7 @@ import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BanStatus
 import com.shyden.shytalk.data.repository.CreateUserResult
+import com.shyden.shytalk.data.repository.DeviceLockStatus
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
 import com.shyden.shytalk.data.repository.PmLockCheckResult
@@ -319,15 +320,10 @@ class AuthViewModelIdentityTest {
     }
 
     private class FakeDeviceRepository : DeviceRepository {
-        var bindingResult: Resource<String?> = Resource.Success(null)
+        var lockResult: Resource<DeviceLockStatus> = Resource.Success(DeviceLockStatus.ALLOWED)
         var banResult: Resource<BanStatus> = Resource.Success(BanStatus())
 
-        override suspend fun getDeviceBinding(deviceId: String) = bindingResult
-
-        override suspend fun bindDevice(
-            deviceId: String,
-            userId: String,
-        ) = Resource.Success(Unit)
+        override suspend fun resolveDeviceLock(deviceId: String) = lockResult
 
         override suspend fun checkBanStatus(deviceId: String) = banResult
     }
@@ -400,6 +396,116 @@ class AuthViewModelIdentityTest {
             val state = vm.uiState.value
             assertTrue(state.isAuthenticated, "Should be authenticated even for new user")
             assertFalse(state.hasProfile, "Should NOT have profile — needs creation")
+        }
+
+    // ─── Device-lock: the decision now comes from the API (SHY-0170). ─────
+    // bypassDeviceChecks = false so the lock branch actually runs. These run on
+    // JVM AND iOS (commonTest), so the device-lock enforcement is proven on both.
+
+    @Test
+    fun signIn_existingUser_deviceLockedByApi_showsDeviceLockedAndDoesNotAuthenticate() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Success(SignInResult.Found(10000005))
+                }
+            val userRepo =
+                FakeUserRepository().apply {
+                    existsResult = Resource.Success(true)
+                    getUserResult =
+                        Resource.Success(
+                            User(uid = "10000005", uniqueId = 10000005, displayName = "Alice", acceptedLegalVersion = 999),
+                        )
+                }
+            val authRepo = FakeAuthRepository(firebaseUid = null, isAuthenticated = false, currentUserEmail = "alice@gmail.com")
+            val deviceRepo = FakeDeviceRepository().apply { lockResult = Resource.Success(DeviceLockStatus.LOCKED) }
+
+            val vm = AuthViewModel(authRepo, userRepo, deviceRepo, identityRepo, "device-1", bypassDeviceChecks = false)
+            advanceUntilIdle()
+            vm.signInWithGoogle("fake-id-token")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertTrue(state.isDeviceLocked, "API said LOCKED → the device-locked screen must show")
+            assertFalse(state.isAuthenticated, "A locked device must NOT end authenticated (signed out)")
+            assertFalse(state.hasProfile, "Locked before profile resolution")
+        }
+
+    @Test
+    fun signIn_newUser_deviceLockedByApi_blocksAccountCreation() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply { resolveResult = Resource.Success(SignInResult.NotFound) }
+            val authRepo = FakeAuthRepository(firebaseUid = null, isAuthenticated = false, currentUserEmail = "newuser@gmail.com")
+            val deviceRepo = FakeDeviceRepository().apply { lockResult = Resource.Success(DeviceLockStatus.LOCKED) }
+
+            val vm = AuthViewModel(authRepo, FakeUserRepository(), deviceRepo, identityRepo, "device-1", bypassDeviceChecks = false)
+            advanceUntilIdle()
+            vm.signInWithGoogle("fake-id-token")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertTrue(state.isDeviceLocked, "A new account cannot be created on an API-locked device")
+            assertFalse(state.isAuthenticated, "Blocked new user must NOT end authenticated")
+        }
+
+    @Test
+    fun signIn_existingUser_deviceAllowedByApi_proceedsToAuthenticated() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Success(SignInResult.Found(10000005))
+                }
+            val userRepo =
+                FakeUserRepository().apply {
+                    existsResult = Resource.Success(true)
+                    getUserResult =
+                        Resource.Success(
+                            User(uid = "10000005", uniqueId = 10000005, displayName = "Alice", acceptedLegalVersion = 999),
+                        )
+                }
+            val authRepo = FakeAuthRepository(firebaseUid = null, isAuthenticated = false, currentUserEmail = "alice@gmail.com")
+            // ALLOWED with the check ENABLED — proves the allowed path, not a bypass.
+            val deviceRepo = FakeDeviceRepository().apply { lockResult = Resource.Success(DeviceLockStatus.ALLOWED) }
+
+            val vm = AuthViewModel(authRepo, userRepo, deviceRepo, identityRepo, "device-1", bypassDeviceChecks = false)
+            advanceUntilIdle()
+            vm.signInWithGoogle("fake-id-token")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertFalse(state.isDeviceLocked, "ALLOWED → never device-locked")
+            assertTrue(state.isAuthenticated, "ALLOWED existing user proceeds to authenticated")
+            assertTrue(state.hasProfile, "ALLOWED existing user resolves their profile")
+        }
+
+    @Test
+    fun signIn_existingUser_lockCheckError_isLenientAndProceeds() =
+        runTest {
+            val identityRepo =
+                FakeIdentityRepository().apply {
+                    resolveResult = Resource.Success(SignInResult.Found(10000005))
+                }
+            val userRepo =
+                FakeUserRepository().apply {
+                    existsResult = Resource.Success(true)
+                    getUserResult =
+                        Resource.Success(
+                            User(uid = "10000005", uniqueId = 10000005, displayName = "Alice", acceptedLegalVersion = 999),
+                        )
+                }
+            val authRepo = FakeAuthRepository(firebaseUid = null, isAuthenticated = false, currentUserEmail = "alice@gmail.com")
+            // A lock-check outage must NOT lock out a real user (availability posture).
+            val deviceRepo = FakeDeviceRepository().apply { lockResult = Resource.Error("network down") }
+
+            val vm = AuthViewModel(authRepo, userRepo, deviceRepo, identityRepo, "device-1", bypassDeviceChecks = false)
+            advanceUntilIdle()
+            vm.signInWithGoogle("fake-id-token")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertFalse(state.isDeviceLocked, "A lock-check ERROR must not lock the device (lenient)")
+            assertTrue(state.isAuthenticated, "Lenient error → the user still proceeds")
         }
 
     @Test

@@ -2,7 +2,6 @@
   "firestore": [
     "app/src/main/java/com/shyden/shytalk/core/di/AppKoinModule.kt",
     "app/src/main/java/com/shyden/shytalk/data/repository/BannerRepositoryImpl.kt",
-    "app/src/main/java/com/shyden/shytalk/data/repository/DeviceRepositoryImpl.kt",
     "app/src/main/java/com/shyden/shytalk/data/repository/EconomyRepositoryImpl.kt",
     "app/src/main/java/com/shyden/shytalk/data/repository/FunFactRepositoryImpl.kt",
     "app/src/main/java/com/shyden/shytalk/data/repository/GiftRepositoryImpl.kt",
