@@ -212,8 +212,16 @@ function resolveBinding(ancestors, name) {
         return { loop: node };
       }
     }
-    if (FUNCTION_TYPES.has(node.type) && node.params.some((p) => patternBinds(p, name))) {
-      return { shadowedBy: `${node.type} parameter` };
+    if (FUNCTION_TYPES.has(node.type)) {
+      const index = node.params.findIndex((p) => patternBinds(p, name));
+      if (index !== -1) {
+        // Carry WHICH function and WHICH slot, so a caller can check that every
+        // call site passes a string literal there rather than assume it.
+        return {
+          shadowedBy: `${node.type} parameter`,
+          parameterOf: { fn: node, index, fnAncestors: ancestors.slice(0, i) },
+        };
+      }
     }
     if (node.type === 'CatchClause' && patternBinds(node.param, name)) {
       return { shadowedBy: 'CatchClause parameter' };
@@ -241,10 +249,17 @@ function wipedCollectionsFromAst(ast) {
 
   walk(ast.program, (node, ancestors) => {
     if (node.type !== 'CallExpression') return;
-    if (node.callee.type !== 'Identifier' || !WIPE_FNS.has(node.callee.name)) return;
+    const { callee } = node;
+    const calleeName =
+      callee.type === 'Identifier'
+        ? callee.name
+        : callee.type === 'MemberExpression' && callee.property.type === 'Identifier'
+          ? callee.property.name
+          : null;
+    if (!calleeName || !WIPE_FNS.has(calleeName)) return;
 
     const target = node.arguments[1];
-    const describe = (why) => unresolved.push(`${node.callee.name}(db, …): ${why}`);
+    const describe = (why) => unresolved.push(`${calleeName}(db, …): ${why}`);
 
     if (!target) return describe('no collection argument');
     if (target.type === 'StringLiteral') return void wipes.add(target.value);
@@ -358,8 +373,40 @@ function exportedStringConstant(moduleSource, name) {
   return null;
 }
 
-/** Does this literal path text carry an actual name, not just separators? */
-const hasNameText = (text) => String(text).split('/').some(Boolean);
+/** The name a function is known by: `function f(){}` or `const f = (…) => {}`. */
+function functionName(fn, ancestors) {
+  if (fn.id?.type === 'Identifier') return fn.id.name;
+  const parent = ancestors[ancestors.length - 1];
+  if (parent?.type === 'VariableDeclarator' && parent.id.type === 'Identifier')
+    return parent.id.name;
+  return null;
+}
+
+/**
+ * A parameter in a collection-name slot is only readable if EVERY call site in
+ * this file passes something readable there — a literal, or a template whose own
+ * collection slots resolve. That is what puts the name in front of the blanket
+ * literal scan. Trusting the assumption instead of checking it is how the victim
+ * side went blind in the first place (reviewer R15-I2).
+ */
+function everyCallSitePassesAReadablePath(ctx, fnName, paramIndex) {
+  if (ctx.functionsInProgress.has(fnName)) return false; // recursive helper
+  ctx.functionsInProgress.add(fnName);
+  try {
+    let sawCall = false;
+    let allReadable = true;
+    walk(ctx.ast.program, (node, ancestors) => {
+      if (node.type !== 'CallExpression') return;
+      if (node.callee.type !== 'Identifier' || node.callee.name !== fnName) return;
+      sawCall = true;
+      const arg = node.arguments[paramIndex];
+      if (!arg || !pathIsReadable(arg, ancestors, ctx).readable) allReadable = false;
+    });
+    return sawCall && allReadable;
+  } finally {
+    ctx.functionsInProgress.delete(fnName);
+  }
+}
 
 /** An in-file array of string literals: its names are scanned by `referencedSegments`. */
 function arrayOfStringLiterals(node, ancestors) {
@@ -393,69 +440,115 @@ function pathIsReadable(node, ancestors, ctx) {
   if (node.type === 'StringLiteral') return { readable: true };
 
   if (node.type === 'TemplateLiteral') {
-    if (hasNameText(node.quasis[0]?.value.cooked ?? '')) return { readable: true };
-    const head = node.expressions[0];
-    if (head?.type !== 'Identifier') {
-      return { readable: false, why: `the path begins with a ${head?.type ?? 'nothing'}` };
+    // A Firestore path alternates collection/document: `rooms/r1/messages/m1`.
+    // Only EVEN 0-based segments name a collection, so only interpolations that
+    // land on one need reading — `users/${uid}` hides nothing, `${SUBCOL}` in
+    // `users/${uid}/${SUBCOL}/${id}` hides a collection name (reviewer R15-I1).
+    let segment = 0;
+    for (let i = 0; i < node.quasis.length; i++) {
+      let text = node.quasis[i].value.cooked ?? '';
+      // A leading '/' is not an empty first segment; Firestore paths are relative.
+      if (i === 0 && text.startsWith('/')) text = text.slice(1);
+      segment += text.split('/').length - 1;
+
+      const expression = node.expressions[i];
+      if (!expression) break;
+      if (segment % 2 !== 0) continue; // a document-id slot names no collection
+
+      if (expression.type !== 'Identifier') {
+        return { readable: false, why: `a collection segment is a ${expression.type}` };
+      }
+      const result = pathIsReadable(expression, ancestors, ctx);
+      if (!result.readable) return result;
     }
-    return pathIsReadable(head, ancestors, ctx);
+    return { readable: true };
   }
 
   if (node.type === 'Identifier') {
-    const { declarator, shadowedBy, loop } = resolveBinding(ancestors, node.name);
-    if (shadowedBy?.endsWith('parameter')) return { readable: true };
-    if (loop) {
-      if (arrayOfStringLiterals(loop.right, ancestors)) return { readable: true };
-      return { readable: false, why: `'${node.name}' iterates names this file never spells out` };
+    // `const A = `${A}`` is a TDZ crash at runtime, but Babel parses it happily.
+    // Guard the cycle rather than let the guard die of a RangeError (R15-I4).
+    if (ctx.seen.has(node.name)) {
+      return { readable: false, why: `'${node.name}' is defined in terms of itself` };
     }
-    const init = declarator?.init;
-    if (init?.type === 'StringLiteral') return { readable: true };
-    if (init?.type === 'TemplateLiteral') return pathIsReadable(init, ancestors, ctx);
-
-    // `const { SAFETY_AUDIT_COLLECTION } = require('../../src/safety/safety-audit')`
-    // names a collection whose literal lives in ANOTHER file. Follow the require:
-    // the name must reach `segments`, or this file silently stops counting as a
-    // user of that collection and a sibling's wipe of it goes unreported.
-    const specifier = relativeRequireSpecifier(declarator);
-    if (specifier && ctx?.readModule) {
-      const moduleSource = ctx.readModule(specifier);
-      const value = moduleSource && exportedStringConstant(moduleSource, node.name);
-      if (value) {
-        ctx.importedNames.add(value);
-        return { readable: true };
-      }
-      return {
-        readable: false,
-        why: `'${node.name}' is imported from '${specifier}' but is not a string constant there`,
-      };
+    ctx.seen.add(node.name);
+    try {
+      return identifierIsReadable(node, ancestors, ctx);
+    } finally {
+      ctx.seen.delete(node.name);
     }
-    return { readable: false, why: `'${node.name}' is not a local string constant` };
   }
 
   return { readable: false, why: `the path is a ${node.type}` };
 }
 
-/**
- * Firestore paths whose collection name the analyzer cannot read.
- *
- * `db.doc(`${ROOMS}/${id}`)` and `db.doc(SAFETY_DOC)` both name a collection
- * through an identifier. Today every such identifier in this repo happens to be
- * a local `const X = '<literal>'`, so the blanket literal scan sees the name —
- * luck, not design. Centralise those constants into a shared import and the file
- * silently stops counting as a user of the collection, and a sibling's wipe of
- * it passes unreported. The guard fails on a non-empty list, exactly as it does
- * for an unresolvable wipe.
- */
+function identifierIsReadable(node, ancestors, ctx) {
+  const { declarator, shadowedBy, loop, parameterOf } = resolveBinding(ancestors, node.name);
+
+  if (shadowedBy?.endsWith('parameter')) {
+    if (!parameterOf)
+      return { readable: false, why: `'${node.name}' is a parameter of nothing nameable` };
+    const { fn, index, fnAncestors } = parameterOf;
+    const name = functionName(fn, fnAncestors);
+    if (name && everyCallSitePassesAReadablePath(ctx, name, index)) return { readable: true };
+    return {
+      readable: false,
+      why: `'${node.name}' is a parameter whose call sites do not all pass a string literal`,
+    };
+  }
+
+  if (loop) {
+    if (arrayOfStringLiterals(loop.right, ancestors)) return { readable: true };
+    return { readable: false, why: `'${node.name}' iterates names this file never spells out` };
+  }
+
+  const init = declarator?.init;
+  if (init?.type === 'StringLiteral') return { readable: true };
+  if (init?.type === 'TemplateLiteral') return pathIsReadable(init, ancestors, ctx);
+
+  // `const { SAFETY_AUDIT_COLLECTION } = require('../../src/safety/safety-audit')`
+  // names a collection whose literal lives in ANOTHER file. Follow the require:
+  // the name must reach `segments`, or this file silently stops counting as a
+  // user of that collection and a sibling's wipe of it goes unreported.
+  const specifier = relativeRequireSpecifier(declarator);
+  if (specifier && ctx.readModule) {
+    const moduleSource = ctx.readModule(specifier);
+    const value = moduleSource && exportedStringConstant(moduleSource, node.name);
+    if (value) {
+      ctx.importedNames.add(value);
+      return { readable: true };
+    }
+    return {
+      readable: false,
+      why: `'${node.name}' is imported from '${specifier}' but is not a string constant there`,
+    };
+  }
+  return { readable: false, why: `'${node.name}' is not a local string constant` };
+}
+
+/** `db` itself, or a call chained off it (`db.collection(x).doc(y)`). */
+function isFirestoreChain(node) {
+  if (node.type === 'Identifier') return node.name === 'db';
+  if (node.type !== 'CallExpression' || node.callee.type !== 'MemberExpression') return false;
+  return isFirestoreChain(node.callee.object);
+}
+
 function firestorePathsFromAst(ast, readModule) {
   const unresolved = [];
   const importedNames = new Set();
-  const ctx = { readModule, importedNames };
+  const ctx = { ast, readModule, importedNames, seen: new Set(), functionsInProgress: new Set() };
 
   walk(ast.program, (node, ancestors) => {
     if (node.type !== 'CallExpression') return;
     const { callee } = node;
     if (callee.type !== 'MemberExpression' || callee.property.type !== 'Identifier') return;
     if (!FIRESTORE_PATH_FNS.has(callee.property.name)) return;
+    if (!isFirestoreChain(callee.object)) return;
+
+    // Only `db.<fn>(…)` takes a full path. Chained off a reference,
+    // `.collection(name)` takes a bare collection name — still a name we must be
+    // able to read — while `.doc(id)` takes a DOCUMENT id, which names nothing.
+    const onRoot = callee.object.type === 'Identifier';
+    if (!onRoot && callee.property.name === 'doc') return;
 
     const { readable, why } = pathIsReadable(node.arguments[0], ancestors, ctx);
     if (readable) return;

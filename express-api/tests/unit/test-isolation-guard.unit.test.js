@@ -220,6 +220,78 @@ describe('isolation analyzer — the detector sees every form a violation can ta
     ]);
   });
 
+  test('a document-id slot hides no collection — `users/${uid}` needs no report', () => {
+    expect(unresolvedSegments('db.doc(`users/${uid}`).get();')).toEqual([]);
+  });
+
+  test('REPORTS: a SUBCOLLECTION slot whose name is imported (not just the leading one)', () => {
+    // `users/${uid}/${SUBCOL}/${id}` — segment 2 names a collection. Checking
+    // only the head because the leading text reads fine is the same allowlist
+    // mistake, one level in (reviewer R15-I1).
+    const source = [
+      "const { SUBCOL } = require('./collection-names');",
+      'db.doc(`users/${uid}/${SUBCOL}/${id}`).set({});',
+    ].join('\n');
+    expect(unresolvedSegments(source)).toEqual([
+      expect.stringMatching(/'SUBCOL' is not a local string constant/),
+    ]);
+  });
+
+  test('a locally-named subcollection slot needs no report', () => {
+    const source = ["const SUB = 'backpack';", 'db.doc(`users/${uid}/${SUB}/${id}`).set({});'].join(
+      '\n',
+    );
+    expect(unresolvedSegments(source)).toEqual([]);
+  });
+
+  test('a chained `.doc(id)` takes a document id, not a path', () => {
+    // `db.collection(SPEC).doc(`p${i}`)` — the `.doc()` argument names nothing.
+    const source = ["const SPEC = 'spec';", 'db.collection(SPEC).doc(`p${i}`).set({});'].join('\n');
+    expect(unresolvedSegments(source)).toEqual([]);
+  });
+
+  test('REPORTS: a chained `.collection(name)` whose name is imported', () => {
+    const source = [
+      "const { SUB } = require('./collection-names');",
+      "db.collection('users').doc('u1').collection(SUB).get();",
+    ].join('\n');
+    expect(unresolvedSegments(source)).toEqual([
+      expect.stringMatching(/'SUB' is not a local string constant/),
+    ]);
+  });
+
+  test('a helper parameter is readable when every call site passes a readable path', () => {
+    const source = [
+      'const seed = (path, data) => db.doc(path).set(data);',
+      "seed('gifts/g1', {});",
+      'seed(`${col}/stale`, {});',
+      "const col = 'rooms';",
+    ].join('\n');
+    expect(unresolvedSegments(source)).toEqual([]);
+  });
+
+  test('REPORTS: a helper parameter whose call sites do not all pass a readable path', () => {
+    // Trusting the parameter without checking its call sites is how the victim
+    // side went blind in the first place (reviewer R15-I2).
+    const source = [
+      "const { HIDDEN } = require('./collection-names');",
+      'const seed = (path, data) => db.doc(path).set(data);',
+      "seed('gifts/g1', {});",
+      'seed(`${HIDDEN}/x`, {});',
+    ].join('\n');
+    expect(unresolvedSegments(source)).toEqual([
+      expect.stringMatching(/'path' is a parameter whose call sites do not all pass/),
+    ]);
+  });
+
+  test('REPORTS: a self-referential constant, without hanging', () => {
+    // Babel parses `const A = `${A}`` happily; Node would throw a TDZ error. The
+    // analyzer must not recurse forever (reviewer R15-I4).
+    expect(unresolvedSegments('const A = `${A}`; db.doc(A).get();')).toEqual([
+      expect.stringMatching(/'A' is defined in terms of itself/),
+    ]);
+  });
+
   test('REPORTS: a Firestore path whose leading name is never declared', () => {
     expect(unresolvedSegments('db.collection(`${MYSTERY}/${id}`).get();')).toEqual([
       expect.stringMatching(/'MYSTERY' is not a local string constant/),
@@ -311,6 +383,32 @@ describe('wipedCollections — every branch resolves or reports, none silently i
   test('RESOLVES: `let` loop bindings, not just `const`', () => {
     const { wipes } = analyseBody("for (let c of ['users']) clearCollection(db, c);");
     expect([...wipes]).toEqual(['users']);
+  });
+
+  test('a member-expression wipe call is seen, not silently skipped', () => {
+    // `helpers.clearCollection(db, x)` — a different import style must not make
+    // the wipe invisible (reviewer R15-I3).
+    const { wipes, unresolved } = analyseBody(
+      [
+        "const helpers = require('../helpers/firebase-emulator');",
+        "helpers.clearCollection(db, 'users');",
+      ].join('\n'),
+    );
+    expect([...wipes]).toEqual(['users']);
+    expect(unresolved).toEqual([]);
+  });
+
+  test('REPORTS: a member-expression wipe call with an unresolvable target', () => {
+    const { wipes, unresolved } = analyseBody(
+      [
+        "const helpers = require('../helpers/firebase-emulator');",
+        'helpers.clearCollection(db, mystery);',
+      ].join('\n'),
+    );
+    expect([...wipes]).toEqual([]);
+    expect(unresolved).toEqual([
+      expect.stringMatching(/'mystery' is neither a loop variable nor a string constant/),
+    ]);
   });
 
   test('REPORTS: a wipe call with no collection argument', () => {
