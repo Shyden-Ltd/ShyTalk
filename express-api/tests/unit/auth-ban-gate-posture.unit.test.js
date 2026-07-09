@@ -42,16 +42,10 @@ jest.mock('../../src/utils/log', () => ({
 }));
 
 const mockCheckUserBans = jest.fn();
-// `virtual` lets this suite express the wished-for module BEFORE it exists
-// (pure RED); once src/utils/bans.js lands, the option is inert.
-jest.mock(
-  '../../src/utils/bans',
-  () => ({
-    checkUserBans: (...args) => mockCheckUserBans(...args),
-    clearBanCache: jest.fn(),
-  }),
-  { virtual: true },
-);
+jest.mock('../../src/utils/bans', () => ({
+  checkUserBans: (...args) => mockCheckUserBans(...args),
+  clearBanCache: jest.fn(),
+}));
 
 const log = require('../../src/utils/log');
 const {

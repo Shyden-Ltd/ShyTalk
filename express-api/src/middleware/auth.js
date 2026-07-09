@@ -6,6 +6,7 @@
  */
 
 const { auth, db } = require('../utils/firebase');
+const { checkUserBans, clearBanCache } = require('../utils/bans');
 const log = require('../utils/log');
 
 // ─── In-memory caches ────────────────────────────────────────────
@@ -195,18 +196,28 @@ async function authMiddleware(req, res, next) {
     // Check suspension (only if user exists)
     const isSuspended = await checkSuspension(uniqueId);
 
-    if (isSuspended) {
-      const isSuspensionExempt =
-        /^\/users\/[^/]+\/appeal$/.test(req.path) ||
-        /^\/users\/[^/]+\/lift-suspension$/.test(req.path) ||
-        /^\/users\/[^/]+\/delete$/.test(req.path) ||
-        /^\/users\/[^/]+\/cancel-delete$/.test(req.path) ||
-        /^\/users\/[^/]+\/deletion-status$/.test(req.path) ||
-        /^\/users\/[^/]+\/data-export/.test(req.path) ||
-        (req.method === 'POST' && req.path === '/appeals');
-      if (!isSuspensionExempt) {
-        return res.status(403).json({ error: 'Account suspended' });
-      }
+    if (isSuspended && !isSuspensionExemptPath(req)) {
+      return res.status(403).json({ error: 'Account suspended' });
+    }
+
+    // Per-request ban gate (SHY-0149): device + network bans, matched on
+    // the REAL edge IP. Runs on every auth-gated request so the web,
+    // direct-API, modified-client, and mid-session bypasses are all
+    // closed. A lookup failure rejects into the catch below (fail-closed).
+    const ban = await checkUserBans(uniqueId, req.ip);
+    if (ban.isBanned && !isBanExemptPath(req)) {
+      log.warn('auth', 'Request denied: banned', {
+        path: req.path,
+        uniqueId,
+        banType: ban.banType,
+      });
+      return res.status(403).json({
+        error: 'Account banned',
+        code: 'banned',
+        banType: ban.banType,
+        reason: ban.reason,
+        expiresAt: ban.expiresAt,
+      });
     }
 
     req.auth = { uid, uniqueId, token: decoded };
@@ -215,6 +226,37 @@ async function authMiddleware(req, res, next) {
     log.error('auth', 'Authentication failed', { error: err.message });
     return res.status(401).json({ error: 'Authentication failed' });
   }
+}
+
+/**
+ * Paths a SUSPENDED user may still reach: the appeal flow plus the
+ * account-deletion / GDPR-export rights that suspension must not remove.
+ */
+function isSuspensionExemptPath(req) {
+  return (
+    /^\/users\/[^/]+\/appeal$/.test(req.path) ||
+    /^\/users\/[^/]+\/lift-suspension$/.test(req.path) ||
+    /^\/users\/[^/]+\/delete$/.test(req.path) ||
+    /^\/users\/[^/]+\/cancel-delete$/.test(req.path) ||
+    /^\/users\/[^/]+\/deletion-status$/.test(req.path) ||
+    /^\/users\/[^/]+\/data-export/.test(req.path) ||
+    (req.method === 'POST' && req.path === '/appeals')
+  );
+}
+
+/**
+ * Paths a BANNED user may still reach: everything a suspended user may
+ * (appeals + GDPR rights survive a ban), PLUS the two ban-delivery /
+ * device-binding channels — /device-info is how the app LEARNS it is
+ * banned (the ban screen), and /devices/lock-check runs pre-ban-screen in
+ * the sign-in flow. Gating those would replace the ban screen with a
+ * generic error while enforcing nothing (both are telemetry/verdict
+ * endpoints, not abuse-capable actions).
+ */
+function isBanExemptPath(req) {
+  return (
+    isSuspensionExemptPath(req) || req.path === '/device-info' || req.path === '/devices/lock-check'
+  );
 }
 
 /**
@@ -253,14 +295,32 @@ async function authMiddlewareStrict(req, res, next) {
     // Check suspension (only if user exists)
     const isSuspended = await checkSuspension(uniqueId);
 
-    if (isSuspended) {
-      const isSuspensionExempt =
-        req.path === '/portal/me' ||
-        req.path === '/portal/sign-out' ||
-        /^\/users\/[^/]+\/appeal$/.test(req.path);
-      if (!isSuspensionExempt) {
-        return res.status(403).json({ error: 'Account suspended' });
-      }
+    const isStrictExempt =
+      req.path === '/portal/me' ||
+      req.path === '/portal/sign-out' ||
+      /^\/users\/[^/]+\/appeal$/.test(req.path);
+
+    if (isSuspended && !isStrictExempt) {
+      return res.status(403).json({ error: 'Account suspended' });
+    }
+
+    // Per-request ban gate (SHY-0149) — same authority as authMiddleware,
+    // same strict-variant exemptions as the suspension check (portal
+    // self-service + appeal). Fail-closed via the catch below.
+    const ban = await checkUserBans(uniqueId, req.ip);
+    if (ban.isBanned && !isStrictExempt) {
+      log.warn('auth', 'Request denied: banned (strict)', {
+        path: req.path,
+        uniqueId,
+        banType: ban.banType,
+      });
+      return res.status(403).json({
+        error: 'Account banned',
+        code: 'banned',
+        banType: ban.banType,
+        reason: ban.reason,
+        expiresAt: ban.expiresAt,
+      });
     }
 
     req.auth = { uid, uniqueId, token: decoded };
@@ -410,6 +470,9 @@ module.exports = {
   clearSuspensionCache,
   clearUniqueIdCache,
   clearAdminClaimCache,
+  // Re-exported from utils/bans so middleware consumers (tests, admin
+  // routes already importing from here) have one import surface.
+  clearBanCache,
   updateUniqueIdCache,
   resolveUniqueId,
 };

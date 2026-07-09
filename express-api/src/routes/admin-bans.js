@@ -23,6 +23,7 @@ router.use('/admin/bans', _adminGuardWrapper);
 
 const { generateId, now } = require('../utils/helpers');
 const { sendSystemPm } = require('../utils/system-pm');
+const { clearBanCache } = require('../utils/bans');
 const log = require('../utils/log');
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -84,6 +85,11 @@ router.post('/admin/bans/device', async (req, res) => {
       createdAt: now(),
       createdBy: req.auth.uid,
     });
+
+    // Full clear (not per-uid): the ban may target a device bound to a
+    // user other than linkedUniqueId — the gate must see it on the
+    // target's NEXT request (SHY-0149 mid-session AC).
+    clearBanCache();
 
     // Audit log
     await db.doc(`adminAuditLog/${generateId()}`).set({
@@ -157,6 +163,9 @@ router.post('/admin/bans/network', async (req, res) => {
       createdBy: req.auth.uid,
     });
 
+    // Invalidate the gate's cached active-networkBans list immediately.
+    clearBanCache();
+
     // Audit log
     await db.doc(`adminAuditLog/${generateId()}`).set({
       adminId: req.auth.uid,
@@ -193,6 +202,8 @@ router.post('/admin/bans/network', async (req, res) => {
 router.delete('/admin/bans/device/:deviceId', async (req, res) => {
   try {
     await db.doc(`deviceBans/${req.params.deviceId}`).delete();
+    // An unban must lift the gate as promptly as a ban engages it.
+    clearBanCache();
 
     await db.doc(`adminAuditLog/${generateId()}`).set({
       adminId: req.auth.uid,
@@ -216,6 +227,8 @@ router.delete('/admin/bans/device/:deviceId', async (req, res) => {
 router.delete('/admin/bans/network/:banId', async (req, res) => {
   try {
     await db.doc(`networkBans/${req.params.banId}`).delete();
+    // An unban must lift the gate as promptly as a ban engages it.
+    clearBanCache();
 
     await db.doc(`adminAuditLog/${generateId()}`).set({
       adminId: req.auth.uid,
@@ -262,6 +275,8 @@ router.post('/admin/bans/unban-all/:uniqueId', async (req, res) => {
     }
 
     await Promise.all(allDocs.map((d) => d.ref.delete()));
+    // An unban must lift the gate as promptly as a ban engages it.
+    clearBanCache();
 
     await db.doc(`adminAuditLog/${generateId()}`).set({
       adminId: req.auth.uid,

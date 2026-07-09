@@ -48,7 +48,7 @@ const { db } = require('../../src/utils/firebase');
 const { assertEmulatorReachable, clearCollection } = require('../helpers/firebase-emulator');
 const { mintRealUser, mintTokenWithoutUserDoc, clearAuthCaches } = require('../helpers/real-auth');
 const authModule = require('../../src/middleware/auth');
-const { authMiddleware } = authModule;
+const { authMiddleware, clearBanCache } = authModule;
 const deviceInfoRouter = require('../../src/routes/device-info');
 const suggestionsRouter = require('../../src/routes/suggestions');
 const adminBansRouter = require('../../src/routes/admin-bans');
@@ -58,11 +58,6 @@ const NETWORK_BANS = 'networkBans';
 const DEVICE_BINDINGS = 'deviceBindings';
 const USERS = 'users';
 const SUGGESTIONS = 'suggestions';
-
-// Not yet exported before GREEN — optional-call so behavioral tests fail on
-// assertions (RED), not on setup TypeErrors.
-const clearBanCache = (...args) =>
-  typeof authModule.clearBanCache === 'function' ? authModule.clearBanCache(...args) : undefined;
 
 /**
  * Probe app replicating the production wiring that matters to the gate:
@@ -253,6 +248,20 @@ describe('network bans match the real edge IP — ip, subnet, asn', () => {
     expect(res.body).toMatchObject({ code: 'banned', banType: 'network_asn' });
   });
 
+  test('an ASN ban stored numerically (the admin-route format) still matches the AS-prefixed binding ASN', async () => {
+    const caller = await mintRealUser({ uniqueId: '5024' });
+    await db
+      .doc(`${DEVICE_BINDINGS}/dev-asn-2`)
+      .set({ uniqueId: '5024', boundAt: 1, asn: 'AS64500' });
+    // Pre-existing defect: the admin route validates ASN ban values as
+    // digits-only ('64500') while geo enrichment stores 'AS64500' — strict
+    // equality meant an admin-issued ASN ban could never match.
+    await seedNetworkBan('nb-asn-numeric-1', { type: 'asn', value: '64500' });
+
+    const res = await probeAs(caller).expect(403);
+    expect(res.body).toMatchObject({ code: 'banned', banType: 'network_asn' });
+  });
+
   test('an EXPIRED network ban no longer blocks', async () => {
     const caller = await mintRealUser({ uniqueId: '5023' });
     await seedNetworkBan('nb-expired-1', {
@@ -291,7 +300,7 @@ describe('X-Forwarded-For forgery does not evade network bans', () => {
       .post('/api/device-info')
       .set(caller.headers)
       .set('X-Forwarded-For', `${CLEAN_IP}, ${EDGE_IP}`)
-      .send({ deviceId: 'dev-xff-3', platform: 'android' })
+      .send({ deviceId: 'dev-xff-3' })
       .expect(200);
 
     // Sign-in ban report reflects the REAL IP…
@@ -362,7 +371,7 @@ describe('exempt paths stay reachable while banned', () => {
     const res = await request(createRouterApp(deviceInfoRouter))
       .post('/api/device-info')
       .set(caller.headers)
-      .send({ deviceId: 'dev-channel-1', platform: 'android' })
+      .send({ deviceId: 'dev-channel-1' })
       .expect(200);
     expect(res.body.banStatus).toMatchObject({ isBanned: true, reason: 'channel test' });
   });

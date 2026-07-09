@@ -27,6 +27,7 @@ const {
   clearUniqueIdCache,
   clearSuspensionCache,
   clearAdminClaimCache,
+  clearBanCache,
 } = require('../../src/middleware/auth');
 
 // Monotonic counter for unique synthetic uids (avoids a flagged Math.random PRNG).
@@ -37,6 +38,7 @@ function clearAuthCaches() {
   clearUniqueIdCache();
   clearSuspensionCache();
   clearAdminClaimCache();
+  clearBanCache();
 }
 
 async function exchangeCustomTokenForIdToken(customToken) {

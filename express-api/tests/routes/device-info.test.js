@@ -1,940 +1,314 @@
+/**
+ * POST /api/device-info — REAL-services integration test (SHY-0149
+ * migration off the old fully-mocked suite; No-Stubs debt, EPIC-0003
+ * pattern).
+ *
+ * Everything here runs against the REAL Firestore + Auth emulator with the
+ * REAL authMiddleware in front of the router — storage shapes, binding
+ * reconciliation, and ban reporting are proven end-to-end, not against a
+ * hand-rolled db chain. The two mock-necessary slices moved to unit files:
+ * getIpGeo's third-party HTTP branches + the Firestore-throws 500 posture
+ * (tests/unit/device-info.unit.test.js) and the ban engine's pure edges
+ * (tests/unit/bans.unit.test.js).
+ *
+ * IP notes: requests that need an IPv4 client address send it as the
+ * rightmost X-Forwarded-For entry under `trust proxy: 1` — exactly how the
+ * production edge delivers it (`req.ip`). TEST-NET addresses (RFC 5737)
+ * keep the best-effort geo lookup inert (ip-api rejects reserved ranges;
+ * the route degrades to null geo either way). Requests with no XFF ride
+ * the IPv6-mapped loopback, which short-circuits geo entirely. Sign-in ASN
+ * ban matching is geo-derived and therefore pinned at the unit layer + via
+ * stored-binding ASNs in the auth-ban-gate suite.
+ *
+ * NODE_ENV='local' is set BEFORE requiring src/utils/firebase so the Admin
+ * SDK + Auth emulator target localhost. PER-FILE opt-in only — never
+ * prepend NODE_ENV=local to the canonical `npm test`
+ * (feedback-express-suite-no-node-env-override).
+ */
+
+const PRIOR_NODE_ENV = process.env.NODE_ENV;
+process.env.NODE_ENV = 'local';
+
 const express = require('express');
 const request = require('supertest');
-
-// ─── Firebase mock ───────────────────────────────────────────────
-
-const mockSet = jest.fn().mockResolvedValue();
-const mockDocGet = jest.fn().mockResolvedValue({ exists: false });
-const mockCollectionGet = jest.fn().mockResolvedValue({ empty: true, docs: [] });
-
-const mockDoc = jest.fn(() => ({
-  get: mockDocGet,
-  set: mockSet,
-}));
-
-const mockLimit = jest.fn(() => ({
-  get: mockCollectionGet,
-}));
-
-// Chain supports `.where(filter).limit(N).get()` for the active-bans
-// query that replaced the expireBans cron. Returns the same
-// `mockCollectionGet` regardless of filter/limit, so existing tests
-// that read network bans still work.
-const mockWhere = jest.fn(() => ({
-  get: mockCollectionGet,
-  limit: mockLimit,
-}));
-
-const mockCollection = jest.fn(() => ({
-  get: mockCollectionGet,
-  limit: mockLimit,
-  where: mockWhere,
-}));
-
-jest.mock('../../src/utils/firebase', () => ({
-  db: {
-    doc: (...args) => mockDoc(...args),
-    collection: (...args) => mockCollection(...args),
-  },
-}));
-
-// ─── Fetch mock ──────────────────────────────────────────────────
-
-const originalFetch = global.fetch;
-
-beforeEach(() => {
-  jest.clearAllMocks();
-
-  // Default: device binding doesn't exist yet
-  mockDocGet.mockResolvedValue({ exists: false });
-  // Default: no network bans
-  mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-
-  // Default: successful geo response
-  global.fetch = jest.fn().mockResolvedValue({
-    ok: true,
-    json: () =>
-      Promise.resolve({
-        isp: 'BT',
-        as: 'AS2856 British Telecommunications PLC',
-        country: 'United Kingdom',
-        regionName: 'England',
-      }),
-  });
-});
-
-afterAll(() => {
-  global.fetch = originalFetch;
-});
-
-// ─── App setup ───────────────────────────────────────────────────
-
+const { db } = require('../../src/utils/firebase');
+const { assertEmulatorReachable, clearCollection } = require('../helpers/firebase-emulator');
+const { mintRealUser, clearAuthCaches } = require('../helpers/real-auth');
+const { authMiddleware } = require('../../src/middleware/auth');
 const deviceInfoRouter = require('../../src/routes/device-info');
+
+const DEVICE_BINDINGS = 'deviceBindings';
+const DEVICE_BANS = 'deviceBans';
+const NETWORK_BANS = 'networkBans';
+const USERS = 'users';
+
+const CLIENT_IP = '198.51.100.42'; // TEST-NET-2 — real IPv4 shape, geo-inert
+const OTHER_IP = '198.51.100.77';
 
 function createApp() {
   const app = express();
+  app.set('trust proxy', 1); // mirrors express-api/src/index.js:33
   app.use(express.json());
-  app.use((req, _res, next) => {
-    req.auth = { uid: 'user123', uniqueId: 'user123' };
-    next();
-  });
+  app.use('/api', authMiddleware);
   app.use('/api', deviceInfoRouter);
   return app;
 }
 
-const validBody = {
-  deviceId: 'abc-xyz',
-  manufacturer: 'Samsung',
-  model: 'Galaxy S24',
-  osVersion: 'Android 14',
-  screenResolution: '1080x2340',
-  screenDensity: 2.75,
-  totalRamMb: 8192,
-  appVersion: '0.53',
-  buildNumber: 54,
-  locale: 'en-GB',
-  networkType: 'wifi',
-  carrierName: 'EE',
-  firebaseInstallationId: 'fid-abc',
+/** POST device-info as `caller`; `ip` rides as the edge-delivered (rightmost) XFF. */
+function submit(caller, body, { ip } = {}) {
+  const req = request(createApp()).post('/api/device-info').set(caller.headers);
+  if (ip) req.set('X-Forwarded-For', ip);
+  return req.send(body);
+}
+
+const readBinding = async (deviceId) => {
+  const snap = await db.doc(`${DEVICE_BINDINGS}/${deviceId}`).get();
+  return snap.exists ? snap.data() : null;
 };
 
-// ─── Tests ───────────────────────────────────────────────────────
+beforeAll(() => {
+  assertEmulatorReachable();
+});
 
-describe('POST /api/device-info', () => {
-  test('accepts valid device info and stores it (200)', async () => {
-    const app = createApp();
+beforeEach(async () => {
+  clearAuthCaches();
+  await clearCollection(db, DEVICE_BINDINGS);
+  await clearCollection(db, DEVICE_BANS);
+  await clearCollection(db, NETWORK_BANS);
+  await clearCollection(db, USERS);
+});
 
-    const res = await request(app)
-      .post('/api/device-info')
-      .set('x-forwarded-for', '203.0.113.1')
-      .send(validBody)
-      .expect(200);
+afterAll(() => {
+  process.env.NODE_ENV = PRIOR_NODE_ENV;
+});
 
-    expect(res.body.success).toBe(true);
-    expect(res.body.banStatus).toBeDefined();
-    expect(res.body.banStatus.isBanned).toBe(false);
+describe('input validation', () => {
+  test('rejects a missing deviceId (400)', async () => {
+    const caller = await mintRealUser({ uniqueId: '7001' });
+    const res = await submit(caller, { platform: 'android' }).expect(400);
+    expect(res.body).toEqual({ error: 'deviceId is required' });
+  });
 
-    // Should have written to Firestore
-    expect(mockDoc).toHaveBeenCalledWith('deviceBindings/abc-xyz');
-    expect(mockSet).toHaveBeenCalledWith(
-      expect.objectContaining({
-        deviceId: 'abc-xyz',
-        uniqueId: 'user123',
+  test('rejects an empty body (400)', async () => {
+    const caller = await mintRealUser({ uniqueId: '7002' });
+    await submit(caller, {}).expect(400);
+  });
+
+  test('rejects a deviceId containing "/" — no Firestore path redirection (SHY-0170)', async () => {
+    const caller = await mintRealUser({ uniqueId: '7003' });
+    const res = await submit(caller, { deviceId: 'evil/../../users' }).expect(400);
+    expect(res.body).toEqual({ error: 'deviceId is invalid' });
+  });
+});
+
+describe('storage', () => {
+  test('stores the submitted device info with the REAL edge IP and binding timestamps', async () => {
+    const caller = await mintRealUser({ uniqueId: '7010' });
+
+    const res = await submit(
+      caller,
+      {
+        deviceId: 'dev-store-1',
         manufacturer: 'Samsung',
-        model: 'Galaxy S24',
-        isp: 'BT',
-        asn: 'AS2856',
-        country: 'United Kingdom',
-        region: 'England',
-      }),
-      { merge: true },
-    );
-  });
-
-  test('rejects missing deviceId (400)', async () => {
-    const app = createApp();
-
-    const res = await request(app)
-      .post('/api/device-info')
-      .send({ manufacturer: 'Samsung' })
-      .expect(400);
-
-    expect(res.body.error).toBe('deviceId is required');
-  });
-
-  test('rejects a deviceId containing "/" (400 invalid) — no Firestore path redirection (SHY-0170)', async () => {
-    const app = createApp();
-
-    const res = await request(app)
-      .post('/api/device-info')
-      .send({ deviceId: 'a/b/c', manufacturer: 'Samsung' })
-      .expect(400);
-
-    expect(res.body.error).toBe('deviceId is invalid');
-    expect(mockDoc).not.toHaveBeenCalledWith('deviceBindings/a/b/c');
-  });
-
-  test('returns banStatus.isBanned = false when no bans', async () => {
-    // Device ban doc doesn't exist
-    mockDocGet.mockResolvedValue({ exists: false });
-    // No network bans
-    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-
-    const app = createApp();
-
-    const res = await request(app).post('/api/device-info').send(validBody).expect(200);
-
-    expect(res.body.banStatus.isBanned).toBe(false);
-    expect(res.body.banStatus.banType).toBeNull();
-  });
-
-  test('returns banStatus with device ban', async () => {
-    // First call: deviceBindings/{deviceId} — doesn't exist
-    // Second call: deviceBans/{deviceId} — exists with ban
-    let docGetCallCount = 0;
-    mockDocGet.mockImplementation(() => {
-      docGetCallCount++;
-      if (docGetCallCount === 1) {
-        // deviceBindings check (existing doc check)
-        return Promise.resolve({ exists: false });
-      }
-      // deviceBans check
-      return Promise.resolve({
-        exists: true,
-        data: () => ({
-          reason: 'Cheating',
-          expiresAt: new Date(Date.now() + 86400000).toISOString(), // future
-        }),
-      });
-    });
-
-    const app = createApp();
-
-    const res = await request(app).post('/api/device-info').send(validBody).expect(200);
-
-    expect(res.body.banStatus.isBanned).toBe(true);
-    expect(res.body.banStatus.banType).toBe('device');
-    expect(res.body.banStatus.reason).toBe('Cheating');
-  });
-
-  test('returns banStatus with network ban (IP match)', async () => {
-    // deviceBindings — doesn't exist, deviceBans — doesn't exist
-    mockDocGet.mockResolvedValue({ exists: false });
-
-    // Network bans — one IP ban matching the forwarded IP
-    mockCollectionGet.mockResolvedValue({
-      empty: false,
-      docs: [
-        {
-          data: () => ({
-            type: 'ip',
-            value: '203.0.113.50',
-            reason: 'Spam IP',
-            expiresAt: new Date(Date.now() + 86400000).toISOString(),
-          }),
-        },
-      ],
-    });
-
-    const app = createApp();
-
-    const res = await request(app)
-      .post('/api/device-info')
-      .set('x-forwarded-for', '203.0.113.50, 10.0.0.1')
-      .send(validBody)
-      .expect(200);
-
-    expect(res.body.banStatus.isBanned).toBe(true);
-    expect(res.body.banStatus.banType).toBe('network_ip');
-    expect(res.body.banStatus.reason).toBe('Spam IP');
-  });
-
-  test('skips expired bans', async () => {
-    // Device ban exists but expired
-    let docGetCallCount = 0;
-    mockDocGet.mockImplementation(() => {
-      docGetCallCount++;
-      if (docGetCallCount === 1) {
-        return Promise.resolve({ exists: false });
-      }
-      // deviceBans — expired
-      return Promise.resolve({
-        exists: true,
-        data: () => ({
-          reason: 'Old ban',
-          expiresAt: new Date(Date.now() - 86400000).toISOString(), // past
-        }),
-      });
-    });
-
-    // Network bans — also expired
-    mockCollectionGet.mockResolvedValue({
-      empty: false,
-      docs: [
-        {
-          data: () => ({
-            type: 'ip',
-            value: '127.0.0.1',
-            reason: 'Old IP ban',
-            expiresAt: new Date(Date.now() - 86400000).toISOString(),
-          }),
-        },
-      ],
-    });
-
-    const app = createApp();
-
-    const res = await request(app).post('/api/device-info').send(validBody).expect(200);
-
-    expect(res.body.banStatus.isBanned).toBe(false);
-  });
-
-  test('uses Firestore .where() filter to fetch only active network bans', async () => {
-    // Confirms the query layer filters out expired bans before they
-    // reach checkBans's per-doc safety check. This is the change that
-    // eliminates the need for the expireBans cron — Firestore returns
-    // only currently-active bans (expiresAt == null OR > now), so reads
-    // are bounded by the active-ban count, not total stored count.
-    mockDocGet.mockResolvedValue({ exists: false });
-    mockCollectionGet.mockResolvedValue({ empty: true, size: 0, docs: [] });
-
-    const app = createApp();
-
-    await request(app).post('/api/device-info').send(validBody).expect(200);
-
-    expect(mockWhere).toHaveBeenCalled();
-  });
-
-  test('matches permanent network ban (expiresAt === null) under the where-filter', async () => {
-    // Permanent bans (no expiresAt) must still be returned by the OR
-    // filter. A naive `where('expiresAt', '>', now)` would silently
-    // drop them; the OR branch for `== null` keeps them visible.
-    mockDocGet.mockResolvedValue({ exists: false });
-    mockCollectionGet.mockResolvedValue({
-      empty: false,
-      size: 1,
-      docs: [
-        {
-          data: () => ({
-            type: 'ip',
-            value: '203.0.113.50',
-            reason: 'Permanent IP ban',
-            expiresAt: null,
-          }),
-        },
-      ],
-    });
-
-    const app = createApp();
-
-    const res = await request(app)
-      .post('/api/device-info')
-      .set('x-forwarded-for', '203.0.113.50')
-      .send(validBody)
-      .expect(200);
-
-    expect(res.body.banStatus.isBanned).toBe(true);
-    expect(res.body.banStatus.banType).toBe('network_ip');
-    expect(res.body.banStatus.expiresAt).toBeNull();
-  });
-
-  test('logs truncation warning when networkBans hits the 500 limit', async () => {
-    // The query is capped at 500 to bound per-request reads on the
-    // Spark tier. If a deployment ever has >500 simultaneously-active
-    // network bans, this log tells ops the bound was hit so they can
-    // consider a different query strategy.
-    const log = require('../../src/utils/log');
-    const warnSpy = jest.spyOn(log, 'warn').mockImplementation(() => {});
-
-    try {
-      mockDocGet.mockResolvedValue({ exists: false });
-      // 500 non-matching docs — exercises the truncation branch without
-      // short-circuiting on a match.
-      const docs = Array.from({ length: 500 }, (_, i) => ({
-        data: () => ({
-          type: 'ip',
-          value: `10.${Math.floor(i / 65536)}.${Math.floor(i / 256) % 256}.${i % 256}`,
-          reason: 'bulk',
-          expiresAt: null,
-        }),
-      }));
-      mockCollectionGet.mockResolvedValue({ empty: false, size: 500, docs });
-
-      const app = createApp();
-
-      await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.99')
-        .send(validBody)
-        .expect(200);
-
-      expect(warnSpy).toHaveBeenCalledWith(
-        'device-info',
-        expect.stringContaining('truncat'),
-        expect.objectContaining({ limit: 500 }),
-      );
-    } finally {
-      warnSpy.mockRestore();
-    }
-  });
-
-  test('does not log truncation warning when networkBans size < 500', async () => {
-    // Regression guard: a contributor flipping `===` to `>=` or
-    // changing the constant could fire the warning on every healthy
-    // request. Pin the silent-success path.
-    const log = require('../../src/utils/log');
-    const warnSpy = jest.spyOn(log, 'warn').mockImplementation(() => {});
-
-    try {
-      mockDocGet.mockResolvedValue({ exists: false });
-      mockCollectionGet.mockResolvedValue({
-        empty: false,
-        size: 3,
-        docs: [
-          { data: () => ({ type: 'ip', value: '10.0.0.1', reason: 'x', expiresAt: null }) },
-          { data: () => ({ type: 'ip', value: '10.0.0.2', reason: 'y', expiresAt: null }) },
-          { data: () => ({ type: 'ip', value: '10.0.0.3', reason: 'z', expiresAt: null }) },
-        ],
-      });
-
-      const app = createApp();
-
-      await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.99')
-        .send(validBody)
-        .expect(200);
-
-      expect(warnSpy).not.toHaveBeenCalled();
-    } finally {
-      warnSpy.mockRestore();
-    }
-  });
-
-  test('handles IP geolocation failure gracefully', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new Error('Network error'));
-
-    const app = createApp();
-
-    const res = await request(app).post('/api/device-info').send(validBody).expect(200);
-
+        model: 'SM-S911B',
+        osVersion: '15',
+        locale: 'en-GB',
+        appVersion: '1.2.3',
+      },
+      { ip: CLIENT_IP },
+    ).expect(200);
     expect(res.body.success).toBe(true);
-    // Geo fields should be null
-    expect(mockSet).toHaveBeenCalledWith(
-      expect.objectContaining({
-        isp: null,
-        asn: null,
-        country: null,
-        region: null,
-      }),
-      { merge: true },
+
+    const binding = await readBinding('dev-store-1');
+    expect(binding).toMatchObject({
+      deviceId: 'dev-store-1',
+      manufacturer: 'Samsung',
+      model: 'SM-S911B',
+      osVersion: '15',
+      locale: 'en-GB',
+      appVersion: '1.2.3',
+      lastIp: CLIENT_IP,
+      uniqueId: '7010',
+    });
+    expect(binding.firstSeen).toBeDefined();
+    expect(binding.boundAt).toBeDefined();
+    expect(binding.lastSeenAt).toBeDefined();
+  });
+
+  test('stores null for optional fields that are not provided', async () => {
+    const caller = await mintRealUser({ uniqueId: '7011' });
+    await submit(caller, { deviceId: 'dev-nulls-1' }).expect(200);
+
+    const binding = await readBinding('dev-nulls-1');
+    expect(binding).toMatchObject({
+      manufacturer: null,
+      model: null,
+      osVersion: null,
+      screenResolution: null,
+      screenDensity: null,
+      totalRamMb: null,
+      appVersion: null,
+      buildNumber: null,
+      locale: null,
+      networkType: null,
+      carrierName: null,
+      firebaseInstallationId: null,
+    });
+  });
+
+  test('sets firstSeen/boundAt only on the FIRST submission; later ones update lastSeenAt', async () => {
+    const caller = await mintRealUser({ uniqueId: '7012' });
+
+    await submit(caller, { deviceId: 'dev-again-1' }).expect(200);
+    const first = await readBinding('dev-again-1');
+
+    await new Promise((r) => setTimeout(r, 5));
+    await submit(caller, { deviceId: 'dev-again-1', model: 'iPhone16,2' }).expect(200);
+    const second = await readBinding('dev-again-1');
+
+    expect(second.firstSeen).toBe(first.firstSeen);
+    expect(second.boundAt).toBe(first.boundAt);
+    expect(second.model).toBe('iPhone16,2');
+    expect(second.lastSeenAt >= first.lastSeenAt).toBe(true);
+  });
+
+  test('a forged leftmost X-Forwarded-For is ignored — the stored lastIp is the edge-delivered entry', async () => {
+    const caller = await mintRealUser({ uniqueId: '7013' });
+
+    await submit(caller, { deviceId: 'dev-forge-1' }, { ip: `${OTHER_IP}, ${CLIENT_IP}` }).expect(
+      200,
     );
+    expect((await readBinding('dev-forge-1')).lastIp).toBe(CLIENT_IP);
+  });
+});
+
+describe('binding reconciliation (SHY-0170)', () => {
+  test('does NOT rebind a device already owned by a DIFFERENT user', async () => {
+    await db.doc(`${DEVICE_BINDINGS}/dev-foreign-1`).set({ uniqueId: '7098', boundAt: 42 });
+    const caller = await mintRealUser({ uniqueId: '7020' });
+
+    await submit(caller, { deviceId: 'dev-foreign-1' }).expect(200);
+    expect((await readBinding('dev-foreign-1')).uniqueId).toBe('7098');
   });
 
-  test('sets firstSeen only on new bindings', async () => {
-    // First request: doc doesn't exist — should include firstSeen
-    mockDocGet.mockResolvedValue({ exists: false });
+  test('re-affirms the binding when the device is already the CALLER’s', async () => {
+    await db.doc(`${DEVICE_BINDINGS}/dev-mine-1`).set({ uniqueId: '7021', boundAt: 42 });
+    const caller = await mintRealUser({ uniqueId: '7021' });
 
-    const app = createApp();
-
-    await request(app).post('/api/device-info').send(validBody).expect(200);
-
-    const firstCallDoc = mockSet.mock.calls[0][0];
-    expect(firstCallDoc).toHaveProperty('firstSeen');
-    expect(firstCallDoc).toHaveProperty('boundAt');
-
-    // Reset mocks
-    jest.clearAllMocks();
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({ isp: 'BT', as: 'AS2856 BT', country: 'UK', regionName: 'England' }),
-    });
-
-    // Second request: doc exists — should NOT include firstSeen
-    mockDocGet.mockResolvedValue({ exists: true, data: () => ({}) });
-    mockCollectionGet.mockResolvedValue({ empty: true, docs: [] });
-
-    await request(app).post('/api/device-info').send(validBody).expect(200);
-
-    const secondCallDoc = mockSet.mock.calls[0][0];
-    expect(secondCallDoc).not.toHaveProperty('firstSeen');
-    expect(secondCallDoc).not.toHaveProperty('boundAt');
+    await submit(caller, { deviceId: 'dev-mine-1', manufacturer: 'Google' }).expect(200);
+    const binding = await readBinding('dev-mine-1');
+    expect(binding.uniqueId).toBe('7021');
+    expect(binding.manufacturer).toBe('Google');
   });
+});
 
-  test('does NOT rebind uniqueId when the device is already bound to a DIFFERENT user (SHY-0170)', async () => {
-    // Security reconcile: device-info updates telemetry on every launch, but must
-    // never silently re-bind a device already owned by another account to the
-    // caller — that would defeat the device-lock the lock-check endpoint enforces.
-    let n = 0;
-    mockDocGet.mockImplementation(() => {
-      n++;
-      // 1st get = deviceBindings existence check (bound to someone else)
-      if (n === 1)
-        return Promise.resolve({ exists: true, data: () => ({ uniqueId: 'otheruser' }) });
-      // 2nd get = deviceBans check (none)
-      return Promise.resolve({ exists: false });
-    });
-
-    const app = createApp(); // req.auth.uniqueId = 'user123'
-    await request(app)
-      .post('/api/device-info')
-      .set('x-forwarded-for', '203.0.113.1')
-      .send(validBody)
-      .expect(200);
-
-    const written = mockSet.mock.calls[0][0];
-    // Telemetry still updates …
-    expect(written).toMatchObject({ deviceId: 'abc-xyz', model: 'Galaxy S24' });
-    // … but the caller must NOT steal the binding (uniqueId not overwritten).
-    expect(written.uniqueId).toBeUndefined();
-  });
-
-  test('DOES set uniqueId when the device is already bound to the SAME caller', async () => {
-    // The reconcile only suppresses uniqueId on a foreign binding; re-affirming
-    // your own binding is fine (and keeps the field present for new-device writes).
-    let n = 0;
-    mockDocGet.mockImplementation(() => {
-      n++;
-      if (n === 1) return Promise.resolve({ exists: true, data: () => ({ uniqueId: 'user123' }) });
-      return Promise.resolve({ exists: false });
-    });
-
-    const app = createApp(); // req.auth.uniqueId = 'user123'
-    await request(app)
-      .post('/api/device-info')
-      .set('x-forwarded-for', '203.0.113.1')
-      .send(validBody)
-      .expect(200);
-
-    expect(mockSet.mock.calls[0][0].uniqueId).toBe('user123');
-  });
-
-  // ─── Additional branch coverage tests ───────────────────────────
-
-  describe('IP extraction', () => {
-    test('falls back to req.ip when no x-forwarded-for header', async () => {
-      const app = createApp();
-
-      const res = await request(app).post('/api/device-info').send(validBody).expect(200);
-
-      expect(res.body.success).toBe(true);
-      // Without x-forwarded-for, req.ip is used (typically ::ffff:127.0.0.1 in supertest).
-      // Since that's IPv6, getIpGeo returns {} without calling fetch, but the route still succeeds.
-      expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ deviceId: 'abc-xyz' }), {
-        merge: true,
-      });
+describe('sign-in ban report (banStatus)', () => {
+  test('reports isBanned=false when nothing matches', async () => {
+    const caller = await mintRealUser({ uniqueId: '7030' });
+    const res = await submit(caller, { deviceId: 'dev-clean-1' }, { ip: CLIENT_IP }).expect(200);
+    expect(res.body.banStatus).toEqual({
+      isBanned: false,
+      banType: null,
+      reason: null,
+      expiresAt: null,
     });
   });
 
-  describe('empty/null body edge cases', () => {
-    test('rejects empty body (400)', async () => {
-      const app = createApp();
-
-      const res = await request(app).post('/api/device-info').send({}).expect(400);
-
-      expect(res.body.error).toBe('deviceId is required');
+  test('reports an active device ban on the SUBMITTED deviceId', async () => {
+    await db.doc(`${DEVICE_BANS}/dev-banned-1`).set({
+      deviceId: 'dev-banned-1',
+      reason: 'abuse',
+      expiresAt: null,
     });
+    const caller = await mintRealUser({ uniqueId: '7031' });
 
-    test('stores null for all optional fields when not provided', async () => {
-      const app = createApp();
-
-      await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.1')
-        .send({ deviceId: 'minimal-device' })
-        .expect(200);
-
-      expect(mockSet).toHaveBeenCalledWith(
-        expect.objectContaining({
-          deviceId: 'minimal-device',
-          manufacturer: null,
-          model: null,
-          osVersion: null,
-          screenResolution: null,
-          screenDensity: null,
-          totalRamMb: null,
-          appVersion: null,
-          buildNumber: null,
-          locale: null,
-          networkType: null,
-          carrierName: null,
-          firebaseInstallationId: null,
-        }),
-        { merge: true },
-      );
+    const res = await submit(caller, { deviceId: 'dev-banned-1' }).expect(200);
+    expect(res.body.banStatus).toEqual({
+      isBanned: true,
+      banType: 'device',
+      reason: 'abuse',
+      expiresAt: null,
     });
   });
 
-  describe('getIpGeo branches', () => {
-    test('returns empty geo for non-IPv4 address', async () => {
-      global.fetch = jest.fn();
-
-      const app = createApp();
-
-      const res = await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '2001:db8::1')
-        .send(validBody)
-        .expect(200);
-
-      // fetch should NOT be called for non-IPv4
-      expect(global.fetch).not.toHaveBeenCalled();
-      expect(res.body.success).toBe(true);
-      // Geo fields should be null
-      expect(mockSet).toHaveBeenCalledWith(
-        expect.objectContaining({
-          isp: null,
-          asn: null,
-          country: null,
-          region: null,
-        }),
-        { merge: true },
-      );
+  test('an EXPIRED device ban does not report banned', async () => {
+    await db.doc(`${DEVICE_BANS}/dev-expired-1`).set({
+      deviceId: 'dev-expired-1',
+      reason: 'old',
+      expiresAt: new Date(Date.now() - 60_000).toISOString(),
     });
+    const caller = await mintRealUser({ uniqueId: '7032' });
 
-    test('returns empty geo when ip-api returns non-ok response', async () => {
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: false,
-        status: 429,
-      });
-
-      const app = createApp();
-
-      const res = await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.1')
-        .send(validBody)
-        .expect(200);
-
-      expect(res.body.success).toBe(true);
-      expect(mockSet).toHaveBeenCalledWith(
-        expect.objectContaining({
-          isp: null,
-          asn: null,
-          country: null,
-          region: null,
-        }),
-        { merge: true },
-      );
-    });
-
-    test('handles missing fields in geo response', async () => {
-      global.fetch = jest.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({}),
-      });
-
-      const app = createApp();
-
-      const res = await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.1')
-        .send(validBody)
-        .expect(200);
-
-      expect(res.body.success).toBe(true);
-      expect(mockSet).toHaveBeenCalledWith(
-        expect.objectContaining({
-          isp: null,
-          asn: null,
-          country: null,
-          region: null,
-        }),
-        { merge: true },
-      );
-    });
+    const res = await submit(caller, { deviceId: 'dev-expired-1' }).expect(200);
+    expect(res.body.banStatus.isBanned).toBe(false);
   });
 
-  describe('network ban types', () => {
-    test('detects subnet network ban', async () => {
-      mockDocGet.mockResolvedValue({ exists: false });
-
-      mockCollectionGet.mockResolvedValue({
-        empty: false,
-        docs: [
-          {
-            data: () => ({
-              type: 'subnet',
-              value: '203.0.113.0/24',
-              reason: 'Banned subnet',
-              expiresAt: null, // permanent ban
-            }),
-          },
-        ],
-      });
-
-      const app = createApp();
-
-      const res = await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.50')
-        .send(validBody)
-        .expect(200);
-
-      expect(res.body.banStatus.isBanned).toBe(true);
-      expect(res.body.banStatus.banType).toBe('network_subnet');
-      expect(res.body.banStatus.reason).toBe('Banned subnet');
-      expect(res.body.banStatus.expiresAt).toBeNull();
+  test('reports a PERMANENT network IP ban (expiresAt null) matched on the real edge IP', async () => {
+    await db.doc(`${NETWORK_BANS}/nb-perm-1`).set({
+      type: 'ip',
+      value: CLIENT_IP,
+      reason: 'network abuse',
+      expiresAt: null,
     });
+    const caller = await mintRealUser({ uniqueId: '7033' });
 
-    test('detects ASN network ban', async () => {
-      mockDocGet.mockResolvedValue({ exists: false });
-
-      mockCollectionGet.mockResolvedValue({
-        empty: false,
-        docs: [
-          {
-            data: () => ({
-              type: 'asn',
-              value: 'AS2856',
-              reason: 'Banned ASN',
-              expiresAt: new Date(Date.now() + 86400000).toISOString(),
-            }),
-          },
-        ],
-      });
-
-      const app = createApp();
-
-      const res = await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.1')
-        .send(validBody)
-        .expect(200);
-
-      expect(res.body.banStatus.isBanned).toBe(true);
-      expect(res.body.banStatus.banType).toBe('network_asn');
-      expect(res.body.banStatus.reason).toBe('Banned ASN');
-    });
-
-    test('ignores network ban with unknown type', async () => {
-      mockDocGet.mockResolvedValue({ exists: false });
-
-      mockCollectionGet.mockResolvedValue({
-        empty: false,
-        docs: [
-          {
-            data: () => ({
-              type: 'unknown_type',
-              value: 'something',
-              reason: 'Should not match',
-              expiresAt: new Date(Date.now() + 86400000).toISOString(),
-            }),
-          },
-        ],
-      });
-
-      const app = createApp();
-
-      const res = await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.1')
-        .send(validBody)
-        .expect(200);
-
-      expect(res.body.banStatus.isBanned).toBe(false);
-    });
+    const res = await submit(caller, { deviceId: 'dev-net-1' }, { ip: CLIENT_IP }).expect(200);
+    expect(res.body.banStatus).toMatchObject({ isBanned: true, banType: 'network_ip' });
   });
 
-  describe('permanent bans (no expiresAt)', () => {
-    test('permanent device ban (no expiresAt) is active', async () => {
-      let docGetCallCount = 0;
-      mockDocGet.mockImplementation(() => {
-        docGetCallCount++;
-        if (docGetCallCount === 1) {
-          return Promise.resolve({ exists: false });
-        }
-        return Promise.resolve({
-          exists: true,
-          data: () => ({
-            reason: 'Permanent ban',
-            // no expiresAt — should be treated as active
-          }),
-        });
-      });
-
-      const app = createApp();
-
-      const res = await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.1')
-        .send(validBody)
-        .expect(200);
-
-      expect(res.body.banStatus.isBanned).toBe(true);
-      expect(res.body.banStatus.banType).toBe('device');
-      expect(res.body.banStatus.reason).toBe('Permanent ban');
-      expect(res.body.banStatus.expiresAt).toBeNull();
+  test('an EXPIRED network ban is excluded by the active-bans query', async () => {
+    await db.doc(`${NETWORK_BANS}/nb-old-1`).set({
+      type: 'ip',
+      value: CLIENT_IP,
+      reason: 'old',
+      expiresAt: new Date(Date.now() - 60_000).toISOString(),
     });
+    const caller = await mintRealUser({ uniqueId: '7034' });
+
+    const res = await submit(caller, { deviceId: 'dev-net-2' }, { ip: CLIENT_IP }).expect(200);
+    expect(res.body.banStatus.isBanned).toBe(false);
   });
 
-  describe('isIpInSubnet edge cases', () => {
-    test('subnet check with /0 prefix (matches all IPs)', async () => {
-      mockDocGet.mockResolvedValue({ exists: false });
-
-      mockCollectionGet.mockResolvedValue({
-        empty: false,
-        docs: [
-          {
-            data: () => ({
-              type: 'subnet',
-              value: '0.0.0.0/0',
-              reason: 'Global ban',
-              expiresAt: null,
-            }),
-          },
-        ],
-      });
-
-      const app = createApp();
-
-      const res = await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.50')
-        .send(validBody)
-        .expect(200);
-
-      expect(res.body.banStatus.isBanned).toBe(true);
-      expect(res.body.banStatus.banType).toBe('network_subnet');
+  test('reports a subnet ban catching the edge IP', async () => {
+    await db.doc(`${NETWORK_BANS}/nb-subnet-1`).set({
+      type: 'subnet',
+      value: '198.51.100.0/24',
+      reason: 'subnet abuse',
+      expiresAt: null,
     });
+    const caller = await mintRealUser({ uniqueId: '7035' });
 
-    test('subnet check with invalid CIDR falls back safely', async () => {
-      mockDocGet.mockResolvedValue({ exists: false });
-
-      mockCollectionGet.mockResolvedValue({
-        empty: false,
-        docs: [
-          {
-            data: () => ({
-              type: 'subnet',
-              value: 'not-a-cidr',
-              reason: 'Bad CIDR',
-              expiresAt: null,
-            }),
-          },
-        ],
-      });
-
-      const app = createApp();
-
-      const res = await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.50')
-        .send(validBody)
-        .expect(200);
-
-      // isIpInSubnet should catch the error and return false
-      expect(res.body.banStatus.isBanned).toBe(false);
-    });
+    const res = await submit(caller, { deviceId: 'dev-net-3' }, { ip: CLIENT_IP }).expect(200);
+    expect(res.body.banStatus).toMatchObject({ isBanned: true, banType: 'network_subnet' });
   });
 
-  describe('checkBans error handling', () => {
-    test('returns noBan when checkBans throws', async () => {
-      // First call (deviceBindings) succeeds
-      // Second call (deviceBans) throws
-      let docGetCallCount = 0;
-      mockDocGet.mockImplementation(() => {
-        docGetCallCount++;
-        if (docGetCallCount === 1) {
-          return Promise.resolve({ exists: false });
-        }
-        throw new Error('Firestore connection lost');
-      });
-
-      const app = createApp();
-
-      const res = await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.1')
-        .send(validBody)
-        .expect(200);
-
-      // Should gracefully return noBan
-      expect(res.body.banStatus.isBanned).toBe(false);
-      expect(res.body.banStatus.banType).toBeNull();
+  test('an unknown network-ban type is ignored (no crash, not banned)', async () => {
+    await db.doc(`${NETWORK_BANS}/nb-weird-1`).set({
+      type: 'carrier-pigeon',
+      value: CLIENT_IP,
+      reason: 'nonsense',
+      expiresAt: null,
     });
+    const caller = await mintRealUser({ uniqueId: '7036' });
+
+    const res = await submit(caller, { deviceId: 'dev-net-4' }, { ip: CLIENT_IP }).expect(200);
+    expect(res.body.banStatus.isBanned).toBe(false);
   });
 
-  describe('main route error handling', () => {
-    test('returns 500 when Firestore set throws', async () => {
-      mockSet.mockRejectedValueOnce(new Error('Write failed'));
-
-      const app = createApp();
-
-      const res = await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.1')
-        .send(validBody)
-        .expect(500);
-
-      expect(res.body.error).toBe('Internal server error');
+  test('a forged leftmost XFF cannot dodge a network ban at sign-in', async () => {
+    await db.doc(`${NETWORK_BANS}/nb-forge-1`).set({
+      type: 'ip',
+      value: CLIENT_IP,
+      reason: 'network abuse',
+      expiresAt: null,
     });
-  });
+    const caller = await mintRealUser({ uniqueId: '7037' });
 
-  describe('non-matching network bans', () => {
-    test('IP ban does not match different IP', async () => {
-      mockDocGet.mockResolvedValue({ exists: false });
-
-      mockCollectionGet.mockResolvedValue({
-        empty: false,
-        docs: [
-          {
-            data: () => ({
-              type: 'ip',
-              value: '10.0.0.1',
-              reason: 'Wrong IP',
-              expiresAt: new Date(Date.now() + 86400000).toISOString(),
-            }),
-          },
-        ],
-      });
-
-      const app = createApp();
-
-      const res = await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.50')
-        .send(validBody)
-        .expect(200);
-
-      expect(res.body.banStatus.isBanned).toBe(false);
-    });
-
-    test('subnet ban does not match IP outside range', async () => {
-      mockDocGet.mockResolvedValue({ exists: false });
-
-      mockCollectionGet.mockResolvedValue({
-        empty: false,
-        docs: [
-          {
-            data: () => ({
-              type: 'subnet',
-              value: '10.0.0.0/8',
-              reason: 'Internal subnet ban',
-              expiresAt: null,
-            }),
-          },
-        ],
-      });
-
-      const app = createApp();
-
-      const res = await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.50')
-        .send(validBody)
-        .expect(200);
-
-      expect(res.body.banStatus.isBanned).toBe(false);
-    });
-
-    test('ASN ban does not match different ASN', async () => {
-      mockDocGet.mockResolvedValue({ exists: false });
-
-      mockCollectionGet.mockResolvedValue({
-        empty: false,
-        docs: [
-          {
-            data: () => ({
-              type: 'asn',
-              value: 'AS99999',
-              reason: 'Different ASN',
-              expiresAt: new Date(Date.now() + 86400000).toISOString(),
-            }),
-          },
-        ],
-      });
-
-      const app = createApp();
-
-      const res = await request(app)
-        .post('/api/device-info')
-        .set('x-forwarded-for', '203.0.113.1')
-        .send(validBody)
-        .expect(200);
-
-      expect(res.body.banStatus.isBanned).toBe(false);
-    });
+    const res = await submit(
+      caller,
+      { deviceId: 'dev-net-5' },
+      { ip: `${OTHER_IP}, ${CLIENT_IP}` }, // clean decoy left, real IP right
+    ).expect(200);
+    expect(res.body.banStatus).toMatchObject({ isBanned: true, banType: 'network_ip' });
   });
 });

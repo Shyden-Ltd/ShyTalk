@@ -12,6 +12,7 @@ const router = require('express').Router();
 const { db, auth } = require('../utils/firebase');
 const { generateId } = require('../utils/helpers');
 const { getFcmCaptures, clearFcmCaptures } = require('../utils/fcm');
+const { clearBanCache } = require('../utils/bans');
 const log = require('../utils/log');
 
 const TEST_PREFIX = 'test_';
@@ -690,6 +691,8 @@ async function deleteTestData(testRunId) {
       }
     }
   }
+  // Deleted bans must stop gating the NEXT test scenario immediately.
+  clearBanCache();
 
   // 4. Delete other top-level test docs (gifts, rooms, banners, funFacts, conversations, etc.)
   // Note: system PMs created by admin actions won't have _testRun set — accepted trade-off
