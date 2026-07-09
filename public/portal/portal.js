@@ -695,10 +695,15 @@
 
     var endDateEl = $('banned-end-date');
     var endValueEl = $('banned-end-value');
-    if (endDateEl && endValueEl && ban.expiresAt) {
+    var expiryDate = ban.expiresAt ? new Date(ban.expiresAt) : null;
+    // `new Date('garbage')` does not throw and `Invalid Date` formats to the
+    // literal string "Invalid Date" — a try/catch never fires here, so the
+    // validity check has to be explicit. Show nothing rather than nonsense.
+    var hasValidExpiry = expiryDate !== null && !isNaN(expiryDate.getTime());
+
+    if (endDateEl && endValueEl && hasValidExpiry) {
       try {
-        var date = new Date(ban.expiresAt);
-        endValueEl.textContent = date.toLocaleDateString(getCurrentLang(), {
+        endValueEl.textContent = expiryDate.toLocaleDateString(getCurrentLang(), {
           year: 'numeric',
           month: 'long',
           day: 'numeric',
@@ -707,10 +712,12 @@
         });
         endDateEl.hidden = false;
       } catch (_e) {
+        // An unsupported locale tag can still throw — fall back to hiding it.
         endDateEl.hidden = true;
       }
     } else if (endDateEl) {
-      endDateEl.hidden = true; // permanent ban — no end date to show
+      // Permanent ban, or an expiry we cannot make sense of.
+      endDateEl.hidden = true;
     }
 
     showSection('banned-section');

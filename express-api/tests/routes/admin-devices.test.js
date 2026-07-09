@@ -570,8 +570,17 @@ describe('POST /api/admin/devices — all branches', () => {
     ['null', null],
     ['false', false],
     ['empty string', ''],
+    ['whitespace-only string', '   '],
     ['array', []],
-  ])('rejects uniqueId: %s (all coerce to account 0 via Number())', async (_label, value) => {
+    ['negative', -1],
+    ['negative string', '-1'],
+    ['fractional', 1.5],
+    ['exponent string', '1e3'],
+    ['Infinity string', 'Infinity'],
+    ['NaN string', 'NaN'],
+    ['Infinity', Infinity],
+    ['NaN', NaN],
+  ])('rejects uniqueId: %s — a uniqueId is a non-negative integer', async (_label, value) => {
     const app = createApp();
     const res = await request(app)
       .post('/api/admin/devices')
@@ -589,6 +598,17 @@ describe('POST /api/admin/devices — all branches', () => {
       .expect(400);
     expect(res.body.error).toContain('required');
     expect(mockSet).not.toHaveBeenCalled();
+  });
+
+  test('accepts a numeric STRING uniqueId (what the admin console posts)', async () => {
+    const app = createApp();
+    await request(app)
+      .post('/api/admin/devices')
+      .send({ deviceId: 'dev-strid', uniqueId: '10000042' })
+      .expect(200);
+    expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({ uniqueId: 10000042 }), {
+      merge: true,
+    });
   });
 
   test('allows uniqueId of 0 (falsy but not undefined)', async () => {

@@ -9,6 +9,17 @@
  */
 
 const router = require('express').Router();
+
+/**
+ * A uniqueId is a non-negative integer, given either as a number or as its
+ * plain decimal string. Deliberately stricter than `Number()`, which happily
+ * turns '   ', '' and null into 0, and accepts '1e3', -1 and 1.5.
+ */
+function isNonNegativeIntegerId(value) {
+  if (typeof value === 'number') return Number.isInteger(value) && value >= 0;
+  if (typeof value === 'string') return /^\d+$/.test(value);
+  return false;
+}
 const { db } = require('../utils/firebase');
 const { requireAdmin } = require('../middleware/auth');
 const {
@@ -71,13 +82,12 @@ router.post('/admin/devices', async (req, res) => {
 
     const { deviceId, uniqueId, manufacturer, model, lastIp, isp } = req.body;
 
-    // `uniqueId` is written as `Number(uniqueId)`, so anything that coerces
-    // must be rejected up front: null, undefined, false, '' and [] all become
-    // account 0 (reviewer R5-I4, R6-I1). Accept only a number or a numeric
-    // string — `uniqueId: 0` remains valid.
-    const numericId =
-      typeof uniqueId === 'number' || typeof uniqueId === 'string' ? Number(uniqueId) : NaN;
-    if (!deviceId || uniqueId === '' || !Number.isFinite(numericId)) {
+    // `uniqueId` is written as `Number(uniqueId)`, so every value that coerces
+    // must be rejected up front. `Number()` is far too permissive here: null,
+    // false, '' AND any whitespace-only string all become account 0, while
+    // '1e3', -1 and 1.5 produce ids no account can ever have (reviewers R5-I4,
+    // R6-I1, R7-I1/I2). A uniqueId is a non-negative integer — nothing else.
+    if (!deviceId || !isNonNegativeIntegerId(uniqueId)) {
       return res.status(400).json({ error: 'deviceId and uniqueId are required' });
     }
 

@@ -102,9 +102,20 @@ function evictOldest(cache) {
   }
 }
 
-/** Check if a ban is currently active (not expired). */
+/**
+ * Is this ban currently in force?
+ *
+ * No `expiresAt` means permanent. An expiry we cannot parse means we cannot
+ * prove the ban has lapsed — so it stays in force. The naive
+ * `new Date(x).getTime() > Date.now()` yields `NaN > now === false`, which
+ * silently RETIRES a ban whose expiry is corrupt: a safety control that fails
+ * open (SHY-0149, found while writing the malformed-expiry test).
+ */
 function isBanActive(ban) {
-  return !ban.expiresAt || new Date(ban.expiresAt).getTime() > Date.now();
+  if (!ban.expiresAt) return true; // permanent
+  const expiry = new Date(ban.expiresAt).getTime();
+  if (Number.isNaN(expiry)) return true; // unparseable → cannot prove it lapsed
+  return expiry > Date.now();
 }
 
 /** Build a ban result object. */

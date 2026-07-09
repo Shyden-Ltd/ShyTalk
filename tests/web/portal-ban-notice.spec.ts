@@ -20,6 +20,8 @@ import { createTestUser } from './helpers/roadmap-auth';
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:3000';
 const TEST_API_KEY = process.env.TEST_API_KEY || 'local-test-key';
 const BAN_REASON = 'SHY-0149 portal ban notice';
+// The ban reason is admin-authored and rendered into the ban screen.
+const XSS_REASON = '<img src=x id="portal-xss-probe" onerror="window.__xss=1">';
 
 async function testWrite(collection: string, doc: Record<string, unknown>): Promise<void> {
   const res = await fetch(`${API_BASE}/api/test/write/${collection}`, {
@@ -31,7 +33,11 @@ async function testWrite(collection: string, doc: Record<string, unknown>): Prom
 }
 
 /** A real, banned account, signed in through the portal's own login form. */
-async function signInBannedPortalUser(page: Page, expiresAt: string | null) {
+async function signInBannedPortalUser(
+  page: Page,
+  expiresAt: string | null,
+  reason: string = BAN_REASON,
+) {
   const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const testRunId = `test_shy0149_portal_${stamp}`;
   const email = `shy0149-portal-${stamp}@shytalk.dev`;
@@ -50,7 +56,7 @@ async function signInBannedPortalUser(page: Page, expiresAt: string | null) {
   await testWrite('deviceBans', {
     id: `portal-ban-${stamp}`,
     deviceId: `portal-ban-${stamp}`,
-    reason: BAN_REASON,
+    reason,
     duration: expiresAt ? '24h' : 'permanent',
     expiresAt,
     linkedUniqueId: String(uniqueId),
@@ -112,6 +118,57 @@ test.describe('Portal — a banned user is told they are banned', () => {
     await expect(page.locator('#banned-appeal-btn')).toBeVisible();
     await expect(page.locator('#banned-contact-link')).toBeVisible();
     await expect(page.locator('#banned-signout-btn')).toBeVisible();
+
+    await teardown(testRunId);
+  });
+
+  test('the appeal button explains how to appeal THE BAN (not the suspension copy)', async ({
+    page,
+  }) => {
+    const { testRunId } = await signInBannedPortalUser(page, null);
+    await expect(page.locator('#banned-section')).toBeVisible({ timeout: 20_000 });
+
+    await page.click('#banned-appeal-btn');
+    // showMessageModal() unhides #message-modal and fills its title/body.
+    await expect(page.locator('#message-modal')).not.toHaveAttribute('hidden', /.*/);
+    await expect(page.locator('#message-modal-body')).toContainText(/appeal your ban/i);
+
+    await teardown(testRunId);
+  });
+
+  test('the sign-out button really signs the banned user out', async ({ page }) => {
+    const { testRunId } = await signInBannedPortalUser(page, null);
+    await expect(page.locator('#banned-section')).toBeVisible({ timeout: 20_000 });
+
+    await page.click('#banned-signout-btn');
+
+    // Back to the login form, and no longer authenticated.
+    await expect(page.locator('#login-section')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('#banned-section')).toBeHidden();
+
+    await teardown(testRunId);
+  });
+
+  test('a hostile ban reason renders as inert text, never as markup', async ({ page }) => {
+    const { testRunId } = await signInBannedPortalUser(page, null, XSS_REASON);
+    const reason = page.locator('#banned-reason');
+    await expect(reason).toBeVisible({ timeout: 20_000 });
+
+    await expect(reason).toHaveText(XSS_REASON); // survives as literal text…
+    expect(await page.locator('#portal-xss-probe').count()).toBe(0); // …injects nothing
+    expect(await reason.locator('img').count()).toBe(0);
+
+    await teardown(testRunId);
+  });
+
+  test('a malformed expiry shows no end date rather than the words "Invalid Date"', async ({
+    page,
+  }) => {
+    const { testRunId } = await signInBannedPortalUser(page, 'not-a-real-date');
+    await expect(page.locator('#banned-section')).toBeVisible({ timeout: 20_000 });
+
+    await expect(page.locator('#banned-end-date')).toBeHidden();
+    await expect(page.locator('#banned-section')).not.toContainText('Invalid Date');
 
     await teardown(testRunId);
   });

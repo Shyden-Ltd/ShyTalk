@@ -296,4 +296,14 @@ describe('isBanActive — expiry semantics', () => {
     expect(isBanActive({ expiresAt: new Date(Date.now() + 60_000).toISOString() })).toBe(true);
     expect(isBanActive({ expiresAt: new Date(Date.now() - 60_000).toISOString() })).toBe(false);
   });
+
+  test.each([['garbage'], ['not-a-real-date'], ['2026-13-45'], ['']])(
+    'an expiry we cannot parse (%s) keeps the ban in force — never fails open',
+    (expiresAt) => {
+      // `new Date(x).getTime()` is NaN, and `NaN > Date.now()` is false, so the
+      // naive comparison silently retires the ban. A safety control must not
+      // lapse because its expiry field is corrupt.
+      expect(isBanActive({ expiresAt })).toBe(true);
+    },
+  );
 });
