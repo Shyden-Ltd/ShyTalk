@@ -31,35 +31,53 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * "account". A banned user in any of those locales could not tell which state
  * their account was in, which is the entire purpose of the screen.
  *
- * So equality is not the test. Each locale declares the WORD that means "banned"
- * and the WORD that means "suspended", and each state's copy must contain its
- * own word and not the other's. That table is the specification: a translator
+ * So equality is not the test. Each locale declares the ROOT that means "ban"
+ * and the ROOT that means "suspend", and each state's copy must contain its
+ * own root and not the other's. That table is the specification: a translator
  * changing the copy must keep it true, and an engineer cannot satisfy it by
  * swapping a noun.
+ *
+ * A ROOT, not a whole word, because the copy shifts part-of-speech between
+ * keys: the Russian heading says `забанен` (participle) but `banned_until`
+ * says `Бан заканчивается:` (noun) — they share only the stem `бан`. A
+ * whole-word table could therefore never cover the `_until` pair, and that
+ * pair is precisely where `ru`/`uk` shipped the suspension's generic noun
+ * (`Блокировка`/`Блокування`) with nothing to catch it.
  */
 
-/** [word meaning "banned", word meaning "suspended"] — stems, to survive inflection. */
-const STATE_WORDS: Record<(typeof PORTAL_LOCALES)[number], readonly [string, string]> = {
-  en: ['banned', 'suspended'],
+/**
+ * [root meaning "ban", root meaning "suspend"] — lowercase stems, matched
+ * case-insensitively (`Бан` at sentence start must still count). Each root is
+ * the invariant substring across every grammatical form its state word takes
+ * in this locale's state-describing copy (the STATE_PAIRS below — headings,
+ * reasons, untils; NOT the shared action strings, where "appeal your ban"
+ * would legitimately carry a root), and each is absent from the OTHER state's
+ * copy — that absence is what makes the exclusion assertions meaningful.
+ * Indonesian's suspend-root is `angguh` because the stem `tangguh`
+ * nasal-mutates under prefixation: di+tangguh → ditangguhkan, but
+ * peN+tangguh → peNangguhan.
+ */
+const STATE_ROOTS: Record<(typeof PORTAL_LOCALES)[number], readonly [string, string]> = {
+  en: ['ban', 'suspen'],
   ar: ['حظر', 'تعليق'],
-  de: ['gebannt', 'gesperrt'],
-  es: ['bane', 'suspend'],
-  fr: ['banni', 'suspend'],
-  hi: ['प्रतिबंधित', 'निलंबित'],
-  id: ['diblokir', 'ditangguhkan'],
-  it: ['bandit', 'sospes'],
+  de: ['bann', 'sperr'],
+  es: ['bane', 'suspen'],
+  fr: ['banni', 'suspen'],
+  hi: ['प्रतिबंध', 'निलंब'],
+  id: ['blokir', 'angguh'],
+  it: ['band', 'sospe'],
   ja: ['禁止', '停止'],
   km: ['ហាមឃាត់', 'ផ្អាក'],
   ko: ['차단', '정지'],
-  nl: ['verbannen', 'geschorst'],
-  pl: ['zbanowan', 'zawieszon'],
-  pt: ['banida', 'suspens'],
-  ru: ['забанен', 'заблокирован'],
-  sv: ['bannlyst', 'stängts av'],
+  nl: ['verbann', 'schors'],
+  pl: ['ban', 'zawiesz'],
+  pt: ['ban', 'suspens'],
+  ru: ['бан', 'блок'],
+  sv: ['bannlys', 'stäng'],
   th: ['แบน', 'ระงับ'],
-  tr: ['yasakla', 'askıya'],
-  uk: ['забанено', 'заблоковано'],
-  vi: ['cấm', 'tạm ngừng'],
+  tr: ['yasak', 'askı'],
+  uk: ['бан', 'блок'],
+  vi: ['cấm', 'ngừng'],
   zh: ['封禁', '暂停'],
 };
 
@@ -68,10 +86,23 @@ const BANNED_KEYS = [
   'banned_appeal', 'banned_contact', 'banned_signout',
 ];
 
-/** State-describing copy: each must carry its own state word, and not the other's. */
+/**
+ * The suspension screen renders the same six, plus `suspended_reason_label` —
+ * the prefix `portal.js` composes in front of the account's stored suspension
+ * reason. The ban screen has no such label; `renderBan` writes the reason
+ * whole. That asymmetry is why this list is seven keys, not six.
+ */
+const SUSPENDED_KEYS = [
+  'suspended_heading', 'suspended_reason', 'suspended_until',
+  'suspended_appeal', 'suspended_contact', 'suspended_signout',
+  'suspended_reason_label',
+];
+
+/** State-describing copy: each must carry its own state root, and not the other's. */
 const STATE_PAIRS = [
   ['banned_heading', 'suspended_heading'],
   ['banned_reason', 'suspended_reason'],
+  ['banned_until', 'suspended_until'],
 ] as const;
 
 /** Action copy: the same action in both states, so sharing the wording is correct. */
@@ -92,10 +123,10 @@ test.describe('Portal ban screen — i18n completeness across all 21 locales', (
     expect(hasNestedObject(source)).toBe(false);
   });
 
-  test('every locale defines all six banned_* keys with a non-empty value', () => {
+  test('every locale defines all thirteen banned_* and suspended_* keys with a non-empty value', () => {
     for (const lang of PORTAL_LOCALES) {
       const block = localeBlock(source, lang);
-      for (const key of BANNED_KEYS) {
+      for (const key of [...BANNED_KEYS, ...SUSPENDED_KEYS]) {
         const value = valueOf(block, key);
         expect(value, `${lang} is missing ${key}`).not.toBeNull();
         expect(value!.trim(), `${lang}'s ${key} is empty`).not.toBe('');
@@ -103,28 +134,28 @@ test.describe('Portal ban screen — i18n completeness across all 21 locales', (
     }
   });
 
-  test('each state’s copy carries its own state word, and never the other’s', () => {
+  test('each state’s copy carries its own state root, and never the other’s', () => {
     const problems: string[] = [];
     for (const lang of PORTAL_LOCALES) {
       const block = localeBlock(source, lang);
-      const [banWord, suspendWord] = STATE_WORDS[lang];
+      const [banRoot, suspendRoot] = STATE_ROOTS[lang].map((r) => r.toLowerCase());
 
       for (const [bannedKey, suspendedKey] of STATE_PAIRS) {
-        const banned = valueOf(block, bannedKey);
-        const suspended = valueOf(block, suspendedKey);
-        if (banned === null || suspended === null) continue; // covered by the test above
+        const banned = valueOf(block, bannedKey)?.toLowerCase();
+        const suspended = valueOf(block, suspendedKey)?.toLowerCase();
+        if (banned == null || suspended == null) continue; // covered by the test above
 
-        if (!banned.includes(banWord)) {
-          problems.push(`${lang}: ${bannedKey} does not say "${banWord}" — "${banned}"`);
+        if (!banned.includes(banRoot)) {
+          problems.push(`${lang}: ${bannedKey} does not carry "${banRoot}" — "${banned}"`);
         }
-        if (banned.includes(suspendWord)) {
-          problems.push(`${lang}: ${bannedKey} says "${suspendWord}", the suspension word`);
+        if (banned.includes(suspendRoot)) {
+          problems.push(`${lang}: ${bannedKey} carries "${suspendRoot}", the suspension root`);
         }
-        if (!suspended.includes(suspendWord)) {
-          problems.push(`${lang}: ${suspendedKey} does not say "${suspendWord}" — "${suspended}"`);
+        if (!suspended.includes(suspendRoot)) {
+          problems.push(`${lang}: ${suspendedKey} does not carry "${suspendRoot}" — "${suspended}"`);
         }
-        if (suspended.includes(banWord)) {
-          problems.push(`${lang}: ${suspendedKey} says "${banWord}", the ban word`);
+        if (suspended.includes(banRoot)) {
+          problems.push(`${lang}: ${suspendedKey} carries "${banRoot}", the ban root`);
         }
       }
     }
@@ -141,5 +172,29 @@ test.describe('Portal ban screen — i18n completeness across all 21 locales', (
         expect(valueOf(block, key)?.trim(), `${lang}'s ${key} is empty`).toBeTruthy();
       }
     }
+  });
+});
+
+test.describe('Parser guards — the detect-branch, on synthetic fixtures', () => {
+  // The guard test above proves the REAL file passes both checks — only ever
+  // their pass-branch. Nothing there proves either check can still FAIL: a
+  // regression that neuters one regex would leave the guard green while
+  // `localeBlock` silently truncates, and every locale assertion in this file
+  // would then pass against a fragment. These fixtures pin the detect-branch.
+  test('hasNestedObject flags a nested object literal', () => {
+    const nested = "  en: {\n    tooltip: {\n      title: 'x',\n    },\n  },\n";
+    expect(hasNestedObject(nested)).toBe(true);
+  });
+
+  test('localeBlockCount counts two-space block closers only', () => {
+    const twoBlocks = "  en: {\n    a: 'x',\n  },\n  fr: {\n    b: 'y',\n  },\n";
+    expect(localeBlockCount(twoBlocks)).toBe(2);
+
+    // A nested object's four-space closer is not a block close — the count
+    // stays honest about how many LOCALE blocks the file finishes.
+    const nestedClose = "  en: {\n    o: {\n    },\n  },\n";
+    expect(localeBlockCount(nestedClose)).toBe(1);
+
+    expect(localeBlockCount('')).toBe(0);
   });
 });
