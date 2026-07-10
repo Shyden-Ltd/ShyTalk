@@ -51,23 +51,34 @@ export function hasNestedObject(source: string): boolean {
 }
 
 /**
- * A key's value, or null.
+ * A key's value with its escapes decoded, or null when the key is absent.
  *
  * The literal `:` immediately after the key name is what stops `suspended_reason`
  * from reading the co-resident `suspended_reason_label`, and `\b` stops it
  * matching inside a longer identifier.
  *
- * Both quote styles and backslash escapes are handled, because the translations
- * file uses all three: `login_no_account: "Don't have an account?"` is
- * double-quoted, and `fr.suspended_until: 'Suspension jusqu\'à :'` escapes its
- * apostrophe inside single quotes. A naive `'([^']*)'` silently returns
- * `Suspension jusqu\` for that key — a wrong value, not a missing one, which is
- * the worst outcome a reader of this helper could get.
+ * Both quote styles are read, and the escapes the file actually uses are
+ * decoded (`\'`, `\uXXXX`, plus `\"`/`\\` for grammar-completeness):
+ * `login_no_account: "Don't have an account?"` is double-quoted, and
+ * `fr.suspended_until: 'Suspension jusqu\'au\u00a0:'` escapes its apostrophe
+ * inside single quotes. A naive `'([^']*)'` silently returns
+ * `Suspension jusqu\` for that key — a wrong value, not a missing one, which
+ * is the worst outcome a reader of this helper could get. For the same reason
+ * any OTHER escape throws: returning bytes that differ from what a JS engine
+ * would produce is guessing, and this helper feeds assertions.
  */
 export function valueOf(block: string, key: string): string | null {
   const pattern = `\\b${key}:\\s*(?:'((?:[^'\\\\]|\\\\.)*)'|"((?:[^"\\\\]|\\\\.)*)")`;
   const match = block.match(new RegExp(pattern));
   if (!match) return null;
   const raw = match[1] ?? match[2];
-  return raw.replace(/\\(['"\\])/g, '$1');
+  // The global regex consumes each backslash PAIR left to right, so the second
+  // backslash of a decoded `\\` can never be misread as opening a new escape.
+  return raw.replace(/\\(u[0-9a-fA-F]{4}|.)/g, (_, esc: string) => {
+    if (esc.length === 5) return String.fromCharCode(parseInt(esc.slice(1), 16));
+    if (esc === "'" || esc === '"' || esc === '\\') return esc;
+    throw new Error(
+      `valueOf(${key}): unhandled escape \\${esc} — extend the decoder; never return wrong bytes`,
+    );
+  });
 }

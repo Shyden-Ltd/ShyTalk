@@ -197,4 +197,37 @@ test.describe('Parser guards — the detect-branch, on synthetic fixtures', () =
 
     expect(localeBlockCount('')).toBe(0);
   });
+
+  // valueOf's quote and escape branches CANNOT be pinned by the corpus tests
+  // above: round 20 proved that reverting the helper to its pre-fix
+  // single-quote-only form keeps every locale assertion green, because the one
+  // real escaped value (fr.suspended_until) truncates to "Suspension jusqu\" —
+  // which still contains the root "suspen" and is still non-empty. Only an
+  // exact-value assertion on a synthetic fixture can tell a faithful parse
+  // from a truncated one.
+  test('valueOf decodes escaped apostrophes and \\uXXXX — never a truncated value', () => {
+    const block = "  fr: {\n    x: 'jusqu\\'au\\u00a0test',\n  },\n";
+    // The expected string carries a REAL apostrophe and a REAL no-break space —
+    // the decoded characters, not their source-file escape spellings.
+    expect(valueOf(block, 'x')).toBe("jusqu'au\u00a0test");
+  });
+
+  test('valueOf reads double-quoted values, decoding escaped double quotes', () => {
+    const block = '  en: {\n    x: "say \\"hi\\" to don\'t",\n  },\n';
+    expect(valueOf(block, 'x')).toBe('say "hi" to don\'t');
+  });
+
+  test('valueOf distinguishes a missing key (null) from an empty value', () => {
+    const block = "  en: {\n    x: '',\n  },\n";
+    expect(valueOf(block, 'x')).toBe('');
+    expect(valueOf(block, 'y')).toBeNull();
+  });
+
+  test('valueOf refuses an escape it cannot faithfully decode', () => {
+    // \n is valid JS but not part of this file's value grammar; returning the
+    // two literal characters would be wrong bytes, so the helper must throw
+    // rather than guess (the same report-don't-guess posture as the guards).
+    const block = "  en: {\n    x: 'a\\nb',\n  },\n";
+    expect(() => valueOf(block, 'x')).toThrow(/unhandled escape/);
+  });
 });
