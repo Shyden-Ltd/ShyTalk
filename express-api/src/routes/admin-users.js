@@ -27,6 +27,7 @@ const router = require('express').Router();
 const { db, auth, FieldValue } = require('../utils/firebase');
 const { mintClaimsMerging, VALID_COHORTS } = require('../utils/firebase-claims');
 const { requireAdmin, clearSuspensionCache, clearAdminClaimCache } = require('../middleware/auth');
+const { clearBanCache } = require('../utils/bans');
 const { generateId, now } = require('../utils/helpers');
 const { computeDisplayScore } = require('../utils/gcs');
 const { sendSystemPm } = require('../utils/system-pm');
@@ -1471,6 +1472,10 @@ async function autoApplyBans(uniqueId, endDate) {
 
   await batch.commit();
 
+  // Auto-applied bans must bite on the target's next request, exactly
+  // like admin-issued ones (SHY-0149 mid-session AC).
+  clearBanCache();
+
   const deviceCount = bindingsSnap.docs.length;
   const networkCount = lastIp ? 1 : 0;
   log.info('admin-users', 'Auto-bans applied', {
@@ -1530,6 +1535,8 @@ async function liftAutoAppliedBans(uniqueId, adminUid) {
   if (allDocs.length === 0) return;
 
   await Promise.all(allDocs.map((d) => d.ref.delete()));
+  // Lifting bans must unblock the gate as promptly as banning engages it.
+  clearBanCache();
 
   // Audit log
   await db.doc(`adminAuditLog/${generateId()}`).set({

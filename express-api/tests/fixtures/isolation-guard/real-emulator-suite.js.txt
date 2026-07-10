@@ -1,0 +1,10 @@
+// Named like a unit test, but reaches the real emulator and mints real tokens.
+process.env.NODE_ENV = 'local';
+
+const { db } = require('../../src/utils/firebase');
+const { mintRealUser } = require('../helpers/real-auth');
+
+test('a real caller is authorised', async () => {
+  const user = await mintRealUser({ uniqueId: 1 });
+  await db.doc(`users/${user.uniqueId}`).get();
+});
