@@ -230,4 +230,14 @@ test.describe('Parser guards — the detect-branch, on synthetic fixtures', () =
     const block = "  en: {\n    x: 'a\\nb',\n  },\n";
     expect(() => valueOf(block, 'x')).toThrow(/unhandled escape/);
   });
+
+  test('valueOf decodes an escaped backslash without misreading what follows', () => {
+    // The source value is a\\nb — an escaped backslash, then a plain n. The
+    // decoder must consume the pair atomically: emit ONE backslash and treat
+    // the n as ordinary text. An implementation that re-examines the emitted
+    // backslash — or one "simplified" to only the escapes the corpus uses
+    // today — reads \n here and throws, or returns the wrong bytes (R21).
+    const block = "  en: {\n    x: 'a\\\\nb',\n  },\n";
+    expect(valueOf(block, 'x')).toBe('a\\nb');
+  });
 });
