@@ -13,6 +13,7 @@ const { db, auth } = require('../utils/firebase');
 const { generateId } = require('../utils/helpers');
 const { getFcmCaptures, clearFcmCaptures } = require('../utils/fcm');
 const { clearBanCache } = require('../utils/bans');
+const { nextUniqueIdFrom, restoreUniqueIdCounter } = require('../utils/unique-id-counter');
 const log = require('../utils/log');
 
 const TEST_PREFIX = 'test_';
@@ -59,12 +60,15 @@ router.post('/test/setup', async (req, res) => {
       userIndex++;
       const uid = `${testRunId}_user_${generateId()}`;
 
-      // Allocate real uniqueId via atomic counter transaction
+      // Allocate real uniqueId via atomic counter transaction. The counter
+      // has been observed string-typed (then `+ 1` CONCATENATES: "33331" + 1
+      // === "333311" — every user carries a string uniqueId the number-typed
+      // admin search can never match); nextUniqueIdFrom is type-immune.
       const counterRef = db.doc('counters/uniqueId');
       const uniqueId = await db.runTransaction(async (t) => {
         const counterDoc = await t.get(counterRef);
-        const current = counterDoc.exists ? counterDoc.data().value : 100000000;
-        const next = current + 1;
+        const raw = counterDoc.exists ? counterDoc.data().value : undefined;
+        const next = nextUniqueIdFrom(raw, { base: 100000000 });
         t.set(counterRef, { value: next }, { merge: true });
         return next;
       });
@@ -775,12 +779,12 @@ async function deleteTestData(testRunId) {
     // Best-effort cleanup — config deletion failure is non-critical
   }
 
-  // 6. Restore uniqueId counter to the highest remaining real user (best-effort)
+  // 6. Restore uniqueId counter after deleting test users (best-effort).
+  // Type-immune + raise-only — see utils/unique-id-counter.js for the
+  // string-poisoning root cause and the concurrent-allocation race guard.
   if (userUniqueIds.length > 0) {
     try {
-      const maxSnap = await db.collection('users').orderBy('uniqueId', 'desc').limit(1).get();
-      const maxId = maxSnap.empty ? 100000000 : maxSnap.docs[0].data().uniqueId;
-      await db.doc('counters/uniqueId').set({ value: maxId }, { merge: true });
+      await restoreUniqueIdCounter(db);
     } catch {
       // Best-effort — counter restoration failure does not block test cleanup
     }

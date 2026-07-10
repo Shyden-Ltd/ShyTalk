@@ -362,6 +362,36 @@ describe('testDataCleanup (real Firestore emulator)', () => {
     expect(await read('counters/uniqueId')).toEqual({ value: 100000000 });
   });
 
+  test('REAL Firestore type-orders a string uniqueId above every number — and the restore must not trust it', async () => {
+    await seed('users/tu1', { _testRun: 'test_run', createdAt: 0, uniqueId: 100000099 });
+    await seed('users/real1', { uniqueId: 100000050 }); // survives, numeric
+    await seed('users/ghost', { uniqueId: '99' }); // survives, STRING-typed (numerically tiny)
+
+    // The root-cause claim, proven against the real emulator: in a desc order
+    // the string doc tops the query despite its tiny numeric appearance.
+    const top = await db.collection('users').orderBy('uniqueId', 'desc').limit(1).get();
+    expect(top.docs[0].id).toBe('ghost');
+    expect(top.docs[0].data().uniqueId).toBe('99');
+
+    await testDataCleanup();
+
+    // A string top doc means the numeric max is unknowable from this query —
+    // the counter must get the numeric base, never the string.
+    const counter = await read('counters/uniqueId');
+    expect(counter).toEqual({ value: 100000000 });
+    expect(typeof counter.value).toBe('number');
+  });
+
+  test('restore is raise-only: a live counter above the candidate survives (concurrent-allocation guard)', async () => {
+    await seed('users/tu1', { _testRun: 'test_run', createdAt: 0, uniqueId: 100000099 });
+    await seed('users/real1', { uniqueId: 100000050 });
+    await seed('counters/uniqueId', { value: 100000200 }); // a concurrent setup already advanced it
+
+    await testDataCleanup();
+
+    expect(await read('counters/uniqueId')).toEqual({ value: 100000200 });
+  });
+
   test('does not touch the counter when no users were deleted', async () => {
     // A stale non-user test doc is deleted, but no users → no counter write.
     await seed('gifts/g1', { _testRun: 'test_run', createdAt: 0 });
