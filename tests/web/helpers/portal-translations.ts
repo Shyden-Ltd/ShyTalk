@@ -51,11 +51,23 @@ export function hasNestedObject(source: string): boolean {
 }
 
 /**
- * A key's value, or null. The literal `:` immediately after the key name is what
- * stops `suspended_reason` from reading the co-resident `suspended_reason_label`,
- * and `\b` stops it matching inside a longer identifier.
+ * A key's value, or null.
+ *
+ * The literal `:` immediately after the key name is what stops `suspended_reason`
+ * from reading the co-resident `suspended_reason_label`, and `\b` stops it
+ * matching inside a longer identifier.
+ *
+ * Both quote styles and backslash escapes are handled, because the translations
+ * file uses all three: `login_no_account: "Don't have an account?"` is
+ * double-quoted, and `fr.suspended_until: 'Suspension jusqu\'à :'` escapes its
+ * apostrophe inside single quotes. A naive `'([^']*)'` silently returns
+ * `Suspension jusqu\` for that key — a wrong value, not a missing one, which is
+ * the worst outcome a reader of this helper could get.
  */
 export function valueOf(block: string, key: string): string | null {
-  const match = block.match(new RegExp(`\\b${key}:\\s*'([^']*)'`));
-  return match ? match[1] : null;
+  const pattern = `\\b${key}:\\s*(?:'((?:[^'\\\\]|\\\\.)*)'|"((?:[^"\\\\]|\\\\.)*)")`;
+  const match = block.match(new RegExp(pattern));
+  if (!match) return null;
+  const raw = match[1] ?? match[2];
+  return raw.replace(/\\(['"\\])/g, '$1');
 }
