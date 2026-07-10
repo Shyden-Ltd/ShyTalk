@@ -134,7 +134,9 @@ Touches `express-api/**` (shared auth middleware + IP derivation + sensitive rou
 
 ## Notes (running log)
 
-- **Reviewed-up-to:** `ce940a91dbe` (round 24 MERGE; round 25 pending on the roadmap-CSP one-liner).
+- **Reviewed-up-to:** `69720d9f39a` (round 26 MERGE — zero findings; 26 rounds total, all clean).
+
+- 2026-07-11 — **Rounds 25–26 on the CSP one-liner.** Round 25 (FIX-FIRST, both items taken): the `http://localhost:*` frame-src wildcard was wider than the one value the code can produce (`roadmap-auth.js:150` + `firebase.json` hardcode the Auth emulator at `:9099`) — narrowed to `http://localhost:9099`; and the identical pre-existing gap in `public/_headers`' `/portal/*` frame-src (portal.js uses the same `useEmulator` pattern; inert today since `_headers` is Cloudflare-only, fixed same-session per the pattern-completeness rule). Round 26 confirmed both lines on disk: MERGE. Post-narrowing re-confirm 9/9 on mobile-chrome.
 
 - 2026-07-11 — **Full 5-browser matrix (fresh-API run) + one CSP finding, fixed.** With the counter fix actually in the loop (the previous run had silently reused an API process started before the fix was committed — the matrix runner now ALWAYS restarts :3000 from the working tree): **chromium 1356 passed / 0 failed / 0 flaky (15.0m); firefox 1336/0/0 (21.6m); mobile-chrome 1329 passed + 3 failed; mobile-safari 1313 passed + same 3; webkit aborted by a browser-engine crash at 1.3h (31 per-test timeouts, "browser has been closed", 19 flaky all passed on retry — engine instability, not product; full webkit re-run dispatched). Zero connection errors across all five (the EMFILE class stayed dead).** The 3 real failures: this story's `roadmap-auth.js` fix finally lets Firebase Auth initialize locally, so the SDK frames the :9099 Auth emulator — and `roadmap.html`'s CSP `frame-src` lacked the `http://localhost:*` its own `connect-src` already carries; the console-error specs caught the violation on the slower engines. One-line fix mirroring the in-tag precedent; red→green proven on mobile-chrome, then the two affected spec files re-verified green on ALL five engines (18/18 each).
 
