@@ -134,7 +134,10 @@ Touches `express-api/**` (shared auth middleware + IP derivation + sensitive rou
 
 ## Notes (running log)
 
-- **Reviewed-up-to:** `69720d9f39a` (round 26 MERGE — zero findings; 26 rounds total, all clean).
+- **Reviewed-up-to:** `69720d9f39a` (round 26; round 27 pending on the gifts-spec idempotency one-liner).
+
+- 2026-07-11 — **Pre-push hook surfaced one more crash-legacy: `admin-gifts.spec.ts` test 10 is not abort-safe.** The spec applies fixed `example.com` URLs to the first seed gift and restores them afterwards — but a WebKit engine crash mid-test (SHY-0176's failure mode) aborted between Apply and restore, persisting the URLs. On every later run the fill equaled the stored value, no change event fired, no `gift-modified` class, deterministic red — while `seedIfMissing` never repairs an existing doc. Diagnosis detour worth recording: direct emulator reads first "falsified" the stale-state theory because they queried `projects/shytalk-local` — the API actually runs against **`demo-shytalk`** (`FIREBASE_PROJECT_ID` in `.env.local`); the emulator hosts both namespaces and answers queries for either. The failure trace's captured `/api/gifts/all` bodies exposed the mismatch. Fixed: one-time doc repair + the spec now uses per-run unique URLs (`anim-${Date.now()}.json`) so an aborted run can never poison the next; 14/14 twice consecutively.
+
 
 - 2026-07-11 — **Rounds 25–26 on the CSP one-liner.** Round 25 (FIX-FIRST, both items taken): the `http://localhost:*` frame-src wildcard was wider than the one value the code can produce (`roadmap-auth.js:150` + `firebase.json` hardcode the Auth emulator at `:9099`) — narrowed to `http://localhost:9099`; and the identical pre-existing gap in `public/_headers`' `/portal/*` frame-src (portal.js uses the same `useEmulator` pattern; inert today since `_headers` is Cloudflare-only, fixed same-session per the pattern-completeness rule). Round 26 confirmed both lines on disk: MERGE. Post-narrowing re-confirm 9/9 on mobile-chrome.
 
