@@ -134,7 +134,7 @@ Touches `express-api/**` (shared auth middleware + IP derivation + sensitive rou
 
 ## Notes (running log)
 
-- **Reviewed-up-to:** `69720d9f39a` (round 26; round 27 pending on the gifts-spec idempotency one-liner).
+- **Reviewed-up-to:** `1c3bcbd1a21` (round 27 MERGE — zero findings; 27 rounds total). Fast-follow noted by round 27: wrap admin-gifts test 10's apply/verify in try/finally so ANY failure path (not only the crash path) restores the fixture — pre-existing, non-regressive, filed with the SHY-0176 cleanup batch.
 
 - 2026-07-11 — **Pre-push hook surfaced one more crash-legacy: `admin-gifts.spec.ts` test 10 is not abort-safe.** The spec applies fixed `example.com` URLs to the first seed gift and restores them afterwards — but a WebKit engine crash mid-test (SHY-0176's failure mode) aborted between Apply and restore, persisting the URLs. On every later run the fill equaled the stored value, no change event fired, no `gift-modified` class, deterministic red — while `seedIfMissing` never repairs an existing doc. Diagnosis detour worth recording: direct emulator reads first "falsified" the stale-state theory because they queried `projects/shytalk-local` — the API actually runs against **`demo-shytalk`** (`FIREBASE_PROJECT_ID` in `.env.local`); the emulator hosts both namespaces and answers queries for either. The failure trace's captured `/api/gifts/all` bodies exposed the mismatch. Fixed: one-time doc repair + the spec now uses per-run unique URLs (`anim-${Date.now()}.json`) so an aborted run can never poison the next; 14/14 twice consecutively.
 
