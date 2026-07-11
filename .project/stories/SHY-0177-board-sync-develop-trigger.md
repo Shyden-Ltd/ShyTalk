@@ -1,6 +1,6 @@
 ---
 id: SHY-0177
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-11
 priority: P1
@@ -126,3 +126,4 @@ Syncing from develop ONLY (not both branches) is load-bearing: change detection 
 
 ## Notes (running log)
 - 2026-07-11 — **CREATED fully-refined** ([[feedback-no-skeleton-stories-fully-refined]]) at operator request ("sync ticket changes from develop onto the GitHub project board first", prioritized ahead of SHY-0150). Root cause: git-flow pivot (SHY-0161) left the board mirror main-triggered. Pickup-fitness investigation done at creation time: develop ruleset verified `non_fast_forward`-only; sidecar tracked on develop; exactly one `blob/main` in the script (footer, line 1177); four Jest suites pin the script/workflow — impact inventory in `## Test Plan`. Develop-only trigger (not main+develop) is load-bearing: equality body-hash has no version ordering, so a second source branch can regress the board. Non-technical BDD per [[feedback-non-technical-bdd]].
+- 2026-07-11 — **Rounds 1-3 code-reviewer (pre-push loop): CLEAN (ZERO FINDINGS at R2 and R3).** R1 Critical: the new retry-loop branches (loud exit-1 failure, hoist-resistance of the live-head resolution, per-attempt observability) were unpinned — fixed with 4 tests; mutants built verbatim from the live yaml (hoisted LIVE_HEAD; deleted `exit 1`) and proven killed. R2: ZERO FINDINGS + one informational note (step-summary table unpinned) — filled per [[feedback-fill-gaps-always-no-skip]] as a 12th test. R3: ZERO FINDINGS with independent byte-level re-verification. Suite 12/12; family 214/214 across the 5 sync suites; actionlint + shellcheck + prettier/eslint + validator + no-new-stubs ratchet all clean. `Reviewed-up-to: eb77145031b`. Flipping In Review; push + PR to develop next (autonomous merge per develop authority; the merge itself is the live-fire proof — this workflow file is its own trigger path).
