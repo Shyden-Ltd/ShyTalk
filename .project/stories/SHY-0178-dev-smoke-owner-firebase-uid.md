@@ -118,16 +118,18 @@ This is not a SHY-0150 regression (the smoke account is not banned) and not an e
 
 ## Definition of Done
 
-- [ ] `ownerFirebaseUid` stamped from the fresh JWT's uid claim (via `deriveOwnerFirebaseUid`) in the room-create payload; stale "pre-push dev-smoke project" header comment corrected; failure hint moved to the test-pinned `buildRoomsCreateFailureHint` helper naming every rule precondition.
-- [ ] `tests/web/dev-smoke-helpers.spec.ts` green locally (10/10, chromium); negative-control tests + asserted cleanup present in `dev-smoke.spec.ts`.
-- [ ] Story validator green; `code-reviewer` 100% clean on the local commit before push.
-- [ ] Deploy-To-Dev dispatched with `ref: story/SHY-0178-dev-smoke-owner-firebase-uid`: **Dev Smoke job green** including both negative controls (run URL in Notes).
+- [x] `ownerFirebaseUid` stamped from the fresh JWT's uid claim (via `deriveOwnerFirebaseUid`) in the room-create payload; stale "pre-push dev-smoke project" header comment corrected; failure hint moved to the test-pinned `buildRoomsCreateFailureHint` helper naming every rule precondition.
+- [x] `tests/web/dev-smoke-helpers.spec.ts` green locally (10/10, chromium); negative-control tests + asserted cleanup present in `dev-smoke.spec.ts`.
+- [x] Story validator green; `code-reviewer` 100% clean on the local commit before push (R2 MERGE-READY, zero findings).
+- [x] Deploy-To-Dev dispatched with `ref: story/SHY-0178-dev-smoke-owner-firebase-uid`: **Dev Smoke job green** including both negative controls (run URL in Notes).
 - [ ] PR merged to develop (squash, title `SHY-0178: …`); post-merge `ref: develop` dispatch shows Dev Smoke green on develop.
 - [ ] Story `In Review` after merge; `Done` on next release cut with `released_in:`.
 
 ## Notes (running log)
 
 Reviewed-up-to: 56d534ae176
+
+- 2026-07-11 21:26 WIB — **DEV PROOF GREEN.** Deploy-To-Dev branch dispatch https://github.com/Shyden-Ltd/ShyTalk/actions/runs/29155698877 (ref `story/SHY-0178-dev-smoke-owner-firebase-uid`): **Dev Smoke Tests SUCCESS — 23/23 passed (12.8s)**, both negative controls executed and green by name (`rooms-create WITHOUT ownerFirebaseUid is denied (SHY-0029 clause live)` ✓ 132ms; `rooms-create with a FORGED ownerFirebaseUid is denied` ✓ 447ms) against the real deployed dev rules — no silent skip (23 = the file's full chromium test count). Backend/Web/Android/Sanity also green on the branch deploy. Seed Dev Personas red = known pre-existing (~2026-07-01). iOS TestFlight job still in progress at recording time — its outcome is the manual-rerun datapoint for the separate iOS-destination diagnosis, not a gate for this tests-only story. Pre-push local suite on push: 1366 passed / 1 known flaky (admin-keyboard Enter) / 37 skipped, 15.7m. PR: https://github.com/Shyden-Ltd/ShyTalk/pull/1579.
 
 - 2026-07-11 20:07 WIB — CREATED fully refined during the develop→dev deploy triage; RED already watched on run 29152433000 (Dev Smoke 403 on rooms create). Root cause pinned to SHY-0029's `ownerFirebaseUid` present-and-matching clause vs the older smoke payload; fix derives the uid from the same refreshed JWT that signs the write.
 - 2026-07-11 20:47 WIB — code-reviewer R2 on `56d534ae176`: **MERGE-READY, zero findings.** All 6 R1 closures independently re-verified (8-case uid matrix hand-traced; hint pin character-diffed against helper output; negative-control payloads traced clause-by-clause against firestore.rules 248-256; no-formatter-scope claim re-verified). Reviewer notes the string-only guard also fixed a latent type-confusion bug the R1 `||` version had. Status → In Review. Remaining DoD = the live dev-dispatch proofs.
