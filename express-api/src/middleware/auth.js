@@ -7,6 +7,7 @@
 
 const { auth, db } = require('../utils/firebase');
 const { checkUserBans, clearBanCache } = require('../utils/bans');
+const { syncBannedClaim } = require('../utils/banned-claim');
 const log = require('../utils/log');
 
 // ─── In-memory caches ────────────────────────────────────────────
@@ -212,7 +213,19 @@ async function authMiddleware(req, res, next) {
     // permanently-truncating account for good (reviewer C-NEW-1).
     if (!isBanExemptPath(req)) {
       const ban = await checkUserBans(uniqueId, req.ip);
+      // SHY-0150 lazy claim sync: the fresh verdict and the decoded token
+      // meet exactly here — when they disagree, reconcile the `banned`
+      // custom claim so the Firestore rules gate tracks standings no route
+      // ever mutated (lazy expiry, binding flips, UNLINKED network bans
+      // caught by the live IP). Mint rides the verdict; clear goes through
+      // the full recompute inside syncBannedClaim (never the IP-scoped
+      // verdict). syncBannedClaim never throws — a sync failure must not
+      // turn this request into the outer catch's 401.
+      const tokenBanned = decoded.banned === true;
       if (ban.isBanned) {
+        if (!tokenBanned) {
+          await syncBannedClaim(uniqueId, { uid, verdictBanned: true, dedupe: true });
+        }
         log.warn('auth', 'Request denied: banned', {
           path: req.path,
           uniqueId,
@@ -225,6 +238,9 @@ async function authMiddleware(req, res, next) {
           reason: ban.reason,
           expiresAt: ban.expiresAt,
         });
+      }
+      if (tokenBanned) {
+        await syncBannedClaim(uniqueId, { uid, dedupe: true });
       }
     }
 
@@ -343,7 +359,13 @@ async function authMiddlewareStrict(req, res, next) {
     // so a fail-closed rejection cannot strip those rights (reviewer C-NEW-1).
     if (!isStrictBanExempt) {
       const ban = await checkUserBans(uniqueId, req.ip);
+      // SHY-0150 lazy claim sync — same reconciliation as authMiddleware
+      // (see the comment there); the two gates must not diverge.
+      const tokenBanned = decoded.banned === true;
       if (ban.isBanned) {
+        if (!tokenBanned) {
+          await syncBannedClaim(uniqueId, { uid, verdictBanned: true, dedupe: true });
+        }
         log.warn('auth', 'Request denied: banned (strict)', {
           path: req.path,
           uniqueId,
@@ -356,6 +378,9 @@ async function authMiddlewareStrict(req, res, next) {
           reason: ban.reason,
           expiresAt: ban.expiresAt,
         });
+      }
+      if (tokenBanned) {
+        await syncBannedClaim(uniqueId, { uid, dedupe: true });
       }
     }
 
