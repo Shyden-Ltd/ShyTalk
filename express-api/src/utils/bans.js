@@ -422,6 +422,42 @@ async function checkUserBans(uniqueId, ip) {
 }
 
 /**
+ * USER-ATTRIBUTABLE ban standing (SHY-0150) — the recompute authority for
+ * the `banned` custom claim (see utils/banned-claim.js).
+ *
+ * Deliberately IP-FREE, so it can run with no request in hand (ban routes,
+ * unban recompute, suspend/unsuspend). It covers:
+ *   - device standing: an active deviceBan linked to the account OR
+ *     targeting a device bound to it (getUserDeviceStanding), and
+ *   - network bans LINKED to the account (`linkedUniqueId`, both id
+ *     forms), and
+ *   - ASN network bans matching the account's STORED binding ASNs.
+ *
+ * What it CANNOT see — an UNLINKED ip/subnet network ban — has no
+ * enumerable target by construction; the lazy middleware sync mints from
+ * the live per-request verdict when such a ban catches the caller
+ * (the structural limit documented in the SHY-0150 story).
+ *
+ * Fail-closed BY PROPAGATION like checkUserBans: no catch, a lookup
+ * failure rejects to the caller (syncBannedClaim logs and leaves the
+ * claim untouched — never clears on partial evidence).
+ */
+async function computeUserBanStanding(uniqueId) {
+  if (uniqueId === null || uniqueId === undefined) return false;
+  const standing = await getUserDeviceStanding(uniqueId);
+  if (standing.deviceBan && isBanActive(standing.deviceBan)) return true;
+  const forms = idForms(uniqueId);
+  const normalizedAsns = standing.asns.map(normalizeAsn);
+  const networkBans = await getActiveNetworkBans();
+  return networkBans.some(
+    (ban) =>
+      isBanActive(ban) &&
+      (forms.some((form) => form === ban.linkedUniqueId) ||
+        (ban.type === 'asn' && normalizedAsns.includes(normalizeAsn(ban.value)))),
+  );
+}
+
+/**
  * Sign-in ban report for /api/device-info (moved verbatim from
  * device-info.js). Checks the SUBMITTED deviceId + the caller's network.
  * Fail-open by design — see the module docblock.
@@ -557,6 +593,7 @@ function clearBanCache(uniqueId) {
 module.exports = {
   checkBans,
   checkUserBans,
+  computeUserBanStanding,
   clearBanCache,
   countBoundDevices,
   rollbackBindingIfOverCap,

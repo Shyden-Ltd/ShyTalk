@@ -24,6 +24,7 @@ router.use('/admin/bans', _adminGuardWrapper);
 const { generateId, now } = require('../utils/helpers');
 const { sendSystemPm } = require('../utils/system-pm');
 const { clearBanCache, isBanActive } = require('../utils/bans');
+const { syncBannedClaim } = require('../utils/banned-claim');
 const log = require('../utils/log');
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -38,6 +39,37 @@ function parseExpiry(duration) {
   const match = duration.match(/^(\d+)([hd])$/);
   if (!match) return null;
   return new Date(Date.now() + Number.parseInt(match[1], 10) * units[match[2]]).toISOString();
+}
+
+/**
+ * Every enumerable user a device-ban mutation affects (SHY-0150): the
+ * explicitly linked account AND the device's bound owner — an admin may ban
+ * hardware without linking it, but the bound account's claim standing still
+ * flips. Never throws: the ban mutation has already committed, and the lazy
+ * middleware sync self-heals anything missed here.
+ */
+async function syncClaimsForDeviceBan(deviceId, linkedUniqueId) {
+  try {
+    const targets = new Set();
+    // Same truthiness the ban docs store (`linkedUniqueId || null`).
+    if (linkedUniqueId) {
+      targets.add(String(linkedUniqueId));
+    }
+    const bindingSnap = await db.doc(`deviceBindings/${deviceId}`).get();
+    if (bindingSnap.exists) {
+      const binding = bindingSnap.data() || {};
+      const owner = binding.uniqueId ?? binding.userId ?? null;
+      if (owner !== null && owner !== undefined) targets.add(String(owner));
+    }
+    for (const target of targets) {
+      await syncBannedClaim(target);
+    }
+  } catch (err) {
+    log.error('banned-claim', 'device-ban claim sync failed — lazy path will self-heal', {
+      deviceId,
+      error: err.message,
+    });
+  }
 }
 
 // ─── List all active bans ────────────────────────────────────────
@@ -90,6 +122,12 @@ router.post('/admin/bans/device', async (req, res) => {
     // user other than linkedUniqueId — the gate must see it on the
     // target's NEXT request (SHY-0149 mid-session AC).
     clearBanCache();
+
+    // SHY-0150: mint the `banned` claim (+ revoke refresh tokens) for the
+    // linked account and/or the device's bound owner, so the rules layer
+    // denies their direct Firestore writes too. AFTER clearBanCache — the
+    // recompute must read the standing this mutation just created.
+    await syncClaimsForDeviceBan(deviceId, linkedUniqueId);
 
     // Audit log
     await db.doc(`adminAuditLog/${generateId()}`).set({
@@ -166,6 +204,14 @@ router.post('/admin/bans/network', async (req, res) => {
     // Invalidate the gate's cached active-networkBans list immediately.
     clearBanCache();
 
+    // SHY-0150: a LINKED network ban has an enumerable target — mint its
+    // claim now. An unlinked one has none (structural limit): the lazy
+    // middleware sync mints from the live verdict when the banned network
+    // next calls the API.
+    if (linkedUniqueId) {
+      await syncBannedClaim(String(linkedUniqueId));
+    }
+
     // Audit log
     await db.doc(`adminAuditLog/${generateId()}`).set({
       adminId: req.auth.uid,
@@ -201,9 +247,18 @@ router.post('/admin/bans/network', async (req, res) => {
 
 router.delete('/admin/bans/device/:deviceId', async (req, res) => {
   try {
+    // Capture the linked account BEFORE the delete — it is the recompute
+    // target once the ban is gone (SHY-0150).
+    const banSnap = await db.doc(`deviceBans/${req.params.deviceId}`).get();
+    const linkedUniqueId = banSnap.exists ? banSnap.data().linkedUniqueId : null;
+
     await db.doc(`deviceBans/${req.params.deviceId}`).delete();
     // An unban must lift the gate as promptly as a ban engages it.
     clearBanCache();
+
+    // SHY-0150: RECOMPUTE (never blind-clear) — another active ban keeps
+    // the claim. AFTER clearBanCache so the recompute reads fresh standing.
+    await syncClaimsForDeviceBan(req.params.deviceId, linkedUniqueId);
 
     await db.doc(`adminAuditLog/${generateId()}`).set({
       adminId: req.auth.uid,
@@ -226,9 +281,19 @@ router.delete('/admin/bans/device/:deviceId', async (req, res) => {
 
 router.delete('/admin/bans/network/:banId', async (req, res) => {
   try {
+    // Capture the linked account BEFORE the delete (SHY-0150 recompute).
+    const banSnap = await db.doc(`networkBans/${req.params.banId}`).get();
+    const linkedUniqueId = banSnap.exists ? banSnap.data().linkedUniqueId : null;
+
     await db.doc(`networkBans/${req.params.banId}`).delete();
     // An unban must lift the gate as promptly as a ban engages it.
     clearBanCache();
+
+    // SHY-0150: RECOMPUTE (never blind-clear) — another active ban keeps
+    // the claim.
+    if (linkedUniqueId) {
+      await syncBannedClaim(String(linkedUniqueId));
+    }
 
     await db.doc(`adminAuditLog/${generateId()}`).set({
       adminId: req.auth.uid,
@@ -277,6 +342,11 @@ router.post('/admin/bans/unban-all/:uniqueId', async (req, res) => {
     await Promise.all(allDocs.map((d) => d.ref.delete()));
     // An unban must lift the gate as promptly as a ban engages it.
     clearBanCache();
+
+    // SHY-0150: RECOMPUTE — an UNLINKED hardware ban on a still-bound
+    // device survives unban-all (its queries only see linked docs), and
+    // the recompute correctly keeps the claim in that case.
+    await syncBannedClaim(String(uniqueId));
 
     await db.doc(`adminAuditLog/${generateId()}`).set({
       adminId: req.auth.uid,

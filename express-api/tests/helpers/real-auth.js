@@ -29,6 +29,7 @@ const {
   clearAdminClaimCache,
   clearBanCache,
 } = require('../../src/middleware/auth');
+const { clearBannedClaimSyncDedup } = require('../../src/utils/banned-claim');
 
 // Monotonic counter for unique synthetic uids (avoids a flagged Math.random PRNG).
 let noUserDocSeq = 0;
@@ -39,6 +40,7 @@ function clearAuthCaches() {
   clearSuspensionCache();
   clearAdminClaimCache();
   clearBanCache();
+  clearBannedClaimSyncDedup();
 }
 
 async function exchangeCustomTokenForIdToken(customToken) {
@@ -70,6 +72,10 @@ async function exchangeCustomTokenForIdToken(customToken) {
  * @param {boolean} [opts.isSuspended=false]
  * @param {string} [opts.uid]            Firebase uid (defaults to rt-uid-<uniqueId>)
  * @param {object} [opts.extraUserData]  extra fields merged into the users doc
+ * @param {object} [opts.extraClaims]    additional developer claims minted onto the
+ *   ID token (e.g. `{ banned: true }` for SHY-0150's stale-token divergence
+ *   tests). Developer claims only shape THIS token — live customClaims on the
+ *   Auth user record are set separately via setCustomUserClaims.
  */
 /**
  * A namespaced Firestore project (SHY-0171's `FIRESTORE_TEST_NAMESPACE`) makes
@@ -100,6 +106,7 @@ async function mintRealUser({
   isSuspended = false,
   uid,
   extraUserData = {},
+  extraClaims = {},
 } = {}) {
   assertNoTestNamespace();
   if (uniqueId === undefined || uniqueId === null) {
@@ -112,7 +119,7 @@ async function mintRealUser({
     isSuspended,
     ...extraUserData,
   });
-  const claims = {};
+  const claims = { ...extraClaims };
   if (cohort !== undefined) claims.cohort = cohort;
   if (admin) claims.admin = true;
   const customToken = await auth.createCustomToken(firebaseUid, claims);
