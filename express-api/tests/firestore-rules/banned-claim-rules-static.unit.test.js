@@ -47,13 +47,15 @@ describe('isBanned() helper — token-only (Performance AC)', () => {
 
 describe('gate-coverage ratchet', () => {
   test('every gated user-write verb carries !isBanned() — count may only GROW', () => {
-    // 28 gate sites as shipped by SHY-0150: users update; stalkers create;
+    // 31 gate sites as shipped by SHY-0150: users update; stalkers create;
     // rooms create, delete; room messages create, update/delete; seatRequests
     // create, update; conversations create, update; convo messages create,
     // update/delete; edits create; userSettings write; legacy settings write;
     // mutes write; mod_log create; suggestions create, update, delete; votes
-    // create, update, delete; comments create; suggestionDisputes create;
-    // suspensionAppeals create; subscriptions write; notifications update.
+    // create, update, delete; comments create; suggestionDisputes create,
+    // update; suspensionAppeals create; subscriptions write; notifications
+    // update; blockedTopics write; identityGraphs write (reviewer R1-#3 —
+    // banned outranks admin on the admin-writable surfaces too).
     // Adding a NEW user-writable collection? Gate it and bump this floor.
     // This pin failing on a DECREASE means a collection lost its ban gate.
     // Comment lines are stripped first — a prose mention of !isBanned() must
@@ -61,7 +63,7 @@ describe('gate-coverage ratchet', () => {
     // survived a dropped-gate mutant because a comment mentioned the helper).
     const codeLines = RULES.split('\n').filter((line) => !line.trim().startsWith('//'));
     const gateSites = codeLines.filter((line) => line.includes('!isBanned()')).length;
-    expect(gateSites).toBeGreaterThanOrEqual(28);
+    expect(gateSites).toBeGreaterThanOrEqual(31);
   });
 
   test('the split rules kept their read halves (reads must stay ungated)', () => {

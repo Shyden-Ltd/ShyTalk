@@ -672,6 +672,38 @@ describe('banned outranks admin (user-write surface)', () => {
     );
   });
 
+  // Reviewer R1-#3: the three ADMIN-writable collections must obey the same
+  // invariant — a banned admin's client-side moderation writes are denied
+  // (the admin console mutates via Express + Admin SDK, which bypasses rules,
+  // so legitimate moderation is unaffected). Reads stay unchanged.
+  test('DENY: a banned admin cannot write blockedTopics; clean admin can', async () => {
+    await assertFails(dbFor(BANNED_ADMIN).doc('blockedTopics/t-badm').set({ topic: 'x' }));
+    await assertSucceeds(dbFor(ADMIN).doc('blockedTopics/t-adm').set({ topic: 'x' }));
+  });
+
+  test('blockedTopics public read is unchanged for a banned caller', async () => {
+    await seedDoc('blockedTopics/t-read', { topic: 'x' });
+    await assertSucceeds(dbFor(BANNED).doc('blockedTopics/t-read').get());
+  });
+
+  test('DENY: a banned admin cannot resolve a suggestionDispute; clean admin can', async () => {
+    await seedDoc('suggestionDisputes/d-badm', { submitterUid: sid(PEER), reason: 'r' });
+    await assertFails(
+      dbFor(BANNED_ADMIN).doc('suggestionDisputes/d-badm').update({ status: 'resolved' }),
+    );
+    await seedDoc('suggestionDisputes/d-adm', { submitterUid: sid(PEER), reason: 'r' });
+    await assertSucceeds(
+      dbFor(ADMIN).doc('suggestionDisputes/d-adm').update({ status: 'resolved' }),
+    );
+  });
+
+  test('DENY: a banned admin cannot write identityGraphs; clean admin can; banned-admin READ unchanged', async () => {
+    await assertFails(dbFor(BANNED_ADMIN).doc('identityGraphs/g-badm').set({ nodes: [] }));
+    await assertSucceeds(dbFor(ADMIN).doc('identityGraphs/g-adm').set({ nodes: [] }));
+    await seedDoc('identityGraphs/g-read', { nodes: [] });
+    await assertSucceeds(dbFor(BANNED_ADMIN).doc('identityGraphs/g-read').get());
+  });
+
   test('banned admin READS are unchanged (cross-cohort admin read bypass intact)', async () => {
     await seedDoc('rooms/r-badm-read', { cohort: 'minor', ownerId: sid(PEER), state: 'OPEN' });
     await assertSucceeds(dbFor(BANNED_ADMIN).doc('rooms/r-badm-read').get());

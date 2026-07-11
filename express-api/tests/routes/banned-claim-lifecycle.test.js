@@ -54,7 +54,8 @@ const { authMiddleware } = require('../../src/middleware/auth');
 const adminBansRouter = require('../../src/routes/admin-bans');
 const adminUsersRouter = require('../../src/routes/admin-users');
 const { mintClaimsMerging } = require('../../src/utils/firebase-claims');
-const { mintRealUser, clearAuthCaches } = require('../helpers/real-auth');
+const { syncBannedClaim } = require('../../src/utils/banned-claim');
+const { mintRealUser, mintTokenWithoutUserDoc, clearAuthCaches } = require('../helpers/real-auth');
 const { assertEmulatorReachable, clearPrefixed } = require('../helpers/firebase-emulator');
 
 // ── Per-file namespace (shared emulator; see firebase-emulator.js) ─────────
@@ -82,6 +83,10 @@ const IDS = {
   c3: 617023,
   c5: 617024,
   c6: 617025,
+  r1: 617030,
+  r2a: 617031,
+  r2b: 617032,
+  r4: 617033,
 };
 const uidOf = (uniqueId) => `bcl-uid-${uniqueId}`;
 const SYSTEM_UID = 'SHYTALK_SYSTEM'; // system-pm.js — for PM-conversation cleanup
@@ -178,6 +183,7 @@ afterAll(async () => {
     await db.recursiveDelete(db.doc(`conversations/${convId}`));
     await auth.deleteUser(uidOf(uniqueId)).catch(() => {});
   }
+  await auth.deleteUser('bcl-uid-nodoc-r5').catch(() => {}); // R1-5's doc-less user
   if (PRIOR_NODE_ENV === undefined) delete process.env.NODE_ENV;
   else process.env.NODE_ENV = PRIOR_NODE_ENV;
 });
@@ -599,4 +605,105 @@ describe('mintClaimsMerging preserves banned across unrelated mints', () => {
     expect(claims.cohort).toBe('minor');
     expect(claims.banned).toBe(true);
   });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// E — reviewer R1 gap-closures (util-level contracts, still real-only)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('syncBannedClaim util contracts (reviewer R1)', () => {
+  test('R1-1: the dedupe guard itself short-circuits a repeat call — distinct from idempotency', async () => {
+    // Removing the dedup block must turn THIS red: the second call's return
+    // is `reason: 'dedup'`, which only the guard produces (the idempotent
+    // no-change path returns `{synced: true, changed: false}` instead).
+    await mintRealUser({ uniqueId: IDS.r1, uid: uidOf(IDS.r1), cohort: 'adult' });
+
+    const first = await syncBannedClaim(String(IDS.r1), { dedupe: true });
+    expect(first).toMatchObject({ synced: true, changed: false, banned: false });
+
+    const second = await syncBannedClaim(String(IDS.r1), { dedupe: true });
+    expect(second).toEqual({ synced: false, reason: 'dedup' });
+
+    // Route callers bypass the guard — a fresh mutation must always sync.
+    const routeStyle = await syncBannedClaim(String(IDS.r1));
+    expect(routeStyle).toMatchObject({ synced: true });
+  });
+
+  test('R1-2: ONE device-ban mutation syncs BOTH the linked account AND a different bound owner', async () => {
+    const linked = await mintRealUser({ uniqueId: IDS.r2a, uid: uidOf(IDS.r2a), cohort: 'adult' });
+    const owner = await mintRealUser({ uniqueId: IDS.r2b, uid: uidOf(IDS.r2b), cohort: 'adult' });
+    await seed('deviceBindings/bcl-dev-r2', { uniqueId: String(IDS.r2b), boundAt: 1 });
+
+    await request(app)
+      .post('/api/admin/bans/device')
+      .set(admin.headers)
+      .send({ deviceId: 'bcl-dev-r2', reason: 'bcl-test', linkedUniqueId: String(IDS.r2a) })
+      .expect(200);
+
+    expect((await liveClaims(linked.uid)).banned).toBe(true);
+    expect((await liveClaims(owner.uid)).banned).toBe(true);
+  });
+
+  test('R1-4: an ASN network ban matching a STORED binding ASN is attributable — recompute mints', async () => {
+    const target = await mintRealUser({ uniqueId: IDS.r4, uid: uidOf(IDS.r4), cohort: 'adult' });
+    // Binding stores the ip-api 'AS64500' shape; the admin route validates
+    // digits-only — normalizeAsn bridges them (the SHY-0149 defect class).
+    await seed('deviceBindings/bcl-dev-r4', {
+      uniqueId: String(IDS.r4),
+      asn: 'AS64500',
+      boundAt: 1,
+    });
+    await seed('networkBans/bcl-net-r4', {
+      type: 'asn',
+      value: '64500',
+      reason: 'bcl-test',
+      expiresAt: null,
+      createdAt: 1,
+    });
+
+    const result = await syncBannedClaim(String(IDS.r4));
+
+    expect(result).toMatchObject({ synced: true, banned: true });
+    expect((await liveClaims(target.uid)).banned).toBe(true);
+  });
+
+  test('R1-5: a network-banned caller with NO users doc (uniqueId null) is denied without a mint or a crash', async () => {
+    const target = await mintTokenWithoutUserDoc({ cohort: 'adult', uid: 'bcl-uid-nodoc-r5' });
+    await seed('networkBans/bcl-net-r5', {
+      type: 'ip',
+      value: '203.0.113.55',
+      reason: 'bcl-test',
+      expiresAt: null,
+      createdAt: 1,
+    });
+
+    const res = await request(app)
+      .get('/api/bcl-echo')
+      .set(target.headers)
+      .set('X-Forwarded-For', '203.0.113.55')
+      .expect(403);
+
+    expect(res.body.code).toBe('banned'); // the gate still denies
+    // No uniqueId → nothing to mint; the sync short-circuits cleanly.
+    expect((await liveClaims(target.uid)).banned).toBeUndefined();
+  });
+
+  test('R1-6: the dedup map is BOUNDED — the oldest key is evicted past MAX size and re-syncs', async () => {
+    // Fill the map one past its 500-entry bound with distinct ids. The ids
+    // resolve no users doc, so each call marks the dedup map then returns
+    // `no-uid` — cheap, real, and enough to drive the eviction branch.
+    for (let i = 0; i <= 500; i++) {
+      await syncBannedClaim(`bcl-evict-${i}`, { dedupe: true });
+    }
+    // Oldest key evicted → a repeat is NOT deduped (re-processed to no-uid).
+    expect(await syncBannedClaim('bcl-evict-0', { dedupe: true })).toEqual({
+      synced: false,
+      reason: 'no-uid',
+    });
+    // A recent key is still within the map → deduped.
+    expect(await syncBannedClaim('bcl-evict-500', { dedupe: true })).toEqual({
+      synced: false,
+      reason: 'dedup',
+    });
+  }, 120000);
 });

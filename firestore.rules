@@ -51,8 +51,9 @@ service cloud.firestore {
     // not coerce): only the server-minted boolean blocks; the ≤1h
     // stale-token window is bounded by refresh-token revocation and
     // backstopped per-request by the SHY-0149 API gate. `banned`
-    // OUTRANKS `admin` on user-write rules — the admin console
-    // mutates via the Admin SDK (bypasses rules), never client-side.
+    // OUTRANKS `admin` on every client-writable rule (user-write AND
+    // admin-write surfaces) — the admin console mutates via the Admin
+    // SDK (bypasses rules), never client-side.
     // An UNLINKED network ban has no enumerable target at ban time,
     // so its claim arrives via the lazy middleware path when the
     // banned IP next calls the API (structural limit, documented in
@@ -762,9 +763,12 @@ service cloud.firestore {
     }
 
     // ── Blocked topics — admin write, public read ───────────────
+    // SHY-0150: banned outranks admin here too — the admin console
+    // mutates via Express + Admin SDK (bypasses rules), so gating the
+    // client-side admin write costs legitimate moderation nothing.
     match /blockedTopics/{topicId} {
       allow read: if true;
-      allow write: if request.auth != null && isAdmin();
+      allow write: if request.auth != null && !isBanned() && isAdmin();
     }
 
     // ── Suggestion disputes — submitter create, admin resolve ───
@@ -776,7 +780,9 @@ service cloud.firestore {
       allow create: if request.auth != null
         && !isBanned()
         && request.resource.data.submitterUid == string(callerUniqueId());
-      allow update: if request.auth != null && isAdmin();
+      // SHY-0150: admin resolve gated too (banned outranks admin; the
+      // console's real path is Express + Admin SDK, which bypasses rules).
+      allow update: if request.auth != null && !isBanned() && isAdmin();
     }
 
     // ── Subscriptions — owner-only read/write ───────────────────
@@ -800,8 +806,13 @@ service cloud.firestore {
     }
 
     // ── Identity graphs — admin-only ────────────────────────────
+    // Read/write split by SHY-0150 (mirrors settings/subscriptions):
+    // the ban gate covers the write half only — a banned admin still
+    // READS the graph surface; their client-side writes are denied
+    // (banned outranks admin; Admin-SDK moderation is unaffected).
     match /identityGraphs/{graphId} {
-      allow read, write: if request.auth != null && isAdmin();
+      allow read: if request.auth != null && isAdmin();
+      allow write: if request.auth != null && !isBanned() && isAdmin();
     }
 
     // ── Notification queue — server-only ────────────────────────
