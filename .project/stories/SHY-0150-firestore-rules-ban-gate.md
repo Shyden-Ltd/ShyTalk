@@ -1,6 +1,6 @@
 ---
 id: SHY-0150
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-07-01
 priority: P1
@@ -108,4 +108,5 @@ Touches `firestore.rules` (+ the backend ban-claim set/clear logic) → **backen
 - [ ] `released_in: vX.Y.Z` set on the next release cut.
 
 ## Notes (running log)
+- 2026-07-11 — **PICKUP-FITNESS REVIEW (passed) → In Progress.** Premises re-verified against current code: `firestore.rules` still gates user-writes on `request.auth != null` alone (no ban signal anywhere); the cohort-claim machinery (`express-api/src/utils/firebase-claims.js` — `mintClaimsMerging`) + `auth.revokeRefreshTokens` (used at `admin-users.js`, `portal.js`) are reusable as-is; the SHY-0129 real-Rules-engine harness lives at `express-api/tests/firestore-rules/` (`admin-claim-rules.test.js` is the closest pattern — custom claims on the test token). **Lifecycle points enumerated** (more than the spec assumed): explicit ban-standing mutations at `admin-bans.js` (ban device / ban network / unban device / unban network / unban-all) **plus suspend/unsuspend auto-applied bans** (`admin-users.js` — suspend batches `deviceBans` per bound device + a `networkBans` doc for last IP, `linkedUniqueId`-tagged; unsuspend lifts them), plus passive paths (lazy expiry reaping; binding mint/unbind changing hardware-ban standing). Design: one `syncBannedClaim` chokepoint — called explicitly by the ban-mutation routes (prompt mint + revocation) and lazily by authMiddleware's existing per-request gate when the fresh verdict disagrees with the decoded token's `banned` claim (covers expiry/binding flips, no cron, no extra reads). Structural limit to document: an **unlinked network ban** has no enumerable target → no claim at ban time; the lazy path + SHY-0149's API gate cover it. **Framing check:** rules gate = defense-in-depth *behind* the API-only ratchet ([[feedback-no-direct-backend-all-via-api]]) — rules still permit direct client writes, so a tampered client bypasses SHY-0149 without this. DoD's "judgment-merge (NO auto-merge; notify operator)" predates the git-flow pivot — superseded by the develop-autonomous merge convention (gates unchanged).
 - 2026-07-01 — **CREATED fully-refined** ([[feedback-no-skeleton-stories-fully-refined]]) under [[EPIC-0005-ban-enforcement-hardening]] from the bypass-surface map (vector 7: no rules-level ban gate). Mechanism: a server-set `banned` custom claim (like cohort) + an `isBanned()` rules helper gating user-write collections; propagated via token refresh / refresh-token revocation; the bounded stale-token window is backstopped by [[SHY-0149]]'s per-request API check. `type: bug`, `mvp: true`. Ships alongside SHY-0149. Non-technical BDD per [[feedback-non-technical-bdd]].
