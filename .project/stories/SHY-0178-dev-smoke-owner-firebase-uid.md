@@ -1,6 +1,6 @@
 ---
 id: SHY-0178
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-11
 priority: P0
@@ -127,5 +127,8 @@ This is not a SHY-0150 regression (the smoke account is not banned) and not an e
 
 ## Notes (running log)
 
+Reviewed-up-to: 56d534ae176
+
 - 2026-07-11 20:07 WIB — CREATED fully refined during the develop→dev deploy triage; RED already watched on run 29152433000 (Dev Smoke 403 on rooms create). Root cause pinned to SHY-0029's `ownerFirebaseUid` present-and-matching clause vs the older smoke payload; fix derives the uid from the same refreshed JWT that signs the write.
+- 2026-07-11 20:47 WIB — code-reviewer R2 on `56d534ae176`: **MERGE-READY, zero findings.** All 6 R1 closures independently re-verified (8-case uid matrix hand-traced; hint pin character-diffed against helper output; negative-control payloads traced clause-by-clause against firestore.rules 248-256; no-formatter-scope claim re-verified). Reviewer notes the string-only guard also fixed a latent type-confusion bug the R1 `||` version had. Status → In Review. Remaining DoD = the live dev-dispatch proofs.
 - 2026-07-11 20:30 WIB — code-reviewer R1 on `1d5827b3036`: 0 Critical / 5 Important / 1 Minor. All closed in-session: (1) failure-hint path untested → hint extracted to `buildRoomsCreateFailureHint` (exact-string pinned locally) + two live negative controls added (omitted/forged `ownerFirebaseUid` → 403, satisfying all other clauses — SHY-0029 revert detector); (2) hint missing signed-in/banned preconditions → full checklist in the helper; (3) `afterAll` swallowed the delete → soft-asserted 2xx/404 with teeth; (4) uid derivation unfalsifiable inline → extracted to `deriveOwnerFirebaseUid` (string-only, no trimming) with an 8-case local branch matrix, watched RED (module missing) → GREEN 10/10; (5) CI-config-only rationale grounded in the unreachable-locally property + per-change scope note; (6) type honesty → helper returns `string | undefined`. Reviewer verified clause-by-clause rule match, uid==request.auth.uid via three internal sources, delete-rule independence, and no-direct-backend scope (tests/** exempt by `scripts/check-no-direct-backend.js` design).
