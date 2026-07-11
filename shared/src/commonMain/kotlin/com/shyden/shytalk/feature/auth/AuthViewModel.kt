@@ -316,7 +316,7 @@ class AuthViewModel(
                             if (!resolveDeviceLockOrBlock()) return
                             checkAndApplyBan()
                         } else {
-                            logI(TAG, "Device checks bypassed (debug build)")
+                            logI(TAG, "Device checks bypassed (local/E2E build flag)")
                         }
                         resolveProfileState(uniqueIdStr)
                     }

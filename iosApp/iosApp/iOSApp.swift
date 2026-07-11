@@ -106,7 +106,8 @@ struct iOSApp: App {
             buildVersion: buildVersion,
             deviceInfo: deviceInfo,
             apiBaseUrl: env.apiBaseUrl,
-            googleWebClientId: env.googleWebClientId
+            googleWebClientId: env.googleWebClientId,
+            bypassDeviceChecks: env.bypassDeviceChecks
         )
         setupGoogleSignIn()
         setupLiveKit()

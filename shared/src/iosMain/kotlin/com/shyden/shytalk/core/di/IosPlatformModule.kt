@@ -128,7 +128,13 @@ val iosPlatformModule =
                         "resolution that depends on `named(\"deviceId\")`",
                 )
         }
-        single(named("bypassDeviceChecks")) { true }
+        // Auth-stage device-check bypass — variant-resolved in Swift
+        // (AppEnvironment.resolve: .local → true, .dev/.release → false)
+        // and threaded through doInitKoin → BuildVariant. Defaults false
+        // (enforce) if never initialised. Was hardcoded `true` here for
+        // every build — TestFlight included — silently skipping the
+        // SHY-0170 device-lock and SHY-0149 ban checks on iOS.
+        single(named("bypassDeviceChecks")) { BuildVariant.bypassDeviceChecks }
 
         // Platform utilities (actual classes already exist in iosMain)
         single { StickerStorage() }

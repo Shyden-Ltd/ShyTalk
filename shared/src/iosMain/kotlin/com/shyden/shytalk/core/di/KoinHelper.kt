@@ -41,6 +41,7 @@ fun doInitKoin(
     deviceInfo: String = "?",
     apiBaseUrl: String? = null,
     googleWebClientId: String? = null,
+    bypassDeviceChecks: Boolean = false,
 ) {
     BuildVariant.initLocalEmulator(
         value = useEmulators,
@@ -77,6 +78,12 @@ fun doInitKoin(
     // localhost:3000 from real iPhones and locked the user on "Unable to
     // connect".
     BuildVariant.initApiBaseUrl(apiBaseUrl)
+    // Auth-stage device checks (device-lock + ban application). Default
+    // false = enforce; Swift passes true ONLY for the `.local` variant
+    // (AppEnvironment.resolve), mirroring Android's per-flavor
+    // BuildConfig.BYPASS_DEVICE_CHECKS. Fixes the SHY-0170 iOS gap where
+    // IosPlatformModule hardcoded the bypass to true for EVERY build.
+    BuildVariant.initBypassDeviceChecks(bypassDeviceChecks)
     if (KoinPlatformTools.defaultContext().getOrNull() != null) {
         logI("KoinHelper", "Koin already initialised — skipping")
         return

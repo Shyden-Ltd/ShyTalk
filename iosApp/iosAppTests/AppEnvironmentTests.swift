@@ -127,4 +127,28 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertNotNil(dev.devPersonasPassword, "dev has the picker")
         XCTAssertNil(rel.devPersonasPassword, "release does not")
     }
+
+    // ── bypassDeviceChecks — auth-stage device checks (Security, SHY-0170) ──
+
+    func test_local_bypassesDeviceChecks_forEmulatorE2E() {
+        let cfg = AppEnvironment.resolve(variant: .local, personasPassword: localEmulatorSeed)
+        XCTAssertTrue(cfg.bypassDeviceChecks,
+                      "local mirrors Android's BYPASS_DEVICE_CHECKS=true (emulator/E2E journeys)")
+    }
+
+    func test_dev_enforcesDeviceChecks() {
+        let cfg = AppEnvironment.resolve(variant: .dev, personasPassword: injectedDevPw)
+        XCTAssertFalse(cfg.bypassDeviceChecks,
+                       "dev mirrors Android's BYPASS_DEVICE_CHECKS=false — device-lock + ban checks must run")
+    }
+
+    func test_release_enforcesDeviceChecks() {
+        // The regression this section exists for: IosPlatformModule used to
+        // hardcode the bypass to `true` for EVERY build — TestFlight included —
+        // silently skipping the SHY-0170 device-lock and SHY-0149 ban checks
+        // on iOS while Android enforced them.
+        let cfg = AppEnvironment.resolve(variant: .release, personasPassword: nil)
+        XCTAssertFalse(cfg.bypassDeviceChecks,
+                       "distributable builds must NEVER skip device-lock/ban checks")
+    }
 }

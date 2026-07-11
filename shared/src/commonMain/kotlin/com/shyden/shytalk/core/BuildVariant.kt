@@ -23,6 +23,7 @@ data class BuildVariantConfig(
     val buildVersion: String = "?",
     val deviceInfo: String = "?",
     val apiBaseUrl: String? = null,
+    val bypassDeviceChecks: Boolean = false,
 )
 
 /**
@@ -153,6 +154,19 @@ object BuildVariant {
      * posting to a relative URL.
      */
     val apiBaseUrl: String? get() = holder.apiBaseUrl
+
+    /**
+     * Whether the auth-stage device checks (server-authoritative
+     * device-lock + ban application, SHY-0170/SHY-0149 —
+     * `AuthViewModel.resolveIdentityAndProceed`) are BYPASSED. Mirrors
+     * Android's per-flavor `BuildConfig.BYPASS_DEVICE_CHECKS` (local →
+     * true for emulator/E2E; dev + prod → false). Default `false` =
+     * fail-closed: a platform that never calls [initBypassDeviceChecks]
+     * gets ENFORCEMENT — bypass must be asked for explicitly, per build,
+     * so the pre-fix iOS state (DI hardcoding `true` for every build,
+     * TestFlight included) is no longer expressible by omission.
+     */
+    val bypassDeviceChecks: Boolean get() = holder.bypassDeviceChecks
 
     /**
      * Convenience: any environment that isn't prod is a "preview"
@@ -313,5 +327,16 @@ object BuildVariant {
      */
     fun initApiBaseUrl(value: String?) {
         holder = holder.copy(apiBaseUrl = value?.takeIf { it.isNotBlank() })
+    }
+
+    /**
+     * One-shot device-check-bypass initialiser. Called from
+     * `KoinHelper.doInitKoin(bypassDeviceChecks = ...)` with the
+     * variant-resolved value from Swift's `AppEnvironment.resolve`
+     * (`.local` → true; `.dev`/`.release` → false). See
+     * [bypassDeviceChecks] for the fail-closed rationale.
+     */
+    fun initBypassDeviceChecks(value: Boolean) {
+        holder = holder.copy(bypassDeviceChecks = value)
     }
 }

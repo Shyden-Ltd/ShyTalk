@@ -19,6 +19,13 @@ struct AppEnvironmentConfig: Equatable {
     let apiBaseUrl: String
     let devPersonasPassword: String?
     let googleWebClientId: String?
+    /// Auth-stage device checks (server-authoritative device-lock +
+    /// ban application) are bypassed ONLY on `.local` — mirroring
+    /// Android's per-flavor `BuildConfig.BYPASS_DEVICE_CHECKS`
+    /// (local → true, dev → false, prod → false). Threaded through
+    /// `doInitKoin(bypassDeviceChecks:)`; Kotlin defaults to false
+    /// (enforce) if this is ever dropped from the call.
+    let bypassDeviceChecks: Bool
 }
 
 /// Side-effect-free env resolution, extracted from `iOSApp.swift`'s `init()`
@@ -56,7 +63,8 @@ enum AppEnvironment {
                 environment: "local",
                 apiBaseUrl: localApiBaseUrl,
                 devPersonasPassword: cleaned,
-                googleWebClientId: nil
+                googleWebClientId: nil,
+                bypassDeviceChecks: true
             )
         case .dev:
             return AppEnvironmentConfig(
@@ -64,7 +72,8 @@ enum AppEnvironment {
                 environment: "dev",
                 apiBaseUrl: devApiBaseUrl,
                 devPersonasPassword: cleaned,
-                googleWebClientId: devGoogleWebClientId
+                googleWebClientId: devGoogleWebClientId,
+                bypassDeviceChecks: false
             )
         case .release:
             // Distributable build: NEVER carry the persona picker, regardless
@@ -75,7 +84,8 @@ enum AppEnvironment {
                 environment: "dev",
                 apiBaseUrl: devApiBaseUrl,
                 devPersonasPassword: nil,
-                googleWebClientId: devGoogleWebClientId
+                googleWebClientId: devGoogleWebClientId,
+                bypassDeviceChecks: false
             )
         }
     }

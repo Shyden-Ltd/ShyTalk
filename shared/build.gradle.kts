@@ -131,3 +131,21 @@ compose.resources {
     packageOfResClass = "com.shyden.shytalk.resources"
     generateResClass = always
 }
+
+// SHY-0151: IosBypassDeviceChecksWiringPinTest reads two source files at
+// runtime (the iosMain DI module + the Swift boot file) to guard the
+// device-check-bypass wiring against a hardcoded-`true` regression. Those
+// files are NOT inputs to the jvmTest compilation, so without declaring
+// them here Gradle would treat jvmTest as up-to-date when only they change
+// and skip the pin — leaving the regression unguarded. Declaring them as
+// task inputs forces a re-run whenever either file changes.
+tasks.named("jvmTest") {
+    inputs
+        .files(
+            layout.projectDirectory.file(
+                "src/iosMain/kotlin/com/shyden/shytalk/core/di/IosPlatformModule.kt",
+            ),
+            rootProject.layout.projectDirectory.file("iosApp/iosApp/iOSApp.swift"),
+        ).withPropertyName("iosBypassDeviceChecksPinnedSources")
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+}
