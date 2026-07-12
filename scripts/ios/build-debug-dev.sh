@@ -63,7 +63,12 @@ echo "[build-debug-dev] device=$UDID config=$CONFIG"
 # -allowProvisioningUpdates lets automatic signing register the device /
 # refresh the profile for a development install. The persona password is
 # passed as a command-line build setting so it never touches a committed file.
-set -x
+# The invocation is echoed with the password REDACTED — `set -x` would expand
+# $PW into the xtrace, leaking the real dev password into stderr and every
+# captured build log.
+echo "[build-debug-dev] xcodebuild build -workspace $WORKSPACE -scheme $SCHEME" \
+  "-configuration $CONFIG -destination id=$UDID -derivedDataPath $DERIVED" \
+  "-allowProvisioningUpdates -quiet DEV_QA_PERSONAS_PASSWORD=<redacted>"
 xcodebuild build \
   -workspace "$WORKSPACE" \
   -scheme "$SCHEME" \
@@ -73,7 +78,6 @@ xcodebuild build \
   -allowProvisioningUpdates \
   -quiet \
   DEV_QA_PERSONAS_PASSWORD="$PW"
-set +x
 
 # ── Install on the device ──
 APP_PATH="$DERIVED/Build/Products/$CONFIG-iphoneos/iosApp.app"
