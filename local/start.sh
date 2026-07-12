@@ -214,6 +214,18 @@ echo "  Express API ready."
 # `serve` is pinned as a root devDependency so `npx serve` resolves
 # deterministically (no registry fetch needed on a fresh clone).
 echo "==> Step 6b/8: Serving static web app on localhost:8888..."
+# macOS's default fd cap is 256 and `npx serve` EMFILE-crashes
+# MID-Playwright-run once enough sockets are open — Node dies on open()
+# and the rest of the suite drowns in ERR_CONNECTION_REFUSED (burned
+# SHY-0149, SHY-0150's pre-push, and SHY-0095's push). Raised in THIS
+# shell (not a subshell) so SERVE_PID=$! below still points at serve.
+# Guarded: under `set -e` a bare failing ulimit (hard cap < 10240 on a
+# managed machine) would abort BEFORE cleanup() and orphan Docker/
+# emulators; warn-and-continue keeps the run alive with a visible
+# degraded-state signal (a bare `|| true` would hide the EMFILE risk).
+if ! ulimit -n 10240 2>/dev/null; then
+  echo "WARNING: could not raise fd limit to 10240 (hard limit lower on this machine?) -- npx serve may EMFILE under heavy load." >&2
+fi
 npx serve public --no-clipboard -l 8888 > >(sed 's/^/[WEB] /') 2>&1 &
 SERVE_PID=$!
 

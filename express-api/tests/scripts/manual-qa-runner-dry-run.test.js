@@ -37,9 +37,9 @@ describe('formatDryRunJson — output shape', () => {
     expect(() => JSON.parse(formatDryRunJson({}))).not.toThrow();
   });
 
-  test('top-level shape is { target, cells }', () => {
+  test('top-level shape is { target, cells, parallel }', () => {
     const parsed = JSON.parse(formatDryRunJson({}));
-    expect(Object.keys(parsed).sort()).toEqual(['cells', 'target']);
+    expect(Object.keys(parsed).sort()).toEqual(['cells', 'parallel', 'target']);
   });
 
   test('cells is an array of strings', () => {
@@ -141,10 +141,10 @@ describe('CLI integration — --dry-run', () => {
     expect(() => JSON.parse(r.stdout)).not.toThrow();
   });
 
-  test('--dry-run output has { target, cells } shape', () => {
+  test('--dry-run output has { target, cells, parallel } shape', () => {
     const r = runCli(['--dry-run']);
     const parsed = JSON.parse(r.stdout);
-    expect(Object.keys(parsed).sort()).toEqual(['cells', 'target']);
+    expect(Object.keys(parsed).sort()).toEqual(['cells', 'parallel', 'target']);
   });
 
   test('--dry-run is documented in formatUsage()', () => {
@@ -164,7 +164,7 @@ describe('CLI integration — --dry-run with --target', () => {
 
   test('--dry-run --target prod returns prod allowlist', () => {
     const r = runCli(['--dry-run', '--target', 'prod']);
-    expect(JSON.parse(r.stdout)).toEqual({ target: 'prod', cells: ['chromium'] });
+    expect(JSON.parse(r.stdout)).toEqual({ target: 'prod', cells: ['chromium'], parallel: false });
   });
 
   test('--dry-run --target=dev (= form) parity with space form', () => {
@@ -184,7 +184,7 @@ describe('CLI integration — --dry-run with --browser', () => {
   test('--dry-run --target prod --browser webkit → --browser overrides allowlist', () => {
     const r = runCli(['--dry-run', '--target', 'prod', '--browser', 'webkit']);
     expect(r.status).toBe(0);
-    expect(JSON.parse(r.stdout)).toEqual({ target: 'prod', cells: ['webkit'] });
+    expect(JSON.parse(r.stdout)).toEqual({ target: 'prod', cells: ['webkit'], parallel: false });
   });
 });
 
