@@ -308,6 +308,23 @@ describe('ios-appium-driver — session bootstrap', () => {
     });
   });
 
+  test('useNewWDA is false by default, true when IOS_FORCE_NEW_WDA=true', async () => {
+    const capsUseNewWDA = async () => {
+      const fetchMock = makeFetchMock();
+      const driver = await createIosDriver({ wdaTeamId: 'T', fetchImpl: fetchMock, target: 'dev' });
+      await driver.iosUiDump();
+      const call = fetchMock.mock.calls.find(
+        ([u, o]) => u.endsWith('/session') && o.method === 'POST',
+      );
+      return JSON.parse(call[1].body).capabilities.alwaysMatch['appium:useNewWDA'];
+    };
+    delete process.env.IOS_FORCE_NEW_WDA;
+    expect(await capsUseNewWDA()).toBe(false); // default: reuse the installed WDA (fast)
+    process.env.IOS_FORCE_NEW_WDA = 'true';
+    expect(await capsUseNewWDA()).toBe(true); // forces a fresh build after a signing change
+    delete process.env.IOS_FORCE_NEW_WDA;
+  });
+
   test('session id is reused across multiple method calls (cache)', async () => {
     const fetchMock = makeFetchMock({ sessionId: 'cached-sid' });
     const driver = await createIosDriver({ wdaTeamId: 'T', fetchImpl: fetchMock });

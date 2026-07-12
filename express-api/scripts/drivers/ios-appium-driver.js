@@ -221,9 +221,12 @@ async function createIosDriver({
           // (real 2026-07-12 device failure — "No certificate matching 'Apple Developer'").
           'appium:xcodeSigningId': 'Apple Development',
           'appium:xcodeOrgId': wdaTeamId,
-          // Don't auto-install WDA every time — operator's first run
-          // takes the install hit; subsequent runs reuse the bundle.
-          'appium:useNewWDA': false,
+          // Reuse the installed WDA by default (fast — the operator's first run takes
+          // the build+install hit; later runs reuse the bundle). IOS_FORCE_NEW_WDA=true
+          // forces a fresh build+install — required after a WDA signing/config change or
+          // when the installed WDA is stale/unsigned (else Appium tries to launch a
+          // broken WDA and fails with "connection refused to port 8100").
+          'appium:useNewWDA': process.env.IOS_FORCE_NEW_WDA === 'true',
           // Don't reset app state between sessions; the runner controls
           // app state via its own start-of-scenario reset (parity with
           // androidPersonaSignIn force-stop).
