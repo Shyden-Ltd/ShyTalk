@@ -81,8 +81,12 @@ async function createMobileSafariIosDriver({
 } = {}) {
   const udid = selectUdidImpl(preferredUdid);
   if (!udid) {
-    throw new Error(
-      'createMobileSafariIosDriver: no physical iPhone found via `xcrun xctrace list devices`. Connect + trust the device (it may show under "Devices Offline" on iOS 26/27 — still usable), then re-run.',
+    // Stable `code` → matrix-dispatch isInitError skips (not fails) on no-device.
+    throw Object.assign(
+      new Error(
+        'createMobileSafariIosDriver: no physical iPhone found via `xcrun xctrace list devices`. Connect + trust the device (it may show under "Devices Offline" on iOS 26/27 — still usable), then re-run.',
+      ),
+      { code: 'DRIVER_INIT_FAILED' },
     );
   }
   if (!wdaTeamId) {

@@ -185,14 +185,14 @@ describe('createMobileWebkitIosDriver — input validation', () => {
   });
 
   test('throws when no iPhone is connected', async () => {
-    await expect(
-      createMobileWebkitIosDriver({
-        browser: 'chrome',
-        wdaTeamId: 'TEAM',
-        selectUdidImpl: () => null,
-        fetchImpl: makeFetchMock([]),
-      }),
-    ).rejects.toThrow(/no physical iPhone found via `xcrun xctrace list devices`/);
+    const err = await createMobileWebkitIosDriver({
+      browser: 'chrome',
+      wdaTeamId: 'TEAM',
+      selectUdidImpl: () => null,
+      fetchImpl: makeFetchMock([]),
+    }).catch((e) => e);
+    expect(err.message).toMatch(/no physical iPhone found via `xcrun xctrace list devices`/);
+    expect(err.code).toBe('DRIVER_INIT_FAILED'); // → matrix-dispatch skips, not fails
   });
 
   test('throws when WDA_TEAM_ID is missing', async () => {

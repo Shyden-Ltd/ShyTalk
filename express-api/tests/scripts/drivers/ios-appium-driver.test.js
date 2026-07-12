@@ -129,7 +129,9 @@ describe('ios-appium-driver — selectUdid (xctrace HARDWARE UDID — SHY-0095)'
     expect(execFileSync).toHaveBeenCalledWith(
       '/usr/bin/xcrun',
       ['xctrace', 'list', 'devices'],
-      expect.objectContaining({ stdio: ['ignore', 'pipe', 'ignore'] }),
+      // Pin the bounded timeout too — a bare stdio-only assert would pass even if the
+      // timeout were dropped (R2 gap).
+      expect.objectContaining({ stdio: ['ignore', 'pipe', 'ignore'], timeout: 15000 }),
     );
   });
 
@@ -207,11 +209,15 @@ describe('ios-appium-driver — selectUdid (xctrace HARDWARE UDID — SHY-0095)'
 });
 
 describe('ios-appium-driver — createIosDriver', () => {
-  test('throws actionable error (naming xctrace) when no device is connected', async () => {
+  test('throws actionable error (naming xctrace) + DRIVER_INIT_FAILED code when no device', async () => {
     execFileSync.mockReturnValue('Name   State   Model\n');
-    await expect(
-      createIosDriver({ wdaTeamId: 'TEAM123', fetchImpl: makeFetchMock() }),
-    ).rejects.toThrow(/no physical iPhone found via `xcrun xctrace list devices`/);
+    const err = await createIosDriver({ wdaTeamId: 'TEAM123', fetchImpl: makeFetchMock() }).catch(
+      (e) => e,
+    );
+    expect(err.message).toMatch(/no physical iPhone found via `xcrun xctrace list devices`/);
+    // The code is what matrix-dispatch's isInitError uses to SKIP (not FAIL) the cell —
+    // pinned here so a message reword can never again silently break that classification.
+    expect(err.code).toBe('DRIVER_INIT_FAILED');
   });
 
   test('throws actionable error when WDA_TEAM_ID is missing', async () => {

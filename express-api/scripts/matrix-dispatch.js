@@ -22,7 +22,7 @@
  * An "init" error is signalled by the dispatch callback throwing an
  * Error with `err.code === 'DRIVER_INIT_FAILED'` OR `err.message`
  * containing one of the actionable strings the drivers emit
- * (`no Android device attached`, `no connected iPhone`,
+ * (`no Android device attached`, `no physical iPhone found`,
  * `WDA_TEAM_ID env var is required`, `adb not found`,
  * `Appium /session failed`, `connectOverCDP`). Tests pin the matcher.
  */
@@ -37,8 +37,10 @@ const INIT_ERROR_SIGNATURES = [
   // Mobile chrome/samsung/edge — connectOverCDP failure
   /connectOverCDP\(http/i,
   /0 contexts/i,
-  // iOS appium / Safari / WebKit wrappers
-  /no connected iPhone found/i,
+  // iOS appium / Safari / WebKit wrappers. These drivers now ALSO set
+  // err.code = 'DRIVER_INIT_FAILED' (checked first in isInitError), so this string is
+  // defense-in-depth — keep it matching the drivers' actual "no physical iPhone found".
+  /no physical iPhone found/i,
   /WDA_TEAM_ID env var is required/i,
   /Appium \/session failed/i,
   /no WEBVIEW_ context/i,

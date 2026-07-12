@@ -104,8 +104,12 @@ async function createMobileWebkitIosDriver({
 
   const udid = selectUdidImpl(preferredUdid);
   if (!udid) {
-    throw new Error(
-      `createMobileWebkitIosDriver(${browser}): no physical iPhone found via \`xcrun xctrace list devices\`. Connect + trust the device (it may show under "Devices Offline" on iOS 26/27 — still usable).`,
+    // Stable `code` → matrix-dispatch isInitError skips (not fails) on no-device.
+    throw Object.assign(
+      new Error(
+        `createMobileWebkitIosDriver(${browser}): no physical iPhone found via \`xcrun xctrace list devices\`. Connect + trust the device (it may show under "Devices Offline" on iOS 26/27 — still usable).`,
+      ),
+      { code: 'DRIVER_INIT_FAILED' },
     );
   }
   if (!wdaTeamId) {

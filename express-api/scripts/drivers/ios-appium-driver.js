@@ -172,8 +172,14 @@ async function createIosDriver({
 } = {}) {
   const udid = selectUdid(preferredUdid);
   if (!udid) {
-    throw new Error(
-      'createIosDriver: no physical iPhone found via `xcrun xctrace list devices`. Connect + trust the device (it may show under "Devices Offline" on iOS 26/27 — still usable), then re-run.',
+    // Stable `code` so matrix-dispatch's isInitError classifies "no device" as a SKIP
+    // (not a FAIL that can abort the whole matrix under --fail-fast) independently of
+    // the human message wording — the message is a fragile signal on its own.
+    throw Object.assign(
+      new Error(
+        'createIosDriver: no physical iPhone found via `xcrun xctrace list devices`. Connect + trust the device (it may show under "Devices Offline" on iOS 26/27 — still usable), then re-run.',
+      ),
+      { code: 'DRIVER_INIT_FAILED' },
     );
   }
   if (!wdaTeamId) {

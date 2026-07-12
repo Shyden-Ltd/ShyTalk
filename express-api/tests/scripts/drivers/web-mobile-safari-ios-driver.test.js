@@ -84,14 +84,14 @@ function defaultHandlers({ sessionId = 'sess-abc', textValue = 'Hello' } = {}) {
 // createMobileSafariIosDriver — input validation ──────────────────────
 
 describe('createMobileSafariIosDriver — input validation', () => {
-  test('throws when no iPhone is connected (selectUdid returns null)', async () => {
-    await expect(
-      createMobileSafariIosDriver({
-        wdaTeamId: 'TEAM123',
-        selectUdidImpl: () => null,
-        fetchImpl: makeFetchMock([]),
-      }),
-    ).rejects.toThrow(/no physical iPhone found via `xcrun xctrace list devices`/);
+  test('throws (+ DRIVER_INIT_FAILED code) when no iPhone is connected (selectUdid returns null)', async () => {
+    const err = await createMobileSafariIosDriver({
+      wdaTeamId: 'TEAM123',
+      selectUdidImpl: () => null,
+      fetchImpl: makeFetchMock([]),
+    }).catch((e) => e);
+    expect(err.message).toMatch(/no physical iPhone found via `xcrun xctrace list devices`/);
+    expect(err.code).toBe('DRIVER_INIT_FAILED'); // → matrix-dispatch skips, not fails
   });
 
   test('throws when WDA_TEAM_ID is missing', async () => {

@@ -55,7 +55,7 @@ describe('isInitError', () => {
     '[android-cdp-helpers] adb forward failed: cannot bind',
     '[mobile-samsung-android-driver] connectOverCDP(http://127.0.0.1:9555) failed',
     '[mobile-edge-android-driver] CDP returned 0 contexts — Mobile Edge',
-    'createMobileSafariIosDriver: no connected iPhone found via xcrun devicectl',
+    'createMobileSafariIosDriver: no physical iPhone found via xcrun xctrace list devices',
     'createIosDriver: WDA_TEAM_ID env var is required',
     'Appium /session failed (500) for Chrome iOS',
     'Appium /contexts for Edge iOS returned no WEBVIEW_ context',
@@ -132,7 +132,7 @@ describe('runMatrix — happy paths', () => {
         if (browser === 'chromium') return true;
         if (browser === 'firefox') return false;
         if (browser === 'mobile-safari-ios') {
-          throw new Error('no connected iPhone found via xcrun devicectl');
+          throw new Error('no physical iPhone found via xcrun xctrace list devices');
         }
         return true;
       },
@@ -734,7 +734,7 @@ describe('formatMatrixResult', () => {
     const r = await runMatrix({
       browsers: ['chromium', 'mobile-safari-ios'],
       dispatchOne: async ({ browser }) => {
-        if (browser === 'mobile-safari-ios') throw new Error('no connected iPhone found');
+        if (browser === 'mobile-safari-ios') throw new Error('no physical iPhone found');
         return true;
       },
       nowMs: (() => {

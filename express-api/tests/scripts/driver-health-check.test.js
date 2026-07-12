@@ -206,7 +206,7 @@ describe('runHealthCheck — multi-cell aggregation', () => {
       browsers: ['mobile-chrome-android', 'mobile-safari-ios'],
       factories: {
         'mobile-chrome-android': makeFactoryThrowing(new Error('no Android device attached')),
-        'mobile-safari-ios': makeFactoryThrowing(new Error('no connected iPhone found')),
+        'mobile-safari-ios': makeFactoryThrowing(new Error('no physical iPhone found')),
       },
     });
     expect(r.totals.skip).toBe(2);
@@ -323,7 +323,7 @@ describe('formatHealthCheckResult', () => {
       browsers: ['chromium', 'mobile-safari-ios'],
       factories: {
         chromium: makeFactoryReturning(makeFakeDriver()),
-        'mobile-safari-ios': makeFactoryThrowing(new Error('no connected iPhone found')),
+        'mobile-safari-ios': makeFactoryThrowing(new Error('no physical iPhone found')),
       },
     });
     const text = formatHealthCheckResult(r);
