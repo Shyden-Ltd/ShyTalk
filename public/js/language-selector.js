@@ -38,11 +38,33 @@
 
   var STORAGE_KEY = 'shytalk_language';
 
+  function isSupported(code) {
+    return !!code && LANGUAGES.some(function (l) { return l.code === code; });
+  }
+
   function getLanguage() {
+    // SHY-0181: a `?lang=<code>` URL param wins over everything, so the app
+    // (and any deep link) can force a locale regardless of navigator.language.
+    // Validated against the 20-locale allowlist BEFORE use OR persistence, so
+    // an attacker-supplied value can never reach the DOM / localStorage. A
+    // valid value is persisted so the choice sticks across in-site navigation
+    // that drops the param. Wrapped in try/catch: a missing URLSearchParams
+    // (ancient engine) or a malformed query must fall through, never throw.
+    try {
+      if (typeof window !== 'undefined' && window.location && window.location.search) {
+        var urlLang = new URLSearchParams(window.location.search).get('lang');
+        if (isSupported(urlLang)) {
+          localStorage.setItem(STORAGE_KEY, urlLang);
+          return urlLang;
+        }
+      }
+    } catch (e) {
+      /* fall through to the persisted / browser default */
+    }
     var saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && LANGUAGES.some(function (l) { return l.code === saved; })) return saved;
+    if (isSupported(saved)) return saved;
     var browser = (navigator.language || 'en').split('-')[0];
-    if (LANGUAGES.some(function (l) { return l.code === browser; })) return browser;
+    if (isSupported(browser)) return browser;
     return 'en';
   }
 
