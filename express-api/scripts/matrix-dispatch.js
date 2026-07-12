@@ -55,6 +55,24 @@ function isInitError(err) {
 }
 
 /**
+ * Maps a browser slug to the physical resource its cell contends for, so the parallel
+ * driver can serialise same-resource cells while running different resources concurrently.
+ * The matrix slug shape is `<browser>-<platform>` (e.g. `mobile-safari-ios`,
+ * `mobile-chrome-android`) plus the native `ios`/`android` cells and bare desktop browsers.
+ *   - anything containing `android` → the one Android device
+ *   - anything containing `ios`     → the one iPhone
+ *   - everything else (chromium/firefox/webkit/edge) → the Mac (desktop browsers)
+ * Two iOS cells therefore never drive the same iPhone at once, while iOS + Android + Mac
+ * all progress in parallel.
+ */
+function defaultResourceKey(browser) {
+  const b = String(browser).toLowerCase();
+  if (b.includes('android')) return 'android';
+  if (b.includes('ios')) return 'iphone';
+  return 'mac';
+}
+
+/**
  * Runs the matrix and returns aggregated results.
  *
  *   const result = await runMatrix({
@@ -103,6 +121,16 @@ async function runMatrix({
   onCellStart,
   onCellEnd,
   nowMs = () => Date.now(),
+  // parallel — when true, cells are dispatched PER-DEVICE-SERIAL, CROSS-DEVICE-PARALLEL:
+  // grouped by `resourceKey(browser)`, each group's cells run sequentially (so two cells
+  // never drive the same iPhone/Android at once) while all groups run concurrently (iOS +
+  // Android + Mac progress simultaneously). Default false = the original strict-sequential
+  // behaviour (backward-compatible; every existing test omits it). failFast/bailAfter still
+  // apply: once a gate trips, no NEW cell is dispatched, but cells already in flight in
+  // other groups finish.
+  parallel = false,
+  // resourceKey — maps a browser slug to the physical resource its cell contends for.
+  resourceKey = defaultResourceKey,
 } = {}) {
   if (!Array.isArray(browsers)) {
     throw new Error('runMatrix: `browsers` must be an array of browser slugs');
@@ -116,7 +144,6 @@ async function runMatrix({
     );
   }
 
-  const cells = [];
   let stopped = false;
   let failureCount = 0;
   // First-fire wins: preserves the original "matrix aborted by failFast"
@@ -125,37 +152,28 @@ async function runMatrix({
   // skip-error logs see which gate stopped the run.
   let abortReason = '';
 
-  for (const browser of browsers) {
-    if (stopped) {
-      cells.push({ browser, outcome: 'skip', error: abortReason, durationMs: 0 });
-      continue;
-    }
+  // Runs ONE cell (onCellStart → retry loop → cell record → onCellEnd) and returns it.
+  // Pure per-cell work; the shared failFast/bailAfter gates are applied by the caller via
+  // `applyGates` after each cell, so the sequential and parallel drivers below share
+  // identical outcome semantics.
+  async function runOneCell(browser) {
     if (typeof onCellStart === 'function') onCellStart({ browser });
     const t0 = nowMs();
     let outcome;
     let error;
     let attempts = 0;
     const maxAttempts = retry + 1;
-    // Per-cell retry loop: try once + up to `retry` more times on
-    // fail/timeout. Pass or skip break out immediately (skip = no
-    // device, not a flake). Error is re-assigned each attempt so the
-    // final cell.error reflects the last attempt's message.
+    // Per-cell retry loop: try once + up to `retry` more times on fail/timeout. Pass or
+    // skip break out immediately (skip = no device, not a flake).
     while (attempts < maxAttempts) {
       attempts++;
-      // outcome + error are reassigned by try/catch below in every
-      // code path, so no defensive reset needed (ESLint no-useless-
-      // assignment would flag it). The previous iteration's values are
-      // immediately overwritten; the final iteration's values are what
-      // gets recorded in `cell` after the loop.
       error = undefined;
       try {
         const result = await dispatchOne({ browser });
         outcome = result ? 'pass' : 'fail';
       } catch (e) {
-        // 'CELL_TIMEOUT' is set by the runner's spawnSync wrapper when
-        // the per-cell process exceeded --cell-timeout. Surfaces as its
-        // own outcome (NOT 'fail') so the operator can distinguish hangs
-        // from assertion failures in the summary.
+        // 'CELL_TIMEOUT' → 'timeout' (distinct from 'fail' so hangs are visible);
+        // DRIVER_INIT_FAILED / init signatures → 'skip' (no device); else → 'fail'.
         if (e && e.code === 'CELL_TIMEOUT') {
           outcome = 'timeout';
           error = e.message;
@@ -167,42 +185,79 @@ async function runMatrix({
           error = e.message;
         }
       }
-      // Pass or skip → done, no retry needed.
       if (outcome === 'pass' || outcome === 'skip') break;
     }
     const durationMs = Math.max(0, nowMs() - t0);
     const cell = { browser, outcome, durationMs };
-    // Error preserved only on non-pass outcomes — a passing retry
-    // clears any prior-attempt errors so the report doesn't false-alarm.
+    // Error preserved only on non-pass outcomes — a passing retry clears prior-attempt
+    // errors so the report doesn't false-alarm.
     if (error && outcome !== 'pass') cell.error = error;
-    // attempts/retries recorded only when > 1 — preserves backward
-    // compatibility with the field-shape pre-retry (existing tests don't
-    // expect attempts/retries to exist on single-attempt cells).
+    // attempts/retries recorded only when > 1 — preserves the pre-retry field shape.
     if (attempts > 1) {
       cell.attempts = attempts;
       cell.retries = attempts - 1;
     }
-    cells.push(cell);
     if (typeof onCellEnd === 'function') onCellEnd(cell);
-    // Increment failure count first — both failFast and bailAfter
-    // gates use the same definition (real failure or hang, not skip).
-    if (outcome === 'fail' || outcome === 'timeout') failureCount++;
-    // failFast aborts on real failures (timeouts included — a hang
-    // can also mask other cells from running in time, so fail-fast on
-    // timeout is the safer default).
-    if (failFast && (outcome === 'fail' || outcome === 'timeout')) {
+    return cell;
+  }
+
+  // Applies the failFast/bailAfter gates after a cell completes. Single-threaded JS keeps
+  // the shared-counter updates race-free even under the parallel driver (no await between
+  // the read and the write here).
+  function applyGates(cell) {
+    if (cell.outcome === 'fail' || cell.outcome === 'timeout') failureCount++;
+    if (failFast && (cell.outcome === 'fail' || cell.outcome === 'timeout')) {
       stopped = true;
       if (!abortReason) abortReason = 'matrix aborted by failFast';
     }
-    // bailAfter aborts after the configured failure count is hit.
-    // bailAfter=1 is equivalent in effect to failFast=true; both can
-    // be set together with no conflict.
     if (bailAfter > 0 && failureCount >= bailAfter) {
       stopped = true;
       if (!abortReason) {
         abortReason = `matrix aborted by --bail ${bailAfter} after ${failureCount} failure(s)`;
       }
     }
+  }
+
+  const skipCell = (browser) => ({ browser, outcome: 'skip', error: abortReason, durationMs: 0 });
+
+  let cells;
+  if (!parallel) {
+    // Strict-sequential (original behaviour): one cell at a time, in order.
+    cells = [];
+    for (const browser of browsers) {
+      if (stopped) {
+        cells.push(skipCell(browser));
+        continue;
+      }
+      const cell = await runOneCell(browser);
+      cells.push(cell);
+      applyGates(cell);
+    }
+  } else {
+    // Per-device-serial, cross-device-parallel: one async worker per resource group runs
+    // that group's cells in order; all workers run concurrently. Output is reassembled to
+    // the input `browsers` order so the report + every downstream consumer is unchanged.
+    const groups = new Map();
+    for (const browser of browsers) {
+      const key = resourceKey(browser);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(browser);
+    }
+    const cellByBrowser = new Map();
+    await Promise.all(
+      [...groups.values()].map(async (groupBrowsers) => {
+        for (const browser of groupBrowsers) {
+          if (stopped) {
+            cellByBrowser.set(browser, skipCell(browser));
+            continue;
+          }
+          const cell = await runOneCell(browser);
+          cellByBrowser.set(browser, cell);
+          applyGates(cell);
+        }
+      }),
+    );
+    cells = browsers.map((browser) => cellByBrowser.get(browser));
   }
 
   const totals = cells.reduce(
@@ -344,6 +399,7 @@ function formatMatrixResultJunit(result, { nowIso = () => new Date().toISOString
 module.exports = {
   INIT_ERROR_SIGNATURES,
   isInitError,
+  defaultResourceKey,
   runMatrix,
   formatMatrixResult,
   formatMatrixResultJson,

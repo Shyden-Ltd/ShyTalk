@@ -27,6 +27,7 @@ const REPO_ROOT = path.resolve(__dirname, '../../..');
 const {
   INIT_ERROR_SIGNATURES,
   isInitError,
+  defaultResourceKey,
   runMatrix,
   formatMatrixResult,
   formatMatrixResultJson,
@@ -994,5 +995,94 @@ describe('formatMatrixResultJunit', () => {
       ok: true,
     });
     expect(xml).toMatch(/failures="0"/);
+  });
+});
+
+// defaultResourceKey + runMatrix parallel driver ─────────────────────
+
+describe('defaultResourceKey', () => {
+  test('android slugs → android, ios slugs → iphone, desktop → mac', () => {
+    expect(defaultResourceKey('mobile-chrome-android')).toBe('android');
+    expect(defaultResourceKey('android')).toBe('android');
+    expect(defaultResourceKey('mobile-safari-ios')).toBe('iphone');
+    expect(defaultResourceKey('ios')).toBe('iphone');
+    expect(defaultResourceKey('chromium')).toBe('mac');
+    expect(defaultResourceKey('firefox')).toBe('mac');
+    expect(defaultResourceKey('webkit')).toBe('mac');
+    expect(defaultResourceKey('edge')).toBe('mac');
+  });
+});
+
+describe('runMatrix — parallel (per-device-serial, cross-device-parallel)', () => {
+  test('cells on DIFFERENT devices run concurrently (iOS + Android overlap)', async () => {
+    const started = [];
+    const release = {};
+    const dispatchOne = ({ browser }) => {
+      started.push(browser);
+      return new Promise((resolve) => {
+        release[browser] = () => resolve(true);
+      });
+    };
+    const p = runMatrix({ browsers: ['ios', 'android'], dispatchOne, parallel: true });
+    // Let both group-workers reach their (blocked) dispatch before either resolves.
+    await new Promise((r) => setImmediate(r));
+    expect(started.sort()).toEqual(['android', 'ios']); // both in flight ⇒ concurrent
+    release['ios']();
+    release['android']();
+    const result = await p;
+    expect(result.totals.pass).toBe(2);
+  });
+
+  test('cells on the SAME device run serially (two iOS cells never overlap)', async () => {
+    let active = 0;
+    let maxActive = 0;
+    const dispatchOne = async () => {
+      active++;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((r) => setImmediate(r));
+      active--;
+      return true;
+    };
+    await runMatrix({
+      browsers: ['mobile-safari-ios', 'mobile-chrome-ios'],
+      dispatchOne,
+      parallel: true,
+    });
+    expect(maxActive).toBe(1); // both map to 'iphone' ⇒ serialised, never 2 at once
+  });
+
+  test('output cells preserve input browser order regardless of completion order', async () => {
+    // android (first) finishes AFTER ios/chromium — output order must still match input.
+    const dispatchOne = async ({ browser }) => {
+      if (browser === 'android') await new Promise((r) => setTimeout(r, 5));
+      return true;
+    };
+    const result = await runMatrix({
+      browsers: ['android', 'ios', 'chromium'],
+      dispatchOne,
+      parallel: true,
+    });
+    expect(result.cells.map((c) => c.browser)).toEqual(['android', 'ios', 'chromium']);
+  });
+
+  test('failFast stops dispatching NEW same-group cells once a fail lands', async () => {
+    const dispatched = [];
+    const dispatchOne = async ({ browser }) => {
+      dispatched.push(browser);
+      if (browser === 'mobile-chrome-android') return false; // first android cell fails
+      await new Promise((r) => setTimeout(r, 10)); // others block so the fail lands first
+      return true;
+    };
+    const result = await runMatrix({
+      browsers: ['mobile-chrome-android', 'mobile-samsung-android', 'ios'],
+      dispatchOne,
+      parallel: true,
+      failFast: true,
+    });
+    // android group: chrome fails → the group's NEXT cell (samsung) is never dispatched.
+    expect(dispatched).not.toContain('mobile-samsung-android');
+    const samsung = result.cells.find((c) => c.browser === 'mobile-samsung-android');
+    expect(samsung.outcome).toBe('skip');
+    expect(samsung.error).toBe('matrix aborted by failFast');
   });
 });
