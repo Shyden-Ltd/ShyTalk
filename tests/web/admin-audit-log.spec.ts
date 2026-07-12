@@ -15,6 +15,22 @@ test.describe('Admin Audit Log Tab', () => {
     await navigateToTab(page, 'Audit Log');
     // Wait for the audit log panel to be visible
     await expect(page.locator('#audit-log-panel')).toBeVisible({ timeout: 10_000 });
+    // SHY-0174: also wait for the tab's INITIAL (unfiltered) load to settle
+    // before any test runs its own filtered search. `navigateToTab` only waits
+    // for `data-module-ready`, which flips when `activate()` fire-and-forgets
+    // `load()` (audit-log.js — not awaited), so without this the initial load
+    // can still be in flight and, if it resolves after a test's filtered
+    // response, repopulate the shared tbody with UNFILTERED rows mid-assert.
+    // Settle on a real `.audit-admin-name` row or the empty state.
+    await page.waitForFunction(() => {
+      const tbody = document.getElementById('audit-log-tbody');
+      const empty = document.getElementById('audit-log-empty');
+      if (!tbody) return false;
+      return (
+        tbody.querySelector('.audit-admin-name') !== null ||
+        (empty && empty.style.display !== 'none')
+      );
+    }, { timeout: 15_000 });
   });
 
   // ── Loading & Rendering ──
@@ -81,22 +97,42 @@ test.describe('Admin Audit Log Tab', () => {
   test('filter by admin name shows matching entries', async ({ page }) => {
     const adminInput = page.locator('#audit-log-filter-admin');
     await adminInput.fill('claude-test');
+    // SHY-0174: wait for the FILTERED response (admin=claude-test), not just
+    // for the "Loading" text to clear — the old wait resolved on the previous
+    // state's STALE rows (which carry other admins' names), so the assertion
+    // read them and failed non-deterministically once the emulator's audit
+    // data varied. The response URL is a signal independent of the asserted
+    // row content, so the wait isn't tautological.
+    const responded = page.waitForResponse(
+      (r) =>
+        r.url().includes('/api/admin/audit-log') &&
+        r.url().includes('admin=claude-test') &&
+        r.status() === 200,
+      { timeout: 15_000 },
+    );
     await page.locator('#audit-log-search-btn').click();
-
+    await responded;
+    // Settle on a REAL data row (`.audit-admin-name`, on every buildRow) or the
+    // empty state — never the unclassed "Loading" placeholder <tr>.
     await page.waitForFunction(() => {
       const tbody = document.getElementById('audit-log-tbody');
-      return tbody && !tbody.textContent?.includes('Loading');
-    }, { timeout: 10_000 });
+      const empty = document.getElementById('audit-log-empty');
+      if (!tbody) return false;
+      return (
+        tbody.querySelector('.audit-admin-name') !== null ||
+        (empty && empty.style.display !== 'none')
+      );
+    }, { timeout: 15_000 });
 
-    // Either entries match the filter or empty state shows
-    const rows = page.locator('#audit-log-tbody tr');
-    const count = await rows.count();
-    if (count > 0) {
-      // All visible admin names should contain the filter text
-      const adminNames = await page.locator('#audit-log-tbody .audit-admin-name').allTextContents();
-      for (const name of adminNames) {
-        expect(name.toLowerCase()).toContain('claude');
-      }
+    // Every returned row must match the admin filter. (No strict non-empty
+    // assert: this spec has no request mock — the claude-test admin's own
+    // audit entries drive it, whose presence at this instant isn't guaranteed;
+    // the acute racy-stale-row read is what this fixes.)
+    const adminNames = await page
+      .locator('#audit-log-tbody .audit-admin-name')
+      .allTextContents();
+    for (const name of adminNames) {
+      expect(name.toLowerCase()).toContain('claude');
     }
 
     // Clean up filter
