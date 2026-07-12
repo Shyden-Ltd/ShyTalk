@@ -16,6 +16,9 @@ set -euo pipefail
 
 ROOT="${1:-public}"
 RESOLVER='language-selector.js'
+# Anchor on an actual <script ... src="...language-selector.js"...> include, so
+# a bare filename mention (a comment, a <meta>, prose) does NOT falsely pass.
+RESOLVER_INCLUDE='<script[^>]*src="[^"]*language-selector\.js'
 
 if [ ! -d "$ROOT" ]; then
   echo "check-web-pages-have-lang-resolver: root '$ROOT' not found" >&2
@@ -25,7 +28,7 @@ fi
 missing=0
 # -print0 / read -d '' handles any path safely.
 while IFS= read -r -d '' page; do
-  if ! grep -q "$RESOLVER" "$page"; then
+  if ! grep -qE "$RESOLVER_INCLUDE" "$page"; then
     echo "MISSING language resolver ($RESOLVER): ${page}" >&2
     missing=$((missing + 1))
   fi

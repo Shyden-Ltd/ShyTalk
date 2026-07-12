@@ -49,6 +49,19 @@ describe('check-web-pages-have-lang-resolver.sh', () => {
     expect(r.stderr).not.toMatch(/good\.html/); // only the offender is named
   });
 
+  test('a page that only MENTIONS the filename (comment/prose, no <script src>) fails', () => {
+    // The guard must check the page actually LOADS the resolver, not that the
+    // string appears somewhere — a commented reference must NOT falsely pass.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lang-guard-mention-'));
+    fs.writeFileSync(
+      path.join(root, 'sneaky.html'),
+      '<html><!-- TODO: wire up language-selector.js --><meta name="x" content="language-selector.js"></html>',
+    );
+    const r = run(root);
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/sneaky\.html/);
+  });
+
   test('exit 2 on a missing root (usage error, not a false pass)', () => {
     const r = run(path.join(os.tmpdir(), 'definitely-not-a-dir-xyz'));
     expect(r.status).toBe(2);

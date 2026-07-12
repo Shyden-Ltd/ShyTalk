@@ -25,6 +25,10 @@ async function resolvedLang(page: any, url: string): Promise<string> {
 }
 
 test.describe('SHY-0181 — ?lang= URL flag drives language site-wide', () => {
+  // Pin the browser locale so the navigator-fallback tests are deterministic
+  // (no reliance on the CI/runner OS language).
+  test.use({ locale: 'en-US' });
+
   for (const url of SURFACES) {
     test(`?lang=fr forces French on ${url}`, async ({ page }) => {
       expect(await resolvedLang(page, `${url}?lang=fr`)).toBe('fr');
@@ -56,8 +60,29 @@ test.describe('SHY-0181 — ?lang= URL flag drives language site-wide', () => {
     await page.goto(`${BASE}/`);
     await page.evaluate(() => localStorage.removeItem('shytalk_language'));
     const lang = await resolvedLang(page, '/?lang=xx-not-a-locale');
-    expect(lang).not.toBe('xx-not-a-locale');
-    expect(['en', 'de']).toContain(lang); // navigator default in CI is en (allow de for a de runner)
+    // test.use locale=en-US makes the navigator fallback deterministic.
+    expect(lang).toBe('en');
+  });
+
+  test('?lang= with a BCP-47 region (fr-CA) resolves to the base locale (fr)', async ({ page }) => {
+    expect(await resolvedLang(page, '/?lang=fr-CA')).toBe('fr');
+  });
+
+  test('?lang= is case-insensitive (FR → fr)', async ({ page }) => {
+    expect(await resolvedLang(page, '/?lang=FR')).toBe('fr');
+  });
+
+  test('ShyTalkLanguage.set() rejects an unsupported value (never written to the DOM)', async ({
+    page,
+  }) => {
+    await page.goto(`${BASE}/`);
+    await page.evaluate(() => localStorage.removeItem('shytalk_language'));
+    await page.evaluate(() => (window as any).ShyTalkLanguage.set('not-a-locale'));
+    const htmlLang = await page.evaluate(() => document.documentElement.lang);
+    expect(htmlLang).not.toBe('not-a-locale');
+    expect(await page.evaluate(() => localStorage.getItem('shytalk_language'))).not.toBe(
+      'not-a-locale',
+    );
   });
 
   test('a script-injection ?lang= is never applied to the document', async ({ page }) => {

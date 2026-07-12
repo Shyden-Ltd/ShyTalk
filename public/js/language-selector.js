@@ -52,9 +52,20 @@
     // (ancient engine) or a malformed query must fall through, never throw.
     try {
       if (typeof window !== 'undefined' && window.location && window.location.search) {
-        var urlLang = new URLSearchParams(window.location.search).get('lang');
+        var raw = new URLSearchParams(window.location.search).get('lang');
+        // Normalise like the navigator fallback below: lowercase + strip a
+        // BCP-47 region ('fr-CA' / 'FR' -> 'fr'), so a copy-pasted browser tag
+        // or an uppercase deep link still resolves.
+        var urlLang = raw ? raw.toLowerCase().split('-')[0] : raw;
         if (isSupported(urlLang)) {
-          localStorage.setItem(STORAGE_KEY, urlLang);
+          // Persistence is best-effort: a localStorage failure (Safari private
+          // mode / blocked-storage iframe / quota) must NOT discard an already-
+          // validated, explicit choice — persist in its own try, then return.
+          try {
+            localStorage.setItem(STORAGE_KEY, urlLang);
+          } catch (e2) {
+            /* best-effort persistence */
+          }
           return urlLang;
         }
       }
@@ -78,6 +89,10 @@
   var RTL_LANGS = ['ar'];
 
   function setLanguage(lang) {
+    // Validate here too (not just in getLanguage): setLanguage is exposed as
+    // window.ShyTalkLanguage.set, so any caller must be prevented from writing
+    // an unsupported value to localStorage / the DOM (defense in depth).
+    if (!isSupported(lang)) return;
     localStorage.setItem(STORAGE_KEY, lang);
     document.documentElement.lang = lang;
     document.documentElement.dir = RTL_LANGS.indexOf(lang) !== -1 ? 'rtl' : 'ltr';
