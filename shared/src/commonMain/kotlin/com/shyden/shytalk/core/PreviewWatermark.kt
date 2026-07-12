@@ -3,8 +3,13 @@ package com.shyden.shytalk.core
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -92,7 +97,17 @@ fun PreviewWatermark(content: @Composable () -> Unit) {
                 modifier =
                     Modifier
                         .align(Alignment.TopEnd)
-                        .padding(top = 4.dp, end = 4.dp)
+                        // Keep the badge clear of the status bar / notch (top) and the
+                        // right safe-area edge — otherwise its top rows sit under the
+                        // clock/battery and are unreadable (reported on iPhone
+                        // 2026-07-12). safeDrawing covers iOS safe area + Android
+                        // system bars/cutout; `.only(Top + End)` avoids padding the
+                        // bottom/start where this top-right badge doesn't need it.
+                        .windowInsetsPadding(
+                            WindowInsets.safeDrawing.only(
+                                WindowInsetsSides.Top + WindowInsetsSides.End,
+                            ),
+                        ).padding(top = 4.dp, end = 4.dp)
                         .zIndex(WATERMARK_Z_INDEX),
             )
         }
