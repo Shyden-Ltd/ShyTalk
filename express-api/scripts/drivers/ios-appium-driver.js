@@ -18,8 +18,8 @@
  * Architecture:
  *   - Operator's Mac runs `appium server -p 4723` (one-time)
  *   - Driver POSTs JSON to http://localhost:4723/session to create
- *     a session against the operator's iPhone (udid auto-detected
- *     via xcrun devicectl)
+ *     a session against the operator's iPhone (hardware udid
+ *     auto-detected via `xcrun xctrace list devices` — see selectUdid())
  *   - WDA gets installed/launched by Appium on first session
  *   - Driver tears down the session in close()
  *
@@ -97,7 +97,11 @@ const DEFAULT_APPIUM_BASE_URL = 'http://localhost:4723';
  *    UUID but no OS-version paren and must never be selected.
  */
 function selectUdid(preferredUdid) {
-  if (preferredUdid) return preferredUdid;
+  // A blank/whitespace-only preferred udid is treated as "no preference" and falls
+  // through to auto-detection; a real value is returned trimmed (a udid never carries
+  // surrounding whitespace, so padding is always a mistake Appium would reject).
+  const preferred = typeof preferredUdid === 'string' ? preferredUdid.trim() : preferredUdid;
+  if (preferred) return preferred;
   try {
     // execFileSync (no shell) avoids the command-injection class of bug — even though
     // the args are hardcoded, default to the safer primitive. stderr discarded via
@@ -110,6 +114,11 @@ function selectUdid(preferredUdid) {
     const raw = execFileSync('/usr/bin/xcrun', ['xctrace', 'list', 'devices'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
+      // Bound the call: `xctrace list devices` can hang on a stale usbmuxd tunnel (the
+      // very Devices-Offline territory this driver handles). A timeout-kill throws → the
+      // catch below returns null → createIosDriver fails fast + loud, never wedging the
+      // runner indefinitely.
+      timeout: 15000,
     });
     // Everything before "== Simulators ==" is the real-device sections (online +
     // offline); simulators are dropped so a no-real-device run never returns a sim UDID.
@@ -123,7 +132,14 @@ function selectUdid(preferredUdid) {
       if (match) return match[1];
     }
     return null;
-  } catch (_e) {
+  } catch (e) {
+    // Distinguish a genuine xctrace failure (missing Xcode, permissions, timeout,
+    // malformed output) from the ordinary no-device case (which returns null above
+    // WITHOUT throwing). This diagnostic is the observability SHY-0095 adds — a silent
+    // device-selection failure previously cost a full day of QA runs.
+    console.error(
+      `[ios-appium-driver] selectUdid: \`xcrun xctrace list devices\` failed: ${e.message}`,
+    );
     return null;
   }
 }

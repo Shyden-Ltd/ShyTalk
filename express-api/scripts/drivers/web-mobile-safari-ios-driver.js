@@ -31,8 +31,8 @@
  *     4723 + setup doc.
  *   - WDA_TEAM_ID missing → re-uses ios-appium-driver's same error text
  *     to keep operator's mental model consistent.
- *   - No iPhone connected → uses xcrun devicectl from the existing iOS
- *     driver's selectUdid (shared via module re-export).
+ *   - No iPhone connected → uses `xcrun xctrace list devices` from the
+ *     existing iOS driver's selectUdid (shared via module re-export).
  *   - Safari is not the focused app → Appium safari context auto-focuses
  *     it via the WebKit Remote Inspector activation; no operator action
  *     required.
@@ -82,7 +82,7 @@ async function createMobileSafariIosDriver({
   const udid = selectUdidImpl(preferredUdid);
   if (!udid) {
     throw new Error(
-      'createMobileSafariIosDriver: no connected iPhone found via `xcrun devicectl list devices`. Pair the device with Xcode, ensure it shows "available" or "connected", then re-run.',
+      'createMobileSafariIosDriver: no physical iPhone found via `xcrun xctrace list devices`. Connect + trust the device (it may show under "Devices Offline" on iOS 26/27 — still usable), then re-run.',
     );
   }
   if (!wdaTeamId) {

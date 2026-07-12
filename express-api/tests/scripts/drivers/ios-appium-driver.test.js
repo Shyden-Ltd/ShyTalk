@@ -138,11 +138,17 @@ describe('ios-appium-driver — selectUdid (xctrace HARDWARE UDID — SHY-0095)'
     expect(execFileSync).not.toHaveBeenCalled();
   });
 
-  test('returns null when execFileSync throws (xctrace missing / Xcode not installed)', () => {
+  test('returns null AND logs a diagnostic (never silent) when xctrace throws', () => {
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     execFileSync.mockImplementation(() => {
       throw new Error('xcrun: not found');
     });
     expect(selectUdid()).toBeNull();
+    // Distinguishes "xctrace errored" from "no device" — the observability gap R1 flagged.
+    expect(errSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/selectUdid: .*xctrace list devices.* failed: xcrun: not found/),
+    );
+    errSpy.mockRestore();
   });
 
   // Regression guard for the reverted-to-devicectl bug: fed devicectl's table (whose
@@ -153,6 +159,50 @@ describe('ios-appium-driver — selectUdid (xctrace HARDWARE UDID — SHY-0095)'
     const result = selectUdid();
     expect(result).not.toBe(STUB_UDID); // 74563FF8-… — the rejected CoreDevice UUID
     expect(result).toBeNull();
+  });
+
+  // ── Edge cases closed after R1 review (each verified against the live regex) ──
+
+  test('a device name with an embedded decoy `(N) (hex)` pair still returns the REAL trailing UDID', () => {
+    // The `$`-anchored device-line regex resolves to the LAST pair on the line, so a
+    // name carrying version-like text can never shadow the real hardware UDID.
+    execFileSync.mockReturnValue(
+      `== Devices ==\nWeird Name (1.0) (DEADBE) Phone (27.0) (${HARDWARE_UDID})`,
+    );
+    expect(selectUdid()).toBe(HARDWARE_UDID);
+  });
+
+  test('with two real devices listed, returns the FIRST in xctrace order', () => {
+    execFileSync.mockReturnValue(
+      [
+        '== Devices ==',
+        'Phone A (27.0) (00008150-AAAAAAAAAAAAAAAA)',
+        'Phone B (27.0) (00008150-BBBBBBBBBBBBBBBB)',
+      ].join('\n'),
+    );
+    expect(selectUdid()).toBe('00008150-AAAAAAAAAAAAAAAA');
+  });
+
+  test('tolerates trailing whitespace after the closing UDID paren', () => {
+    execFileSync.mockReturnValue(`== Devices ==\nSean’s iPhone (27.0) (${HARDWARE_UDID})   `);
+    expect(selectUdid()).toBe(HARDWARE_UDID);
+  });
+
+  test('a whitespace-only preferred udid is ignored → falls through to auto-detect', () => {
+    execFileSync.mockReturnValue(XCTRACE_IPHONE_OFFLINE_SECTION);
+    expect(selectUdid('   ')).toBe(HARDWARE_UDID);
+    expect(execFileSync).toHaveBeenCalled(); // did NOT short-circuit on the blank value
+  });
+
+  test('an empty-string preferred udid is ignored → falls through to auto-detect', () => {
+    execFileSync.mockReturnValue(XCTRACE_IPHONE_OFFLINE_SECTION);
+    expect(selectUdid('')).toBe(HARDWARE_UDID);
+    expect(execFileSync).toHaveBeenCalled();
+  });
+
+  test('a padded preferred udid is returned trimmed (never handed to Appium with spaces)', () => {
+    expect(selectUdid('  00008150-000954D90A20401C  ')).toBe(HARDWARE_UDID);
+    expect(execFileSync).not.toHaveBeenCalled();
   });
 });
 

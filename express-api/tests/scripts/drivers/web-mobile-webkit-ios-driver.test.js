@@ -192,7 +192,7 @@ describe('createMobileWebkitIosDriver — input validation', () => {
         selectUdidImpl: () => null,
         fetchImpl: makeFetchMock([]),
       }),
-    ).rejects.toThrow(/no connected iPhone found/);
+    ).rejects.toThrow(/no physical iPhone found via `xcrun xctrace list devices`/);
   });
 
   test('throws when WDA_TEAM_ID is missing', async () => {

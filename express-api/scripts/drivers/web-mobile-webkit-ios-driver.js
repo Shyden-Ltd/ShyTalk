@@ -105,7 +105,7 @@ async function createMobileWebkitIosDriver({
   const udid = selectUdidImpl(preferredUdid);
   if (!udid) {
     throw new Error(
-      `createMobileWebkitIosDriver(${browser}): no connected iPhone found via \`xcrun devicectl list devices\`. Pair the device with Xcode + ensure it shows "available" or "connected".`,
+      `createMobileWebkitIosDriver(${browser}): no physical iPhone found via \`xcrun xctrace list devices\`. Connect + trust the device (it may show under "Devices Offline" on iOS 26/27 — still usable).`,
     );
   }
   if (!wdaTeamId) {
