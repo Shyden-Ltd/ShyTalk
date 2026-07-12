@@ -27,6 +27,47 @@ const STUB_DEVICECTL_OUTPUT = [
   `Sean's iPhone   Seans-iPhone.coredevice.local   ${STUB_UDID}   available (paired)   iPhone Air (iPhone18,4)`,
 ].join('\n');
 
+// ── Real captured `xcrun xctrace list devices` output (2026-07-12) ──
+// iPhone Air (iPhone18,4) / iOS 27, Xcode 27 CoreDevice toolchain. THIS is the source
+// Appium's XCUITest `appium:udid` needs: the 8-16-hex HARDWARE UDID. Appium REJECTS the
+// CoreDevice UUID that `xcrun devicectl list devices` prints — real 2026-07-11 journey
+// failure: `Unknown device or simulator UDID: '74563FF8-D1FC-567D-A6C1-7C8C3CEFE0C6'`.
+// Parser rules these fixtures prove:
+//   • the Mac host has NO `(osver)` paren → excluded (never mistaken for a device)
+//   • every Simulator shares the `(osver) (udid)` shape → the `== Simulators ==` section
+//     must be split off, else a run with no real device returns a simulator UDID
+//   • on iOS 26/27 a drivable wired iPhone routinely appears under `== Devices Offline ==`
+//     in xctrace's legacy view → the offline section MUST be included (excluding it
+//     returned null + failed the whole iOS matrix, 2026-07-02).
+const HARDWARE_UDID = '00008150-000954D90A20401C';
+const XCTRACE_IPHONE_OFFLINE_SECTION = [
+  '== Devices ==',
+  'Shyden’s MacBook (65EA33F3-7472-5CCD-AF6A-6DCEA99ACF50)',
+  '',
+  '== Devices Offline ==',
+  `Sean’s iPhone (27.0) (${HARDWARE_UDID})`,
+  '',
+  '== Simulators ==',
+  'iPhone 17 Pro Simulator (27.0) (BD7F2244-A299-4176-B76E-7D851B8F897A)',
+  'iPhone Air Simulator (27.0) (22C6D10D-E5B8-4CA4-9D85-7CC85DB45DF8)',
+].join('\n');
+const XCTRACE_IPHONE_ONLINE_SECTION = [
+  '== Devices ==',
+  'Shyden’s MacBook (65EA33F3-7472-5CCD-AF6A-6DCEA99ACF50)',
+  `Sean’s iPhone (27.0) (${HARDWARE_UDID})`,
+  '',
+  '== Simulators ==',
+  'iPhone Air Simulator (27.0) (22C6D10D-E5B8-4CA4-9D85-7CC85DB45DF8)',
+].join('\n');
+const XCTRACE_NO_REAL_DEVICE = [
+  '== Devices ==',
+  'Shyden’s MacBook (65EA33F3-7472-5CCD-AF6A-6DCEA99ACF50)',
+  '',
+  '== Simulators ==',
+  'iPhone Air Simulator (27.0) (22C6D10D-E5B8-4CA4-9D85-7CC85DB45DF8)',
+  'iPhone 17 Pro Simulator (27.0) (BD7F2244-A299-4176-B76E-7D851B8F897A)',
+].join('\n');
+
 function makeFetchMock({ sessionId = 'session-abc' } = {}) {
   return jest.fn(async (url, opts) => {
     if (url.endsWith('/session') && opts.method === 'POST') {
@@ -48,53 +89,79 @@ function makeFetchMock({ sessionId = 'session-abc' } = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  execFileSync.mockReturnValue(STUB_DEVICECTL_OUTPUT);
+  // Default device query resolves to the real iPhone's HARDWARE UDID via xctrace.
+  execFileSync.mockReturnValue(XCTRACE_IPHONE_OFFLINE_SECTION);
 });
 
-describe('ios-appium-driver — selectUdid', () => {
-  test('returns the preferred udid when one is supplied', () => {
-    expect(selectUdid('explicit-udid-123')).toBe('explicit-udid-123');
+// SHY-0095 increment 1 — selectUdid must return the HARDWARE UDID that Appium accepts,
+// derived from `xctrace`. (The former devicectl-based block that pinned the CoreDevice
+// UUID Appium rejects at runtime has been removed — it was a false test encoding the
+// bug; the `does NOT return the CoreDevice UUID` case below is its regression guard.)
+describe('ios-appium-driver — selectUdid (xctrace HARDWARE UDID — SHY-0095)', () => {
+  test('returns the hardware UDID for a device in the online "== Devices ==" section', () => {
+    execFileSync.mockReturnValue(XCTRACE_IPHONE_ONLINE_SECTION);
+    expect(selectUdid()).toBe(HARDWARE_UDID);
   });
 
-  test('parses the standard devicectl table format', () => {
-    execFileSync.mockReturnValue(STUB_DEVICECTL_OUTPUT);
-    expect(selectUdid()).toBe(STUB_UDID);
+  test('returns the hardware UDID when the device is under "== Devices Offline ==" (iOS 26/27 legacy view)', () => {
+    execFileSync.mockReturnValue(XCTRACE_IPHONE_OFFLINE_SECTION);
+    expect(selectUdid()).toBe(HARDWARE_UDID);
   });
 
-  test('parses the legacy 8-16 dash-separated UDID format', () => {
-    const legacyUdid = '00008110-001A2B3C4D5E6F70';
-    execFileSync.mockReturnValue(`Some Device   host.local   ${legacyUdid}   connected   iPhone X`);
-    expect(selectUdid()).toBe(legacyUdid);
-  });
-
-  test('returns null when no device shows available/connected state', () => {
-    execFileSync.mockReturnValue('Name            Hostname     Identifier   State   Model\n');
+  test('excludes the Mac host line (no OS-version paren) — never returns the Mac UUID', () => {
+    execFileSync.mockReturnValue(XCTRACE_NO_REAL_DEVICE);
+    // Mac present + simulators only, no real iPhone → null, NEVER the Mac's 65EA… UUID.
     expect(selectUdid()).toBeNull();
   });
 
-  test('returns null when execFileSync throws (devicectl missing / Xcode not installed)', () => {
+  test('never returns a Simulator UDID when no real device is connected', () => {
+    execFileSync.mockReturnValue(XCTRACE_NO_REAL_DEVICE);
+    const result = selectUdid();
+    // A simulator shares the `(osver) (udid)` shape; the parser must have split the
+    // `== Simulators ==` section off, so a no-real-device run is null, not a sim UDID.
+    expect(result).not.toBe('22C6D10D-E5B8-4CA4-9D85-7CC85DB45DF8');
+    expect(result).toBeNull();
+  });
+
+  test('invokes `xcrun xctrace list devices` (NOT devicectl, whose Identifier Appium rejects)', () => {
+    execFileSync.mockReturnValue(XCTRACE_IPHONE_OFFLINE_SECTION);
+    selectUdid();
+    expect(execFileSync).toHaveBeenCalledWith(
+      '/usr/bin/xcrun',
+      ['xctrace', 'list', 'devices'],
+      expect.objectContaining({ stdio: ['ignore', 'pipe', 'ignore'] }),
+    );
+  });
+
+  test('still honours an explicitly-supplied preferred udid (no device query)', () => {
+    expect(selectUdid('00008150-EXPLICIT')).toBe('00008150-EXPLICIT');
+    expect(execFileSync).not.toHaveBeenCalled();
+  });
+
+  test('returns null when execFileSync throws (xctrace missing / Xcode not installed)', () => {
     execFileSync.mockImplementation(() => {
       throw new Error('xcrun: not found');
     });
     expect(selectUdid()).toBeNull();
   });
 
-  test('uses execFileSync (no shell), passing absolute /usr/bin/xcrun + args as an array', () => {
-    selectUdid();
-    expect(execFileSync).toHaveBeenCalledWith(
-      '/usr/bin/xcrun',
-      ['devicectl', 'list', 'devices'],
-      expect.objectContaining({ stdio: ['ignore', 'pipe', 'ignore'] }),
-    );
+  // Regression guard for the reverted-to-devicectl bug: fed devicectl's table (whose
+  // Identifier column is the CoreDevice UUID Appium rejects), selectUdid must NOT return
+  // that UUID. Goes RED if selectUdid is switched back to `devicectl list devices`.
+  test('does NOT return the CoreDevice UUID (devicectl output must never yield a match)', () => {
+    execFileSync.mockReturnValue(STUB_DEVICECTL_OUTPUT);
+    const result = selectUdid();
+    expect(result).not.toBe(STUB_UDID); // 74563FF8-… — the rejected CoreDevice UUID
+    expect(result).toBeNull();
   });
 });
 
 describe('ios-appium-driver — createIosDriver', () => {
-  test('throws actionable error when no device is connected', async () => {
+  test('throws actionable error (naming xctrace) when no device is connected', async () => {
     execFileSync.mockReturnValue('Name   State   Model\n');
     await expect(
       createIosDriver({ wdaTeamId: 'TEAM123', fetchImpl: makeFetchMock() }),
-    ).rejects.toThrow(/no connected iPhone found/);
+    ).rejects.toThrow(/no physical iPhone found via `xcrun xctrace list devices`/);
   });
 
   test('throws actionable error when WDA_TEAM_ID is missing', async () => {
@@ -115,7 +182,7 @@ describe('ios-appium-driver — createIosDriver', () => {
     expect(typeof driver.iosTapByTag).toBe('function');
     expect(typeof driver.iosPersonaSignIn).toBe('function');
     expect(typeof driver.close).toBe('function');
-    expect(driver._udid).toBe(STUB_UDID);
+    expect(driver._udid).toBe(HARDWARE_UDID);
   });
 
   test('target="local" → bundleId com.shyden.shytalk.local', async () => {
@@ -164,7 +231,7 @@ describe('ios-appium-driver — session bootstrap', () => {
     expect(caps.capabilities.alwaysMatch).toMatchObject({
       platformName: 'iOS',
       'appium:automationName': 'XCUITest',
-      'appium:udid': STUB_UDID,
+      'appium:udid': HARDWARE_UDID,
       'appium:bundleId': 'com.shyden.shytalk.dev',
       'appium:xcodeOrgId': 'TEAM-MY-TEAM',
     });

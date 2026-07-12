@@ -72,34 +72,57 @@ const IOS_METHOD_NAMES = [
 const DEFAULT_APPIUM_BASE_URL = 'http://localhost:4723';
 
 /**
- * Returns the first connected physical iPhone's UDID via
- * `xcrun devicectl list devices`. Mirrors the picker in
- * ios-devicectl-driver.js so both drivers select the same device.
+ * Returns the connected physical iPhone's HARDWARE UDID via
+ * `xcrun xctrace list devices`.
+ *
+ * MUST NOT mirror ios-devicectl-driver.js's picker — the two drivers need DIFFERENT
+ * identifiers. `xcrun devicectl list devices` prints the CoreDevice UUID (e.g.
+ * `74563FF8-D1FC-567D-A6C1-7C8C3CEFE0C6`) in its Identifier column, and Appium's
+ * XCUITest driver REJECTS that at session start — real 2026-07-11 journey failure:
+ * `Unknown device or simulator UDID: '74563FF8-…'`. Appium's `appium:udid` needs the
+ * ECID-based HARDWARE UDID (e.g. `00008150-000954D90A20401C`), which xctrace prints as
+ * `<name> (<osver>) (<udid>)`. The devicectl driver legitimately keeps the CoreDevice
+ * UUID for its own app-lifecycle commands — that is precisely why these two pickers
+ * must diverge (a prior "make both select the same device" unification is the bug this
+ * fixes; SHY-0095).
+ *
+ * Parsing rules (proven by the real captured fixtures in this driver's test):
+ *  - Split off the `== Simulators ==` section first — a simulator line shares the exact
+ *    `(osver) (udid)` shape, so without this a run with NO real device would return a
+ *    simulator UDID and silently drive a simulator (false green + real-device violation).
+ *  - Keep BOTH `== Devices ==` and `== Devices Offline ==`: on iOS 26/27 a wired,
+ *    Appium-drivable iPhone routinely appears under "Offline" in xctrace's legacy view,
+ *    so excluding it returned null and failed the whole iOS matrix (2026-07-02).
+ *  - The `(osver) (udid)` double-paren shape excludes the Mac host line, which carries a
+ *    UUID but no OS-version paren and must never be selected.
  */
 function selectUdid(preferredUdid) {
   if (preferredUdid) return preferredUdid;
   try {
-    // execFileSync (no shell) avoids the command-injection class of bug
-    // — even though the args here are hardcoded, default to the safer
-    // primitive. stderr discarded via `ignore` so a missing devicectl
-    // doesn't pollute the runner's output (the empty stdout below
-    // returns null cleanly).
+    // execFileSync (no shell) avoids the command-injection class of bug — even though
+    // the args are hardcoded, default to the safer primitive. stderr discarded via
+    // `ignore` so a missing xctrace doesn't pollute the runner's output (empty stdout
+    // below returns null cleanly).
     //
-    // Absolute path (/usr/bin/xcrun) satisfies sonarjs/no-os-command-from-path:
-    // xcrun is shipped by Apple at this fixed system location on every
-    // macOS install (Command Line Tools shim), so PATH-search is both
-    // unnecessary and a weak link.
-    const raw = execFileSync('/usr/bin/xcrun', ['devicectl', 'list', 'devices'], {
+    // Absolute path (/usr/bin/xcrun) satisfies sonarjs/no-os-command-from-path: xcrun is
+    // shipped by Apple at this fixed system location on every macOS install (Command
+    // Line Tools shim), so PATH-search is both unnecessary and a weak link.
+    const raw = execFileSync('/usr/bin/xcrun', ['xctrace', 'list', 'devices'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     });
-    const uuidRx =
-      /([0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12})\s+(?:available|connected)/i;
-    const legacyRx = /([0-9A-F]{8}-[0-9A-F]{16})\s+(?:available|connected)/i;
-    const uuidMatch = raw.match(uuidRx);
-    if (uuidMatch) return uuidMatch[1];
-    const legacyMatch = raw.match(legacyRx);
-    return legacyMatch ? legacyMatch[1] : null;
+    // Everything before "== Simulators ==" is the real-device sections (online +
+    // offline); simulators are dropped so a no-real-device run never returns a sim UDID.
+    const deviceSection = raw.split(/==\s*Simulators\s*==/)[0];
+    // Physical device line: "<name> (<osver>) (<hardware-udid>)". The OS-version paren
+    // before the UDID paren is what distinguishes a real iPhone from the Mac host line
+    // ("<name> (<uuid>)" — no os-version paren), whose UUID must never be selected.
+    const deviceLineRx = /\([0-9]+(?:\.[0-9]+)*\)\s+\(([0-9A-Fa-f-]+)\)\s*$/;
+    for (const line of deviceSection.split('\n')) {
+      const match = line.match(deviceLineRx);
+      if (match) return match[1];
+    }
+    return null;
   } catch (_e) {
     return null;
   }
@@ -134,7 +157,7 @@ async function createIosDriver({
   const udid = selectUdid(preferredUdid);
   if (!udid) {
     throw new Error(
-      'createIosDriver: no connected iPhone found via `xcrun devicectl list devices`. Pair the device with Xcode, ensure it shows "available" or "connected", then re-run.',
+      'createIosDriver: no physical iPhone found via `xcrun xctrace list devices`. Connect + trust the device (it may show under "Devices Offline" on iOS 26/27 — still usable), then re-run.',
     );
   }
   if (!wdaTeamId) {
