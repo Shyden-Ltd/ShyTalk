@@ -221,7 +221,7 @@ if [ "$HAS_WEB" = "true" ]; then
   elif ! curl -s -o /dev/null http://localhost:8888/; then
     echo ""
     echo "⚠ Web changes detected but web server not running on :8888 — skipping Playwright pre-push"
-    echo "  To enable: npx serve public -l 8888 &"
+    echo "  To enable: node local/serve-web.js --port 8888 --root public --quiet &"
   else
     echo "Running Playwright pre-push (chromium only)..."
     # Use --reporter=list: writes one line per test result and flushes per-line.
