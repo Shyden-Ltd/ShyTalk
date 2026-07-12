@@ -15511,6 +15511,10 @@ function formatUsage() {
     '  --headed                  Run the browser in headed (visible) mode',
     '  --matrix                  Dispatch every allowed cell in sequence',
     '  --fail-fast               Stop the matrix at the first failing cell',
+    '  --parallel                Dispatch cells per-device-serial, cross-device-',
+    '                              parallel: cells for the same device run one at',
+    '                              a time, but iOS + Android + Mac groups progress',
+    '                              together. Default off (strict-sequential).',
     '  --bail <n>                Stop the matrix after <n> failures (timeouts',
     '                              count as failures, skips do not). 0 = no bail.',
     '                              --bail 1 is equivalent in effect to --fail-fast.',
@@ -15626,6 +15630,7 @@ function formatListJson(target) {
 // alongside the helper as a single source of truth.
 const PER_CELL_STRIP_FLAGS = new Set([
   '--matrix',
+  '--parallel',
   '--report-dir',
   '--report-format',
   '--report-output',
@@ -15808,7 +15813,23 @@ function formatDryRunJson(opts = {}) {
   if (opts.shardIndex !== undefined && opts.shardCount !== undefined) {
     cells = shardCells(cells, opts.shardIndex, opts.shardCount);
   }
-  return JSON.stringify({ target, cells });
+  // `parallel` previews the dispatch mode so an operator can confirm a
+  // matrix invocation will overlap device groups BEFORE burning a run.
+  return JSON.stringify({ target, cells, parallel: opts.parallel === true });
+}
+
+// buildRunMatrixOptions — maps parsed CLI opts onto runMatrix's option
+// shape (browsers + gates + dispatch mode). Extracted so the mapping is
+// unit-testable at the value level without spawning a real matrix; the
+// clamps mirror the historical inline expressions exactly.
+function buildRunMatrixOptions({ allowed, opts = {} }) {
+  return {
+    browsers: allowed,
+    failFast: opts.failFast === true,
+    bailAfter: opts.bailAfter > 0 ? opts.bailAfter : 0,
+    retry: opts.retry > 0 ? opts.retry : 0,
+    parallel: opts.parallel === true,
+  };
 }
 
 // ── CLI ─────────────────────────────────────────────────────────────
@@ -15838,6 +15859,7 @@ async function main() {
     else if (flat[i] === '--browser') opts.browser = flat[++i];
     else if (flat[i] === '--headed') opts.headed = true;
     else if (flat[i] === '--matrix') opts.matrix = true;
+    else if (flat[i] === '--parallel') opts.parallel = true;
     else if (flat[i] === '--fail-fast') opts.failFast = true;
     else if (flat[i] === '--bail') opts.bailAfter = parseInt(flat[++i], 10);
     else if (flat[i] === '--retry') {
@@ -16079,7 +16101,7 @@ async function main() {
       formatMatrixResultJson,
       formatMatrixResultJunit,
     } = require('./matrix-dispatch');
-    const { spawnSync } = require('child_process');
+    const { createCellDispatcher } = require('./matrix-cell-dispatch');
 
     // --retry-failed: filter `allowed` down to only the cells that
     // failed/timed out in a previous matrix report. Lets the operator
@@ -16129,71 +16151,28 @@ async function main() {
       cellLogs.ensureReportDir(opts.reportDir);
     }
 
+    // Capture mode: pipe stdout+stderr so the dispatcher can both tee
+    // them to the operator's terminal AND write a per-cell log file.
+    // Also forced on under --parallel even without --report-dir:
+    // concurrent cells inheriting the same terminal would interleave
+    // lines mid-cell, so the dispatcher buffers each cell's output and
+    // tees it as one contiguous block at cell end. Inherit mode
+    // (sequential, no --report-dir): zero log overhead, as before.
+    const captureStdio = Boolean(opts.reportDir) || opts.parallel === true;
+    const dispatchOne = createCellDispatcher({
+      runnerPath: __filename,
+      baseArgv,
+      cellTimeoutMs: opts.cellTimeoutMs,
+      captureStdio,
+      reportDir: opts.reportDir || null,
+      cellLogs,
+    });
     const matrixResult = await runMatrix({
-      browsers: allowed,
-      failFast: opts.failFast === true,
-      bailAfter: opts.bailAfter > 0 ? opts.bailAfter : 0,
-      retry: opts.retry > 0 ? opts.retry : 0,
+      ...buildRunMatrixOptions({ allowed, opts }),
       onCellStart: ({ browser }) => console.log(`[matrix] → dispatching ${browser}`),
       onCellEnd: (cell) =>
         console.log(`[matrix] ← ${cell.browser}: ${cell.outcome} (${cell.durationMs}ms)`),
-      dispatchOne: async ({ browser }) => {
-        const cellArgs = [...baseArgv, '--browser', browser];
-        // Capture mode: pipe stdout+stderr so we can both tee them to
-        // the operator's terminal AND write a per-cell log file. Inherit
-        // mode (no --report-dir): subprocess stdio inherits the runner's
-        // streams as before (zero log overhead).
-        const captureStdio = Boolean(opts.reportDir);
-        // spawnSync's `timeout` option kills the child with SIGTERM
-        // once exceeded; result is `proc.status === null, signal === 'SIGTERM'`.
-        // We translate that to a CELL_TIMEOUT throw so matrix-dispatch's
-        // classifier produces a 'timeout' outcome (distinct from 'fail').
-        const spawnOpts = {
-          stdio: captureStdio ? ['ignore', 'pipe', 'pipe'] : 'inherit',
-          env: process.env,
-        };
-        if (opts.cellTimeoutMs) spawnOpts.timeout = opts.cellTimeoutMs;
-        const proc = spawnSync(process.execPath, [__filename, ...cellArgs], spawnOpts);
-        if (proc.error) {
-          // spawnSync sets proc.error.code = 'ETIMEDOUT' when the
-          // child was killed for exceeding the timeout. Translate to
-          // CELL_TIMEOUT so matrix-dispatch can classify it.
-          if (proc.error.code === 'ETIMEDOUT') {
-            const e = new Error(`cell timed out after ${Math.round(opts.cellTimeoutMs / 1000)}s`);
-            e.code = 'CELL_TIMEOUT';
-            throw e;
-          }
-          throw proc.error;
-        }
-        // Some Node versions surface timeout via signal+null-status
-        // instead of proc.error — handle that path too.
-        if (proc.status === null && proc.signal === 'SIGTERM' && opts.cellTimeoutMs) {
-          const e = new Error(`cell timed out after ${Math.round(opts.cellTimeoutMs / 1000)}s`);
-          e.code = 'CELL_TIMEOUT';
-          throw e;
-        }
-        if (captureStdio) {
-          // Tee captured stdio to the runner's terminal so the operator
-          // sees the cell's output in real time too — same UX as
-          // 'inherit' mode.
-          const stdout = proc.stdout ? proc.stdout.toString('utf8') : '';
-          const stderr = proc.stderr ? proc.stderr.toString('utf8') : '';
-          if (stdout) process.stdout.write(stdout);
-          if (stderr) process.stderr.write(stderr);
-          // Write per-cell log file. Combined stdout+stderr so a future
-          // operator grep sees both interleaved (close to chronological).
-          cellLogs.writeCellLog({
-            dir: opts.reportDir,
-            cell: {
-              browser,
-              outcome: proc.status === 0 ? 'pass' : 'fail',
-              durationMs: 0, // not measured here; runMatrix sets it on its own cell record
-            },
-            body: stdout + (stderr ? `\n---STDERR---\n${stderr}` : ''),
-          });
-        }
-        return proc.status === 0;
-      },
+      dispatchOne,
     });
     // Always print the human-readable text table to stdout so the
     // operator gets immediate feedback regardless of --report-format.
@@ -16457,6 +16436,7 @@ module.exports = {
   formatVersion,
   formatListJson,
   formatDryRunJson,
+  buildRunMatrixOptions,
   applyFilter,
   shardCells,
   buildDriverFactories,
