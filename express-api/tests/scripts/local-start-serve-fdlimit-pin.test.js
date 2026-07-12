@@ -25,19 +25,30 @@ const START_SH = path.resolve(__dirname, '../../../local/start.sh');
 describe('local/start.sh — :8888 serve fd-limit hardening', () => {
   const lines = fs.readFileSync(START_SH, 'utf8').split('\n');
   const serveIdx = lines.findIndex((l) => /npx serve public .*-l 8888/.test(l));
-  const ulimitIdx = lines.findIndex((l) => /^\s*ulimit -n (\d+)/.test(l));
+  // The raise must be GUARDED: start.sh runs under `set -e`, and a bare
+  // `ulimit -n N` on a machine whose HARD cap is below N returns nonzero
+  // and aborts the script BEFORE cleanup() — orphaning Docker/emulators
+  // (R6 finding). Warn-and-continue is required, not `|| true` (which
+  // would silently reintroduce the EMFILE risk with no operator signal).
+  const ulimitIdx = lines.findIndex((l) => /^\s*if ! ulimit -n (\d+)/.test(l));
 
   test('the serve launch exists (guard for this pin going stale)', () => {
     expect(serveIdx).toBeGreaterThan(-1);
   });
 
-  test('an ulimit raise of at least 10240 precedes the serve launch nearby', () => {
+  test('a GUARDED ulimit raise of at least 10240 precedes the serve launch nearby', () => {
     expect(ulimitIdx).toBeGreaterThan(-1);
-    const m = /^\s*ulimit -n (\d+)/.exec(lines[ulimitIdx]);
+    const m = /^\s*if ! ulimit -n (\d+)/.exec(lines[ulimitIdx]);
     expect(parseInt(m[1], 10)).toBeGreaterThanOrEqual(10240);
     expect(ulimitIdx).toBeLessThan(serveIdx);
     // Locality: the raise must be part of the step-6b launch block, not
     // an unrelated line elsewhere that a refactor could strand.
     expect(serveIdx - ulimitIdx).toBeLessThanOrEqual(10);
+  });
+
+  test('the guard warns instead of silently degrading', () => {
+    const guardBlock = lines.slice(ulimitIdx, ulimitIdx + 4).join('\n');
+    expect(guardBlock).toMatch(/WARNING/);
+    expect(guardBlock).toMatch(/fd limit|EMFILE/i);
   });
 });
