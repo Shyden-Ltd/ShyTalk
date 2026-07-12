@@ -33,12 +33,47 @@ const { EXIT_DRIVER_INIT_FAILED } = require('./matrix-dispatch');
  * runMatrix. All collaborators are injectable for tests but default to
  * the real thing; the spawned cell is ALWAYS a real subprocess.
  */
+// Per-stream capture ceiling. spawnSync enforced a maxBuffer (default 1 MiB,
+// ENOBUFS past it — a crash); the async path instead keeps the HEAD of the
+// output and appends a truncation notice, so a runaway cell can neither grow
+// the runner's heap unboundedly nor kill its own cell record.
+const DEFAULT_MAX_CAPTURE_BYTES = 64 * 1024 * 1024;
+
+// Collects a child stream up to `limit` bytes (head-biased) and reports
+// whether anything was dropped.
+function cappedCollector(stream, limit) {
+  const chunks = [];
+  let bytes = 0;
+  let truncated = false;
+  stream.on('data', (c) => {
+    if (bytes >= limit) {
+      truncated = true;
+      return;
+    }
+    const room = limit - bytes;
+    if (c.length > room) {
+      chunks.push(c.subarray(0, room));
+      bytes += room;
+      truncated = true;
+    } else {
+      chunks.push(c);
+      bytes += c.length;
+    }
+  });
+  return () => {
+    let text = Buffer.concat(chunks).toString('utf8');
+    if (truncated) text += `\n[capture truncated at ${limit} bytes]\n`;
+    return text;
+  };
+}
+
 function createCellDispatcher({
   runnerPath,
   baseArgv,
   nodePath = process.execPath,
   cellTimeoutMs,
   captureStdio = false,
+  maxCaptureBytes = DEFAULT_MAX_CAPTURE_BYTES,
   reportDir = null,
   cellLogs = null,
   out = process.stdout,
@@ -72,11 +107,11 @@ function createCellDispatcher({
     }
 
     const child = spawn(nodePath, [runnerPath, ...cellArgs], spawnOpts);
-    const stdoutChunks = [];
-    const stderrChunks = [];
+    let readStdout = () => '';
+    let readStderr = () => '';
     if (captureStdio) {
-      child.stdout.on('data', (c) => stdoutChunks.push(c));
-      child.stderr.on('data', (c) => stderrChunks.push(c));
+      readStdout = cappedCollector(child.stdout, maxCaptureBytes);
+      readStderr = cappedCollector(child.stderr, maxCaptureBytes);
     }
 
     const { code, signal } = await new Promise((resolve, reject) => {
@@ -98,22 +133,18 @@ function createCellDispatcher({
       );
     });
 
-    if (code === null && signal === 'SIGTERM' && cellTimeoutMs) {
-      // Parity with the spawnSync path: a timed-out cell throws before
-      // any tee/log write (runMatrix records the timeout on its own
-      // cell record).
-      throw cellTimeoutError(cellTimeoutMs);
-    }
-
+    const timedOut = code === null && signal === 'SIGTERM' && Boolean(cellTimeoutMs);
     const initFailed = code === EXIT_DRIVER_INIT_FAILED;
     if (captureStdio) {
-      const stdout = Buffer.concat(stdoutChunks).toString('utf8');
-      const stderr = Buffer.concat(stderrChunks).toString('utf8');
+      const stdout = readStdout();
+      const stderr = readStderr();
       // One write per stream per cell — atomic tee blocks under
-      // parallel dispatch (see module docstring). Init-failed cells
-      // flush too: the operator must see WHY the device/env wasn't
-      // available, and the log file keeps the matrix-cell-logs promise
-      // that device-offline skips leave a debuggable artifact behind.
+      // parallel dispatch (see module docstring). Timed-out and
+      // init-failed cells flush too: a hung cell is the failure mode
+      // MOST in need of a debug trail (and under --parallel capture is
+      // forced, so without this flush its output would simply vanish),
+      // and the log file keeps the matrix-cell-logs promise that
+      // device-offline skips leave a debuggable artifact behind.
       if (stdout) out.write(stdout);
       if (stderr) err.write(stderr);
       if (reportDir && cellLogs) {
@@ -121,12 +152,16 @@ function createCellDispatcher({
           dir: reportDir,
           cell: {
             browser,
-            outcome: initFailed ? 'skip' : code === 0 ? 'pass' : 'fail',
+            outcome: timedOut ? 'timeout' : initFailed ? 'skip' : code === 0 ? 'pass' : 'fail',
             durationMs: 0, // not measured here; runMatrix sets it on its own cell record
           },
           body: stdout + (stderr ? `\n---STDERR---\n${stderr}` : ''),
         });
       }
+    }
+
+    if (timedOut) {
+      throw cellTimeoutError(cellTimeoutMs);
     }
 
     if (initFailed) {

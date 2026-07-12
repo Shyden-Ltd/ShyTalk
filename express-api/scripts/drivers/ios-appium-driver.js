@@ -170,6 +170,16 @@ async function createIosDriver({
   bundleId: explicitBundleId,
   fetchImpl = globalThis.fetch,
 } = {}) {
+  // Cheap env validation FIRST, device probe second: a no-device
+  // environment (CI, phone unplugged) must surface the missing env var,
+  // not a misleading "no physical iPhone" for what is a config gap —
+  // and the probe shells out to xcrun, so failing early is also faster.
+  // Same ordering as the two web-mobile iOS siblings.
+  if (!wdaTeamId) {
+    throw new Error(
+      'createIosDriver: WDA_TEAM_ID env var is required. This is the operator\'s Apple Developer team ID — Appium uses it to sign WebDriverAgent for the iPhone. Find it in Xcode → Preferences → Accounts → <your account> → Manage Certificates, or via `security find-identity -v -p codesigning | grep "Apple Development"`.',
+    );
+  }
   const udid = selectUdid(preferredUdid);
   if (!udid) {
     // Stable `code` so matrix-dispatch's isInitError classifies "no device" as a SKIP
@@ -180,11 +190,6 @@ async function createIosDriver({
         'createIosDriver: no physical iPhone found via `xcrun xctrace list devices`. Connect + trust the device (it may show under "Devices Offline" on iOS 26/27 — still usable), then re-run.',
       ),
       { code: 'DRIVER_INIT_FAILED' },
-    );
-  }
-  if (!wdaTeamId) {
-    throw new Error(
-      'createIosDriver: WDA_TEAM_ID env var is required. This is the operator\'s Apple Developer team ID — Appium uses it to sign WebDriverAgent for the iPhone. Find it in Xcode → Preferences → Accounts → <your account> → Manage Certificates, or via `security find-identity -v -p codesigning | grep "Apple Development"`.',
     );
   }
   // iOS ships a SINGLE PRODUCT_BUNDLE_IDENTIFIER for every build config (Debug /
@@ -198,8 +203,10 @@ async function createIosDriver({
     dev: 'com.shyden.shytalk',
     prod: 'com.shyden.shytalk',
   };
-  const bundleId =
-    explicitBundleId || process.env.IOS_BUNDLE_ID || bundleIdMap[target] || bundleIdMap.dev;
+  // Blank-but-truthy env values ('   ') must not reach Appium as a
+  // literal-whitespace bundleId — trim, and fall through when empty.
+  const envBundleId = (process.env.IOS_BUNDLE_ID || '').trim();
+  const bundleId = explicitBundleId || envBundleId || bundleIdMap[target] || bundleIdMap.dev;
 
   const driver = { _udid: udid, _appiumBaseUrl: appiumBaseUrl, _bundleId: bundleId };
 

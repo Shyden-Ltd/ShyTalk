@@ -565,3 +565,64 @@ describe('ios-appium-driver — method registry', () => {
     }
   });
 });
+
+// R4 — env-check ordering + IOS_BUNDLE_ID override hygiene (SHY-0095) ─
+
+describe('R4 — env-check ordering + IOS_BUNDLE_ID hygiene', () => {
+  test('WDA_TEAM_ID is validated BEFORE the device probe runs', async () => {
+    // Cheap env validation precedes the xcrun subprocess probe (parity
+    // with the two web-mobile iOS siblings): a no-device environment
+    // must report the missing env var, not "no physical iPhone".
+    execFileSync.mockImplementation(() => {
+      throw new Error('device probe ran before env validation');
+    });
+    await expect(createIosDriver({ fetchImpl: makeFetchMock() })).rejects.toThrow(
+      /WDA_TEAM_ID env var is required/,
+    );
+  });
+
+  test('IOS_BUNDLE_ID env override wins over the target map', async () => {
+    process.env.IOS_BUNDLE_ID = 'com.example.sideload';
+    try {
+      const driver = await createIosDriver({
+        wdaTeamId: 'TEAM123',
+        fetchImpl: makeFetchMock(),
+        target: 'dev',
+      });
+      expect(driver._bundleId).toBe('com.example.sideload');
+    } finally {
+      delete process.env.IOS_BUNDLE_ID;
+    }
+  });
+
+  test('explicit bundleId param wins over IOS_BUNDLE_ID', async () => {
+    process.env.IOS_BUNDLE_ID = 'com.example.env-loses';
+    try {
+      const driver = await createIosDriver({
+        wdaTeamId: 'TEAM123',
+        fetchImpl: makeFetchMock(),
+        bundleId: 'com.example.param-wins',
+      });
+      expect(driver._bundleId).toBe('com.example.param-wins');
+    } finally {
+      delete process.env.IOS_BUNDLE_ID;
+    }
+  });
+
+  test('whitespace-only IOS_BUNDLE_ID is ignored (falls back to the target map)', async () => {
+    // A blank-but-truthy env value must not reach Appium as a literal
+    // whitespace bundleId — that fails session creation with an opaque
+    // "invalid bundle id" far from the real cause.
+    process.env.IOS_BUNDLE_ID = '   ';
+    try {
+      const driver = await createIosDriver({
+        wdaTeamId: 'TEAM123',
+        fetchImpl: makeFetchMock(),
+        target: 'dev',
+      });
+      expect(driver._bundleId).toBe('com.shyden.shytalk');
+    } finally {
+      delete process.env.IOS_BUNDLE_ID;
+    }
+  });
+});

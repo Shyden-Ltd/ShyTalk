@@ -700,3 +700,73 @@ describe('createMobileWebkitIosDriver — takeScreenshot delegation', () => {
     }
   });
 });
+
+// R4 parity — WDA signing caps + env-check ordering (SHY-0095) ────────
+
+describe('R4 — WDA signing parity with ios-appium-driver', () => {
+  test('session caps use the modern "Apple Development" signing id', async () => {
+    // 'Apple Developer' matches NO certificate (live-proven 2026-07-12:
+    // xcodebuild code 65 on the first fresh WDA build).
+    const fetchImpl = makeFetchMock(defaultHandlers());
+    const driver = await createMobileWebkitIosDriver({
+      browser: 'chrome',
+      wdaTeamId: 'TEAM123',
+      selectUdidImpl: () => 'UDID-A',
+      fetchImpl,
+    });
+    await driver.webRefreshRoomsList('Alice');
+    const sessionCall = fetchImpl.calls.find((c) => c.url.endsWith('/session'));
+    const caps = JSON.parse(sessionCall.opts.body).capabilities.alwaysMatch;
+    expect(caps['appium:xcodeSigningId']).toBe('Apple Development');
+  });
+
+  test('useNewWDA defaults false and flips true under IOS_FORCE_NEW_WDA=true', async () => {
+    async function capsWithEnv(value) {
+      if (value === undefined) delete process.env.IOS_FORCE_NEW_WDA;
+      else process.env.IOS_FORCE_NEW_WDA = value;
+      try {
+        const fetchImpl = makeFetchMock(defaultHandlers());
+        const driver = await createMobileWebkitIosDriver({
+          browser: 'edge',
+          wdaTeamId: 'TEAM123',
+          selectUdidImpl: () => 'UDID-A',
+          fetchImpl,
+        });
+        await driver.webRefreshRoomsList('Alice');
+        const sessionCall = fetchImpl.calls.find((c) => c.url.endsWith('/session'));
+        return JSON.parse(sessionCall.opts.body).capabilities.alwaysMatch;
+      } finally {
+        delete process.env.IOS_FORCE_NEW_WDA;
+      }
+    }
+    expect((await capsWithEnv(undefined))['appium:useNewWDA']).toBe(false);
+    expect((await capsWithEnv('true'))['appium:useNewWDA']).toBe(true);
+    expect((await capsWithEnv('1'))['appium:useNewWDA']).toBe(false);
+  });
+
+  test('WDA_TEAM_ID is validated BEFORE the device probe runs', async () => {
+    await expect(
+      createMobileWebkitIosDriver({
+        browser: 'firefox',
+        wdaTeamId: undefined,
+        selectUdidImpl: () => {
+          throw new Error('device probe ran before env validation');
+        },
+        fetchImpl: makeFetchMock([]),
+      }),
+    ).rejects.toThrow(/WDA_TEAM_ID env var is required/);
+  });
+
+  test('browser-slug validation still precedes everything (unknown slug wins over missing WDA)', async () => {
+    await expect(
+      createMobileWebkitIosDriver({
+        browser: 'opera',
+        wdaTeamId: undefined,
+        selectUdidImpl: () => {
+          throw new Error('device probe ran before validation');
+        },
+        fetchImpl: makeFetchMock([]),
+      }),
+    ).rejects.toThrow(/not supported/);
+  });
+});

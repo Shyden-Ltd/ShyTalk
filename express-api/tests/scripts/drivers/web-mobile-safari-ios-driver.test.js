@@ -456,3 +456,63 @@ describe('createMobileSafariIosDriver — takeScreenshot delegation', () => {
     }
   });
 });
+
+// R4 parity — WDA signing caps + env-check ordering (SHY-0095) ────────
+
+describe('R4 — WDA signing parity with ios-appium-driver', () => {
+  test('session caps use the modern "Apple Development" signing id', async () => {
+    // 'Apple Developer' matches NO certificate — live-proven on-device
+    // 2026-07-12: xcodebuild code 65 "No certificate matching 'Apple
+    // Developer'" the moment a fresh WDA build is needed.
+    const fetchImpl = makeFetchMock(defaultHandlers());
+    const driver = await createMobileSafariIosDriver({
+      wdaTeamId: 'TEAM123',
+      selectUdidImpl: () => 'UDID-A',
+      fetchImpl,
+    });
+    await driver.webRefreshRoomsList('Alice');
+    const sessionCall = fetchImpl.calls.find((c) => c.url.endsWith('/session'));
+    const caps = JSON.parse(sessionCall.opts.body).capabilities.alwaysMatch;
+    expect(caps['appium:xcodeSigningId']).toBe('Apple Development');
+  });
+
+  test('useNewWDA defaults false and flips true under IOS_FORCE_NEW_WDA=true', async () => {
+    async function capsWithEnv(value) {
+      if (value === undefined) delete process.env.IOS_FORCE_NEW_WDA;
+      else process.env.IOS_FORCE_NEW_WDA = value;
+      try {
+        const fetchImpl = makeFetchMock(defaultHandlers());
+        const driver = await createMobileSafariIosDriver({
+          wdaTeamId: 'TEAM123',
+          selectUdidImpl: () => 'UDID-A',
+          fetchImpl,
+        });
+        await driver.webRefreshRoomsList('Alice');
+        const sessionCall = fetchImpl.calls.find((c) => c.url.endsWith('/session'));
+        return JSON.parse(sessionCall.opts.body).capabilities.alwaysMatch;
+      } finally {
+        delete process.env.IOS_FORCE_NEW_WDA;
+      }
+    }
+    expect((await capsWithEnv(undefined))['appium:useNewWDA']).toBe(false);
+    expect((await capsWithEnv('true'))['appium:useNewWDA']).toBe(true);
+    // Only the literal 'true' forces a rebuild — '1'/'yes' stay false.
+    expect((await capsWithEnv('1'))['appium:useNewWDA']).toBe(false);
+  });
+
+  test('WDA_TEAM_ID is validated BEFORE the device probe runs', async () => {
+    // Cheap env validation must precede the xcrun subprocess probe:
+    // otherwise a no-device environment (CI) reports "no physical
+    // iPhone" for what is actually a missing env var, and the runner's
+    // driver-init-exit test becomes machine-dependent.
+    await expect(
+      createMobileSafariIosDriver({
+        wdaTeamId: undefined,
+        selectUdidImpl: () => {
+          throw new Error('device probe ran before env validation');
+        },
+        fetchImpl: makeFetchMock([]),
+      }),
+    ).rejects.toThrow(/WDA_TEAM_ID env var is required/);
+  });
+});

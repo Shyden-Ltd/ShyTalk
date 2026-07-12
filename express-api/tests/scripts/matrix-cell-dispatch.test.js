@@ -393,3 +393,113 @@ describe('createCellDispatcher — driver-init exit code (inc-2 skip classificat
     expect(result.ok).toBe(true);
   });
 });
+
+describe('createCellDispatcher — R4: timeout diagnostics + capture cap', () => {
+  test('capture mode flushes buffered output and writes a timeout log BEFORE the CELL_TIMEOUT throw', async () => {
+    // A hung cell is the failure mode MOST in need of a debug trail —
+    // and under --parallel capture is forced, so without this flush the
+    // operator gets nothing but "cell timed out after 1s".
+    const reportDir = tmpDir('cell-dispatch-timeout-flush-');
+    const out = new PassThrough();
+    const readOut = collect(out);
+    const dispatchOne = createCellDispatcher({
+      runnerPath: FIXTURE,
+      baseArgv: [],
+      cellTimeoutMs: 1000,
+      captureStdio: true,
+      reportDir,
+      cellLogs,
+      out,
+      err: new PassThrough(),
+      env: {
+        ...process.env,
+        FAKE_CELL_STDOUT: 'progress: step 2 of 9 reached\n',
+        FAKE_CELL_SLEEP_MS: '30000',
+      },
+    });
+    await expect(dispatchOne({ browser: 'chromium' })).rejects.toMatchObject({
+      code: 'CELL_TIMEOUT',
+    });
+    expect(readOut()).toContain('progress: step 2 of 9 reached');
+    const log = fs.readFileSync(path.join(reportDir, 'chromium.log'), 'utf8');
+    expect(log).toContain('browser=chromium outcome=timeout');
+    expect(log).toContain('progress: step 2 of 9 reached');
+  });
+
+  test('capture is capped: output past maxCaptureBytes is dropped with a truncation notice', async () => {
+    const out = new PassThrough();
+    const readOut = collect(out);
+    const dispatchOne = createCellDispatcher({
+      runnerPath: FIXTURE,
+      baseArgv: [],
+      captureStdio: true,
+      maxCaptureBytes: 64,
+      out,
+      err: new PassThrough(),
+      env: { ...process.env, FAKE_CELL_STDOUT: 'A'.repeat(300) },
+    });
+    await expect(dispatchOne({ browser: 'chromium' })).resolves.toBe(true);
+    const teed = readOut();
+    // Head is preserved, the overflow is not, and the operator is told.
+    expect(teed).toContain('A'.repeat(64));
+    expect(teed).not.toContain('A'.repeat(65));
+    expect(teed).toMatch(/capture truncated/);
+  });
+});
+
+describe('createCellDispatcher — R4: composition through runMatrix', () => {
+  test('retry does not re-dispatch an init-skip cell; a failing cell still retries fully', async () => {
+    const dispatchOne = createCellDispatcher({
+      runnerPath: FIXTURE,
+      baseArgv: [],
+      captureStdio: true,
+      out: new PassThrough(),
+      err: new PassThrough(),
+      env: { ...process.env, FAKE_CELL_EXIT_MAP: 'mobile-x-ios=3,chromium=1' },
+    });
+    const result = await runMatrix({
+      browsers: ['mobile-x-ios', 'chromium'],
+      retry: 2,
+      dispatchOne,
+    });
+    const [skipCell, failCell] = result.cells;
+    expect(skipCell.browser).toBe('mobile-x-ios');
+    expect(skipCell.outcome).toBe('skip');
+    // attempts/retries are only recorded when >1 — a skip on the first
+    // attempt must NOT enter the retry loop, so the fields are absent.
+    expect(skipCell.attempts).toBeUndefined();
+    expect(skipCell.retries).toBeUndefined();
+    expect(failCell.browser).toBe('chromium');
+    expect(failCell.outcome).toBe('fail');
+    expect(failCell.attempts).toBe(3);
+    expect(failCell.retries).toBe(2);
+  });
+
+  test("parallel + failFast: the failing group stops dispatching, the other group's in-flight cell completes", async () => {
+    const dispatchOne = createCellDispatcher({
+      runnerPath: FIXTURE,
+      baseArgv: [],
+      captureStdio: true,
+      out: new PassThrough(),
+      err: new PassThrough(),
+      env: {
+        ...process.env,
+        FAKE_CELL_EXIT_MAP: 'mobile-a-android=1,mobile-b-android=0,chromium=0',
+      },
+    });
+    const result = await runMatrix({
+      browsers: ['mobile-a-android', 'mobile-b-android', 'chromium'],
+      parallel: true,
+      failFast: true,
+      dispatchOne,
+    });
+    const byBrowser = Object.fromEntries(result.cells.map((c) => [c.browser, c]));
+    expect(byBrowser['mobile-a-android'].outcome).toBe('fail');
+    // Same-group successor: never dispatched once the gate tripped.
+    expect(byBrowser['mobile-b-android'].outcome).toBe('skip');
+    expect(byBrowser['mobile-b-android'].error).toMatch(/failFast/);
+    // Cross-group cell was already in flight at t0 and finishes normally.
+    expect(byBrowser['chromium'].outcome).toBe('pass');
+    expect(result.ok).toBe(false);
+  });
+});

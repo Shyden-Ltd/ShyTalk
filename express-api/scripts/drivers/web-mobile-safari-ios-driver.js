@@ -79,6 +79,15 @@ async function createMobileSafariIosDriver({
   fetchImpl = globalThis.fetch,
   selectUdidImpl = selectUdid,
 } = {}) {
+  // Cheap env validation FIRST, device probe second: a no-device
+  // environment (CI, phone unplugged) must surface the missing env var,
+  // not a misleading "no physical iPhone" for what is a config gap —
+  // and the probe shells out to xcrun, so failing early is also faster.
+  if (!wdaTeamId) {
+    throw new Error(
+      'createMobileSafariIosDriver: WDA_TEAM_ID env var is required. This is the operator\'s Apple Developer team ID — Appium uses it to sign WebDriverAgent + the Safari Remote Inspector bridge. Find it via `security find-identity -v -p codesigning | grep "Apple Development"`.',
+    );
+  }
   const udid = selectUdidImpl(preferredUdid);
   if (!udid) {
     // Stable `code` → matrix-dispatch isInitError skips (not fails) on no-device.
@@ -87,11 +96,6 @@ async function createMobileSafariIosDriver({
         'createMobileSafariIosDriver: no physical iPhone found via `xcrun xctrace list devices`. Connect + trust the device (it may show under "Devices Offline" on iOS 26/27 — still usable), then re-run.',
       ),
       { code: 'DRIVER_INIT_FAILED' },
-    );
-  }
-  if (!wdaTeamId) {
-    throw new Error(
-      'createMobileSafariIosDriver: WDA_TEAM_ID env var is required. This is the operator\'s Apple Developer team ID — Appium uses it to sign WebDriverAgent + the Safari Remote Inspector bridge. Find it via `security find-identity -v -p codesigning | grep "Apple Development"`.',
     );
   }
 
@@ -111,9 +115,17 @@ async function createMobileSafariIosDriver({
           // tells the XCUITest driver to bootstrap Mobile Safari + its
           // WebKit Remote Inspector bridge.
           'appium:browserName': 'safari',
-          'appium:xcodeSigningId': 'Apple Developer',
+          // "Apple Development" is the modern signing-cert name; "Apple
+          // Developer" matches no certificate and fails the WDA rebuild
+          // with xcodebuild code 65 (live-proven 2026-07-12; parity with
+          // ios-appium-driver's identical fix).
+          'appium:xcodeSigningId': 'Apple Development',
           'appium:xcodeOrgId': wdaTeamId,
-          'appium:useNewWDA': false,
+          // Reuse the installed WDA by default; IOS_FORCE_NEW_WDA=true
+          // forces a fresh build+install after a signing/config change
+          // (else Appium launches the stale WDA → "connection refused
+          // to port 8100"). Same contract as ios-appium-driver.
+          'appium:useNewWDA': process.env.IOS_FORCE_NEW_WDA === 'true',
           'appium:noReset': true,
           // Auto-accept any URL-bar autofill / safari-suggestion prompts
           // so the operator doesn't have to babysit the device.
