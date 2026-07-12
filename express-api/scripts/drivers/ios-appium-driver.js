@@ -187,12 +187,19 @@ async function createIosDriver({
       'createIosDriver: WDA_TEAM_ID env var is required. This is the operator\'s Apple Developer team ID — Appium uses it to sign WebDriverAgent for the iPhone. Find it in Xcode → Preferences → Accounts → <your account> → Manage Certificates, or via `security find-identity -v -p codesigning | grep "Apple Development"`.',
     );
   }
+  // iOS ships a SINGLE PRODUCT_BUNDLE_IDENTIFIER for every build config (Debug /
+  // Debug-Dev / Debug-Local / Release) — the config, via AppEnvironment, selects the
+  // backend, NOT a suffixed bundle id (unlike Android's per-flavour ids; confirmed in
+  // iosApp.xcodeproj: every config sets `com.shyden.shytalk`). Every `target` therefore
+  // maps to the same id; kept as a map (not a bare constant) to stay explicit per-target
+  // and keep `target` a live input. IOS_BUNDLE_ID overrides for one-off installs.
   const bundleIdMap = {
-    local: 'com.shyden.shytalk.local',
-    dev: 'com.shyden.shytalk.dev',
+    local: 'com.shyden.shytalk',
+    dev: 'com.shyden.shytalk',
     prod: 'com.shyden.shytalk',
   };
-  const bundleId = explicitBundleId || bundleIdMap[target] || bundleIdMap.dev;
+  const bundleId =
+    explicitBundleId || process.env.IOS_BUNDLE_ID || bundleIdMap[target] || bundleIdMap.dev;
 
   const driver = { _udid: udid, _appiumBaseUrl: appiumBaseUrl, _bundleId: bundleId };
 
@@ -209,7 +216,10 @@ async function createIosDriver({
           'appium:automationName': 'XCUITest',
           'appium:udid': udid,
           'appium:bundleId': bundleId,
-          'appium:xcodeSigningId': 'Apple Developer',
+          // "Apple Development" is the modern signing-cert name; "Apple Developer"
+          // matches no certificate and fails the WDA rebuild with xcodebuild code 65
+          // (real 2026-07-12 device failure — "No certificate matching 'Apple Developer'").
+          'appium:xcodeSigningId': 'Apple Development',
           'appium:xcodeOrgId': wdaTeamId,
           // Don't auto-install WDA every time — operator's first run
           // takes the install hit; subsequent runs reuse the bundle.

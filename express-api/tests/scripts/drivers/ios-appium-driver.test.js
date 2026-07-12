@@ -241,13 +241,25 @@ describe('ios-appium-driver — createIosDriver', () => {
     expect(driver._udid).toBe(HARDWARE_UDID);
   });
 
-  test('target="local" → bundleId com.shyden.shytalk.local', async () => {
+  test('target="local" → bundleId com.shyden.shytalk (iOS uses ONE bundle id across configs)', async () => {
     const driver = await createIosDriver({
       wdaTeamId: 'TEAM123',
       fetchImpl: makeFetchMock(),
       target: 'local',
     });
-    expect(driver._bundleId).toBe('com.shyden.shytalk.local');
+    // iOS has a single PRODUCT_BUNDLE_IDENTIFIER for every config (Debug / Debug-Dev /
+    // Debug-Local / Release) — the build config, via AppEnvironment, selects the backend,
+    // NOT a suffixed bundle id (unlike Android's per-flavor ids). Confirmed in pbxproj.
+    expect(driver._bundleId).toBe('com.shyden.shytalk');
+  });
+
+  test('target="dev" → bundleId com.shyden.shytalk (single iOS bundle id)', async () => {
+    const driver = await createIosDriver({
+      wdaTeamId: 'TEAM123',
+      fetchImpl: makeFetchMock(),
+      target: 'dev',
+    });
+    expect(driver._bundleId).toBe('com.shyden.shytalk');
   });
 
   test('target="prod" → bundleId com.shyden.shytalk (no suffix)', async () => {
@@ -288,8 +300,11 @@ describe('ios-appium-driver — session bootstrap', () => {
       platformName: 'iOS',
       'appium:automationName': 'XCUITest',
       'appium:udid': HARDWARE_UDID,
-      'appium:bundleId': 'com.shyden.shytalk.dev',
+      'appium:bundleId': 'com.shyden.shytalk',
       'appium:xcodeOrgId': 'TEAM-MY-TEAM',
+      // The real signing cert is "Apple Development" (modern name); "Apple Developer"
+      // matches no cert and fails the WDA rebuild (real 2026-07-12 code-65 failure).
+      'appium:xcodeSigningId': 'Apple Development',
     });
   });
 
