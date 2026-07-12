@@ -26,6 +26,7 @@
  * runner per cell.
  */
 const { spawn } = require('child_process');
+const { EXIT_DRIVER_INIT_FAILED } = require('./matrix-dispatch');
 
 /**
  * Builds the `dispatchOne({ browser })` callback the runner hands to
@@ -104,11 +105,15 @@ function createCellDispatcher({
       throw cellTimeoutError(cellTimeoutMs);
     }
 
+    const initFailed = code === EXIT_DRIVER_INIT_FAILED;
     if (captureStdio) {
       const stdout = Buffer.concat(stdoutChunks).toString('utf8');
       const stderr = Buffer.concat(stderrChunks).toString('utf8');
       // One write per stream per cell — atomic tee blocks under
-      // parallel dispatch (see module docstring).
+      // parallel dispatch (see module docstring). Init-failed cells
+      // flush too: the operator must see WHY the device/env wasn't
+      // available, and the log file keeps the matrix-cell-logs promise
+      // that device-offline skips leave a debuggable artifact behind.
       if (stdout) out.write(stdout);
       if (stderr) err.write(stderr);
       if (reportDir && cellLogs) {
@@ -116,12 +121,24 @@ function createCellDispatcher({
           dir: reportDir,
           cell: {
             browser,
-            outcome: code === 0 ? 'pass' : 'fail',
+            outcome: initFailed ? 'skip' : code === 0 ? 'pass' : 'fail',
             durationMs: 0, // not measured here; runMatrix sets it on its own cell record
           },
           body: stdout + (stderr ? `\n---STDERR---\n${stderr}` : ''),
         });
       }
+    }
+
+    if (initFailed) {
+      // The single-cell process signalled "driver could not bootstrap"
+      // via the reserved exit code (its main() catch classifies init
+      // errors — see classifyCrashExit). Rethrow as a coded error so
+      // runMatrix classifies the cell 'skip', not 'fail'.
+      const e = new Error(
+        `cell ${browser}: driver init failed (device/browser app/env not available) — subprocess exit ${EXIT_DRIVER_INIT_FAILED}`,
+      );
+      e.code = 'DRIVER_INIT_FAILED';
+      throw e;
     }
 
     return code === 0;

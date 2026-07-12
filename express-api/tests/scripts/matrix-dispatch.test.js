@@ -1086,3 +1086,52 @@ describe('runMatrix — parallel (per-device-serial, cross-device-parallel)', ()
     expect(samsung.error).toBe('matrix aborted by failFast');
   });
 });
+
+// ── inc-2: reserved driver-init exit code + crash classification ─────
+
+describe('EXIT_DRIVER_INIT_FAILED — reserved cell exit code', () => {
+  const { EXIT_DRIVER_INIT_FAILED } = require('../../scripts/matrix-dispatch');
+
+  test('is 3 (0=pass, 1=findings, 2=runtime error are all taken)', () => {
+    expect(EXIT_DRIVER_INIT_FAILED).toBe(3);
+  });
+});
+
+describe('classifyCrashExit — main() catch classification', () => {
+  const { classifyCrashExit, EXIT_DRIVER_INIT_FAILED } = require('../../scripts/matrix-dispatch');
+
+  test('DRIVER_INIT_FAILED-coded error → reserved exit code + DRIVER_INIT_FAILED label', () => {
+    const e = Object.assign(new Error('boom'), { code: 'DRIVER_INIT_FAILED' });
+    expect(classifyCrashExit(e)).toEqual({
+      exitCode: EXIT_DRIVER_INIT_FAILED,
+      label: 'DRIVER_INIT_FAILED',
+    });
+  });
+
+  test('init-signature message (no code) → reserved exit code + DRIVER_INIT_FAILED label', () => {
+    const e = new Error(
+      'createMobileSafariIosDriver: WDA_TEAM_ID env var is required. This is the operator…',
+    );
+    expect(classifyCrashExit(e)).toEqual({
+      exitCode: EXIT_DRIVER_INIT_FAILED,
+      label: 'DRIVER_INIT_FAILED',
+    });
+  });
+
+  test('generic error → exit 2 + RUNNER_CRASH label', () => {
+    expect(classifyCrashExit(new Error('ENOENT: no such file or directory'))).toEqual({
+      exitCode: 2,
+      label: 'RUNNER_CRASH',
+    });
+  });
+
+  test('null / undefined → exit 2 + RUNNER_CRASH label (never throws)', () => {
+    expect(classifyCrashExit(null)).toEqual({ exitCode: 2, label: 'RUNNER_CRASH' });
+    expect(classifyCrashExit(undefined)).toEqual({ exitCode: 2, label: 'RUNNER_CRASH' });
+  });
+
+  test('CELL_TIMEOUT-coded error is NOT an init failure → exit 2', () => {
+    const e = Object.assign(new Error('cell timed out after 5s'), { code: 'CELL_TIMEOUT' });
+    expect(classifyCrashExit(e)).toEqual({ exitCode: 2, label: 'RUNNER_CRASH' });
+  });
+});

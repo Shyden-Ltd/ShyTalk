@@ -54,6 +54,26 @@ function isInitError(err) {
   return INIT_ERROR_SIGNATURES.some((rx) => rx.test(message));
 }
 
+// Reserved single-cell exit code for "a driver could not bootstrap"
+// (no device / browser app / env var). 0 = pass, 1 = findings, 2 =
+// runtime error are all taken by the runner's documented contract; the
+// per-cell dispatcher translates THIS code back into a
+// DRIVER_INIT_FAILED throw so a real `--matrix` run classifies the
+// cell 'skip' instead of collapsing it into 'fail' (SHY-0095 inc-2).
+const EXIT_DRIVER_INIT_FAILED = 3;
+
+/**
+ * Classifies a main() crash into the exit code + stderr label the
+ * single-cell process should die with. Init failures get the reserved
+ * exit code; everything else keeps the historical RUNNER_CRASH exit 2.
+ */
+function classifyCrashExit(err) {
+  if (isInitError(err)) {
+    return { exitCode: EXIT_DRIVER_INIT_FAILED, label: 'DRIVER_INIT_FAILED' };
+  }
+  return { exitCode: 2, label: 'RUNNER_CRASH' };
+}
+
 /**
  * Maps a browser slug to the physical resource its cell contends for, so the parallel
  * driver can serialise same-resource cells while running different resources concurrently.
@@ -399,6 +419,8 @@ function formatMatrixResultJunit(result, { nowIso = () => new Date().toISOString
 module.exports = {
   INIT_ERROR_SIGNATURES,
   isInitError,
+  EXIT_DRIVER_INIT_FAILED,
+  classifyCrashExit,
   defaultResourceKey,
   runMatrix,
   formatMatrixResult,

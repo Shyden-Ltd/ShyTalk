@@ -6,6 +6,8 @@
  * so the dispatcher under test passes ordinary argv:
  *
  *   FAKE_CELL_EXIT             exit code (default 0)
+ *   FAKE_CELL_EXIT_MAP         per-browser exit codes, e.g. "chromium=3,firefox=0"
+ *                              (wins over FAKE_CELL_EXIT for listed browsers)
  *   FAKE_CELL_SLEEP_MS         delay before exiting
  *   FAKE_CELL_STDOUT           string written to stdout
  *   FAKE_CELL_STDERR           string written to stderr
@@ -66,6 +68,12 @@ async function main() {
 
   const sleepMs = parseInt(process.env.FAKE_CELL_SLEEP_MS || '0', 10);
   if (sleepMs > 0) await new Promise((r) => setTimeout(r, sleepMs));
+  if (process.env.FAKE_CELL_EXIT_MAP) {
+    for (const pair of process.env.FAKE_CELL_EXIT_MAP.split(',')) {
+      const [slug, code] = pair.split('=');
+      if (slug === browser) process.exit(parseInt(code, 10));
+    }
+  }
   process.exit(parseInt(process.env.FAKE_CELL_EXIT || '0', 10));
 }
 

@@ -25,6 +25,7 @@ const { PassThrough } = require('stream');
 
 const { createCellDispatcher } = require('../../scripts/matrix-cell-dispatch');
 const cellLogs = require('../../scripts/matrix-cell-logs');
+const { runMatrix, EXIT_DRIVER_INIT_FAILED } = require('../../scripts/matrix-dispatch');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'fake-matrix-cell.js');
 
@@ -305,5 +306,90 @@ describe('createCellDispatcher — concurrency (the point of the async conversio
     // through and the operator's parallel log is scrambled.
     expect(teed).toContain(blockA);
     expect(teed).toContain(blockB);
+  });
+});
+
+describe('createCellDispatcher — driver-init exit code (inc-2 skip classification)', () => {
+  // The single-cell runner exits with the reserved EXIT_DRIVER_INIT_FAILED
+  // code when a driver cannot bootstrap (no device / missing env). The
+  // dispatcher must translate that into a DRIVER_INIT_FAILED throw so
+  // matrix-dispatch classifies the cell 'skip' — before inc-2, exit-2
+  // init crashes collapsed into 'fail' alongside real assertion failures.
+
+  test('a cell exiting EXIT_DRIVER_INIT_FAILED rejects with code DRIVER_INIT_FAILED naming the cell', async () => {
+    const dispatchOne = createCellDispatcher({
+      runnerPath: FIXTURE,
+      baseArgv: [],
+      env: { ...process.env, FAKE_CELL_EXIT: String(EXIT_DRIVER_INIT_FAILED) },
+    });
+    await expect(dispatchOne({ browser: 'mobile-safari-ios' })).rejects.toMatchObject({
+      code: 'DRIVER_INIT_FAILED',
+      message: expect.stringContaining('mobile-safari-ios'),
+    });
+  });
+
+  test('exit-1 (real failure) still resolves false — reserved code does not swallow real fails', async () => {
+    const dispatchOne = createCellDispatcher({
+      runnerPath: FIXTURE,
+      baseArgv: [],
+      env: { ...process.env, FAKE_CELL_EXIT: '1' },
+    });
+    await expect(dispatchOne({ browser: 'chromium' })).resolves.toBe(false);
+  });
+
+  test('capture mode flushes the init-failed cell output and writes a skip log before throwing', async () => {
+    const reportDir = tmpDir('cell-dispatch-init-skip-');
+    const out = new PassThrough();
+    const err = new PassThrough();
+    const readOut = collect(out);
+    const readErr = collect(err);
+    const dispatchOne = createCellDispatcher({
+      runnerPath: FIXTURE,
+      baseArgv: [],
+      captureStdio: true,
+      reportDir,
+      cellLogs,
+      out,
+      err,
+      env: {
+        ...process.env,
+        FAKE_CELL_EXIT: String(EXIT_DRIVER_INIT_FAILED),
+        FAKE_CELL_STDOUT: 'booting driver...\n',
+        FAKE_CELL_STDERR: 'DRIVER_INIT_FAILED no physical iPhone found\n',
+      },
+    });
+    await expect(dispatchOne({ browser: 'mobile-safari-ios' })).rejects.toMatchObject({
+      code: 'DRIVER_INIT_FAILED',
+    });
+    // The operator must be able to see WHY the cell skipped: output teed +
+    // log written with outcome=skip (fulfils the matrix-cell-logs
+    // docstring promise that device-offline skips leave a log behind).
+    expect(readOut()).toContain('booting driver...');
+    expect(readErr()).toContain('no physical iPhone found');
+    const log = fs.readFileSync(path.join(reportDir, 'mobile-safari-ios.log'), 'utf8');
+    expect(log).toContain('browser=mobile-safari-ios outcome=skip');
+    expect(log).toContain('booting driver...');
+    expect(log).toContain('---STDERR---');
+    expect(log).toContain('no physical iPhone found');
+  });
+
+  test('end-to-end through runMatrix: init-exit cell classifies skip, healthy cell passes, matrix ok', async () => {
+    const dispatchOne = createCellDispatcher({
+      runnerPath: FIXTURE,
+      baseArgv: [],
+      captureStdio: true,
+      out: new PassThrough(),
+      err: new PassThrough(),
+      env: { ...process.env, FAKE_CELL_EXIT_MAP: 'mobile-safari-ios=3,chromium=0' },
+    });
+    const result = await runMatrix({
+      browsers: ['mobile-safari-ios', 'chromium'],
+      dispatchOne,
+    });
+    expect(result.cells.map((c) => ({ browser: c.browser, outcome: c.outcome }))).toEqual([
+      { browser: 'mobile-safari-ios', outcome: 'skip' },
+      { browser: 'chromium', outcome: 'pass' },
+    ]);
+    expect(result.ok).toBe(true);
   });
 });

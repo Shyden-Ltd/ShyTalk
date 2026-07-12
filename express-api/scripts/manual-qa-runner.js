@@ -28,6 +28,8 @@
  *   0 — zero findings of any severity
  *   1 — one or more findings (Blocker / Major / Minor / Polish)
  *   2 — runtime error (missing env, unreachable target, etc.)
+ *   3 — driver init failed (no device / browser app / env var) —
+ *       reserved so a --matrix parent classifies the cell 'skip'
  */
 
 const fs = require('fs');
@@ -16448,7 +16450,13 @@ module.exports = {
 
 if (require.main === module) {
   main().catch((e) => {
-    console.error('RUNNER_CRASH', e?.message || e);
-    process.exit(2);
+    // Driver-init failures (no device / browser app / env var) exit with
+    // the reserved code so a --matrix parent classifies the cell 'skip';
+    // every other crash keeps the historical RUNNER_CRASH exit 2. Lazy
+    // require — the classifier lives beside the matrix outcome taxonomy.
+    const { classifyCrashExit } = require('./matrix-dispatch');
+    const { exitCode, label } = classifyCrashExit(e);
+    console.error(label, e?.message || e);
+    process.exit(exitCode);
   });
 }
