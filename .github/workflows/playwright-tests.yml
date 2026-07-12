@@ -245,7 +245,10 @@ jobs:
           EOF
 
       - name: Serve admin panel
-        run: npx serve public -l 8888 &
+        # SHY-0180: the zero-dep serve-web.js, not `npx serve` (which dies
+        # ~15 min into a heavy Chromium run — its npm-exec wrapper catches a
+        # signal and crashes on an in-flight EBADF).
+        run: node local/serve-web.js --port 8888 --root public --quiet &
 
       - name: Run Playwright tests (${{ matrix.project }})
         env:
