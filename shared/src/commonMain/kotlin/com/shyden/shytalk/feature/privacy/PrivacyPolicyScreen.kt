@@ -24,7 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.ui.PlatformWebView
-import com.shyden.shytalk.core.util.Constants
+import com.shyden.shytalk.core.util.WebUrls
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -61,7 +61,7 @@ fun PrivacyPolicyScreen(
                     .padding(padding),
         ) {
             PlatformWebView(
-                url = Constants.PRIVACY_POLICY_URL,
+                url = WebUrls.legalForCurrentBuild(WebUrls.LegalDoc.PRIVACY),
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             )
 

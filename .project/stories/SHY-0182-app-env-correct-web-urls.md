@@ -1,6 +1,6 @@
 ---
 id: SHY-0182
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-07-13
 priority: P1
@@ -112,4 +112,9 @@ Touches `shared/**` (+ platform host bridging) → **full protocol**: all app fr
 
 ## Notes
 
+- 2026-07-13 ~17:35 WIB — **Pickup-fitness review — the two "unknowns" RESOLVED by investigation (not guessing), so the story is buildable autonomously except the secret-provisioning + device gauntlet.**
+  - **Hosts (all three now pinned):** prod web `https://shytalk.shyden.co.uk` (Cloudflare Pages project `shytalk-site`), **dev web `https://dev.shytalk.shyden.co.uk`** (`shytalk-site-dev`, per `deploy-dev.yml:259/872`), local web = the `:8888` server via the on-device localhost bridge (same pattern as `apiBaseUrl`).
+  - **Dev-page restriction scheme:** HTTP **Basic auth**, `realm="ShyTalk Non-Prod"` — the edge middleware `functions/_lib/lockdown.js::basicAuthOk` **ignores the username and checks only the password** (`= DEV_BASIC_AUTH_PASSWORD` secret; fails closed if unset). So the app's dev-access credential is `Authorization: Basic base64("x:<DEV_BASIC_AUTH_PASSWORD>")`. The value is a build-time secret that MUST be empty on prod builds (mirror the `DEV_QA_PERSONAS_PASSWORD` → `BuildVariant` injection pattern). **Only genuine operator dependency left:** provisioning that secret into the app build config + the device gauntlet (real iPhone currently blocked — see [[reference-ios27-ui-automation-consent-gate]]).
+  - **The actual bug (confirmed):** `Constants.kt:76` `LEGAL_BASE_URL = "https://shytalk.shyden.co.uk"` is a compile-time `const val`, and the 4 legal `*_URL` constants derive from it → **every dev/local build opens PROD legal pages**. Real page names: `privacy.html`, `terms.html`, `community-guidelines.html`, `cyber-bullying.html` (NOT the story-shorthand). Consumers: `PrivacyPolicyScreen`/`TermsAndConditionsScreen`/`CommunityStandardsScreen`/`CyberBullyingPolicyScreen` (pass `Constants.*_URL` to `PlatformWebView`), and `PlatformWebView.android.kt:70` gates in-WebView nav on `LEGAL_BASE_URL` prefix — that gate MUST follow the dynamic base. Existing `ConstantsTest.kt:224+` `startsWith(LEGAL_BASE_URL)` tests will change (URLs become runtime-built).
+  - **Design:** a pure `WebUrls.baseUrl(environment, localHostOverride)` (dev/prod static, local injected, **fail-closed on unknown env**) + `WebUrls.legal(doc, environment, locale)` appending `?lang=<LanguagePreference.get()>`. Pure → the exhaustive (env × 20 locale) contamination suite drops straight onto it. App locale source = `LanguagePreference.get(): String`.
 - 2026-07-13 — Filed under EPIC-0007 as the APP half of the web-surface-correctness theme; the WEB `?lang=` resolver is [[SHY-0181]]. Hard rule + CI + contamination-tests per [[feedback-web-urls-env-derived-never-cross]] (operator 2026-07-13: "do not cross-over between environments ever" + "tests must confirm no cross-environment contaminations"). `type: bug` because the hardcoded prod URL is a live cross-env defect. `mvp: true` (compliance-adjacent + a real leak).

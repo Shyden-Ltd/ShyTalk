@@ -19,7 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
-import com.shyden.shytalk.core.util.Constants
+import com.shyden.shytalk.core.util.WebUrls
 
 @Composable
 actual fun PlatformWebView(
@@ -67,7 +67,11 @@ actual fun PlatformWebView(
                                     request: WebResourceRequest?,
                                 ): Boolean {
                                     val requestUrl = request?.url?.toString() ?: return true
-                                    return !requestUrl.startsWith(Constants.LEGAL_BASE_URL)
+                                    // Keep in-page navigation on the host the page was loaded
+                                    // from — for ANY environment (SHY-0182). The old hardcoded
+                                    // Constants.LEGAL_BASE_URL (prod) blocked every link on a
+                                    // dev/local build's own pages.
+                                    return !requestUrl.startsWith(WebUrls.originOf(url))
                                 }
                             }
                         loadUrl(url)

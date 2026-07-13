@@ -213,40 +213,9 @@ class ConstantsTest {
         assertEquals("super_shy_trial", Constants.SUPER_SHY_TRIAL_ID)
     }
 
-    // ── Legal URLs ──────────────────────────────────────────────────
-
-    @Test
-    fun `LEGAL_BASE_URL starts with https`() {
-        assertTrue(Constants.LEGAL_BASE_URL.startsWith("https://"))
-    }
-
-    @Test
-    fun `PRIVACY_POLICY_URL contains legal base URL`() {
-        assertTrue(Constants.PRIVACY_POLICY_URL.startsWith(Constants.LEGAL_BASE_URL))
-    }
-
-    @Test
-    fun `TERMS_URL contains legal base URL`() {
-        assertTrue(Constants.TERMS_URL.startsWith(Constants.LEGAL_BASE_URL))
-    }
-
-    @Test
-    fun `COMMUNITY_GUIDELINES_URL contains legal base URL`() {
-        assertTrue(Constants.COMMUNITY_GUIDELINES_URL.startsWith(Constants.LEGAL_BASE_URL))
-    }
-
-    @Test
-    fun `CYBER_BULLYING_URL contains legal base URL`() {
-        assertTrue(Constants.CYBER_BULLYING_URL.startsWith(Constants.LEGAL_BASE_URL))
-    }
-
-    @Test
-    fun `all legal URLs end with html extension`() {
-        assertTrue(Constants.PRIVACY_POLICY_URL.endsWith(".html"))
-        assertTrue(Constants.TERMS_URL.endsWith(".html"))
-        assertTrue(Constants.COMMUNITY_GUIDELINES_URL.endsWith(".html"))
-        assertTrue(Constants.CYBER_BULLYING_URL.endsWith(".html"))
-    }
+    // Legal-page URLs moved to WebUrls (SHY-0182) — see WebUrlsTest for the
+    // env-derived + locale-carrying + cross-env-contamination coverage. The
+    // old hardcoded-prod Constants.*_URL const vals were removed (the leak).
 
     // ── Notification channels ───────────────────────────────────────
 

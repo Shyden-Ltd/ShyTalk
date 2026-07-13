@@ -14,7 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import com.shyden.shytalk.core.ui.PlatformWebView
-import com.shyden.shytalk.core.util.Constants
+import com.shyden.shytalk.core.util.WebUrls
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.stringResource
@@ -38,7 +38,7 @@ fun CommunityStandardsScreen(onNavigateBack: () -> Unit) {
         },
     ) { padding ->
         PlatformWebView(
-            url = Constants.COMMUNITY_GUIDELINES_URL,
+            url = WebUrls.legalForCurrentBuild(WebUrls.LegalDoc.COMMUNITY),
             modifier =
                 Modifier
                     .fillMaxSize()

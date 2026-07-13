@@ -72,10 +72,9 @@ object Constants {
     const val COMPANY_ADDRESS = "71-75 Shelton Street, Covent Garden, London, WC2H 9JQ"
     const val CONTACT_EMAIL = "shytalk.help@gmail.com"
 
-    // Legal pages (Cloudflare Pages)
-    const val LEGAL_BASE_URL = "https://shytalk.shyden.co.uk"
-    const val PRIVACY_POLICY_URL = "$LEGAL_BASE_URL/privacy.html"
-    const val TERMS_URL = "$LEGAL_BASE_URL/terms.html"
-    const val COMMUNITY_GUIDELINES_URL = "$LEGAL_BASE_URL/community-guidelines.html"
-    const val CYBER_BULLYING_URL = "$LEGAL_BASE_URL/cyber-bullying.html"
+    // Legal-page URLs moved to `WebUrls` (SHY-0182): they must derive from
+    // BuildVariant.environment + the app locale, never a hardcoded prod host
+    // ([[feedback-web-urls-env-derived-never-cross]]). The old
+    // `LEGAL_BASE_URL`/`*_URL` const vals were the cross-env leak — every
+    // dev/local build opened prod legal pages.
 }
