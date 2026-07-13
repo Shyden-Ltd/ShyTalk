@@ -1,6 +1,6 @@
 ---
 id: SHY-0186
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-07-14
 priority: P1
@@ -107,4 +107,5 @@ Discovered during SHY-0182 review (`reference` note in that story): `./gradlew :
 
 ## Notes
 
+- 2026-07-14 ~03:30 WIB — **Increment 1 (the rename) DONE + a scope discovery.** Self-validated to In Progress (mechanical infra rename, low architectural risk). Renamed the **20** K/N-illegal backtick test names across 10 `commonTest` files (only `(`/`)`/`,` present; a collision-free, `fun \`…\``-scoped transform — dropped the punctuation, collapsed spaces). Result: **`:shared:compileTestKotlinIosSimulatorArm64` now compiles** (was: `Name contains illegal characters`), and `:shared:jvmTest` (1331/0) + `:shared:testAndroidHostTest` (545/0) stay green with preserved counts. **DISCOVERY — the rename is necessary but NOT sufficient:** `:shared:iosSimulatorArm64Test` (the RUN) fails at LINK — `ld: framework 'FirebaseCore' not found`. The K/N test binary transitively links `iosMain`'s native Firebase dependency, but the standalone gradle test link (unlike the app) has no Firebase framework search path — that comes from CocoaPods. **So the story is a bigger infra effort than M:** increment 2 must wire the CocoaPods/Firebase native frameworks (`FirebaseCore` + deps) into the `linkDebugTestIosSimulatorArm64` search path (or otherwise make the K/N test binary linkable) before the suite can execute. Then the illegal-name guard + CI wiring (increments 3-4). **Coordination:** the in-flight SHY-0182 branch adds ~21 MORE illegal names — those must be renamed too before its merge re-breaks the compile (the guard, once landed, enforces this).
 - 2026-07-14 — Filed from a SHY-0182 code-review finding (F6). Verified: `./gradlew :shared:iosSimulatorArm64Test` fails to compile; `grep -rE 'fun \`[^\`]*[(),][^\`]*\`' shared/src/commonTest` → 41 matches across 11 files. The K/N-illegal set may include chars beyond `()`/`,` (e.g. `.`/`:`) — the fix must iterate the compiler to zero, not just handle `()`/`,`. Parent EPIC-0003 (operational, real-only test apparatus): this makes the shared unit suite real on the K/N runtime, not a JVM stand-in.

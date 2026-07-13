@@ -574,7 +574,7 @@ class BuildVariantTest {
     }
 
     @Test
-    fun `isLocal is false on the fail-safe default (uninitialised env defaults to prod)`() {
+    fun `isLocal is false on the fail-safe default uninitialised env defaults to prod`() {
         // The default holder has environment="prod" so isLocal must be
         // false without any explicit initialiser. Pins the fail-safe
         // semantic so a missed init never enables local-only behaviours
@@ -628,7 +628,7 @@ class BuildVariantTest {
     // flow (which would fail against the Firebase Auth emulator).
 
     @Test
-    fun `isOAuthSignInVisible is true on all flavors (always render buttons)`() {
+    fun `isOAuthSignInVisible is true on all flavors always render buttons`() {
         for (env in listOf("local", "dev", "prod")) {
             BuildVariant.initBuildInfo(environment = env, buildVersion = "1.0")
             assertTrue(
@@ -639,7 +639,7 @@ class BuildVariantTest {
     }
 
     @Test
-    fun `isOAuthSignInVisible is true on the fail-safe default (no init called)`() {
+    fun `isOAuthSignInVisible is true on the fail-safe default no init called`() {
         // Defaults to prod (renders the buttons functionally). Visibility
         // gate is still true so a misconfigured platform initialiser
         // never accidentally hides the buttons.
@@ -668,7 +668,7 @@ class BuildVariantTest {
     }
 
     @Test
-    fun `isOAuthSignInFunctional is true on the fail-safe default (defaults to prod)`() {
+    fun `isOAuthSignInFunctional is true on the fail-safe default defaults to prod`() {
         // Critical fail-safe: a missing initialiser must NOT silently
         // disable OAuth on real prod. Defaults to "prod" → functional.
         assertTrue(BuildVariant.isOAuthSignInFunctional)
@@ -725,7 +725,7 @@ class BuildVariantTest {
     }
 
     @Test
-    fun `isDevAffordancesVisible ignores persona-password presence on prod (visibility is env-only)`() {
+    fun `isDevAffordancesVisible ignores persona-password presence on prod visibility is env-only`() {
         // Critical: a prod build with the persona password accidentally
         // baked in (env var leak, misconfigured CI) must STILL hide the
         // picker. The visibility gate is purely env-based; password
