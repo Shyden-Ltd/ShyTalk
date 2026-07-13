@@ -3,6 +3,7 @@ package com.shyden.shytalk.core.util
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.annotation.VisibleForTesting
 
 @SuppressLint("StaticFieldLeak")
 actual object LanguagePreference {
@@ -24,6 +25,20 @@ actual object LanguagePreference {
 
     fun init(context: Context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    /**
+     * Clears both the wired `prefs` and the in-memory fallback back to a
+     * pristine state. Test-support for this process-singleton (host tests must
+     * be able to isolate the prefs-present vs prefs-absent paths); never called
+     * by production code.
+     */
+    @VisibleForTesting
+    fun resetForTest() {
+        prefs = null
+        memLanguage = null
+        memAutoTranslate = false
+        memLegalVersion = 0
     }
 
     actual fun get(): String =

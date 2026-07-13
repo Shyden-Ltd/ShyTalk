@@ -56,7 +56,11 @@ class WebUrlsTest {
         BuildVariant.initBuildInfo(environment = "prod", buildVersion = "?", deviceInfo = "?")
         BuildVariant.initApiBaseUrl(null)
         BuildVariant.initDevWebAuthPassword(null)
+        // LanguagePreference is a process-singleton with THREE independent fields;
+        // reset all of them so no test leaks state into the next (HARD no-leak rule).
         LanguagePreference.set("en")
+        LanguagePreference.setAutoTranslate(false)
+        LanguagePreference.setAcceptedLegalVersion(0)
     }
 
     // ── baseUrl: exact host per environment ─────────────────────────────
@@ -672,6 +676,21 @@ class WebUrlsTest {
         // mutant that ignored the domain would wrongly suppress these.
         assertTrue(WebUrls.shouldShowWebViewLoadError("NSURLErrorDomain", 102L))
         assertTrue(WebUrls.shouldShowWebViewLoadError("WebKitErrorDomain", -999L))
+    }
+
+    @Test
+    fun `the suppressed codes are EXACT (an adjacent code in the right domain still shows)`() {
+        // Pins 102/-999 as `==`, not `>=`/`<=` — a boundary mutation would wrongly
+        // suppress these adjacent codes.
+        assertTrue(WebUrls.shouldShowWebViewLoadError("WebKitErrorDomain", 103L))
+        assertTrue(WebUrls.shouldShowWebViewLoadError("WebKitErrorDomain", 101L))
+        assertTrue(WebUrls.shouldShowWebViewLoadError("NSURLErrorDomain", -998L))
+        assertTrue(WebUrls.shouldShowWebViewLoadError("NSURLErrorDomain", -1000L))
+    }
+
+    @Test
+    fun `an empty error domain shows the diagnostic`() {
+        assertTrue(WebUrls.shouldShowWebViewLoadError("", 102L))
     }
 
     // ── legal(): locale validation ───────────────────────────────────────

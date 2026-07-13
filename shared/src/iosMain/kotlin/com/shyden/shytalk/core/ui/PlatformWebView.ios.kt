@@ -12,6 +12,7 @@ import androidx.compose.ui.viewinterop.UIKitInteropInteractionMode
 import androidx.compose.ui.viewinterop.UIKitInteropProperties
 import androidx.compose.ui.viewinterop.UIKitView
 import com.shyden.shytalk.core.util.WebUrls
+import kotlinx.cinterop.ObjCSignatureOverride
 import platform.Foundation.NSError
 import platform.Foundation.NSURL
 import platform.Foundation.NSURLAuthenticationChallenge
@@ -176,15 +177,26 @@ private class LegalWebViewDelegate(
         onLoadStarted() // a fresh load clears any prior diagnostic
     }
 
-    // Only the PROVISIONAL failure is handled: a pre-commit failure (the legal
-    // page never loaded — network down, or the Basic-auth challenge we cancelled)
-    // is what leaves a truly BLANK page, which is the AC's concern. A post-commit
-    // `didFailNavigation` leaves partially-rendered content, not a blank page —
-    // and it can't be overridden alongside this one anyway (identical Kotlin
-    // signature, differing only by Obj-C selector → conflicting overloads).
+    // Both a PRE-commit failure (`didFailProvisionalNavigation` — the legal page
+    // never loaded: network down, or the Basic-auth challenge we cancelled) and a
+    // POST-commit failure (`didFailNavigation` — connection lost mid-transfer)
+    // surface the diagnostic, matching Android's `onReceivedError` which fires for
+    // any main-frame failure regardless of commit state. The two ObjC methods
+    // share an identical Kotlin signature (differing only by selector), so the
+    // both need @ObjCSignatureOverride to sit alongside each other.
+    @ObjCSignatureOverride
     override fun webView(
         webView: WKWebView,
         didFailProvisionalNavigation: WKNavigation?,
+        withError: NSError,
+    ) {
+        if (WebUrls.shouldShowWebViewLoadError(withError.domain, withError.code)) onLoadError()
+    }
+
+    @ObjCSignatureOverride
+    override fun webView(
+        webView: WKWebView,
+        didFailNavigation: WKNavigation?,
         withError: NSError,
     ) {
         if (WebUrls.shouldShowWebViewLoadError(withError.domain, withError.code)) onLoadError()
