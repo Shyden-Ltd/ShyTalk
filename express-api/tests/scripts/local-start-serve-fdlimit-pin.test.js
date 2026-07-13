@@ -24,7 +24,9 @@ const START_SH = path.resolve(__dirname, '../../../local/start.sh');
 
 describe('local/start.sh — :8888 serve fd-limit hardening', () => {
   const lines = fs.readFileSync(START_SH, 'utf8').split('\n');
-  const serveIdx = lines.findIndex((l) => /npx serve public .*-l 8888/.test(l));
+  // SHY-0180: the :8888 web server is now the zero-dep `serve-web.js`, not
+  // `npx serve` (which died mid-suite). The fd-raise guard still precedes it.
+  const serveIdx = lines.findIndex((l) => /serve-web\.js.*--port 8888/.test(l));
   // The raise must be GUARDED: start.sh runs under `set -e`, and a bare
   // `ulimit -n N` on a machine whose HARD cap is below N returns nonzero
   // and aborts the script BEFORE cleanup() — orphaning Docker/emulators
