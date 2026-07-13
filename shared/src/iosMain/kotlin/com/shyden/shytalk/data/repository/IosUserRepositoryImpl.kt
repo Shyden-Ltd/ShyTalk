@@ -6,6 +6,7 @@ import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.firebaseCall
 import com.shyden.shytalk.core.util.logW
+import com.shyden.shytalk.core.util.recoverListenerErrors
 import com.shyden.shytalk.data.firestore.dataMap
 import com.shyden.shytalk.data.remote.IosApiClient
 import dev.gitlive.firebase.firestore.Direction
@@ -188,6 +189,11 @@ class IosUserRepositoryImpl(
                     warningReason = data["warningReason"] as? String,
                 )
             }
+            // SHY-0185: a `.snapshots` listener error (rules denial / network
+            // drop) surfaces as a FirebaseFirestoreException emitted into the
+            // Flow; uncaught on iOS it SIGABRTs the app right after sign-in.
+            // Recover to a safe default (parity with Android's swallow).
+            .recoverListenerErrors(UserFlags())
 
     override fun observeUsers(userIds: Set<String>): Flow<User> {
         if (userIds.isEmpty()) return emptyFlow()
