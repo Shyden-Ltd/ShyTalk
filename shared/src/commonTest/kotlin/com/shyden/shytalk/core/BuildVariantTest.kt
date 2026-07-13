@@ -14,6 +14,7 @@ class BuildVariantTest {
         BuildVariant.initIosDeviceId(null)
         BuildVariant.initBuildInfo(environment = "prod", buildVersion = "?", deviceInfo = "?")
         BuildVariant.initApiBaseUrl(null)
+        BuildVariant.initDevWebAuthPassword(null)
     }
 
     @Test
@@ -491,6 +492,43 @@ class BuildVariantTest {
         BuildVariant.initApiBaseUrl("http://localhost:3000")
         BuildVariant.initApiBaseUrl(null)
         assertNull(BuildVariant.apiBaseUrl)
+    }
+
+    // ── devWebAuthPassword — non-prod web Basic-auth secret (SHY-0182) ──
+
+    @Test
+    fun `devWebAuthPassword defaults to null so prod never carries a web secret`() {
+        assertNull(BuildVariant.devWebAuthPassword)
+    }
+
+    @Test
+    fun `initDevWebAuthPassword captures a non-empty secret for dev builds`() {
+        BuildVariant.initDevWebAuthPassword("s3cret-pw")
+        assertEquals("s3cret-pw", BuildVariant.devWebAuthPassword)
+    }
+
+    @Test
+    fun `initDevWebAuthPassword coerces empty string to null (fail-closed)`() {
+        // Matches the DEV_QA_PERSONAS_PASSWORD sibling: an empty BuildConfig
+        // field (prod/local) must not present an empty password — coerce to
+        // null so WebUrls.devWebBasicAuth sends no credential at all.
+        BuildVariant.initDevWebAuthPassword("")
+        assertNull(BuildVariant.devWebAuthPassword)
+    }
+
+    @Test
+    fun `initDevWebAuthPassword can be cleared by passing null`() {
+        BuildVariant.initDevWebAuthPassword("s3cret-pw")
+        BuildVariant.initDevWebAuthPassword(null)
+        assertNull(BuildVariant.devWebAuthPassword)
+    }
+
+    @Test
+    fun `initDevWebAuthPassword persists independently of other init calls`() {
+        BuildVariant.initDevWebAuthPassword("s3cret-pw")
+        BuildVariant.initApiBaseUrl("http://localhost:3000")
+        BuildVariant.initBuildInfo(environment = "dev", buildVersion = "1.0")
+        assertEquals("s3cret-pw", BuildVariant.devWebAuthPassword)
     }
 
     // ── isPersonaPickerAvailable matrix (PR B v2 — persona picker) ──

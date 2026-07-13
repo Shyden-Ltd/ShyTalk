@@ -43,6 +43,9 @@ SSOT_BASENAME='WebUrls.kt'
 
 # Forbidden literals (extended regex). Kept as an explicit list so each match
 # is self-documenting and the legal-page set is exact.
+# ⚠️ The legal-page filenames MUST stay in sync with WebUrls.LegalDoc.*.page —
+# the Jest meta-test `asserts the guard covers every WebUrls.LegalDoc page`
+# fails if a new LegalDoc is added here without updating this alternation.
 FORBIDDEN='dev\.shytalk\.shyden\.co\.uk|shytalk\.shyden\.co\.uk/(privacy|terms|community-guidelines|cyber-bullying)\.html'
 
 found=0
@@ -53,9 +56,18 @@ for root in "${ROOTS[@]}"; do
     case "$file" in
       *"/$SSOT_BASENAME") continue ;;
       */test/*|*Test.kt|*Tests.swift|*/androidTest/*|*/commonTest/*|*/jvmTest/*|*/androidHostTest/*) continue ;;
+      # Generated build output (vendored SPM checkouts, R8 output, etc.) — never
+      # source, gitignored, but a local Xcode/Gradle build leaves it under the
+      # scanned roots. Skip so a local run doesn't grind thousands of files.
+      */build/*|*/DerivedData/*|*/SourcePackages/*) continue ;;
     esac
-    # grep -n each offending line; -E extended regex, -H always show file.
-    if matches=$(grep -HnE "$FORBIDDEN" "$file"); then
+    # grep -n each offending line; -E extended regex, -H always show file, -i
+    # case-insensitive (host matching is case-insensitive per DNS + WebUrls'
+    # own .lowercase() comparisons — a `DEV.shytalk…` literal must not slip by).
+    # NOTE: line-based — a literal split across lines by string concatenation or
+    # a ktlint line-wrap won't match; the paired Jest meta-test documents this
+    # boundary. The realistic regression (a plain hardcoded literal) is caught.
+    if matches=$(grep -HniE "$FORBIDDEN" "$file"); then
       echo "$matches" | while IFS= read -r line; do
         echo "HARDCODED cross-env web URL: $line" >&2
       done

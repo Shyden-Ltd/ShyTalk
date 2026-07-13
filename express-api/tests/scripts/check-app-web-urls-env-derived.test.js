@@ -104,6 +104,48 @@ describe('check-app-web-urls-env-derived.sh', () => {
     expect(r.status).toBe(0);
   });
 
+  test('catches a case-variant host literal (case-insensitive match)', () => {
+    // Host matching is case-insensitive (DNS + WebUrls' own .lowercase()); an
+    // upper/mixed-case literal must not slip past the guard.
+    const { root, write } = mkTree('webguard-case-');
+    write(
+      'shared/src/commonMain/Leak.kt',
+      'val u = "https://DEV.ShyTalk.Shyden.CO.UK/privacy.html"\n',
+    );
+    const r = run(path.join(root, 'shared/src/commonMain'));
+    expect(r.status).toBe(1);
+    expect(r.stderr).toMatch(/Leak\.kt/);
+  });
+
+  test('skips generated build output (a local Xcode/Gradle build leaves it under the roots)', () => {
+    const { root, write } = mkTree('webguard-build-');
+    // A vendored file under build/ with the literal — must NOT trip the guard.
+    write(
+      'iosApp/build/SourcePackages/checkouts/vendor/Foo.swift',
+      'let u = "https://dev.shytalk.shyden.co.uk/x.html"\n',
+    );
+    const r = run(path.join(root, 'iosApp'));
+    expect(r.status).toBe(0);
+  });
+
+  test('the guard covers every WebUrls.LegalDoc page (drift guard)', () => {
+    // If a 5th LegalDoc is added without updating the script's forbidden list,
+    // a hardcoded URL for that page would bypass the guard. Tie the two lists
+    // together: every LegalDoc `.page` filename must appear in the script.
+    const webUrls = fs.readFileSync(
+      path.join(REPO_ROOT, 'shared/src/commonMain/kotlin/com/shyden/shytalk/core/util/WebUrls.kt'),
+      'utf8',
+    );
+    const script = fs.readFileSync(SCRIPT, 'utf8');
+    // Extract the enum page literals, e.g. PRIVACY("privacy.html").
+    const pages = [...webUrls.matchAll(/\(\s*"([a-z-]+\.html)"\s*\)/g)].map((m) => m[1]);
+    expect(pages.length).toBeGreaterThanOrEqual(4); // sanity: we found the enum
+    for (const page of pages) {
+      const stem = page.replace(/\.html$/, '');
+      expect(script).toContain(stem); // the forbidden alternation lists this page
+    }
+  });
+
   test('exit 0 against the REAL repo (the estate is clean today)', () => {
     // The whole point: this guard passes now, and any future hardcoded URL
     // trips it. Run with no args → the script scans its default app roots.

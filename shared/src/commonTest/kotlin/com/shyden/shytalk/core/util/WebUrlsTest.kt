@@ -1,9 +1,12 @@
 package com.shyden.shytalk.core.util
 
+import com.shyden.shytalk.core.BuildVariant
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -44,6 +47,17 @@ class WebUrlsTest {
         )
 
     private val allDocs = WebUrls.LegalDoc.entries
+
+    // The *ForCurrentBuild tests mutate the process-global BuildVariant +
+    // LanguagePreference; reset both after EVERY test so a set state can't leak
+    // into another test ([[feedback-test-isolation-no-leaks]] HARD rule).
+    @AfterTest
+    fun resetGlobalState() {
+        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "?", deviceInfo = "?")
+        BuildVariant.initApiBaseUrl(null)
+        BuildVariant.initDevWebAuthPassword(null)
+        LanguagePreference.set("en")
+    }
 
     // ── baseUrl: exact host per environment ─────────────────────────────
 
@@ -220,6 +234,19 @@ class WebUrlsTest {
     }
 
     @Test
+    fun `local web host derivation returns a non-3000 URL unchanged (documented passthrough)`() {
+        // Pins the current contract: only the `:3000`→`:8888` port swap is applied;
+        // a URL without `:3000` passes through untouched. Safe in production (the
+        // caller only invokes this for `local`, whose API URL always carries :3000),
+        // but pinned so a future refactor that routes a non-:3000 URL here is a
+        // conscious decision, not a silent surprise.
+        assertEquals(
+            "https://dev-api.shytalk.shyden.co.uk",
+            WebUrls.localWebHostFromApi("https://dev-api.shytalk.shyden.co.uk"),
+        )
+    }
+
+    @Test
     fun `a derived local host flows through legal() to a reachable web URL`() {
         val host = WebUrls.localWebHostFromApi("http://10.0.2.2:3000")
         assertEquals(
@@ -342,6 +369,79 @@ class WebUrlsTest {
         )) {
             assertEquals(null, WebUrls.devWebBasicAuth("dev", host, "s3cret"), "leaked secret to host=$host")
         }
+    }
+
+    // ── legalForCurrentBuild: the LIVE wiring the app screens call ───────
+    // These drive the real BuildVariant + LanguagePreference so a broken wire
+    // (wrong env field, dropped local-host derivation, wrong locale source)
+    // is caught — the pure legal() tests above would stay green through it.
+
+    @Test
+    fun `legalForCurrentBuild on a dev build uses the dev host and the app locale`() {
+        BuildVariant.initBuildInfo(environment = "dev", buildVersion = "1.0")
+        LanguagePreference.set("fr")
+        assertEquals(
+            "https://dev.shytalk.shyden.co.uk/privacy.html?lang=fr",
+            WebUrls.legalForCurrentBuild(WebUrls.LegalDoc.PRIVACY),
+        )
+    }
+
+    @Test
+    fun `legalForCurrentBuild on a prod build uses the prod host (no cross-env)`() {
+        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "1.0")
+        LanguagePreference.set("ar")
+        assertEquals(
+            "https://shytalk.shyden.co.uk/terms.html?lang=ar",
+            WebUrls.legalForCurrentBuild(WebUrls.LegalDoc.TERMS),
+        )
+    }
+
+    @Test
+    fun `legalForCurrentBuild on a local build derives the reachable host from the API bridge`() {
+        BuildVariant.initBuildInfo(environment = "local", buildVersion = "1.0")
+        BuildVariant.initApiBaseUrl("http://10.0.2.2:3000")
+        LanguagePreference.set("de")
+        assertEquals(
+            "http://10.0.2.2:8888/community-guidelines.html?lang=de",
+            WebUrls.legalForCurrentBuild(WebUrls.LegalDoc.COMMUNITY),
+        )
+    }
+
+    @Test
+    fun `legalForCurrentBuild on a local build with no API url falls back to the default local host`() {
+        BuildVariant.initBuildInfo(environment = "local", buildVersion = "1.0")
+        // apiBaseUrl left null → localWebHostFromApi(null) → default local host.
+        LanguagePreference.set("en")
+        assertEquals(
+            "http://localhost:8888/cyber-bullying.html?lang=en",
+            WebUrls.legalForCurrentBuild(WebUrls.LegalDoc.CYBER_BULLYING),
+        )
+    }
+
+    // ── devWebBasicAuthForCurrentBuild: live BuildVariant wiring ─────────
+
+    @Test
+    fun `devWebBasicAuthForCurrentBuild returns creds on a dev build with the secret set`() {
+        BuildVariant.initBuildInfo(environment = "dev", buildVersion = "1.0")
+        BuildVariant.initDevWebAuthPassword("s3cret")
+        assertEquals(
+            "shytalk-app" to "s3cret",
+            WebUrls.devWebBasicAuthForCurrentBuild("dev.shytalk.shyden.co.uk"),
+        )
+    }
+
+    @Test
+    fun `devWebBasicAuthForCurrentBuild returns null on a prod build even if a secret leaked in`() {
+        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "1.0")
+        BuildVariant.initDevWebAuthPassword("s3cret") // defence-in-depth: env gate still wins
+        assertNull(WebUrls.devWebBasicAuthForCurrentBuild("dev.shytalk.shyden.co.uk"))
+    }
+
+    @Test
+    fun `devWebBasicAuthForCurrentBuild returns null on a dev build with no secret provisioned`() {
+        BuildVariant.initBuildInfo(environment = "dev", buildVersion = "1.0")
+        // devWebAuthPassword left null (secret not baked into this build).
+        assertNull(WebUrls.devWebBasicAuthForCurrentBuild("dev.shytalk.shyden.co.uk"))
     }
 
     // ── legal(): locale validation ───────────────────────────────────────
