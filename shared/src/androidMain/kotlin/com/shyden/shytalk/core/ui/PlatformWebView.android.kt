@@ -66,12 +66,14 @@ actual fun PlatformWebView(
                                     view: WebView?,
                                     request: WebResourceRequest?,
                                 ): Boolean {
+                                    // `request.url` is already parsed by the platform; its
+                                    // canonical string form feeds an EXACT same-origin check
+                                    // (scheme+host+port, userinfo rejected) — NOT a prefix
+                                    // match, which `https://host@evil.com` would bypass
+                                    // (SHY-0182 security fix). Keeps in-page navigation on the
+                                    // host the page loaded from, for ANY environment.
                                     val requestUrl = request?.url?.toString() ?: return true
-                                    // Keep in-page navigation on the host the page was loaded
-                                    // from — for ANY environment (SHY-0182). The old hardcoded
-                                    // Constants.LEGAL_BASE_URL (prod) blocked every link on a
-                                    // dev/local build's own pages.
-                                    return !requestUrl.startsWith(WebUrls.originOf(url))
+                                    return !WebUrls.isSameOrigin(url, requestUrl)
                                 }
                             }
                         loadUrl(url)

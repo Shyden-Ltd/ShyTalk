@@ -228,25 +228,79 @@ class WebUrlsTest {
         )
     }
 
-    // ── originOf: the WebView nav-gate boundary ──────────────────────────
+    // ── isSameOrigin: the WebView nav-gate (SECURITY) ────────────────────
 
     @Test
-    fun `originOf strips the path and query, keeping scheme and authority`() {
-        assertEquals(
-            "https://dev.shytalk.shyden.co.uk",
-            WebUrls.originOf("https://dev.shytalk.shyden.co.uk/privacy.html?lang=fr"),
-        )
-        assertEquals("http://10.0.2.2:8888", WebUrls.originOf("http://10.0.2.2:8888/terms.html?lang=de"))
+    fun `same host, different page is same-origin (in-page navigation allowed)`() {
+        val loaded = WebUrls.legal(WebUrls.LegalDoc.PRIVACY, environment = "dev", locale = "en")
+        assertTrue(WebUrls.isSameOrigin(loaded, "https://dev.shytalk.shyden.co.uk/terms.html"))
+        assertTrue(WebUrls.isSameOrigin(loaded, "https://DEV.SHYTALK.SHYDEN.CO.UK/terms.html")) // host case-insensitive
     }
 
     @Test
-    fun `originOf of a legal URL gates navigation to that same host`() {
-        // A request to another page on the SAME host is allowed; a foreign host is not.
-        val loaded = WebUrls.legal(WebUrls.LegalDoc.PRIVACY, environment = "dev", locale = "en")
-        val origin = WebUrls.originOf(loaded)
-        assertTrue("https://dev.shytalk.shyden.co.uk/terms.html".startsWith(origin))
-        assertFalse("https://shytalk.shyden.co.uk/terms.html".startsWith(origin))
-        assertFalse("https://evil.example.com/".startsWith(origin))
+    fun `a plainly different host is NOT same-origin`() {
+        val loaded = "https://dev.shytalk.shyden.co.uk/privacy.html?lang=en"
+        assertFalse(WebUrls.isSameOrigin(loaded, "https://evil.example.com/"))
+        assertFalse(WebUrls.isSameOrigin(loaded, "https://shytalk.shyden.co.uk/terms.html")) // prod ≠ dev
+    }
+
+    @Test
+    fun `userinfo-embedded host does NOT bypass the gate`() {
+        // `https://dev.shytalk.shyden.co.uk@evil.com/` prefix-matches the loaded
+        // origin but its REAL host is evil.com — the old startsWith gate allowed it.
+        val loaded = "https://dev.shytalk.shyden.co.uk/privacy.html"
+        assertFalse(WebUrls.isSameOrigin(loaded, "https://dev.shytalk.shyden.co.uk@evil.com/"))
+        assertFalse(WebUrls.isSameOrigin(loaded, "https://dev.shytalk.shyden.co.uk:443@evil.com/x"))
+    }
+
+    @Test
+    fun `a suffix-domain host does NOT bypass the gate`() {
+        // `dev.shytalk.shyden.co.uk.evil.com` prefix-matches but is evil.com's subdomain.
+        val loaded = "https://dev.shytalk.shyden.co.uk/privacy.html"
+        assertFalse(WebUrls.isSameOrigin(loaded, "https://dev.shytalk.shyden.co.uk.evil.com/"))
+        assertFalse(WebUrls.isSameOrigin(loaded, "https://dev.shytalk.shyden.co.uk-evil.com/"))
+    }
+
+    @Test
+    fun `a different scheme is NOT same-origin`() {
+        val loaded = "https://dev.shytalk.shyden.co.uk/privacy.html"
+        assertFalse(WebUrls.isSameOrigin(loaded, "http://dev.shytalk.shyden.co.uk/terms.html"))
+    }
+
+    @Test
+    fun `a different port is NOT same-origin`() {
+        val loaded = "http://10.0.2.2:8888/privacy.html"
+        assertTrue(WebUrls.isSameOrigin(loaded, "http://10.0.2.2:8888/terms.html"))
+        assertFalse(WebUrls.isSameOrigin(loaded, "http://10.0.2.2:3000/terms.html"))
+    }
+
+    @Test
+    fun `non-http(s) and malformed request URLs fail closed`() {
+        val loaded = "https://dev.shytalk.shyden.co.uk/privacy.html"
+        assertFalse(WebUrls.isSameOrigin(loaded, "javascript:alert(1)"))
+        assertFalse(WebUrls.isSameOrigin(loaded, "data:text/html,<script>alert(1)</script>"))
+        assertFalse(WebUrls.isSameOrigin(loaded, "about:blank"))
+        assertFalse(WebUrls.isSameOrigin(loaded, "intent://evil#Intent;scheme=https;end"))
+        assertFalse(WebUrls.isSameOrigin(loaded, "not-a-url"))
+        assertFalse(WebUrls.isSameOrigin(loaded, ""))
+    }
+
+    @Test
+    fun `a malformed LOADED url also fails closed`() {
+        // Defensive: even if the page was somehow loaded from a junk URL, gate closed.
+        assertFalse(WebUrls.isSameOrigin("garbage", "https://dev.shytalk.shyden.co.uk/x.html"))
+    }
+
+    @Test
+    fun `every legal URL is same-origin with a sibling page but not the other env`() {
+        for (env in listOf("prod", "dev")) {
+            val loaded = WebUrls.legal(WebUrls.LegalDoc.PRIVACY, environment = env, locale = "en")
+            val sameHostSibling = WebUrls.legal(WebUrls.LegalDoc.TERMS, environment = env, locale = "de")
+            assertTrue(WebUrls.isSameOrigin(loaded, sameHostSibling), "$env sibling should be same-origin")
+            val otherEnv = if (env == "prod") "dev" else "prod"
+            val crossEnv = WebUrls.legal(WebUrls.LegalDoc.TERMS, environment = otherEnv, locale = "de")
+            assertFalse(WebUrls.isSameOrigin(loaded, crossEnv), "$env must not be same-origin as $otherEnv")
+        }
     }
 
     // ── legal(): locale validation ───────────────────────────────────────
