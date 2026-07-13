@@ -81,6 +81,17 @@ android {
                 "DEV_QA_PERSONAS_PASSWORD",
                 "\"${(project.findProperty("DEV_QA_PERSONAS_PASSWORD") as? String) ?: System.getenv("DEV_QA_PERSONAS_PASSWORD") ?: ""}\"",
             )
+            // SHY-0182: HTTP Basic-auth password for the restricted dev web
+            // pages (Cloudflare `realm="ShyTalk Non-Prod"`). Sourced from env
+            // var / gradle prop, EMPTY by default so a CI-built dev APK without
+            // the secret simply can't open dev pages (fail-closed) rather than
+            // shipping a credential. Must match the `DEV_BASIC_AUTH_PASSWORD`
+            // secret the deploy-dev workflow feeds the Pages middleware.
+            buildConfigField(
+                "String",
+                "DEV_BASIC_AUTH_PASSWORD",
+                "\"${(project.findProperty("DEV_BASIC_AUTH_PASSWORD") as? String) ?: System.getenv("DEV_BASIC_AUTH_PASSWORD") ?: ""}\"",
+            )
         }
         create("prod") {
             dimension = "env"
@@ -100,6 +111,8 @@ android {
             // Prod never bakes the persona-picker password — production
             // builds must not expose any test-account shortcut.
             buildConfigField("String", "DEV_QA_PERSONAS_PASSWORD", "\"\"")
+            // Prod web is public (no Basic-auth gate); never bake the secret.
+            buildConfigField("String", "DEV_BASIC_AUTH_PASSWORD", "\"\"")
         }
         create("local") {
             dimension = "env"
@@ -136,6 +149,9 @@ android {
             // when an operator runs `./gradlew installLocalDebug` against
             // a freshly started emulator stack — no env var needed.
             buildConfigField("String", "DEV_QA_PERSONAS_PASSWORD", "\"localdev123\"")
+            // The local web server (local/serve-web.js) has NO Basic-auth gate,
+            // so no credential is needed or baked (empty → sends none).
+            buildConfigField("String", "DEV_BASIC_AUTH_PASSWORD", "\"\"")
         }
     }
 

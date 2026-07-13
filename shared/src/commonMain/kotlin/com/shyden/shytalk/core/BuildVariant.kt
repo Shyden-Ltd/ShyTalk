@@ -23,6 +23,7 @@ data class BuildVariantConfig(
     val buildVersion: String = "?",
     val deviceInfo: String = "?",
     val apiBaseUrl: String? = null,
+    val devWebAuthPassword: String? = null,
 )
 
 /**
@@ -153,6 +154,17 @@ object BuildVariant {
      * posting to a relative URL.
      */
     val apiBaseUrl: String? get() = holder.apiBaseUrl
+
+    /**
+     * The HTTP Basic-auth password the app presents to reach the restricted
+     * NON-PROD web pages (Cloudflare Pages `realm="ShyTalk Non-Prod"`, whose
+     * edge middleware ignores the username and checks only the password —
+     * `functions/_lib/lockdown.js`). Injected at build time from
+     * `DEV_BASIC_AUTH_PASSWORD`; **null on prod** (prod web is public and must
+     * never carry the secret). Consumed only via [WebUrls.devWebBasicAuth]
+     * (SHY-0182). Empty coerces to null so callers read with `isNullOrEmpty`.
+     */
+    val devWebAuthPassword: String? get() = holder.devWebAuthPassword
 
     /**
      * Convenience: any environment that isn't prod is a "preview"
@@ -313,5 +325,17 @@ object BuildVariant {
      */
     fun initApiBaseUrl(value: String?) {
         holder = holder.copy(apiBaseUrl = value?.takeIf { it.isNotBlank() })
+    }
+
+    /**
+     * One-shot initialiser for the non-prod web Basic-auth password. Called
+     * from platform entry points (Android `MainActivity`, iOS `KoinHelper`)
+     * with the build-injected `DEV_BASIC_AUTH_PASSWORD` (empty/absent on prod).
+     * Empty coerces to null → [WebUrls.devWebBasicAuth] then sends no credential
+     * (fail-closed: a build without the secret simply can't open dev pages,
+     * rather than presenting an empty password).
+     */
+    fun initDevWebAuthPassword(value: String?) {
+        holder = holder.copy(devWebAuthPassword = value?.takeIf { it.isNotEmpty() })
     }
 }

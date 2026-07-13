@@ -75,6 +75,27 @@ actual fun PlatformWebView(
                                     val requestUrl = request?.url?.toString() ?: return true
                                     return !WebUrls.isSameOrigin(url, requestUrl)
                                 }
+
+                                // Answer the dev web pages' Basic-auth challenge
+                                // (realm "ShyTalk Non-Prod") so a dev build can open
+                                // its own restricted pages (SHY-0182). WebUrls gates
+                                // the secret to dev builds + the dev host only; any
+                                // other challenger (prod, an off-site redirect) gets
+                                // cancel() — the secret never leaks.
+                                override fun onReceivedHttpAuthRequest(
+                                    view: WebView?,
+                                    handler: android.webkit.HttpAuthHandler?,
+                                    host: String?,
+                                    realm: String?,
+                                ) {
+                                    if (handler == null) return
+                                    val credential = WebUrls.devWebBasicAuthForCurrentBuild(host)
+                                    if (credential != null) {
+                                        handler.proceed(credential.first, credential.second)
+                                    } else {
+                                        handler.cancel()
+                                    }
+                                }
                             }
                         loadUrl(url)
                     }

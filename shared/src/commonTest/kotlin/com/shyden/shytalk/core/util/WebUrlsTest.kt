@@ -303,6 +303,47 @@ class WebUrlsTest {
         }
     }
 
+    // ── devWebBasicAuth: dev-page credential (fail-closed) ───────────────
+
+    @Test
+    fun `dev build presents the credential to its own dev host`() {
+        assertEquals(
+            "shytalk-app" to "s3cret",
+            WebUrls.devWebBasicAuth("dev", challengingHost = "dev.shytalk.shyden.co.uk", password = "s3cret"),
+        )
+        // Host comparison is case-insensitive (DNS).
+        assertEquals(
+            "shytalk-app" to "s3cret",
+            WebUrls.devWebBasicAuth("dev", challengingHost = "DEV.SHYTALK.SHYDEN.CO.UK", password = "s3cret"),
+        )
+    }
+
+    @Test
+    fun `prod and local never present a credential`() {
+        assertEquals(null, WebUrls.devWebBasicAuth("prod", "dev.shytalk.shyden.co.uk", "s3cret"))
+        assertEquals(null, WebUrls.devWebBasicAuth("local", "dev.shytalk.shyden.co.uk", "s3cret"))
+    }
+
+    @Test
+    fun `a missing or blank password authenticates nothing (fail-closed)`() {
+        assertEquals(null, WebUrls.devWebBasicAuth("dev", "dev.shytalk.shyden.co.uk", null))
+        assertEquals(null, WebUrls.devWebBasicAuth("dev", "dev.shytalk.shyden.co.uk", ""))
+    }
+
+    @Test
+    fun `the secret is NEVER sent to a host other than the dev web host`() {
+        // Defends against handing the dev password to an off-site redirect's challenger.
+        for (host in listOf(
+            "evil.com",
+            "dev-api.shytalk.shyden.co.uk",
+            "shytalk.shyden.co.uk",
+            "dev.shytalk.shyden.co.uk.evil.com",
+            null,
+        )) {
+            assertEquals(null, WebUrls.devWebBasicAuth("dev", host, "s3cret"), "leaked secret to host=$host")
+        }
+    }
+
     // ── legal(): locale validation ───────────────────────────────────────
 
     @Test

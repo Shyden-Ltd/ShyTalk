@@ -22,6 +22,17 @@ object WebUrls {
     /** Canonical dev web host (Cloudflare Pages project `shytalk-site-dev`). */
     const val DEV_HOST: String = "https://dev.shytalk.shyden.co.uk"
 
+    /** The dev web host authority (no scheme) — the ONLY host the app hands its Basic-auth secret to. */
+    const val DEV_HOST_AUTHORITY: String = "dev.shytalk.shyden.co.uk"
+
+    /**
+     * Username in the dev-page Basic-auth handshake. The edge middleware
+     * (`functions/_lib/lockdown.js`) ignores the username and checks only the
+     * password, so any non-empty value works; a fixed placeholder keeps it
+     * identifiable in access logs.
+     */
+    const val DEV_WEB_AUTH_USERNAME: String = "shytalk-app"
+
     /**
      * Fallback local web host when the caller injects none. The local server
      * (`local/serve-web.js`) listens on :8888; a real device reaches it over
@@ -146,6 +157,38 @@ object WebUrls {
         if (authority.isEmpty() || '@' in authority) return null
         return "$scheme://${authority.lowercase()}"
     }
+
+    /**
+     * The Basic-auth credential (username to password) the app must present to
+     * a dev-web Basic-auth challenge from [challengingHost], or null to send
+     * NONE. Fails closed on every axis:
+     *  - only `dev` builds ever authenticate (prod web is public; local isn't gated);
+     *  - the secret goes ONLY to our own dev host [DEV_HOST_AUTHORITY] — a
+     *    challenge from any other host (e.g. after an off-site redirect) gets
+     *    nothing, so the secret can't leak to an attacker-controlled challenger;
+     *  - a blank/absent [password] (build without the secret) authenticates nothing.
+     *
+     * @param challengingHost the host issuing the 401 (Android's
+     *   `onReceivedHttpAuthRequest` host arg / WKWebView challenge host).
+     */
+    fun devWebBasicAuth(
+        environment: String,
+        challengingHost: String?,
+        password: String?,
+    ): Pair<String, String>? {
+        if (environment != "dev") return null
+        if (password.isNullOrEmpty()) return null
+        if (challengingHost?.lowercase() != DEV_HOST_AUTHORITY) return null
+        return DEV_WEB_AUTH_USERNAME to password
+    }
+
+    /**
+     * Convenience over [devWebBasicAuth] reading the live [BuildVariant]
+     * ([BuildVariant.environment] + [BuildVariant.devWebAuthPassword]); the
+     * platform WebView auth-challenge handler calls this with the challenging host.
+     */
+    fun devWebBasicAuthForCurrentBuild(challengingHost: String?): Pair<String, String>? =
+        devWebBasicAuth(BuildVariant.environment, challengingHost, BuildVariant.devWebAuthPassword)
 
     /**
      * Derives the local WEB host from the local API base URL by swapping the

@@ -134,6 +134,9 @@ class MainActivity : AppCompatActivity() {
             buildVersion = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
             deviceInfo = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}",
         )
+        // SHY-0182: the Basic-auth secret for the restricted dev web pages
+        // (empty on prod/local → WebUrls.devWebBasicAuth sends no credential).
+        BuildVariant.initDevWebAuthPassword(BuildConfig.DEV_BASIC_AUTH_PASSWORD)
         biometricAuth.setActivity(this)
         enableEdgeToEdge()
 
