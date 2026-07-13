@@ -1,6 +1,6 @@
 ---
 id: SHY-0185
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-13
 priority: P0
@@ -104,4 +104,8 @@ Root-caused 2026-07-13 from 20 on-device crash reports (`idevicecrashreport`, al
 
 ## Notes (running log)
 
+Reviewed-up-to: 952d965a204
+
+- 2026-07-13 ~21:11 WIB — **ON-DEVICE VERIFIED (real iPhone).** Rebuilt the Debug-Dev app WITH the fix, reinstalled fresh, drove sign-in (alert→legal→sign-in screen). Crash count via `idevicecrashreport` stayed at the **baseline 20 — ZERO new crashes**; the newest .ips is still the pre-fix 16:56 one. The app stayed alive (`processId 1365`, queryable ShyTalk dump) through legal acceptance onto the sign-in screen — exactly where the unfixed app SIGABRT'd to SpringBoard 20 times earlier today. Crash fix confirmed. (The run's bind-x "picker never opened" is the SEPARATE pre-existing iOS-27 sign-in-landing snapshot-hang / coord-tap flakiness — not a crash, tracked with the SHY-0151 device proof.)
+- 2026-07-13 ~20:30 WIB — **code-reviewer R1 clean after fixes** (commit `952d965a204`): Exception-only boundary (fatal Error rethrows), cancellation + Error + UserFlags-safe-default tests (FlowRecoveryTest 6), logging at the iOS call site, KDoc + story-UX-AC corrections. Reviewer confirmed no exploitable fail-open (server-side suspension/ban enforcement is independent of this client listener). jvmTest + compileKotlinIosArm64 green; ktlint+detekt clean.
 - 2026-07-13 ~20:20 WIB — Filed from the SHY-0151 device-proof crash investigation (operator authorised the mitigation). Evidence: 20 `iosApp-2026-07-13-*.ips` crash reports (scratchpad/crash2), all SIGABRT via `FirebaseFirestoreException` from `NativeDocumentReference$snapshots` → `IosUserRepositoryImpl.observeUserFlags` (no catch) → `SharedNavGraph.kt:116` collect. Android impl (`app/src/main/.../UserRepositoryImpl.kt:189`) already swallows the error arg. Root fix = EPIC-0006 (route via API). Related history: [[project-shy0139-ios-crash-fix]].
