@@ -142,6 +142,26 @@ object WebUrls {
     }
 
     /**
+     * Whether the WKWebView should ALLOW a navigation to [targetUrl] while the
+     * currently-displayed page is [currentUrl]. This is the iOS counterpart of
+     * the Android nav-gate, which is a straight [isSameOrigin] call — but iOS
+     * WKWebView invokes its navigation-policy delegate for the FIRST programmatic
+     * load too (Android's `shouldOverrideUrlLoading` does not). Before anything
+     * is committed [currentUrl] is null; that initial load MUST be allowed or the
+     * page never appears. Every subsequent navigation is the same same-origin
+     * gate (stay on the host the legal page loaded from, block off-origin links),
+     * and a null/unparseable [targetUrl] fails CLOSED (block).
+     */
+    fun shouldAllowWebViewNavigation(
+        currentUrl: String?,
+        targetUrl: String?,
+    ): Boolean {
+        if (currentUrl == null) return true // initial load — nothing displayed yet
+        if (targetUrl == null) return false // fail closed
+        return isSameOrigin(currentUrl, targetUrl)
+    }
+
+    /**
      * The normalized `scheme://authority` origin of [url] (scheme + authority
      * lowercased, port retained), or null when [url] is not a plain http(s)
      * URL or carries userinfo — cases that must never match a legitimate
@@ -189,6 +209,57 @@ object WebUrls {
      */
     fun devWebBasicAuthForCurrentBuild(challengingHost: String?): Pair<String, String>? =
         devWebBasicAuth(BuildVariant.environment, challengingHost, BuildVariant.devWebAuthPassword)
+
+    /**
+     * What a WKWebView auth-challenge delegate should do, decided here in
+     * commonMain so the iOS delegate is a thin, on-device-untestable-glue-free
+     * translation into `completionHandler` dispositions (this decision carries
+     * the unit-test coverage). Android needs no equivalent type — its
+     * `onReceivedHttpAuthRequest` only fires for HTTP auth, so proceed/cancel
+     * suffices; iOS funnels EVERY challenge (including TLS server-trust) through
+     * one delegate method, hence the third [PerformDefault] case.
+     */
+    sealed interface WebViewAuthChallengeAction {
+        /** Answer a dev-web Basic-auth challenge with these credentials. */
+        data class UseCredential(
+            val username: String,
+            val password: String,
+        ) : WebViewAuthChallengeAction
+
+        /**
+         * A Basic-auth challenge we will NOT answer — cancel it. Fails closed:
+         * no native login prompt, and the dev secret never reaches a challenger
+         * we don't trust (wrong host / prod build / no secret).
+         */
+        data object Cancel : WebViewAuthChallengeAction
+
+        /**
+         * NOT a Basic-auth challenge (TLS server-trust, client cert, …) — let
+         * the platform handle it. Cancelling here would break HTTPS.
+         */
+        data object PerformDefault : WebViewAuthChallengeAction
+    }
+
+    /**
+     * The [WebViewAuthChallengeAction] for a WKWebView auth challenge:
+     *  - a Basic-auth challenge ([isBasicAuthChallenge] true) →
+     *    [WebViewAuthChallengeAction.UseCredential] when
+     *    [devWebBasicAuthForCurrentBuild] grants one for [challengingHost]
+     *    (dev build, our dev host, secret present), else
+     *    [WebViewAuthChallengeAction.Cancel];
+     *  - any non-Basic challenge → [WebViewAuthChallengeAction.PerformDefault],
+     *    so certificate validation is never subverted.
+     */
+    fun webViewAuthChallengeAction(
+        isBasicAuthChallenge: Boolean,
+        challengingHost: String?,
+    ): WebViewAuthChallengeAction {
+        if (!isBasicAuthChallenge) return WebViewAuthChallengeAction.PerformDefault
+        val credential =
+            devWebBasicAuthForCurrentBuild(challengingHost)
+                ?: return WebViewAuthChallengeAction.Cancel
+        return WebViewAuthChallengeAction.UseCredential(credential.first, credential.second)
+    }
 
     /**
      * Derives the local WEB host from the local API base URL by swapping the

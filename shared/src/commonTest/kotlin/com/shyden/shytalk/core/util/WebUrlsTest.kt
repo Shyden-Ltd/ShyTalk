@@ -444,6 +444,150 @@ class WebUrlsTest {
         assertNull(WebUrls.devWebBasicAuthForCurrentBuild("dev.shytalk.shyden.co.uk"))
     }
 
+    // ── webViewAuthChallengeAction: iOS WKWebView challenge disposition ──
+    // The pure decision the iOS delegate translates into completionHandler
+    // dispositions. Mirrors Android's onReceivedHttpAuthRequest (proceed/cancel)
+    // AND adds the iOS-only third case: a non-Basic challenge (TLS server-trust)
+    // must fall through to PerformDefault, never be cancelled.
+
+    @Test
+    fun `a Basic-auth challenge on a dev build with the secret uses the credential`() {
+        BuildVariant.initBuildInfo(environment = "dev", buildVersion = "1.0")
+        BuildVariant.initDevWebAuthPassword("s3cret")
+        assertEquals(
+            WebUrls.WebViewAuthChallengeAction.UseCredential("shytalk-app", "s3cret"),
+            WebUrls.webViewAuthChallengeAction(
+                isBasicAuthChallenge = true,
+                challengingHost = "dev.shytalk.shyden.co.uk",
+            ),
+        )
+    }
+
+    @Test
+    fun `a Basic-auth challenge from a NON-dev host is cancelled (secret never leaks off-host)`() {
+        BuildVariant.initBuildInfo(environment = "dev", buildVersion = "1.0")
+        BuildVariant.initDevWebAuthPassword("s3cret")
+        // An off-site redirect challenges us — the dev secret is gated to our host.
+        assertEquals(
+            WebUrls.WebViewAuthChallengeAction.Cancel,
+            WebUrls.webViewAuthChallengeAction(
+                isBasicAuthChallenge = true,
+                challengingHost = "evil.example.com",
+            ),
+        )
+    }
+
+    @Test
+    fun `a Basic-auth challenge on a PROD build is cancelled even if a secret leaked in`() {
+        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "1.0")
+        BuildVariant.initDevWebAuthPassword("s3cret") // env gate still wins
+        assertEquals(
+            WebUrls.WebViewAuthChallengeAction.Cancel,
+            WebUrls.webViewAuthChallengeAction(
+                isBasicAuthChallenge = true,
+                challengingHost = "dev.shytalk.shyden.co.uk",
+            ),
+        )
+    }
+
+    @Test
+    fun `a Basic-auth challenge on a dev build with no secret is cancelled`() {
+        BuildVariant.initBuildInfo(environment = "dev", buildVersion = "1.0")
+        // devWebAuthPassword left null — nothing to answer with.
+        assertEquals(
+            WebUrls.WebViewAuthChallengeAction.Cancel,
+            WebUrls.webViewAuthChallengeAction(
+                isBasicAuthChallenge = true,
+                challengingHost = "dev.shytalk.shyden.co.uk",
+            ),
+        )
+    }
+
+    @Test
+    fun `a NON-Basic challenge falls through to default handling even when creds are available`() {
+        // A TLS server-trust challenge on a dev build with the secret set: we
+        // must NOT answer it with the Basic password and must NOT cancel it
+        // (that would break HTTPS) — the platform validates the certificate.
+        BuildVariant.initBuildInfo(environment = "dev", buildVersion = "1.0")
+        BuildVariant.initDevWebAuthPassword("s3cret")
+        assertEquals(
+            WebUrls.WebViewAuthChallengeAction.PerformDefault,
+            WebUrls.webViewAuthChallengeAction(
+                isBasicAuthChallenge = false,
+                challengingHost = "dev.shytalk.shyden.co.uk",
+            ),
+        )
+    }
+
+    @Test
+    fun `a NON-Basic challenge on a prod build also falls through to default handling`() {
+        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "1.0")
+        assertEquals(
+            WebUrls.WebViewAuthChallengeAction.PerformDefault,
+            WebUrls.webViewAuthChallengeAction(
+                isBasicAuthChallenge = false,
+                challengingHost = "shytalk.shyden.co.uk",
+            ),
+        )
+    }
+
+    // ── shouldAllowWebViewNavigation: iOS nav-gate (initial-load aware) ──
+    // iOS WKWebView calls its nav-policy delegate for the FIRST programmatic
+    // load too (Android's shouldOverrideUrlLoading does not) — so a null current
+    // URL means "initial load" and must be allowed, else the page never appears.
+
+    @Test
+    fun `the initial load is allowed (no page displayed yet)`() {
+        assertTrue(
+            WebUrls.shouldAllowWebViewNavigation(
+                currentUrl = null,
+                targetUrl = "https://dev.shytalk.shyden.co.uk/privacy.html?lang=en",
+            ),
+        )
+    }
+
+    @Test
+    fun `same-origin in-page navigation is allowed`() {
+        assertTrue(
+            WebUrls.shouldAllowWebViewNavigation(
+                currentUrl = "https://dev.shytalk.shyden.co.uk/privacy.html",
+                targetUrl = "https://dev.shytalk.shyden.co.uk/terms.html",
+            ),
+        )
+    }
+
+    @Test
+    fun `off-origin navigation is blocked`() {
+        assertFalse(
+            WebUrls.shouldAllowWebViewNavigation(
+                currentUrl = "https://dev.shytalk.shyden.co.uk/privacy.html",
+                targetUrl = "https://evil.example.com/phish.html",
+            ),
+        )
+    }
+
+    @Test
+    fun `a userinfo-injection target is blocked (not treated as same-origin)`() {
+        // The exact bypass isSameOrigin closes: `host@evil.com` starts with the
+        // loaded host but is really evil.com.
+        assertFalse(
+            WebUrls.shouldAllowWebViewNavigation(
+                currentUrl = "https://dev.shytalk.shyden.co.uk/privacy.html",
+                targetUrl = "https://dev.shytalk.shyden.co.uk@evil.example.com/phish.html",
+            ),
+        )
+    }
+
+    @Test
+    fun `a null target on a loaded page is blocked (fail closed)`() {
+        assertFalse(
+            WebUrls.shouldAllowWebViewNavigation(
+                currentUrl = "https://dev.shytalk.shyden.co.uk/privacy.html",
+                targetUrl = null,
+            ),
+        )
+    }
+
     // ── legal(): locale validation ───────────────────────────────────────
 
     @Test
