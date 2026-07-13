@@ -633,6 +633,47 @@ class WebUrlsTest {
         )
     }
 
+    // ── shouldShowWebViewLoadError: iOS load-failure diagnostic filter ───
+    // Real failures show the diagnostic; deliberate cancellations do NOT.
+
+    @Test
+    fun `a policy-block cancellation does NOT show the load-error diagnostic`() {
+        // Our nav-gate blocking an off-origin link → WebKitErrorDomain 102.
+        assertFalse(WebUrls.shouldShowWebViewLoadError("WebKitErrorDomain", 102L))
+    }
+
+    @Test
+    fun `an explicit navigate-away cancellation does NOT show the diagnostic`() {
+        assertFalse(WebUrls.shouldShowWebViewLoadError("NSURLErrorDomain", -999L))
+    }
+
+    @Test
+    fun `a cancelled Basic-auth challenge DOES show the diagnostic`() {
+        // NSURLErrorUserCancelledAuthentication (-1012) — the dev-page credential
+        // failure the Error-path AC is about: a real inability to load the page.
+        assertTrue(WebUrls.shouldShowWebViewLoadError("NSURLErrorDomain", -1012L))
+    }
+
+    @Test
+    fun `a network failure DOES show the diagnostic`() {
+        // NSURLErrorNotConnectedToInternet (-1009).
+        assertTrue(WebUrls.shouldShowWebViewLoadError("NSURLErrorDomain", -1009L))
+    }
+
+    @Test
+    fun `an unknown or null error domain shows the diagnostic (fail toward informing)`() {
+        assertTrue(WebUrls.shouldShowWebViewLoadError(null, 102L))
+        assertTrue(WebUrls.shouldShowWebViewLoadError("SomeOtherDomain", -999L))
+    }
+
+    @Test
+    fun `the suppression is domain-SPECIFIC (same code in the wrong domain still shows)`() {
+        // 102 only suppresses under WebKitErrorDomain; -999 only under NSURL — a
+        // mutant that ignored the domain would wrongly suppress these.
+        assertTrue(WebUrls.shouldShowWebViewLoadError("NSURLErrorDomain", 102L))
+        assertTrue(WebUrls.shouldShowWebViewLoadError("WebKitErrorDomain", -999L))
+    }
+
     // ── legal(): locale validation ───────────────────────────────────────
 
     @Test

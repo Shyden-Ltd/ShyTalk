@@ -170,6 +170,31 @@ object WebUrls {
     }
 
     /**
+     * Whether a WKWebView provisional-navigation failure ([errorDomain]/[errorCode]
+     * from `didFailProvisionalNavigation`/`didFailNavigation`) should surface the
+     * user-facing load-error diagnostic (SHY-0182 Error-path AC). TRUE for a real
+     * failure (network down, a cancelled dev-page Basic-auth challenge →
+     * `NSURLErrorUserCancelledAuthentication`), but FALSE for a DELIBERATE
+     * cancellation that isn't a failure at all:
+     *  - our own nav-gate blocking an off-origin link cancels the load
+     *    (`WebKitErrorDomain` 102, `WebKitErrorFrameLoadInterruptedByPolicyChange`);
+     *  - an explicit cancel / navigate-away (`NSURLErrorDomain` -999,
+     *    `NSURLErrorCancelled`).
+     * Showing "connection trouble" for either of those would be wrong — the user
+     * deliberately stayed put, nothing failed. (Android needs no equivalent: its
+     * `shouldOverrideUrlLoading` blocks BEFORE a load starts, so `onReceivedError`
+     * never fires for a policy block.)
+     */
+    fun shouldShowWebViewLoadError(
+        errorDomain: String?,
+        errorCode: Long,
+    ): Boolean {
+        if (errorDomain == "WebKitErrorDomain" && errorCode == 102L) return false
+        if (errorDomain == "NSURLErrorDomain" && errorCode == -999L) return false
+        return true
+    }
+
+    /**
      * The normalized `scheme://authority` origin of [url] (scheme + authority
      * lowercased, port retained), or null when [url] is not a plain http(s)
      * URL or carries userinfo — cases that must never match a legitimate
