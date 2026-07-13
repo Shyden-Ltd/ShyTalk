@@ -1,6 +1,6 @@
 ---
 id: SHY-0182
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-13
 priority: P1
@@ -111,6 +111,10 @@ Touches `shared/**` (+ platform host bridging) → **full protocol**: all app fr
 - All web URLs env-derived + locale-carrying; dev-access working; cross-environment-contamination tests green; legal-link coverage green; CI guard green; device gauntlet green on dev + local (correct host + app language); `code-reviewer` 100% clean; merged; released.
 
 ## Notes
+
+Reviewed-up-to: 46525674c23
+
+- 2026-07-13 ~20:10 WIB — **code-reviewer R1 + fixes.** Reviewer confirmed the pure logic (env-derivation, `isSameOrigin` security, `devWebBasicAuth`) has excellent adversarial coverage and no exploitable bypass, but flagged the WIRING layer's coverage gaps. **Fixed (unit-testable):** C1 `legalForCurrentBuild` (4 live-wiring tests), I1 `devWebBasicAuthForCurrentBuild`, I2 `BuildVariant.devWebAuthPassword` sibling tests + `resetState()` clear + `WebUrlsTest` `@AfterTest` (isolation HARD rule), I5 `localWebHostFromApi` passthrough pin, I6 guard case-insensitivity + `*/build/*` skip + LegalDoc-drift meta-test. Counts: WebUrlsTest 33→41, BuildVariantTest 78→83, guard meta 7→10; all green, iOS+app compile, ktlint+detekt clean (commit `46525674c23`). **Deferred to the device/secret gauntlet phase (BLOCKED — not merge-ready):** C2 real-WebView instrumented test (nav-gate + auth handler glue), I3 `LegalAcceptanceTest`/`legal_acceptance.feature` value-level URL assertion, I4 Playwright dev-access (needs the provisioned `DEV_BASIC_AUTH_PASSWORD`). These ARE the pre-merge device gauntlet, which the story cannot pass until the real iPhone is unblocked ([[reference-ios27-ui-automation-consent-gate]]) + the operator provisions the dev secret. **PR opened for visibility/review; DO NOT MERGE until C2/I3/I4 + the full device gauntlet are green.**
 
 - 2026-07-13 ~19:35 WIB — **CI guard + dev-page Basic-auth wiring landed (commits `c6fbd9dcb4e`, `0af21727dea`).**
   - **CI guard** `scripts/check-app-web-urls-env-derived.sh` (wired into `lint.yml`): fails on a hardcoded dev web host or a legal-page URL in app runtime source outside `WebUrls.kt`+tests. Scoping decision made: dev-host anchor requires the dot (`dev-api.` NOT matched); `roadmap.html`/`images.`/`livekit.`/email-domain out of scope. Fixture-tested detector — 7 Jest meta-tests (catches by name, zero false positives, SSOT+test allowlist, REAL repo clean).
