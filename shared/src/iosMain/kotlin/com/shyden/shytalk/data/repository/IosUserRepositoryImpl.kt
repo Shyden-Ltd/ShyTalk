@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -192,8 +193,14 @@ class IosUserRepositoryImpl(
             // SHY-0185: a `.snapshots` listener error (rules denial / network
             // drop) surfaces as a FirebaseFirestoreException emitted into the
             // Flow; uncaught on iOS it SIGABRTs the app right after sign-in.
-            // Recover to a safe default (parity with Android's swallow).
-            .recoverListenerErrors(UserFlags())
+            // Log it (default debug-logging rule; parity with this file's other
+            // swallow sites) then recover to a safe default. The logging `catch`
+            // rethrows so the terminal recovery still fires; `kotlinx` catch
+            // never invokes either lambda for CancellationException.
+            .catch { e ->
+                logW(TAG, "observeUserFlags listener error for $userId — falling back to safe defaults", e)
+                throw e
+            }.recoverListenerErrors(UserFlags())
 
     override fun observeUsers(userIds: Set<String>): Flow<User> {
         if (userIds.isEmpty()) return emptyFlow()

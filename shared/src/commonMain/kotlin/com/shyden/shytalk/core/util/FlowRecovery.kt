@@ -15,12 +15,25 @@ import kotlinx.coroutines.flow.catch
  * `addSnapshotListener` callback already swallows the error argument; this gives
  * the iOS Flows the same safety.
  *
- * Terminal `catch` so it also covers any downstream `map`. Values emitted before
- * the error are preserved; only the error is replaced by [fallback]. Deliberately
- * does NOT retry — a persistent error (e.g. a real rules denial) would hot-loop.
+ * Place it LAST in the chain: upstream operators (e.g. `map`) run before it, so
+ * their errors are recovered too; anything added AFTER it is not protected.
+ * Values emitted before the error are preserved; only the error is replaced by
+ * [fallback]. Deliberately does NOT retry — a persistent error (e.g. a real rules
+ * denial) would hot-loop; the listener therefore stays down until the collector
+ * re-subscribes (next sign-in), which is the accepted residual until EPIC-0006.
+ *
+ * Recovers only an [Exception]. A fatal [Error] (OutOfMemoryError, StackOverflow)
+ * is rethrown so a genuinely unrecoverable condition isn't masked as a safe
+ * default — matching the boundary in [firebaseCall]. `kotlinx` `catch` already
+ * rethrows [kotlinx.coroutines.CancellationException] before this lambda runs, so
+ * coroutine cancellation is never swallowed.
  *
  * The proper fix is to stop touching Firestore from the client and route via the
  * Express API ([[feedback-no-direct-backend-all-via-api]] / EPIC-0006); this is
  * the acute crash mitigation.
  */
-fun <T> Flow<T>.recoverListenerErrors(fallback: T): Flow<T> = catch { emit(fallback) }
+fun <T> Flow<T>.recoverListenerErrors(fallback: T): Flow<T> =
+    catch { e ->
+        if (e !is Exception) throw e
+        emit(fallback)
+    }

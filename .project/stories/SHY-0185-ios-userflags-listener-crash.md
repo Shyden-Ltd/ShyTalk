@@ -44,7 +44,7 @@ Root-caused 2026-07-13 from 20 on-device crash reports (`idevicecrashreport`, al
 - [ ] On a listener error the fallback is the SAFE state (`isSuspended=false`, `hasActiveWarning=false`) — a read error must NOT lock a user out or fabricate a warning; it fails OPEN for the user's own non-privileged flags, matching Android's existing swallow-the-error behaviour.
 
 ### UX
-- [ ] N/A — no user-visible string or layout change; the observable difference is "no crash". A subsequent recomposition re-subscribes the listener, so live updates resume.
+- [ ] N/A — no user-visible string or layout change; the observable difference is "no crash". **Accepted residual:** because the recovery completes the Flow (no retry — a persistent rules denial would hot-loop), live flag monitoring stays down until the collector re-subscribes on the **next sign-in**, not on recomposition (the `LaunchedEffect(uid)` only relaunches when `uid` changes). This is strictly better than the crash and matches the fail-safe intent; restoring continuous observation is EPIC-0006's route-via-API work. Server-side suspension/ban enforcement is unaffected (independent of this listener).
 
 ### i18n
 - [ ] N/A — no user-facing copy.
