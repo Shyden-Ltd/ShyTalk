@@ -1,6 +1,6 @@
 ---
 id: SHY-0181
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-13
 priority: P1
@@ -116,6 +116,7 @@ Touches `public/**` (website runtime) → **full protocol** on the affected web 
 
 Reviewed-up-to: 400af19c99a
 
+- 2026-07-13 15:50 WIB — **Status → In Review (SHY-0127 Gate 1) ahead of PR + judgment-merge to develop.** Remote head `400af19c99a` is the reviewed/validated code (R2 zero findings; pre-push chromium full corpus passed 2026-07-12); this commit is a review-neutral .md-only status flip + marker push.
 - 2026-07-13 06:22 WIB — **code-reviewer R2 delta on `400af19c99a`: ZERO FINDINGS — MERGE-READY.** All 6 must-fixes (I1/I2/I4/I5/I6) confirmed fixed by the reviewer's own control-flow trace + non-tautological RED→GREEN per test; the `?lang=-` → `''` → rejected edge and the guard regex vs all 11 real pages' actual `<script src>` tags both independently re-verified. I3/I7/I8 dispositions confirmed recorded. **NEXT SESSION: push branch story/SHY-0181-site-wide-lang-flag (2 commits de1cd379354 + 400af19c99a; a push was in flight at pause — verify it landed) → PR to develop → judgment-merge (develop-autonomous). No further review needed.**
 
 - 2026-07-13 — **code-reviewer R1: 0 Critical, 8 Important/Minor — must-fixes all addressed.** (I1) `setLanguage()` (exposed as `ShyTalkLanguage.set`) didn't validate → added `if (!isSupported(lang)) return;` (defense-in-depth; test: `.set('not-a-locale')` never reaches the DOM/storage). (I2) a valid `?lang=` was discarded if `localStorage.setItem` threw (Safari private mode / blocked-storage) → persistence decoupled into its own try so the validated value still returns. (I4) `?lang=` did no normalisation while navigator fallback stripped region → normalise `?lang=` (lowercase + strip BCP-47 region) so `fr-CA`/`FR` resolve to `fr` (tests added). (I5) the invalid-`?lang=` test used a loose `['en','de']` matcher (violates the exact-value rule) → `test.use({ locale: 'en-US' })` + exact `toBe('en')`. (I6) the guard grepped a bare substring (a comment mention would false-pass) → anchored on `<script … src="…language-selector.js"` + a new meta-test fixture (comment-only mention → exit 1). Accepted/noted: I3 (pre-existing unguarded fallback `localStorage` reads — separate hardening, the new comment overclaimed and was tightened), I7 (stale-URL re-clobbers a later picker choice — intended per this story's persist-the-flag design; explicit product behaviour), I8 (getter-writes-storage in the picker hot path — idempotent, harmless). lang-flag.spec.ts 12/12; guard meta-test 5/5; shellcheck clean.
