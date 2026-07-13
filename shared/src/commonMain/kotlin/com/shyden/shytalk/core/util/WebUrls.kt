@@ -148,16 +148,24 @@ object WebUrls {
      * WKWebView invokes its navigation-policy delegate for the FIRST programmatic
      * load too (Android's `shouldOverrideUrlLoading` does not). Before anything
      * is committed [currentUrl] is null; that initial load MUST be allowed or the
-     * page never appears. Every subsequent navigation is the same same-origin
-     * gate (stay on the host the legal page loaded from, block off-origin links),
-     * and a null/unparseable [targetUrl] fails CLOSED (block).
+     * page never appears — the initial-load branch takes precedence, so a null
+     * [currentUrl] allows regardless of [targetUrl]. Once a page HAS loaded
+     * ([currentUrl] non-null) it's the same same-origin gate (stay on the host
+     * the legal page loaded from, block off-origin links), and there a
+     * null/unparseable [targetUrl] fails CLOSED (block).
+     *
+     * NOTE: this trusts that WKWebView reports a null current URL ONLY for the
+     * genuine first load. A same-navigation server redirect off-origin before
+     * commit is out of scope here (WKWebView auto-follows 3xx during a
+     * provisional navigation without re-consulting this policy hook) and is
+     * covered by the device-gated C2 instrumented test, not this pure gate.
      */
     fun shouldAllowWebViewNavigation(
         currentUrl: String?,
         targetUrl: String?,
     ): Boolean {
-        if (currentUrl == null) return true // initial load — nothing displayed yet
-        if (targetUrl == null) return false // fail closed
+        if (currentUrl == null) return true // initial load takes precedence — nothing displayed yet
+        if (targetUrl == null) return false // on a loaded page, a null target fails closed
         return isSameOrigin(currentUrl, targetUrl)
     }
 
@@ -224,7 +232,13 @@ object WebUrls {
         data class UseCredential(
             val username: String,
             val password: String,
-        ) : WebViewAuthChallengeAction
+        ) : WebViewAuthChallengeAction {
+            // Redact the secret from the auto-generated data-class toString so a
+            // future debug log line (local/dev builds log unredacted by default)
+            // interpolating this action can't leak the password verbatim — the
+            // story's Security AC forbids logging the dev-page credential.
+            override fun toString(): String = "UseCredential(username=$username, password=***)"
+        }
 
         /**
          * A Basic-auth challenge we will NOT answer — cancel it. Fails closed:

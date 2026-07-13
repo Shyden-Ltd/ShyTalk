@@ -531,6 +531,40 @@ class WebUrlsTest {
         )
     }
 
+    @Test
+    fun `a Basic-auth challenge with a null challenging host is cancelled`() {
+        // The nullable-host boundary pinned at THIS function (not only via the
+        // composed devWebBasicAuth): a challenge with no host can't be our dev
+        // host, so no credential is offered.
+        BuildVariant.initBuildInfo(environment = "dev", buildVersion = "1.0")
+        BuildVariant.initDevWebAuthPassword("s3cret")
+        assertEquals(
+            WebUrls.WebViewAuthChallengeAction.Cancel,
+            WebUrls.webViewAuthChallengeAction(isBasicAuthChallenge = true, challengingHost = null),
+        )
+    }
+
+    @Test
+    fun `a Basic-auth challenge with a blank challenging host is cancelled`() {
+        BuildVariant.initBuildInfo(environment = "dev", buildVersion = "1.0")
+        BuildVariant.initDevWebAuthPassword("s3cret")
+        assertEquals(
+            WebUrls.WebViewAuthChallengeAction.Cancel,
+            WebUrls.webViewAuthChallengeAction(isBasicAuthChallenge = true, challengingHost = ""),
+        )
+    }
+
+    @Test
+    fun `UseCredential toString redacts the password (never logs the dev secret)`() {
+        // Security AC: the dev-page credential must never be logged. The
+        // data-class auto-toString would print the password verbatim; the
+        // override masks it, so a future debug log of the action can't leak it.
+        val rendered = WebUrls.WebViewAuthChallengeAction.UseCredential("shytalk-app", "s3cret").toString()
+        assertFalse(rendered.contains("s3cret"), "toString leaked the password: $rendered")
+        assertTrue(rendered.contains("shytalk-app"), "toString should still name the username")
+        assertTrue(rendered.contains("***"), "toString should mark the password redacted")
+    }
+
     // ── shouldAllowWebViewNavigation: iOS nav-gate (initial-load aware) ──
     // iOS WKWebView calls its nav-policy delegate for the FIRST programmatic
     // load too (Android's shouldOverrideUrlLoading does not) — so a null current
@@ -585,6 +619,17 @@ class WebUrlsTest {
                 currentUrl = "https://dev.shytalk.shyden.co.uk/privacy.html",
                 targetUrl = null,
             ),
+        )
+    }
+
+    @Test
+    fun `both current and target null takes the initial-load branch (pins check order)`() {
+        // With nothing loaded yet the initial-load allowance wins over the
+        // loaded-page fail-closed rule — this is the ONLY input that distinguishes
+        // the two early-return checks, so it pins their order against a reorder
+        // mutant that the other nav cases can't see.
+        assertTrue(
+            WebUrls.shouldAllowWebViewNavigation(currentUrl = null, targetUrl = null),
         )
     }
 
