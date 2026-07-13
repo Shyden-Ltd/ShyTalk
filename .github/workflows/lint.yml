@@ -112,6 +112,9 @@ jobs:
       - name: Every web page loads the shared language resolver (?lang= flag — SHY-0181)
         run: bash scripts/check-web-pages-have-lang-resolver.sh public
 
+      - name: App web URLs are env-derived, never a hardcoded cross-env literal (SHY-0182)
+        run: bash scripts/check-app-web-urls-env-derived.sh
+
       - name: Release workflow contract (PR-flow + signed commits)
         run: bash scripts/check-release-trigger.sh
 
