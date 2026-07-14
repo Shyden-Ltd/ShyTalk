@@ -99,6 +99,7 @@ Touches `shared/**` (+ platform host bridging) → **full protocol**: all app fr
 
 - **[[SHY-0181]]** (the pages must honor `?lang=` before the app passing it has an effect).
 - The dev web host + its restriction mechanism (operator confirms the dev-page auth scheme the app must satisfy).
+- **[[SHY-0186]] K/N-rename coordination (pre-merge requirement for THIS branch):** this branch adds ~21 K/N-illegal backtick test names (20 in `WebUrlsTest.kt` + additions in existing files) AND pre-dates SHY-0186's develop-baseline rename of the original 20. Before THIS story merges: merge develop in (brings the renames), then rename every remaining illegal name so `grep -rE 'fun \`[^\`]*[(),][^\`]*\`' shared/src/commonTest` returns 0 and `./gradlew :shared:compileTestKotlinIosSimulatorArm64` stays green — otherwise this merge re-breaks the K/N compile SHY-0186 just fixed. Nothing mechanical enforces this until [[SHY-0188]]'s guard lands (from SHY-0186 PR #1598 code-review Imp-3, 2026-07-14).
 
 ## Risks & Mitigations
 
