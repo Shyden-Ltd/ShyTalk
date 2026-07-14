@@ -54,7 +54,7 @@ class FlowRecoveryTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun `cancellation propagates uncaught and does NOT receive the fallback (structured concurrency)`() =
+    fun `cancellation propagates uncaught and does NOT receive the fallback structured concurrency`() =
         runTest {
             // Swallowing CancellationException would break coroutine cancellation
             // propagation — a scope canceller would never get its cancel signal.
@@ -87,7 +87,7 @@ class FlowRecoveryTest {
         }
 
     @Test
-    fun `the UserFlags fallback is the SAFE default state (Security AC)`() =
+    fun `the UserFlags fallback is the SAFE default state Security AC`() =
         runTest {
             // The observeUserFlags fix recovers to UserFlags(); a read error must
             // NOT lock a user out or fabricate a warning. Pin that contract here.
