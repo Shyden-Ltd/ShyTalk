@@ -1,6 +1,6 @@
 ---
 id: SHY-0091
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-06-12
 priority: P0
@@ -121,6 +121,8 @@ This story is `*.md`-only (CLAUDE.md + story files + out-of-repo memory) → **d
 - [ ] Done on the next release cut + `released_in: vX.Y.Z`.
 
 ## Notes (running log)
+
+- 2026-07-14 ~17:05 WIB — **Status reconciled In Progress → In Review** (WIP=1 hygiene surfaced by SHY-0186 PR #1598 code-review Min-7). Evidence: the codified `## Pre-Merge Testing Protocol` IS in CLAUDE.md on develop (content-merged; the repo squash-merges, so branch SHAs never appear in develop history — content, not ancestry, is the proof), and SHY-INDEX already carried 👀 In Review for this row. The file frontmatter was the stale side. Stays In Review pending release-cut mapping (`released_in:`) per [[feedback-done-equals-release-cut]].
 - 2026-06-12 ~22:45 BST — Created as the umbrella adoption story (operator 2026-06-12: "go through EVERY not-done ticket and refine them to include all this testing"). Consolidates codification + the 54-ticket embed into one PR with per-ticket commits (operator: "one single PR… commit and review each ticket individually… complete the PR once all committed"). Decisions from the Q&A: merge = production-ready / zero-doubt, Claude merges autonomously when certain; devices connected now; dev includes real-iOS app journeys (web = Chrome only); regression = impact-loops + full-corpus-at-gate; exemption = `*.md`-only; release = the cut (pre-merge gauntlet is the gate). Framework build (making today's non-functional drivers fully operational — NO stubs, per the new rule) = EPIC-0003, after this.
 - 2026-06-12 — Commit 1: codified `## Pre-Merge Testing Protocol` in `CLAUDE.md` (482eb9b).
 - 2026-06-13 ~00:26 BST — Operator added a companion HARD GLOBAL rule: **No Stubs / Mocks / Fakes — Real Only** ("real only... stubs is no longer allowed"; chose the sweeping scope incl. test doubles after being shown it reworks mock-gh / FakeGiftRepository / recording-diff). Codified into `CLAUDE.md` § No Stubs — Real Only + memory, folded into THIS PR (one-active-branch). EPIC-0003 reframed to build the matrix FULLY OPERATIONAL (no stubbed cells). Already-refined ticket Test Plans naming test doubles (0046 FakeGiftRepository, 0071 mock-gh recording-diff, 0019 fetch-mocks) get a real-backend scrub before the PR completes. Interpretation recorded for operator review: "real" = local emulator stack / real backends / real devices; new-work-forward + opportunistic migration (no 12k big-bang); impossible-to-induce conditions escalate, never silently mock.

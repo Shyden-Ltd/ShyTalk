@@ -1,23 +1,24 @@
 ---
 id: SHY-0186
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-14
 priority: P1
 type: infra
-effort: L
+effort: M
 roadmap_ids: []
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1598
 epic: EPIC-0003
 mvp: false
 ---
 
-# SHY-0186: Execute the shared unit suite on the Kotlin/Native runtime (unblock `iosSimulatorArm64Test`)
+# SHY-0186: Make the shared `commonTest` suite COMPILE on Kotlin/Native (rename the K/N-illegal test names)
 
 ## User Story
 
 **As** an engineer shipping shared `commonMain` logic to a Kotlin/Native iOS app,
-**I want** the `commonTest` suite to actually RUN on the Kotlin/Native runtime (not only the JVM),
-**So that** K/N-specific behaviour (string/UTF-16 handling, integer widths, coroutine dispatch, memory model, `expect`/`actual` selection) is proven on the runtime the app really ships on, instead of assumed from a JVM-only pass.
+**I want** the `commonTest` sources to at least COMPILE for the Kotlin/Native test target (today they don't),
+**So that** the path to actually RUNNING the shared suite on the runtime the app ships on (SHY-0188) is unblocked, and new K/N-illegal test names can no longer accumulate unnoticed.
 
 ## Why
 
@@ -26,18 +27,18 @@ Discovered during SHY-0182 review (`reference` note in that story): `./gradlew :
 ## Acceptance Criteria
 
 ### Happy path
-- [ ] `./gradlew :shared:iosSimulatorArm64Test` **compiles and runs green** — every `commonTest` class executes on the Kotlin/Native simulator runtime.
-- [ ] The full `commonTest` count that runs on K/N equals the count that runs on `:shared:jvmTest` (no class silently excluded).
+- [ ] `./gradlew :shared:compileTestKotlinIosSimulatorArm64` **compiles green** (was: `Name contains illegal characters`) — zero K/N-illegal backtick test names remain anywhere in `shared/src/commonTest`.
+- [ ] Every renamed name still accurately describes what its test asserts (no meaning lost with the punctuation).
 
 ### Error paths
-- [ ] A test whose name still contains a K/N-illegal character fails the build LOUDLY (compile error) rather than being silently skipped — verified by a guard (below).
+- [ ] A test name still containing a K/N-illegal character fails `compileTestKotlinIosSimulatorArm64` LOUDLY (compiler error) — the failure mode is a broken build, never a silently-skipped test.
 
 ### Edge cases
 - [ ] Renames introduce NO duplicate test names within a class (two names that differed only by punctuation would collide) — the rename is verified to keep every name unique.
-- [ ] `:shared:jvmTest` + `:shared:testAndroidHostTest` stay 100% green after the renames (a rename must not change a test's meaning or drop it).
+- [ ] `:shared:jvmTest` + `:shared:testAndroidHostTest` stay 100% green after the renames **with preserved counts** (a rename must not change a test's meaning or drop it).
 
 ### Performance
-- [ ] `iosSimulatorArm64Test` wall-clock is bounded (simulator boot + run); it runs in CI on the existing macOS runner without a paid upgrade ([[feedback-no-self-hosted-runners]]).
+- [ ] The compile check adds no meaningful wall-clock (it is a compile task on the existing toolchain, no simulator boot).
 
 ### Security
 - N/A — test-only; no runtime/product surface, no data flow.
@@ -49,15 +50,14 @@ Discovered during SHY-0182 review (`reference` note in that story): `./gradlew :
 - N/A — test method names are developer-facing identifiers, not user strings.
 
 ### Observability
-- [ ] CI surfaces the K/N test result by name (a required check or a clearly-named job) so a K/N-only regression is visible, not buried.
+- [ ] The story `## Notes` record the verified evidence trail (compile green + preserved jvm/androidHost counts + the grep-to-zero of illegal names) so the increment is auditable without re-running it.
 
 ## BDD Scenarios
 
-**Scenario: the K/N test binary links and runs**
+**Scenario: the K/N test binary compiles**
 - **Given** the shared module with the renamed `commonTest` names
-- **When** `./gradlew :shared:iosSimulatorArm64Test` runs
-- **Then** it exits 0
-- **And** the test report lists every `commonTest` class (same class set as `:shared:jvmTest`)
+- **When** `./gradlew :shared:compileTestKotlinIosSimulatorArm64` runs
+- **Then** it exits 0 with no `Name contains illegal characters` error
 
 **Scenario: an illegal name is caught, not skipped**
 - **Given** a `commonTest` function named with a `(` in its backtick identifier
@@ -78,17 +78,19 @@ Discovered during SHY-0182 review (`reference` note in that story): `./gradlew :
 
 **RED first:** `./gradlew :shared:iosSimulatorArm64Test` currently fails to compile (41 names / 11 files) — that IS the failing state this story turns green.
 
-- **Rename:** convert each K/N-illegal backtick name to a legal, still-readable, still-unique form (drop `(`/`)`, replace `,` with a dash/space), across the 11 `commonTest` files. A one-shot script scoped to `fun \`…\`` declarations, with a collision report.
-- **Green gate (all three targets):** `:shared:iosSimulatorArm64Test` (new — must compile + pass), `:shared:jvmTest` (unchanged count, green), `:shared:testAndroidHostTest` (unchanged count, green).
-- **Guard:** a `commonTest`-scoped lint check (shell or a `check-*.sh` wired into `lint.yml`) that fails if any `commonTest` `fun \`…\`` name contains a K/N-illegal character — so the debt can't regrow. Fixture-tested per [[feedback-detector-must-report-not-guess]].
-- **CI:** add `:shared:iosSimulatorArm64Test` to the iOS CI path (or `pr-checks.yml`) so K/N execution is enforced going forward, surfaced by name ([[feedback-warnings-are-failures]] discipline).
+- **Rename:** convert each K/N-illegal backtick name to a legal, still-readable, still-unique form (drop `(`/`)`, replace `,` with a dash/space), across the develop-baseline `commonTest` files. A one-shot transform scoped to `fun \`…\`` declarations, with a collision check.
+- **Green gate:** `:shared:compileTestKotlinIosSimulatorArm64` (new — must compile), `:shared:jvmTest` (unchanged count, green), `:shared:testAndroidHostTest` (unchanged count, green) — all forced-execution runs (`--rerun-tasks`), never cache hits.
+- **Split out (SHY-0188):** the K/N test EXECUTION (Firebase framework link), the illegal-name guard in `lint.yml`, and the CI wiring — one story = one PR ([[feedback-agile-user-stories]]).
+- **Protocol classification (device/browser gauntlet):** the diff is `.project/stories/**` + test-identifier renames inside `shared/src/commonTest/**` only. `commonTest` compiles exclusively into test binaries — zero bytes of it reach any shipped app/web artifact — so there is no user-observable surface for a device/browser journey to exercise (same rationale as the `*.md`-only exemption; SHY-0087/0088 carve-out precedent). All host-side frameworks the change CAN affect (jvmTest, androidHostTest, K/N test compile, ktlint, detekt, story validators) run in full.
 
 ## Out of Scope
 
+- **Executing the K/N suite (the Firebase-framework link fix), the illegal-name guard, and the CI wiring — split to [[SHY-0188]]** (1 story = 1 PR; this story is the compile-unblock rename only).
 - Adding NEW shared tests (this is execution-enablement of the existing suite).
 - Migrating any test to real services (that is the EPIC-0003 per-domain stories).
 - iOS `iosApp/iosAppTests` (XCTest) — a separate suite; this story is `shared/commonTest` on K/N.
 - Renaming androidTest/instrumented names (they run on a device via a different toolchain that permits these names).
+- The ~21 additional illegal names on the in-flight SHY-0182 branch — those are renamed ON that branch by its author before ITS merge (see Notes coordination entry).
 
 ## Dependencies
 
@@ -103,9 +105,10 @@ Discovered during SHY-0182 review (`reference` note in that story): `./gradlew :
 
 ## Definition of Done
 
-`:shared:iosSimulatorArm64Test` compiles + runs green with the full `commonTest` class set; `:shared:jvmTest` + `:shared:testAndroidHostTest` unchanged-count green; the illegal-name guard is wired into `lint.yml` (fixture-tested) and CI runs the K/N suite by name; `code-reviewer` 100% clean; merged; released.
+`:shared:compileTestKotlinIosSimulatorArm64` green with zero K/N-illegal names remaining in `commonTest`; `:shared:jvmTest` + `:shared:testAndroidHostTest` unchanged-count green on forced execution; renames collision-free and meaning-preserving; SHY-0188 filed fully-refined for execution/guard/CI; `code-reviewer` 100% clean; merged; released.
 
 ## Notes
 
+- 2026-07-14 ~17:05 WIB — **code-reviewer R1 (0 code findings; 4 Important + 4 Minor on process/docs) → ALL addressed + story RE-SCOPED to the rename increment.** (Imp-1, 1-story-1-PR) the "increments 2-4 under this SHY" plan violated [[feedback-agile-user-stories]] → this SHY is re-scoped to exactly PR #1598's deliverable (compile-unblock rename; title/AC/BDD/Test Plan/DoD rewritten to the compile bar; effort L→M since the L was the deferred link work) and **SHY-0188 filed fully-refined** for execution + guard + CI (the EPIC-0003 sub-slice pattern). (Imp-2) status → In Review at this push (SHY-0127 Gate 1). (Imp-3, count reconciliation) the filing-time **41 names / 11 files** grep ran on a working tree that included SHY-0182's unmerged additions; the develop-baseline scope this PR delivers is **20 names / 10 files** — the remaining ~21 (incl. `WebUrlsTest.kt`, which does not exist on develop) belong to the SHY-0182 BRANCH and are renamed there by its author before ITS merge (nothing mechanical enforces this until SHY-0188's guard lands — reciprocal note added to SHY-0182's story on its branch). (Imp-4) device/browser-gauntlet classification recorded in Test Plan: test-identifier-only rename, zero shipped-artifact bytes → no journey surface; all host frameworks ran. (Min-5) `pr:` added. (Min-6) EPIC-0003 `child_shys` += SHY-0186/0188. (Min-7, pre-existing WIP drift) SHY-0091 + SHY-0120 file-status reconciled In Progress→In Review with content-on-develop evidence (their INDEX rows already said In Review; squash-merge means branch SHAs never appear in develop history); SHY-0113 left In Progress deliberately (genuinely-open umbrella; forward-only lifecycle forbids parking to Draft) — WIP=1 now holds (0113 only). SHY-INDEX corrected (0181 row was stale In-Progress; 0186/0188 rows added). (Min-8) two terse renames polished in `FirebaseCallTest` ("e g" → "such as"; trailing "etc" list → "like X and Y"). Verification: forced-execution `--rerun-tasks` triple gate green — compileTestKotlinIosSimulatorArm64 ✓, jvmTest **1331/0**, testAndroidHostTest **545/0** (counts preserved); illegal-name grep → 0; per-file duplicate-name check → 0; ktlint (changed files) + detekt clean. Reviewed-up-to: fa7529decdb (R1 base — bump to the R1-fix commit once its delta re-review returns clean).
 - 2026-07-14 ~03:30 WIB — **Increment 1 (the rename) DONE + a scope discovery.** Self-validated to In Progress (mechanical infra rename, low architectural risk). Renamed the **20** K/N-illegal backtick test names across 10 `commonTest` files (only `(`/`)`/`,` present; a collision-free, `fun \`…\``-scoped transform — dropped the punctuation, collapsed spaces). Result: **`:shared:compileTestKotlinIosSimulatorArm64` now compiles** (was: `Name contains illegal characters`), and `:shared:jvmTest` (1331/0) + `:shared:testAndroidHostTest` (545/0) stay green with preserved counts. **DISCOVERY — the rename is necessary but NOT sufficient:** `:shared:iosSimulatorArm64Test` (the RUN) fails at LINK — `ld: framework 'FirebaseCore' not found`. The K/N test binary transitively links `iosMain`'s native Firebase dependency, but the standalone gradle test link (unlike the app) has no Firebase framework search path — that comes from CocoaPods. **So the story is a bigger infra effort than M:** increment 2 must wire the CocoaPods/Firebase native frameworks (`FirebaseCore` + deps) into the `linkDebugTestIosSimulatorArm64` search path (or otherwise make the K/N test binary linkable) before the suite can execute. Then the illegal-name guard + CI wiring (increments 3-4). **Coordination:** the in-flight SHY-0182 branch adds ~21 MORE illegal names — those must be renamed too before its merge re-breaks the compile (the guard, once landed, enforces this). **Design decision for increment 2 (why effort bumped M→L):** the K/N test binary links ALL of `iosMain` (even to exercise pure `commonMain` logic), and `iosMain` hard-depends on the gitlive-Firebase native stack (`FirebaseCore`/`FirebaseFirestore`/`FirebaseAuth`/`FirebaseDatabase` + gRPC/BoringSSL/abseil), provided only by the app's CocoaPods — so there's no "just test the pure logic" shortcut. Options: (a) `linkerOpts` the full Pods framework stack into `linkDebugTestIosSimulatorArm64` (works, fragile — framework list drifts with Firebase versions); (b) adopt the KMP `cocoapods{}` plugin so the pod frameworks are provided to the test link natively; (c) a test-only stub-framework shim. Recommend (b). Not attempted here (needs a focused, non-contended session — a parallel session held the Xcode toolchain 2026-07-13/14).
 - 2026-07-14 — Filed from a SHY-0182 code-review finding (F6). Verified: `./gradlew :shared:iosSimulatorArm64Test` fails to compile; `grep -rE 'fun \`[^\`]*[(),][^\`]*\`' shared/src/commonTest` → 41 matches across 11 files. The K/N-illegal set may include chars beyond `()`/`,` (e.g. `.`/`:`) — the fix must iterate the compiler to zero, not just handle `()`/`,`. Parent EPIC-0003 (operational, real-only test apparatus): this makes the shared unit suite real on the K/N runtime, not a JVM stand-in.
