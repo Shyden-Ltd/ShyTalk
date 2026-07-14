@@ -13,7 +13,9 @@ import com.shyden.shytalk.core.push.chatDeepLinks
 import com.shyden.shytalk.core.push.consumeChatDeepLink
 import com.shyden.shytalk.core.push.verifyPushNavigation
 import com.shyden.shytalk.core.util.LanguagePreference
+import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
+import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.PrivateMessageRepository
 import com.shyden.shytalk.data.repository.UserRepository
@@ -27,6 +29,7 @@ import com.shyden.shytalk.navigation.IosPlatformNavCallbacks
 import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.navigation.SharedNavGraph
 import com.shyden.shytalk.navigation.createIosPlatformScreens
+import com.shyden.shytalk.navigation.resolveLaunchDestination
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
 import kotlinx.coroutines.flow.filterNotNull
 import org.koin.mp.KoinPlatformTools
@@ -147,9 +150,33 @@ private fun IosApp() {
                 // duplicate that here; a one-shot LaunchedEffect would race with
                 // FCM's async token delivery and miss the registration.
 
+                // SHY-0187: shared launch resolver — the SAME decision Android's
+                // MainActivity makes, killing the platform asymmetry (this used to
+                // hardcode Sign-In: no silent restore AND no App-Lock gate on iOS).
+                val startDestination =
+                    remember {
+                        val koin = KoinPlatformTools.defaultContext().get()
+                        val authRepo = koin.get<AuthRepository>()
+                        val appLockRepo = koin.get<AppLockRepository>()
+                        val destination =
+                            resolveLaunchDestination(
+                                hasStoredCredential = appLockRepo.hasCredential,
+                                isAppLockEnabled = appLockRepo.isAppLockEnabled,
+                                isLockRequired = appLockRepo.isLockRequired(),
+                                isAuthenticated = authRepo.isAuthenticated,
+                                hasResolvedUser = authRepo.currentUserId != null,
+                            )
+                        logI(
+                            "MainViewController",
+                            "Cold-launch destination: ${destination.route} " +
+                                "(lockGated=${destination == Screen.Lock})",
+                        )
+                        destination.route
+                    }
+
                 SharedNavGraph(
                     navController = navController,
-                    startDestination = Screen.SignIn.route,
+                    startDestination = startDestination,
                     onSignOut = { navController.navigate(Screen.SignIn.route) { popUpTo(0) } },
                     platformCallbacks = platformCallbacks,
                     platformScreens = platformScreens,

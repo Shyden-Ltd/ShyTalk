@@ -51,6 +51,7 @@ import com.shyden.shytalk.core.room.RoomService
 import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.UnsafeDeviceGate
+import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.data.remote.StartingScreen
 import com.shyden.shytalk.data.remote.WorkerApiClient
@@ -71,6 +72,7 @@ import com.shyden.shytalk.feature.update.DegradedModeScreen
 import com.shyden.shytalk.feature.update.ForceUpdateScreen
 import com.shyden.shytalk.navigation.NavGraph
 import com.shyden.shytalk.navigation.Screen
+import com.shyden.shytalk.navigation.resolveLaunchDestination
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
@@ -461,16 +463,25 @@ class MainActivity : AppCompatActivity() {
 
                                 val pendingEmailLink by pendingEmailLinkState
 
-                                // Skip sign-in screen if already authenticated (prevents login flash)
+                                // SHY-0187: shared launch resolver — gates on the
+                                // App-Lock BEFORE any content, silently restores a
+                                // live session (prevents login flash), else Sign-In.
                                 val initialRoute =
-                                    if (
-                                        authRepository.isAuthenticated &&
-                                        appLockRepository.hasCredential &&
-                                        authRepository.currentUserId != null
-                                    ) {
-                                        Screen.Main.route
-                                    } else {
-                                        Screen.SignIn.route
+                                    remember {
+                                        val destination =
+                                            resolveLaunchDestination(
+                                                hasStoredCredential = appLockRepository.hasCredential,
+                                                isAppLockEnabled = appLockRepository.isAppLockEnabled,
+                                                isLockRequired = appLockRepository.isLockRequired(),
+                                                isAuthenticated = authRepository.isAuthenticated,
+                                                hasResolvedUser = authRepository.currentUserId != null,
+                                            )
+                                        logI(
+                                            TAG,
+                                            "Cold-launch destination: ${destination.route} " +
+                                                "(lockGated=${destination == Screen.Lock})",
+                                        )
+                                        destination.route
                                     }
 
                                 NavGraph(

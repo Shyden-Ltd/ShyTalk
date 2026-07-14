@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.shyden.shytalk.core.effects.PlatformBackHandler
 import com.shyden.shytalk.core.util.SecureScreenEffect
 import com.shyden.shytalk.feature.auth.components.PinDots
 import com.shyden.shytalk.feature.auth.components.PinKeypad
@@ -41,6 +42,10 @@ fun LockScreen(
     modifier: Modifier = Modifier,
 ) {
     SecureScreenEffect()
+
+    // SHY-0187: consume the system back gesture — backing out of the lock
+    // would reveal whatever content sits beneath it.
+    PlatformBackHandler(enabled = true) {}
 
     val state by viewModel.state.collectAsStateWithLifecycle()
 

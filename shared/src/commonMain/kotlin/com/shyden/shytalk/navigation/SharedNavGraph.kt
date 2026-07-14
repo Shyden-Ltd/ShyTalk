@@ -148,12 +148,39 @@ fun SharedNavGraph(
         }
     }
 
+    // SHY-0187: re-interpose the App-Lock over post-auth content when the
+    // lock timeout expires in the background.
+    AppLockResumeGate(navController)
+
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
             startDestination = startDestination,
         ) {
             // ── Auth ──
+
+            composable(Screen.Lock.route) {
+                com.shyden.shytalk.feature.auth.LockScreen(
+                    onUnlocked = {
+                        // Warm re-lock (Lock pushed over content) → return to that
+                        // content; cold launch (Lock is the stack root) → to Main
+                        // with Lock removed so back cannot re-enter it.
+                        if (navController.previousBackStackEntry != null) {
+                            navController.safePopBackStack()
+                        } else {
+                            navController.navigate(Screen.Main.route) {
+                                popUpTo(Screen.Lock.route) { inclusive = true }
+                            }
+                        }
+                    },
+                    onReauthRequired = {
+                        // Session unrecoverable — full re-auth, nothing beneath kept.
+                        navController.navigate(Screen.SignIn.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    },
+                )
+            }
 
             composable(Screen.SignIn.route) {
                 platformScreens.signInScreen(

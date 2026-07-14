@@ -95,6 +95,26 @@ fun doInitKoin(
     }
 }
 
+/**
+ * Records "the app just went to background" for the App-Lock timeout
+ * (SHY-0187). Called from Swift (`AppDelegate`) on
+ * `UIApplication.didEnterBackgroundNotification` — the iOS counterpart of
+ * `MainActivity`'s `ProcessLifecycleOwner` onStop observer, so both
+ * platforms measure the lock timeout as time-spent-in-background.
+ *
+ * Failure direction: if Koin isn't up yet (a notification racing app init)
+ * the write is skipped — the timestamp stays stale, and a stale timestamp
+ * makes `isLockRequired()` MORE likely to lock, never less. Fail-closed.
+ */
+fun recordAppBackgroundedForAppLock() {
+    val koin = KoinPlatformTools.defaultContext().getOrNull()
+    if (koin == null) {
+        logI("KoinHelper", "App-Lock background timestamp skipped — Koin not initialised (fail-closed)")
+        return
+    }
+    koin.get<com.shyden.shytalk.data.repository.AppLockRepository>().updateLastActiveTimestamp()
+}
+
 private fun configureFirebaseEmulators() {
     val host = "localhost"
     Firebase.firestore.useEmulator(host, 8080)

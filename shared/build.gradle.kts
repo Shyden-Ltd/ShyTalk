@@ -131,3 +131,18 @@ compose.resources {
     packageOfResClass = "com.shyden.shytalk.resources"
     generateResClass = always
 }
+
+// SHY-0187: AppLockWiringPinTest (jvmTest) reads these navigation sources
+// directly off disk. The app-module + iosMain files are NOT inputs to the
+// jvmTest compilation, so without declaring them here Gradle would treat
+// jvmTest as up-to-date when only they change and skip the pin — leaving the
+// "built but never wired" regression unguarded.
+tasks.named("jvmTest") {
+    inputs
+        .files(
+            rootProject.layout.projectDirectory.file("app/src/main/java/com/shyden/shytalk/MainActivity.kt"),
+            rootProject.layout.projectDirectory.file("app/src/main/java/com/shyden/shytalk/navigation/NavGraph.kt"),
+            layout.projectDirectory.file("src/iosMain/kotlin/com/shyden/shytalk/MainViewController.kt"),
+        ).withPropertyName("appLockWiringPinnedSources")
+        .withPathSensitivity(org.gradle.api.tasks.PathSensitivity.RELATIVE)
+}
