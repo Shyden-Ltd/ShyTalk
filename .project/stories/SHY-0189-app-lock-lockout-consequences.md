@@ -7,7 +7,7 @@ priority: P1
 type: bug
 effort: M
 roadmap_ids: []
-epic: EPIC-0005
+epic: EPIC-0004
 mvp: false
 ---
 

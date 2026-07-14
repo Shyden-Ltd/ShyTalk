@@ -49,9 +49,14 @@ fun LockScreen(
 
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    // OS biometric-prompt copy is resolved HERE (UI layer) and passed down —
+    // the VM must never suspend on compose-resource IO (SHY-0187 R2).
+    val bioTitle = stringResource(Res.string.biometric_unlock_title)
+    val bioDesc = stringResource(Res.string.biometric_unlock_desc)
+
     LaunchedEffect(state.biometricAvailable) {
         if (state.biometricAvailable) {
-            viewModel.authenticateWithBiometric()
+            viewModel.authenticateWithBiometric(bioTitle, bioDesc)
         }
     }
 
@@ -117,7 +122,7 @@ fun LockScreen(
                 onBackspace = { viewModel.onPinBackspace() },
                 onBiometric =
                     if (state.biometricAvailable) {
-                        { viewModel.authenticateWithBiometric() }
+                        { viewModel.authenticateWithBiometric(bioTitle, bioDesc) }
                     } else {
                         null
                     },

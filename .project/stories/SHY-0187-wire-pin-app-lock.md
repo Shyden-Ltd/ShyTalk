@@ -7,7 +7,7 @@ priority: P1
 type: bug
 effort: L
 roadmap_ids: []
-epic: EPIC-0005
+epic: EPIC-0004
 mvp: true
 ---
 
@@ -119,6 +119,8 @@ Touches `shared/**` + `app/**` + `iosApp/**` (launch routing) → **full protoco
 Cold-launch + warm-resume both gate on App-Lock across real Android + real iPhone; unlock→Main with no back-stack bypass; `resolveLaunchDestination` unit-tested exhaustively; iOS/Android parity proven in commonTest; `code-reviewer` 100% clean; merged; released.
 
 ## Notes
+
+- 2026-07-15 ~05:30 WIB — **code-reviewer R2 on `c6c2d21d8eb` (agent ac2848b2ab0bb63e0): 1 Critical / 2 Important / 1 Minor — ALL verified against live code, then addressed; R2.1 delta re-review PENDING before push.** (Crit-1, 4th ungated reveal path) `handleRoomIntent`'s inRoom branch called `requestOpenPm` synchronously from onCreate/onNewIntent — ahead of ON_RESUME's re-lock interpose and with NO push-authz re-check (RoomScreen collects `pendingPmOpen` at ON_START, so the PM sheet could render before the Lock) → now publishes `pendingInRoomPmState`, consumed by a NEW gated LaunchedEffect in composition (lock gate with the real currentRoute → identity gate → `verifyPushNavigation` → `requestOpenPm`; drop-and-log fail-closed at every gate; both race orderings safe — whichever of relock/effect runs first, route==Lock or a due/dead state gates). RED-first pins: androidGates ≥2→≥3, `pendingInRoomPmState` presence, `verifyPushNavigation(` ≥2. (Imp-2, gate blind to rule 4) `isNavigationLockGated` couldn't represent dead-session state → signature gains isAuthenticated+hasResolvedUser and the body now DELEGATES to `resolveLaunchDestination` (gated ⇔ route==Lock ∨ resolver==Lock — the two can never diverge again); all 4 call sites updated (MainActivity ×3, MainViewController ×1); RED-first commonTest: rule-4 gating matrix + 96-combination gate/resolver agreement property + signed-out-not-lock-gated (the identity gate owns that drop). (Imp-3, biometric path zero coverage) the root blocker was `getString(Res…)` suspending on real compose-resource IO inside the VM — parks the host-JVM test scheduler forever (discovered via the first RED run) → prompt strings hoisted to the UI layer (`LockScreen` resolves via `stringResource` and passes into `authenticateWithBiometric(bioTitle, bioDesc)`; the VM does no compose-resource IO — errors stay lazy `UiText`) + `*ForTest` seams on the jvmMain-ONLY BiometricAuth/CryptoKeyPair stubs (never shipped; they exist to host jvmTest) + FakeBiometricRepository made configurable → 10 value-level tests drive the REAL flow (challenge→sign→verify→restore): exact-token + exact-base64-signature asserts, dead-session restore, restore-fail→reauth-never-unlock, live-session-no-resign, timestamp refresh, verify-fail, challenge-fail, null-signature, Fallback, hardware-Error, missing-stored-ids. MUTANT-verified per [[feedback-verify-the-mutant-not-just-the-mutation]]: the verbatim db7de0e7ec4 onSuccess body reapplied → exactly the 3 security tests went RED → restored. (Min-4, epic mismatch) SHY-0187 + SHY-0189 retagged EPIC-0005→EPIC-0004 (persistent-session/cold-start — where the App-Lock was built) + both added to EPIC-0004 `child_shys`; SHY + EPIC validators `--scan` green. Gates after fixes (single invocation): jvmTest **1371/0**, app unit **2233/0**, compileTestKotlinIosSimulatorArm64 ✓, compileKotlinIosArm64 ✓, assembleDevDebug ✓, detekt ✓, ktlint (all 10 touched files) ✓.
 
 Reviewed-up-to: db7de0e7ec4
 

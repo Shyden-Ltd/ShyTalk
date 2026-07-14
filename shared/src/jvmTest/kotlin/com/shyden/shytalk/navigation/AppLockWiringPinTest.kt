@@ -129,18 +129,51 @@ class AppLockWiringPinTest {
 
     @Test
     fun `every deep-link navigation call site checks the lock gate first`() {
-        // MainActivity has TWO gated intents (room + chat); the iOS collector one.
+        // MainActivity has THREE gated intent paths (room + chat + in-room PM);
+        // the iOS collector one. The in-room PM path (R2 Critical) is the
+        // handleRoomIntent branch that used to call requestOpenPm directly —
+        // synchronously, before ON_RESUME could interpose the Lock.
         val android = read(mainActivity)
         val androidGates = Regex("isNavigationLockGated\\(").findAll(android).count()
         assertTrue(
-            androidGates >= 2,
-            "$mainActivity must gate BOTH deep-link effects (room + chat); found $androidGates call(s) — " +
-                "an ungated navigate() lands content on top of the Lock screen",
+            androidGates >= 3,
+            "$mainActivity must gate ALL THREE deep-link paths (room + chat + in-room PM); " +
+                "found $androidGates call(s) — an ungated path lands content on top of the Lock screen",
         )
         val ios = read(mainViewController)
         assertTrue(
             ios.contains("isNavigationLockGated("),
             "$mainViewController must gate the chat deep-link collector",
+        )
+    }
+
+    @Test
+    fun `in-room PM intents route through a pending state not a direct open call`() {
+        // R2 Critical: handleRoomIntent runs synchronously in onCreate/onNewIntent
+        // where no navController exists, so it must PUBLISH the intent into a
+        // state the composition consumes behind the lock gate — never call
+        // requestOpenPm directly (that raced the ON_RESUME re-lock and skipped
+        // the push-authz re-check entirely).
+        val android = read(mainActivity)
+        assertTrue(
+            android.contains("pendingInRoomPmState"),
+            "$mainActivity must publish in-room PM intents into pendingInRoomPmState " +
+                "for the gated LaunchedEffect to consume",
+        )
+    }
+
+    @Test
+    fun `both android chat-content paths re-verify push authorization`() {
+        // The chat deep-link effect AND the in-room PM effect must each call
+        // verifyPushNavigation (block-list + group-membership re-check,
+        // fail-closed) — a compromised push payload must not open content
+        // through EITHER path.
+        val android = read(mainActivity)
+        val authzChecks = Regex("verifyPushNavigation\\(").findAll(android).count()
+        assertTrue(
+            authzChecks >= 2,
+            "$mainActivity must re-verify push authz on both chat-content paths " +
+                "(chat navigate + in-room PM); found $authzChecks call(s)",
         )
     }
 

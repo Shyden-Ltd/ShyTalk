@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.jetbrains.compose.resources.getString
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -168,13 +167,21 @@ class LockScreenViewModel(
         }
     }
 
+    /**
+     * [bioTitle]/[bioDesc] are the OS biometric-prompt strings, resolved by
+     * the UI layer (stringResource) and passed in — the VM must not suspend
+     * on compose-resource IO (`getString` parks the coroutine on real
+     * resource-loading IO, which deadlocks the host-JVM test scheduler; the
+     * prompt copy is a UI concern anyway — errors stay lazy via [UiText]).
+     */
     @OptIn(ExperimentalEncodingApi::class)
-    fun authenticateWithBiometric() {
+    fun authenticateWithBiometric(
+        bioTitle: String,
+        bioDesc: String,
+    ) {
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null) }
 
-            val bioTitle = getString(Res.string.biometric_unlock_title)
-            val bioDesc = getString(Res.string.biometric_unlock_desc)
             when (val bioResult = biometricAuth.authenticate(bioTitle, bioDesc)) {
                 is BiometricResult.Success -> {
                     val uniqueId = appLockRepository.storedUniqueId

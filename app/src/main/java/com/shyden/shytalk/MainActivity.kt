@@ -101,6 +101,13 @@ class MainActivity : AppCompatActivity() {
 
     private val navigateToRoomState = mutableStateOf<String?>(null)
     private val navigateToChatState = mutableStateOf<Pair<String, Boolean>?>(null) // (id, isGroup)
+
+    // In-room PM intent (id, isGroup): published by handleRoomIntent, consumed
+    // by a gated LaunchedEffect in composition. NEVER open the PM sheet
+    // directly from the intent handler — it runs before ON_RESUME can
+    // interpose the App-Lock and it has no navController for the gate's
+    // currentRoute (SHY-0187 R2 Critical).
+    private val pendingInRoomPmState = mutableStateOf<Pair<String, Boolean>?>(null)
     private val pendingEmailLinkState = mutableStateOf<String?>(null)
     private val showLeaveConfirmationState = mutableStateOf(false)
     private var lastSeenJob: Job? = null
@@ -413,6 +420,8 @@ class MainActivity : AppCompatActivity() {
                                                 hasStoredCredential = appLockRepository.hasCredential,
                                                 isAppLockEnabled = appLockRepository.isAppLockEnabled,
                                                 isLockRequired = appLockRepository.isLockRequired(),
+                                                isAuthenticated = authRepository.isAuthenticated,
+                                                hasResolvedUser = authRepository.currentUserId != null,
                                                 currentRoute = navController.currentDestination?.route,
                                             )
                                         ) {
@@ -447,6 +456,8 @@ class MainActivity : AppCompatActivity() {
                                                 hasStoredCredential = appLockRepository.hasCredential,
                                                 isAppLockEnabled = appLockRepository.isAppLockEnabled,
                                                 isLockRequired = appLockRepository.isLockRequired(),
+                                                isAuthenticated = authRepository.isAuthenticated,
+                                                hasResolvedUser = authRepository.currentUserId != null,
                                                 currentRoute = navController.currentDestination?.route,
                                             )
                                         ) {
@@ -486,6 +497,58 @@ class MainActivity : AppCompatActivity() {
                                         // future tri-platform unification through that
                                         // channel doesn't leave a stale link. Idempotent.
                                         consumeChatDeepLink()
+                                    }
+                                }
+
+                                val pendingInRoomPm by pendingInRoomPmState
+
+                                // SHY-0187 R2: in-room PM intents (a PM push tapped
+                                // while live in a room) get the SAME gates as the
+                                // navigate path — the App-Lock outranks the link
+                                // (fail-closed drop), then the push-authz re-check
+                                // (block-list + group membership, fail-closed).
+                                LaunchedEffect(pendingInRoomPm) {
+                                    val pmIntent = pendingInRoomPm
+                                    if (pmIntent != null) {
+                                        val (id, isGroup) = pmIntent
+                                        if (isNavigationLockGated(
+                                                hasStoredCredential = appLockRepository.hasCredential,
+                                                isAppLockEnabled = appLockRepository.isAppLockEnabled,
+                                                isLockRequired = appLockRepository.isLockRequired(),
+                                                isAuthenticated = authRepository.isAuthenticated,
+                                                hasResolvedUser = authRepository.currentUserId != null,
+                                                currentRoute = navController.currentDestination?.route,
+                                            )
+                                        ) {
+                                            logI(TAG, "In-room PM intent dropped — App-Lock is gating")
+                                            pendingInRoomPmState.value = null
+                                            return@LaunchedEffect
+                                        }
+                                        val currentUserId = authRepository.resolvedUniqueId
+                                        if (currentUserId.isNullOrEmpty()) {
+                                            Log.w(TAG, "In-room PM intent dropped — identity not yet resolved or signed out")
+                                            pendingInRoomPmState.value = null
+                                            return@LaunchedEffect
+                                        }
+                                        val authzOk =
+                                            verifyPushNavigation(
+                                                currentUserId = currentUserId,
+                                                targetId = id,
+                                                isGroup = isGroup,
+                                                fetchBlockedUserIds = { userRepository.getBlockedUserIds(it) },
+                                                fetchConversation = { privateMessageRepository.getConversation(it) },
+                                            )
+                                        if (!authzOk) {
+                                            pendingInRoomPmState.value = null
+                                            return@LaunchedEffect
+                                        }
+                                        val mgr = activeRoomManager as? ActiveRoomManager
+                                        if (isGroup) {
+                                            mgr?.requestOpenPm(groupConversationId = id)
+                                        } else {
+                                            mgr?.requestOpenPm(userId = id)
+                                        }
+                                        pendingInRoomPmState.value = null
                                     }
                                 }
 
@@ -668,14 +731,20 @@ class MainActivity : AppCompatActivity() {
             val inRoom = activeRoomManager.activeRoomId.value != null
 
             if (inRoom) {
-                // User is in a room — open PmBottomSheet within the room instead of navigating away
-                val mgr = activeRoomManager as? ActiveRoomManager
-                if (isGroup) {
-                    val conversationId = intent.getStringExtra("conversationId")
-                    if (conversationId != null) mgr?.requestOpenPm(groupConversationId = conversationId)
-                } else {
-                    val otherUserId = intent.getStringExtra("otherUserId")
-                    if (otherUserId != null) mgr?.requestOpenPm(userId = otherUserId)
+                // User is in a room — open PmBottomSheet within the room instead
+                // of navigating away. Published as pending state (NOT a direct
+                // requestOpenPm): this method runs synchronously in
+                // onCreate/onNewIntent, BEFORE ON_RESUME can interpose the
+                // App-Lock, and the composition-side effect also re-checks push
+                // authz — same fail-closed semantics as the navigate path.
+                val id =
+                    if (isGroup) {
+                        intent.getStringExtra("conversationId")
+                    } else {
+                        intent.getStringExtra("otherUserId")
+                    }
+                if (id != null) {
+                    pendingInRoomPmState.value = id to isGroup
                 }
             } else {
                 if (isGroup) {

@@ -63,17 +63,29 @@ fun shouldRelockOnResume(
  * because the App-Lock stands between the user and content.
  *
  * True when the Lock screen is currently showing (regardless of the timer —
- * navigating over a rendered lock is always a bypass) OR when a lock is due
- * but not yet rendered (the cold-launch/pre-composition race: the intent
- * handler can run before the start destination composes). Droppers log and
- * clear the pending link — fail-closed, like the existing
- * identity-not-resolved drop path.
+ * navigating over a rendered lock is always a bypass) OR when
+ * [resolveLaunchDestination] would choose the Lock for the same state: a due
+ * lock (including the cold-launch/pre-composition race, where the intent
+ * handler runs before the start destination composes) or rule 4's
+ * credentialed dead session. The gate DELEGATES to the resolver so the two
+ * decisions can never diverge. A signed-out state is deliberately NOT
+ * lock-gated — the resolver says Sign-In and every call site's
+ * identity-not-resolved check owns that drop. Droppers log and clear the
+ * pending link — fail-closed.
  */
 fun isNavigationLockGated(
     hasStoredCredential: Boolean,
     isAppLockEnabled: Boolean,
     isLockRequired: Boolean,
+    isAuthenticated: Boolean,
+    hasResolvedUser: Boolean,
     currentRoute: String?,
 ): Boolean =
     currentRoute == Screen.Lock.route ||
-        (hasStoredCredential && isAppLockEnabled && isLockRequired)
+        resolveLaunchDestination(
+            hasStoredCredential = hasStoredCredential,
+            isAppLockEnabled = isAppLockEnabled,
+            isLockRequired = isLockRequired,
+            isAuthenticated = isAuthenticated,
+            hasResolvedUser = hasResolvedUser,
+        ) == Screen.Lock

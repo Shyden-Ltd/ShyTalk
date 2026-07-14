@@ -262,6 +262,8 @@ class LaunchDestinationTest {
                     hasStoredCredential = true,
                     isAppLockEnabled = true,
                     isLockRequired = required,
+                    isAuthenticated = true,
+                    hasResolvedUser = true,
                     currentRoute = Screen.Lock.route,
                 ),
                 "a deep link must never navigate over a showing Lock screen (required=$required)",
@@ -278,6 +280,8 @@ class LaunchDestinationTest {
                     hasStoredCredential = true,
                     isAppLockEnabled = true,
                     isLockRequired = true,
+                    isAuthenticated = true,
+                    hasResolvedUser = true,
                     currentRoute = route,
                 ),
                 "a due lock must gate deep links on route=$route (covers the pre-composition race)",
@@ -286,25 +290,106 @@ class LaunchDestinationTest {
     }
 
     @Test
-    fun `deep-link navigation is not gated without a due lock away from the Lock screen`() {
-        val offStates =
-            listOf(
-                Triple(false, true, true),
-                Triple(true, false, true),
-                Triple(true, true, false),
-            )
-        for ((cred, enabled, required) in offStates) {
+    fun `deep-link navigation is gated for a credentialed dead session even without a due lock`() {
+        // R2 hardening: rule 4 — credential present, session dead/unresolved.
+        // The launch resolver routes this state to Lock (the PIN doubles as
+        // the session-restore credential), so a deep link must not out-run it.
+        val noGateLockStates = listOf(false to false, false to true, true to false)
+        for ((enabled, required) in noGateLockStates) {
+            for ((auth, user) in listOf(false to false, false to true, true to false)) {
+                for (route in listOf(Screen.Main.route, "room/123", null)) {
+                    assertEquals(
+                        true,
+                        isNavigationLockGated(
+                            hasStoredCredential = true,
+                            isAppLockEnabled = enabled,
+                            isLockRequired = required,
+                            isAuthenticated = auth,
+                            hasResolvedUser = user,
+                            currentRoute = route,
+                        ),
+                        "dead session must gate deep links: enabled=$enabled required=$required " +
+                            "auth=$auth user=$user route=$route",
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `deep-link navigation is not gated for a live resolved session without a due lock away from the Lock screen`() {
+        val noGateLockStates = listOf(false to false, false to true, true to false)
+        for ((enabled, required) in noGateLockStates) {
             assertEquals(
                 false,
                 isNavigationLockGated(
-                    hasStoredCredential = cred,
+                    hasStoredCredential = true,
                     isAppLockEnabled = enabled,
                     isLockRequired = required,
+                    isAuthenticated = true,
+                    hasResolvedUser = true,
                     currentRoute = Screen.Main.route,
                 ),
-                "cred=$cred enabled=$enabled required=$required on Main must not gate deep links",
+                "live session, no due lock (enabled=$enabled required=$required) must not gate deep links",
             )
         }
+    }
+
+    @Test
+    fun `deep-link navigation is not lock-gated when signed out`() {
+        // No credential → the resolver says SignIn, not Lock: dropping a
+        // signed-out deep link is the IDENTITY gate's job (both platforms
+        // drop on unresolved identity right after this gate), not the lock's.
+        assertEquals(
+            false,
+            isNavigationLockGated(
+                hasStoredCredential = false,
+                isAppLockEnabled = true,
+                isLockRequired = true,
+                isAuthenticated = false,
+                hasResolvedUser = false,
+                currentRoute = Screen.Main.route,
+            ),
+        )
+    }
+
+    @Test
+    fun `deep-link gate agrees with the launch resolver on every state`() {
+        // Structural pin for the R2 delegation fix: gated ⇔ Lock showing ∨
+        // resolver-would-Lock, checked exhaustively so the gate and the
+        // resolver can never diverge again without a red test naming the state.
+        val bools = listOf(false, true)
+        var checked = 0
+        for (cred in bools) {
+            for (enabled in bools) {
+                for (required in bools) {
+                    for (auth in bools) {
+                        for (user in bools) {
+                            for (route in listOf(Screen.Lock.route, Screen.Main.route, null)) {
+                                val expected =
+                                    route == Screen.Lock.route ||
+                                        expectedFor(cred, enabled, required, auth, user) == Screen.Lock
+                                assertEquals(
+                                    expected,
+                                    isNavigationLockGated(
+                                        hasStoredCredential = cred,
+                                        isAppLockEnabled = enabled,
+                                        isLockRequired = required,
+                                        isAuthenticated = auth,
+                                        hasResolvedUser = user,
+                                        currentRoute = route,
+                                    ),
+                                    "gate/resolver disagreement: cred=$cred enabled=$enabled " +
+                                        "required=$required auth=$auth user=$user route=$route",
+                                )
+                                checked++
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assertEquals(96, checked, "the agreement matrix must cover every combination")
     }
 
     @Test

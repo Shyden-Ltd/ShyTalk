@@ -114,6 +114,8 @@ private fun IosApp() {
                                 hasStoredCredential = lockRepo.hasCredential,
                                 isAppLockEnabled = lockRepo.isAppLockEnabled,
                                 isLockRequired = lockRepo.isLockRequired(),
+                                isAuthenticated = authRepo.isAuthenticated,
+                                hasResolvedUser = authRepo.currentUserId != null,
                                 currentRoute = navController.currentDestination?.route,
                             )
                         ) {
