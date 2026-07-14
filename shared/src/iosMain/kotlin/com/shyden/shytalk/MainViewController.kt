@@ -29,6 +29,7 @@ import com.shyden.shytalk.navigation.IosPlatformNavCallbacks
 import com.shyden.shytalk.navigation.Screen
 import com.shyden.shytalk.navigation.SharedNavGraph
 import com.shyden.shytalk.navigation.createIosPlatformScreens
+import com.shyden.shytalk.navigation.isNavigationLockGated
 import com.shyden.shytalk.navigation.resolveLaunchDestination
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
 import kotlinx.coroutines.flow.filterNotNull
@@ -106,6 +107,20 @@ private fun IosApp() {
                     chatDeepLinks.filterNotNull().collect { link ->
                         val koin = KoinPlatformTools.defaultContext().get()
                         val authRepo = koin.get<AuthRepository>()
+                        // SHY-0187: the App-Lock gate outranks even an authorized
+                        // deep link — drop, fail-closed (same as Android).
+                        val lockRepo = koin.get<AppLockRepository>()
+                        if (isNavigationLockGated(
+                                hasStoredCredential = lockRepo.hasCredential,
+                                isAppLockEnabled = lockRepo.isAppLockEnabled,
+                                isLockRequired = lockRepo.isLockRequired(),
+                                currentRoute = navController.currentDestination?.route,
+                            )
+                        ) {
+                            logI("MainViewController", "Chat deep-link dropped — App-Lock is gating")
+                            consumeChatDeepLink()
+                            return@collect
+                        }
                         // Use resolvedUniqueId (not currentUserId) so we never
                         // query users/{firebaseUid} during the cold-start race
                         // before identity resolution completes.

@@ -56,3 +56,24 @@ fun shouldRelockOnResume(
             currentRoute == Screen.EmailSignIn.route
     return hasStoredCredential && isAppLockEnabled && isLockRequired && !exempt
 }
+
+/**
+ * Deep-link gate (SHY-0187): whether a programmatic navigation triggered by
+ * an external intent (push tap, room invite, chat deep link) must be DROPPED
+ * because the App-Lock stands between the user and content.
+ *
+ * True when the Lock screen is currently showing (regardless of the timer —
+ * navigating over a rendered lock is always a bypass) OR when a lock is due
+ * but not yet rendered (the cold-launch/pre-composition race: the intent
+ * handler can run before the start destination composes). Droppers log and
+ * clear the pending link — fail-closed, like the existing
+ * identity-not-resolved drop path.
+ */
+fun isNavigationLockGated(
+    hasStoredCredential: Boolean,
+    isAppLockEnabled: Boolean,
+    isLockRequired: Boolean,
+    currentRoute: String?,
+): Boolean =
+    currentRoute == Screen.Lock.route ||
+        (hasStoredCredential && isAppLockEnabled && isLockRequired)

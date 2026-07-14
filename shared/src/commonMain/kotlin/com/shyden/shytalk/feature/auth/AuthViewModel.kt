@@ -63,6 +63,10 @@ data class AuthUiState(
     val emailForLink: String? = null,
     val needsPinSetup: Boolean = false,
     val hasStoredCredential: Boolean = false,
+    // Informational only — the ACTUAL App-Lock gate reads AppLockRepository
+    // directly via resolveLaunchDestination (cold launch) + AppLockResumeGate
+    // (warm resume); nothing routes on this flag (SHY-0187). Do not build
+    // navigation against it.
     val needsLockScreen: Boolean = false,
     /**
      * Set when local auth storage (Keychain / EncryptedSharedPreferences / Firebase

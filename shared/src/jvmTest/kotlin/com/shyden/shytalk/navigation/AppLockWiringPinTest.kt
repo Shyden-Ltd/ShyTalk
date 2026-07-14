@@ -23,6 +23,13 @@ import kotlin.test.assertTrue
  *  - BOTH nav graphs (SharedNavGraph for iOS, the app NavGraph for Android)
  *    register the Lock destination and mount the warm-resume re-lock gate.
  *  - The Lock screen consumes the system back gesture (no back-bypass).
+ *  - Every deep-link navigate() call site checks the lock gate first.
+ *
+ * Known limitation: these are raw substring pins, not AST-aware — a
+ * COMMENTED-OUT wiring line keeps them green. They catch deletion (the
+ * realistic regression: a refactor drops the call), not sabotage; the
+ * behavioural layers (commonTest decisions + the device gauntlet) are the
+ * semantic backstop.
  */
 class AppLockWiringPinTest {
     private fun repoRoot(): File {
@@ -117,6 +124,23 @@ class AppLockWiringPinTest {
         assertTrue(
             appDelegate.contains("recordAppBackgroundedForAppLock"),
             "AppDelegate.swift must call the Kotlin bridge on backgrounding",
+        )
+    }
+
+    @Test
+    fun `every deep-link navigation call site checks the lock gate first`() {
+        // MainActivity has TWO gated intents (room + chat); the iOS collector one.
+        val android = read(mainActivity)
+        val androidGates = Regex("isNavigationLockGated\\(").findAll(android).count()
+        assertTrue(
+            androidGates >= 2,
+            "$mainActivity must gate BOTH deep-link effects (room + chat); found $androidGates call(s) — " +
+                "an ungated navigate() lands content on top of the Lock screen",
+        )
+        val ios = read(mainViewController)
+        assertTrue(
+            ios.contains("isNavigationLockGated("),
+            "$mainViewController must gate the chat deep-link collector",
         )
     }
 

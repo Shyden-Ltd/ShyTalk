@@ -72,6 +72,7 @@ import com.shyden.shytalk.feature.update.DegradedModeScreen
 import com.shyden.shytalk.feature.update.ForceUpdateScreen
 import com.shyden.shytalk.navigation.NavGraph
 import com.shyden.shytalk.navigation.Screen
+import com.shyden.shytalk.navigation.isNavigationLockGated
 import com.shyden.shytalk.navigation.resolveLaunchDestination
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -405,6 +406,20 @@ class MainActivity : AppCompatActivity() {
                                 LaunchedEffect(navigateToRoomId) {
                                     val roomId = navigateToRoomId
                                     if (roomId != null) {
+                                        // SHY-0187: a push/intent must never navigate over
+                                        // (or ahead of) the App-Lock — drop it, fail-closed,
+                                        // like the identity-not-resolved drop below.
+                                        if (isNavigationLockGated(
+                                                hasStoredCredential = appLockRepository.hasCredential,
+                                                isAppLockEnabled = appLockRepository.isAppLockEnabled,
+                                                isLockRequired = appLockRepository.isLockRequired(),
+                                                currentRoute = navController.currentDestination?.route,
+                                            )
+                                        ) {
+                                            logI(TAG, "Room deep-link dropped — App-Lock is gating")
+                                            navigateToRoomState.value = null
+                                            return@LaunchedEffect
+                                        }
                                         navController.navigate(Screen.Room.createRoute(roomId)) {
                                             launchSingleTop = true
                                         }
@@ -426,6 +441,19 @@ class MainActivity : AppCompatActivity() {
                                     val chatInfo = navigateToChatInfo
                                     if (chatInfo != null) {
                                         val (id, isGroup) = chatInfo
+                                        // SHY-0187: the App-Lock gate outranks even an
+                                        // authorized deep link (fail-closed drop).
+                                        if (isNavigationLockGated(
+                                                hasStoredCredential = appLockRepository.hasCredential,
+                                                isAppLockEnabled = appLockRepository.isAppLockEnabled,
+                                                isLockRequired = appLockRepository.isLockRequired(),
+                                                currentRoute = navController.currentDestination?.route,
+                                            )
+                                        ) {
+                                            logI(TAG, "Chat deep-link dropped — App-Lock is gating")
+                                            navigateToChatState.value = null
+                                            return@LaunchedEffect
+                                        }
                                         val currentUserId = authRepository.resolvedUniqueId
                                         if (currentUserId.isNullOrEmpty()) {
                                             Log.w(TAG, "Push deep-link dropped — identity not yet resolved or signed out")

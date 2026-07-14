@@ -2,9 +2,11 @@ package com.shyden.shytalk.feature.auth
 
 import com.shyden.shytalk.core.util.BiometricAuth
 import com.shyden.shytalk.core.util.CryptoKeyPair
+import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.SecureStorage
 import com.shyden.shytalk.core.util.UiText
 import com.shyden.shytalk.data.repository.AppLockRepositoryImpl
+import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.BiometricRepository
 import com.shyden.shytalk.data.repository.PinRepository
 import com.shyden.shytalk.data.repository.PinVerifyResult
@@ -33,7 +35,9 @@ class LockScreenViewModelTest {
     private lateinit var fakeBioRepo: FakeBiometricRepository
     private lateinit var fakeBioAuth: BiometricAuth
     private lateinit var fakeCrypto: CryptoKeyPair
+    private lateinit var storage: SecureStorage
     private lateinit var appLockRepo: AppLockRepositoryImpl
+    private lateinit var fakeAuthRepo: FakeAuthRepository
     private lateinit var viewModel: LockScreenViewModel
 
     @BeforeTest
@@ -43,9 +47,11 @@ class LockScreenViewModelTest {
         fakeBioRepo = FakeBiometricRepository()
         fakeBioAuth = BiometricAuth() // JVM stub — isAvailable() returns false
         fakeCrypto = CryptoKeyPair() // JVM stub
-        appLockRepo = AppLockRepositoryImpl(SecureStorage())
+        storage = SecureStorage()
+        appLockRepo = AppLockRepositoryImpl(storage)
         appLockRepo.setCredential("12345678", "dev-1", "\$2b\$10\$hash")
-        viewModel = LockScreenViewModel(fakePinRepo, fakeBioRepo, fakeBioAuth, fakeCrypto, appLockRepo)
+        fakeAuthRepo = FakeAuthRepository()
+        viewModel = LockScreenViewModel(fakePinRepo, fakeBioRepo, fakeBioAuth, fakeCrypto, appLockRepo, fakeAuthRepo)
     }
 
     @AfterTest
@@ -143,7 +149,7 @@ class LockScreenViewModelTest {
     @Test
     fun `submitPin with no stored uniqueId shows session expired error`() {
         appLockRepo.clearCredential()
-        viewModel = LockScreenViewModel(fakePinRepo, fakeBioRepo, fakeBioAuth, fakeCrypto, appLockRepo)
+        viewModel = LockScreenViewModel(fakePinRepo, fakeBioRepo, fakeBioAuth, fakeCrypto, appLockRepo, fakeAuthRepo)
         "1234".forEach { viewModel.onPinDigit(it) }
         viewModel.submitPin()
 
@@ -158,7 +164,7 @@ class LockScreenViewModelTest {
     fun `submitPin with cleared credential does not call verifyPin`() =
         runTest {
             appLockRepo.clearCredential()
-            viewModel = LockScreenViewModel(fakePinRepo, fakeBioRepo, fakeBioAuth, fakeCrypto, appLockRepo)
+            viewModel = LockScreenViewModel(fakePinRepo, fakeBioRepo, fakeBioAuth, fakeCrypto, appLockRepo, fakeAuthRepo)
             "1234".forEach { viewModel.onPinDigit(it) }
             viewModel.submitPin()
             advanceUntilIdle()
@@ -408,6 +414,125 @@ class LockScreenViewModelTest {
     }
 
     // ─── Fakes ──────────────────────────────────────────────────
+
+    // ─── SHY-0187: unlock must restore a dead Firebase session ───
+
+    @Test
+    fun `correct PIN with a dead session restores it via the custom token before unlocking`() =
+        runTest {
+            fakeAuthRepo.fakeAuthenticated = false
+            fakePinRepo.verifyResult = Result.success(PinVerifyResult(customToken = "token-restore"))
+            "1234".forEach { viewModel.onPinDigit(it) }
+            viewModel.submitPin()
+            advanceUntilIdle()
+            assertEquals(listOf("token-restore"), fakeAuthRepo.customTokenSignIns)
+            assertTrue(viewModel.state.value.unlocked)
+            assertFalse(viewModel.state.value.requiresReauth)
+        }
+
+    @Test
+    fun `correct PIN with a dead session and a failing restore routes to reauth not unlock`() =
+        runTest {
+            fakeAuthRepo.fakeAuthenticated = false
+            fakeAuthRepo.customTokenResult = Resource.Error("restore failed")
+            fakePinRepo.verifyResult = Result.success(PinVerifyResult(customToken = "token-dead"))
+            "1234".forEach { viewModel.onPinDigit(it) }
+            viewModel.submitPin()
+            advanceUntilIdle()
+            assertEquals(listOf("token-dead"), fakeAuthRepo.customTokenSignIns)
+            assertFalse(viewModel.state.value.unlocked)
+            assertTrue(viewModel.state.value.requiresReauth)
+        }
+
+    @Test
+    fun `correct PIN with a live session does not re-sign-in`() =
+        runTest {
+            fakeAuthRepo.fakeAuthenticated = true
+            fakePinRepo.verifyResult = Result.success(PinVerifyResult(customToken = "token-live"))
+            "1234".forEach { viewModel.onPinDigit(it) }
+            viewModel.submitPin()
+            advanceUntilIdle()
+            assertEquals(emptyList(), fakeAuthRepo.customTokenSignIns)
+            assertTrue(viewModel.state.value.unlocked)
+        }
+
+    // ─── SHY-0187: unlock resets the lock-timeout clock ──────────
+
+    @Test
+    fun `successful unlock refreshes the lock timestamp so the next resume does not immediately re-lock`() =
+        runTest {
+            appLockRepo.setAppLockEnabled(true)
+            appLockRepo.setLockTimeoutMinutes(1)
+            storage.putLong("lastActiveTimestamp", 1L) // ancient → lock due
+            assertTrue(appLockRepo.isLockRequired(), "precondition: the lock must be due before unlock")
+            fakePinRepo.verifyResult = Result.success(PinVerifyResult(customToken = "token-abc"))
+            "1234".forEach { viewModel.onPinDigit(it) }
+            viewModel.submitPin()
+            advanceUntilIdle()
+            assertTrue(viewModel.state.value.unlocked)
+            assertFalse(
+                appLockRepo.isLockRequired(),
+                "unlock must refresh the timestamp — a stale one re-locks on the very next resume/rotation",
+            )
+        }
+
+    @Test
+    fun `failed restore does not refresh the lock timestamp`() =
+        runTest {
+            appLockRepo.setAppLockEnabled(true)
+            appLockRepo.setLockTimeoutMinutes(1)
+            storage.putLong("lastActiveTimestamp", 1L)
+            fakeAuthRepo.fakeAuthenticated = false
+            fakeAuthRepo.customTokenResult = Resource.Error("restore failed")
+            fakePinRepo.verifyResult = Result.success(PinVerifyResult(customToken = "token-dead"))
+            "1234".forEach { viewModel.onPinDigit(it) }
+            viewModel.submitPin()
+            advanceUntilIdle()
+            assertTrue(appLockRepo.isLockRequired(), "a failed unlock must leave the lock due (fail-closed)")
+        }
+
+    private class FakeAuthRepository : AuthRepository {
+        var fakeAuthenticated: Boolean = true
+        var customTokenResult: Resource<String> = Resource.Success("uid-1")
+        val customTokenSignIns = mutableListOf<String>()
+
+        override val currentUserId: String? get() = if (fakeAuthenticated) "user-1" else null
+        override val isAuthenticated: Boolean get() = fakeAuthenticated
+        override val currentUserEmail: String? = null
+        override val currentFirebaseUid: String? get() = if (fakeAuthenticated) "fb-uid-1" else null
+        override var resolvedUniqueId: String? = null
+        override var resolvedDisplayName: String? = null
+
+        override fun getProviderInfo(): Pair<String, String>? = null
+
+        override suspend fun signInWithGoogleIdToken(idToken: String): Resource<String> = error("not used")
+
+        override suspend fun signInWithAppleIdToken(
+            idToken: String,
+            rawNonce: String,
+        ): Resource<String> = error("not used")
+
+        override suspend fun signInWithAppleViaProvider(activity: Any): Resource<String> = error("not used")
+
+        override suspend fun sendSignInLink(email: String): Resource<Unit> = error("not used")
+
+        override suspend fun signInWithEmailLink(
+            email: String,
+            link: String,
+        ): Resource<String> = error("not used")
+
+        override suspend fun signInWithCustomToken(token: String): Resource<String> {
+            customTokenSignIns += token
+            if (customTokenResult is Resource.Success) fakeAuthenticated = true
+            return customTokenResult
+        }
+
+        override suspend fun signOut() {
+            fakeAuthenticated = false
+        }
+
+        override suspend fun refreshIdToken(): Resource<Unit> = Resource.Success(Unit)
+    }
 
     private class FakePinRepository : PinRepository {
         var verifyResult: Result<PinVerifyResult> = Result.success(PinVerifyResult(customToken = "token"))

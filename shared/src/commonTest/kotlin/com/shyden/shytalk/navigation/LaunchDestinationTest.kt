@@ -254,6 +254,60 @@ class LaunchDestinationTest {
     }
 
     @Test
+    fun `deep-link navigation is gated while the Lock screen is showing regardless of timer state`() {
+        for (required in listOf(false, true)) {
+            assertEquals(
+                true,
+                isNavigationLockGated(
+                    hasStoredCredential = true,
+                    isAppLockEnabled = true,
+                    isLockRequired = required,
+                    currentRoute = Screen.Lock.route,
+                ),
+                "a deep link must never navigate over a showing Lock screen (required=$required)",
+            )
+        }
+    }
+
+    @Test
+    fun `deep-link navigation is gated when a lock is due even before Lock renders`() {
+        for (route in listOf(Screen.Main.route, Screen.Splash.route, null)) {
+            assertEquals(
+                true,
+                isNavigationLockGated(
+                    hasStoredCredential = true,
+                    isAppLockEnabled = true,
+                    isLockRequired = true,
+                    currentRoute = route,
+                ),
+                "a due lock must gate deep links on route=$route (covers the pre-composition race)",
+            )
+        }
+    }
+
+    @Test
+    fun `deep-link navigation is not gated without a due lock away from the Lock screen`() {
+        val offStates =
+            listOf(
+                Triple(false, true, true),
+                Triple(true, false, true),
+                Triple(true, true, false),
+            )
+        for ((cred, enabled, required) in offStates) {
+            assertEquals(
+                false,
+                isNavigationLockGated(
+                    hasStoredCredential = cred,
+                    isAppLockEnabled = enabled,
+                    isLockRequired = required,
+                    currentRoute = Screen.Main.route,
+                ),
+                "cred=$cred enabled=$enabled required=$required on Main must not gate deep links",
+            )
+        }
+    }
+
+    @Test
     fun `lock gate outranks silent restore when both apply`() {
         // The single most security-critical ordering: a fully-restorable session
         // that ALSO has a pending lock must land on Lock, never Main.
