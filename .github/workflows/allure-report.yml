@@ -87,11 +87,17 @@ jobs:
         if: steps.check-existing.outputs.skip != 'true'
         run: |
           MERGED="allure-results-all/environment.properties"
-          > "$MERGED"
+          : > "$MERGED"
           find allure-results-all -name environment.properties -not -path "$MERGED" | sort | while read -r f; do
-            SUITE=$(echo "$f" | sed 's|allure-results-all/||;s|/environment.properties||;s|/|.|g')
+            # <dir>/<suite path>/environment.properties → dot-joined suite id,
+            # in pure parameter expansion (same output as the old sed chain).
+            rel="${f#allure-results-all/}"
+            rel="${rel%/environment.properties}"
+            SUITE="${rel//\//.}"
             while IFS= read -r line; do
-              trimmed=$(echo "$line" | sed 's/^[[:space:]]*//')
+              # pure-bash left-trim: strip the leading-whitespace run (the
+              # longest non-space-led suffix is everything after it).
+              trimmed="${line#"${line%%[![:space:]]*}"}"
               [ -z "$trimmed" ] && continue
               KEY=$(echo "$trimmed" | cut -d= -f1)
               VALUE=$(echo "$trimmed" | cut -d= -f2-)
@@ -156,7 +162,9 @@ jobs:
         run: |
           RUNS_DIR="gh-pages/${{ inputs.suite_name }}/${{ inputs.report_env }}/runs"
           if [ -d "$RUNS_DIR" ]; then
-            ls -1d "$RUNS_DIR"/*/ 2>/dev/null | sort | head -n -${{ inputs.max_history_runs }} | xargs rm -rf 2>/dev/null || true
+            # NUL-delimited find (not ls) — filename-safe end to end; GNU
+            # sort/head -z are fine here (this only ever runs on ubuntu).
+            find "$RUNS_DIR" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z | head -z -n -${{ inputs.max_history_runs }} | xargs -0 rm -rf 2>/dev/null || true
             echo "Pruned old runs, kept last ${{ inputs.max_history_runs }}"
           fi
 
@@ -275,6 +283,8 @@ jobs:
         run: |
           REPO="${{ github.repository }}"
           OWNER="${REPO%%/*}"
-          echo "## Allure Report (${{ inputs.suite_name }})" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "[View Report](https://${OWNER}.github.io/${REPO##*/}/${{ inputs.suite_name }}/${{ inputs.report_env }}/latest/)" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Allure Report (${{ inputs.suite_name }})"
+            echo ""
+            echo "[View Report](https://${OWNER}.github.io/${REPO##*/}/${{ inputs.suite_name }}/${{ inputs.report_env }}/latest/)"
+          } >> "$GITHUB_STEP_SUMMARY"
