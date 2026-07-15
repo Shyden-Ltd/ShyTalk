@@ -90,12 +90,14 @@ jobs:
       - name: Run actionlint (workflow + embedded shellcheck)
         run: |
           set -euo pipefail
-          # -shellcheck=  passes shellcheck flags into embedded shellcheck.
-          # We disable SC2086 (intentional word-splitting on $RUNNER_TEMP)
-          # repo-wide because GH-managed paths are safe to leave unquoted
-          # in run: blocks where the alternative would be every reference
-          # gaining a quote. Other shellcheck rules apply normally.
-          actionlint -shellcheck='-e SC2086'
+          # SHELLCHECK_OPTS is the documented channel for passing flags into
+          # actionlint's embedded shellcheck. We exclude SC2086 (intentional
+          # word-splitting on GH-managed paths like $RUNNER_TEMP) repo-wide;
+          # every other rule applies normally. NOTE (SHY-0191): actionlint's
+          # -shellcheck flag is NOT for flags — it names the shellcheck
+          # EXECUTABLE, and a non-executable value silently DISABLES the
+          # integration (exit 0, no warning). Never pass that flag here.
+          SHELLCHECK_OPTS='-e SC2086' actionlint
 
       - name: No paid GitHub-hosted runner specs
         run: bash scripts/check-no-paid-runners.sh

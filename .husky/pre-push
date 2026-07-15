@@ -118,7 +118,10 @@ fi
 
 if [ "$HAS_WORKFLOW_CHANGES" = "true" ] && command -v actionlint >/dev/null 2>&1; then
   echo "  → actionlint (workflow + embedded shellcheck)..."
-  if ! actionlint -shellcheck='-e SC2086'; then
+  # SHELLCHECK_OPTS (not the -shellcheck flag, which names the shellcheck
+  # EXECUTABLE and silently disables the integration on a non-executable
+  # value — SHY-0191) passes the repo-wide SC2086 exclusion; mirrors lint.yml.
+  if ! SHELLCHECK_OPTS='-e SC2086' actionlint; then
     echo ""
     echo "✗ actionlint failed — push blocked"
     echo "  Install: brew install actionlint  (or see https://github.com/rhysd/actionlint)"
