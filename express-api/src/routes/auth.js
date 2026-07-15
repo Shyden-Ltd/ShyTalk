@@ -273,7 +273,13 @@ router.post('/auth/pin/setup', sensitiveLimiter, authMiddleware, async (req, res
       pinLockoutCount: 0,
     });
 
-    res.json({ message: 'PIN set' });
+    // Return the computed hash: the client stores it as its local App-Lock
+    // credential (SecureStorage, by design) and treats a missing field as a
+    // hard failure — without it, enrolment throws "No value for pinHash" and no
+    // PIN can ever be set. It is bcrypt of the caller's own PIN, returned over
+    // TLS to the authenticated setter who is about to persist it on-device
+    // anyway; no new exposure (SHY-0192).
+    res.json({ message: 'PIN set', pinHash });
   } catch (err) {
     log.error('auth', 'PIN setup failed', { error: err.message });
     res.status(500).json({ error: 'Failed to set PIN' });

@@ -80,6 +80,10 @@ describe('PIN Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.message).toBe('PIN set');
+      // SHY-0192: the client stores this hash as its local App-Lock credential
+      // and throws "No value for pinHash" if the field is absent — enrolment is
+      // impossible without it. The response MUST carry the computed hash.
+      expect(res.body.pinHash).toBe('$2b$10$pinhash');
       expect(bcrypt.hash).toHaveBeenCalledWith('1234', 10);
       expect(mockDocUpdate).toHaveBeenCalledWith(
         'users/12345678',

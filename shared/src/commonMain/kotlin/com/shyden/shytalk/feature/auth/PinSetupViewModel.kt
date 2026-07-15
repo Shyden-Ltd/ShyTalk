@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.util.UiText
 import com.shyden.shytalk.data.repository.AppLockRepository
+import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.PinRepository
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
@@ -29,6 +30,8 @@ data class PinSetupState(
 class PinSetupViewModel(
     private val pinRepository: PinRepository,
     private val appLockRepository: AppLockRepository,
+    private val authRepository: AuthRepository,
+    private val deviceId: String,
 ) : ViewModel() {
     private val _state = MutableStateFlow(PinSetupState())
     val state: StateFlow<PinSetupState> = _state.asStateFlow()
@@ -95,10 +98,14 @@ class PinSetupViewModel(
             pinRepository
                 .setupPin(pin)
                 .onSuccess { pinHash ->
-                    // Store bcrypt hash locally for offline PIN verification
-                    val uniqueId = appLockRepository.storedUniqueId
-                    val deviceId = appLockRepository.storedDeviceId
-                    if (uniqueId.isNullOrEmpty() || deviceId.isNullOrEmpty()) {
+                    // Source identity from the authenticated session + the device-id
+                    // provider — NOT from the App-Lock repo's own stored copy, which
+                    // setCredential (below) is the ONLY writer of. Reading it here
+                    // was circular: on a first-ever enrolment it is always null, so
+                    // every first PIN failed "Device not registered" (SHY-0192).
+                    val uniqueId = authRepository.currentUserId
+                    if (uniqueId.isNullOrEmpty()) {
+                        // No resolved identity ⇒ not signed in; genuinely cannot enrol.
                         _state.update { it.copy(isLoading = false, error = UiText.res(Res.string.pin_device_not_registered)) }
                         return@onSuccess
                     }
