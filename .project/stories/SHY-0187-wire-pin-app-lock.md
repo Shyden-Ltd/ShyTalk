@@ -34,6 +34,7 @@ Operator decided 2026-07-09 this is **in MVP scope, a security bug** ("Fix it �
 - [ ] On COLD launch, a user with App-Lock enabled + lock-required lands on the Lock screen and must pass PIN/biometric before Main renders.
 - [ ] On WARM resume after the background timeout, the Lock screen is shown before the previously-visible content.
 - [ ] A correct PIN/biometric unlocks → navigates to Main (Lock removed from the back stack; back-button can't skip it).
+- [ ] The enrolment surface is reachable: Settings offers a Security entry on BOTH platforms → App-Lock toggle + timeout; reset-PIN opens PIN setup (the only `setAppLockEnabled`/`setCredential` callers — without them the lock can never be turned on by a user).
 
 ### Error paths
 - [ ] `requiresReauth` (Firebase session expired) routes to Sign-In, not a dead Lock screen.
@@ -86,6 +87,12 @@ Operator decided 2026-07-09 this is **in MVP scope, a security bug** ("Fix it �
 - **When** the launch destination is resolved
 - **Then** it routes to Sign-In, not the Lock screen
 
+**Scenario: a user can actually turn the App-Lock on**
+- **Given** a signed-in user on either platform
+- **When** they open Settings → Security
+- **Then** the Security screen renders with the App-Lock toggle and lock-timeout options
+- **And** the reset-PIN action opens the PIN setup screen so a credential can be stored
+
 ## Test Plan
 
 Touches `shared/**` + `app/**` + `iosApp/**` (launch routing) → **full protocol**.
@@ -96,6 +103,7 @@ Touches `shared/**` + `app/**` + `iosApp/**` (launch routing) → **full protoco
 - **Android instrumented `app/src/androidTest/assets/features/lock_screen.feature` (EXISTS)** — real-device: cold launch + warm-resume gate render + unlock→Main + back-button-can't-skip.
 - **iOS** — the `MainViewController` start destination consumes `resolveLaunchDestination` (not a hardcoded `Screen.SignIn`).
 - **Device gauntlet** — real Android + real iPhone: enable lock → background past timeout → foreground → must re-auth; cold launch → must re-auth; wrong-PIN lockout renders.
+- **Kotlin jvmTest — enrolment-surface pins (added at device-gauntlet pickup)**: `AppLockWiringPinTest` additionally pins the Settings→Security entry (`settings_securityItem` + `onNavigateToSecurity` on both platforms), `composable(Screen.SecuritySettings.route)` + `composable(Screen.PinSetup.route)` registration in BOTH graphs, reset-PIN routing to PinSetup, the iOS params threading, and the absence of the destination-less linked-accounts row — because "enable lock" (the device step above) had no real user path until these screens were reachable.
 
 ## Out of Scope
 
@@ -119,6 +127,9 @@ Touches `shared/**` + `app/**` + `iosApp/**` (launch routing) → **full protoco
 Cold-launch + warm-resume both gate on App-Lock across real Android + real iPhone; unlock→Main with no back-stack bypass; `resolveLaunchDestination` unit-tested exhaustively; iOS/Android parity proven in commonTest; `code-reviewer` 100% clean; merged; released.
 
 ## Notes
+
+- 2026-07-15 ~23:50 WIB — **Device-gauntlet pickup surfaced the THIRD unwired layer: the enrolment surface. Wired in-scope (R3 delta review pending before push).** Walking the story's own device step ("enable lock → background past timeout") was impossible for a real user: `SecuritySettingsScreen` (the ONLY `setAppLockEnabled` caller) and `PinSetupScreen` (the ONLY `setCredential` caller) had ZERO navigation consumers — `Screen.SecuritySettings` + `Screen.PinSetup` were registered nowhere, so the App-Lock could never be turned on outside tests (tests compose screens directly, which is exactly how all three layers of this defect stayed green). Faking the precondition via prefs injection would violate real-only; the story IS the nav-wiring story → wired here, RED-first: **+5 pins in `AppLockWiringPinTest`** (watched fail: Settings security entry `settings_securityItem`, both graphs register SecuritySettings, both register PinSetup + route reset-PIN to it, IosPlatformScreens threads the callback, no dead linked-accounts row) → then: Security row in `AppSettingsScreen` Main page (Fingerprint icon, reuses `security_title` — present in all 21 locale files, zero new strings), `AppSettingsScreenParams.onNavigateToSecurity` deliberately NON-defaulted (a platform that forgets must fail to compile, not ship a dead row) — the compiler immediately caught 2 constructor sites in `PlatformScreensTest` (updated), both graphs register `composable(Screen.SecuritySettings.route)` (repo + `BiometricAuth.isAvailable()` via koinInject, back = pop, reset-PIN → PinSetup) + `composable(Screen.PinSetup.route)` (`onCompleted` = pop), `IosPlatformScreens` threads the param, `IosPlatformScreens.kt` added to the pin task's declared inputs. **Removed** the Security screen's `onLinkedAccounts` row + param: no `Screen` route or destination exists for it anywhere (linked accounts live INSIDE `AppSettingsScreen` as an internal page) — a visible row that does nothing is a shipped placeholder; a future story re-adds row + route + pin together (pin `security settings carries no dead linked-accounts row` keeps it out til then). Pins 14/14 + params 9/9 verified via result XML. Full host gates + R3 + the device walk (REAL enrolment now) follow.
+  **iOS Debug-Local device build root-causes (3, all fixed/documented):** (1) `KOTLIN_FRAMEWORK_BUILD_TYPE=debug` must be passed on the xcodebuild command line for `-Local` configs — the shared `Local.xcconfig` fronts Debug-Local AND Release-Local so it cannot carry the value (`Dev.xcconfig` line 49 documents this asymmetry); (2) `iosApp/Pods/Pods.xcodeproj` was MISSING from the workspace (support files + Manifest.lock intact — partial clean artifact) → every CocoaPods module (`FirebaseCore`/`GoogleSignIn`/`FirebaseMessaging`) failed dependency scanning; `pod install` regenerated it (lockfiles matched, zero version drift); (3) NEVER selectively delete `ModuleCache.noindex`/`ExplicitPrecompiledModules` from a derivedData — the incremental build DB still references the deleted `.scan` artifacts ("Failed to query serialized dependencies"); a SIGKILLed xcodebuild corrupts these caches, and the recovery is deleting the WHOLE derivedData dir, not spot-cleaning. Build DONE; staleness probe: `resolveLaunchDestination` ×2 + `recordAppBackgroundedForAppLock` ×2 present in `iosApp.debug.dylib` (the R1 Imp-5 "first xcodebuild" proof of the AppDelegate observer). Also noted: pod install warns CocoaPods Firebase stops publishing new versions after Oct 2026 — future SPM-migration story for the backlog.
 
 - 2026-07-15 ~05:50 WIB — **code-reviewer R2.1 delta on `7ff85204a70` (same agent, resumed): ZERO FINDINGS — CLEAN.** All four R2 fixes independently confirmed: (Crit-1) only 2 `requestOpenPm` call sites exist repo-wide, both inside the new gated effect; all 4 paths clear the pending state; BOTH race orderings verified gated. (Imp-2) delegation verified byte-for-byte vs the resolver; all 4 call sites pass live auth facts; the 96-combination agreement property "would fail on almost any future regression". (Imp-3) all 12 `authenticateWithBiometric(` call sites 2-arg (zero stale); seams confirmed structurally unshippable (jvmMain has no dependents/distribution); the 10 tests hand-traced against the mutant — 3 independently RED. (Min-4) reciprocal epic links verified. Review-clean → pushed.
 

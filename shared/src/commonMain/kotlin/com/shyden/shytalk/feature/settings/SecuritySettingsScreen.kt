@@ -53,7 +53,6 @@ fun SecuritySettingsScreen(
     biometricAvailable: Boolean,
     onNavigateBack: () -> Unit,
     onResetPin: () -> Unit,
-    onLinkedAccounts: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var appLockEnabled by remember { mutableStateOf(appLockRepository.isAppLockEnabled) }
@@ -181,21 +180,6 @@ fun SecuritySettingsScreen(
                     Modifier
                         .clickable(onClick = onResetPin)
                         .testTag("resetPinSetting"),
-            )
-
-            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-
-            // Linked Accounts
-            ListItem(
-                headlineContent = { Text(stringResource(Res.string.security_linked_accounts)) },
-                supportingContent = { Text(stringResource(Res.string.security_linked_accounts_desc)) },
-                trailingContent = {
-                    Icon(Icons.Default.ChevronRight, contentDescription = null)
-                },
-                modifier =
-                    Modifier
-                        .clickable(onClick = onLinkedAccounts)
-                        .testTag("linkedAccountsSetting"),
             )
         }
     }

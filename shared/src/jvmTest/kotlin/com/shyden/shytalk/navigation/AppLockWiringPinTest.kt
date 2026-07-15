@@ -185,4 +185,88 @@ class AppLockWiringPinTest {
             "$lockScreen must consume back — otherwise the back gesture reveals the content beneath the lock",
         )
     }
+
+    // ── Enrolment surface (found during the SHY-0187 device gauntlet) ──────
+    // The lock wiring above is unreachable for a real user if the enrolment
+    // surface stays dark: SecuritySettingsScreen (the ONLY setAppLockEnabled
+    // caller) and PinSetupScreen (the ONLY setCredential caller) had zero
+    // navigation consumers, so no user could ever turn the App-Lock on. Same
+    // defect class as the lock itself — one pin per enrolment wiring point.
+
+    private val appSettingsScreen = "shared/src/commonMain/kotlin/com/shyden/shytalk/feature/settings/AppSettingsScreen.kt"
+    private val securitySettingsScreen =
+        "shared/src/commonMain/kotlin/com/shyden/shytalk/feature/settings/SecuritySettingsScreen.kt"
+    private val iosPlatformScreens = "shared/src/iosMain/kotlin/com/shyden/shytalk/navigation/IosPlatformScreens.kt"
+
+    @Test
+    fun `settings main page offers a security entry`() {
+        val src = read(appSettingsScreen)
+        assertTrue(
+            src.contains("onNavigateToSecurity"),
+            "$appSettingsScreen must expose an onNavigateToSecurity callback — without a Settings " +
+                "entry the App-Lock enrolment screen is unreachable and the lock can never be enabled",
+        )
+        assertTrue(
+            src.contains("settings_securityItem"),
+            "$appSettingsScreen must render the Security row (testTag settings_securityItem)",
+        )
+    }
+
+    @Test
+    fun `both nav graphs register the SecuritySettings destination`() {
+        listOf(sharedNavGraph, appNavGraph).forEach { path ->
+            val src = read(path)
+            assertTrue(
+                src.contains("composable(Screen.SecuritySettings.route)"),
+                "$path must register Screen.SecuritySettings — it is the ONLY caller of " +
+                    "setAppLockEnabled, so an unregistered screen means the lock can never be turned on",
+            )
+            assertTrue(
+                src.contains("onNavigateToSecurity = { navController.navigate(Screen.SecuritySettings.route) }"),
+                "$path must route the Settings security entry to Screen.SecuritySettings",
+            )
+        }
+    }
+
+    @Test
+    fun `both nav graphs register the PinSetup destination and route reset-pin to it`() {
+        listOf(sharedNavGraph, appNavGraph).forEach { path ->
+            val src = read(path)
+            assertTrue(
+                src.contains("composable(Screen.PinSetup.route)"),
+                "$path must register Screen.PinSetup — it is the ONLY caller of setCredential, " +
+                    "so an unregistered screen means no credential can ever be stored",
+            )
+            assertTrue(
+                src.contains("onResetPin = { navController.navigate(Screen.PinSetup.route) }"),
+                "$path must route the Security screen's reset-PIN action to Screen.PinSetup",
+            )
+        }
+    }
+
+    @Test
+    fun `ios platform screens thread the security navigation through to the shared settings screen`() {
+        val src = read(iosPlatformScreens)
+        assertTrue(
+            src.contains("onNavigateToSecurity"),
+            "$iosPlatformScreens must thread AppSettingsScreenParams.onNavigateToSecurity into " +
+                "AppSettingsScreen — otherwise the Security row is dead on iOS only",
+        )
+    }
+
+    @Test
+    fun `security settings carries no dead linked-accounts row`() {
+        // Linked accounts live INSIDE AppSettingsScreen as an internal page;
+        // SecuritySettingsScreen's onLinkedAccounts callback had no reachable
+        // destination (no Screen route exists). A visible row that does
+        // nothing is a shipped placeholder — it must stay removed until a
+        // real destination exists (a future story re-adds row + route + pin
+        // together).
+        val src = read(securitySettingsScreen)
+        assertFalse(
+            src.contains("onLinkedAccounts"),
+            "$securitySettingsScreen must not render a linked-accounts row with no destination — " +
+                "AppSettingsScreen's internal LinkedAccounts page is the real surface",
+        )
+    }
 }
