@@ -7,7 +7,7 @@ priority: P2
 effort: S
 type: bug
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1604
 mvp: false
 ---
 
