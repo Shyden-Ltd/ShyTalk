@@ -7,7 +7,7 @@ priority: P2
 effort: L
 type: infra
 roadmap_ids: []
-pr:
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1602
 mvp: false
 ---
 
