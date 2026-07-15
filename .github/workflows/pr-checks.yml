@@ -286,7 +286,10 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: kotlin-report
           destination_dir: kotlin/pr/latest
-          keep_files: true
+          # SHY-0128: false — peaceiris cleans ONLY destination_dir before
+          # copying (v4.1.0 git-utils.ts L127-138), so each deploy replaces this
+          # suite/env's latest/ instead of stranding prior hashed files forever.
+          keep_files: false
 
   sonarcloud:
     needs: [detect-changes, build-and-test]
