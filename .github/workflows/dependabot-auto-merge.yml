@@ -33,7 +33,6 @@ jobs:
           UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
           PACKAGE_ECOSYSTEM: ${{ steps.metadata.outputs.package-ecosystem }}
         run: |
-
           # Auto-merge: patch and minor for all ecosystems
           if [ "$UPDATE_TYPE" = "version-update:semver-patch" ] || [ "$UPDATE_TYPE" = "version-update:semver-minor" ]; then
             echo "merge=true" >> "$GITHUB_OUTPUT"

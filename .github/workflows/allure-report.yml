@@ -162,9 +162,20 @@ jobs:
         run: |
           RUNS_DIR="gh-pages/${{ inputs.suite_name }}/${{ inputs.report_env }}/runs"
           if [ -d "$RUNS_DIR" ]; then
-            # NUL-delimited find (not ls) — filename-safe end to end; GNU
-            # sort/head -z are fine here (this only ever runs on ubuntu).
-            find "$RUNS_DIR" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z | head -z -n -${{ inputs.max_history_runs }} | xargs -0 rm -rf 2>/dev/null || true
+            # NUL-delimited find into a bash array (not `ls` parsing —
+            # SC2012): filename-safe end to end, no GNU-only flags, same
+            # ascending byte sort as before so the newest N (date-prefixed
+            # names) are the ones kept.
+            dirs=()
+            while IFS= read -r -d '' d; do
+              dirs+=("$d")
+            done < <(find "$RUNS_DIR" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
+            excess=$(( ${#dirs[@]} - ${{ inputs.max_history_runs }} ))
+            if [ "$excess" -gt 0 ]; then
+              for (( i = 0; i < excess; i++ )); do
+                rm -rf -- "${dirs[i]}"
+              done
+            fi
             echo "Pruned old runs, kept last ${{ inputs.max_history_runs }}"
           fi
 

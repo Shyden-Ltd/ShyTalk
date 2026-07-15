@@ -25,6 +25,19 @@ const WORKFLOWS_DIR = path.join(REPO_ROOT, '.github/workflows');
 
 const FIXED_FORM = "SHELLCHECK_OPTS='-e SC2086' actionlint";
 
+/** The YAML lines of a named step (house helper — see the SHY-0128 pins). */
+function stepBlock(yaml, stepName) {
+  const lines = yaml.split('\n');
+  const start = lines.findIndex((l) => l.includes(`- name: ${stepName}`));
+  if (start === -1) return '';
+  const out = [lines[start]];
+  for (let i = start + 1; i < lines.length; i++) {
+    if (/^ {6}- name: /.test(lines[i]) || /^ {0,4}\S/.test(lines[i])) break;
+    out.push(lines[i]);
+  }
+  return out.join('\n');
+}
+
 describe('actionlint embedded-shellcheck invocation — SHY-0191', () => {
   let lintYaml;
   let prePush;
@@ -34,11 +47,18 @@ describe('actionlint embedded-shellcheck invocation — SHY-0191', () => {
   });
 
   test('lint.yml runs actionlint with SHELLCHECK_OPTS (shellcheck ACTIVE, SC2086 excluded)', () => {
-    expect(lintYaml).toContain(FIXED_FORM);
+    // Step-scoped, not whole-file: the fixed form must sit INSIDE the
+    // actionlint step's own block, so a stray mention elsewhere (a comment,
+    // another step) can never satisfy this pin vacuously.
+    const block = stepBlock(lintYaml, 'Run actionlint (workflow + embedded shellcheck)');
+    expect(block).not.toBe('');
+    expect(block).toContain(FIXED_FORM);
   });
 
-  test('.husky/pre-push runs actionlint with SHELLCHECK_OPTS (same gate locally)', () => {
-    expect(prePush).toContain(FIXED_FORM);
+  test('.husky/pre-push runs actionlint with SHELLCHECK_OPTS as the live guard condition', () => {
+    // Line-anchored to the actual `if !` invocation — a comment mentioning
+    // the form cannot satisfy it.
+    expect(prePush).toMatch(/^[ \t]*if ! SHELLCHECK_OPTS='-e SC2086' actionlint; then$/m);
     // the graceful skip when actionlint is not installed must survive the fix
     expect(prePush).toMatch(/command -v actionlint/);
   });
@@ -50,12 +70,22 @@ describe('actionlint embedded-shellcheck invocation — SHY-0191', () => {
     expect(prePush).not.toMatch(/-shellcheck=/);
   });
 
-  test('no shellcheck suppression comments anywhere in workflows or the pre-push hook', () => {
+  test('no shellcheck suppression comments in any actionlint-scanned surface', () => {
     // Zero-suppression policy: findings get FIXED, never disabled inline.
+    // Scan surface = exactly what actionlint lints: workflows, composite
+    // actions under .github/actions/**, plus the pre-push hook.
     const files = fs
       .readdirSync(WORKFLOWS_DIR)
       .filter((f) => f.endsWith('.yml') || f.endsWith('.yaml'))
       .map((f) => path.join(WORKFLOWS_DIR, f));
+    const actionsDir = path.join(REPO_ROOT, '.github/actions');
+    for (const entry of fs.readdirSync(actionsDir)) {
+      for (const candidate of ['action.yml', 'action.yaml']) {
+        const p = path.join(actionsDir, entry, candidate);
+        if (fs.existsSync(p)) files.push(p);
+      }
+    }
+    expect(files.length).toBeGreaterThan(10); // workflows + ≥10 composite actions
     for (const f of [...files, PRE_PUSH_HOOK]) {
       const text = fs.readFileSync(f, 'utf8');
       expect(text).not.toMatch(/shellcheck disable/);
