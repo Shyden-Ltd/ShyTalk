@@ -32,10 +32,13 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.data.repository.AppLockRepository
+import com.shyden.shytalk.data.repository.PinRepository
+import com.shyden.shytalk.feature.auth.PinVerifyDialog
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 
 private val TIMEOUT_OPTIONS: List<Pair<Int, StringResource>> =
     listOf(
@@ -59,6 +62,12 @@ fun SecuritySettingsScreen(
     var biometricEnabled by remember { mutableStateOf(appLockRepository.isBiometricEnabled) }
     var lockTimeout by remember { mutableStateOf(appLockRepository.lockTimeoutMinutes) }
     var showTimeoutMenu by remember { mutableStateOf(false) }
+    // Reset-PIN is a security-sensitive action: replacing the PIN while a
+    // credential exists must re-verify identity first (the App-Lock is worthless
+    // if anyone holding the unlocked phone can silently change the PIN). A
+    // first-time set (no stored credential) has nothing to verify against, so it
+    // routes straight through.
+    var showVerifyForReset by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -178,9 +187,33 @@ fun SecuritySettingsScreen(
                 },
                 modifier =
                     Modifier
-                        .clickable(onClick = onResetPin)
-                        .testTag("resetPinSetting"),
+                        .clickable {
+                            if (appLockRepository.hasCredential) {
+                                showVerifyForReset = true
+                            } else {
+                                onResetPin()
+                            }
+                        }.testTag("resetPinSetting"),
             )
         }
+    }
+
+    if (showVerifyForReset) {
+        // PinRepository is resolved lazily here (not a screen parameter) so the
+        // screen constructs — and its no-credential first-set path renders —
+        // without pulling the API-client/Firebase dependency chain the verify
+        // dialog needs only when a credential actually exists.
+        val pinRepository: PinRepository = koinInject()
+        PinVerifyDialog(
+            pinRepository = pinRepository,
+            appLockRepository = appLockRepository,
+            onVerified = {
+                showVerifyForReset = false
+                onResetPin()
+            },
+            onDismiss = { showVerifyForReset = false },
+            title = stringResource(Res.string.security_reset_pin),
+            subtitle = stringResource(Res.string.security_reset_pin_desc),
+        )
     }
 }

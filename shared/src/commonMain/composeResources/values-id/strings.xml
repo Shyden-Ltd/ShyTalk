@@ -1502,9 +1502,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Verifikasi identitas Anda untuk menetapkan PIN baru</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">Akun Tertaut</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">Kelola metode masuk</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">Masuk dengan email</string>

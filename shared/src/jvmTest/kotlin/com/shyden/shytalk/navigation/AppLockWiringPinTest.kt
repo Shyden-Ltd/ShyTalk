@@ -255,6 +255,28 @@ class AppLockWiringPinTest {
     }
 
     @Test
+    fun `reset-PIN is identity-gated when a credential already exists`() {
+        // SECURITY (device-gauntlet finding): the reset-PIN row's copy promises
+        // "Verify your identity to set a new PIN", but wiring onResetPin straight
+        // into PinSetup let anyone with the unlocked phone (the App-Lock's exact
+        // threat model — Settings is only reachable unlocked) silently replace
+        // the PIN with no re-auth. The screen must show PinVerifyDialog before
+        // resetting WHEN a credential exists; a first-time set (no credential)
+        // has nothing to verify and passes through.
+        val src = read(securitySettingsScreen)
+        assertTrue(
+            src.contains("PinVerifyDialog("),
+            "$securitySettingsScreen must gate reset-PIN behind PinVerifyDialog — the copy promises " +
+                "identity verification and the App-Lock is defeated if a PIN can be reset without it",
+        )
+        assertTrue(
+            src.contains("hasCredential"),
+            "$securitySettingsScreen must branch on appLockRepository.hasCredential so first-time PIN " +
+                "setup (no existing credential) is not locked out by the verification gate",
+        )
+    }
+
+    @Test
     fun `security settings carries no dead linked-accounts row`() {
         // Linked accounts live INSIDE AppSettingsScreen as an internal page;
         // SecuritySettingsScreen's onLinkedAccounts callback had no reachable
