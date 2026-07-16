@@ -268,15 +268,18 @@ test.describe('Admin Keyboard Shortcuts', () => {
     await searchInput.fill(String(testData.user.uniqueId));
     const displayNameInput = page.locator('[data-field="displayName"]');
 
-    // Press Enter to search, then wait for the round-trip to settle (button
-    // back to "Search") and the form to populate. WebKit intermittently drops
-    // the single synthetic Enter, so re-press until the search actually runs —
-    // the same keydown race the report-shortcut helper absorbs. Idempotent:
-    // re-searching the same uid yields the same result.
+    // Press Enter to search and wait for the form to populate — the true
+    // end-state that proves the search ran. Assert ONLY that: an intermediate
+    // `toHaveText('Search')` check races the pre-search idle state (the button
+    // reads "Search" both before the search starts AND after it finishes), so
+    // it can match the idle moment and let the populate check race an in-flight
+    // search. WebKit — and occasionally Chromium — drops the single synthetic
+    // Enter, so re-press until the form populates. Idempotent: re-searching the
+    // same uid yields the same result; the form starts blank so this cannot
+    // pass on stale data.
     await expect(async () => {
       await searchInput.press('Enter');
-      await expect(searchBtn).toHaveText('Search', { timeout: 5_000 });
-      await expect(displayNameInput).toHaveValue(testData.user.displayName, { timeout: 3_000 });
+      await expect(displayNameInput).toHaveValue(testData.user.displayName, { timeout: 5_000 });
     }).toPass({ timeout: 20_000 });
   });
 
