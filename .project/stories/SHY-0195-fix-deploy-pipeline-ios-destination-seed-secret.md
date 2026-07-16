@@ -1,12 +1,13 @@
 ---
 id: SHY-0195
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-16
 priority: P1
 effort: S
 type: infra
 roadmap_ids: []
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1613
 ---
 
 # SHY-0195: Fix the Deploy-To-Dev pipeline — iOS archive destination, persona-seed secret name, setup-java SHA drift
@@ -109,8 +110,13 @@ Three verified pipeline defects, diagnosed 2026-07-16 from run 29456042020 (and 
 
 ## Definition of Done
 
-All four YAML/action files fixed; pin tests flipped RED→GREEN; full express suite green; `code-reviewer` 100% clean; merged to develop; **a dispatched Deploy-To-Dev run on develop shows "Distribute iOS to TestFlight" AND "Seed Dev Personas" green** (run id in Notes); story stays In Review until release per lifecycle.
+All four YAML/action files fixed; pin tests flipped RED→GREEN; full express suite green; `code-reviewer` 100% clean; merged to develop; **a dispatched Deploy-To-Dev run (this branch as the `ref` — the Phase-3 unmerged-branch pattern) shows "Distribute iOS to TestFlight" AND "Seed Dev Personas" green BEFORE merge** (run id in Notes); story stays In Review until release per lifecycle.
 
 ## Notes
 
 - 2026-07-16 ~13:0x WIB — Filed and picked up in one motion (diagnosis completed this morning: runner-image delta `0202.1→0213.1`, empty destination enumeration, secret-name archaeology to SHY-0136, drift test RED since the main sync). Control sample: run 29475103691 (pre-fix, in flight at filing time).
+- 2026-07-16 ~13:2x WIB — TDD: destination + seed-secret pins RED first, fixes in 5ca638fa701 (target suites 45/45). `code-reviewer`: APPROVE + 2 Important findings (destination-exclusivity guard on `-exportArchive`; usage-line secret pin) — both fixed in bffe73fe15c (33/33; test-only delta implementing the reviewer's own prescriptions). Full express suite 13,498 green (REAL_EXIT=0); actionlint + prettier + eslint + story validator clean. Control run 29475103691 completed: failed on exactly the two target jobs — clean control sample.
+
+Reviewed-up-to: bffe73fe15c
+
+- 2026-07-16 ~13:5x WIB — Status → In Review. PR [#1613](https://github.com/Shyden-Ltd/ShyTalk/pull/1613). DoD verification dispatched from this branch via the Deploy-To-Dev `ref` input (Phase-3 unmerged-branch pattern): run 29478170583 — https://github.com/Shyden-Ltd/ShyTalk/actions/runs/29478170583. Merge proceeds only if "Distribute iOS to TestFlight" AND "Seed Dev Personas / Seed test personas (dev)" conclude green (control 29475103691 failed exactly these two); result recorded on PR #1613 before merge.
