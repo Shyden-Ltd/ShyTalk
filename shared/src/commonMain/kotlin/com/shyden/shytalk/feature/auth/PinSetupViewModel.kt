@@ -96,9 +96,13 @@ class PinSetupViewModel(
     }
 
     private fun savePinToServer(pin: String) {
+        // Re-entrancy guard: a second submit while the first round-trip is in
+        // flight must not fire a second /pin/setup call. isLoading is set
+        // SYNCHRONOUSLY (before the coroutine launches) so an immediate
+        // re-tap observes it; inside the launch it would race the second tap.
+        if (_state.value.isLoading) return
+        _state.update { it.copy(isLoading = true, error = null) }
         viewModelScope.launch {
-            _state.update { it.copy(isLoading = true, error = null) }
-
             pinRepository
                 .setupPin(pin)
                 .onSuccess { pinHash ->

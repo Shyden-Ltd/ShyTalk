@@ -248,15 +248,24 @@ class PinSetupViewModelTest {
     // ─── PIN mismatch ───────────────────────────────────────────
 
     @Test
-    fun `submit in Confirm with mismatched PIN resets to Enter`() {
-        viewModel.selectPinLength(4)
-        "1234".forEach { viewModel.onDigit(it) }
-        viewModel.submit() // → Confirm
-        "5678".forEach { viewModel.onDigit(it) }
-        viewModel.submit() // mismatch
+    fun `submit in Confirm with mismatched PIN resets to Enter`() =
+        runTest {
+            viewModel.selectPinLength(4)
+            "1234".forEach { viewModel.onDigit(it) }
+            viewModel.submit() // → Confirm
+            "5678".forEach { viewModel.onDigit(it) }
+            viewModel.submit() // mismatch
+            // Drain the dispatcher BEFORE asserting: a regression that launches
+            // the server call on mismatch would only execute here — without this
+            // drain the call-count assertion can't see it (escaped-mutant lesson).
+            advanceUntilIdle()
 
-        assertEquals(PinSetupStep.Enter, viewModel.state.value.step)
-    }
+            assertEquals(PinSetupStep.Enter, viewModel.state.value.step)
+            // Combined-review Important #3: a mismatch re-prompts WITHOUT
+            // contacting the server — count attempts, not just successes.
+            assertEquals(0, fakePinRepo.setupCallCount)
+            assertNull(fakePinRepo.lastSetupPin)
+        }
 
     @Test
     fun `submit in Confirm with mismatched PIN shows mismatch error`() {
@@ -405,6 +414,26 @@ class PinSetupViewModelTest {
             assertEquals(Res.string.pin_device_not_registered, error.resource)
             assertFalse(viewModel.state.value.showBiometricOffer)
             assertFalse(viewModel.state.value.isLoading)
+            // Fail-closed (combined-review Important #2): the unresolved-identity
+            // guard must leave the stored credential untouched.
+            assertEquals("existing-hash", appLockRepo.localPinHash)
+        }
+
+    // ─── Re-entrancy (combined-review Minor #4) ─────────────────
+
+    @Test
+    fun `rapid double submit fires exactly one setup call`() =
+        runTest {
+            viewModel.selectPinLength(4)
+            "1234".forEach { viewModel.onDigit(it) }
+            viewModel.submit() // → Confirm
+            "1234".forEach { viewModel.onDigit(it) }
+            viewModel.submit() // first confirm submit — round-trip in flight
+            viewModel.submit() // rapid second tap before the round-trip returns
+            advanceUntilIdle()
+
+            assertEquals(1, fakePinRepo.setupCallCount)
+            assertTrue(viewModel.state.value.showBiometricOffer)
         }
 
     // ─── Setup failure ──────────────────────────────────────────
@@ -425,6 +454,31 @@ class PinSetupViewModelTest {
             assertTrue(error is UiText.Plain, "Expected UiText.Plain for exception with message but got $error")
             assertEquals("Setup failed", error.text)
             assertFalse(viewModel.state.value.showBiometricOffer)
+            // Fail-closed (combined-review Important #2): a failed setup must not
+            // touch the stored credential — no half-enrolled state.
+            assertEquals("existing-hash", appLockRepo.localPinHash)
+        }
+
+    @Test
+    fun `setupPin failure during first enrolment registers no credential`() =
+        runTest {
+            // The sharper fail-closed case: NO pre-existing credential (true first
+            // enrolment). A server failure must leave the App-Lock un-enrolled —
+            // never a half-enrolled state where the lock engages with no
+            // verifiable PIN (SHY-0192 error-path AC).
+            appLockRepo.clearCredential()
+            fakePinRepo.setupShouldFail = true
+            viewModel = PinSetupViewModel(fakePinRepo, appLockRepo, fakeAuthRepo, "dev-1")
+
+            viewModel.selectPinLength(4)
+            "1234".forEach { viewModel.onDigit(it) }
+            viewModel.submit()
+            "1234".forEach { viewModel.onDigit(it) }
+            viewModel.submit()
+            advanceUntilIdle()
+
+            assertFalse(appLockRepo.hasCredential)
+            assertNull(appLockRepo.localPinHash)
         }
 
     @Test
@@ -443,6 +497,7 @@ class PinSetupViewModelTest {
             assertNotNull(error)
             assertTrue(error is UiText.Res, "Expected UiText.Res for null-message exception but got $error")
             assertEquals(Res.string.pin_setup_failed, error.resource)
+            assertEquals("existing-hash", appLockRepo.localPinHash)
         }
 
     @Test
@@ -457,6 +512,7 @@ class PinSetupViewModelTest {
             advanceUntilIdle()
 
             assertFalse(viewModel.state.value.isLoading)
+            assertEquals("existing-hash", appLockRepo.localPinHash)
         }
 
     // ─── Biometric offer ────────────────────────────────────────
@@ -515,7 +571,13 @@ class PinSetupViewModelTest {
         var setupShouldFail = false
         var setupFailMessage: String? = "Setup failed"
 
+        // Counts ATTEMPTS (incremented before the failure branch) so tests can
+        // assert the server was never contacted — a success-only marker like
+        // lastSetupPin can't distinguish "no call" from "failed call".
+        var setupCallCount = 0
+
         override suspend fun setupPin(pin: String): Result<String> {
+            setupCallCount++
             if (setupShouldFail) return Result.failure(Exception(setupFailMessage))
             lastSetupPin = pin
             return Result.success("\$2b\$10\$fakebcrypthashfortest")
