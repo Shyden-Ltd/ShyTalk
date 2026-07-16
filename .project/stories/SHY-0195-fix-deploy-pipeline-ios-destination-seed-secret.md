@@ -1,6 +1,6 @@
 ---
 id: SHY-0195
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-16
 priority: P1
@@ -60,8 +60,8 @@ Three verified pipeline defects, diagnosed 2026-07-16 from run 29456042020 (and 
 ## BDD Scenarios
 
 **Scenario: the dev deploy distributes iOS again**
-- **Given** the fix is merged to develop
-- **When** Deploy-To-Dev is dispatched on ref=develop
+- **Given** the fix branch carries the destination fix
+- **When** Deploy-To-Dev is dispatched with the fix branch as its `ref` (Phase-3 unmerged-branch pattern)
 - **Then** the "Distribute iOS to TestFlight" job completes successfully (no "Found no destinations" error)
 
 **Scenario: personas reseed on deploy again**
@@ -89,7 +89,7 @@ Three verified pipeline defects, diagnosed 2026-07-16 from run 29456042020 (and 
 - **`express-api/tests/scripts/ci-action-pin-consistency.test.js`**: ALREADY RED on develop (the drift) → bump the composite action's SHA → GREEN. No test edit needed (the ratchet is the test).
 - **Full express suite** (`npm test`, CI harness up) — proves no other pin/structure test regressed.
 - **actionlint + prettier/eslint + story validator + `code-reviewer` clean** (CI-config-only gate set).
-- **Dispatch proof:** after merge, run Deploy-To-Dev on ref=develop; previously-failing jobs must pass (iOS TestFlight + Seed Dev Personas). Any failure → fix-forward loop.
+- **Dispatch proof:** Deploy-To-Dev dispatched with the story branch as `ref` (Phase-3 unmerged-branch pattern) BEFORE merge; previously-failing jobs must pass (iOS TestFlight + Seed Dev Personas). Any failure → fix-forward loop on the branch.
 
 ## Out of Scope
 
@@ -109,8 +109,13 @@ Three verified pipeline defects, diagnosed 2026-07-16 from run 29456042020 (and 
 
 ## Definition of Done
 
-All four YAML/action files fixed; pin tests flipped RED→GREEN; full express suite green; `code-reviewer` 100% clean; merged to develop; **a dispatched Deploy-To-Dev run on develop shows "Distribute iOS to TestFlight" AND "Seed Dev Personas" green** (run id in Notes); story stays In Review until release per lifecycle.
+All four YAML/action files fixed; pin tests flipped RED→GREEN; full express suite green; `code-reviewer` 100% clean; **a dispatched Deploy-To-Dev run (story branch as `ref` — Phase-3 unmerged-branch pattern) shows "Distribute iOS to TestFlight" AND "Seed Dev Personas" green BEFORE merge** (run id in Notes); merged to MAIN per the CI-config-only→main rule (operator 2026-07-16) with main back-merged into develop immediately after; story → Done on main-merge (no release-cut wait for this class).
 
 ## Notes
 
 - 2026-07-16 ~13:0x WIB — Filed and picked up in one motion (diagnosis completed this morning: runner-image delta `0202.1→0213.1`, empty destination enumeration, secret-name archaeology to SHY-0136, drift test RED since the main sync). Control sample: run 29475103691 (pre-fix, in flight at filing time).
+- 2026-07-16 ~13:2x WIB — TDD: destination + seed-secret pins RED first, fixes landed (target suites 45/45). `code-reviewer`: APPROVE + 2 Important findings (destination-exclusivity guard on `-exportArchive`; usage-line secret pin) — both fixed (33/33; test-only delta implementing the reviewer's own prescriptions). Full express suite 13,498 green (REAL_EXIT=0) on the develop-based branch; actionlint + prettier + eslint + story validator clean. Control run 29475103691 completed: failed exactly the two target jobs — clean control sample.
+- 2026-07-16 ~13:5x WIB — DoD verification dispatched from the develop-based branch via the Deploy-To-Dev `ref` input (Phase-3 unmerged-branch pattern): run 29478170583 — https://github.com/Shyden-Ltd/ShyTalk/actions/runs/29478170583. Merge gates on "Distribute iOS to TestFlight" AND "Seed Dev Personas / Seed test personas (dev)" green (control failed exactly these two).
+- 2026-07-16 ~14:2x WIB — Operator directive (now codified): CI-config-only tickets merge DIRECTLY to main; story → Done on main-merge; main back-merged into develop immediately. PR #1613 (base develop) closed superseded — that branch was develop-based, so retargeting it would have dragged develop's whole unreleased delta past the device gauntlet. Re-cut from origin/main: cherry-picks cad84aa9562 + 8fe9c1c5582 verified BYTE-IDENTICAL to the reviewed content (per-file diff = 0 across all 6 code files); targeted pin suites 48/48 on the main tree; actionlint + prettier + story validator clean. Run 29478170583 remains the DoD verification — it exercises the exact fixed archive invocation + secret plumbing; the develop-vs-main tree delta touches neither failure mode.
+
+Reviewed-up-to: 8fe9c1c5582
