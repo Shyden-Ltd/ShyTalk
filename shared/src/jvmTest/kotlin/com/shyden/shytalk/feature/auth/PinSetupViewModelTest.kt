@@ -529,8 +529,6 @@ class PinSetupViewModelTest {
             com.shyden.shytalk.data.repository
                 .PinVerifyResult(customToken = "token"),
         )
-
-        override suspend fun resetPin(newPin: String) = Result.success(Unit)
     }
 
     private class FakeAuthRepository : AuthRepository {

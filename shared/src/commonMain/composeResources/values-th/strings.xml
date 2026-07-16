@@ -1499,6 +1499,8 @@
     <string name="security_reset_pin">รีเซ็ต PIN</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">ยืนยันตัวตนของคุณเพื่อตั้งค่า PIN ใหม่</string>
+    <string name="security_set_pin">ตั้งค่า PIN</string>
+    <string name="security_set_pin_desc">ปกป้องแอปด้วย PIN</string>
     <!-- google-translated 2026-05-04 -->
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->

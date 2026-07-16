@@ -1498,6 +1498,8 @@
     <string name="security_reset_pin">Réinitialiser le code PIN</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Vérifiez votre identité pour définir un nouveau code PIN</string>
+    <string name="security_set_pin">Définir un code PIN</string>
+    <string name="security_set_pin_desc">Protégez l'application avec un code PIN</string>
     <!-- google-translated 2026-05-04 -->
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->

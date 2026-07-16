@@ -1500,6 +1500,8 @@
     <string name="security_reset_pin">Återställ PIN-koden</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Verifiera din identitet för att ange en ny PIN-kod</string>
+    <string name="security_set_pin">Ange PIN-kod</string>
+    <string name="security_set_pin_desc">Skydda appen med en PIN-kod</string>
     <!-- google-translated 2026-05-04 -->
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->

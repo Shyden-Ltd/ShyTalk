@@ -5,7 +5,6 @@
  * POST   /api/auth/otp/verify            → Verify OTP code, return custom token
  * POST   /api/auth/pin/setup             → Create/replace PIN hash (auth required)
  * POST   /api/auth/pin/verify            → Verify PIN, return custom token
- * POST   /api/auth/pin/reset             → Reset PIN + clear lockout (auth required)
  * POST   /api/auth/biometric/register    → Store biometric public key (auth required)
  * POST   /api/auth/biometric/verify      → Verify biometric signature, return custom token
  * GET    /api/auth/biometric/challenge   → Get challenge nonce
@@ -381,39 +380,6 @@ router.post('/auth/pin/verify', sensitiveLimiter, async (req, res) => {
   } catch (err) {
     log.error('auth', 'PIN verify failed', { error: err.message });
     res.status(500).json({ error: 'Verification failed' });
-  }
-});
-
-// POST /api/auth/pin/reset (auth required)
-router.post('/auth/pin/reset', sensitiveLimiter, authMiddleware, async (req, res) => {
-  try {
-    const { pin } = req.body || {};
-    const uniqueId = req.auth?.uniqueId;
-    if (!uniqueId) return res.status(401).json({ error: 'Authentication required' });
-
-    if (!pin || typeof pin !== 'string' || !/^\d+$/.test(pin)) {
-      return res.status(400).json({ error: 'PIN must be numeric' });
-    }
-    if (pin.length < PIN_MIN_LENGTH || pin.length > PIN_MAX_LENGTH) {
-      return res
-        .status(400)
-        .json({ error: `PIN must be ${PIN_MIN_LENGTH}-${PIN_MAX_LENGTH} digits` });
-    }
-
-    const pinHash = await bcrypt.hash(pin, BCRYPT_ROUNDS);
-    const userRef = db.doc(`users/${uniqueId}`);
-    await userRef.update({
-      pinHash,
-      pinSetAt: Date.now(),
-      pinAttempts: 0,
-      pinLockedUntil: null,
-      pinLockoutCount: 0,
-    });
-
-    res.json({ message: 'PIN reset' });
-  } catch (err) {
-    log.error('auth', 'PIN reset failed', { error: err.message });
-    res.status(500).json({ error: 'Failed to reset PIN' });
   }
 });
 

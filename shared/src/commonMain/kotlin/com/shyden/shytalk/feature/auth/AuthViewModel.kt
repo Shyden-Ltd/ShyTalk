@@ -61,7 +61,6 @@ data class AuthUiState(
     val banExpiresAt: String? = null,
     val awaitingEmailLink: Boolean = false,
     val emailForLink: String? = null,
-    val needsPinSetup: Boolean = false,
     val hasStoredCredential: Boolean = false,
     // Informational only — the ACTUAL App-Lock gate reads AppLockRepository
     // directly via resolveLaunchDestination (cold launch) + AppLockResumeGate
@@ -587,8 +586,6 @@ class AuthViewModel(
                             if (!needsLegal) {
                                 LanguagePreference.setAcceptedLegalVersion(CURRENT_LEGAL_VERSION)
                             }
-                            // Check if user needs PIN setup (migration or new device)
-                            val needsPin = appLockRepository?.hasCredential == false
                             // Inconsistent state guard (PR 5b 2026-05-04): a user
                             // with `ageVerified = true` AND `dateOfBirth = null`
                             // is in a state the verification flow cannot have
@@ -617,7 +614,6 @@ class AuthViewModel(
                                     hasProfile = true,
                                     hasDOB = user.dateOfBirth != null,
                                     needsLegalAcceptance = needsLegal,
-                                    needsPinSetup = needsPin,
                                 )
                             }
                         }

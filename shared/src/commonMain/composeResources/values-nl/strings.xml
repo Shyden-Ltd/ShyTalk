@@ -1501,6 +1501,8 @@
     <string name="security_reset_pin">Pincode opnieuw instellen</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Verifieer uw identiteit om een ​​nieuwe pincode in te stellen</string>
+    <string name="security_set_pin">Pincode instellen</string>
+    <string name="security_set_pin_desc">Bescherm de app met een pincode</string>
     <!-- google-translated 2026-05-04 -->
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->

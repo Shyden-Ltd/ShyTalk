@@ -358,68 +358,20 @@ describe('PIN Routes', () => {
     });
   });
 
-  // ─── POST /api/auth/pin/reset ─────────────────────────────────
+  // ─── POST /api/auth/pin/reset — endpoint removed (SHY-0192) ─────
 
   describe('POST /api/auth/pin/reset', () => {
-    it('should reset PIN and clear lockout', async () => {
+    it('should not exist — PIN create/replace has exactly one home (/pin/setup)', async () => {
+      // SHY-0192: /pin/reset duplicated /pin/setup's exact Firestore write but
+      // WITHOUT returning pinHash, which the clients require to register their
+      // local App-Lock credential — any future caller wired to it would
+      // re-create the broken-enrolment bug. The route must stay gone; resets
+      // go through /pin/setup (create-or-replace, clears lockout state).
       const app = buildApp({ uniqueId: 12345678 });
 
       const res = await request(app).post('/api/auth/pin/reset').send({ pin: '5678' });
 
-      expect(res.status).toBe(200);
-      expect(res.body.message).toBe('PIN reset');
-      expect(mockDocUpdate).toHaveBeenCalledWith(
-        'users/12345678',
-        expect.objectContaining({
-          pinHash: '$2b$10$pinhash',
-          pinAttempts: 0,
-          pinLockedUntil: null,
-          pinLockoutCount: 0,
-        }),
-      );
-    });
-
-    it('should reject invalid PIN on reset', async () => {
-      const app = buildApp({ uniqueId: 12345678 });
-
-      const res = await request(app).post('/api/auth/pin/reset').send({ pin: 'abc' });
-
-      expect(res.status).toBe(400);
-    });
-
-    it('should return 401 without auth', async () => {
-      const app = buildApp(null);
-
-      const res = await request(app).post('/api/auth/pin/reset').send({ pin: '5678' });
-
-      expect(res.status).toBe(401);
-    });
-
-    it('should reject PIN shorter than 4 digits on reset', async () => {
-      const app = buildApp({ uniqueId: 12345678 });
-
-      const res = await request(app).post('/api/auth/pin/reset').send({ pin: '12' });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/4-8/);
-    });
-
-    it('should reject PIN longer than 8 digits on reset', async () => {
-      const app = buildApp({ uniqueId: 12345678 });
-
-      const res = await request(app).post('/api/auth/pin/reset').send({ pin: '123456789' });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/4-8/);
-    });
-
-    it('should reject missing PIN on reset', async () => {
-      const app = buildApp({ uniqueId: 12345678 });
-
-      const res = await request(app).post('/api/auth/pin/reset').send({});
-
-      expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/numeric/i);
+      expect(res.status).toBe(404);
     });
   });
 

@@ -1499,6 +1499,8 @@
     <string name="security_reset_pin">PIN zurücksetzen</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Bestätigen Sie Ihre Identität, um eine neue PIN festzulegen</string>
+    <string name="security_set_pin">PIN festlegen</string>
+    <string name="security_set_pin_desc">Schützen Sie die App mit einer PIN</string>
     <!-- google-translated 2026-05-04 -->
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->

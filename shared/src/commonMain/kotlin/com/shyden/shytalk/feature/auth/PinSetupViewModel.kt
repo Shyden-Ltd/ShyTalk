@@ -3,6 +3,8 @@ package com.shyden.shytalk.feature.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shyden.shytalk.core.util.UiText
+import com.shyden.shytalk.core.util.logE
+import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.data.repository.AppLockRepository
 import com.shyden.shytalk.data.repository.AuthRepository
 import com.shyden.shytalk.data.repository.PinRepository
@@ -26,6 +28,8 @@ data class PinSetupState(
     val completed: Boolean = false,
     val showBiometricOffer: Boolean = false,
 )
+
+private const val TAG = "PinSetup"
 
 class PinSetupViewModel(
     private val pinRepository: PinRepository,
@@ -106,12 +110,15 @@ class PinSetupViewModel(
                     val uniqueId = authRepository.currentUserId
                     if (uniqueId.isNullOrEmpty()) {
                         // No resolved identity ⇒ not signed in; genuinely cannot enrol.
+                        logE(TAG, "PIN enrolment blocked: no authenticated session identity")
                         _state.update { it.copy(isLoading = false, error = UiText.res(Res.string.pin_device_not_registered)) }
                         return@onSuccess
                     }
                     appLockRepository.setCredential(uniqueId, deviceId, pinHash)
+                    logI(TAG, "PIN enrolment succeeded: credential registered for this device")
                     _state.update { it.copy(isLoading = false, showBiometricOffer = true) }
                 }.onFailure { e ->
+                    logE(TAG, "PIN enrolment failed at /pin/setup", e)
                     _state.update {
                         it.copy(
                             isLoading = false,

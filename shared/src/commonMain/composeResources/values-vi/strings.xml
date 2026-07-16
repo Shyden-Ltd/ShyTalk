@@ -1501,6 +1501,8 @@
     <string name="security_reset_pin">Đặt lại mã PIN</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Xác minh danh tính của bạn để đặt mã PIN mới</string>
+    <string name="security_set_pin">Đặt mã PIN</string>
+    <string name="security_set_pin_desc">Bảo vệ ứng dụng bằng mã PIN</string>
     <!-- google-translated 2026-05-04 -->
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->

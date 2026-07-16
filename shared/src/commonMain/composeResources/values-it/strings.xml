@@ -1501,6 +1501,8 @@
     <string name="security_reset_pin">Reimposta PIN</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Verifica la tua identità per impostare un nuovo PIN</string>
+    <string name="security_set_pin">Imposta PIN</string>
+    <string name="security_set_pin_desc">Proteggi l'app con un PIN</string>
     <!-- google-translated 2026-05-04 -->
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->
