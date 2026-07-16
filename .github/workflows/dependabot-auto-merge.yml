@@ -26,11 +26,13 @@ jobs:
 
       - name: Determine if auto-mergeable
         id: check
+        # env-bound (not inline ${{ }} in run:) per the workflow-injection
+        # hygiene convention. The old unused DEP_TYPE binding is gone
+        # (SC2034 — the merge policy never consulted dependency-type).
+        env:
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+          PACKAGE_ECOSYSTEM: ${{ steps.metadata.outputs.package-ecosystem }}
         run: |
-          UPDATE_TYPE="${{ steps.metadata.outputs.update-type }}"
-          DEP_TYPE="${{ steps.metadata.outputs.dependency-type }}"
-          PACKAGE_ECOSYSTEM="${{ steps.metadata.outputs.package-ecosystem }}"
-
           # Auto-merge: patch and minor for all ecosystems
           if [ "$UPDATE_TYPE" = "version-update:semver-patch" ] || [ "$UPDATE_TYPE" = "version-update:semver-minor" ]; then
             echo "merge=true" >> "$GITHUB_OUTPUT"
