@@ -132,4 +132,82 @@ describe('iOS deploy archive timing instrumentation (SHY-0088)', () => {
       expect(src.slice(exportIdx, exportIdx + 500)).not.toMatch(/-destination\b/);
     },
   );
+
+  // SHY-0195 root cause #2 (verification run 29478170583): runner image
+  // 20260630.0213.1 ships the default Xcode WITHOUT the iOS platform runtime
+  // (Apple split platform runtimes out of the Xcode bundle) — the archive
+  // then dies with "iOS 26.0 is not installed" (exit 70) even with the
+  // explicit generic destination; the original "Found no destinations" empty
+  // list was the same gap pre-destination. The workflow must assert its own
+  // dependency: `sudo xcodebuild -downloadPlatform iOS` BEFORE the archive
+  // invocation, so the pipeline is image-proof instead of trusting what the
+  // runner pre-installs. Idempotency verified empirically (2026-07-16, review
+  // finding #1): on a host with the platform already installed the command
+  // exits 0 in <1s — it does NOT share the Metal-Toolchain -importComponent
+  // exit-70 "already installed" failure mode. Line-order pin, matching the
+  // line-based style above.
+  test.each(WORKFLOWS)(
+    '%s installs the iOS platform runtime BEFORE the archive invocation, in the same job',
+    (name) => {
+      const src = stripComments(fs.readFileSync(workflowPath(name), 'utf8'));
+      const lines = src.split('\n');
+      const installLine = lines.findIndex((l) => /sudo xcodebuild -downloadPlatform iOS\b/.test(l));
+      const archiveActionLine = lines.findIndex((l) => l.trim() === 'archive');
+      expect(installLine).toBeGreaterThan(-1);
+      expect(archiveActionLine).toBeGreaterThan(-1);
+      // Walk back from the action line to its owning xcodebuild call (same
+      // isolation archiveInvocation uses) so the order pin compares against
+      // the REAL archive invocation, not merely any line spelling `archive`.
+      let archiveStart = archiveActionLine;
+      while (archiveStart >= 0 && !/^\s*xcodebuild\b/.test(lines[archiveStart])) archiveStart -= 1;
+      expect(archiveStart).toBeGreaterThan(-1);
+      expect(installLine).toBeLessThan(archiveStart);
+      // No job boundary in the span: `runs-on:` only ever appears at a job's
+      // top level, so its absence proves install + archive live in the SAME
+      // job (an install in an earlier job would leave the archive job on a
+      // fresh runner without the platform). Per-line test, not an /m span
+      // regex, per this file's slow-regex convention.
+      const between = lines.slice(installLine + 1, archiveStart);
+      expect(between.some((l) => /^\s*runs-on:/.test(l))).toBe(false);
+    },
+  );
+
+  // Hang-mitigation steps pin their own cap (ios-konan-cache-no-hang.test.js
+  // convention): the install step exists to bound a potentially-slow network
+  // fetch, so losing its timeout-minutes would only ever resurface as a real
+  // multi-hour CI hang.
+  test.each(WORKFLOWS)('%s bounds the platform-install step with timeout-minutes: 20', (name) => {
+    const src = stripComments(fs.readFileSync(workflowPath(name), 'utf8'));
+    const lines = src.split('\n');
+    const installLine = lines.findIndex((l) => /sudo xcodebuild -downloadPlatform iOS\b/.test(l));
+    expect(installLine).toBeGreaterThan(-1);
+    // Scope to the install step's own block (walk to its `- name:` header
+    // and to the next step header) so the pin can't drift onto a sibling
+    // step's timeout.
+    let start = installLine;
+    while (start >= 0 && !/^\s*- name:/.test(lines[start])) start -= 1;
+    let end = installLine + 1;
+    while (end < lines.length && !/^\s*- name:/.test(lines[end])) end += 1;
+    expect(start).toBeGreaterThan(-1);
+    expect(lines.slice(start, end).join('\n')).toMatch(/timeout-minutes:\s*20\b/);
+  });
+
+  // The install step's 20-min cap stacks with the archive step's 50-min cap
+  // plus ~35-55 min of other legitimate job overhead (see the job's tuning
+  // comment): a slow-but-not-hung worst case can exceed the old 100-min job
+  // envelope, which would fire the OPAQUE outer job timeout the step-level
+  // fuses exist to pre-empt. ≥120 keeps the step caps as the first fuse.
+  const ARCHIVE_JOBS = { 'deploy-dev.yml': 'distribute-ios', 'deploy-prod.yml': 'deploy-ios-prod' };
+  test.each(WORKFLOWS)('%s archive job envelope is ≥ 120 min so step fuses fire first', (name) => {
+    const src = fs.readFileSync(workflowPath(name), 'utf8');
+    const lines = src.split('\n');
+    const jobStart = lines.findIndex((l) => new RegExp(`^ {2}${ARCHIVE_JOBS[name]}:\\s*$`).test(l));
+    expect(jobStart).toBeGreaterThan(-1);
+    let jobEnd = jobStart + 1;
+    while (jobEnd < lines.length && !/^ {2}[\w-]+:/.test(lines[jobEnd])) jobEnd += 1;
+    const job = lines.slice(jobStart, jobEnd).join('\n');
+    const match = job.match(/^ {4}timeout-minutes:[ \t]*(\d+)/m);
+    expect(match).not.toBeNull();
+    expect(parseInt(match[1], 10)).toBeGreaterThanOrEqual(120);
+  });
 });

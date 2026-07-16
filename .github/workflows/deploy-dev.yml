@@ -429,7 +429,12 @@ jobs:
     # site), the outer job envelope can stay tight at 100 min. Normal
     # case is ~60-80 min on cold-cache macos-latest. 100 is the safety
     # net for anything unexpected before the step timeouts fire.
-    timeout-minutes: 100
+    # 2026-07-16 (SHY-0195): 100 -> 120 — the platform-runtime install
+    # step adds a 20-min cap on top of the archive step's 50-min cap;
+    # stacked worst-case legit-slow steps + ~35-55 min of other overhead
+    # could exceed 100 and fire this OPAQUE job timeout before the
+    # step-level fuses. 120 keeps the step caps as the first fuse.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -608,6 +613,21 @@ jobs:
       # fresh and avoid the collision.
       - name: Stop gradle daemon before xcodebuild
         run: ./gradlew --stop
+
+      # Runner image 20260630.0213.1 ships the default Xcode WITHOUT the iOS
+      # platform runtime (Apple split platform runtimes out of the Xcode
+      # bundle) — the archive then fails with "iOS 26.0 is not installed"
+      # (exit 70; SHY-0195 run 29478170583), and before the explicit
+      # -destination the same gap surfaced as the EMPTY "Found no
+      # destinations" list. Assert our own dependency instead of trusting
+      # image contents. Idempotency VERIFIED empirically (2026-07-16, Xcode
+      # 27.0 host with the platform already installed): exit 0 in <1s — NOT
+      # the Metal-Toolchain -importComponent exit-70 "already installed"
+      # failure mode. Step-capped per this file's hang-detector philosophy
+      # (normal case: seconds when present, ~3-10 min to fetch).
+      - name: Ensure iOS platform runtime is installed
+        run: sudo xcodebuild -downloadPlatform iOS
+        timeout-minutes: 20
 
       # Step-level hang detector: the xcodebuild archive (which transitively
       # runs gradle for K/Native compile + framework embed/sign + IPA export

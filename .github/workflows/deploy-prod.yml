@@ -447,7 +447,9 @@ jobs:
     # Tuned 2026-05-21 to 100 min. See deploy-dev.yml's distribute-ios
     # timeout comment for the full reasoning (gradle daemon collision was
     # the real cause of the apparent slowness, not insufficient minutes).
-    timeout-minutes: 100
+    # 2026-07-16 (SHY-0195): 100 -> 120 to absorb the new 20-min
+    # platform-install step cap — see deploy-dev.yml's matching note.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -522,6 +524,14 @@ jobs:
       # Same gradle-daemon collision pattern would hit prod releases too.
       - name: Stop gradle daemon before xcodebuild
         run: ./gradlew --stop
+
+      # Ensure the iOS platform runtime exists — see deploy-dev.yml's
+      # matching step for the full rationale (runner image 0213.1 ships
+      # Xcode without it; SHY-0195 run 29478170583). Idempotency verified
+      # empirically (exit 0 in <1s when already installed) + step-capped.
+      - name: Ensure iOS platform runtime is installed
+        run: sudo xcodebuild -downloadPlatform iOS
+        timeout-minutes: 20
 
       # Step-level hang detector — see deploy-dev.yml's matching step for
       # the rationale. 50-min cap catches recurrence cheaply.
