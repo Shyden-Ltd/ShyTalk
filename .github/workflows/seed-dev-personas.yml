@@ -33,7 +33,7 @@ on:
       FIREBASE_SERVICE_ACCOUNT_DEV:
         description: 'Firebase service account JSON for the dev project'
         required: true
-      PERSONAS_PASSWORD_DEV:
+      DEV_QA_PERSONAS_PASSWORD:
         description: 'Shared seeded-persona password'
         required: true
 
@@ -108,10 +108,10 @@ jobs:
         with:
           # For workflow_call, secrets are forwarded by the caller via
           # `secrets:` block; for workflow_dispatch, they resolve from
-          # the repo-level GitHub Actions secrets (PERSONAS_PASSWORD_DEV,
+          # the repo-level GitHub Actions secrets (DEV_QA_PERSONAS_PASSWORD,
           # FIREBASE_SERVICE_ACCOUNT_DEV). Both paths land in the same
           # `secrets.X` references at this scope.
           service-account-json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}
           firebase-project: ${{ steps.target-values.outputs.firebase-project }}
-          personas-password: ${{ secrets.PERSONAS_PASSWORD_DEV }}
+          personas-password: ${{ secrets.DEV_QA_PERSONAS_PASSWORD }}
           database-url: ${{ steps.target-values.outputs.database-url }}

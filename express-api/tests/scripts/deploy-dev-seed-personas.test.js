@@ -90,7 +90,7 @@ describe('deploy-dev.yml — seed-dev-personas job (reusable workflow caller)', 
     expect(jobBlock).toMatch(/if:.*inputs\.seed-personas\s*!=\s*false/);
   });
 
-  test('seed-dev-personas job inherits secrets (so the reusable workflow can read FIREBASE_SERVICE_ACCOUNT_DEV / PERSONAS_PASSWORD_DEV)', () => {
+  test('seed-dev-personas job inherits secrets (so the reusable workflow can read FIREBASE_SERVICE_ACCOUNT_DEV / DEV_QA_PERSONAS_PASSWORD)', () => {
     // `secrets: inherit` is the only path by which the reusable workflow
     // sees the calling repo's secrets. Without it, the workflow_call
     // would fail at the secrets validation in seed-dev-personas.yml.
@@ -119,14 +119,18 @@ describe('seed-dev-personas.yml — reusable workflow + direct dispatch', () => 
     // an explicit per-secret mapping. Names match the repo's GitHub
     // Actions secrets settings.
     expect(SEED_WORKFLOW).toContain('FIREBASE_SERVICE_ACCOUNT_DEV:');
-    expect(SEED_WORKFLOW).toContain('PERSONAS_PASSWORD_DEV:');
+    // SHY-0195: the canonical name is DEV_QA_PERSONAS_PASSWORD (SHY-0136
+    // consolidation); the old PERSONAS_PASSWORD_DEV repo secret no longer
+    // exists, and requiring it broke every seed run from 2026-07-01 on.
+    expect(SEED_WORKFLOW).toContain('DEV_QA_PERSONAS_PASSWORD:');
+    expect(SEED_WORKFLOW).not.toContain('PERSONAS_PASSWORD_DEV');
     // Both must be required so a future caller that forgets to forward
     // them fails at workflow_call validation rather than at runtime.
     const callIdx = SEED_WORKFLOW.indexOf('workflow_call:');
     const dispatchIdx = SEED_WORKFLOW.indexOf('workflow_dispatch:');
     const callBlock = SEED_WORKFLOW.slice(callIdx, dispatchIdx);
     expect(callBlock).toMatch(/FIREBASE_SERVICE_ACCOUNT_DEV:[\s\S]{1,200}required: true/);
-    expect(callBlock).toMatch(/PERSONAS_PASSWORD_DEV:[\s\S]{1,200}required: true/);
+    expect(callBlock).toMatch(/DEV_QA_PERSONAS_PASSWORD:[\s\S]{1,200}required: true/);
   });
 
   test('declares a `target` input on both triggers with `dev` as the only allowed value', () => {

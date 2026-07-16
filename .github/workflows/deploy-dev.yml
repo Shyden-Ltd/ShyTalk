@@ -682,6 +682,7 @@ jobs:
             -workspace iosApp.xcworkspace \
             -scheme iosApp \
             -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -configuration Release \
             -showBuildTimingSummary \
             -archivePath "$RUNNER_TEMP/iosApp.xcarchive" \
