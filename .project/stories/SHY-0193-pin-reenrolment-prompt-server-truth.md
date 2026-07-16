@@ -1,6 +1,6 @@
 ---
 id: SHY-0193
-status: Draft
+status: Cancelled
 owner: claude
 created: 2026-07-16
 priority: P2
@@ -117,5 +117,7 @@ Touches `express-api/src/routes/users.js` (sign-in payload) + `shared/**` (sign-
 Sign-in exposes `hasPin` (boolean only); the re-enrolment prompt shows exactly for (server PIN ∧ no local credential); decline is respected; all 20 locales carry the strings; `code-reviewer` 100% clean; backend + device gauntlets green; merged; released.
 
 ## Notes
+
+- 2026-07-16 ~10:1x WIB — **CANCELLED, same day as filing.** Operator redirected the whole App-Lock architecture: PIN/biometrics must be **device-local and serverless**, using the DEVICE's own credential (OS unlock prompt), never set by the application; "if the app is uninstalled it's lost and needs to be set up again (if the user chooses)". This story's entire premise — a server-truth `hasPin` signal driving a re-enrolment prompt after reinstall — is the exact opposite: uninstall-loses-lock is now INTENDED behaviour, and no PIN state exists server-side to signal from. Superseded by SHY-0196 (OS-credential App-Lock), which includes the first-run OFFER flow the operator specified. No implementation had started.
 
 - 2026-07-16 — Filed from SHY-0192's conscious deferral of the `needsPinSetup` auto-prompt (the removed flag read local-only state and could not represent this case). See SHY-0192 Notes for the removal rationale and the device evidence that motivated the enrolment rework.
