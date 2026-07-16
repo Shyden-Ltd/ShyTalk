@@ -56,7 +56,12 @@ async function pressReportActionKey(
 }
 
 test.describe('Admin Keyboard Shortcuts', () => {
-  test.describe.configure({ mode: 'serial' });
+  // Serial + a widened timeout: several tests chain multi-step interactions
+  // that each retry via pressReportActionKey's `toPass` (up to 10s apiece —
+  // the W-key test chains two), which would otherwise crowd the default 20s
+  // budget. The headroom guarantees a genuinely-broken shortcut surfaces the
+  // clean inner `toHaveValue` assertion rather than an opaque test-timeout.
+  test.describe.configure({ mode: 'serial', timeout: 45_000 });
 
   // Defensive isolation: alphabetically-earlier files that touch
   // suspension state — admin-appeals.spec.ts (suspends in beforeAll
