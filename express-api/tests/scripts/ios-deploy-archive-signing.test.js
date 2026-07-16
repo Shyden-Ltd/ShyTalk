@@ -119,4 +119,17 @@ describe('iOS deploy archive timing instrumentation (SHY-0088)', () => {
       expect(archive).toMatch(/-destination ['"]generic\/platform=iOS['"]/);
     },
   );
+
+  test.each(WORKFLOWS)(
+    '%s does not leak -destination onto the -exportArchive call (review SHY-0195 Imp #1)',
+    (name) => {
+      const src = stripComments(fs.readFileSync(workflowPath(name), 'utf8'));
+      // Mirror of the -showBuildTimingSummary exclusivity guard above: the
+      // destination belongs to the archive compile only; the export step
+      // operates on the finished .xcarchive and takes no destination.
+      const exportIdx = src.indexOf('-exportArchive');
+      expect(exportIdx).toBeGreaterThan(-1);
+      expect(src.slice(exportIdx, exportIdx + 500)).not.toMatch(/-destination\b/);
+    },
+  );
 });
