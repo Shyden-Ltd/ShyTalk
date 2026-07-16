@@ -1500,6 +1500,8 @@
     <string name="security_reset_pin">Скинути PIN-код</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Підтвердьте свою особу, щоб встановити новий PIN-код</string>
+    <string name="security_set_pin">Встановити PIN-код</string>
+    <string name="security_set_pin_desc">Захистіть додаток за допомогою PIN-коду</string>
     <!-- google-translated 2026-05-04 -->
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->

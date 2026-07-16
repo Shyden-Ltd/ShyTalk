@@ -1501,6 +1501,8 @@
     <string name="security_reset_pin">Setel ulang PIN</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Verifikasi identitas Anda untuk menetapkan PIN baru</string>
+    <string name="security_set_pin">Tetapkan PIN</string>
+    <string name="security_set_pin_desc">Lindungi aplikasi dengan PIN</string>
     <!-- google-translated 2026-05-04 -->
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->

@@ -1501,6 +1501,8 @@
     <string name="security_reset_pin">PINのリセット</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">本人確認を行って新しい PIN を設定してください</string>
+    <string name="security_set_pin">PIN を設定</string>
+    <string name="security_set_pin_desc">PIN でアプリを保護します</string>
     <!-- google-translated 2026-05-04 -->
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->

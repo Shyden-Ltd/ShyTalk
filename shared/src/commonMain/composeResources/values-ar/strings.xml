@@ -1501,6 +1501,8 @@
     <string name="security_reset_pin">إعادة تعيين رقم التعريف الشخصي</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">قم بتأكيد هويتك لتعيين رقم PIN جديد</string>
+    <string name="security_set_pin">تعيين رقم التعريف الشخصي</string>
+    <string name="security_set_pin_desc">احمِ التطبيق برقم PIN</string>
     <!-- google-translated 2026-05-04 -->
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->

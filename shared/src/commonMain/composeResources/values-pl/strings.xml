@@ -1501,6 +1501,8 @@
     <string name="security_reset_pin">Zresetuj PIN</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Zweryfikuj swoją tożsamość, aby ustawić nowy PIN</string>
+    <string name="security_set_pin">Ustaw PIN</string>
+    <string name="security_set_pin_desc">Chroń aplikację za pomocą kodu PIN</string>
     <!-- google-translated 2026-05-04 -->
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->

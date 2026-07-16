@@ -178,10 +178,27 @@ fun SecuritySettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-            // Reset PIN
+            // Set / Reset PIN — the copy must match what actually happens
+            // (SHY-0192 UX AC): with no credential the row goes STRAIGHT to
+            // setup (no identity verification), so promising "verify your
+            // identity" would be wrong; with a credential the verify dialog
+            // gates it, so the row says so.
+            val hasPinCredential = appLockRepository.hasCredential
             ListItem(
-                headlineContent = { Text(stringResource(Res.string.security_reset_pin)) },
-                supportingContent = { Text(stringResource(Res.string.security_reset_pin_desc)) },
+                headlineContent = {
+                    Text(
+                        stringResource(
+                            if (hasPinCredential) Res.string.security_reset_pin else Res.string.security_set_pin,
+                        ),
+                    )
+                },
+                supportingContent = {
+                    Text(
+                        stringResource(
+                            if (hasPinCredential) Res.string.security_reset_pin_desc else Res.string.security_set_pin_desc,
+                        ),
+                    )
+                },
                 trailingContent = {
                     Icon(Icons.Default.ChevronRight, contentDescription = null)
                 },

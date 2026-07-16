@@ -1501,6 +1501,8 @@
     <string name="security_reset_pin">PIN\'i sıfırla</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Yeni bir PIN belirlemek için kimliğinizi doğrulayın</string>
+    <string name="security_set_pin">PIN belirle</string>
+    <string name="security_set_pin_desc">Uygulamayı PIN ile koruyun</string>
     <!-- google-translated 2026-05-04 -->
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->

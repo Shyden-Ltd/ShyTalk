@@ -1501,6 +1501,8 @@
     <string name="security_reset_pin">Restablecer PIN</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Verifique su identidad para establecer un nuevo PIN</string>
+    <string name="security_set_pin">Establecer PIN</string>
+    <string name="security_set_pin_desc">Proteja la aplicación con un PIN</string>
     <!-- google-translated 2026-05-04 -->
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->

@@ -1501,6 +1501,8 @@
     <string name="security_reset_pin">Сбросить PIN-код</string>
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Подтвердите свою личность, чтобы установить новый PIN-код.</string>
+    <string name="security_set_pin">Установить PIN-код</string>
+    <string name="security_set_pin_desc">Защитите приложение с помощью PIN-кода.</string>
     <!-- google-translated 2026-05-04 -->
     <!-- google-translated 2026-05-04 -->
     <!-- Email sign-in -->

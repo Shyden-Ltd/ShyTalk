@@ -698,8 +698,6 @@ class LockScreenViewModelTest {
             verifyCallCount++
             return verifyResult
         }
-
-        override suspend fun resetPin(newPin: String) = Result.success(Unit)
     }
 
     private class FakeBiometricRepository : BiometricRepository {
