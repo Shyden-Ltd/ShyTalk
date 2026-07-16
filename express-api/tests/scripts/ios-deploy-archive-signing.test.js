@@ -102,4 +102,21 @@ describe('iOS deploy archive timing instrumentation (SHY-0088)', () => {
       expect(occurrences).toBe(1);
     },
   );
+
+  // SHY-0195: the macOS runner image 20260630.0213.1 stopped inferring a
+  // destination from `-sdk iphoneos` alone — `xcodebuild … archive` died with
+  // "Found no destinations for the scheme 'iosApp' and action archive"
+  // (an EMPTY destination list) on every dev deploy from 2026-07-11. The
+  // explicit generic device destination is the canonical, version-proof form;
+  // this pins it on the archive invocation of BOTH deploy workflows so the
+  // prod workflow's identical latent copy can never regress back either.
+  test.each(WORKFLOWS)(
+    "%s archives with an explicit -destination 'generic/platform=iOS'",
+    (name) => {
+      const src = stripComments(fs.readFileSync(workflowPath(name), 'utf8'));
+      const archive = archiveInvocation(src);
+      expect(archive).not.toBeNull();
+      expect(archive).toMatch(/-destination ['"]generic\/platform=iOS['"]/);
+    },
+  );
 });
