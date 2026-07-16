@@ -7,6 +7,7 @@ priority: P1
 effort: S
 type: infra
 roadmap_ids: []
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1614
 ---
 
 # SHY-0195: Fix the Deploy-To-Dev pipeline — iOS archive destination, persona-seed secret name, setup-java SHA drift
@@ -117,5 +118,7 @@ All four YAML/action files fixed; pin tests flipped RED→GREEN; full express su
 - 2026-07-16 ~13:2x WIB — TDD: destination + seed-secret pins RED first, fixes landed (target suites 45/45). `code-reviewer`: APPROVE + 2 Important findings (destination-exclusivity guard on `-exportArchive`; usage-line secret pin) — both fixed (33/33; test-only delta implementing the reviewer's own prescriptions). Full express suite 13,498 green (REAL_EXIT=0) on the develop-based branch; actionlint + prettier + eslint + story validator clean. Control run 29475103691 completed: failed exactly the two target jobs — clean control sample.
 - 2026-07-16 ~13:5x WIB — DoD verification dispatched from the develop-based branch via the Deploy-To-Dev `ref` input (Phase-3 unmerged-branch pattern): run 29478170583 — https://github.com/Shyden-Ltd/ShyTalk/actions/runs/29478170583. Merge gates on "Distribute iOS to TestFlight" AND "Seed Dev Personas / Seed test personas (dev)" green (control failed exactly these two).
 - 2026-07-16 ~14:2x WIB — Operator directive (now codified): CI-config-only tickets merge DIRECTLY to main; story → Done on main-merge; main back-merged into develop immediately. PR #1613 (base develop) closed superseded — that branch was develop-based, so retargeting it would have dragged develop's whole unreleased delta past the device gauntlet. Re-cut from origin/main: cherry-picks cad84aa9562 + 8fe9c1c5582 verified BYTE-IDENTICAL to the reviewed content (per-file diff = 0 across all 6 code files); targeted pin suites 48/48 on the main tree; actionlint + prettier + story validator clean. Run 29478170583 remains the DoD verification — it exercises the exact fixed archive invocation + secret plumbing; the develop-vs-main tree delta touches neither failure mode.
+
+- 2026-07-16 ~14:3x WIB — PR [#1614](https://github.com/Shyden-Ltd/ShyTalk/pull/1614) (base main) opened; #1613 closed superseded. Verification run 29478170583 progress: **"Seed Dev Personas / Seed test personas (dev)" GREEN** (red in control — secret fix proven); "Distribute iOS to TestFlight" in progress; all other jobs green.
 
 Reviewed-up-to: 8fe9c1c5582
