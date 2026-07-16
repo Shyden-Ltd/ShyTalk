@@ -266,20 +266,20 @@ test.describe('Admin Keyboard Shortcuts', () => {
 
     const searchInput = page.getByRole('spinbutton', { name: 'ShyTalk User ID' });
     await searchInput.fill(String(testData.user.uniqueId));
-    const displayNameInput = page.locator('[data-field="displayName"]');
 
-    // Press Enter to search and wait for the form to populate — the true
-    // end-state that proves the search ran. Assert ONLY that: an intermediate
-    // `toHaveText('Search')` check races the pre-search idle state (the button
-    // reads "Search" both before the search starts AND after it finishes), so
-    // it can match the idle moment and let the populate check race an in-flight
-    // search. WebKit — and occasionally Chromium — drops the single synthetic
-    // Enter, so re-press until the form populates. Idempotent: re-searching the
-    // same uid yields the same result; the form starts blank so this cannot
-    // pass on stale data.
+    // Press Enter to search and wait for the loaded user's uniqueId to appear —
+    // the true end-state that proves the search ran AND loaded the right user.
+    // Assert on `#field-uniqueId` (IMMUTABLE) rather than displayName: the
+    // worker-scoped testData.user is shared across the whole suite and other
+    // tests mutate its displayName (e.g. a suspension test can leave it reading
+    // "Suspended Account"), so a displayName assertion is fragile to test order.
+    // The uniqueId can never be mutated, and the form starts blank, so this
+    // cannot pass on stale data or a dropped Enter. WebKit — and occasionally
+    // Chromium — drops the single synthetic Enter, so re-press until it settles.
+    const uniqueIdDisplay = page.locator('#field-uniqueId');
     await expect(async () => {
       await searchInput.press('Enter');
-      await expect(displayNameInput).toHaveValue(testData.user.displayName, { timeout: 5_000 });
+      await expect(uniqueIdDisplay).toHaveText(String(testData.user.uniqueId), { timeout: 5_000 });
     }).toPass({ timeout: 20_000 });
   });
 
