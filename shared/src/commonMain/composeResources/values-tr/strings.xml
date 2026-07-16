@@ -1502,9 +1502,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Yeni bir PIN belirlemek için kimliğinizi doğrulayın</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">Bağlı Hesaplar</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">Oturum açma yöntemlerini yönetin</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">E-postayla oturum açın</string>

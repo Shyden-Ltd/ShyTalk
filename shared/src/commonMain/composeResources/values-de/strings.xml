@@ -1500,9 +1500,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">Bestätigen Sie Ihre Identität, um eine neue PIN festzulegen</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">Verknüpfte Konten</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">Anmeldemethoden verwalten</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">Melden Sie sich mit E-Mail an</string>

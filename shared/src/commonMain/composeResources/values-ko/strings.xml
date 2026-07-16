@@ -1502,9 +1502,7 @@
     <!-- google-translated 2026-05-04 -->
     <string name="security_reset_pin_desc">새 PIN을 설정하려면 신원을 확인하세요.</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts">연결된 계정</string>
     <!-- google-translated 2026-05-04 -->
-    <string name="security_linked_accounts_desc">로그인 방법 관리</string>
     <!-- Email sign-in -->
     <!-- google-translated 2026-05-04 -->
     <string name="email_sign_in_title">이메일로 로그인</string>
