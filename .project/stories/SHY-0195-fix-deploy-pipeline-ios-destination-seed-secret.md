@@ -125,3 +125,5 @@ All four YAML/action files fixed; pin tests flipped RED→GREEN; full express su
 - 2026-07-16 ~18:5x WIB — Develop-side drift half: the device-return gauntlet's express battery failed exactly ci-action-pin-consistency (setup-java pinned to 2 SHAs — the drift THIS story fixed on the main-based branch never reached develop after #1613 was closed superseded). Aligned `.github/actions/setup-jdk-gradle/action.yml` to the SAME SHA #1614 uses (0f481fcb… v5.5.0) so the eventual main→develop back-merge cannot conflict or re-drift. RED = the canonical full express run (13,495/13,496, sole failure named this drift + fix verbatim); GREEN = pin suite 15/15. One-line test-prescribed alignment, self-verified per the agent-frugality rule (the R1/R1.1-reviewed main-side fix is byte-identical on this SHA).
 
 Reviewed-up-to: 0887bd52cd2
+
+Reviewed-up-to: 2238d4e3640
