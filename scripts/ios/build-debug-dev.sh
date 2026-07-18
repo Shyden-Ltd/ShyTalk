@@ -80,6 +80,8 @@ echo "[build-debug-dev] xcodebuild build -workspace $WORKSPACE -scheme $SCHEME" 
 # history, meaningful ("commit #N"), needs no external counter; never
 # compared against CI's GITHUB_RUN_NUMBER channel (each is internally
 # monotonic; local Debug-Dev installs never upload to TestFlight).
+# Shallow clones would undercount — N/A here: this script only ever runs
+# against the operator's full local checkout, never in CI.
 VERSION_NAME=$(awk -F'"' '/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"/ {print $2; exit}' "$REPO_ROOT/app/build.gradle.kts")
 if [ -z "$VERSION_NAME" ]; then
   echo "FATAL: could not parse versionName from app/build.gradle.kts" >&2
@@ -89,7 +91,10 @@ if ! echo "$VERSION_NAME" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
   echo "FATAL: versionName '$VERSION_NAME' is not a strict 3-int semver (Apple's CFBundleShortVersionString rule)" >&2
   exit 1
 fi
-BUILD_NUMBER=$(git rev-list --count HEAD)
+if ! BUILD_NUMBER=$(git rev-list --count HEAD); then
+  echo "FATAL: could not count commits for CURRENT_PROJECT_VERSION (git rev-list --count HEAD failed)" >&2
+  exit 1
+fi
 echo "[build-debug-dev] version identity: MARKETING_VERSION=$VERSION_NAME CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
 
 # SHY-0205 — stamp the git identity into the build (Info.plist ShyTalkGit*

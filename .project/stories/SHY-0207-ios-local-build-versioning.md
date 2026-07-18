@@ -1,6 +1,6 @@
 ---
 id: SHY-0207
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-18
 priority: P1
@@ -100,9 +100,10 @@ Operator task #11 (2026-07-18, ordered right after the watermark). `1.0 (1)` com
 
 ## Definition of Done
 
-- [ ] ACs checked; pins RED→GREEN; shellcheck/eslint/prettier clean; iPhone walk evidence (screenshot + NSLog line) in Notes; code-reviewer clean; PR → develop merged; In Review until release.
+- [x] ACs checked; pins RED→GREEN; shellcheck/eslint/prettier clean; iPhone walk evidence (screenshot + NSLog line) in Notes; code-reviewer clean (2 Minor fixed same-session); PR → develop merged pending; In Review until release.
 
 ## Notes
 
+- 2026-07-18 ~16:50 WIB — Review round (background-resume RULE VIOLATION acknowledged — operator called it out; the run had already produced its verdict; memory hardened: reviews are fresh FOREGROUND Agent calls only from now on): 0 Critical / 0 Important / 2 Minor, both fixed same-commit — (1) shallow-clone N/A now actually documented in the script comment (the AC had claimed it); (2) BUILD_NUMBER git failure wrapped in the script's own FATAL: convention instead of a bare set -e trip. Reviewer independently hand-traced the script against the REAL spawnSync secret-leak unit test (redaction contract unaffected). Both fixes self-verified (shellcheck + 42/42 pins + bash -n) per the small-delta rule; reviewer had declared ship-ready-as-is. Reviewed-up-to: this commit.
 - 2026-07-18 ~16:38 WIB — DEVICE-PROVEN on iPhone 74563FF8 (detached build, BUILD-EXIT=0 in <4 min warm): watermark status line now `dev · 0.97.15 (2152) · api 4393f56` + green dot (was `1.0 (1)`); branch `story/SHY-02…-versioning`, sha `26a676b*`, built 07-18 16:33. Script echoed `MARKETING_VERSION=0.97.15 CURRENT_PROJECT_VERSION=2152`. Screenshot: scratchpad/ios-0207.png. Pins 42/42; shellcheck/eslint/prettier clean. One test-authoring lesson: the fail-fast-ordering pin initially anchored on 'xcodebuild build' and matched the redacted-ECHO line — re-anchored on the line-start invocation.
 - 2026-07-18 ~16:40 WIB — Story born-refined during the post-SHY-0205 pickup; best-solution alternatives recorded in ## Why per the new ticket bar.
