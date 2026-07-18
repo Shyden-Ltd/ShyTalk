@@ -28,6 +28,8 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.shyden.shytalk.core.BuildVariant
+import com.shyden.shytalk.core.QaContext
 import com.shyden.shytalk.core.room.RoomLifecycleManager
 import com.shyden.shytalk.core.ui.PlatformWebView
 import com.shyden.shytalk.core.util.BiometricAuth
@@ -107,8 +109,15 @@ fun SharedNavGraph(
 
     // Re-sync after navigation (e.g., fresh sign-in updates currentUserId from null)
     LaunchedEffect(Unit) {
-        navController.currentBackStackEntryFlow.collect {
+        navController.currentBackStackEntryFlow.collect { entry ->
             currentUserId = authRepository.currentUserId
+            if (BuildVariant.isPreviewBuild) {
+                // Feed the preview watermark's route line (SHY-0205).
+                // Route PATTERNS only (`rooms/{roomId}`), never filled-in
+                // arguments — a room id or user id in the watermark would
+                // leak identifiers into shared screenshots.
+                QaContext.setCurrentRoute(entry.destination.route)
+            }
         }
     }
 

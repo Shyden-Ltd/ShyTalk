@@ -602,6 +602,7 @@ class PinSetupViewModelTest {
         override val currentFirebaseUid: String? get() = uniqueId?.let { "fb-$it" }
         override var resolvedUniqueId: String? = null
         override var resolvedDisplayName: String? = null
+        override var resolvedCohort: String? = null
 
         override fun getProviderInfo(): Pair<String, String>? = null
 
