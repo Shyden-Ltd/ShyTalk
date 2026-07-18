@@ -38,17 +38,17 @@ tail -f /tmp/shytalk-gauntlet/latest/gauntlet.log
 
 ## Common invocations
 
-| Goal | Command |
-| --- | --- |
-| Full cold-boot + matrix (web + Android cells) | `gauntlet.sh` |
-| Everything incl. iOS cells + framework suites | `gauntlet.sh --detach --frameworks --ios` |
-| Bring services up, no tests | `gauntlet.sh --no-matrix` |
-| Nuke and restart a wedged stack | `gauntlet.sh --fresh --no-matrix` |
-| Fresh app state on the phone | `gauntlet.sh --install-apk --reset-app` |
-| Full pre-merge protocol locally | `gauntlet.sh --detach --fresh --frameworks --ios --android-bdd` |
-| Just reseed after a Jest run | `bash 20-reseed.sh` |
-| Just check what's missing on this machine | `bash 00-prereqs.sh` |
-| Tear everything down | `bash 90-stop.sh` |
+| Goal                                          | Command                                                         |
+| --------------------------------------------- | --------------------------------------------------------------- |
+| Full cold-boot + matrix (web + Android cells) | `gauntlet.sh`                                                   |
+| Everything incl. iOS cells + framework suites | `gauntlet.sh --detach --frameworks --ios`                       |
+| Bring services up, no tests                   | `gauntlet.sh --no-matrix`                                       |
+| Nuke and restart a wedged stack               | `gauntlet.sh --fresh --no-matrix`                               |
+| Fresh app state on the phone                  | `gauntlet.sh --install-apk --reset-app`                         |
+| Full pre-merge protocol locally               | `gauntlet.sh --detach --fresh --frameworks --ios --android-bdd` |
+| Just reseed after a Jest run                  | `bash 20-reseed.sh`                                             |
+| Just check what's missing on this machine     | `bash 00-prereqs.sh`                                            |
+| Tear everything down                          | `bash 90-stop.sh`                                               |
 
 `gauntlet.sh --help` prints every flag.
 
@@ -105,19 +105,19 @@ stack is down, seeding fails, or no physical iPhone is visible to
 
 ## Troubleshooting
 
-| Symptom | Cause → fix |
-| --- | --- |
-| `docker compose up` bind failure on UDP 52xxx | Random app squatting LiveKit's RTC range → `10-services.sh` sweeps it automatically |
-| start.sh aborts on occupied ports | Orphans from a crashed run → `10-services.sh` sweeps, or `90-stop.sh` first |
-| Every persona sign-in 400 INVALID_PASSWORD | Wrong seeded password → `bash 20-reseed.sh` (it forces + verifies `localdev123`) |
-| Mass `CONNECTION_REFUSED` late in a run | :8888 server died (fd limit or sleep) → check `10-services.sh` brought it up; never run unattended without caffeinate |
-| `adb devices` shows `unauthorized` | Accept the RSA prompt on the phone screen |
-| Android journeys see the clock/keyguard | Phone locked → `30-android.sh` wakes + stay-on; disable any secure lock for runs |
-| iOS cells all fail to attach | iPhone not visible to devicectl (cable/unlock/Developer Mode), or the WDA jam above |
+| Symptom                                       | Cause → fix                                                                                                           |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `docker compose up` bind failure on UDP 52xxx | Random app squatting LiveKit's RTC range → `10-services.sh` sweeps it automatically                                   |
+| start.sh aborts on occupied ports             | Orphans from a crashed run → `10-services.sh` sweeps, or `90-stop.sh` first                                           |
+| Every persona sign-in 400 INVALID_PASSWORD    | Wrong seeded password → `bash 20-reseed.sh` (it forces + verifies `localdev123`)                                      |
+| Mass `CONNECTION_REFUSED` late in a run       | :8888 server died (fd limit or sleep) → check `10-services.sh` brought it up; never run unattended without caffeinate |
+| `adb devices` shows `unauthorized`            | Accept the RSA prompt on the phone screen                                                                             |
+| Android journeys see the clock/keyguard       | Phone locked → `30-android.sh` wakes + stay-on; disable any secure lock for runs                                      |
+| iOS cells all fail to attach                  | iPhone not visible to devicectl (cable/unlock/Developer Mode), or the WDA jam above                                   |
 
 ## Environment knobs
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `SHYTALK_REPO` | auto-detected from script location | repo checkout the scripts operate on |
-| `GAUNTLET_TMP` | `/tmp/shytalk-gauntlet` | where run artifacts/logs/sentinels live |
+| Variable       | Default                            | Meaning                                 |
+| -------------- | ---------------------------------- | --------------------------------------- |
+| `SHYTALK_REPO` | auto-detected from script location | repo checkout the scripts operate on    |
+| `GAUNTLET_TMP` | `/tmp/shytalk-gauntlet`            | where run artifacts/logs/sentinels live |
