@@ -70,6 +70,28 @@ echo "[build-debug-dev] xcodebuild build -workspace $WORKSPACE -scheme $SCHEME" 
   "-configuration $CONFIG -destination id=$UDID -derivedDataPath $DERIVED" \
   "-allowProvisioningUpdates -quiet DEV_QA_PERSONAS_PASSWORD=<redacted>" \
   "SHYTALK_GIT_BRANCH/SHA/DIRTY=<from live git>"
+# ── SHY-0207: real version identity for local installs ──
+# project.pbxproj's defaults (MARKETING_VERSION=1.0, CURRENT_PROJECT_VERSION=1)
+# made every local install read "1.0 (1)". CI already overrides both at
+# archive time on the xcodebuild-settings seam — this is the local
+# equivalent. versionName parses from app/build.gradle.kts with the SAME
+# anchored awk deploy-dev.yml uses (single source of truth; the pin suite
+# asserts both stay identical). Build number = commit count: monotonic per
+# history, meaningful ("commit #N"), needs no external counter; never
+# compared against CI's GITHUB_RUN_NUMBER channel (each is internally
+# monotonic; local Debug-Dev installs never upload to TestFlight).
+VERSION_NAME=$(awk -F'"' '/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"/ {print $2; exit}' "$REPO_ROOT/app/build.gradle.kts")
+if [ -z "$VERSION_NAME" ]; then
+  echo "FATAL: could not parse versionName from app/build.gradle.kts" >&2
+  exit 1
+fi
+if ! echo "$VERSION_NAME" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+  echo "FATAL: versionName '$VERSION_NAME' is not a strict 3-int semver (Apple's CFBundleShortVersionString rule)" >&2
+  exit 1
+fi
+BUILD_NUMBER=$(git rev-list --count HEAD)
+echo "[build-debug-dev] version identity: MARKETING_VERSION=$VERSION_NAME CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
+
 # SHY-0205 — stamp the git identity into the build (Info.plist ShyTalkGit*
 # keys resolve these settings; the preview watermark renders them).
 # Failures degrade to "" → the Kotlin side coerces blank → "?".
@@ -90,6 +112,8 @@ xcodebuild build \
   -allowProvisioningUpdates \
   -quiet \
   DEV_QA_PERSONAS_PASSWORD="$PW" \
+  MARKETING_VERSION="$VERSION_NAME" \
+  CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
   SHYTALK_GIT_BRANCH="$GIT_BRANCH" \
   SHYTALK_GIT_SHA="$GIT_SHA" \
   SHYTALK_GIT_DIRTY="$GIT_DIRTY"
