@@ -168,6 +168,34 @@ describe('stamp-build-meta.mjs (SHY-0205)', () => {
     fs.rmSync(bare, { recursive: true, force: true });
   });
 
+  test('escapeAttr neutralises a hostile --build value (the one un-sanitised slot)', () => {
+    // branch/sha pass sanitizeLabel first; --build is the only value that
+    // reaches the attribute with escapeAttr as its SOLE defence — prove it.
+    const out = runStamp(
+      ['--target', 'dev', '--root', 'public', '--build', '<script>"x"&</script>'],
+      { cwd: repo },
+    );
+    expect(out.status).toBe(0);
+    const html = fs.readFileSync(path.join(repo, 'public', 'index.html'), 'utf8');
+    expect(html).toContain(
+      'name="shytalk-build" content="&lt;script&gt;&quot;x&quot;&amp;&lt;/script&gt;"',
+    );
+    expect(html).not.toContain('<script>"x"&</script>');
+  });
+
+  test('detached HEAD stamps sha but degrades branch to omission (renders ?)', () => {
+    execFileSync(GIT, ['checkout', '-q', '--detach', 'HEAD'], { cwd: repo });
+    const out = runStamp(['--target', 'dev', '--root', 'public'], {
+      cwd: repo,
+      env: { ...process.env, SHYTALK_DEPLOY_REF: '' },
+    });
+    expect(out.status).toBe(0);
+    const html = fs.readFileSync(path.join(repo, 'public', 'index.html'), 'utf8');
+    expect(html).not.toContain('shytalk-git-branch');
+    expect(html).not.toContain('content="HEAD"');
+    expect(html).toContain('shytalk-git-sha');
+  });
+
   describe('workflow wiring', () => {
     const devYml = fs.readFileSync(
       path.join(REPO_ROOT, '.github', 'workflows', 'deploy-dev.yml'),

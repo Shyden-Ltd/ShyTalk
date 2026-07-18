@@ -64,7 +64,11 @@ function readGitIdentity(cwd) {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],
       }).trim();
-    const branch = run(["rev-parse", "--abbrev-ref", "HEAD"]);
+    // `--abbrev-ref HEAD` prints the LITERAL string "HEAD" (exit 0) on a
+    // detached checkout (mid-rebase/bisect) — that's "branch unknown",
+    // not a branch name, so degrade it to null → the watermark's "?".
+    const rawBranch = run(["rev-parse", "--abbrev-ref", "HEAD"]);
+    const branch = rawBranch === "HEAD" ? null : rawBranch;
     const sha = run(["rev-parse", "--short", "HEAD"]);
     const dirty = run(["status", "--porcelain"]).length > 0;
     return { branch, sha, dirty };

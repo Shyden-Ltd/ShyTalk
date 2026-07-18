@@ -74,6 +74,9 @@ echo "[build-debug-dev] xcodebuild build -workspace $WORKSPACE -scheme $SCHEME" 
 # keys resolve these settings; the preview watermark renders them).
 # Failures degrade to "" → the Kotlin side coerces blank → "?".
 GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+# Detached HEAD prints the LITERAL "HEAD" (exit 0) — that's "branch
+# unknown"; pass empty so the Kotlin side renders "?" not "HEAD".
+if [ "$GIT_BRANCH" = "HEAD" ]; then GIT_BRANCH=""; fi
 GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || true)"
 GIT_DIRTY=""
 if [ -n "$(git status --porcelain 2>/dev/null)" ]; then GIT_DIRTY="1"; fi

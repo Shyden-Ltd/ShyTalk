@@ -707,6 +707,7 @@ jobs:
             MARKETING_VERSION="${VERSION_NAME}" \
             SHYTALK_GIT_BRANCH="${SHYTALK_DEPLOY_REF}" \
             SHYTALK_GIT_SHA="$(git -C .. rev-parse --short HEAD)" \
+            SHYTALK_GIT_DIRTY="" \
             archive
           # Export IPA
           xcodebuild \

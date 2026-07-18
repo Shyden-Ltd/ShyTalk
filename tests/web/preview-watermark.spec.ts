@@ -153,6 +153,11 @@ test.describe("Preview watermark — git identity lines (SHY-0205)", () => {
   test("an unreachable backend turns the dot red — REAL induced failure", async ({
     page,
   }) => {
+    const healthLogs: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.text().includes("[ShyTalk] server health"))
+        healthLogs.push(msg.text());
+    });
     await page.addInitScript(() => {
       // Closed port ⇒ genuine fetch failure (no mocks — the rule).
       (window as any).__preview_api_override = "http://127.0.0.1:1";
@@ -168,6 +173,29 @@ test.describe("Preview watermark — git identity lines (SHY-0205)", () => {
         { timeout: 10_000 },
       )
       .toBe("rgb(255, 82, 82)");
+    // Observability AC: exactly ONE state-change line (unknown -> false),
+    // never one per poll.
+    expect(healthLogs).toHaveLength(1);
+    expect(healthLogs[0]).toContain("unknown -> false");
+  });
+
+  test("every badge line clamps to a single row — no wrap explosion", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.evaluate(() => {
+      (window as any).__journey_marker =
+        "j01-adult-new-day-one scenario-03 一个非常长的旅程标记字符串 that would wrap across many rows without the per-line clamp";
+    });
+    await expect(page.locator("#preview-watermark")).toContainText("▶", {
+      timeout: 5_000,
+    });
+    const rowHeights = await page
+      .locator("#preview-watermark div")
+      .evaluateAll((els) => els.map((el) => (el as HTMLElement).offsetHeight));
+    // font-size 9px · line-height 1.3 ⇒ one row ≈ 12px; a wrapped line
+    // would be ≥ 24px. Title row is 10px — still far under the bound.
+    for (const h of rowHeights) expect(h).toBeLessThan(20);
   });
 });
 
@@ -223,18 +251,25 @@ test.describe("Preview watermark — QA context lines (SHY-0205)", () => {
       localStorage.setItem("shytalk_language", "zh");
     });
     await page.goto("/");
-    await page.waitForFunction(() => document.documentElement.lang === "zh", null, {
-      timeout: 5_000,
-    });
+    await page.waitForFunction(
+      () => document.documentElement.lang === "zh",
+      null,
+      {
+        timeout: 5_000,
+      },
+    );
     await expect(page.locator("#preview-watermark")).toContainText("zh · /", {
       timeout: 5_000,
     });
   });
 
-  test("build-identity console line is emitted once per load", async ({ page }) => {
+  test("build-identity console line is emitted once per load", async ({
+    page,
+  }) => {
     const identityLines: string[] = [];
     page.on("console", (msg) => {
-      if (msg.text().includes("[ShyTalk] build identity:")) identityLines.push(msg.text());
+      if (msg.text().includes("[ShyTalk] build identity:"))
+        identityLines.push(msg.text());
     });
     await page.goto("/");
     await expect.poll(() => identityLines.length, { timeout: 5_000 }).toBe(1);

@@ -34,6 +34,22 @@ class WatermarkFormatTest {
     }
 
     @Test
+    fun `truncateMiddle handles CJK unicode within budget`() {
+        val branch = "story/SHY-0205-预览水印构建标识-watermark"
+        val out = WatermarkFormat.truncateMiddle(branch, 24)
+        assertEquals(24, out.length)
+        assertTrue(out.contains('…'))
+        assertTrue(branch.startsWith(out.substringBefore('…')))
+        assertTrue(branch.endsWith(out.substringAfter('…')))
+    }
+
+    @Test
+    fun `truncateMiddle degenerate budgets collapse to the ellipsis`() {
+        assertEquals("…", WatermarkFormat.truncateMiddle("abcdef", 1))
+        assertEquals("…", WatermarkFormat.truncateMiddle("abcdef", 0))
+    }
+
+    @Test
     fun `truncateMiddle output never exceeds max`() {
         val branch = "story/SHY-0205-preview-watermark-build-identity"
         val out = WatermarkFormat.truncateMiddle(branch, WatermarkFormat.MAX_BRANCH_CHARS)

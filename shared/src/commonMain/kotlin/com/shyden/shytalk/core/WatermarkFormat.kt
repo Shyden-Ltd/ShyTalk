@@ -47,12 +47,20 @@ object WatermarkFormat {
      * Middle-truncates [value] to at most [max] chars, keeping head and
      * tail around a single `…`. Head gets the extra char on odd budgets —
      * branch prefixes (`story/SHY-NNNN-`) carry the identifying part.
+     *
+     * Operates on UTF-16 units (like the JS mirror's `slice`): BMP text
+     * (incl. CJK) truncates cleanly; a branch name containing non-BMP
+     * characters could split a surrogate at the cut — accepted for a
+     * QA badge over git refs, which are overwhelmingly ASCII.
+     * Degenerate budgets (`max` ≤ 1) collapse to the ellipsis alone
+     * rather than throwing (the JS mirror silently degrades the same way).
      */
     fun truncateMiddle(
         value: String,
         max: Int,
     ): String {
         if (value.length <= max) return value
+        if (max <= 1) return "…"
         val keepEnd = (max - 1) / 2
         val keepStart = max - 1 - keepEnd
         return value.take(keepStart) + "…" + value.takeLast(keepEnd)

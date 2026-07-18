@@ -108,9 +108,11 @@
     return null;
   }
 
-  /** Middle-truncation, mirroring WatermarkFormat.truncateMiddle. */
+  /** Middle-truncation, mirroring WatermarkFormat.truncateMiddle
+   *  (incl. its max<=1 → "…" degenerate-budget rule). */
   function truncateMiddle(value, max) {
     if (value.length <= max) return value;
+    if (max <= 1) return "…";
     var keepEnd = Math.floor((max - 1) / 2);
     var keepStart = max - 1 - keepEnd;
     return (
@@ -174,7 +176,32 @@
     // prod never reaches here (script exits above) — local vs dev only.
     // Single-line env ternary: the env-url guard's sanctioned shape
     // (suggestions-board.js precedent).
-    return env === "local" ? "http://localhost:3000" : "https://dev-api.shytalk.shyden.co.uk"; // localhost checked first
+    return env === "local"
+      ? "http://localhost:3000"
+      : "https://dev-api.shytalk.shyden.co.uk"; // localhost checked first
+  }
+
+  // Logs only on ok→fail / fail→ok transitions (Observability AC —
+  // parity with the Kotlin side's state-change logD), never per poll.
+  function recordHealth(ok) {
+    var previous = serverHealth.ok;
+    serverHealth.ok = ok;
+    if (previous !== ok) {
+      try {
+        // eslint-disable-next-line no-console
+        console.log(
+          "[ShyTalk] server health " +
+            (previous === null ? "unknown" : previous) +
+            " -> " +
+            ok +
+            " (sha=" +
+            (serverHealth.sha || "?") +
+            ")",
+        );
+      } catch (_) {
+        /* console unavailable */
+      }
+    }
   }
 
   function pollHealth() {
@@ -187,13 +214,13 @@
         .then(function (body) {
           if (body && typeof body.sha === "string" && body.sha)
             serverHealth.sha = body.sha;
-          serverHealth.ok = !!(body && body.status === "ok");
+          recordHealth(!!(body && body.status === "ok"));
         })
         .catch(function () {
-          serverHealth.ok = false;
+          recordHealth(false);
         });
     } catch (_) {
-      serverHealth.ok = false;
+      recordHealth(false);
     }
   }
   pollHealth();
@@ -297,18 +324,26 @@
         ? window.__journey_marker.trim()
         : null;
 
+    // Per-line clamp (compactness AC): one visual row per line, ellipsis
+    // instead of wrapping — the JS mirror of Compose's maxLines=1 +
+    // TextOverflow.Ellipsis.
+    var LINE_STYLE =
+      ' style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis"';
     var lines = [
       '<div style="font-weight:700;font-size:10px;font-family:system-ui,sans-serif">ShyTalk Preview</div>',
-      "<div>" + statusLine + "</div>",
-      "<div>" +
+      "<div" + LINE_STYLE + ">" + statusLine + "</div>",
+      "<div" +
+        LINE_STYLE +
+        ">" +
         escapeHtml(branch ? truncateMiddle(branch, BRANCH_MAX_CHARS) : "?") +
         "</div>",
-      "<div>" + shaLine + "</div>",
-      "<div>" + escapeHtml(getBrowserId()) + "</div>",
-      "<div>" + uidLine + "</div>",
-      "<div>" + localeRouteLine + "</div>",
+      "<div" + LINE_STYLE + ">" + shaLine + "</div>",
+      "<div" + LINE_STYLE + ">" + escapeHtml(getBrowserId()) + "</div>",
+      "<div" + LINE_STYLE + ">" + uidLine + "</div>",
+      "<div" + LINE_STYLE + ">" + localeRouteLine + "</div>",
     ];
-    if (marker) lines.push("<div>▶ " + escapeHtml(marker) + "</div>");
+    if (marker)
+      lines.push("<div" + LINE_STYLE + ">▶ " + escapeHtml(marker) + "</div>");
     node.innerHTML = lines.join("");
 
     if (document.body) document.body.appendChild(node);

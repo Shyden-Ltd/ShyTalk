@@ -291,6 +291,26 @@ describe('iosApp.xcodeproj — SHY-0104 Debug-Dev build configuration', () => {
 
     // Values must be build-setting references, never literals — a baked
     // branch/sha would go stale silently and defeat the whole feature.
+    // Both WRITERS of the settings must pass the full triple: the local
+    // device build script AND the CI TestFlight archive (CI passes an
+    // explicit empty DIRTY — checkouts are clean — so the plist key
+    // resolves to the documented empty-string state, never to the
+    // unresolved literal).
+    test.each([
+      ['scripts/ios/build-debug-dev.sh', /SHYTALK_GIT_BRANCH="\$GIT_BRANCH"/],
+      ['scripts/ios/build-debug-dev.sh', /SHYTALK_GIT_SHA="\$GIT_SHA"/],
+      ['scripts/ios/build-debug-dev.sh', /SHYTALK_GIT_DIRTY="\$GIT_DIRTY"/],
+      ['.github/workflows/deploy-dev.yml', /SHYTALK_GIT_BRANCH="\$\{SHYTALK_DEPLOY_REF\}"/],
+      [
+        '.github/workflows/deploy-dev.yml',
+        /SHYTALK_GIT_SHA="\$\(git -C \.\. rev-parse --short HEAD\)"/,
+      ],
+      ['.github/workflows/deploy-dev.yml', /SHYTALK_GIT_DIRTY=""/],
+    ])('%s passes the git-identity settings (%s)', (rel, re) => {
+      const src = fs.readFileSync(path.join(REPO_ROOT, rel), 'utf8');
+      expect(src).toMatch(re);
+    });
+
     test.each([
       ['ShyTalkGitBranch', '$(SHYTALK_GIT_BRANCH)'],
       ['ShyTalkGitSha', '$(SHYTALK_GIT_SHA)'],

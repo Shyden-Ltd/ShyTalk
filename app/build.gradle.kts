@@ -45,6 +45,9 @@ android {
                             .trim()
                     }.getOrDefault("")
             ).replace(Regex("[^A-Za-z0-9._/-]"), "-")
+                // Detached HEAD prints the LITERAL "HEAD" (exit 0) —
+                // that's "branch unknown", shown as "?" not "HEAD".
+                .takeUnless { it == "HEAD" } ?: ""
         val gitSha =
             runCatching {
                 providers

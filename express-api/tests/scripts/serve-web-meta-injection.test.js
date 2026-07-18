@@ -82,7 +82,7 @@ describe('serve-web git-meta injection (SHY-0205)', () => {
   test('html responses carry the live git identity of the serving repo', async () => {
     // Serve from a scratch web root INSIDE the real repo — the git values
     // must match what git reports for the repo right now.
-    const scratch = fs.mkdtempSync(path.join(REPO_ROOT, '.serve-web-test-'));
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'serve-web-test-'));
     try {
       makeWebRoot(scratch);
       const started = await startServer(REPO_ROOT, path.join(scratch, 'web'));
@@ -108,7 +108,7 @@ describe('serve-web git-meta injection (SHY-0205)', () => {
   });
 
   test('non-html assets stream through byte-identical', async () => {
-    const scratch = fs.mkdtempSync(path.join(REPO_ROOT, '.serve-web-test-'));
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'serve-web-test-'));
     try {
       makeWebRoot(scratch);
       const started = await startServer(REPO_ROOT, path.join(scratch, 'web'));
@@ -137,7 +137,7 @@ describe('serve-web git-meta injection (SHY-0205)', () => {
   });
 
   test('404 behaviour is unchanged', async () => {
-    const scratch = fs.mkdtempSync(path.join(REPO_ROOT, '.serve-web-test-'));
+    const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'serve-web-test-'));
     try {
       makeWebRoot(scratch);
       const started = await startServer(REPO_ROOT, path.join(scratch, 'web'));
