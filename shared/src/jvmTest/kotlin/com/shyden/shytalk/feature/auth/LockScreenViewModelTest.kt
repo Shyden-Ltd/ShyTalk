@@ -652,6 +652,7 @@ class LockScreenViewModelTest {
         override val currentFirebaseUid: String? get() = if (fakeAuthenticated) "fb-uid-1" else null
         override var resolvedUniqueId: String? = null
         override var resolvedDisplayName: String? = null
+        override var resolvedCohort: String? = null
 
         override fun getProviderInfo(): Pair<String, String>? = null
 

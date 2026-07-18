@@ -8,6 +8,7 @@ import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.UiText
 import com.shyden.shytalk.core.util.currentTimeMillis
+import com.shyden.shytalk.core.util.effectiveCohort
 import com.shyden.shytalk.core.util.logE
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.core.util.logW
@@ -511,6 +512,7 @@ class AuthViewModel(
                         is Resource.Success -> {
                             val user = userResult.data
                             authRepository.resolvedDisplayName = user.displayName
+                            authRepository.resolvedCohort = user.effectiveCohort
                             if (user.isActivelySuspended) {
                                 logI(TAG, "Suspension detected: reason=${user.suspensionReason}")
                                 _uiState.update {

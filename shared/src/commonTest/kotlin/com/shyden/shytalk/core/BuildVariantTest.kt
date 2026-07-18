@@ -12,7 +12,15 @@ class BuildVariantTest {
     fun resetState() {
         BuildVariant.initLocalEmulator(false)
         BuildVariant.initIosDeviceId(null)
-        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "?", deviceInfo = "?")
+        BuildVariant.initBuildInfo(
+            environment = "prod",
+            buildVersion = "?",
+            deviceInfo = "?",
+            gitBranch = "?",
+            gitSha = "?",
+            gitDirty = false,
+            builtAt = "?",
+        )
         BuildVariant.initApiBaseUrl(null)
     }
 
@@ -745,5 +753,66 @@ class BuildVariantTest {
             BuildVariant.isPersonaPickerAvailable,
             "functional gate still reports available; visibility gate is what hides the picker",
         )
+    }
+
+    // ── SHY-0205: build-time git identity slots ──
+    //
+    // Same fail-safe philosophy as buildVersion/deviceInfo: every slot
+    // defaults to a visible placeholder so an absent platform initialiser
+    // reads as "?" in the watermark instead of rendering blank segments.
+
+    @Test
+    fun `git identity slots default to placeholders`() {
+        assertEquals("?", BuildVariant.gitBranch)
+        assertEquals("?", BuildVariant.gitSha)
+        assertFalse(BuildVariant.gitDirty)
+        assertEquals("?", BuildVariant.builtAt)
+    }
+
+    @Test
+    fun `initBuildInfo captures git identity verbatim`() {
+        BuildVariant.initBuildInfo(
+            environment = "local",
+            buildVersion = "0.97.15 (176)",
+            deviceInfo = "OnePlus · Android 16",
+            gitBranch = "story/SHY-0205-preview-watermark-build-identity",
+            gitSha = "abc1234def",
+            gitDirty = true,
+            builtAt = "07-18 11:40",
+        )
+        assertEquals("story/SHY-0205-preview-watermark-build-identity", BuildVariant.gitBranch)
+        assertEquals("abc1234def", BuildVariant.gitSha)
+        assertTrue(BuildVariant.gitDirty)
+        assertEquals("07-18 11:40", BuildVariant.builtAt)
+    }
+
+    @Test
+    fun `initBuildInfo coerces blank git strings to placeholders`() {
+        BuildVariant.initBuildInfo(
+            environment = "dev",
+            buildVersion = "1.0",
+            gitBranch = "  ",
+            gitSha = "",
+            builtAt = " ",
+        )
+        assertEquals("?", BuildVariant.gitBranch)
+        assertEquals("?", BuildVariant.gitSha)
+        assertEquals("?", BuildVariant.builtAt)
+    }
+
+    @Test
+    fun `legacy three-arg initBuildInfo leaves git slots at placeholders`() {
+        // Existing call sites (AuthFlowTest, older platform bridges) pass
+        // only environment/buildVersion/deviceInfo — the new slots must
+        // default rather than break the call or inherit stale values.
+        BuildVariant.initBuildInfo(
+            environment = "local",
+            buildVersion = "1.0",
+            deviceInfo = "device",
+        )
+        assertEquals("?", BuildVariant.gitBranch)
+        assertEquals("?", BuildVariant.gitSha)
+        assertFalse(BuildVariant.gitDirty)
+        assertEquals("?", BuildVariant.builtAt)
     }
 }

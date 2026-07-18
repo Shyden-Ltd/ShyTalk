@@ -46,6 +46,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.google.firebase.messaging.FirebaseMessaging
 import com.shyden.shytalk.BuildConfig
+import com.shyden.shytalk.core.BuildVariant
+import com.shyden.shytalk.core.QaContext
 import com.shyden.shytalk.core.crop.CropContract
 import com.shyden.shytalk.core.crop.CropInput
 import com.shyden.shytalk.core.push.notifyPushPermissionPrompted
@@ -125,8 +127,17 @@ fun NavGraph(
 
     // Re-sync after navigation (e.g., fresh sign-in updates currentUserId from null)
     LaunchedEffect(Unit) {
-        navController.currentBackStackEntryFlow.collect {
+        navController.currentBackStackEntryFlow.collect { entry ->
             currentUserId = authRepository.currentUserId
+            if (BuildVariant.isPreviewBuild) {
+                // Feed the preview watermark's route line (SHY-0205) —
+                // mirrors SharedNavGraph's publisher (Android runs THIS
+                // graph, not the shared one — the on-device walk caught
+                // the omission). Route PATTERNS only (`rooms/{roomId}`),
+                // never filled-in arguments: an id in the watermark
+                // would leak identifiers into shared screenshots.
+                QaContext.setCurrentRoute(entry.destination.route)
+            }
         }
     }
 

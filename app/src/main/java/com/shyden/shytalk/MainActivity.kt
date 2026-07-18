@@ -51,6 +51,7 @@ import com.shyden.shytalk.core.room.RoomService
 import com.shyden.shytalk.core.util.LanguagePreference
 import com.shyden.shytalk.core.util.Resource
 import com.shyden.shytalk.core.util.UnsafeDeviceGate
+import com.shyden.shytalk.core.util.logD
 import com.shyden.shytalk.core.util.logI
 import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.data.remote.StartingScreen
@@ -77,6 +78,7 @@ import com.shyden.shytalk.navigation.resolveLaunchDestination
 import com.shyden.shytalk.resources.*
 import com.shyden.shytalk.resources.Res
 import com.shyden.shytalk.ui.theme.ShyTalkTheme
+import com.shyden.shytalk.util.formatBuiltAt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -139,10 +141,26 @@ class MainActivity : AppCompatActivity() {
         // "ShyTalk Preview" badge on every screen so leaked screenshots
         // are unmistakably staging. Flavor maps directly to environment
         // ("prod" → no watermark; everything else → watermark).
+        // builtAt = install time (SHY-0205): a reinstall always follows a
+        // build in the QA loop, and unlike a baked constant it cannot go
+        // stale under gradle's configuration cache.
+        val installedAt =
+            runCatching {
+                formatBuiltAt(packageManager.getPackageInfo(packageName, 0).lastUpdateTime)
+            }.getOrDefault("")
         BuildVariant.initBuildInfo(
             environment = BuildConfig.FLAVOR,
             buildVersion = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
             deviceInfo = "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} · Android ${android.os.Build.VERSION.RELEASE}",
+            gitBranch = BuildConfig.GIT_BRANCH,
+            gitSha = BuildConfig.GIT_SHA,
+            gitDirty = BuildConfig.GIT_DIRTY,
+            builtAt = installedAt,
+        )
+        logD(
+            "MainActivity",
+            "build identity: ${BuildConfig.FLAVOR} ${BuildConfig.VERSION_NAME}(${BuildConfig.VERSION_CODE}) " +
+                "${BuildConfig.GIT_BRANCH}@${BuildConfig.GIT_SHA}${if (BuildConfig.GIT_DIRTY) "*" else ""} installed $installedAt",
         )
         biometricAuth.setActivity(this)
         enableEdgeToEdge()
