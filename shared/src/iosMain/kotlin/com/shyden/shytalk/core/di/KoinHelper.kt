@@ -41,6 +41,10 @@ fun doInitKoin(
     deviceInfo: String = "?",
     apiBaseUrl: String? = null,
     googleWebClientId: String? = null,
+    gitBranch: String = "",
+    gitSha: String = "",
+    gitDirty: Boolean = false,
+    builtAt: String = "",
 ) {
     BuildVariant.initLocalEmulator(
         value = useEmulators,
@@ -58,10 +62,17 @@ fun doInitKoin(
     // "ShyTalk Preview" badge on every screen so leaked screenshots
     // are unmistakably staging. Swift forwards `"local"` for `#if DEBUG`
     // and `"prod"` (or whatever the user-facing env is) for Release.
+    // Git identity (SHY-0205) arrives from Info.plist's ShyTalkGit* keys
+    // (xcodebuild SHYTALK_GIT_* settings); unstamped builds pass "" and
+    // initBuildInfo coerces blank → "?".
     BuildVariant.initBuildInfo(
         environment = environment,
         buildVersion = buildVersion,
         deviceInfo = deviceInfo,
+        gitBranch = gitBranch,
+        gitSha = gitSha,
+        gitDirty = gitDirty,
+        builtAt = builtAt,
     )
     // Eagerly persist the iOS deviceId before any Firebase / Koin
     // resolution. PR #406 attempted lazy `UIDevice.identifierForVendor`

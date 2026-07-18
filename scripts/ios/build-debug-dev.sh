@@ -68,7 +68,16 @@ echo "[build-debug-dev] device=$UDID config=$CONFIG"
 # captured build log.
 echo "[build-debug-dev] xcodebuild build -workspace $WORKSPACE -scheme $SCHEME" \
   "-configuration $CONFIG -destination id=$UDID -derivedDataPath $DERIVED" \
-  "-allowProvisioningUpdates -quiet DEV_QA_PERSONAS_PASSWORD=<redacted>"
+  "-allowProvisioningUpdates -quiet DEV_QA_PERSONAS_PASSWORD=<redacted>" \
+  "SHYTALK_GIT_BRANCH/SHA/DIRTY=<from live git>"
+# SHY-0205 — stamp the git identity into the build (Info.plist ShyTalkGit*
+# keys resolve these settings; the preview watermark renders them).
+# Failures degrade to "" → the Kotlin side coerces blank → "?".
+GIT_BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || true)"
+GIT_DIRTY=""
+if [ -n "$(git status --porcelain 2>/dev/null)" ]; then GIT_DIRTY="1"; fi
+
 xcodebuild build \
   -workspace "$WORKSPACE" \
   -scheme "$SCHEME" \
@@ -77,7 +86,10 @@ xcodebuild build \
   -derivedDataPath "$DERIVED" \
   -allowProvisioningUpdates \
   -quiet \
-  DEV_QA_PERSONAS_PASSWORD="$PW"
+  DEV_QA_PERSONAS_PASSWORD="$PW" \
+  SHYTALK_GIT_BRANCH="$GIT_BRANCH" \
+  SHYTALK_GIT_SHA="$GIT_SHA" \
+  SHYTALK_GIT_DIRTY="$GIT_DIRTY"
 
 # ── Install on the device ──
 APP_PATH="$DERIVED/Build/Products/$CONFIG-iphoneos/iosApp.app"

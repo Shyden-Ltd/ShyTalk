@@ -622,6 +622,11 @@ jobs:
         env:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          # SHY-0205 — effective deployed ref for the watermark stamp
+          # (same inputs.ref-or-ref_name convention the deploy-summary
+          # steps use). Via env:, never inline in run: — inputs.ref is
+          # operator-typed text (workflow-injection hygiene).
+          SHYTALK_DEPLOY_REF: ${{ inputs.ref != '' && inputs.ref || github.ref_name }}
         run: |
           set -euo pipefail
           # Inject a unique CFBundleVersion per CI run. TestFlight rejects
@@ -690,6 +695,8 @@ jobs:
             DEVELOPMENT_TEAM=F3XX4PM3MF \
             CURRENT_PROJECT_VERSION="${BUILD_NUMBER}" \
             MARKETING_VERSION="${VERSION_NAME}" \
+            SHYTALK_GIT_BRANCH="${SHYTALK_DEPLOY_REF}" \
+            SHYTALK_GIT_SHA="$(git -C .. rev-parse --short HEAD)" \
             archive
           # Export IPA
           xcodebuild \
