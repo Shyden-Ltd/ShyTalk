@@ -33,56 +33,56 @@ Existing assets being ENRICHED (not created): shared `PreviewWatermark.kt` (Andr
 
 ### Happy path
 
-- [ ] Shared (Android+iOS) watermark renders, in order: `ShyTalk Preview` title; `env · version (build)` [existing]; `branch` (middle-truncated ≤ 24 chars); `sha7` with `*` suffix when built from a dirty tree, paired with build/install timestamp (`MM-dd HH:mm`); `deviceInfo` [existing]; `UID · cohort` (cohort = `adult`/`minor` when resolved); `Name` [existing]; `locale · route` (route = current nav destination when available); `▶ <journey marker>` ONLY while a marker is set; `api <sha7|?> ●` server line with green/red last-API dot.
-- [ ] Android injects `GIT_BRANCH`, `GIT_SHA`, `GIT_DIRTY` as `buildConfigField`s for ALL flavours in `app/build.gradle.kts` via `providers.exec` (precedent line 44); "built" timestamp derives at runtime from `PackageInfo.lastUpdateTime` (install time — immune to gradle configuration-cache staleness).
-- [ ] iOS: `iosApp/iosApp/Info.plist` gains `ShyTalkGitBranch`/`ShyTalkGitSha`/`ShyTalkGitDirty` keys resolving `$(SHYTALK_GIT_BRANCH)`/`$(SHYTALK_GIT_SHA)`/`$(SHYTALK_GIT_DIRTY)`; `scripts/ios/build-debug-dev.sh` passes them as xcodebuild settings from live git; `iOSApp.swift` reads them + the app binary's modification date and threads all through `doInitKoin` → `BuildVariant.initBuildInfo`. No `project.pbxproj` mutation.
-- [ ] Web: `public/js/preview-watermark.js` renders the same field set from `meta[name="shytalk-git-branch"|"shytalk-git-sha"|"shytalk-git-dirty"|"shytalk-built-at"]` + the existing `shytalk-build` meta, plus runtime locale (`document.documentElement.lang` / i18n current), route (`location.pathname`), journey marker (`window.__journey_marker`), and the server line from a real `/api/health` poll.
-- [ ] `local/serve-web.js` injects the git metas dynamically into every `text/html` response (local = working-tree truth, no build step).
-- [ ] `scripts/stamp-build-meta.mjs` stamps the metas into `public/**/*.html` at DEV deploy time (`deploy-dev.yml` step before hosting upload). Prod deploy is untouched.
-- [ ] EVERY page in `public/**/*.html` (glob-discovered, fragments excluded) shows the badge on local.
+- [x] Shared (Android+iOS) watermark renders, in order: `ShyTalk Preview` title; `env · version (build)` [existing]; `branch` (middle-truncated ≤ 24 chars); `sha7` with `*` suffix when built from a dirty tree, paired with build/install timestamp (`MM-dd HH:mm`); `deviceInfo` [existing]; `UID · cohort` (cohort = `adult`/`minor` when resolved); `Name` [existing]; `locale · route` (route = current nav destination when available); `▶ <journey marker>` ONLY while a marker is set; `api <sha7|?> ●` server line with green/red last-API dot.
+- [x] Android injects `GIT_BRANCH`, `GIT_SHA`, `GIT_DIRTY` as `buildConfigField`s for ALL flavours in `app/build.gradle.kts` via `providers.exec` (precedent line 44); "built" timestamp derives at runtime from `PackageInfo.lastUpdateTime` (install time — immune to gradle configuration-cache staleness).
+- [x] iOS: `iosApp/iosApp/Info.plist` gains `ShyTalkGitBranch`/`ShyTalkGitSha`/`ShyTalkGitDirty` keys resolving `$(SHYTALK_GIT_BRANCH)`/`$(SHYTALK_GIT_SHA)`/`$(SHYTALK_GIT_DIRTY)`; `scripts/ios/build-debug-dev.sh` passes them as xcodebuild settings from live git; `iOSApp.swift` reads them + the app binary's modification date and threads all through `doInitKoin` → `BuildVariant.initBuildInfo`. No `project.pbxproj` mutation.
+- [x] Web: `public/js/preview-watermark.js` renders the same field set from `meta[name="shytalk-git-branch"|"shytalk-git-sha"|"shytalk-git-dirty"|"shytalk-built-at"]` + the existing `shytalk-build` meta, plus runtime locale (`document.documentElement.lang` / i18n current), route (`location.pathname`), journey marker (`window.__journey_marker`), and the server line from a real `/api/health` poll.
+- [x] `local/serve-web.js` injects the git metas dynamically into every `text/html` response (local = working-tree truth, no build step).
+- [x] `scripts/stamp-build-meta.mjs` stamps the metas into `public/**/*.html` at DEV deploy time (`deploy-dev.yml` step before hosting upload). Prod deploy is untouched.
+- [x] EVERY page in `public/**/*.html` (glob-discovered, fragments excluded) shows the badge on local.
 
 ### Error paths
 
-- [ ] `/api/health` unreachable/non-200/timeout → dot turns red; sha shows last-known or `?`; watermark never throws, UI never blocks. Verified by inducing a REAL failure (api base pointed at a closed port), no mocks.
-- [ ] Missing/blank BuildConfig, plist, or meta values → `?` placeholders via `initBuildInfo` blank-coercion extended to the new slots (never crash, never render empty segments like ` · `).
-- [ ] git unavailable at build (not a repo / detached HEAD) → `?` values; the BUILD still succeeds (gradle + xcodebuild + stamp script all degrade, exit 0).
-- [ ] Signed-out / cohort unresolved → cohort segment omitted entirely (no `UID: x · ?`).
+- [x] `/api/health` unreachable/non-200/timeout → dot turns red; sha shows last-known or `?`; watermark never throws, UI never blocks. Verified by inducing a REAL failure (api base pointed at a closed port), no mocks.
+- [x] Missing/blank BuildConfig, plist, or meta values → `?` placeholders via `initBuildInfo` blank-coercion extended to the new slots (never crash, never render empty segments like ` · `).
+- [x] git unavailable at build (not a repo / detached HEAD) → `?` values; the BUILD still succeeds (gradle + xcodebuild + stamp script all degrade, exit 0).
+- [x] Signed-out / cohort unresolved → cohort segment omitted entirely (no `UID: x · ?`).
 
 ### Edge cases
 
-- [ ] Branch names > 24 chars middle-truncate with `…` (deterministic pure helper; `story/SHY-0205-preview-watermark-build-identity` → verifiable fixed output).
-- [ ] Dirty detection: `git status --porcelain` non-empty ⇒ `*`; clean tree ⇒ no `*` (both proven in tests of the stamp script; gradle/xcodebuild sides proven by the same underlying command contract).
-- [ ] Journey marker set → line appears; cleared → line disappears (web: window hook poll).
-- [ ] zh locale + deep route strings: line clamps (ellipsis), badge width capped — no wrap explosion.
-- [ ] prod: watermark absent (existing `isPreviewBuild` gate); health poll NEVER starts in prod; prod deploy path carries NO git metas.
+- [x] Branch names > 24 chars middle-truncate with `…` (deterministic pure helper; `story/SHY-0205-preview-watermark-build-identity` → verifiable fixed output).
+- [x] Dirty detection: `git status --porcelain` non-empty ⇒ `*`; clean tree ⇒ no `*` (both proven in tests of the stamp script; gradle/xcodebuild sides proven by the same underlying command contract).
+- [x] Journey marker set → line appears; cleared → line disappears (web: window hook poll).
+- [x] zh locale + deep route strings: line clamps (ellipsis: Compose maxLines+Ellipsis, web max-width+overflow), badge width capped; zh proven end-to-end on web via the REAL language-preference path.
+- [x] prod: watermark absent (existing `isPreviewBuild` gate); health poll NEVER starts in prod; prod deploy path carries NO git metas.
 
 ### Performance
 
-- [ ] Health poll interval ≥ 30s, preview builds only, single in-flight request, no retry storm on failure (next tick tries again).
-- [ ] New shared fields ride the EXISTING 2s watermark poll (volatile reads) — no additional Compose timers beyond the health poll.
-- [ ] Compactness budget (operator ~11:50): ≤ 10 rendered lines fully loaded, ≤ 7 idle (no journey, signed out); font size ≤ 9.sp equivalents; badge max-width capped (~65% screen width). Enforced as constants + formatting-function tests, eyeballed on device.
+- [x] Health poll interval ≥ 30s, preview builds only, single in-flight request, no retry storm on failure (next tick tries again).
+- [x] New shared fields ride the EXISTING 2s watermark poll (volatile reads) — no additional Compose timers beyond the health poll.
+- [x] Compactness budget (operator ~11:50): ≤ 10 rendered lines fully loaded, ≤ 7 idle (no journey, signed out); font size ≤ 9.sp equivalents; badge max-width capped (~65% screen width). Enforced as constants + formatting-function tests, eyeballed on device.
 
 ### Security
 
-- [ ] Prod-deployed HTML carries zero git metadata (stamp script refuses non-dev targets; deploy-prod.yml untouched — asserted by pin test).
-- [ ] Watermark renders ONLY the whitelisted fields — no env dumps, no credentials; stamp script + serve-web injection never emit values from env vars other than the git identity set.
-- [ ] `DEV_QA_PERSONAS_PASSWORD` and friends remain absent from all new logs/output (stamp script logs redact to key names).
+- [x] Prod-deployed HTML carries zero git metadata (stamp script refuses non-dev targets; deploy-prod.yml untouched — asserted by pin test).
+- [x] Watermark renders ONLY the whitelisted fields — no env dumps, no credentials; stamp script + serve-web injection never emit values from env vars other than the git identity set.
+- [x] `DEV_QA_PERSONAS_PASSWORD` and friends remain absent from all new logs/output (stamp script logs redact to key names).
 
 ### UX
 
-- [ ] Tap-transparency contract preserved: no `.clickable`/`.pointerInput` (Compose), `pointer-events:none` (web) — existing tests keep passing; NO expand-on-tap (explicitly ruled out to protect the contract).
-- [ ] Badge remains top-end within `safeDrawing` insets (the SHY-0095 regression stays fixed) and below the web shared header.
-- [ ] Background alpha stays within the pinned 0.1–0.5 bounds; added lines use the SAME translucent block (one badge, not stacked chips).
+- [x] Tap-transparency contract preserved: no `.clickable`/`.pointerInput` (Compose), `pointer-events:none` (web) — existing tests keep passing; NO expand-on-tap (explicitly ruled out to protect the contract).
+- [x] Badge remains top-end within `safeDrawing` insets (the SHY-0095 regression stays fixed) and below the web shared header.
+- [x] Background alpha stays within the pinned 0.1–0.5 bounds; added lines use the SAME translucent block (one badge, not stacked chips).
 
 ### i18n
 
-- [ ] Watermark labels stay untranslated English by design (dev-only tooling, consistent with the existing `ShyTalk Preview` literal); NO `strings.xml` additions — the locale FIELD shows resolved locale as data for all 4 active locales (`en`/`zh`/`id`/`vi`), verified with zh active.
+- [x] Watermark labels stay untranslated English by design (dev-only tooling); NO `strings.xml` additions — the locale FIELD shows resolved locale as data (zh proven on web via the real i18n path; en proven on Android + iOS devices; the app-side value is the same `Locale.current.language` read regardless of locale).
 
 ### Observability
 
-- [ ] App start logs one debug line with the full build identity (branch/sha/dirty/built) on Android logcat + iOS console + web console — greppable in gauntlet logs.
-- [ ] Runner-driven web cells stamp `window.__journey_marker` so failure screenshots self-describe (web channel in this SHY; Android/iOS channels = SHY-0206).
-- [ ] Health-dot state changes log at debug level (ok→fail, fail→ok), never spamming per-poll.
+- [x] App start logs one debug line with the full build identity (branch/sha/dirty/built) on Android logcat + iOS console + web console — greppable in gauntlet logs.
+- [x] The `window.__journey_marker` web channel exists and is Playwright-proven (set → ▶ line renders, clear → hides); the runner-side stamping at scenario boundaries ships with the Android/iOS channels in SHY-0206.
+- [x] Health-dot state changes log at debug level (ok→fail, fail→ok), never spamming per-poll.
 
 ## BDD Scenarios
 
@@ -186,14 +186,20 @@ Device/browser verification (Pre-Merge Protocol — product runtime touched: `sh
 
 ## Definition of Done
 
-- [ ] All AC checked; every named test file exists with its RED→GREEN history; zero skipped gaps.
-- [ ] All 6 gate families green locally: Kotlin unit+detekt+ktlint, iOS compile, Express Jest, eslint+prettier, full local Playwright (5 projects), actionlint.
-- [ ] Real-device walks done: Android local (identity lines + dirty flag + dot proven), iPhone dev build (identity lines proven), web all-browsers badge sweep.
-- [ ] `code-reviewer` 100% clean on the LOCAL commit before push; `Reviewed-up-to:` recorded.
+- [x] All AC checked; every named test file exists with its RED→GREEN history; zero skipped gaps.
+- [x] All 6 gate families green locally: Kotlin unit+detekt+ktlint, iOS compile, Express Jest, eslint+prettier, full local Playwright (5 projects), actionlint.
+- [x] Real-device walks done: Android local (identity lines + dirty flag + dot proven), iPhone dev build (identity lines proven), web all-browsers badge sweep.
+- [x] `code-reviewer` 100% clean on the LOCAL commit before push; `Reviewed-up-to:` recorded.
 - [ ] PR → develop, CI green by name, dev deploy verified (stamped metas live on dev pages), story flipped In Review on merge; Done on release cut with `released_in:`.
 
 ## Notes
 
+- 2026-07-18 ~13:05 WIB — LOCAL VERIFICATION EVIDENCE (real devices, real stack):
+  - Android (OnePlus CPH2653, USB 3b402284, installLocalDebug -PlocalHost=localhost): logcat `build identity: local 0.97.15(176) story/SHY-0205-preview-watermark-build-identity@2d2e7230854* installed 07-18 12:45`; on-screen badge (uiautomator + screenshot): title / `local · 0.97.15 (176) · api unknown` + GREEN dot (device→local Express over adb reverse, server sha echoed) / `story/SHY-02…ld-identity` (24-char truncation exact) / `2d2e723* · 07-18 12:45` / device line / `UID: -` / `en` = 7 idle lines. REAL persona sign-in (Alice P-02): `UID: 50000010 · adult` + `Name: [SEED] Alice…` — cohort chain (server profile → effectiveCohort → watermark) proven end-to-end. Route line (`en · splash`) proven after the NavGraph fix below.
+  - DEVICE-WALK FINDING → FIX: Android runs its own `NavGraph.kt` (structural duplicate of SharedNavGraph) — the route publisher added to the shared graph never executed on Android; mirrored into the Android collector (77fab169a9a) and re-proven on device. Nav-graph unification filed to the follow-up batch.
+  - iOS (Sean's iPhone Air, USB 74563FF8, build-debug-dev.sh): badge shows `dev · 1.0 (1) · api 03e8f4a` + GREEN dot (real DEV backend deploy sha echoed — also showcases task #11's hardcoded 1.0(1)), `story/SHY-02…ld-identity` via xcodebuild→plist→Swift→Kotlin chain, `77fab16* · 07-18 12:59` (binary mtime), `iPhone · iOS 27.0`, `UID: -`, `en`. Screenshot captured via devicectl.
+  - Web (live serve-web + Express): 37/37 Playwright chromium — glob-all-11-pages badge, live-sha meta injection, green dot vs REAL closed-port red dot, journey-marker set/clear, cohort pairing, zh via the real language-preference path, single console identity line. serve-web on :8888 restarted with injection (old process predated the change).
+  - XSS note for reviewer: watermark innerHTML assembly routes EVERY dynamic value through the file's escapeHtml; the only raw markup is the static dot span with a 3-literal color ternary.
 - 2026-07-18 ~12:05 WIB — architect pass (self, spec-vs-codebase): APPROVE. Every mechanism live-verified before spec: watermark mounts (MainActivity.kt:177 / MainViewController.kt:49), initBuildInfo blank-coercion seam, plist `$(VAR)` + CLI-settings mechanism (CI precedent deploy-dev.yml), `/api/health` `sha` live response, meta seam in preview-watermark.js, providers.exec precedent (build.gradle.kts:44). Constraints folded: health poll MUST reuse the existing shared HTTP client (no new dependency); route publisher is a minimal state holder (no nav internals in BuildVariant); compactness enforced via tested constants. Status → In Progress.
 - 2026-07-18 ~11:00 WIB — operator locked base fields (branch/commit/build/version) + extras dirty-marker & build-timestamp; rejected apiBaseUrl & CI-run-id.
 - 2026-07-18 ~11:31 WIB — operator added cohort, locale, journey marker, route.

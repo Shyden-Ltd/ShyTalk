@@ -211,6 +211,35 @@ test.describe("Preview watermark — QA context lines (SHY-0205)", () => {
       "· /roadmap.html",
     );
   });
+
+  test("zh locale switch is reflected in the locale line (real i18n path)", async ({
+    page,
+  }) => {
+    // Same mechanism the language selector uses (the 404-i18n idiom):
+    // the stored preference drives the inline init bridge, which sets
+    // document.documentElement.lang — the exact source the watermark
+    // reads. No hooks, the REAL i18n path.
+    await page.addInitScript(() => {
+      localStorage.setItem("shytalk_language", "zh");
+    });
+    await page.goto("/");
+    await page.waitForFunction(() => document.documentElement.lang === "zh", null, {
+      timeout: 5_000,
+    });
+    await expect(page.locator("#preview-watermark")).toContainText("zh · /", {
+      timeout: 5_000,
+    });
+  });
+
+  test("build-identity console line is emitted once per load", async ({ page }) => {
+    const identityLines: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.text().includes("[ShyTalk] build identity:")) identityLines.push(msg.text());
+    });
+    await page.goto("/");
+    await expect.poll(() => identityLines.length, { timeout: 5_000 }).toBe(1);
+    expect(identityLines[0]).toMatch(/build identity: local .+@[0-9a-f]{4,}/);
+  });
 });
 
 test.describe("Preview watermark — production opt-out", () => {

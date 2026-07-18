@@ -139,6 +139,27 @@
   var env = getEnvironment();
   if (env === "prod") return; // No watermark, no polling, on prod.
 
+  // One greppable build-identity line per page load (Observability AC —
+  // parity with Android's logcat line and iOS's NSLog).
+  try {
+    // eslint-disable-next-line no-console
+    console.log(
+      "[ShyTalk] build identity: " +
+        env +
+        " " +
+        getBuildVersion() +
+        " " +
+        (getMeta("shytalk-git-branch") || "?") +
+        "@" +
+        (getMeta("shytalk-git-sha") || "?") +
+        (getMeta("shytalk-git-dirty") === "1" ? "*" : "") +
+        " built " +
+        (getMeta("shytalk-built-at") || "?"),
+    );
+  } catch (_) {
+    /* console unavailable — never break the page */
+  }
+
   // ── Server-echo health poll (SHY-0205) ──
   // Asks the EXISTING /api/health which backend is actually ANSWERING —
   // sha is its self-reported deploy identity ("unknown" on local). The
