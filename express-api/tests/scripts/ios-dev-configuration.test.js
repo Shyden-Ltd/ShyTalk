@@ -267,6 +267,57 @@ describe('iosApp.xcodeproj — SHY-0104 Debug-Dev build configuration', () => {
     });
   });
 
+  describe('local build versioning (SHY-0207)', () => {
+    let script;
+    beforeAll(() => {
+      script = fs.readFileSync(path.join(REPO_ROOT, 'scripts/ios/build-debug-dev.sh'), 'utf8');
+    });
+
+    // Local device builds must pass BOTH version settings on the same
+    // xcodebuild seam CI uses — the pbxproj 1.0/(1) defaults must never
+    // reach a device install again.
+    test.each([
+      [/MARKETING_VERSION="\$VERSION_NAME"/],
+      [/CURRENT_PROJECT_VERSION="\$BUILD_NUMBER"/],
+    ])('script passes %s to xcodebuild', (re) => {
+      expect(script).toMatch(re);
+    });
+
+    test('versionName parsed with the SAME anchored awk CI uses', () => {
+      const anchored =
+        "awk -F'\"' '/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*\"/ {print $2; exit}'";
+      expect(script).toContain(anchored);
+      const devYml = fs.readFileSync(
+        path.join(REPO_ROOT, '.github', 'workflows', 'deploy-dev.yml'),
+        'utf8',
+      );
+      expect(devYml).toContain(anchored);
+    });
+
+    test('script fail-fasts on a non-semver versionName BEFORE xcodebuild', () => {
+      expect(script).toMatch(/\^\[0-9\]\+\\\.\[0-9\]\+\\\.\[0-9\]\+\$/);
+      const guardIdx = script.indexOf('not a strict 3-int semver');
+      // Anchor on the real invocation (line start), not the redacted-echo
+      // line that also contains the words 'xcodebuild build'.
+      const buildIdx = script.indexOf('\nxcodebuild build');
+      expect(guardIdx).toBeGreaterThan(-1);
+      expect(guardIdx).toBeLessThan(buildIdx);
+    });
+
+    test('local build number = git rev-list --count HEAD (monotonic, no external counter)', () => {
+      expect(script).toMatch(/git rev-list --count HEAD/);
+    });
+
+    test('CI archive version overrides are UNCHANGED (regression pin)', () => {
+      const devYml = fs.readFileSync(
+        path.join(REPO_ROOT, '.github', 'workflows', 'deploy-dev.yml'),
+        'utf8',
+      );
+      expect(devYml).toMatch(/CURRENT_PROJECT_VERSION="\$\{BUILD_NUMBER\}"/);
+      expect(devYml).toMatch(/MARKETING_VERSION="\$\{VERSION_NAME\}"/);
+    });
+  });
+
   describe('Info.plist git-identity injection (SHY-0205)', () => {
     let plist;
     beforeAll(() => {
