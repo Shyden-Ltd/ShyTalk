@@ -26,39 +26,39 @@ Operator task #11 (2026-07-18, ordered right after the watermark). `1.0 (1)` com
 
 ### Happy path
 
-- [ ] `scripts/ios/build-debug-dev.sh` passes `MARKETING_VERSION=<versionName parsed from app/build.gradle.kts>` and `CURRENT_PROJECT_VERSION=<git rev-list --count HEAD>` to xcodebuild, reusing deploy-dev.yml's anchored awk + strict 3-int-semver validation verbatim.
-- [ ] A freshly built local install's watermark reads `dev · <versionName> (<commit-count>)` (e.g. `dev · 0.97.15 (1607)`), device-verified.
-- [ ] CI archives are UNTOUCHED (deploy-dev.yml already correct; pinned unchanged).
+- [x] `scripts/ios/build-debug-dev.sh` passes `MARKETING_VERSION=<versionName parsed from app/build.gradle.kts>` and `CURRENT_PROJECT_VERSION=<git rev-list --count HEAD>` to xcodebuild, reusing deploy-dev.yml's anchored awk + strict 3-int-semver validation verbatim.
+- [x] A freshly built local install's watermark reads `dev · <versionName> (<commit-count>)` (e.g. `dev · 0.97.15 (1607)`), device-verified.
+- [x] CI archives are UNTOUCHED (deploy-dev.yml already correct; pinned unchanged).
 
 ### Error paths
 
-- [ ] versionName unparseable / not strict semver → the script FAILS loudly before xcodebuild (same message shape as CI) — never silently ships `1.0 (1)` again.
-- [ ] git unavailable for the commit count → build fails loudly (the script already requires a repo for the SHY-0205 git stamps; consistent fail-fast).
+- [x] versionName unparseable / not strict semver → the script FAILS loudly before xcodebuild (same message shape as CI) — never silently ships `1.0 (1)` again.
+- [x] git unavailable for the commit count → build fails loudly (the script already requires a repo for the SHY-0205 git stamps; consistent fail-fast).
 
 ### Edge cases
 
-- [ ] Shallow clone (commit count artificially low): N/A locally — the operator's checkout is full; documented in the script comment.
-- [ ] Detached HEAD: `rev-list --count HEAD` still counts — build number stays meaningful.
+- [x] Shallow clone (commit count artificially low): N/A locally — the operator's checkout is full; documented in the script comment.
+- [x] Detached HEAD: `rev-list --count HEAD` still counts — build number stays meaningful.
 
 ### Performance
 
-- [ ] N/A — two subprocess calls prepended to a multi-minute build.
+- [x] N/A — two subprocess calls prepended to a multi-minute build.
 
 ### Security
 
-- [ ] No new secrets/values in logs beyond the version pair (redacted-echo line updated to include them — they are non-secret).
+- [x] No new secrets/values in logs beyond the version pair (redacted-echo line updated to include them — they are non-secret).
 
 ### UX
 
-- [ ] N/A — QA badge content only; no end-user surface.
+- [x] N/A — QA badge content only; no end-user surface.
 
 ### i18n
 
-- [ ] N/A — numeric version identity, no user-facing strings.
+- [x] N/A — numeric version identity, no user-facing strings.
 
 ### Observability
 
-- [ ] The script echoes the resolved `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` once (greppable in build logs), and the watermark + iOS `build identity` NSLog carry them on-device.
+- [x] The script echoes the resolved `MARKETING_VERSION`/`CURRENT_PROJECT_VERSION` once (greppable in build logs), and the watermark + iOS `build identity` NSLog carry them on-device.
 
 ## BDD Scenarios
 
@@ -104,4 +104,5 @@ Operator task #11 (2026-07-18, ordered right after the watermark). `1.0 (1)` com
 
 ## Notes
 
+- 2026-07-18 ~16:38 WIB — DEVICE-PROVEN on iPhone 74563FF8 (detached build, BUILD-EXIT=0 in <4 min warm): watermark status line now `dev · 0.97.15 (2152) · api 4393f56` + green dot (was `1.0 (1)`); branch `story/SHY-02…-versioning`, sha `26a676b*`, built 07-18 16:33. Script echoed `MARKETING_VERSION=0.97.15 CURRENT_PROJECT_VERSION=2152`. Screenshot: scratchpad/ios-0207.png. Pins 42/42; shellcheck/eslint/prettier clean. One test-authoring lesson: the fail-fast-ordering pin initially anchored on 'xcodebuild build' and matched the redacted-ECHO line — re-anchored on the line-start invocation.
 - 2026-07-18 ~16:40 WIB — Story born-refined during the post-SHY-0205 pickup; best-solution alternatives recorded in ## Why per the new ticket bar.
