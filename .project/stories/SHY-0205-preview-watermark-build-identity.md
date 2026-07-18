@@ -1,6 +1,6 @@
 ---
 id: SHY-0205
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-18
 priority: P1
@@ -195,6 +195,7 @@ Device/browser verification (Pre-Merge Protocol — product runtime touched: `sh
 
 ## Notes
 
+- 2026-07-18 ~14:20 WIB — code-reviewer R2 (same agent, full re-read at HEAD): **CLEAN** — all 11 R1 findings verified genuinely resolved (hand-traced escapeAttr output, detached-HEAD sentinel ordering, transition-log state machine incl. the exactly-once non-flakiness argument); active regression hunt found nothing. Reviewed-up-to: 1e31f3fdf14. Status → In Review.
 - 2026-07-18 ~13:55 WIB — code-reviewer R1 (full branch diff): 0 Critical, 6 Important, 5 Minor/Plausible. ALL verified against source, ALL addressed:
   (1) web health-dot state-change log missing → `recordHealth()` transition log added + Playwright pins exactly ONE `unknown -> false` line in the red-dot test. (2) web line-clamp not implemented (divs wrapped) → per-line `white-space:nowrap;overflow:hidden;text-overflow:ellipsis` on all 7 content lines + a CJK-long-marker clamp test asserting every row < 20px. (3) detached HEAD rendered literal "HEAD" not "?" → degraded to unknown in all three readers (build.gradle.kts takeUnless, build-debug-dev.sh guard, build-meta.js null-map) + detached-HEAD stamp test + gradle pin. (4) escapeAttr untested on the one un-sanitised slot (--build) → hostile `<script>"x"&</script>` test asserts full entity-encoding. (5) Android gradle injection had no structural pin (iOS did) → NEW android-git-identity-pin.test.js (10 tests: buildConfigFields, GITHUB_REF_NAME precedence, providers.exec config-cache safety, both sanitise regexes, detached-HEAD guard). (6) deploy-dev iOS archive omitted SHYTALK_GIT_DIRTY → explicit `SHYTALK_GIT_DIRTY=""` + 6 writer-invocation pins (build script + CI) in ios-dev-configuration.test.js. (7) web Name-line asymmetry → documented as deliberate in Out of Scope. (8) truncateMiddle unicode test promised-but-missing → CJK case added; UTF-16/surrogate limitation documented in KDoc. (9) truncateMiddle(., 0) threw in Kotlin but not JS → max<=1 → "…" guard BOTH sides + tests. (10) serve-web test scratch dirs inside the repo tree → moved to os.tmpdir(). (11) DST case for BuiltAt — accepted as-is (display-only debug timestamp; noted, not implemented). Post-fix gates: Jest 66 green across the four suites, eslint 0-warning, jvmTest 1429, iosArm64 compiles, ktlint/detekt/actionlint/shellcheck clean, watermark spec 38/38 chromium.
 - 2026-07-18 ~13:05 WIB — LOCAL VERIFICATION EVIDENCE (real devices, real stack):
