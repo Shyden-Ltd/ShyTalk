@@ -61,7 +61,6 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | [SHY-0122](SHY-0122-admin-portal-real-migration.md)             | P2  | L      | refactor | Admin portal → real (alerts/logs/devices/economy/audit + propagation) (EPIC-0003) | 📝 Draft       | —                | —   |
 | [SHY-0123](SHY-0123-utils-integration-real-migration.md)        | P2  | L      | refactor | Utils-integration → real backends (firebase/email/fcm/r2/alertManager/data-export) (EPIC-0003) | 📝 Draft       | —                | —   |
 | [SHY-0124](SHY-0124-playwright-real-backend-migration.md)       | P2  | M      | refactor | Playwright integration e2e → real backend (6 migrate, 2 unit kept) (EPIC-0003) | 📝 Draft       | —                | —   |
-| [SHY-0179](SHY-0179-compose-screenshot-test-framework.md)       | P2  | M      | infra    | Adopt a JVM screenshot-test framework for shared Compose UI (Roborazzi; from SHY-0095 R4 I6) | 📝 Draft       | —                | —   |
 | [SHY-0180](SHY-0180-plain-node-web-server.md)                   | P1  | S      | infra    | Replace `npx serve` with a zero-dep static server (kills the mid-suite serve death; from SHY-0095) | 👀 In Review   | —                | —   |
 | [SHY-0181](SHY-0181-site-wide-lang-flag.md)                     | P1  | M      | feature  | Site-wide `?lang=` locale flag — every owned web page honors the requested language (EPIC-0007) | 👀 In Review   | —                | [#1591](https://github.com/Shyden-Ltd/ShyTalk/pull/1591) |
 | [SHY-0182](SHY-0182-app-env-correct-web-urls.md)                | P1  | L      | bug      | App opens the environment-correct web pages in the app language — never cross environments (EPIC-0007) | 📝 Draft       | —                | —   |
@@ -179,6 +178,7 @@ Live backlog of every piece of work captured under the Agile way of working ([[f
 | -------------------------------------------------- | --- | ------ | ----- | ----------------------------------------------------------------------------------------------------- | ------------ | ----------- | -------------------------------------------------------- |
 | [SHY-0003](SHY-0003-convert-roadmap-to-stories.md) | P1  | L      | chore | Convert zero-gap roadmap to user stories (work shipped via #1036; story superseded by SHY-0032)       | ❌ Cancelled | G054        | [#1036](https://github.com/Shyden-Ltd/ShyTalk/pull/1036) |
 | [SHY-0089](SHY-0089-gradle-build-cache-kn-ios-link.md) | P2 | M | infra | Build-cache the 22-min Kotlin/Native iOS framework link — rejected (non-cacheable; evidence in story) | ❌ Cancelled | —           | —                                                        |
+| [SHY-0179](SHY-0179-compose-screenshot-test-framework.md) | P2 | M | infra | Adopt Roborazzi for shared Compose screenshots — superseded by SHY-0215 (EPIC-0008), which absorbs it | ❌ Cancelled | —           | —                                                        |
 
 ## Reserved (planned, not yet filed)
 

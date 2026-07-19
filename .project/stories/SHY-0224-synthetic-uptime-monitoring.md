@@ -26,10 +26,10 @@ The audit listed **synthetic / uptime** monitoring as a gap: nothing checks the 
 
 ### Happy path
 
-- [ ] A **synthetic probe suite** runs a small set of REAL user journeys against a live environment — sign-in (dedicated synthetic account), room-list load, join a room, send + receive a message — asserting each completes within a latency budget. Registered `synthetic-uptime` (`stack`/live, `publicArea: Cross-cutting`).
+- [ ] A **synthetic probe suite** runs a small set of REAL user journeys against a live environment — sign-in (dedicated synthetic account), room-list load, join a room, send + receive a message — asserting each completes within a latency budget. Registered `synthetic-uptime` with SHY-0212's **`live`** category (schedule-driven, deployed-environment; excluded from `run-all` profiles, reported into the health page's live section), `publicArea: Cross-cutting`.
 - [ ] A **scheduled GitHub Actions workflow** (`.github/workflows/synthetic-monitor.yml`) runs the probes at a documented, quota-respecting interval against dev (and optionally prod with the dedicated synthetic account) — the deliberate, justified cron exception, documented as such.
 - [ ] On each run it writes a fresh live signal (per-journey pass/fail + latency + timestamp) into the SHY-0220 feed (`public/health-data.json` "live" section) so the public page shows current status + "last checked N minutes ago".
-- [ ] On failure it raises an operator signal (a GitHub issue and/or a PushNotification per [[feedback-sound-notify-when-interaction-needed]]) so an outage is actioned, not just recorded.
+- [ ] On failure it raises an operator signal (a GitHub issue and/or a PushNotification per [[feedback-sound-notify-when-interaction-needed]]) so an outage is actioned, not just recorded. **Any alert issue must be distinguishable from a `story`-labelled story-issue and must NOT be swept by the SHY-0082 board sync** (which deletes label families repo-wide + manages `story`-labelled issues each run) — use a distinct label (e.g. `uptime-alert`) so alerts survive.
 - [ ] Registers into `scripts/test/framework-registry.mjs`, emits normalized `metadata.json` (SHY-0212 contract), and `docs/testing/synthetic-uptime.md` explains in plain language what "live now" means + the schedule + the non-destructive guarantees.
 
 ### Error paths
