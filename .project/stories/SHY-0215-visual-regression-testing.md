@@ -27,7 +27,7 @@ The audit confirmed **no visual regression testing** — no Playwright `toHaveSc
 ### Happy path
 
 - [ ] **Web (Playwright `toHaveScreenshot`):** `tests/visual/*.visual.spec.ts` capture key pages/states in the REAL browser matrix and compare against committed baselines with a documented pixel/ratio threshold — public roadmap, sign-in (both entries), room list, in-room, messaging, payments, admin. Registered `visual-web` (`stack`, `publicArea: Cross-cutting`).
-- [ ] **Shared Compose UI (Roborazzi):** host-rendered snapshot tests in `shared/src/*Test` (or `app` host test set) render the key composables/screens to bitmaps and compare against baselines — deterministic, no device. Registered `visual-compose` (`host`, `publicArea: Cross-cutting`).
+- [ ] **Shared Compose UI (Roborazzi):** host-rendered snapshot tests in `shared/src/*Test` (or `app` host test set) render the key composables/screens to bitmaps and compare against baselines — deterministic, no device. Registered `visual-compose` (`host`, `publicArea: Cross-cutting`). **Supersedes SHY-0179** (Cancelled): this sub-framework *is* that story's JVM-Roborazzi approach, and it explicitly folds in the **PreviewWatermark safe-area regression** (SHY-0095 R4 I6) as a `visual-compose` baseline — the instrumented Compose path is documented-broken for shell composables, and the JVM render bypasses it.
 - [ ] **Real-device smoke:** during the device gauntlet, key screens are captured on a real Android device and a real iPhone and compared against committed device baselines to catch platform-specific rendering (fonts, insets, safe-area, status bar). Registered `visual-device` (`device`, `publicArea: Cross-cutting`).
 - [ ] A regression above threshold FAILS with a side-by-side (expected / actual / diff) artifact; an intentional visual change is accepted by an explicit, reviewed baseline-update command (`--update-snapshots` equivalent), never auto-accepted in CI.
 - [ ] All three register into `scripts/test/framework-registry.mjs`, emit normalized `metadata.json` (SHY-0212 contract), and `docs/testing/visual-regression.md` explains in plain language what a visual diff means and how to update a baseline intentionally.
@@ -46,7 +46,7 @@ The audit confirmed **no visual regression testing** — no Playwright `toHaveSc
 - [ ] Font rendering differences across the browser matrix (Chromium vs WebKit vs Firefox) are handled by per-browser baselines or a tuned threshold — a cross-browser AA-rendering delta does not false-fail.
 - [ ] Dark mode + light mode are both baselined for theme-aware screens.
 - [ ] A screen that legitimately changes every render (e.g. a live trend chart) is either excluded with rationale or region-masked — documented in the visual README.
-- [ ] Device baselines are per-device-class (the specific real Android + real iPhone models the gauntlet uses), not a single universal image.
+- [ ] Device baselines are per-device-class (the specific real Android + real iPhone models the gauntlet uses), not a single universal image. Because real-device rendering shifts with OS/font updates, `visual-device` uses a **tolerance threshold + a documented re-baseline cadence** (re-baseline on an intentional OS/design change, reviewed) so an OS point-update doesn't flake the lane; a sustained unexplained diff is still a real regression, not auto-accepted.
 
 ### Performance
 
@@ -66,7 +66,7 @@ The audit confirmed **no visual regression testing** — no Playwright `toHaveSc
 
 ### i18n
 
-- [ ] Key screens are baselined in at least one non-Latin locale (e.g. `zh`) and one RTL locale (`ar`) so a translation that overflows/clips or an RTL mirroring break is caught visually, not just functionally.
+- [ ] Key screens are baselined in at least one non-Latin **active** locale (e.g. `zh`) so a translation that overflows/clips is caught visually, not just functionally. **RTL mirroring is baselined via a pseudo-RTL locale** (not real `ar`, which is NOT in the active set — this aligns with SHY-0222's canonical stance); a real `ar` baseline is added only if/when Arabic rejoins the active locales.
 - [ ] Font-fallback for CJK/Arabic glyphs renders without tofu (□) on the baselined screens — a missing-glyph regression fails the diff.
 
 ### Observability

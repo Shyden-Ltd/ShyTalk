@@ -20,14 +20,14 @@ As a ShyTalk user who relies on assistive technology (screen reader, large text,
 
 ## Why
 
-The audit confirmed **zero accessibility testing** exists today — no axe-core, no pa11y, no Lighthouse a11y, no Espresso `AccessibilityChecks`, no iOS accessibility audit. For a social app that must be inclusive (and, for a minors-facing product, defensibly so), shipping with no a11y signal is an MVP-launch risk: contrast failures, unlabeled controls, and tiny touch targets are exactly the defects that make an app unusable for disabled users and invite complaints/legal exposure. This story adds the **real** a11y frameworks — driving real browsers and real devices (per EPIC-0003 real-only policy) — and registers them into SHY-0212's runner so a non-engineer can run `npm run test:all` and see an accessibility verdict, and SHY-0220 can show "Sign-in: accessible ✓" in plain language.
+The audit confirmed **no systematic WCAG accessibility tooling** exists today — no axe-core, no pa11y, no Lighthouse a11y, no Espresso `AccessibilityChecks`, no iOS accessibility audit. (A few hand-rolled a11y assertions exist — e.g. `tests/web/portal-a11y.spec.ts`, `aria-label-i18n.spec.ts`, `language-selector-aria-i18n.spec.ts` — which this story subsumes under a systematic, WCAG-2.2-AA-gated framework rather than leaving ad-hoc.) For a social app that must be inclusive (and, for a minors-facing product, defensibly so), shipping with no a11y signal is an MVP-launch risk: contrast failures, unlabeled controls, and tiny touch targets are exactly the defects that make an app unusable for disabled users and invite complaints/legal exposure. This story adds the **real** a11y frameworks — driving real browsers and real devices (per EPIC-0003 real-only policy) — and registers them into SHY-0212's runner so a non-engineer can run `npm run test:all` and see an accessibility verdict, and SHY-0220 can show "Sign-in: accessible ✓" in plain language.
 
 ## Acceptance Criteria
 
 ### Happy path
 
 - [ ] **Web (`@axe-core/playwright`):** an axe-core scan runs inside Playwright against every significant page/state — public roadmap, sign-in (OAuth + email-OTP entry), room list, in-room, messaging, payments/wallet, admin — asserting **zero `critical` and zero `serious`** WCAG 2.1/2.2 AA violations. Files: `tests/a11y/*.a11y.spec.ts`.
-- [ ] **Android (Espresso `AccessibilityChecks` + Compose semantics):** instrumented tests on a real device enable `AccessibilityChecks.enable().setRunChecksFromRootView(true)` and walk the key screens, asserting every actionable node has a non-empty `contentDescription`/semantics, touch targets ≥ 48dp, and text contrast ≥ 4.5:1. Files: `app/src/androidTest/java/com/shyden/shytalk/a11y/*A11yTest.kt`.
+- [ ] **Android (Espresso `AccessibilityChecks` + Compose semantics):** instrumented tests on a real device enable `AccessibilityChecks.enable().setRunChecksFromRootView(true)` and walk the key screens, asserting every actionable node has a non-empty `contentDescription`/semantics, touch targets ≥ 48dp, and text contrast ≥ 4.5:1. Files: `app/src/androidTest/java/com/shyden/shytalk/a11y/*A11yTest.kt`. (Where the instrumented Compose path is documented-broken for some *shell* composables — SHY-0095 R4 — the a11y assertion for that screen falls back to Compose-test semantics on the JVM host, mirroring SHY-0215's `visual-compose` rationale; any such gap is recorded, never silently skipped.)
 - [ ] **iOS (`performAccessibilityAudit`):** XCUITest on a real iPhone calls `XCUIApplication().performAccessibilityAudit(for:)` on each key screen covering contrast, dynamic type, element detection, hit region, sufficient element description, and trait audits — zero unignored findings. Files: `iosApp/iosAppUITests/A11yAuditTests.swift`.
 - [ ] All three register into `scripts/test/framework-registry.mjs` (web = `stack`, Android/iOS = `device`, `publicArea: Cross-cutting`) with `docs/testing/accessibility.md` explaining in plain language what "accessible" means here and how to run each.
 - [ ] Each emits the normalized `metadata.json` (SHY-0212 contract) so SHY-0220 can surface an a11y status per surface.
@@ -66,7 +66,7 @@ The audit confirmed **zero accessibility testing** exists today — no axe-core,
 
 - [ ] Content descriptions / accessibility labels are pulled from the localized `strings.xml` (all active locales), not hardcoded English — a test asserts a labeled control's accessible name resolves through the resource system.
 - [ ] Dynamic Type (iOS) / font-scaling (Android, up to the largest system setting) does not clip or truncate localized text on the key screens — audited at max scale.
-- [ ] RTL layout (Arabic) mirrors correctly on the audited screens — no reversed/overlapping controls (asserted under an RTL locale on device).
+- [ ] RTL layout mirrors correctly on the audited screens — no reversed/overlapping controls — asserted under a **pseudo-RTL locale** (Arabic is not an active locale; aligns with SHY-0222). A real `ar` on-device pass is added only if Arabic rejoins the active set.
 
 ### Observability
 

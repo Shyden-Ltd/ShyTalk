@@ -158,7 +158,7 @@ Touches backend (`express-api/**`, deletion workflow, rules) → FULL Pre-Merge 
 ## Definition of Done
 
 - [ ] All AC boxes across the 8 dimensions checked.
-- [ ] `compliance-suite` green: complete export, residual-PII-free erasure (with explicit carve-out), working report/moderation flow, enforced cohort separation — all against the real stack.
+- [ ] `compliance-suite` green: complete export, erasure that leaves no residual PII **outside the documented, policy-approved safety-retention carve-out** (asserted per stated policy — NOT a legal-sufficiency claim), working report/moderation flow, enforced cohort separation — all against the real stack.
 - [ ] Registered; `docs/testing/compliance.md` present, plain-language, with clause→test table + scope boundary + pending-legal-review flag; `metadata.json` per-area emitted.
 - [ ] Every real compliance gap surfaced is fixed at root.
 - [ ] `code-reviewer` + security review 100% clean; `Reviewed-up-to:` recorded; status `In Review`; `pre-merge-check.sh` OK.

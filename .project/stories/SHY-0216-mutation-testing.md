@@ -26,7 +26,7 @@ The audit confirmed **no mutation testing** (no Stryker for JS, no Pitest for Ko
 
 ### Happy path
 
-- [ ] **JS (StrykerJS):** `@stryker-mutator/core` is configured (`stryker.conf.json` in `express-api/`) to mutate the critical modules — `src/utils/bans.js`, `src/utils/age-verification*`, auth/OTP routes, payments/wallet, moderation — running the REAL Jest suite, with a **mutation-score threshold** (`break` = the agreed floor, `high`/`low` for reporting) that FAILS when the score drops below the floor. Registered `mutation-js` (`stack`, `publicArea: Cross-cutting`).
+- [ ] **JS (StrykerJS):** `@stryker-mutator/core` is configured (`stryker.conf.json` in `express-api/`) to mutate the critical **pure-logic** modules — `src/utils/bans.js` (ban-active/expiry), `src/utils/age-verification*` (age/cohort predicates), and the pure validators/normalizers — running their **fast host unit tests**, with a **mutation-score threshold** (`break` = the agreed floor, `high`/`low` for reporting) that FAILS when the score drops below the floor. Registered `mutation-js` (`host`, `publicArea: Cross-cutting`). **Mutating over the emulator-backed route/integration tests is deliberately EXCLUDED** — running a live-emulator suite once per mutant is slow and prone to shared-Firestore state contention (mutation testing is designed for fast, isolated units); route/authz behaviour is instead covered by SHY-0221 (fuzz/property) + the real integration suite, not mutation.
 - [ ] **Kotlin (Pitest):** the Pitest Gradle plugin mutates the critical shared business logic (auth routing/guards, ban/age domain logic, cohort logic) running the JVM unit tests, with a mutation-score threshold that FAILS below the floor. Registered `mutation-kotlin` (`host`, `publicArea: Cross-cutting`).
 - [ ] **PR gate = incremental:** on a PR, mutation runs only the changed critical files (Stryker `--incremental`; Pitest history/`--includeLaunchClasspath` scoped to the diff) so the gate is bounded; a **full** run is available on-demand via `workflow_dispatch` (no cron).
 - [ ] A **surviving mutant** on changed critical code FAILS the gate, naming the file, line, the mutation (e.g. "`>=` → `>` survived"), and pointing at the test that should have killed it.
@@ -111,7 +111,7 @@ The audit confirmed **no mutation testing** (no Stryker for JS, no Pitest for Ko
 
 ## Test Plan
 
-**Classification:** meta-testing over the REAL suites. `mutation-js` runs the real Jest suite (against the real local stack per EPIC-0003) many times; `mutation-kotlin` runs the real JVM unit tests. No new doubles are introduced. The only host-runnable unit portion is the allowlist parser + the metadata normalizer adapter.
+**Classification:** meta-testing over the REAL host unit suites. `mutation-js` runs the real fast **host unit** tests for the pure-logic critical modules many times (no emulator dependency — see the scoping AC); `mutation-kotlin` runs the real JVM unit tests. No new doubles are introduced. The only additional host-runnable portion is the allowlist parser + the metadata normalizer adapter.
 
 ### Red — write failing tests first
 
@@ -156,7 +156,7 @@ Touches test-suites over backend + shared logic; the mutation run exercises `exp
 ## Definition of Done
 
 - [ ] All AC boxes across the 8 dimensions checked.
-- [ ] `mutation-js` (Stryker, real Jest on real stack) + `mutation-kotlin` (Pitest, JVM unit) green at/above the score floor over the critical modules.
+- [ ] `mutation-js` (Stryker, real host unit tests over the pure-logic critical modules) + `mutation-kotlin` (Pitest, JVM unit) green at/above the score floor over the critical modules.
 - [ ] Every surviving mutant surfaced during the story is killed with a real asserting test (not allowlisted away).
 - [ ] Both registered; `docs/testing/mutation.md` present + plain-language; `metadata.json` emitted; PR incremental + on-demand full, no cron.
 - [ ] `code-reviewer` 100% clean; `Reviewed-up-to:` recorded; status `In Review`; `pre-merge-check.sh` OK.

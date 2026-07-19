@@ -1,6 +1,6 @@
 ---
 id: SHY-0179
-status: Draft
+status: Cancelled
 owner: claude
 created: 2026-07-12
 priority: P2
@@ -95,3 +95,4 @@ SHY-0095's R4 review confirmed a repo-wide framework gap: NO visual-regression t
 ## Notes (running log)
 
 - 2026-07-12 — Filed from SHY-0095 R4 finding I6 (watermark safe-area fix had zero automated coverage in any framework; instrumented Compose path documented-broken for shell composables). Reviewer's concrete suggestion: Roborazzi, JVM-only, bypasses the broken instrumented path.
+- 2026-07-20 — **CANCELLED — superseded by SHY-0215** (EPIC-0008 visual regression). SHY-0215's `visual-compose` sub-framework adopts the exact same JVM Roborazzi approach for shared Compose UI, and explicitly absorbs this story's scope: the PreviewWatermark safe-area regression (SHY-0095 R4 I6) is folded in as a `visual-compose` baseline. Discovered during the EPIC-0008 architect review (2026-07-20) — SHY-0215 was filed without cross-referencing this pre-existing ticket (check-existing-ticket slip); reconciled by superseding here. No work lost — 0215 delivers a strict superset.
