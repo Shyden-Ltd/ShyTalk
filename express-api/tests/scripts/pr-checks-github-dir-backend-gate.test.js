@@ -157,16 +157,12 @@ describe('SHY-0226: .github/** lights BACKEND so the pin guard cannot be skipped
 
   describe('behavioral: production case statement classification', () => {
     test('a workflow file change classifies as BACKEND (the #1646 hole)', () => {
-      const flags = classifyFiles(yamlText, [
-        '.github/workflows/test-backend.yml',
-      ]);
+      const flags = classifyFiles(yamlText, ['.github/workflows/test-backend.yml']);
       expect(flags.BACKEND).toBe('true');
     });
 
     test('a composite-action change classifies as BACKEND', () => {
-      const flags = classifyFiles(yamlText, [
-        '.github/actions/setup-jdk-gradle/action.yml',
-      ]);
+      const flags = classifyFiles(yamlText, ['.github/actions/setup-jdk-gradle/action.yml']);
       expect(flags.BACKEND).toBe('true');
     });
 
@@ -176,9 +172,7 @@ describe('SHY-0226: .github/** lights BACKEND so the pin guard cannot be skipped
     });
 
     test('.github changes set ONLY backend (no app/web/integration bleed)', () => {
-      const flags = classifyFiles(yamlText, [
-        '.github/workflows/pr-checks.yml',
-      ]);
+      const flags = classifyFiles(yamlText, ['.github/workflows/pr-checks.yml']);
       expect(flags).toMatchObject({
         ANDROID_APP: 'false',
         IOS_APP: 'false',
@@ -209,9 +203,7 @@ describe('SHY-0226: .github/** lights BACKEND so the pin guard cannot be skipped
       // arm stays FIRST. Re-merging `.github/*` into the no-op arm (or
       // reordering it after) would silently recreate the #1646 hole for
       // .github markdown-adjacent diffs with every other case still green (R1).
-      const flags = classifyFiles(yamlText, [
-        '.github/pull_request_template.md',
-      ]);
+      const flags = classifyFiles(yamlText, ['.github/pull_request_template.md']);
       expect(flags.BACKEND).toBe('true');
     });
 

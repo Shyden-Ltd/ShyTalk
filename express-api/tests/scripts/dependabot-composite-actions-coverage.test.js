@@ -159,9 +159,7 @@ function findMultiSubpathRepos(actionPaths) {
  */
 function repoCoveredByPatterns(repo, patterns) {
   return patterns.some((glob) => {
-    const re = new RegExp(
-      `^${glob.split('*').map(escapeRegExp).join('.*')}$`,
-    );
+    const re = new RegExp(`^${glob.split('*').map(escapeRegExp).join('.*')}$`);
     return re.test(repo) && re.test(`${repo}/subpath`);
   });
 }
@@ -197,9 +195,7 @@ describe('SHY-0226: dependabot.yml covers every composite-action directory', () 
     let compositeNames;
 
     beforeAll(() => {
-      declaredDirs = collectGithubActionsDirectories(
-        fs.readFileSync(DEPENDABOT_PATH, 'utf8'),
-      );
+      declaredDirs = collectGithubActionsDirectories(fs.readFileSync(DEPENDABOT_PATH, 'utf8'));
       compositeNames = listCompositeActionDirs(ACTIONS_DIR);
     });
 
@@ -218,9 +214,7 @@ describe('SHY-0226: dependabot.yml covers every composite-action directory', () 
           'Composite-action directories invisible to Dependabot — a future ' +
             'action bump would move workflow pins but not these, recreating ' +
             'the SHY-0162 two-SHA drift that blocked the whole Dependabot ' +
-            `queue. Declare them under the github-actions update entry:\n  ${missing.join(
-              '\n  ',
-            )}`,
+            `queue. Declare them under the github-actions update entry:\n  ${missing.join('\n  ')}`,
         );
       }
     });
@@ -232,21 +226,15 @@ describe('SHY-0226: dependabot.yml covers every composite-action directory', () 
       // Guard against vacuity: the repo uses cache/{,restore,save} and
       // codeql-action/{init,autobuild,analyze} today.
       expect(repos.length).toBeGreaterThan(0);
-      const patterns = collectGithubActionsGroupPatterns(
-        fs.readFileSync(DEPENDABOT_PATH, 'utf8'),
-      );
-      const ungrouped = repos.filter(
-        (repo) => !repoCoveredByPatterns(repo, patterns),
-      );
+      const patterns = collectGithubActionsGroupPatterns(fs.readFileSync(DEPENDABOT_PATH, 'utf8'));
+      const ungrouped = repos.filter((repo) => !repoCoveredByPatterns(repo, patterns));
       if (ungrouped.length > 0) {
         throw new Error(
           'Action repos used under multiple sub-paths but not grouped in ' +
             'dependabot.yml — Dependabot bumps each sub-path in a SEPARATE ' +
             'PR, so every such solo PR both violates the one-SHA invariant ' +
             'and (for codeql-action) breaks at runtime on mixed versions ' +
-            `(#1649). Add a "<repo>*" group pattern for:\n  ${ungrouped.join(
-              '\n  ',
-            )}`,
+            `(#1649). Add a "<repo>*" group pattern for:\n  ${ungrouped.join('\n  ')}`,
         );
       }
     });
@@ -272,10 +260,7 @@ describe('SHY-0226: dependabot.yml covers every composite-action directory', () 
         '    schedule:',
         '      interval: "weekly"',
       ].join('\n');
-      expect(collectGithubActionsDirectories(text)).toEqual([
-        '/',
-        '/.github/actions/setup-node',
-      ]);
+      expect(collectGithubActionsDirectories(text)).toEqual(['/', '/.github/actions/setup-node']);
     });
 
     test('ignores directories of other ecosystems', () => {
@@ -292,15 +277,13 @@ describe('SHY-0226: dependabot.yml covers every composite-action directory', () 
 
   describe('findUncoveredComposites (synthetic fixtures)', () => {
     test('names exactly the undeclared composites', () => {
-      expect(
-        findUncoveredComposites(['a', 'b'], ['/', '/.github/actions/a']),
-      ).toEqual(['/.github/actions/b']);
+      expect(findUncoveredComposites(['a', 'b'], ['/', '/.github/actions/a'])).toEqual([
+        '/.github/actions/b',
+      ]);
     });
 
     test('empty when everything is declared', () => {
-      expect(
-        findUncoveredComposites(['a'], ['/', '/.github/actions/a']),
-      ).toEqual([]);
+      expect(findUncoveredComposites(['a'], ['/', '/.github/actions/a'])).toEqual([]);
     });
   });
 
@@ -325,21 +308,15 @@ describe('SHY-0226: dependabot.yml covers every composite-action directory', () 
 
   describe('repoCoveredByPatterns (synthetic fixtures)', () => {
     test('a "<repo>*" prefix glob covers the repo and its sub-paths', () => {
-      expect(
-        repoCoveredByPatterns('actions/cache', ['actions/cache*']),
-      ).toBe(true);
+      expect(repoCoveredByPatterns('actions/cache', ['actions/cache*'])).toBe(true);
     });
 
     test('an exact-name glob does NOT cover sub-paths (must fail closed)', () => {
-      expect(repoCoveredByPatterns('actions/cache', ['actions/cache'])).toBe(
-        false,
-      );
+      expect(repoCoveredByPatterns('actions/cache', ['actions/cache'])).toBe(false);
     });
 
     test('an unrelated glob does not cover', () => {
-      expect(
-        repoCoveredByPatterns('github/codeql-action', ['actions/cache*']),
-      ).toBe(false);
+      expect(repoCoveredByPatterns('github/codeql-action', ['actions/cache*'])).toBe(false);
     });
   });
 
@@ -356,9 +333,7 @@ describe('SHY-0226: dependabot.yml covers every composite-action directory', () 
         '        update-types:',
         '          - "patch"',
       ].join('\n');
-      expect(collectGithubActionsGroupPatterns(text)).toEqual([
-        'github/codeql-action*',
-      ]);
+      expect(collectGithubActionsGroupPatterns(text)).toEqual(['github/codeql-action*']);
     });
 
     test('ignores groups of other ecosystems', () => {

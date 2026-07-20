@@ -1,12 +1,13 @@
 ---
 id: SHY-0226
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-20
 priority: P1
 effort: S
 type: infra
 roadmap_ids: []
+pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1651
 ---
 
 # SHY-0226: Heal the main-side setup-java pin drift and make CI-action pin drift structurally impossible
