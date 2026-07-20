@@ -108,7 +108,14 @@ jobs:
               # — driver code is a subset of the backend).
               express-api/scripts/drivers/*|express-api/tests/scripts/drivers/*) QA_RUNNER_DRIVERS=true; BACKEND=true ;;
               express-api/*|firestore.rules|database.rules.json) BACKEND=true ;;
-              .github/*|.claude/*|.project/*|*.md|.gitignore|.gitattributes) ;;
+              # CI plumbing (workflows, composite actions, dependabot config)
+              # lights BACKEND so the SHY-0162 pin guard actually runs on the
+              # diff class that introduces pin drift: a workflow-only bump
+              # (#1646) merged with test-backend AND sonarcloud both skipped,
+              # reintroducing a two-SHA drift that failed every queued
+              # Dependabot PR (SHY-0226).
+              .github/*) BACKEND=true ;;
+              .claude/*|.project/*|*.md|.gitignore|.gitattributes) ;;
               *) OTHER=true ;;
             esac
           done <<< "$CHANGED"

@@ -76,7 +76,46 @@ updates:
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
-    directory: "/"
+    # Composite actions under .github/actions/** must be bumped in the SAME
+    # PR as the workflows that call them — one SHA repo-wide per action repo
+    # (SHY-0162 invariant). Watching only "/" left the composites invisible,
+    # so #1587/#1646 moved workflow pins alone and the resulting two-SHA
+    # drift failed every queued Dependabot PR (SHY-0226). Every existing
+    # .github/actions/* directory is declared; the exhaustiveness is pinned
+    # by dependabot-composite-actions-coverage.test.js.
+    directories:
+      - "/"
+      - "/.github/actions/cleanup-ios-signing"
+      - "/.github/actions/decode-google-services"
+      - "/.github/actions/decode-keystore"
+      - "/.github/actions/deploy-firebase-rules"
+      - "/.github/actions/seed-test-personas"
+      - "/.github/actions/setup-ios-signing"
+      - "/.github/actions/setup-jdk-gradle"
+      - "/.github/actions/setup-node"
+      - "/.github/actions/start-firebase-emulators"
+      - "/.github/actions/start-local-services"
+    # Same-repo sub-actions (init/autobuild/analyze; cache/restore/save) are
+    # separate "dependencies" to Dependabot, so ungrouped they arrive as
+    # separate per-sub-path PRs — each one a one-SHA-invariant violation by
+    # construction, and for codeql-action a runtime version-mismatch (#1649:
+    # "Loaded a configuration file for version '4.36.3', but running version
+    # '4.37.1'"). Grouping makes every sub-path ride ONE PR. These repo
+    # groups sit BEFORE patch-updates: Dependabot assigns a dependency to
+    # the first matching group, and same-repo cohesion must win over
+    # update-type bundling. Exhaustiveness is pinned by
+    # dependabot-composite-actions-coverage.test.js (any repo newly used
+    # under a second sub-path fails the test until grouped here).
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
+      actions-cache:
+        patterns:
+          - "actions/cache*"
+      patch-updates:
+        update-types:
+          - "patch"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -86,7 +125,3 @@ updates:
       - "dependencies"
       - "github-actions"
     open-pull-requests-limit: 5
-    groups:
-      patch-updates:
-        update-types:
-          - "patch"
