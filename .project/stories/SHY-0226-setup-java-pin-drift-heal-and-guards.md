@@ -26,6 +26,7 @@ pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1651
    - `dependabot.yml`'s `github-actions` ecosystem watches `directory: "/"` only → composite actions under `.github/actions/**` are invisible to Dependabot → every bump of `setup-java` (or `setup-node`, `cache`, `setup-gradle`, all pinned in composites) moves the workflow references only.
    - `pr-checks.yml` change detection classifies `.github/*` as "no flags" (case arm ~line 111) → a workflow-only PR skips `test-backend`, `sonarcloud` **and** `integration-tests` → the pin guard cannot run on exactly the diff class that introduces drift. That is how #1646 auto-merged green this morning: every guard-carrying job reported "skipped".
 4. **A second drift vector, proven by #1649:** Dependabot treats each sub-path of one action repo (`github/codeql-action/init`, `/autobuild`, `/analyze`; `actions/cache`, `/restore`, `/save`) as a separate dependency and raises separate PRs — so #1649 bumped `autobuild` alone and its own CodeQL job failed with *"Loaded a configuration file for version '4.36.3', but running version '4.37.1'"* (plus GitHub's mixed-versions warning). Every such solo PR also violates the one-SHA invariant by construction. Same-repo sub-actions must ride one grouped PR.
+5. **A third unpinned-drift casualty, surfaced by this PR's own CI:** `integration-tests` fails on main lineage — 4 of 136 specs, all positive-permission cases ("user CAN read own device binding", "caller CAN create room with cohort"), denied via Firestore rules `evaluation error at L57:24`. Main's rules (last change #1550, 07-09) and specs (unchanged since May) are self-consistent — but `.github/actions/start-firebase-emulators` installed **unpinned `firebase-tools@latest`**, and 15.23.0 (07-09) / 15.24.0 (07-15) landed inside a window where change-detection routed **zero** integration runs on main. The locally-proven 15.15.0 passes these exact rules+specs (every local gauntlet); the CI-latest engine denies them — an emulator rules-engine behaviour drift masquerading as a product regression (same signature on #1650). The toolchain must be pinned to the local reference version and bumped deliberately.
 
 ## Acceptance Criteria
 
@@ -34,11 +35,13 @@ pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1651
 - [ ] Every `.github/actions/*` directory is declared in `dependabot.yml`'s `github-actions` entries, so a future action bump raises ONE PR moving every reference together.
 - [ ] A PR whose diff touches only `.github/**` runs the backend test job (and with it the pin guard) — the guard can no longer be skipped on the diff class that causes drift.
 - [ ] Every action repo referenced under two or more sub-paths (`github/codeql-action/*`, `actions/cache*`) is covered by a Dependabot group, so its sub-path bumps arrive as ONE PR moving all references together.
+- [ ] CI's emulator toolchain is pinned to the locally-proven `firebase-tools@15.15.0` with a version-keyed JAR cache — `integration-tests` returns green on main lineage (proven on this PR's own run).
 
 ### Error paths
 - [ ] A future PR reintroducing a two-SHA pin state fails CI by name (test-backend / sonarcloud) before merge, even when its diff is workflow-only.
 - [ ] Adding a NEW composite-action directory without declaring it to Dependabot fails the new coverage test, naming the missing directory.
 - [ ] Introducing a second sub-path of an action repo without a covering Dependabot group fails the coverage test, naming the ungrouped repo.
+- [ ] Reverting to an unpinned `firebase-tools` install — or bumping the pin without moving the cache key in lockstep — fails the new emulator-pin test.
 
 ### Edge cases
 - [ ] Composite actions with no external pinned `uses:` today are still declared (harmless now; future-proofs their first pinned step).
@@ -84,6 +87,7 @@ pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1651
   1. `tests/scripts/ci-action-pin-consistency.test.js` — already RED (CI evidence #1650 job 88287120285; reproduced locally in this worktree).
   2. NEW `tests/scripts/dependabot-composite-actions-coverage.test.js` — parses `dependabot.yml` + the `.github/actions/*` directory list; RED before the `dependabot.yml` change. Also enumerates every action repo used under ≥2 sub-paths across `.github/**` and asserts each is covered by a Dependabot group pattern (the #1649 vector); RED before the groups are added.
   3. NEW `tests/scripts/pr-checks-github-dir-backend-gate.test.js` — parses the detect-changes case block; RED before the `pr-checks.yml` change.
+  4. NEW `tests/scripts/start-firebase-emulators-pin.test.js` — exact-semver install + version-keyed cache, cross-consistent (version-agnostic contract); 3/3 RED against the unpinned composite before the fix.
 - **GREEN**: those three after the fixes; the existing `pr-checks-*.test.js` pin family green (regression net over the case-block edit).
 - **Frameworks**: express Jest (canonical `npm test`; single-file invocations during the device-matrix window — scripts tests are stack-free), eslint, actionlint on edited workflows, story validators.
 - **CI proof on this PR**: the diff touches `express-api/tests/**` → `BACKEND=true` → test-backend + sonarcloud run the pin guard on this very PR.
@@ -91,7 +95,7 @@ pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1651
 
 ## Out of Scope
 
-- The #1650 `integration-tests` emulator failure (different signature — "Emulators did not start within 120s" / Firestore rules denials; investigate after the queue rebases show what remains).
+- Upgrading firebase-tools past 15.15.0 and adapting `firestore.rules`/integration specs to the newer rules engine — that is deliberate follow-up work on develop (product-surface rules change = full protocol), not part of this CI-config heal. The #1650-observed integration failure itself IS root-caused and fixed here (Why #5).
 - Closing/regrouping the already-open per-sub-path PRs (#1649 and siblings) — operational sweep after merge; Dependabot applies groups at PR-creation time, so existing solos are closed and the next scheduled run raises grouped replacements.
 - Rebasing/re-judging the 17 Dependabot PRs (operational sweep immediately after merge, not part of this diff).
 - develop's pin state (v5.5.0-aligned via #1617) — resolved by the mandatory back-merge, not by edits on develop.
@@ -113,3 +117,6 @@ pr: https://github.com/Shyden-Ltd/ShyTalk/pull/1651
 ## Notes
 
 - 2026-07-20 — Born fully refined mid-incident. The story file rides the main PR deliberately (never-untracked rule; it reaches develop via the back-merge — same distribution SHY-0195's spec used in reverse). Lineage: #1587 (07-13) split the pins on main → #1617 (07-16, SHY-0195) healed develop only → #1646 (today 06:14) re-split wider on main with every guard job change-detection-skipped (test-backend / sonarcloud / integration-tests all "skipped"; auto-merge fired on the skips).
+- 2026-07-20 — **code-review R1** (`/code-review low`-shape, single strict reviewer on the LOCAL commit, adapted pre-push): 2 findings, both test-robustness, both verified before applying — (1) job-gate assertions were whole-file `toContain` while the `backend_changed == 'true'` literal exists at 3 sites (job-input wiring line 173, test-backend 315, integration-tests 375) → rescoped via mirrored `extractJob`; (2) no behavioral case covered the `.github/**/*.md` dual-match (`.github/*` vs `*.md` first-match ordering) → added `.github/pull_request_template.md` → BACKEND case. Re-review of the fixes: **zero findings**. Prettier + In-Review flip delta re-reviewed: **zero findings** (reviewer verified the delta formatting-only + confirmed the corrected comment citation).
+- 2026-07-20 — **First CI run surfaced Why #5** (integration-tests red, 4/136 positive-permission denials, same signature as #1650): root-caused to the unpinned `firebase-tools@latest` in `start-firebase-emulators` (15.23.0/15.24.0 released 07-09/07-15 inside a zero-integration-runs window; local 15.15.0 green on identical rules+specs). Fixed in-class: pinned install + version-keyed cache + `start-firebase-emulators-pin.test.js` (RED 3/3 → GREEN). Deliberate 15.24-era upgrade deferred to develop follow-up (Out of Scope). Also: lint's Express prettier step caught hand-formatting on the two new tests (fixed); Pre-Merge Gate correctly failed the In-Progress story (flipped to In Review — Gate 1 working as designed).
+- Reviewed-up-to: `8644c0dff36` + the firebase-tools-pin delta (review pending at commit time; recorded on verdict).

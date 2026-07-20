@@ -12,11 +12,23 @@ runs:
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.cache/firebase/emulators
-        key: firebase-emulators-${{ runner.os }}
+        # Version-keyed: a firebase-tools bump must not reuse another
+        # version's emulator JARs (SHY-0226; keep in lockstep with the
+        # pinned install below — start-firebase-emulators-pin.test.js
+        # enforces the pairing).
+        key: firebase-emulators-${{ runner.os }}-ft15.15.0
     - name: Start Firebase Emulators
       shell: bash
       run: |
-        npm install -g firebase-tools
+        # Pinned, not latest: unpinned installs silently adopted 15.23.0/
+        # 15.24.0 (released 07-09/07-15) whose Firestore rules engine denies
+        # patterns 15.15.0 allows (L57 evaluation-error denials on 4
+        # positive-permission integration specs, #1650/#1651) — while no
+        # integration run happened on main lineage to catch it. 15.15.0 is
+        # the locally-proven reference toolchain; bump DELIBERATELY (both
+        # lines together) with a green integration suite as evidence
+        # (SHY-0226).
+        npm install -g firebase-tools@15.15.0
         firebase emulators:start --project=${{ inputs.project-id }} &
         WAITED=0
         until curl -s http://localhost:4000 > /dev/null 2>&1; do
