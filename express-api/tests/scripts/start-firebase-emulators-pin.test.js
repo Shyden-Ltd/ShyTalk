@@ -60,3 +60,50 @@ describe('SHY-0226: start-firebase-emulators pins the firebase-tools version', (
     expect(cacheKeyLine(actionText)).toContain(version);
   });
 });
+
+/**
+ * R1 (third-delta review): the SAME unpinned-install class existed in
+ * deploy-dev.yml + deploy-prod.yml — the real deploy pipelines. Repo-wide
+ * invariant: EVERY `npm install -g firebase-tools` under .github/** pins an
+ * exact semver. Sites may deliberately pin DIFFERENT versions (each at its
+ * last-proven version — emulators at the local-reference 15.15.0, deploys
+ * at the 15.24.0 their green 07-19 dev deploy actually ran); convergence to
+ * one version rides the deliberate-upgrade follow-up.
+ */
+function collectFirebaseToolsInstalls(githubDir) {
+  const installs = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.ya?ml$/.test(entry.name)) {
+        for (const line of fs.readFileSync(full, 'utf8').split('\n')) {
+          if (line.includes('npm install -g firebase-tools')) {
+            installs.push({ file: path.relative(githubDir, full), line: line.trim() });
+          }
+        }
+      }
+    }
+  };
+  walk(githubDir);
+  return installs;
+}
+
+describe('SHY-0226: every firebase-tools install under .github/** is exact-pinned', () => {
+  test('no unpinned npm install -g firebase-tools remains anywhere in CI', () => {
+    const installs = collectFirebaseToolsInstalls(path.join(REPO_ROOT, '.github'));
+    // Vacuity guard: the emulator composite install must be found.
+    expect(installs.length).toBeGreaterThan(0);
+    const unpinned = installs.filter(({ line }) => !PINNED_INSTALL_RE.test(line));
+    if (unpinned.length > 0) {
+      throw new Error(
+        'Unpinned firebase-tools installs in CI — every run silently adopts ' +
+          'the latest release, the drift class behind the #1650/#1651 ' +
+          'emulator incident (and the same hazard on the deploy pipelines). ' +
+          `Pin an exact semver at:\n  ${unpinned
+            .map(({ file, line }) => `${file}: ${line}`)
+            .join('\n  ')}`,
+      );
+    }
+  });
+});

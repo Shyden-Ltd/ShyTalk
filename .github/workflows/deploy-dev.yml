@@ -102,7 +102,12 @@ jobs:
       - uses: ./.github/actions/setup-node
 
       - name: Install deploy tools
-        run: npm install -g firebase-tools
+        # Pinned at the version the last green dev deploy (07-19) actually
+        # ran — deploys were never exercised on the emulator-reference
+        # 15.15.0-era, so each site pins its own proven version until the
+        # deliberate-upgrade follow-up converges them (SHY-0226; repo-wide
+        # exact-pin invariant enforced by start-firebase-emulators-pin.test.js).
+        run: npm install -g firebase-tools@15.24.0
 
       - name: Deploy Express API to London (dev)
         env:
