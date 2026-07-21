@@ -474,7 +474,10 @@ test.describe("Integration — Firestore rules: deviceBindings privacy", () => {
   test("user CANNOT read another user's device binding", async () => {
     // Critical privacy fix: previously any authed user could read all
     // device↔user bindings, useful for device-fingerprinting and
-    // ban-evasion correlation. Now restricted to the device's owner.
+    // ban-evasion correlation. SHY-0170 (#1550) then moved the
+    // device-lock decision server-side entirely — no client, not even
+    // the device's own owner, may reach a binding (see the sibling
+    // owner-denial test). This case pins the stranger half.
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const adminDb = ctx.firestore() as unknown as Firestore;
       await setDoc(doc(adminDb, "deviceBindings", "device-victim"), {
@@ -490,7 +493,14 @@ test.describe("Integration — Firestore rules: deviceBindings privacy", () => {
     await assertFails(getDoc(doc(attackerDb, "deviceBindings", "device-victim")));
   });
 
-  test("user CAN read their own device binding", async () => {
+  test("user CANNOT read their OWN device binding — API-only, no client path", async () => {
+    // SHY-0170 (#1550) moved the device-lock decision server-side:
+    // `deviceBindings` is written by the Express Admin SDK and read via
+    // /api/admin/devices, so firestore.rules denies clients outright
+    // (`allow read, write: if false`). The owner is denied EXACTLY like
+    // a stranger — that symmetry is the point. If a client could read
+    // its own binding it could enumerate the lock state it is subject
+    // to, which is the reconnaissance step before evading it.
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const adminDb = ctx.firestore() as unknown as Firestore;
       await setDoc(doc(adminDb, "deviceBindings", "device-owner"), {
@@ -503,6 +513,24 @@ test.describe("Integration — Firestore rules: deviceBindings privacy", () => {
       uniqueId: "100000700",
     });
     const ownerDb = owner.firestore() as unknown as Firestore;
-    await assertSucceeds(getDoc(doc(ownerDb, "deviceBindings", "device-owner")));
+    await assertFails(getDoc(doc(ownerDb, "deviceBindings", "device-owner")));
+  });
+
+  test("user CANNOT forge a device binding — the write half of the lockdown", async () => {
+    // The `write: if false` half of L529 had no coverage. Forging a
+    // binding is the actual attack the device lock defends against: a
+    // banned device rebinding itself to a fresh account would walk
+    // straight past the ban. Rules must refuse the client write even
+    // when the payload names the caller's own account.
+    const owner = testEnv.authenticatedContext("uid-forger", {
+      uniqueId: "100000800",
+    });
+    const ownerDb = owner.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(ownerDb, "deviceBindings", "device-forged"), {
+        userId: "100000800",
+        deviceId: "device-forged",
+      }),
+    );
   });
 });

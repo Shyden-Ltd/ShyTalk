@@ -1105,6 +1105,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertSucceeds(
       setDoc(doc(db, "rooms", "room-create-1"), {
         ownerId: "200000200",
+        ownerFirebaseUid: "uid-adult-create",
         cohort: "adult",
         participantIds: ["200000200"],
         state: "ACTIVE",
@@ -1121,6 +1122,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertSucceeds(
       setDoc(doc(db, "rooms", "room-create-2"), {
         ownerId: "200000201",
+        ownerFirebaseUid: "uid-minor-create",
         cohort: "minor",
         participantIds: ["200000201"],
         state: "ACTIVE",
@@ -1137,6 +1139,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertFails(
       setDoc(doc(db, "rooms", "room-create-3"), {
         ownerId: "200000202",
+        ownerFirebaseUid: "uid-adult-create-2",
         cohort: "minor", // claim says adult — mismatch must reject
         participantIds: ["200000202"],
         state: "ACTIVE",
@@ -1153,6 +1156,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertFails(
       setDoc(doc(db, "rooms", "room-create-4"), {
         ownerId: "200000203",
+        ownerFirebaseUid: "uid-minor-create-2",
         cohort: "adult", // claim says minor — mismatch must reject
         participantIds: ["200000203"],
         state: "ACTIVE",
@@ -1169,6 +1173,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertFails(
       setDoc(doc(db, "rooms", "room-create-5"), {
         ownerId: "200000204",
+        ownerFirebaseUid: "uid-adult-create-3",
         // no cohort
         participantIds: ["200000204"],
         state: "ACTIVE",
@@ -1185,6 +1190,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertFails(
       setDoc(doc(db, "rooms", "room-create-6"), {
         ownerId: "200000205",
+        ownerFirebaseUid: "uid-adult-create-4",
         cohort: "super-adult", // not 'adult' or 'minor'
         participantIds: ["200000205"],
         state: "ACTIVE",
@@ -1201,6 +1207,10 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertFails(
       setDoc(doc(db, "rooms", "room-create-7"), {
         ownerId: "999999999", // someone else
+        // Caller's OWN firebase uid — so ownerId is the single
+        // violated conjunct and this test can only fail on the
+        // proxy-room defence it names.
+        ownerFirebaseUid: "uid-adult-create-5",
         cohort: "adult",
         participantIds: ["200000206"],
         state: "ACTIVE",
@@ -1217,6 +1227,7 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertSucceeds(
       setDoc(doc(db, "rooms", "room-create-8"), {
         ownerId: "200000207",
+        ownerFirebaseUid: "uid-no-cohort-claim",
         cohort: "minor",
         participantIds: ["200000207"],
         state: "ACTIVE",
@@ -1232,8 +1243,78 @@ test.describe("Integration — cohort gate: rooms create-time bind", () => {
     await assertFails(
       setDoc(doc(db, "rooms", "room-create-9"), {
         ownerId: "200000208",
+        ownerFirebaseUid: "uid-no-cohort-claim-2",
         cohort: "adult",
         participantIds: ["200000208"],
+        state: "ACTIVE",
+      }),
+    );
+  });
+
+  // ── ownerFirebaseUid bind (SHY-0029 / #1541) ──────────────────
+  // The rule reads `request.resource.data.get('ownerFirebaseUid', '')
+  // == request.auth.uid`. SHY-0029 removed the legacy pre-cron-elim
+  // fallback, so the documented outcomes are: absent -> deny; empty
+  // -> deny; present-and-forged -> deny; present-and-matching ->
+  // allow. Until this story that invariant had ZERO integration
+  // coverage anywhere in tests/integration — and because every spec
+  // in this block omitted the field, each negative case above was
+  // denied on the missing field and never reached the defence it
+  // claimed to test (mutation-proven tautology, SHY-0227).
+
+  test("create with ABSENT ownerFirebaseUid is rejected (absent -> deny)", async () => {
+    const adult = testEnv.authenticatedContext("uid-owner-uid-absent", {
+      uniqueId: "200000209",
+      cohort: "adult",
+    });
+    const db = adult.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "rooms", "room-create-10"), {
+        ownerId: "200000209",
+        // no ownerFirebaseUid — every other conjunct satisfied, so
+        // this test can only fail on the owner-uid bind.
+        cohort: "adult",
+        participantIds: ["200000209"],
+        state: "ACTIVE",
+      }),
+    );
+  });
+
+  test("create with EMPTY ownerFirebaseUid is rejected (empty -> deny)", async () => {
+    // Distinct from absent: `.get(field, '')` collapses both to the
+    // empty string, so an empty value must not be mistaken for a
+    // satisfied bind by a future refactor of the default.
+    const adult = testEnv.authenticatedContext("uid-owner-uid-empty", {
+      uniqueId: "200000210",
+      cohort: "adult",
+    });
+    const db = adult.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "rooms", "room-create-11"), {
+        ownerId: "200000210",
+        ownerFirebaseUid: "",
+        cohort: "adult",
+        participantIds: ["200000210"],
+        state: "ACTIVE",
+      }),
+    );
+  });
+
+  test("create with a FORGED ownerFirebaseUid (another account's uid) is rejected", async () => {
+    // The attack SHY-0029 closes: stamping someone else's Firebase uid
+    // onto a room you create, so downstream server checks that trust
+    // ownerFirebaseUid attribute the room to that account.
+    const adult = testEnv.authenticatedContext("uid-owner-uid-forger", {
+      uniqueId: "200000211",
+      cohort: "adult",
+    });
+    const db = adult.firestore() as unknown as Firestore;
+    await assertFails(
+      setDoc(doc(db, "rooms", "room-create-12"), {
+        ownerId: "200000211",
+        ownerFirebaseUid: "uid-somebody-else",
+        cohort: "adult",
+        participantIds: ["200000211"],
         state: "ACTIVE",
       }),
     );
