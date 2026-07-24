@@ -1,6 +1,6 @@
 ---
 id: SHY-0239
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-25
 priority: P1
@@ -173,3 +173,5 @@ This delivers the operator's verbatim intent — *"pause + ping for PIN before s
 - **I6/I7 — `on_signal`'s new `aborted` event + `emit_event`'s unwritable-`RUN_DIR` guard had no behavioural proof.** Added real tests (drive `on_signal 130` in lib mode → `aborted` in `events.log`; `notify` against a `/nonexistent` `RUN_DIR` → survives, RC 0, console line still printed).
 - **Minors (all applied):** event-order pin (pin-wait before pin-ready), missing-detail-arg tolerance, `-h` no-code-leak pin, `--status` AC wording (pin-wait carries a tab-reason), README `PIN_GATE_TIMEOUT` knob row.
 - Gates: **58 gauntlet-v2 tests green** (SHY-0238's 29 + these 29 = 12 structural + 17 behavioural); FAIL-on-timeout + the fail-fast guard both mutation-proven; `bash -n` + shellcheck + eslint `--max-warnings=0` + prettier + no-new-stubs clean.
+
+Reviewed-up-to: 125cd34dafae29cfaec2ddba42a899024b4cad3e
