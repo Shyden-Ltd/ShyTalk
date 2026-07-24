@@ -163,4 +163,6 @@ So v2 dispatches the device matrix immediately, overlaps only the three stack-in
 - **I5 — `wait_overlapped`'s `${!OVERLAP_PIDS[@]}` was an unguarded empty-array expansion** (bash-3.2 + `set -u` aborts). Added the `[ "${#…[@]}" -gt 0 ] || return 0` guard + a zero-suite behavioural pin (runs under `/bin/bash` 3.2).
 - **I6 — the tee-not-file-only pin matched only ONE of the two call sites**; now extracts `start_overlapped` + `run_logged` bodies and asserts each independently.
 - **I7 — CLI flag parsing was untested**; added real-entrypoint behavioural pins (`-h`, unknown-flag die, invalid `--target`, missing `--target` value).
-- Deferred (reviewer-tempered, not blocking): a full stubbed-orchestration e2e (F3) — needs a `HERE`-override knob; the first real local dispatch (release gate) is the mitigation. Gates: **29 tests green** (16 structural + 13 behavioural), eslint/prettier/shellcheck/`bash -n` clean. Reviewed-up-to: pending the R1-fix commit (marker added on push).
+- Deferred (reviewer-tempered, not blocking): a full stubbed-orchestration e2e (F3) — needs a `HERE`-override knob; the first real local dispatch (release gate) is the mitigation. Gates: **29 tests green** (16 structural + 13 behavioural), eslint/prettier/shellcheck/`bash -n` clean.
+
+Reviewed-up-to: 34a379075569073647d4d66c2724e42a134db72d
