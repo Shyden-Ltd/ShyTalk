@@ -1,0 +1,137 @@
+'use strict';
+
+// SHY-0238 — structural invariants for the Gauntlet v2 orchestrator
+// (express-api/scripts/gauntlet/gauntlet-v2.sh).
+//
+// The full orchestrator can't be unit-run (Docker, emulators, real devices,
+// hours-long suites). But its load-bearing control-flow — the REORDER (matrix
+// before the framework suites), the OVERLAP allowlist (only the three stack-
+// independent suites run concurrently with the live matrix; the Auth-wiping
+// Jest + the two Playwright suites never do), the tee streaming, the reap trap,
+// and the SHY-0236 sentinel/tally contract — is greppable and each invariant
+// maps to a concrete requirement in the SHY-0238 spec. The behavioural helper
+// tests live in gauntlet-v2-overlap.test.js.
+
+const fs = require('node:fs');
+const path = require('node:path');
+
+const SCRIPT = path.resolve(__dirname, '../../scripts/gauntlet/gauntlet-v2.sh');
+const src = fs.readFileSync(SCRIPT, 'utf8');
+const lines = src.split('\n');
+
+// Index of the first line matching a regex (−1 if none).
+const at = (re) => lines.findIndex((l) => re.test(l));
+
+describe('gauntlet-v2.sh — file basics', () => {
+  test('exists + executable + portable shebang', () => {
+    expect(fs.existsSync(SCRIPT)).toBe(true);
+    expect(fs.statSync(SCRIPT).mode & 0o111).not.toBe(0);
+    expect(src.split('\n')[0]).toBe('#!/usr/bin/env bash');
+  });
+
+  test('runs under set -uo pipefail with -e armed AFTER the ERR trap (SHY-0236)', () => {
+    expect(src).toMatch(/set -uo pipefail/);
+    const trapIdx = at(/trap on_fail ERR/);
+    const setEIdx = at(/^\s*set -e\s/);
+    expect(trapIdx).toBeGreaterThan(-1);
+    expect(setEIdx).toBeGreaterThan(trapIdx);
+  });
+
+  test('uses ${BASH_SOURCE[0]} for HERE so the test can source it', () => {
+    expect(src).toMatch(/HERE="\$\(cd "\$\(dirname "\$\{BASH_SOURCE\[0\]\}"\)".*pwd\)"/);
+  });
+
+  test('has a library mode that returns before the orchestration', () => {
+    const libIdx = at(/GAUNTLET_V2_LIB.*&&\s*return 0/);
+    const dispatchIdx = at(/50-matrix\.sh" launch/);
+    expect(libIdx).toBeGreaterThan(-1);
+    // the lib-mode return must precede any orchestration side effect
+    expect(libIdx).toBeLessThan(dispatchIdx);
+  });
+});
+
+describe('gauntlet-v2.sh — the REORDER (devices before the Mac suites)', () => {
+  test('the device matrix is dispatched BEFORE the first overlapped suite', () => {
+    const dispatchIdx = at(/50-matrix\.sh" launch/);
+    const firstOverlapIdx = at(/start_overlapped /);
+    expect(dispatchIdx).toBeGreaterThan(-1);
+    expect(firstOverlapIdx).toBeGreaterThan(-1);
+    expect(dispatchIdx).toBeLessThan(firstOverlapIdx);
+  });
+
+  test('the Auth-wiping Jest runs only AFTER the matrix-wait (never mid-matrix)', () => {
+    const matrixWaitIdx = at(/while \[ ! -e "\$MATRIX_DIR\/DONE" \]/);
+    const jestIdx = at(/run_logged express-jest/);
+    expect(matrixWaitIdx).toBeGreaterThan(-1);
+    expect(jestIdx).toBeGreaterThan(-1);
+    expect(jestIdx).toBeGreaterThan(matrixWaitIdx);
+  });
+});
+
+describe('gauntlet-v2.sh — the OVERLAP allowlist (only stack-independent suites)', () => {
+  // Everything start_overlapped runs concurrently with the LIVE device matrix,
+  // so it must never touch the emulator stack. This pins the exact set.
+  const overlapCalls = lines
+    .filter((l) => /^\s*start_overlapped /.test(l))
+    .map((l) => l.trim().split(/\s+/)[1]);
+
+  test('exactly the three stack-independent suites are overlapped', () => {
+    expect(overlapCalls.sort()).toEqual(['eslint', 'gradle-unit-detekt', 'ktlint']);
+  });
+
+  test('the stack-coupled suites are NEVER overlapped', () => {
+    for (const banned of ['express-jest', 'playwright-e2e', 'playwright-integration']) {
+      expect(overlapCalls).not.toContain(banned);
+    }
+  });
+
+  test('the stack-coupled suites run serially via run_logged (post-matrix)', () => {
+    expect(src).toMatch(/run_logged express-jest\b/);
+    expect(src).toMatch(/run_logged playwright-e2e\b/);
+    expect(src).toMatch(/run_logged playwright-integration\b/);
+  });
+
+  test('the post-jest reseed heals the Auth-wipe before the web suites', () => {
+    const jestIdx = at(/run_logged express-jest/);
+    const reseedIdx = at(/phase "reseed-post-jest"/);
+    const pwIdx = at(/run_logged playwright-e2e/);
+    expect(jestIdx).toBeLessThan(reseedIdx);
+    expect(reseedIdx).toBeLessThan(pwIdx);
+  });
+});
+
+describe('gauntlet-v2.sh — streaming, reaping, sentinel (SHY-0236 contract)', () => {
+  test('overlapped + serial suites stream to BOTH console and file (tee, not file-only)', () => {
+    // start_overlapped + run_logged both pipe through awk (source-prefix, line-
+    // flushed) into tee — never a bare `> "$logf"` file-only redirect.
+    expect(src).toMatch(/awk -v p="\[\$name\] ".*fflush\(\).*\|\s*tee "\$logf"/);
+    expect(src).not.toMatch(/"\$@"\s*>\s*"\$logf"\s*2>&1\s*$/m); // no file-only capture
+  });
+
+  test('the matrix log is streamed live to the console', () => {
+    expect(src).toMatch(/tail -n \+1 -F "\$MATRIX_LOG".*awk.*\[matrix\]/);
+  });
+
+  test('reap trap tears down overlapped suites + the tail on exit/interrupt', () => {
+    expect(src).toMatch(/trap reap_overlapped EXIT INT TERM/);
+    expect(src).toMatch(/reap_overlapped\(\)/);
+    // reap kills the whole process tree (SHY-0236 _pid_tree idiom), never a bare pid
+    expect(src).toMatch(/_pid_tree\(\)/);
+    const reap = src.match(/reap_overlapped\(\)\s*\{[\s\S]*?\n\}/);
+    expect(reap).not.toBeNull();
+    expect(reap[0]).toMatch(/_pid_tree/);
+  });
+
+  test('final tally: any failed step → FAIL + exit 1; clean → DONE (SHY-0236)', () => {
+    const failBranch = src.match(/if \[ "\$\{#FAILED_STEPS\[@\]\}" -gt 0 \]; then[\s\S]*?\nfi/);
+    expect(failBranch).not.toBeNull();
+    expect(failBranch[0]).toMatch(/touch "\$RUN_DIR\/FAIL"/);
+    expect(failBranch[0]).toMatch(/exit 1/);
+    expect(src).toMatch(/touch "\$RUN_DIR\/DONE"/);
+  });
+
+  test('a matrix FAIL sentinel is folded into the tally', () => {
+    expect(src).toMatch(/-e "\$MATRIX_DIR\/FAIL"/);
+    expect(src).toMatch(/FAILED_STEPS\+=\("journey-matrix"\)/);
+  });
+});
