@@ -145,7 +145,7 @@ set -e   # arm AFTER the traps (SHY-0236: a die before the trap writes no sentin
 phase() { PHASE="$1"; log "━━━ PHASE: $1 ━━━"; }
 FAILED_STEPS=()
 
-MATRIX_DIR="" MATRIX_LOG=""
+MATRIX_DIR="" MATRIX_LOG="" MATRIX_PID=""
 
 # ── 1-2. infra (die-fast) ──────────────────────────────────────────────────
 phase "prereqs"; bash "$HERE/00-prereqs.sh"
@@ -171,6 +171,7 @@ if [ "$MATRIX" = "1" ]; then
   bash "$HERE/50-matrix.sh" launch "${MATRIX_ARGS[@]}" 2>&1 | tee "$RUN_DIR/matrix-dispatch.log"
   MATRIX_DIR="$(readlink "$GAUNTLET_TMP/matrix-latest" 2>/dev/null || true)"
   [ -n "$MATRIX_DIR" ] && MATRIX_LOG="$MATRIX_DIR/log"
+  [ -n "$MATRIX_DIR" ] && MATRIX_PID="$(cat "$MATRIX_DIR/pid" 2>/dev/null || true)"
   ok "matrix dispatched (detached) — the phones are working now"
   # Stream the detached matrix log live to the console (still self-logged in its
   # own dir). Line-flushed + source-prefixed so it interleaves readably.
@@ -194,8 +195,21 @@ fi
 # ── 5. wait for the device matrix to finish, then stop the live tail ────────
 if [ "$MATRIX" = "1" ] && [ -n "$MATRIX_DIR" ]; then
   phase "matrix-wait"
-  log "waiting for the device journey matrix to finish (sentinel in $MATRIX_DIR)"
-  while [ ! -e "$MATRIX_DIR/DONE" ] && [ ! -e "$MATRIX_DIR/FAIL" ]; do sleep 5; done
+  log "waiting for the device journey matrix to finish (pid ${MATRIX_PID:-?}, sentinel in $MATRIX_DIR)"
+  while [ ! -e "$MATRIX_DIR/DONE" ] && [ ! -e "$MATRIX_DIR/FAIL" ]; do
+    # Liveness escape: if the detached runner died (OOM/kill) WITHOUT writing a
+    # sentinel, don't wait forever — a release gate that never returns is worse
+    # than a FAIL. Grace-sleep first so a just-finishing runner can still write.
+    if [ -n "$MATRIX_PID" ] && ! kill -0 "$MATRIX_PID" 2>/dev/null; then
+      sleep 2
+      if [ ! -e "$MATRIX_DIR/DONE" ] && [ ! -e "$MATRIX_DIR/FAIL" ]; then
+        warn "matrix runner (pid $MATRIX_PID) exited without a sentinel — treating as FAIL"
+        touch "$MATRIX_DIR/FAIL"
+      fi
+      break
+    fi
+    sleep 5
+  done
   [ -n "$TAIL_PID" ] && { kill "$TAIL_PID" 2>/dev/null || true; TAIL_PID=""; }
   if [ -e "$MATRIX_DIR/FAIL" ]; then
     warn "device journey matrix FAILED — results: bash $HERE/50-matrix.sh results"

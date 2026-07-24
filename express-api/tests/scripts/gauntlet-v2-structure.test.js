@@ -134,4 +134,14 @@ describe('gauntlet-v2.sh — streaming, reaping, sentinel (SHY-0236 contract)', 
     expect(src).toMatch(/-e "\$MATRIX_DIR\/FAIL"/);
     expect(src).toMatch(/FAILED_STEPS\+=\("journey-matrix"\)/);
   });
+
+  test('matrix-wait has a liveness escape (no infinite hang if the runner is killed)', () => {
+    // If the detached runner dies without a sentinel, the poll loop must break +
+    // synthesize a FAIL — a release gate that never returns is worse than a FAIL.
+    const waitBlock = src.match(/phase "matrix-wait"[\s\S]*?\n {2}done/);
+    expect(waitBlock).not.toBeNull();
+    expect(waitBlock[0]).toMatch(/kill -0 "\$MATRIX_PID"/);
+    expect(waitBlock[0]).toMatch(/touch "\$MATRIX_DIR\/FAIL"/);
+    expect(waitBlock[0]).toMatch(/\bbreak\b/);
+  });
 });
