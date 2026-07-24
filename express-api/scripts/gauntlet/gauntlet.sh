@@ -49,14 +49,19 @@ while [ $# -gt 0 ]; do
 done
 case "$TARGET" in local|dev) ;; *) die "--target must be local or dev" ;; esac
 
-RUN_ID="$(date +%Y%m%d-%H%M%S)"
+# On detach we re-exec self; the parent hands its RUN_ID to the child via a
+# PRIVATE marker (_GAUNTLET_CHILD_RUN_ID, set ONLY on the re-exec below — never
+# a public/exported name a stale interactive shell could accidentally collide
+# with) so the child writes its logs + DONE/FAIL sentinel into the SAME dir the
+# parent advertised (SHY-0236).
+RUN_ID="${_GAUNTLET_CHILD_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 RUN_DIR="$GAUNTLET_TMP/$RUN_ID"
 mkdir -p "$RUN_DIR"
 
 # --- detach mode: re-exec self under nohup + caffeinate ---------------------
 if [ "$DETACH" = "1" ]; then
   log "detaching: log → $RUN_DIR/gauntlet.log"
-  ( nohup caffeinate -i "$0" "${PASSTHRU[@]}" >"$RUN_DIR/gauntlet.log" 2>&1 </dev/null &
+  ( _GAUNTLET_CHILD_RUN_ID="$RUN_ID" nohup caffeinate -i "$0" ${PASSTHRU[@]+"${PASSTHRU[@]}"} >"$RUN_DIR/gauntlet.log" 2>&1 </dev/null &
     echo $! >"$RUN_DIR/pid" )
   ln -sfn "$RUN_DIR" "$GAUNTLET_TMP/latest"
   echo "detached. check: tail -20 $RUN_DIR/gauntlet.log ; sentinel: $RUN_DIR/{DONE,FAIL}"
@@ -77,14 +82,20 @@ set -e
 
 phase() { PHASE="$1"; log "━━━ PHASE: $1 ━━━"; }
 
-run_logged() { # <name> <cmd...> — stream + capture, fail loud with log path
+# Test suites are BEST-EFFORT: a failure is recorded (not fatal) so the run
+# still reaches the device journey matrix — the comprehensive tally + FAIL
+# sentinel are emitted at the end (SHY-0236). Infra steps (services / reseed /
+# matrix-dispatch) are NOT run_logged and still die-fast via set -e + ERR trap.
+FAILED_STEPS=()
+run_logged() { # <name> <cmd...> — stream + capture, record failure, keep going
   local name="$1"; shift
   local logf="$RUN_DIR/$name.log"
   log "▶ $name  (log: $logf)"
   if ( "$@" ) 2>&1 | tee "$logf"; then
     ok "$name passed"
   else
-    die "$name FAILED — full output: $logf"
+    warn "$name FAILED — full output: $logf"
+    FAILED_STEPS+=("$name")
   fi
 }
 
@@ -105,7 +116,7 @@ phase "android-prep"
 ANDROID_ARGS=()
 [ "$INSTALL_APK" = "1" ] && ANDROID_ARGS+=(--install)
 [ "$RESET_APP" = "1" ] && ANDROID_ARGS+=(--reset)
-if bash "$HERE/30-android.sh" "${ANDROID_ARGS[@]}"; then
+if bash "$HERE/30-android.sh" ${ANDROID_ARGS[@]+"${ANDROID_ARGS[@]}"}; then
   ANDROID_OK=1
 else
   ANDROID_OK=0
@@ -129,8 +140,8 @@ if [ "$FRAMEWORKS" = "1" ]; then
   # Jest wipes emulator users/Auth — reseed BEFORE any web suite (hard rule).
   phase "reseed-post-jest"
   bash "$HERE/20-reseed.sh"
-  run_logged playwright-e2e bash -c "cd '$REPO' && npx playwright test"
-  run_logged playwright-integration bash -c "cd '$REPO' && npx playwright test --config=playwright.integration.config.ts"
+  run_logged playwright-e2e bash -c "cd '$REPO' && API_BASE_URL=http://localhost:3000 npx playwright test"
+  run_logged playwright-integration bash -c "cd '$REPO' && API_BASE_URL=http://localhost:3000 npx playwright test --config=playwright.integration.config.ts"
   phase "reseed-post-web"
   bash "$HERE/20-reseed.sh"
 fi
@@ -138,7 +149,7 @@ fi
 # --- 7. instrumented Android BDD (opt-in, needs device, long) ----------------------
 if [ "$ANDROID_BDD" = "1" ]; then
   phase "android-bdd"
-  [ "${ANDROID_OK:-0}" = "1" ] || die "--android-bdd requested but Android prep failed"
+  [ "${ANDROID_OK:-0}" = "1" ] || { touch "$RUN_DIR/FAIL"; die "--android-bdd requested but Android prep failed"; }
   run_logged connected-bdd bash -c "cd '$REPO' && ./gradlew connectedDevDebugAndroidTest --console=plain"
   (cd "$REPO" && ./gradlew --stop >/dev/null 2>&1) || true
 fi
@@ -154,6 +165,18 @@ if [ "$MATRIX" = "1" ]; then
   echo "  matrix progress : bash $HERE/50-matrix.sh status"
   echo "  matrix results  : bash $HERE/50-matrix.sh results"
   echo "  stop the matrix : bash $HERE/50-matrix.sh stop"
+fi
+
+# Comprehensive tally: best-effort suites recorded their failures above; if any
+# failed, emit the FAIL sentinel + exit non-zero AFTER the matrix was dispatched
+# (so one broken suite never hides the rest or blocks the device journeys).
+if [ "${#FAILED_STEPS[@]}" -gt 0 ]; then
+  touch "$RUN_DIR/FAIL"
+  trap - ERR
+  printf '\033[1;31mGAUNTLET completed WITH %d FAILED SUITE(S): %s\033[0m\n' \
+    "${#FAILED_STEPS[@]}" "${FAILED_STEPS[*]}" >&2
+  log "artifacts in $RUN_DIR (matrix, if dispatched, runs on: bash $HERE/50-matrix.sh results)"
+  exit 1
 fi
 
 touch "$RUN_DIR/DONE"

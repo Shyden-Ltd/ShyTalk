@@ -154,15 +154,61 @@ cmd_status() {
   tail -30 "$dir/log" 2>/dev/null || echo "(no log yet)"
 }
 
+# Echo a pid and ALL its descendants, deepest-first (bash-3.2 safe recursion).
+_pid_tree() {
+  local p="$1" c
+  [ -n "$p" ] || return 0
+  for c in $(pgrep -P "$p" 2>/dev/null); do _pid_tree "$c"; done
+  printf '%s\n' "$p"
+}
+
 cmd_stop() {
   local dir; dir="$(resolve_run_dir "${1:-}")"
   [ -f "$dir/pid" ] || die "no pid file in $dir"
-  local pid; pid="$(cat "$dir/pid")"
-  kill -0 "$pid" 2>/dev/null || { echo "already exited"; return 0; }
-  kill "$pid" 2>/dev/null || true
-  sleep 5
-  kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null
-  echo "stopped pid $pid"
+  local pid; pid="$(cat "$dir/pid" 2>/dev/null)"
+  local run_id; run_id="$(basename "$dir")"
+  local self=$$ pass p targets serial leftover by_runid
+
+  # SHY-0236 permanent fix (matrix-orphans / hung-uiautomator thrash): the old
+  # `kill $pid` killed ONLY the nohup wrapper, orphaning the manual-qa-runner +
+  # its --parallel cell runners — which keep driving the phone forever. Kill the
+  # WHOLE process tree AND every runner still tagged with THIS run dir, looping
+  # until quiet (a runner can respawn a child between passes). Never our shell.
+  for pass in 1 2 3; do
+    # Re-derive the run-scoped match set fresh each pass (a runner can respawn a
+    # child between passes). Only treat the file-cached $pid as a tree root if it
+    # INDEPENDENTLY still belongs to THIS run — i.e. its argv still carries $run_id.
+    # Over an hours-long gauntlet the OS may have recycled that PID number onto an
+    # unrelated live process, and recursively kill -9'ing that stale pid's subtree
+    # would take down an innocent tree. The run_id-scoped pgrep is the identity
+    # cross-check (kill-servers-by-port-not-pkill / pkill-hits-your-own-waiters).
+    by_runid="$(pgrep -f "$run_id" 2>/dev/null || true)"
+    targets="$( { [ -n "$pid" ] && printf '%s\n' "$by_runid" | grep -qxF "$pid" && _pid_tree "$pid"; \
+                  printf '%s\n' "$by_runid"; } \
+                 | sort -u | grep -vw "$self" || true)"
+    [ -n "$targets" ] || break
+    for p in $targets; do kill -TERM "$p" 2>/dev/null || true; done
+    sleep 2
+    for p in $targets; do kill -0 "$p" 2>/dev/null && kill -9 "$p" 2>/dev/null || true; done
+  done
+
+  # Device-side: force-stop the app + kill the hung `uiautomator` that holds the
+  # UiAutomation connection (the EXIT=137 relaunch loop). The instrumentation
+  # kill is flavour-agnostic; force-stop covers the local + dev app flavours.
+  for serial in $(adb devices 2>/dev/null | awk 'NR>1 && $2=="device"{print $1}'); do
+    adb -s "$serial" shell am force-stop com.shyden.shytalk.local >/dev/null 2>&1 || true
+    adb -s "$serial" shell am force-stop com.shyden.shytalk.dev   >/dev/null 2>&1 || true
+    adb -s "$serial" shell 'pkill -f uiautomator; pkill -f androidx.test' >/dev/null 2>&1 || true
+  done
+
+  # Honest verification — never the old reassuring "stopped pid N" lie.
+  leftover="$(pgrep -fl manual-qa-runner 2>/dev/null | grep -v ' grep' | grep -vw "$self" || true)"
+  if [ -n "$leftover" ]; then
+    warn "stop: runner(s) STILL alive after 3 kill passes — manual check needed:"
+    printf '%s\n' "$leftover" >&2
+    return 1
+  fi
+  echo "stopped run $run_id — full process tree killed, devices force-stopped, uiautomator cleared; 0 runners remain"
 }
 
 cmd_results() {
