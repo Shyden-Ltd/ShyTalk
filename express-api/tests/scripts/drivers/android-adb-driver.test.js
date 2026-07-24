@@ -101,6 +101,30 @@ describe('androidUiDump stale-holder recovery (SHY-0236)', () => {
     const commands = execSync.mock.calls.map((c) => c[0]);
     expect(commands.some((c) => /pkill\b.*uiautomator/.test(c))).toBe(true);
   });
+
+  // The sibling branch: the holder-clear pkill SUCCEEDS (a real stale holder was
+  // present and got killed). The recovery log line lives in the try's success
+  // path — the case above only exercised the catch (pkill itself throwing), so
+  // without this the whole success branch is dead, uncovered code on new logic.
+  test('logs the recovery when the on-device pkill itself succeeds', async () => {
+    execSync.mockClear();
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (/pkill\b.*uiautomator/.test(cmd)) return ''; // a real stale holder is cleared
+      throw new Error('busy'); // every dump attempt throws → retry exhausts
+    });
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const driver = await createAndroidDriver();
+      const xml = await driver.androidUiDump();
+      expect(xml).toBe(''); // failure path still returns '' — behaviour preserved
+      expect(errSpy).toHaveBeenCalledWith(
+        expect.stringContaining('cleared a possibly-stale uiautomator holder'),
+      );
+    } finally {
+      errSpy.mockRestore();
+    }
+  });
 });
 
 /**

@@ -167,7 +167,7 @@ cmd_stop() {
   [ -f "$dir/pid" ] || die "no pid file in $dir"
   local pid; pid="$(cat "$dir/pid" 2>/dev/null)"
   local run_id; run_id="$(basename "$dir")"
-  local self=$$ pass p targets serial leftover
+  local self=$$ pass p targets serial leftover by_runid
 
   # SHY-0236 permanent fix (matrix-orphans / hung-uiautomator thrash): the old
   # `kill $pid` killed ONLY the nohup wrapper, orphaning the manual-qa-runner +
@@ -175,7 +175,16 @@ cmd_stop() {
   # WHOLE process tree AND every runner still tagged with THIS run dir, looping
   # until quiet (a runner can respawn a child between passes). Never our shell.
   for pass in 1 2 3; do
-    targets="$( { [ -n "$pid" ] && _pid_tree "$pid"; pgrep -f "$run_id" 2>/dev/null; } \
+    # Re-derive the run-scoped match set fresh each pass (a runner can respawn a
+    # child between passes). Only treat the file-cached $pid as a tree root if it
+    # INDEPENDENTLY still belongs to THIS run — i.e. its argv still carries $run_id.
+    # Over an hours-long gauntlet the OS may have recycled that PID number onto an
+    # unrelated live process, and recursively kill -9'ing that stale pid's subtree
+    # would take down an innocent tree. The run_id-scoped pgrep is the identity
+    # cross-check (kill-servers-by-port-not-pkill / pkill-hits-your-own-waiters).
+    by_runid="$(pgrep -f "$run_id" 2>/dev/null || true)"
+    targets="$( { [ -n "$pid" ] && printf '%s\n' "$by_runid" | grep -qxF "$pid" && _pid_tree "$pid"; \
+                  printf '%s\n' "$by_runid"; } \
                  | sort -u | grep -vw "$self" || true)"
     [ -n "$targets" ] || break
     for p in $targets; do kill -TERM "$p" 2>/dev/null || true; done
