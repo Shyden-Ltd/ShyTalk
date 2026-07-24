@@ -49,16 +49,19 @@ while [ $# -gt 0 ]; do
 done
 case "$TARGET" in local|dev) ;; *) die "--target must be local or dev" ;; esac
 
-# On detach we re-exec self; inherit the same RUN_ID so the child writes its
-# logs + DONE/FAIL sentinel into the SAME dir the parent advertised (SHY-0236).
-RUN_ID="${GAUNTLET_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
+# On detach we re-exec self; the parent hands its RUN_ID to the child via a
+# PRIVATE marker (_GAUNTLET_CHILD_RUN_ID, set ONLY on the re-exec below — never
+# a public/exported name a stale interactive shell could accidentally collide
+# with) so the child writes its logs + DONE/FAIL sentinel into the SAME dir the
+# parent advertised (SHY-0236).
+RUN_ID="${_GAUNTLET_CHILD_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 RUN_DIR="$GAUNTLET_TMP/$RUN_ID"
 mkdir -p "$RUN_DIR"
 
 # --- detach mode: re-exec self under nohup + caffeinate ---------------------
 if [ "$DETACH" = "1" ]; then
   log "detaching: log → $RUN_DIR/gauntlet.log"
-  ( GAUNTLET_RUN_ID="$RUN_ID" nohup caffeinate -i "$0" ${PASSTHRU[@]+"${PASSTHRU[@]}"} >"$RUN_DIR/gauntlet.log" 2>&1 </dev/null &
+  ( _GAUNTLET_CHILD_RUN_ID="$RUN_ID" nohup caffeinate -i "$0" ${PASSTHRU[@]+"${PASSTHRU[@]}"} >"$RUN_DIR/gauntlet.log" 2>&1 </dev/null &
     echo $! >"$RUN_DIR/pid" )
   ln -sfn "$RUN_DIR" "$GAUNTLET_TMP/latest"
   echo "detached. check: tail -20 $RUN_DIR/gauntlet.log ; sentinel: $RUN_DIR/{DONE,FAIL}"
@@ -146,7 +149,7 @@ fi
 # --- 7. instrumented Android BDD (opt-in, needs device, long) ----------------------
 if [ "$ANDROID_BDD" = "1" ]; then
   phase "android-bdd"
-  [ "${ANDROID_OK:-0}" = "1" ] || die "--android-bdd requested but Android prep failed"
+  [ "${ANDROID_OK:-0}" = "1" ] || { touch "$RUN_DIR/FAIL"; die "--android-bdd requested but Android prep failed"; }
   run_logged connected-bdd bash -c "cd '$REPO' && ./gradlew connectedDevDebugAndroidTest --console=plain"
   (cd "$REPO" && ./gradlew --stop >/dev/null 2>&1) || true
 fi
