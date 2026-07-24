@@ -27,6 +27,7 @@ INTENTIONAL_GLOBALS=(
   "deploy-dev"          # single dev environment (London Express VM + Firebase App Distribution + TestFlight queue), no parallel deploys
   "deploy-prod"         # single prod environment, no parallel deploys
   "release-main"        # single release pipeline owns version bump + tag
+  "sync-stories"        # SHY-0177: one shared story board (GitHub Project) — at most one sync across ALL triggers (develop pushes + manual dispatches from any ref); ref-scoping would let a push and a dispatch mutate the board concurrently
   "rollback-web-prod"   # single prod CF Pages project (shytalk-site) — all rollbacks must serialise globally; ref-scoping would let two refs race a promote on prod
 )
 
