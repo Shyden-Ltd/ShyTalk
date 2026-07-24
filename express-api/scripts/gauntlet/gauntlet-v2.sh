@@ -282,6 +282,16 @@ if [ "$FRESH" = "1" ]; then bash "$HERE/10-services.sh" --fresh; else bash "$HER
 # No-op under --no-pin-gate or --no-matrix.
 pin_ready_gate
 
+# Pre-flight smoke: prove the data plane (API + Auth + Firestore round-trip) is
+# alive BEFORE the hours-long matrix — abort early if the plumbing is dead
+# (SHY-0240). Local needs a reseed first so the smoke persona exists + is signed
+# in with the baked password; dev is already seeded (via CI). No matrix ⇒ no
+# smoke (nothing to protect). A failure die's → ERR trap → FAIL sentinel.
+if [ "$MATRIX" = "1" ]; then
+  if [ "$TARGET" = "local" ]; then phase "reseed-pre-smoke"; bash "$HERE/20-reseed.sh"; fi
+  phase "smoke"; bash "$HERE/25-smoke.sh" "$TARGET"
+fi
+
 # Optional APK (re)build / app reset must happen BEFORE dispatch — 50-matrix's
 # own device prep (30-android.sh with no args) does not install/reset. Its
 # re-tunnel inside the launch is idempotent, so a double prep is harmless.
