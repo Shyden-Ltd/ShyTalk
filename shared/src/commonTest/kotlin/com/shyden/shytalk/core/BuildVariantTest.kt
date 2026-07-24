@@ -12,7 +12,15 @@ class BuildVariantTest {
     fun resetState() {
         BuildVariant.initLocalEmulator(false)
         BuildVariant.initIosDeviceId(null)
-        BuildVariant.initBuildInfo(environment = "prod", buildVersion = "?", deviceInfo = "?")
+        BuildVariant.initBuildInfo(
+            environment = "prod",
+            buildVersion = "?",
+            deviceInfo = "?",
+            gitBranch = "?",
+            gitSha = "?",
+            gitDirty = false,
+            builtAt = "?",
+        )
         BuildVariant.initApiBaseUrl(null)
     }
 
@@ -574,7 +582,7 @@ class BuildVariantTest {
     }
 
     @Test
-    fun `isLocal is false on the fail-safe default (uninitialised env defaults to prod)`() {
+    fun `isLocal is false on the fail-safe default uninitialised env defaults to prod`() {
         // The default holder has environment="prod" so isLocal must be
         // false without any explicit initialiser. Pins the fail-safe
         // semantic so a missed init never enables local-only behaviours
@@ -628,7 +636,7 @@ class BuildVariantTest {
     // flow (which would fail against the Firebase Auth emulator).
 
     @Test
-    fun `isOAuthSignInVisible is true on all flavors (always render buttons)`() {
+    fun `isOAuthSignInVisible is true on all flavors always render buttons`() {
         for (env in listOf("local", "dev", "prod")) {
             BuildVariant.initBuildInfo(environment = env, buildVersion = "1.0")
             assertTrue(
@@ -639,7 +647,7 @@ class BuildVariantTest {
     }
 
     @Test
-    fun `isOAuthSignInVisible is true on the fail-safe default (no init called)`() {
+    fun `isOAuthSignInVisible is true on the fail-safe default no init called`() {
         // Defaults to prod (renders the buttons functionally). Visibility
         // gate is still true so a misconfigured platform initialiser
         // never accidentally hides the buttons.
@@ -668,7 +676,7 @@ class BuildVariantTest {
     }
 
     @Test
-    fun `isOAuthSignInFunctional is true on the fail-safe default (defaults to prod)`() {
+    fun `isOAuthSignInFunctional is true on the fail-safe default defaults to prod`() {
         // Critical fail-safe: a missing initialiser must NOT silently
         // disable OAuth on real prod. Defaults to "prod" → functional.
         assertTrue(BuildVariant.isOAuthSignInFunctional)
@@ -725,7 +733,7 @@ class BuildVariantTest {
     }
 
     @Test
-    fun `isDevAffordancesVisible ignores persona-password presence on prod (visibility is env-only)`() {
+    fun `isDevAffordancesVisible ignores persona-password presence on prod visibility is env-only`() {
         // Critical: a prod build with the persona password accidentally
         // baked in (env var leak, misconfigured CI) must STILL hide the
         // picker. The visibility gate is purely env-based; password
@@ -745,5 +753,66 @@ class BuildVariantTest {
             BuildVariant.isPersonaPickerAvailable,
             "functional gate still reports available; visibility gate is what hides the picker",
         )
+    }
+
+    // ── SHY-0205: build-time git identity slots ──
+    //
+    // Same fail-safe philosophy as buildVersion/deviceInfo: every slot
+    // defaults to a visible placeholder so an absent platform initialiser
+    // reads as "?" in the watermark instead of rendering blank segments.
+
+    @Test
+    fun `git identity slots default to placeholders`() {
+        assertEquals("?", BuildVariant.gitBranch)
+        assertEquals("?", BuildVariant.gitSha)
+        assertFalse(BuildVariant.gitDirty)
+        assertEquals("?", BuildVariant.builtAt)
+    }
+
+    @Test
+    fun `initBuildInfo captures git identity verbatim`() {
+        BuildVariant.initBuildInfo(
+            environment = "local",
+            buildVersion = "0.97.15 (176)",
+            deviceInfo = "OnePlus · Android 16",
+            gitBranch = "story/SHY-0205-preview-watermark-build-identity",
+            gitSha = "abc1234def",
+            gitDirty = true,
+            builtAt = "07-18 11:40",
+        )
+        assertEquals("story/SHY-0205-preview-watermark-build-identity", BuildVariant.gitBranch)
+        assertEquals("abc1234def", BuildVariant.gitSha)
+        assertTrue(BuildVariant.gitDirty)
+        assertEquals("07-18 11:40", BuildVariant.builtAt)
+    }
+
+    @Test
+    fun `initBuildInfo coerces blank git strings to placeholders`() {
+        BuildVariant.initBuildInfo(
+            environment = "dev",
+            buildVersion = "1.0",
+            gitBranch = "  ",
+            gitSha = "",
+            builtAt = " ",
+        )
+        assertEquals("?", BuildVariant.gitBranch)
+        assertEquals("?", BuildVariant.gitSha)
+        assertEquals("?", BuildVariant.builtAt)
+    }
+
+    @Test
+    fun `legacy three-arg initBuildInfo leaves git slots at placeholders`() {
+        // Existing call sites (AuthFlowTest, older platform bridges) pass
+        // only environment/buildVersion/deviceInfo — the new slots must
+        // default rather than break the call or inherit stale values.
+        BuildVariant.initBuildInfo(
+            environment = "local",
+            buildVersion = "1.0",
+            deviceInfo = "device",
+        )
+        assertEquals("?", BuildVariant.gitBranch)
+        assertEquals("?", BuildVariant.gitSha)
+        assertFalse(BuildVariant.gitDirty)
+        assertEquals("?", BuildVariant.builtAt)
     }
 }

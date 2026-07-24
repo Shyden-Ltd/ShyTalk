@@ -30,7 +30,7 @@ class EffectiveCohortTest {
     }
 
     @Test
-    fun `both invalid yields minor (most-restrictive)`() {
+    fun `both invalid yields minor most-restrictive`() {
         assertEquals(COHORT_MINOR, effectiveCohort(cohort = "x", cohortOverride = "y"))
     }
 

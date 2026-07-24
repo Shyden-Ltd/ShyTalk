@@ -146,4 +146,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: express-api/coverage
           destination_dir: express/${{ inputs.report_env || 'pr' }}/latest
-          keep_files: true
+          # SHY-0128: false — peaceiris cleans ONLY destination_dir before
+          # copying (v4.1.0 git-utils.ts L127-138), so each deploy replaces this
+          # suite/env's latest/ instead of stranding prior hashed files forever.
+          keep_files: false

@@ -324,12 +324,6 @@ class IosPinRepositoryImpl(
         } catch (e: Exception) {
             Result.failure(e)
         }
-
-    override suspend fun resetPin(newPin: String): Result<Unit> =
-        runCatching {
-            @Suppress("UNUSED_VARIABLE")
-            val ignored = api.post("/api/auth/pin/reset", JsonObject(mapOf("pin" to JsonPrimitive(newPin))))
-        }
 }
 
 // ── BiometricRepository ─────────────────────────────────────────

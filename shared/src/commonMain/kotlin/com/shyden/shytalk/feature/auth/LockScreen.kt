@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.shyden.shytalk.core.effects.PlatformBackHandler
 import com.shyden.shytalk.core.util.SecureScreenEffect
 import com.shyden.shytalk.feature.auth.components.PinDots
 import com.shyden.shytalk.feature.auth.components.PinKeypad
@@ -42,11 +43,20 @@ fun LockScreen(
 ) {
     SecureScreenEffect()
 
+    // SHY-0187: consume the system back gesture — backing out of the lock
+    // would reveal whatever content sits beneath it.
+    PlatformBackHandler(enabled = true) {}
+
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // OS biometric-prompt copy is resolved HERE (UI layer) and passed down —
+    // the VM must never suspend on compose-resource IO (SHY-0187 R2).
+    val bioTitle = stringResource(Res.string.biometric_unlock_title)
+    val bioDesc = stringResource(Res.string.biometric_unlock_desc)
 
     LaunchedEffect(state.biometricAvailable) {
         if (state.biometricAvailable) {
-            viewModel.authenticateWithBiometric()
+            viewModel.authenticateWithBiometric(bioTitle, bioDesc)
         }
     }
 
@@ -112,7 +122,7 @@ fun LockScreen(
                 onBackspace = { viewModel.onPinBackspace() },
                 onBiometric =
                     if (state.biometricAvailable) {
-                        { viewModel.authenticateWithBiometric() }
+                        { viewModel.authenticateWithBiometric(bioTitle, bioDesc) }
                     } else {
                         null
                     },

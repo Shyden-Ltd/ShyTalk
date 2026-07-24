@@ -18,7 +18,4 @@ interface PinRepository {
         deviceId: String,
         pin: String,
     ): Result<PinVerifyResult>
-
-    /** Reset PIN after re-authentication. Clears lockout state. */
-    suspend fun resetPin(newPin: String): Result<Unit>
 }
