@@ -83,6 +83,26 @@ describe('androidUiDump backoff wiring', () => {
   });
 });
 
+describe('androidUiDump stale-holder recovery (SHY-0236)', () => {
+  // A persistent dump failure is usually a STALE UiAutomation holder (the hung
+  // on-device `uiautomator`, EXIT=137 loop). The driver must CLEAR that holder
+  // so the NEXT dump rebinds fresh — instead of returning '' forever while the
+  // caller relaunches the app endlessly (the matrix-orphans thrash). This pin
+  // is exactly what would have prevented the 2026-07-24 recurrence.
+  test('kills the on-device uiautomator after the retry budget is exhausted', async () => {
+    execSync.mockClear();
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      throw new Error('busy'); // dump throws → retry exhausts; pkill also throws (caught)
+    });
+    const driver = await createAndroidDriver();
+    const xml = await driver.androidUiDump();
+    expect(xml).toBe(''); // failure still returns '' — behaviour preserved
+    const commands = execSync.mock.calls.map((c) => c[0]);
+    expect(commands.some((c) => /pkill\b.*uiautomator/.test(c))).toBe(true);
+  });
+});
+
 /**
  * Build a mock execSync responder driven by a cmd-substring → output
  * map. Each `pattern` is matched against the full shell-quoted

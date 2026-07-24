@@ -18,6 +18,9 @@ const SCRIPT = path.resolve(__dirname, '../../scripts/gauntlet/gauntlet.sh');
 const src = fs.readFileSync(SCRIPT, 'utf8');
 const lines = src.split('\n');
 
+const MATRIX = path.resolve(__dirname, '../../scripts/gauntlet/50-matrix.sh');
+const matrixSrc = fs.readFileSync(MATRIX, 'utf8');
+
 describe('gauntlet.sh cold-boot structural invariants (SHY-0236)', () => {
   test('runs under set -uo pipefail, with -e deferred until AFTER the ERR trap', () => {
     expect(src).toMatch(/set -uo pipefail/);
@@ -89,5 +92,37 @@ describe('gauntlet.sh cold-boot structural invariants (SHY-0236)', () => {
     // a public/exported name a stale interactive shell could set must NOT drive
     // RUN_DIR reuse (would race two runs into one dir)
     expect(src).not.toMatch(/\$\{GAUNTLET_RUN_ID/);
+  });
+});
+
+describe('50-matrix.sh cmd_stop — orphan/thrash prevention (SHY-0236)', () => {
+  // The recurring "phone opens/closes the app forever" thrash: the old stop
+  // killed ONLY the parent, orphaning the --parallel cell runners which keep
+  // driving the phone. These pin the permanent fix.
+  const m = matrixSrc.match(/cmd_stop\(\)\s*\{[\s\S]*?\n\}/);
+  const body = m ? m[0] : '';
+
+  test('cmd_stop exists', () => {
+    expect(m).not.toBeNull();
+  });
+
+  test('kills the whole process TREE, not just the parent pid', () => {
+    expect(matrixSrc).toMatch(/_pid_tree\(\)/); // recursive descendant walk
+    expect(matrixSrc).toMatch(/pgrep -P/);
+    expect(body).toMatch(/_pid_tree/);
+  });
+
+  test('loops until quiet (a runner can respawn a child between passes)', () => {
+    expect(body).toMatch(/for pass in 1 2 3/);
+  });
+
+  test('reaps the on-device uiautomator holder + force-stops the app', () => {
+    expect(body).toMatch(/am force-stop/);
+    expect(body).toMatch(/pkill -f uiautomator/);
+  });
+
+  test('VERIFIES quiet + never prints the bare "stopped pid N" lie', () => {
+    expect(body).toMatch(/pgrep -fl manual-qa-runner/);
+    expect(body).not.toMatch(/echo "stopped pid \$pid"/);
   });
 });
