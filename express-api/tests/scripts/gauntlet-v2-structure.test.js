@@ -66,6 +66,15 @@ describe('gauntlet-v2.sh — the REORDER (devices before the Mac suites)', () =>
     expect(jestIdx).toBeGreaterThan(-1);
     expect(jestIdx).toBeGreaterThan(matrixWaitIdx);
   });
+
+  test('a fresh reseed runs immediately before express-jest (clean baseline, matching v1)', () => {
+    // The reorder must NOT drop v1's guarantee that Jest sees a reseeded baseline
+    // — the matrix leaves the emulator mutated, so reseed-pre-jest is required.
+    const reseedIdx = at(/phase "reseed-pre-jest"/);
+    const jestIdx = at(/run_logged express-jest/);
+    expect(reseedIdx).toBeGreaterThan(-1);
+    expect(reseedIdx).toBeLessThan(jestIdx);
+  });
 });
 
 describe('gauntlet-v2.sh — the OVERLAP allowlist (only stack-independent suites)', () => {
@@ -101,25 +110,42 @@ describe('gauntlet-v2.sh — the OVERLAP allowlist (only stack-independent suite
 });
 
 describe('gauntlet-v2.sh — streaming, reaping, sentinel (SHY-0236 contract)', () => {
-  test('overlapped + serial suites stream to BOTH console and file (tee, not file-only)', () => {
-    // start_overlapped + run_logged both pipe through awk (source-prefix, line-
-    // flushed) into tee — never a bare `> "$logf"` file-only redirect.
-    expect(src).toMatch(/awk -v p="\[\$name\] ".*fflush\(\).*\|\s*tee "\$logf"/);
-    expect(src).not.toMatch(/"\$@"\s*>\s*"\$logf"\s*2>&1\s*$/m); // no file-only capture
+  test('BOTH start_overlapped AND run_logged stream to console+file (tee, per site)', () => {
+    // Assert each function body independently — a combined `toMatch` would pass
+    // if only ONE of the two near-duplicate sites still teed (Finding I6).
+    for (const fn of ['start_overlapped', 'run_logged']) {
+      const body = src.match(new RegExp(`${fn}\\(\\)\\s*\\{[\\s\\S]*?\\n\\}`));
+      expect(body).not.toBeNull();
+      expect(body[0]).toMatch(/awk -v p="\[\$name\] ".*fflush\(\).*\|\s*tee "\$logf"/);
+      expect(body[0]).not.toMatch(/"\$@"\s*>\s*"\$logf"/); // no file-only redirect
+    }
   });
 
   test('the matrix log is streamed live to the console', () => {
     expect(src).toMatch(/tail -n \+1 -F "\$MATRIX_LOG".*awk.*\[matrix\]/);
   });
 
-  test('reap trap tears down overlapped suites + the tail on exit/interrupt', () => {
-    expect(src).toMatch(/trap reap_overlapped EXIT INT TERM/);
-    expect(src).toMatch(/reap_overlapped\(\)/);
+  test('reap trap tears down overlapped suites + the tail (via the _pid_tree idiom)', () => {
+    expect(src).toMatch(/trap reap_overlapped EXIT\b/);
     // reap kills the whole process tree (SHY-0236 _pid_tree idiom), never a bare pid
     expect(src).toMatch(/_pid_tree\(\)/);
     const reap = src.match(/reap_overlapped\(\)\s*\{[\s\S]*?\n\}/);
     expect(reap).not.toBeNull();
     expect(reap[0]).toMatch(/_pid_tree/);
+    expect(reap[0]).toMatch(/TAIL_PID/);
+  });
+
+  test('INT/TERM abort the run (reap + exit), EXIT only reaps — a resume-not-abort bug', () => {
+    // A bare INT/TERM trap that only reaps RESUMES after the handler; the run
+    // must actually terminate. INT/TERM route to on_signal (which exits); EXIT
+    // must NOT be bundled with them.
+    expect(src).toMatch(/trap 'on_signal 130' INT/);
+    expect(src).toMatch(/trap 'on_signal 143' TERM/);
+    expect(src).not.toMatch(/trap reap_overlapped EXIT INT TERM/);
+    const sig = src.match(/on_signal\(\)\s*\{[\s\S]*?\n\}/);
+    expect(sig).not.toBeNull();
+    expect(sig[0]).toMatch(/reap_overlapped/);
+    expect(sig[0]).toMatch(/\bexit\b/);
   });
 
   test('final tally: any failed step → FAIL + exit 1; clean → DONE (SHY-0236)', () => {

@@ -94,4 +94,77 @@ describe('reap_overlapped — real teardown (SHY-0238)', () => {
     expect(result.stdout).toMatch(/PRE=ALIVE/); // fixture really started
     expect(result.stdout).toMatch(/POST=DEAD/); // reap actually killed the tree
   });
+
+  test('also kills the matrix-tail TREE, not just the TAIL_PID subshell', () => {
+    // The real tail is `( tail -F | awk ) &`, so TAIL_PID is the subshell — a
+    // bare `kill $TAIL_PID` orphans the inner `tail -F` (runs forever). The
+    // fixture mirrors that shape (long stub is a GRANDCHILD of TAIL_PID).
+    const tag = `shy0238-tail-${process.pid}`;
+    const { result } = runLib(`
+      ( bash -c 'exec -a ${tag} sleep 30' | cat ) &
+      TAIL_PID=$!
+      for _ in $(seq 1 60); do pgrep -f ${tag} >/dev/null 2>&1 && break; sleep 0.05; done
+      pgrep -f ${tag} >/dev/null 2>&1 && echo "PRE=ALIVE" || echo "PRE=MISSING"
+      reap_overlapped
+      for _ in $(seq 1 60); do pgrep -f ${tag} >/dev/null 2>&1 || break; sleep 0.05; done
+      pgrep -f ${tag} >/dev/null 2>&1 && echo "TAIL=ALIVE" || echo "TAIL=DEAD"
+      pkill -f ${tag} 2>/dev/null || true
+    `);
+    expect(result.stdout).toMatch(/PRE=ALIVE/);
+    expect(result.stdout).toMatch(/TAIL=DEAD/);
+  });
+});
+
+describe('on_signal — a signal actually ABORTS the run (SHY-0238)', () => {
+  test('reaps the overlapped suites AND exits with the given code', () => {
+    // A bare INT/TERM trap that only reaps would RESUME the run; on_signal must
+    // exit. Run it in a subshell so its exit doesn't kill the test harness.
+    const tag = `shy0238-sig-${process.pid}`;
+    const { result } = runLib(`
+      start_overlapped longrun bash -c 'exec -a ${tag} sleep 30'
+      for _ in $(seq 1 60); do pgrep -f ${tag} >/dev/null 2>&1 && break; sleep 0.05; done
+      ( on_signal 130 ); echo "RC=$?"
+      for _ in $(seq 1 60); do pgrep -f ${tag} >/dev/null 2>&1 || break; sleep 0.05; done
+      pgrep -f ${tag} >/dev/null 2>&1 && echo "SUITE=ALIVE" || echo "SUITE=DEAD"
+      pkill -f ${tag} 2>/dev/null || true
+    `);
+    expect(result.stdout).toMatch(/RC=130/); // exited with 128+SIGINT
+    expect(result.stdout).toMatch(/SUITE=DEAD/); // and reaped
+  });
+});
+
+describe('wait_overlapped — empty-array safety (SHY-0238)', () => {
+  test('a call with zero pending suites returns cleanly under set -u (bash-3.2)', () => {
+    const { result } = runLib(`
+      set -u
+      wait_overlapped
+      echo "RC=$?"
+    `);
+    expect(result.stdout).toMatch(/RC=0/); // no "unbound variable" abort
+  });
+});
+
+describe('gauntlet-v2.sh — CLI flag parsing (real entrypoint, SHY-0238)', () => {
+  const run = (...args) =>
+    spawnSync('/bin/bash', [SCRIPT, ...args], { encoding: 'utf8', timeout: 10000 });
+
+  test('-h prints usage and exits 0', () => {
+    const r = run('-h');
+    expect(r.status).toBe(0);
+    expect(r.stdout).toMatch(/--frameworks/);
+  });
+  test('an unknown flag dies non-zero with a clear message', () => {
+    const r = run('--bogus-flag');
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/unknown flag/);
+  });
+  test('an invalid --target value is rejected', () => {
+    const r = run('--target', 'prod');
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/must be local or dev/);
+  });
+  test('a missing --target value is rejected', () => {
+    const r = run('--target');
+    expect(r.status).not.toBe(0);
+  });
 });

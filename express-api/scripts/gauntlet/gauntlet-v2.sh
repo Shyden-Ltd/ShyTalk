@@ -66,6 +66,9 @@ start_overlapped() { # <name> <cmd...>
 # the end owns the pass/fail). Cleared after so reap_overlapped is a no-op.
 wait_overlapped() {
   local i
+  # bash-3.2 + set -u: expanding ${!arr[@]} on a declared-but-empty array aborts
+  # ("unbound variable"). Guard the empty case (nothing to wait for).
+  [ "${#OVERLAP_PIDS[@]}" -gt 0 ] || return 0
   for i in "${!OVERLAP_PIDS[@]}"; do
     if wait "${OVERLAP_PIDS[$i]}"; then
       ok "${OVERLAP_NAMES[$i]} passed"
@@ -85,7 +88,22 @@ reap_overlapped() {
   for pid in ${OVERLAP_PIDS[@]+"${OVERLAP_PIDS[@]}"}; do
     for p in $(_pid_tree "$pid"); do kill -TERM "$p" 2>/dev/null || true; done
   done
-  [ -n "${TAIL_PID:-}" ] && { kill "$TAIL_PID" 2>/dev/null || true; TAIL_PID=""; }
+  # TAIL_PID is the `( tail -F | awk ) &` subshell — kill its TREE, not just the
+  # subshell, or the orphaned `tail -F` runs forever.
+  if [ -n "${TAIL_PID:-}" ]; then
+    for p in $(_pid_tree "$TAIL_PID"); do kill -TERM "$p" 2>/dev/null || true; done
+    TAIL_PID=""
+  fi
+}
+
+# A bare INT/TERM trap that only cleans up would RESUME the script after the
+# handler returns (standard bash semantics) — so Ctrl-C during the overlap phase
+# would kill the suites yet march on into the hours-long matrix-wait. Reap, then
+# actually terminate with the conventional 128+signal code.
+on_signal() { # <exit-code>
+  reap_overlapped
+  trap - EXIT INT TERM
+  exit "${1:-143}"
 }
 
 # Serial suite runner (prep + the post-matrix stack-coupled suites): stream +
@@ -139,7 +157,9 @@ on_fail() {
   printf '\033[1;31mGAUNTLET v2 FAILED at phase: %s — log dir: %s\033[0m\n' "${PHASE:-startup}" "$RUN_DIR" >&2
 }
 trap on_fail ERR
-trap reap_overlapped EXIT INT TERM
+trap reap_overlapped EXIT
+trap 'on_signal 130' INT    # reap + exit (130 = 128+SIGINT) — an interrupt must abort
+trap 'on_signal 143' TERM   # reap + exit (143 = 128+SIGTERM)
 set -e   # arm AFTER the traps (SHY-0236: a die before the trap writes no sentinel)
 
 phase() { PHASE="$1"; log "━━━ PHASE: $1 ━━━"; }
@@ -225,6 +245,10 @@ fi
 # the web suites, exactly as v1 does.
 if [ "$FRAMEWORKS" = "1" ]; then
   phase "stack-coupled-suites"
+  # Reseed BEFORE jest: the device matrix (and --no-matrix) leaves the emulator
+  # in a mutated/unknown state; v1 guaranteed jest a clean baseline (gauntlet.sh
+  # reseeds immediately before jest), so v2 must too.
+  phase "reseed-pre-jest"; bash "$HERE/20-reseed.sh"
   run_logged express-jest bash -c "cd '$REPO/express-api' && npm test"
   phase "reseed-post-jest"; bash "$HERE/20-reseed.sh"
   run_logged playwright-e2e bash -c "cd '$REPO' && API_BASE_URL=http://localhost:3000 npx playwright test"
