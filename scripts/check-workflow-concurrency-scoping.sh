@@ -27,6 +27,7 @@ INTENTIONAL_GLOBALS=(
   "deploy-dev"          # single dev environment (London Express VM + Firebase App Distribution + TestFlight queue), no parallel deploys
   "deploy-prod"         # single prod environment, no parallel deploys
   "release-main"        # single release pipeline owns version bump + tag
+  "rollback-web-prod"   # single prod CF Pages project (shytalk-site) — all rollbacks must serialise globally; ref-scoping would let two refs race a promote on prod
 )
 
 violations=0
