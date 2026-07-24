@@ -1,6 +1,6 @@
 ---
 id: SHY-0240
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-25
 priority: P1
@@ -159,3 +159,5 @@ The four legs, each a real proof:
 - **I4 — the wiring ordering test lacked the sibling `-1`-found guard** (a broken reference regex could pass vacuously). **Fixed:** guard all three indices `> -1`.
 - **M1 — the `PERSONAS_PASSWORD`-only-missing dev path was untested.** **Fixed:** added a 4th abort pin (api-key present, password absent → dies naming `PERSONAS_PASSWORD`).
 - Gates: **81 gauntlet-v2 tests green** (58 prior + 23: 14 structural + 9 behavioural); round-trip predicate mutation-proven; the real run stays green + idempotent; `bash -n` + `shellcheck -x` + eslint + prettier + no-new-stubs clean.
+
+Reviewed-up-to: e7f0479230387b4b2e2627c3f04b019ba80b4074
