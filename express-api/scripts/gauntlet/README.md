@@ -117,7 +117,8 @@ stack is down, seeding fails, or no physical iPhone is visible to
 
 ## Environment knobs
 
-| Variable       | Default                            | Meaning                                 |
-| -------------- | ---------------------------------- | --------------------------------------- |
-| `SHYTALK_REPO` | auto-detected from script location | repo checkout the scripts operate on    |
-| `GAUNTLET_TMP` | `/tmp/shytalk-gauntlet`            | where run artifacts/logs/sentinels live |
+| Variable           | Default                            | Meaning                                                                                                                   |
+| ------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `SHYTALK_REPO`     | auto-detected from script location | repo checkout the scripts operate on                                                                                      |
+| `GAUNTLET_TMP`     | `/tmp/shytalk-gauntlet`            | where run artifacts/logs/sentinels live                                                                                   |
+| `PIN_GATE_TIMEOUT` | `1800`                             | seconds `gauntlet-v2.sh`'s PIN-ready gate waits for confirm before failing the run (non-integer → clamped to the default) |
