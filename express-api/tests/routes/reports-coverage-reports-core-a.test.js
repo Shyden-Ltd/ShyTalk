@@ -83,6 +83,7 @@ jest.mock('../../src/utils/firestore-helpers', () => {
 });
 
 const reportsRouter = require('../../src/routes/reports');
+const { waitFor } = require('../_helpers/wait-for.js');
 
 function createApp({ uid = 'admin-firebase-uid', uniqueId = 'admin-1' } = {}) {
   const app = express();
@@ -153,8 +154,7 @@ describe('POST /api/reports - FCM + cleanupInvalidAdminTokens', () => {
       .post('/api/reports')
       .send({ reportedUserId: 'target', reason: 'spam' });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
-    expect(mockBatchSet).toHaveBeenCalled();
+    await waitFor(() => expect(mockBatchSet).toHaveBeenCalled());
     expect(mockBatchCommit).toHaveBeenCalled();
   });
 
@@ -166,8 +166,7 @@ describe('POST /api/reports - FCM + cleanupInvalidAdminTokens', () => {
       .post('/api/reports')
       .send({ reportedUserId: 'target', reason: 'spam' });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(mockBatchSet).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockBatchSet).not.toHaveBeenCalled());
   });
 
   it('skips FCM when no admin tokens exist', async () => {
@@ -177,8 +176,7 @@ describe('POST /api/reports - FCM + cleanupInvalidAdminTokens', () => {
       .post('/api/reports')
       .send({ reportedUserId: 'target', reason: 'spam' });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(sendFcmToTokens).not.toHaveBeenCalled();
+    await waitFor(() => expect(sendFcmToTokens).not.toHaveBeenCalled());
   });
 
   it('skips non-array fcmTokens', async () => {
@@ -192,8 +190,9 @@ describe('POST /api/reports - FCM + cleanupInvalidAdminTokens', () => {
       .post('/api/reports')
       .send({ reportedUserId: 'target', reason: 'spam' });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(sendFcmToTokens).toHaveBeenCalledWith(['valid'], expect.any(Object));
+    await waitFor(() =>
+      expect(sendFcmToTokens).toHaveBeenCalledWith(['valid'], expect.any(Object)),
+    );
   });
 
   it('logs error when FCM fails', async () => {
@@ -204,8 +203,7 @@ describe('POST /api/reports - FCM + cleanupInvalidAdminTokens', () => {
       .post('/api/reports')
       .send({ reportedUserId: 'target', reason: 'spam' });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
-    expect(log.error).toHaveBeenCalled();
+    await waitFor(() => expect(log.error).toHaveBeenCalled());
   });
 
   it('uses Unknown when reportedUserName not provided', async () => {

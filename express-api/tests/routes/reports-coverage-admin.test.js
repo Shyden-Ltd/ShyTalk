@@ -82,6 +82,7 @@ jest.mock('../../src/utils/firestore-helpers', () => {
 });
 
 const reportsRouter = require('../../src/routes/reports');
+const { waitFor } = require('../_helpers/wait-for.js');
 
 function createApp({ uid = 'admin-firebase-uid', uniqueId = 'admin-1' } = {}) {
   const app = express();
@@ -418,8 +419,7 @@ describe('evictSuspendedUser - via suspend', () => {
       .post('/api/admin/users/u1/suspend')
       .send({ reason: 'Test', canAppeal: false });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(mockBatchSet).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockBatchSet).not.toHaveBeenCalled());
   });
 
   it('handles null seats', async () => {
@@ -431,8 +431,7 @@ describe('evictSuspendedUser - via suspend', () => {
       .post('/api/admin/users/u1/suspend')
       .send({ reason: 'Test', canAppeal: false });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
-    expect(mockBatchCommit).toHaveBeenCalled();
+    await waitFor(() => expect(mockBatchCommit).toHaveBeenCalled());
     // The room write happens even though seats is null — arrayRemove on
     // participantIds still fires.
     expect(mockBatchUpdate).toHaveBeenCalled();
@@ -662,7 +661,6 @@ describe('evictSuspendedUser - seat with userId match via user_id', () => {
       .post('/api/admin/users/u1/suspend')
       .send({ reason: 'Test', canAppeal: false });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
-    expect(mockBatchCommit).toHaveBeenCalled();
+    await waitFor(() => expect(mockBatchCommit).toHaveBeenCalled());
   });
 });

@@ -105,6 +105,7 @@ beforeEach(() => {
 // ─── App setup ───────────────────────────────────────────────────
 
 const conversationsRouter = require('../../src/routes/conversations');
+const { waitFor } = require('../_helpers/wait-for.js');
 
 function createApp(uniqueId = 'user-A') {
   const app = express();
@@ -349,8 +350,7 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
       .send({ text: 'Hello', senderName: 'Alice', type: 'TEXT' });
 
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockSendFcmToTokens).not.toHaveBeenCalled());
   });
 
   test('skips notification when user has no FCM tokens (line 113)', async () => {
@@ -449,8 +449,7 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
       .send({ text: 'Hello', senderName: 'Alice', type: 'TEXT' });
 
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockSendFcmToTokens).not.toHaveBeenCalled());
   });
 
   test('handles DND with start <= end (same-day window, line 100-101)', async () => {

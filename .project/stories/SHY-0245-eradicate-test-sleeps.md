@@ -131,6 +131,16 @@ Because SHY-0242 made the develop gate force `playwright-web` on **every backend
 - Remove the settled-state anchor from a fixed test → the race returns and the test fails in CI.
 - Point the ratchet at an empty directory → it reports 0 and passes, proving a zero result means "scanned and clean" rather than "scanned nothing" ([[feedback-mutation-passed-means-investigate]]).
 
+## Known adjacent defect (recorded, NOT silently patched)
+
+`express-api/tests/scripts/50-matrix-cmd-stop.test.js` passes alone (9/9) but fails inside the full `tests/scripts/` run: *"reaps a process tagged with THIS run_id … → exit 0"* returns 1.
+
+Cause: `cmd_stop`'s final verification (`50-matrix.sh:205`) is `pgrep -fl manual-qa-runner` — **globally** scoped, while the kill passes above it are carefully **run**-scoped (`pgrep -f "$run_id"`). Sibling `manual-qa-runner-*.test.js` files invoke the real script, whose own path contains that token, so a concurrent Jest worker trips the check.
+
+**Deliberately not "fixed" by scoping the verification.** The sibling test *"a surviving manual-qa-runner-tagged process → honest exit 1"* asserts precisely that a runner WITHOUT the run_id must still fail the stop — the global scope is an intentional "never claim success while any runner is alive" guard on a single-gauntlet machine. Narrowing it would delete a real safety property to make a test green.
+
+The correct fix is test-side isolation (serialise the process-sensitive specs), which is a distinct piece of work. It is **not blocking**: this suite passes in CI, where worker scheduling differs — the failure is local-only so far.
+
 ## Out of Scope
 
 - The product's 3s config-loading fallback in `roadmap-auth.js` — a legitimate failure deadline, not a wait-then-assert.

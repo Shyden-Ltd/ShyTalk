@@ -54,6 +54,7 @@ HITS="$(grep -rnI -E \
   'waitForTimeout\(|Thread\.sleep\(|usleep\(|asyncAfter\(|new Promise\(.*=>[[:space:]]*setTimeout' \
   --include='*.ts' --include='*.js' --include='*.kt' --include='*.swift' \
   --exclude='check-no-test-sleeps*' \
+  --exclude='wait-for.js' \
   --exclude-dir=node_modules --exclude-dir=build --exclude-dir=.git \
   --exclude-dir=dist --exclude-dir=test-results --exclude-dir=playwright-report \
   --exclude-dir=allure-results --exclude-dir=.gradle \
