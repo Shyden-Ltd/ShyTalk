@@ -154,7 +154,6 @@ test.describe('Admin Realtime Features', () => {
     await expect(liveToggle).toHaveClass(/active/, { timeout: 3_000 });
 
     // Wait briefly for live mode to be active
-    await page.waitForTimeout(2_000);
 
     // Verify the toggle is active (live mode running)
     await expect(liveToggle).toHaveClass(/active/);

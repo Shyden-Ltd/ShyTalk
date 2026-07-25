@@ -178,7 +178,6 @@ test.describe("non-English lazy translation", () => {
     page,
   }) => {
     const { consoleErrors } = await setupPage(page, { translate: "fail" });
-    await page.waitForTimeout(300);
     await expect(
       page.locator(".feature-item", { hasText: "Tracked story one" }),
     ).toHaveCount(1);
@@ -192,7 +191,6 @@ test.describe("non-English lazy translation", () => {
     const { consoleErrors } = await setupPage(page, {
       translate: "rate-limit",
     });
-    await page.waitForTimeout(300);
     await expect(
       page.locator(".feature-item", { hasText: "Tracked story one" }),
     ).toHaveCount(1);

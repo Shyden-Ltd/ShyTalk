@@ -50,7 +50,6 @@ test.describe('Seasonal Theme System', () => {
       (globalThis as any).Date = MockDate;
     });
     await page.goto(BASE);
-    await page.waitForTimeout(2_000);
     await expect(page.locator('#seasonal-ribbon')).not.toBeVisible();
   });
 

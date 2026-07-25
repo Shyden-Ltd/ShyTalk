@@ -247,7 +247,6 @@ test.describe('Admin Fun Facts', () => {
     await card.getByRole('button', { name: 'Delete' }).click();
 
     // Small wait to let any UI updates settle
-    await page.waitForTimeout(500);
 
     // Fact should still be in the list
     await expect(factCard(page, factText)).toBeVisible();

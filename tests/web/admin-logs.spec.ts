@@ -500,7 +500,6 @@ test.describe('Admin Logs', () => {
       // Re-expand settings
       await page.locator('#logs-settings-section .logs-section-header').click();
       await expect(page.locator('#logs-settings-section')).not.toHaveClass(/collapsed/, { timeout: 3_000 });
-      await page.waitForTimeout(2_000);
 
       await expect(page.locator('#log-cfg-retention')).toHaveValue(newRetention);
 
