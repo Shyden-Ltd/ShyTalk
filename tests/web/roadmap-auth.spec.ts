@@ -53,12 +53,14 @@ test.describe('Roadmap Auth — Login Prompt', () => {
   });
 
   test('no Google/Apple login buttons shown on initial page load', async ({ page }) => {
-    // Login buttons should only appear in modal when user tries an auth action
-    await page.waitForTimeout(5_000);
-    const googleBtn = page.locator('[data-testid="auth-google-btn"], .auth-google-btn');
-    const appleBtn = page.locator('[data-testid="auth-apple-btn"], .auth-apple-btn');
-    expect(await googleBtn.count()).toBe(0);
-    expect(await appleBtn.count()).toBe(0);
+    // Login buttons should only appear in modal when user tries an auth action.
+    // Anchor on the login prompt, which roadmap-auth.js renders ONLY once the
+    // auth state is known ("Don't render login buttons until we know the auth
+    // state (prevents flash)"). Without it, the absence assertions below would
+    // pass trivially before anything had rendered (SHY-0245).
+    await expect(page.locator('[data-testid="auth-login-prompt"]')).toBeVisible();
+    await expect(page.locator('[data-testid="auth-google-btn"], .auth-google-btn')).toHaveCount(0);
+    await expect(page.locator('[data-testid="auth-apple-btn"], .auth-apple-btn')).toHaveCount(0);
   });
 
   // ── Login modal: appears when user tries an auth-gated action ──
@@ -709,9 +711,9 @@ test.describe('Roadmap Auth — Logged In State', () => {
       });
     });
     await page.goto('/roadmap.html');
-    await page.waitForTimeout(3000);
-    // Suggestions endpoint should have been called at least once after auth resolves
-    expect(suggestionsCallCount).toBeGreaterThanOrEqual(1);
+    // Poll the counter until the call actually happens; the timeout bounds the
+    // failure rather than being the wait (SHY-0245).
+    await expect.poll(() => suggestionsCallCount, { timeout: 15_000 }).toBeGreaterThanOrEqual(1);
   });
 
   test('after login, bell icons become clickable (not showing login toast)', async ({ page }) => {
@@ -747,10 +749,13 @@ test.describe('Roadmap Auth — Logged In State', () => {
     const bellIcon = page.locator('.bell-icon, [data-testid="subscribe-btn"]').first();
     if ((await bellIcon.count()) > 0) {
       await bellIcon.click();
-      // Should not show a "please log in" toast
-      const loginToast = page.locator('text=log in, text=sign in');
-      await page.waitForTimeout(1000);
-      await expect(loginToast).toHaveCount(0);
+      // Anchor on the click's real effect — the subscribe modal opening — so
+      // the "no login toast" assertion is made AFTER the app has responded,
+      // not before it could have shown one (SHY-0245).
+      await expect(
+        page.locator('[data-testid="subscribe-modal"], .subscribe-modal, [role="dialog"]').first(),
+      ).toBeVisible();
+      await expect(page.locator('text=log in, text=sign in')).toHaveCount(0);
     }
   });
 
@@ -918,7 +923,9 @@ test.describe('Roadmap Auth — Logged In State', () => {
         navigationOccurred = true;
       });
       await signOutBtn.click();
-      await page.waitForTimeout(2000);
+      // Anchor on sign-out completing — the login prompt returns — so "no
+      // navigation" is asserted after the app has actually acted (SHY-0245).
+      await expect(page.locator('[data-testid="auth-login-prompt"]')).toBeVisible();
       // Page should not have fully reloaded — SPA behavior
       expect(navigationOccurred).toBe(false);
     }
@@ -936,10 +943,10 @@ test.describe('Roadmap Auth — Logged In State', () => {
     const signOutBtn = page.locator('[data-testid="auth-signout-btn"], .auth-signout-btn');
     if ((await signOutBtn.count()) > 0) {
       await signOutBtn.click();
-      await page.waitForTimeout(1000);
-      // User name should no longer be visible after sign out
-      const userName = page.locator('text=CachedUser');
-      await expect(userName).toHaveCount(0);
+      // Anchor on the signed-out UI rendering before asserting the name is
+      // gone, or the absence could pass before sign-out took effect (SHY-0245).
+      await expect(page.locator('[data-testid="auth-login-prompt"]')).toBeVisible();
+      await expect(page.locator('text=CachedUser')).toHaveCount(0);
     }
   });
 
@@ -960,8 +967,9 @@ test.describe('Roadmap Auth — Logged In State', () => {
         await dialog.accept();
       });
       await signOutBtn.click();
-      await page.waitForTimeout(1000);
-      // Sign out should be instant — no confirmation dialog
+      // Sign out completed (login prompt back) — only then is "no dialog
+      // appeared" a real observation rather than an early guess (SHY-0245).
+      await expect(page.locator('[data-testid="auth-login-prompt"]')).toBeVisible();
       expect(dialogAppeared).toBe(false);
     }
   });
@@ -1056,24 +1064,26 @@ test.describe('Roadmap Auth — Session Persistence', () => {
   });
 
   test('login spinner/loading state shown during auth check', async ({ page }) => {
-    // Delay the /roadmap/me response to observe loading state
-    await page.route('**/api/roadmap/me', async (route) => {
-      await new Promise((r) => setTimeout(r, 2000));
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'SlowUser' }),
-      });
+    // HOLD the request that actually gates the loading state, then release it.
+    // The old test delayed /api/roadmap/me, but that is the PROFILE fetch —
+    // `.auth-loading` is rendered while `authStateKnown` is false, which is
+    // driven by Firebase init, gated on /api/firebase-config. Delaying the
+    // wrong request meant the spinner never appeared, which is why the old
+    // assertion was wrapped in `if (count > 0)` and asserted nothing at all.
+    // Holding the real gate is deterministic — no 2s guess (SHY-0245).
+    let releaseConfig: () => void = () => {};
+    const configPending = new Promise<void>((resolve) => {
+      releaseConfig = resolve;
+    });
+    await page.route('**/api/firebase-config', async (route) => {
+      await configPending;
+      await route.continue();
     });
     await page.goto('/roadmap.html');
-    // During the delay, a loading/spinner should be visible
-    const spinner = page.locator(
-      '.auth-loading, [data-testid="auth-loading"], .spinner, .loading',
-    );
-    // Check within first 1.5s before response arrives
-    if ((await spinner.count()) > 0) {
-      await expect(spinner.first()).toBeVisible({ timeout: 1500 });
-    }
+    // Asserted unconditionally. The previous `if (count > 0)` meant that when
+    // the spinner was absent the test asserted NOTHING and passed vacuously.
+    await expect(page.locator('.auth-loading').first()).toBeVisible();
+    releaseConfig();
   });
 });
 
@@ -1103,8 +1113,9 @@ test.describe('Roadmap Auth — Error Handling', () => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
     await page.goto('/roadmap.html');
-    await page.waitForTimeout(3000);
-    // Auth-related errors should not appear in console
+    // Wait for auth to actually resolve before judging the error list —
+    // otherwise "no auth errors" just means auth had not run yet (SHY-0245).
+    await expect(page.locator('[data-testid="auth-login-prompt"]')).toBeVisible();
     const authErrors = errors.filter((e) => /auth|firebase|token/i.test(e));
     expect(authErrors).toHaveLength(0);
   });
@@ -1118,8 +1129,8 @@ test.describe('Roadmap Auth — Error Handling', () => {
       return route.continue();
     });
     await page.goto('/roadmap.html');
-    await page.waitForTimeout(3000);
-    // Page should not crash — should show a fallback or degrade gracefully
+    // `toBeVisible` already auto-retries, so the sleep only slowed the suite
+    // down; the degraded-path assertion is unchanged (SHY-0245).
     await expect(page.locator('body')).toBeVisible();
     // Should not show raw JS errors to the user
     const jsError = page.locator('text=TypeError, text=ReferenceError, text=is not defined');
@@ -1135,8 +1146,8 @@ test.describe('Roadmap Auth — Error Handling', () => {
     const googleBtn = page.locator('[data-testid="auth-google-btn"], .auth-google-btn');
     if ((await googleBtn.count()) > 0) {
       await googleBtn.click();
-      await page.waitForTimeout(2000);
-      // Should show a message about popup being blocked, or at least not crash
+      // `toBeVisible` auto-retries; the "did not crash" contract holds without
+      // guessing how long a blocked popup takes to surface (SHY-0245).
       await expect(page.locator('body')).toBeVisible();
     }
   });
@@ -1189,10 +1200,13 @@ test.describe('Roadmap Auth — Bell icon auth behaviour', () => {
     await bell.waitFor({ timeout: 10_000 });
     await bell.click();
 
-    // Login modal should NOT appear for authenticated users
-    const loginModal = page.locator('[data-testid="login-modal-overlay"]');
-    await page.waitForTimeout(1000);
-    expect(await loginModal.count()).toBe(0);
+    // Anchor on the click's real outcome — the subscribe modal — so the
+    // "no login modal" assertion is made after the app responded. (The header
+    // is NOT a valid anchor here: this test sets window.shytalkAuth without
+    // dispatching `shytalk-auth-changed`, so the header never re-renders.)
+    // Then assert absence with the retrying matcher (SHY-0245).
+    await expect(page.locator('[data-testid="subscribe-modal"]')).toBeVisible();
+    await expect(page.locator('[data-testid="login-modal-overlay"]')).toHaveCount(0);
   });
 
   test('bell icon while profile still loading opens subscribe modal — NOT login modal (W1 race window)', async ({ page }) => {
