@@ -248,7 +248,11 @@ jobs:
         # SHY-0180: the zero-dep serve-web.js, not `npx serve` (which dies
         # ~15 min into a heavy Chromium run — its npm-exec wrapper catches a
         # signal and crashes on an in-flight EBADF).
-        run: node local/serve-web.js --port 8888 --root public --quiet &
+        # SHY-0245: capture the server's own stderr. build-meta.js fails OPEN
+        # when git identity is unavailable, so a broken watermark shows only as
+        # "??" in the page — the reason was invisible because the process is
+        # backgrounded and its output was going nowhere.
+        run: node local/serve-web.js --port 8888 --root public --quiet > /tmp/serve-web.log 2>&1 &
 
       - name: Run Playwright tests (${{ matrix.project }})
         env:
@@ -260,6 +264,12 @@ jobs:
           ALLURE_ENABLED: 'true'
           ALLURE_PROJECT: ${{ matrix.project }}
         run: npx playwright test --project=${{ matrix.project }} --reporter=list,allure-playwright,html
+
+      # SHY-0245: surface the static server's own log. Without this a
+      # fail-open in build-meta.js is undiagnosable from the CI output.
+      - name: Serve-web log
+        if: always()
+        run: cat /tmp/serve-web.log || echo "(no serve-web log)"
 
       - name: Cleanup Docker containers
         if: always()

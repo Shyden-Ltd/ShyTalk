@@ -72,7 +72,18 @@ function readGitIdentity(cwd) {
     const sha = run(["rev-parse", "--short", "HEAD"]);
     const dirty = run(["status", "--porcelain"]).length > 0;
     return { branch, sha, dirty };
-  } catch {
+  } catch (err) {
+    // Still fails OPEN — a missing watermark must never take down page
+    // serving. But it must not fail SILENTLY: swallowing the reason is what
+    // made the CI failure (watermark rendering "??" for BOTH branch and sha)
+    // undiagnosable from outside. stderr only, so served bytes are unchanged.
+    process.stderr.write(
+      "[build-meta] git identity unavailable in " +
+        cwd +
+        ": " +
+        (err && err.message ? err.message : String(err)) +
+        "\n",
+    );
     return null;
   }
 }
