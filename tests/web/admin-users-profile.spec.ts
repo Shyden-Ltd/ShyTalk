@@ -357,16 +357,14 @@ test.describe('Admin Users - Profile Subtab', () => {
     const response = await responsePromise;
     expect(response.status()).toBe(404);
 
-    // The user form should NOT become visible
-    const userForm = page.locator('#user-form');
-    // Wait a moment for any UI updates to settle
-    await page.waitForTimeout(1_000);
-    const isVisible = await userForm.evaluate(el => el.classList.contains('visible'));
-    expect(isVisible).toBe(false);
+    // Anchor on the app's OWN acknowledgement of the 404 — the error toast —
+    // rather than sleeping and hoping the UI settled (SHY-0245). The timeout
+    // bounds the failure; it is not the wait. Without a positive anchor the
+    // "form stays hidden" assertion below could pass trivially, before the
+    // app would ever have rendered it.
+    await expect(page.locator('.toast.error')).toBeVisible({ timeout: 10_000 });
 
-    // A toast error should have appeared (user not found)
-    const toast = page.locator('.toast.error');
-    // The toast may have already faded — check if it appeared at all
-    // by verifying the form stays hidden (primary assertion above)
+    // Only now is "not visible" meaningful: the app has processed the 404.
+    await expect(page.locator('#user-form')).not.toHaveClass(/\bvisible\b/);
   });
 });

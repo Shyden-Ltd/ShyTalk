@@ -64,9 +64,13 @@ test.describe('Shared Header — Unauthenticated state', () => {
   });
 
   test('no user avatar or name shown when not authenticated', async ({ page }) => {
-    await page.waitForTimeout(3_000);
-    const userInfo = page.locator('[data-testid="header-user-info"]');
-    expect(await userInfo.count()).toBe(0);
+    // The header settles into its unauthenticated state by rendering Sign In.
+    // That happens on BOTH bootstrap paths in roadmap-auth.js — the normal
+    // onAuthStateChanged(null), and the config-never-loads fallback — so it is
+    // the honest anchor. The old 3s sleep was tuned to that fallback's timer
+    // and lost the race on slower runners (SHY-0245).
+    await expect(page.locator('[data-testid="header-signin-btn"]')).toBeVisible();
+    await expect(page.locator('[data-testid="header-user-info"]')).toHaveCount(0);
   });
 });
 
@@ -148,6 +152,12 @@ test.describe('Shared Header — Authenticated state', () => {
 
   test('Sign In button hidden when authenticated', async ({ page }) => {
     await page.goto('/roadmap.html');
+    // Wait for the REAL auth bootstrap to settle before injecting, or it races:
+    // shared-header.js re-renders on every `shytalk-auth-changed`, so a late
+    // onAuthStateChanged(null) would land AFTER the injection and restore the
+    // Sign In button. That is exactly what failed on webkit/mobile-safari in CI
+    // while passing locally — the old 1s sleep was the guess (SHY-0245).
+    await expect(page.locator('[data-testid="header-signin-btn"]')).toBeVisible();
     await page.evaluate(() => {
       (window as any).shytalkAuth = {
         ...(window as any).shytalkAuth,
@@ -165,9 +175,9 @@ test.describe('Shared Header — Authenticated state', () => {
       );
     });
 
-    await page.waitForTimeout(1000);
-    const signInBtn = page.locator('[data-testid="header-signin-btn"]');
-    expect(await signInBtn.count()).toBe(0);
+    // Retrying assertion: the header re-renders asynchronously off the event,
+    // so this waits for the button to GO — it does not snapshot once.
+    await expect(page.locator('[data-testid="header-signin-btn"]')).toHaveCount(0);
   });
 });
 
