@@ -1,6 +1,6 @@
 ---
 id: SHY-0243
-status: In Progress
+status: In Review
 owner: claude
 created: 2026-07-25
 priority: P0
@@ -168,5 +168,9 @@ Proven before any code was written (Linux container, real `gauntlet-v2.sh`): `re
   The detached-HEAD condition was reproduced non-destructively by mounting a file containing a raw sha over `/repo/.git/HEAD` (`git rev-parse --abbrev-ref HEAD` → `HEAD`), leaving the host working tree untouched.
 
 - **2026-07-25 ~13:35 WIB — class sweep.** Grepped the corpus for both defect shapes. `50-matrix-cmd-stop.test.js` matches on `pgrep -P` (parent PID, exact) or probes via `spawnSync` **from Node**, whose argv never carries the tag; `gauntlet-cold-boot-structure.test.js` only pins the script's source text; `prepush-sonar-main-only-gate.test.js` already documents the literal-`HEAD` case; `android-git-identity-pin.test.js` is a structural pin. The self-match trap requires the probe to run *inside* the `bash -c` whose body holds the tag — no other site does. Class confined to the one file.
+
+- **2026-07-25 ~13:45 WIB — status → In Review.** Implementation complete, both suites green on macOS and Linux, lint clean. CI's Pre-Merge Gate (SHY-0127 Gate 1, `scripts/check-pr-story-status.js`) correctly refused the PR while this story sat at `In Progress` — the newly-added exemption covers `Draft` only. Flipped as the protocol prescribes.
+
+  **Review provenance (honest record):** the `code-reviewer` agent was NOT dispatched — this session carries an explicit "do not call the Agent tool unless requested" constraint. Two self-review passes ran instead and both produced findings that were fixed before push (weak negative assertion; tag-prefix collision hazard). `Reviewed-up-to:` is deliberately NOT claimed. An agent review is owed before merge if the operator wants Gate 3 satisfied in the usual way.
 
 - **2026-07-25 ~13:40 WIB — self-review finding (fixed before push).** The first draft of the hostile-branch case asserted `not.toContain('a<b')`, a substring that never existed in the raw refname `feat/a"b<c&d` — a trivially-passing negative. Replaced with the three pairs that genuinely appear in the raw value (`a"b`, `b<c`, `c&d`); mutation-proven above.
