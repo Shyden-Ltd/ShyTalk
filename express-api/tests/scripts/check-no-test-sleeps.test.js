@@ -115,3 +115,58 @@ describe('check-no-test-sleeps.sh — does NOT over-reach (SHY-0245)', () => {
     expect(r.stdout).toMatch(/0/);
   });
 });
+
+describe('check-no-test-sleeps.sh — ratchet mode (SHY-0245)', () => {
+  /** Runs the guard against `root` in ratchet mode using `baseline`. */
+  function runRatchet(root, baseline) {
+    return spawnSync('/bin/bash', [SCRIPT, root, '--baseline', baseline], {
+      encoding: 'utf8',
+      timeout: 30000,
+    });
+  }
+
+  /** Writes a baseline JSON into `root` and returns its path. */
+  function writeBaseline(root, obj) {
+    const p = path.join(root, 'baseline.json');
+    fs.writeFileSync(p, JSON.stringify(obj, null, 2));
+    return p;
+  }
+
+  test('existing debt at the baseline PASSES — the backlog does not block every PR', () => {
+    const root = makeTree({
+      'tests/web/a.spec.ts': 'await page.waitForTimeout(1);\nawait page.waitForTimeout(2);\n',
+    });
+    const r = runRatchet(root, writeBaseline(root, { 'tests/web/a.spec.ts': 2 }));
+    expect(r.status).toBe(0);
+  });
+
+  test('a NEW sleep in an already-known file FAILS — debt may only shrink', () => {
+    const root = makeTree({
+      'tests/web/a.spec.ts':
+        'await page.waitForTimeout(1);\nawait page.waitForTimeout(2);\nawait page.waitForTimeout(3);\n',
+    });
+    const r = runRatchet(root, writeBaseline(root, { 'tests/web/a.spec.ts': 2 }));
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/3 > 2/);
+  });
+
+  test('a sleep in a file absent from the baseline FAILS', () => {
+    const root = makeTree({ 'tests/web/new.spec.ts': 'await page.waitForTimeout(1);\n' });
+    const r = runRatchet(root, writeBaseline(root, {}));
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/new\.spec\.ts/);
+  });
+
+  test('SHRINKING the debt without lowering the baseline FAILS, so it cannot silently regrow', () => {
+    const root = makeTree({ 'tests/web/a.spec.ts': 'await page.waitForTimeout(1);\n' });
+    const r = runRatchet(root, writeBaseline(root, { 'tests/web/a.spec.ts': 2 }));
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/lower it/);
+  });
+
+  test('a missing baseline file is a usage error, not a silent pass', () => {
+    const root = makeTree({ 'tests/web/a.spec.ts': 'await page.waitForTimeout(1);\n' });
+    const r = runRatchet(root, path.join(root, 'does-not-exist.json'));
+    expect(r.status).toBe(2);
+  });
+});

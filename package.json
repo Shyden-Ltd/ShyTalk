@@ -18,6 +18,9 @@
     "*.{kt,kts}": [
       "ktlint --relative",
       "bash .claude/hooks/check-kmp-compat.sh"
+    ],
+    "tests/**/*.ts": [
+      "npx --prefix express-api prettier --check"
     ]
   },
   "devDependencies": {

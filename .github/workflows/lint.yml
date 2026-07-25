@@ -124,6 +124,22 @@ jobs:
       - name: No NEW in-process test doubles (EPIC-0003 ratchet)
         run: node scripts/check-no-new-stubs.js
 
+      # SHY-0245: ratchet guard — fixed-duration waits may only SHRINK. A sleep
+      # is a hard-coded guess about how fast the runner is, so it is always
+      # wrong somewhere: too short and it flakes on slow hardware (telling you
+      # about the machine, not the product), too long and every run pays it
+      # forever. Wait on the CONDITION instead. Ratchet rather than a hard zero
+      # so the existing backlog can be worked down without blocking every PR,
+      # while a NEW sleep fails immediately.
+      - name: No NEW fixed-duration waits (SHY-0245 ratchet)
+        run: bash scripts/check-no-test-sleeps.sh --baseline scripts/no-test-sleeps-baseline.json
+
+      # SHY-0245: tests/** previously had NO formatting gate at all — neither
+      # lint-staged nor CI covered it (only express-api/**/*.js, *.feature and
+      # *.{kt,kts}). Unwatched code is where debt accumulates unseen.
+      - name: Prettier — tests/ (formatting gate)
+        run: npx --prefix express-api prettier --check "tests/**/*.ts"
+
       # SHY-0168 (EPIC-0006): ratchet guard — direct client→backend-service
       # access (Firestore / RTDB / Storage) may only SHRINK. Clients must go
       # through the Express API (the authz layer). Fails on any NEW direct
