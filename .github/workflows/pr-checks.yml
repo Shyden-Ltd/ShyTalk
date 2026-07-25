@@ -2,7 +2,11 @@ name: PR Checks
 
 on:
   pull_request:
-    branches: [main]
+    # SHY-0242: develop joins the trigger so every develop PR (stories +
+    # Dependabot) is CI-gated. The device-E2E jobs stay base-main-guarded
+    # (SHY-0163) so feature→develop pays no emulator cost; they run only on
+    # the develop→main promotion.
+    branches: [main, develop]
     types: [opened, synchronize, reopened]
 
 permissions:

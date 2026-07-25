@@ -13,7 +13,7 @@ name: Branch discipline check
 on:
   pull_request:
     types: [opened, reopened]
-    branches: [main]
+    branches: [main, develop]  # SHY-0242: one-active-branch applies to develop work too
 
 concurrency:
   group: branch-discipline-${{ github.event.pull_request.number }}
