@@ -30,6 +30,16 @@ So this cannot be a gradual, call-site-by-call-site migration inside one app bui
 
 **Discovered 2026-07-25** while grinding the Dependabot backlog: `firebaseBom 34.14.1 → 34.15.0` (#1650 patch group) fails `Build & Test` with six `-Werror` errors. The deprecated APIs still **work** — nothing breaks at runtime — the build fails only because Kotlin treats warnings as errors. Operator ruling the same day: **drop `firebase-bom` out of the dependency sweep entirely and file the migration as its own story**, to be picked up immediately after develop is tested, verified and merged. `firebaseBom` therefore stays pinned at `34.14.1` until this story lands.
 
+### Why this is the NEXT ticket once develop is cleared
+
+Not "important eventually" — it is the next thing to pick up, for five reasons that compound:
+
+1. **Holding the BOM freezes the entire Firebase update channel, not just Messaging.** `firebase-auth`, `firebase-database`, `firebase-firestore` and `firebase-messaging` carry **no `version.ref` of their own** in `gradle/libs.versions.toml` — they all resolve their versions from the `firebase-bom` platform. Pinning the BOM at `34.14.1` to dodge the `-Werror` wall therefore blocks **every** Firebase update: Auth, Firestore and RTDB included. No Firebase security advisory is open today (all six current Dependabot alerts are npm), so this is about a **closed channel rather than a live exposure** — but the next Firebase advisory would find us unable to patch without doing this whole migration under incident pressure. That is the expensive way to do it.
+2. **The failure mode when the deprecated path is finally removed is SILENT.** Push does not error — notifications simply stop arriving. Nobody gets an exception, no dashboard goes red, and the sender sees success. On a minors-facing app that path carries moderation notices and ban notifications, so a silent outage is a **safety** regression that could run undetected.
+3. **The cost only grows.** Migrating from one BOM release behind is the cheapest this will ever be. Every release skipped adds more intermediate change to absorb in the same jump, and raises the odds that the eventual migration collides with something else urgent.
+4. **It is launch-shaped.** Push is core to a social app. Entering the MVP on a frozen, deprecated transport means the migration eventually happens on **live users** instead of pre-launch, with real notification loss as the blast radius.
+5. **It taxes every future dependency sweep.** Dependabot re-proposes `firebase-bom` on schedule and it goes red each time. No ignore rule has been added — deliberately, because an ignore would also mask a future Firebase **security** patch (see 1) — so the noise is the price of keeping that channel visible, and it persists until this lands.
+
 ## Acceptance Criteria
 
 ### Happy path

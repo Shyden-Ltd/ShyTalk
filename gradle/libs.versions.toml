@@ -8,11 +8,21 @@ lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.13.0"
 appcompat = "1.7.1"
 navigationCompose = "2.9.8"
-# Held at 34.14.1 — 34.15.0 pulls firebase-messaging 25.1.0, which deprecates
-# getToken()/deleteToken()/onNewToken() in favour of V1 Installation-ID
-# registration. That is a push-architecture migration, not a bump; it is tracked
-# by SHY-0244 and MUST NOT be raised until that story lands (`-Werror` would fail
-# the build, and suppressing the warnings is not an option).
+# HELD at 34.14.1 — do NOT raise until SHY-0244 lands.
+#
+# 34.15.0 pulls firebase-messaging 25.1.0, which deprecates getToken(),
+# deleteToken() and onNewToken() together in favour of V1 Installation-ID
+# registration (register() -> onRegistered(FID)). The two models are mutually
+# exclusive, switched by the firebase_messaging_installation_id_enabled manifest
+# flag, so this is a push-architecture migration — not a bump. Raising it here
+# fails the build under -Werror, and suppressing the warnings is not an option.
+#
+# NOTE this pin freezes the WHOLE Firebase channel: firebase-auth, -database,
+# -firestore and -messaging below all resolve their versions from this BOM (they
+# carry no version of their own). A Firebase security advisory therefore cannot
+# be taken until SHY-0244 is done — which is why that story is next up rather
+# than "someday". Deliberately NOT added to dependabot ignore: an ignore would
+# also hide that security patch.
 firebaseBom = "34.14.1"
 googleServices = "4.5.0"
 coroutines = "1.11.0"
