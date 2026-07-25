@@ -22,8 +22,26 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  */
 
 const SUPPORTED_LOCALES = [
-  'es', 'fr', 'de', 'pt', 'it', 'ja', 'ko', 'zh', 'ar', 'hi',
-  'tr', 'ru', 'uk', 'th', 'vi', 'id', 'pl', 'nl', 'sv', 'km',
+  'es',
+  'fr',
+  'de',
+  'pt',
+  'it',
+  'ja',
+  'ko',
+  'zh',
+  'ar',
+  'hi',
+  'tr',
+  'ru',
+  'uk',
+  'th',
+  'vi',
+  'id',
+  'pl',
+  'nl',
+  'sv',
+  'km',
 ];
 
 async function selectLocale(page: import('@playwright/test').Page, lang: string) {
@@ -52,7 +70,9 @@ test.describe('Homepage roadmap CTA i18n completeness', () => {
     const label = (await page.locator('[data-i18n="roadmap_label"]').textContent())?.trim();
     expect(cta, 'roadmap_cta in ko should not be English').not.toBe("See What's Coming");
     expect(cta, 'roadmap_cta in ko should contain hangul').toMatch(/[가-힯]/);
-    expect(label, 'roadmap_label in ko should not be English').not.toBe('Explore our public roadmap');
+    expect(label, 'roadmap_label in ko should not be English').not.toBe(
+      'Explore our public roadmap',
+    );
   });
 
   test('Russian locale translates roadmap_cta away from English', async ({ page }) => {
@@ -70,7 +90,9 @@ test.describe('Homepage roadmap CTA i18n completeness', () => {
     expect(cta, 'roadmap_cta in km should contain Khmer script').toMatch(/[ក-៿]/);
   });
 
-  test('all 20 supported locales define both roadmap_cta and roadmap_label', async ({ request }) => {
+  test('all 20 supported locales define both roadmap_cta and roadmap_label', async ({
+    request,
+  }) => {
     // Scrapes the externalized HOMEPAGE_T module (was inline in
     // index.html until the homepage-translations.js extraction).
     const res = await request.get(`${BASE}/js/homepage-translations.js`);

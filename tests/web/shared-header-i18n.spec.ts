@@ -104,8 +104,26 @@ test.describe('Shared header signIn i18n', () => {
     const src = await res.text();
 
     const SUPPORTED = [
-      'es', 'fr', 'de', 'pt', 'it', 'ja', 'ko', 'zh', 'ar', 'hi',
-      'tr', 'ru', 'uk', 'th', 'vi', 'id', 'pl', 'nl', 'sv', 'km',
+      'es',
+      'fr',
+      'de',
+      'pt',
+      'it',
+      'ja',
+      'ko',
+      'zh',
+      'ar',
+      'hi',
+      'tr',
+      'ru',
+      'uk',
+      'th',
+      'vi',
+      'id',
+      'pl',
+      'nl',
+      'sv',
+      'km',
     ];
     for (const lang of SUPPORTED) {
       // Each locale row in LEGAL_T.footer must include signIn + signOut.

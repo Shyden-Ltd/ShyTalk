@@ -108,7 +108,9 @@ async function gotoWithFixture(page: Page, fixture: unknown = FIXTURE) {
 }
 
 test.describe('roadmap renders SHY-derived items', () => {
-  test('non-in-progress item renders inside its phase with a shyId badge chip', async ({ page }) => {
+  test('non-in-progress item renders inside its phase with a shyId badge chip', async ({
+    page,
+  }) => {
     await gotoWithFixture(page);
     const phase = page.locator('[data-testid="phase-card"]', { hasText: 'Safety & Compliance' });
     const itemRow = phase.locator('.feature-item', { hasText: 'Imaginary shipped story' });
@@ -116,9 +118,9 @@ test.describe('roadmap renders SHY-derived items', () => {
     await expect(itemRow.locator('.shy-badge')).toHaveText('SHY-0099');
     // In-progress entries render ONLY in the top lift — same semantics as
     // in-progress features (roadmap-app.js phase-body skip).
-    await expect(
-      phase.locator('.feature-item', { hasText: 'Age-gating per feature' }),
-    ).toHaveCount(0);
+    await expect(phase.locator('.feature-item', { hasText: 'Age-gating per feature' })).toHaveCount(
+      0,
+    );
   });
 
   test('title-case item statuses are normalised to the renderer icon classes', async ({ page }) => {
@@ -129,8 +131,9 @@ test.describe('roadmap renders SHY-derived items', () => {
     // "In Progress" (title case from sync) must normalise to the lift
     // predicate — proven by the row appearing in the top section with the
     // in-progress icon class.
-    const lifted = page
-      .locator('#in-progress-section .feature-item', { hasText: 'Age-gating per feature' });
+    const lifted = page.locator('#in-progress-section .feature-item', {
+      hasText: 'Age-gating per feature',
+    });
     await expect(lifted.locator('.feature-status-icon--in-progress')).toHaveCount(1);
   });
 
@@ -149,7 +152,9 @@ test.describe('roadmap renders SHY-derived items', () => {
     await expect(phase.locator('.phase-progress-text')).toContainText('(2/4)');
   });
 
-  test('global donut legend counts include items (consistent with per-phase math)', async ({ page }) => {
+  test('global donut legend counts include items (consistent with per-phase math)', async ({
+    page,
+  }) => {
     await gotoWithFixture(page);
     // FIXTURE totals: done = 1 feature + 2 items (SHY-0099, SHY-0101) = 3;
     // in-progress = SHY-0060 = 1; planned = 2 legacy features.
@@ -164,11 +169,15 @@ test.describe('roadmap renders SHY-derived items', () => {
     await gotoWithFixture(page);
     const phase = page.locator('[data-testid="phase-card"]', { hasText: 'Items Only Phase' });
     await expect(phase).toHaveCount(1);
-    await expect(phase.locator('.feature-item', { hasText: 'All items phase entry' })).toHaveCount(1);
+    await expect(phase.locator('.feature-item', { hasText: 'All items phase entry' })).toHaveCount(
+      1,
+    );
     await expect(phase.locator('.phase-progress-text')).toContainText('(1/1)');
   });
 
-  test('a phases entry without an items key renders unchanged with zero console errors', async ({ page }) => {
+  test('a phases entry without an items key renders unchanged with zero console errors', async ({
+    page,
+  }) => {
     const errors = await gotoWithFixture(page);
     const phase = page.locator('[data-testid="phase-card"]', { hasText: 'Legacy Only Phase' });
     await expect(phase).toHaveCount(1);
@@ -192,7 +201,9 @@ test.describe('roadmap renders SHY-derived items', () => {
 test.describe('badge aria-label is translated', () => {
   test.use({ locale: 'ar' });
 
-  test('Arabic storyBadge template is used in phase rows and the in-progress lift', async ({ page }) => {
+  test('Arabic storyBadge template is used in phase rows and the in-progress lift', async ({
+    page,
+  }) => {
     await gotoWithFixture(page);
     const badges = page.locator('.shy-badge');
     await expect(badges).toHaveCount(3); // SHY-0099 + SHY-0101 bodies, SHY-0060 lift

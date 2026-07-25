@@ -179,7 +179,9 @@ test.describe('Error Recovery & Retry', () => {
     // Save failure should show error, not close modal
   });
 
-  test('partial page failure: working sections shown, failed sections show error', async ({ page }) => {
+  test('partial page failure: working sections shown, failed sections show error', async ({
+    page,
+  }) => {
     // Graceful degradation — working parts still usable
   });
 
@@ -198,7 +200,9 @@ test.describe('Print View', () => {
       const sheets = Array.from(document.styleSheets);
       return sheets.some((s) => {
         try {
-          return Array.from(s.cssRules).some((r) => r instanceof CSSMediaRule && r.conditionText === 'print');
+          return Array.from(s.cssRules).some(
+            (r) => r instanceof CSSMediaRule && r.conditionText === 'print',
+          );
         } catch {
           return false;
         }

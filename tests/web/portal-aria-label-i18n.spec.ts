@@ -22,8 +22,27 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  */
 
 const PORTAL_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+  'en',
+  'ar',
+  'de',
+  'es',
+  'fr',
+  'hi',
+  'id',
+  'it',
+  'ja',
+  'km',
+  'ko',
+  'nl',
+  'pl',
+  'pt',
+  'ru',
+  'sv',
+  'th',
+  'tr',
+  'uk',
+  'vi',
+  'zh',
 ];
 
 const ARIA_KEYS = [
@@ -56,31 +75,47 @@ test.describe('Portal aria-label i18n', () => {
 
   test('Korean portal: aria-labels translate to Hangul after applyLanguage', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('shytalk_language', 'ko');
+      } catch {
+        /* ignore */
+      }
     });
     await page.goto(`${BASE}/portal/`);
     // Wait for portal-translations to apply Korean. The loading section
     // has aria-label translated by applyPortalTranslations.
-    await page.waitForFunction(() => {
-      const el = document.querySelector('#loading-section[aria-label]');
-      return !!(el && el.getAttribute('aria-label') !== 'Loading');
-    }, undefined, { timeout: 10_000 });
+    await page.waitForFunction(
+      () => {
+        const el = document.querySelector('#loading-section[aria-label]');
+        return !!(el && el.getAttribute('aria-label') !== 'Loading');
+      },
+      undefined,
+      { timeout: 10_000 },
+    );
 
     const loadingAria = await page.locator('#loading-section').getAttribute('aria-label');
     expect(loadingAria, 'loading aria-label should not be English').not.toBe('Loading');
     expect(loadingAria, 'loading aria-label should contain Hangul').toMatch(/[가-힯]/);
   });
 
-  test('Brand wordmarks intentionally remain "ShyTalk" (English) across all locales', async ({ page }) => {
+  test('Brand wordmarks intentionally remain "ShyTalk" (English) across all locales', async ({
+    page,
+  }) => {
     // Sanity: switching locale must NOT translate "ShyTalk" — it's the
     // brand name. Verifies we did NOT accidentally add data-i18n-aria-label
     // to the .portal-logo divs.
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ar'); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('shytalk_language', 'ar');
+      } catch {
+        /* ignore */
+      }
     });
     await page.goto(`${BASE}/portal/`);
     await page.waitForFunction(
-      () => typeof (window as Window & { applyLanguage?: (l: string) => void }).applyLanguage === 'function',
+      () =>
+        typeof (window as Window & { applyLanguage?: (l: string) => void }).applyLanguage ===
+        'function',
       undefined,
       { timeout: 5_000 },
     );

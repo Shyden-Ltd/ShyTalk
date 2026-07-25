@@ -30,7 +30,9 @@ test.describe('Roadmap Page — Theme & Layout', () => {
     expect(bg).toBeDefined();
   });
 
-  test('no Star Wars elements (no intro, no crawl, no canvas, no music, no MP3)', async ({ page }) => {
+  test('no Star Wars elements (no intro, no crawl, no canvas, no music, no MP3)', async ({
+    page,
+  }) => {
     // No intro screen
     const intro = page.locator('.intro-screen');
     await expect(intro).toHaveCount(0);
@@ -82,14 +84,20 @@ test.describe('Roadmap Page — Theme & Layout', () => {
   });
 
   test('feature list shows correct status icons', async ({ page }) => {
-    await page.locator('.feature-item, [data-testid="feature-item"]').first().waitFor({ timeout: 10_000 });
+    await page
+      .locator('.feature-item, [data-testid="feature-item"]')
+      .first()
+      .waitFor({ timeout: 10_000 });
     const features = page.locator('.feature-item, [data-testid="feature-item"]');
     const count = await features.count();
     expect(count).toBeGreaterThan(0);
   });
 
   test('bell icon visible on each feature', async ({ page }) => {
-    await page.locator('.feature-item, [data-testid="feature-item"]').first().waitFor({ timeout: 10_000 });
+    await page
+      .locator('.feature-item, [data-testid="feature-item"]')
+      .first()
+      .waitFor({ timeout: 10_000 });
     const bells = page.locator('.feature-bell, [data-testid="feature-bell"]');
     const count = await bells.count();
     expect(count).toBeGreaterThan(0);
@@ -120,8 +128,10 @@ test.describe('Roadmap Page — Theme & Layout', () => {
   test('sticky nav clicks scroll to correct sections', async ({ page }) => {
     await page.evaluate(() => window.scrollTo(0, 1000));
     await page.waitForTimeout(500);
-    const suggestionsLink = page.locator('.sticky-nav a[href*="suggestions"], [data-testid="nav-suggestions"]');
-    if (await suggestionsLink.count() > 0) {
+    const suggestionsLink = page.locator(
+      '.sticky-nav a[href*="suggestions"], [data-testid="nav-suggestions"]',
+    );
+    if ((await suggestionsLink.count()) > 0) {
       await suggestionsLink.click();
       await page.waitForTimeout(500);
       // Should have scrolled to suggestions section
@@ -174,7 +184,7 @@ test.describe('Ring Chart Details', () => {
   test('resize: chart scales on mobile without distortion', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 });
     const chart = page.locator('.ring-chart, [data-testid="ring-chart"]');
-    if (await chart.count() > 0) {
+    if ((await chart.count()) > 0) {
       const box = await chart.boundingBox();
       if (box) {
         // Should maintain aspect ratio
@@ -203,7 +213,7 @@ test.describe('Per-Phase Progress', () => {
     await phase.click();
     // Feature list should expand
     const features = phase.locator('.feature-list, [data-testid="feature-list"]');
-    if (await features.count() > 0) {
+    if ((await features.count()) > 0) {
       await expect(features).toBeVisible();
     }
   });
@@ -243,7 +253,7 @@ test.describe('Sticky Nav', () => {
     await page.evaluate(() => window.scrollTo(0, 500));
     await page.waitForTimeout(500);
     const nav = page.locator('.sticky-nav, [data-testid="sticky-nav"]');
-    if (await nav.count() > 0) {
+    if ((await nav.count()) > 0) {
       const box = await nav.boundingBox();
       if (box) {
         expect(box.width).toBeLessThanOrEqual(320);
@@ -291,11 +301,11 @@ test.describe('Accessibility', () => {
   test('keyboard navigation: escape closes modals', async ({ page }) => {
     // Open a modal first, then press Escape
     const bell = page.locator('.feature-bell, [data-testid="feature-bell"]').first();
-    if (await bell.count() > 0) {
+    if ((await bell.count()) > 0) {
       await bell.click();
       await page.keyboard.press('Escape');
       const modal = page.locator('.modal, [data-testid="modal"]');
-      if (await modal.count() > 0) {
+      if ((await modal.count()) > 0) {
         await expect(modal).not.toBeVisible();
       }
     }
@@ -318,7 +328,7 @@ test.describe('Accessibility', () => {
 
   test('screen reader: vote buttons have descriptive aria-labels', async ({ page }) => {
     const upvote = page.locator('[data-testid="upvote-btn"], .vote-up');
-    if (await upvote.count() > 0) {
+    if ((await upvote.count()) > 0) {
       const ariaLabel = await upvote.first().getAttribute('aria-label');
       if (ariaLabel) {
         expect(ariaLabel.toLowerCase()).toContain('vote');
@@ -445,7 +455,10 @@ test.describe('Performance', () => {
     // Note: actual 3G throttle requires CDP, this tests basic load time
     const start = Date.now();
     await page.goto('/roadmap.html');
-    await page.locator('.phase-card, .crawl-section, [data-testid="phase-card"]').first().waitFor({ timeout: 10_000 });
+    await page
+      .locator('.phase-card, .crawl-section, [data-testid="phase-card"]')
+      .first()
+      .waitFor({ timeout: 10_000 });
     const duration = Date.now() - start;
     // Generous limit for CI but should be well under 10s
     expect(duration).toBeLessThan(10_000);

@@ -102,13 +102,15 @@ test.describe('ShyTalkLogger — init idempotency (regression)', () => {
       }
       // Synthesise one window.error event — pre-fix this would have called
       // self.error() 5 times (once per stacked listener); now exactly once.
-      window.dispatchEvent(new ErrorEvent('error', {
-        message: 'idempotency-test',
-        filename: 'test',
-        lineno: 1,
-        colno: 1,
-        error: new Error('idempotency-test'),
-      }));
+      window.dispatchEvent(
+        new ErrorEvent('error', {
+          message: 'idempotency-test',
+          filename: 'test',
+          lineno: 1,
+          colno: 1,
+          error: new Error('idempotency-test'),
+        }),
+      );
       return count;
     });
 

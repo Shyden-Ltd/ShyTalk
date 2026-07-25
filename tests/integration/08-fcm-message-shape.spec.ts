@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures/scenarios";
+import { test, expect } from './fixtures/scenarios';
 
 /**
  * Integration test #9 — FCM message-shape verification.
@@ -28,8 +28,8 @@ import { test, expect } from "./fixtures/scenarios";
  * test #9.
  */
 
-const API_BASE = process.env.API_BASE_URL || "http://localhost:3000";
-const TEST_API_KEY = process.env.TEST_API_KEY || "local-test-key";
+const API_BASE = process.env.API_BASE_URL || 'http://localhost:3000';
+const TEST_API_KEY = process.env.TEST_API_KEY || 'local-test-key';
 
 interface FcmCapture {
   tokens: string[];
@@ -38,66 +38,57 @@ interface FcmCapture {
 }
 
 async function readCaptures(
-  api: import("@playwright/test").APIRequestContext,
+  api: import('@playwright/test').APIRequestContext,
 ): Promise<FcmCapture[]> {
   const res = await api.get(`${API_BASE}/api/test/fcm-captures`, {
-    headers: { "X-Test-API-Key": TEST_API_KEY },
+    headers: { 'X-Test-API-Key': TEST_API_KEY },
   });
   if (!res.ok()) {
-    throw new Error(
-      `readCaptures failed: ${res.status()}: ${await res.text()}`,
-    );
+    throw new Error(`readCaptures failed: ${res.status()}: ${await res.text()}`);
   }
   const body = await res.json();
   return body.captures;
 }
 
-async function clearCaptures(
-  api: import("@playwright/test").APIRequestContext,
-): Promise<void> {
+async function clearCaptures(api: import('@playwright/test').APIRequestContext): Promise<void> {
   // Express's body parser is strict about Content-Type even on
   // bodyless POSTs in some setups — pass an empty JSON object so we
   // don't depend on that being relaxed.
   const res = await api.post(`${API_BASE}/api/test/fcm-captures/clear`, {
     headers: {
-      "X-Test-API-Key": TEST_API_KEY,
-      "Content-Type": "application/json",
+      'X-Test-API-Key': TEST_API_KEY,
+      'Content-Type': 'application/json',
     },
     data: {},
   });
   if (!res.ok()) {
-    throw new Error(
-      `clearCaptures failed: ${res.status()}: ${await res.text()}`,
-    );
+    throw new Error(`clearCaptures failed: ${res.status()}: ${await res.text()}`);
   }
 }
 
-test.describe("Integration — FCM payload shape", () => {
+test.describe('Integration — FCM payload shape', () => {
   test.beforeEach(async ({ api }) => {
     // Buffer is process-global, so prior tests in the suite (or in
     // the developer's local Express) can leave entries behind.
     await clearCaptures(api);
   });
 
-  test("PM send produces FCM payload with documented shape", async ({
-    api,
-    pair,
-  }) => {
+  test('PM send produces FCM payload with documented shape', async ({ api, pair }) => {
     // Recipient must have an FCM token registered for shouldNotifyRecipient
     // to return true (see conversations.js:69). /api/test/write/users
     // merges into the existing user doc.
     await api.post(`${API_BASE}/api/test/write/users`, {
-      headers: { "X-Test-API-Key": TEST_API_KEY },
+      headers: { 'X-Test-API-Key': TEST_API_KEY },
       data: {
         id: String(pair.recipient.uniqueId),
-        fcmTokens: ["fcm-test-token-1"],
+        fcmTokens: ['fcm-test-token-1'],
         _testRun: pair.testRunId,
       },
     });
 
     const convId = `${pair.testRunId}_fcm_${Date.now()}`;
     await api.post(`${API_BASE}/api/test/write/conversations`, {
-      headers: { "X-Test-API-Key": TEST_API_KEY },
+      headers: { 'X-Test-API-Key': TEST_API_KEY },
       data: {
         id: convId,
         participantIds: [pair.sender.uniqueId, pair.recipient.uniqueId],
@@ -107,24 +98,18 @@ test.describe("Integration — FCM payload shape", () => {
     });
 
     const messageText = `fcm-shape-test-${Date.now()}`;
-    const post = await api.post(
-      `${API_BASE}/api/conversations/${convId}/messages`,
-      {
-        headers: {
-          Authorization: `Bearer ${pair.sender.idToken}`,
-          "Content-Type": "application/json",
-        },
-        data: {
-          text: messageText,
-          type: "TEXT",
-          senderName: pair.sender.displayName,
-        },
+    const post = await api.post(`${API_BASE}/api/conversations/${convId}/messages`, {
+      headers: {
+        Authorization: `Bearer ${pair.sender.idToken}`,
+        'Content-Type': 'application/json',
       },
-    );
-    expect(
-      post.ok(),
-      `post expected 200, got ${post.status()}: ${await post.text()}`,
-    ).toBe(true);
+      data: {
+        text: messageText,
+        type: 'TEXT',
+        senderName: pair.sender.displayName,
+      },
+    });
+    expect(post.ok(), `post expected 200, got ${post.status()}: ${await post.text()}`).toBe(true);
 
     // The notification call is fire-and-forget (conversations.js:301).
     // Poll briefly for the capture to land — typically <100ms but
@@ -137,13 +122,10 @@ test.describe("Integration — FCM payload shape", () => {
       await new Promise((r) => setTimeout(r, 200));
     }
 
-    expect(
-      captures.length,
-      "exactly one FCM capture must land",
-    ).toBeGreaterThanOrEqual(1);
+    expect(captures.length, 'exactly one FCM capture must land').toBeGreaterThanOrEqual(1);
     const cap = captures[0];
 
-    expect(cap.tokens).toEqual(["fcm-test-token-1"]);
+    expect(cap.tokens).toEqual(['fcm-test-token-1']);
 
     // Data payload contract — must match what conversations.js:117
     // produces. Each value is a string (FCM data messages require
@@ -151,22 +133,19 @@ test.describe("Integration — FCM payload shape", () => {
     // but the buffer captures the pre-stringified shape since the
     // local-mode branch skips stringification).
     expect(cap.data).toMatchObject({
-      type: "PM",
+      type: 'PM',
       senderId: pair.sender.uniqueId,
       messageText,
       conversationId: convId,
-      isGroup: "false",
-      showPreview: "true",
+      isGroup: 'false',
+      showPreview: 'true',
     });
     expect(cap.data.senderName).toContain(pair.sender.displayName);
-    expect(typeof cap.ts).toBe("number");
+    expect(typeof cap.ts).toBe('number');
     expect(cap.ts).toBeGreaterThan(Date.now() - 10_000);
   });
 
-  test("recipient with empty fcmTokens does NOT trigger an FCM capture", async ({
-    api,
-    pair,
-  }) => {
+  test('recipient with empty fcmTokens does NOT trigger an FCM capture', async ({ api, pair }) => {
     // The shouldNotifyRecipient gate at conversations.js:69 returns
     // false when fcmTokens is empty/missing. /api/test/setup creates
     // users without fcmTokens (default), so the recipient already
@@ -174,7 +153,7 @@ test.describe("Integration — FCM payload shape", () => {
     // buffer.
     const convId = `${pair.testRunId}_fcm_skip_${Date.now()}`;
     await api.post(`${API_BASE}/api/test/write/conversations`, {
-      headers: { "X-Test-API-Key": TEST_API_KEY },
+      headers: { 'X-Test-API-Key': TEST_API_KEY },
       data: {
         id: convId,
         participantIds: [pair.sender.uniqueId, pair.recipient.uniqueId],
@@ -183,16 +162,13 @@ test.describe("Integration — FCM payload shape", () => {
       },
     });
 
-    const post = await api.post(
-      `${API_BASE}/api/conversations/${convId}/messages`,
-      {
-        headers: {
-          Authorization: `Bearer ${pair.sender.idToken}`,
-          "Content-Type": "application/json",
-        },
-        data: { text: "no-fcm", type: "TEXT" },
+    const post = await api.post(`${API_BASE}/api/conversations/${convId}/messages`, {
+      headers: {
+        Authorization: `Bearer ${pair.sender.idToken}`,
+        'Content-Type': 'application/json',
       },
-    );
+      data: { text: 'no-fcm', type: 'TEXT' },
+    });
     expect(post.ok()).toBe(true);
 
     // Wait the same window we'd wait for a real send to confirm
@@ -201,9 +177,6 @@ test.describe("Integration — FCM payload shape", () => {
     await new Promise((r) => setTimeout(r, 1000));
 
     const captures = await readCaptures(api);
-    expect(
-      captures.length,
-      "no FCM capture should land for a recipient with no fcmTokens",
-    ).toBe(0);
+    expect(captures.length, 'no FCM capture should land for a recipient with no fcmTokens').toBe(0);
   });
 });

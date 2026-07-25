@@ -24,8 +24,14 @@ export default async function globalSetup() {
   // cards at the top of the Reports and Appeals tabs, silently breaking
   // selectors like `.report-card.first()`.
   const collections = [
-    'suggestions', 'notifications', 'moderationLog', 'auditLog', 'adminAuditLog',
-    'blockedTopics', 'reports', 'suspensionAppeals',
+    'suggestions',
+    'notifications',
+    'moderationLog',
+    'auditLog',
+    'adminAuditLog',
+    'blockedTopics',
+    'reports',
+    'suspensionAppeals',
   ];
 
   for (const col of collections) {

@@ -10,7 +10,6 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * from English to the target language.
  */
 test.describe('Translation Verification', () => {
-
   // Helper: open language modal, select a language, close modal
   async function changeLanguage(page: import('@playwright/test').Page, langCode: string) {
     const langBtn = page.locator('.stl-lang-btn');

@@ -6,9 +6,12 @@ import { adminLogin, navigateToTab, searchUser, switchUserSubtab } from './helpe
  * the "Saved" feedback to appear next to the field.  Auto-save fires on blur
  * for text inputs and on change for selects/checkboxes.
  */
-async function waitForAutoSave(page: import('@playwright/test').Page, fieldSelector: string): Promise<void> {
+async function waitForAutoSave(
+  page: import('@playwright/test').Page,
+  fieldSelector: string,
+): Promise<void> {
   // Blur triggers auto-save for text fields
-  await page.locator(fieldSelector).evaluate(el => el.blur());
+  await page.locator(fieldSelector).evaluate((el) => el.blur());
   // Wait for the PATCH request to complete — look for the green "Saved" feedback
   const container = page.locator(fieldSelector).locator('..');
   await expect(container.locator('.field-feedback.saved')).toBeVisible({ timeout: 15_000 });
@@ -19,7 +22,10 @@ async function waitForAutoSave(page: import('@playwright/test').Page, fieldSelec
  * The change event already fired from Playwright's check/selectOption, so
  * we just need to wait for the save feedback.
  */
-async function waitForAutoSaveAfterChange(page: import('@playwright/test').Page, fieldSelector: string): Promise<void> {
+async function waitForAutoSaveAfterChange(
+  page: import('@playwright/test').Page,
+  fieldSelector: string,
+): Promise<void> {
   const container = page.locator(fieldSelector).locator('..');
   await expect(container.locator('.field-feedback.saved')).toBeVisible({ timeout: 15_000 });
 }
@@ -77,7 +83,9 @@ test.describe('Admin Users - Profile Subtab', () => {
     await navigateToTab(page, 'Users');
     await searchUser(page, String(testData.user.uniqueId));
 
-    await expect(page.locator('[data-field="displayName"]')).toHaveValue(newName, { timeout: 15_000 });
+    await expect(page.locator('[data-field="displayName"]')).toHaveValue(newName, {
+      timeout: 15_000,
+    });
 
     // Verify via API
     const apiData = await testData.api.get(userPath);
@@ -110,7 +118,9 @@ test.describe('Admin Users - Profile Subtab', () => {
     await navigateToTab(page, 'Users');
     await searchUser(page, String(testData.user.uniqueId));
 
-    await expect(page.locator('[data-field="description"]')).toHaveValue(description, { timeout: 15_000 });
+    await expect(page.locator('[data-field="description"]')).toHaveValue(description, {
+      timeout: 15_000,
+    });
 
     // Verify via API
     const apiData = await testData.api.get(userPath);
@@ -221,7 +231,9 @@ test.describe('Admin Users - Profile Subtab', () => {
     await navigateToTab(page, 'Users');
     await searchUser(page, String(testData.user.uniqueId));
 
-    await expect(page.locator('select[data-field="userType"]')).toHaveValue('SHYTALK_OFFICIAL', { timeout: 15_000 });
+    await expect(page.locator('select[data-field="userType"]')).toHaveValue('SHYTALK_OFFICIAL', {
+      timeout: 15_000,
+    });
 
     // Verify via API
     const apiData = await testData.api.get(userPath);
@@ -347,7 +359,7 @@ test.describe('Admin Users - Profile Subtab', () => {
 
     // Listen for the API response
     const responsePromise = page.waitForResponse(
-      resp => resp.url().includes('/api/search/uniqueId/99999999'),
+      (resp) => resp.url().includes('/api/search/uniqueId/99999999'),
       { timeout: 15_000 },
     );
 

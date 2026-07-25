@@ -90,8 +90,26 @@ test.describe('Suggestions-board vote/submit/comment toast i18n', () => {
 
     const locales = [
       'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+      'ar',
+      'de',
+      'es',
+      'fr',
+      'hi',
+      'id',
+      'it',
+      'ja',
+      'km',
+      'ko',
+      'nl',
+      'pl',
+      'pt',
+      'ru',
+      'sv',
+      'th',
+      'tr',
+      'uk',
+      'vi',
+      'zh',
     ];
 
     for (const locale of locales) {
@@ -103,16 +121,18 @@ test.describe('Suggestions-board vote/submit/comment toast i18n', () => {
       const block = localeBlock![1];
 
       for (const key of TOAST_KEYS) {
-        expect(block, `${locale} should define ${key}`).toMatch(
-          new RegExp(`${key}\\s*:`),
-        );
+        expect(block, `${locale} should define ${key}`).toMatch(new RegExp(`${key}\\s*:`));
       }
     }
   });
 
   test('Korean locale: sgT() returns Hangul for all toast keys', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('shytalk_language', 'ko');
+      } catch {
+        /* ignore */
+      }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(

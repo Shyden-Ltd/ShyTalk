@@ -4,19 +4,22 @@ import { Page } from '@playwright/test';
 
 /** Wait for the reports list to finish loading. */
 async function waitForReportsLoaded(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () => {
-      const list = document.getElementById('reports-list');
-      if (!list) return false;
-      return list.querySelector('.report-card') !== null ||
-        list.textContent!.includes('No reports') ||
-        list.textContent!.includes('Failed');
-    },
-  );
+  await page.waitForFunction(() => {
+    const list = document.getElementById('reports-list');
+    if (!list) return false;
+    return (
+      list.querySelector('.report-card') !== null ||
+      list.textContent!.includes('No reports') ||
+      list.textContent!.includes('Failed')
+    );
+  });
 }
 
 /** Click a report filter button (pending, resolved, archived). */
-async function filterReports(page: Page, status: 'pending' | 'resolved' | 'archived'): Promise<void> {
+async function filterReports(
+  page: Page,
+  status: 'pending' | 'resolved' | 'archived',
+): Promise<void> {
   const btn = page.locator(`#report-filter-bar button[data-report-filter="${status}"]`);
   await expect(btn).toBeVisible({ timeout: 5_000 });
   await btn.click();
@@ -101,7 +104,9 @@ test.describe('Admin Reports', () => {
     // [[feedback-test-isolation-no-leaks]] for context. Production
     // code never sets this flag — only tests.
     await page.addInitScript(() => {
-      (window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
+      (
+        window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }
+      ).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
     });
     await adminLogin(page);
     await navigateToTab(page, 'Reports');
@@ -109,7 +114,10 @@ test.describe('Admin Reports', () => {
   });
 
   // ── Test 1: Seeded report appears in pending list — API verify ──
-  test('seeded report appears in pending list with API verification', async ({ page, testData }) => {
+  test('seeded report appears in pending list with API verification', async ({
+    page,
+    testData,
+  }) => {
     await filterReports(page, 'pending');
 
     // Verify at least one report card is visible
@@ -156,7 +164,7 @@ test.describe('Admin Reports', () => {
     // waitForReportsLoaded would return immediately seeing stale cards.
     await searchInput.fill(String(testData.user.uniqueId));
     const searchResponse = page.waitForResponse(
-      resp => resp.url().includes('/api/reports') && resp.url().includes('search='),
+      (resp) => resp.url().includes('/api/reports') && resp.url().includes('search='),
     );
     await searchBtn.click();
     await searchResponse;
@@ -175,7 +183,7 @@ test.describe('Admin Reports', () => {
     // Clear search — same pattern: wait for API response
     await searchInput.fill('');
     const clearResponse = page.waitForResponse(
-      resp => resp.url().includes('/api/reports') && !resp.url().includes('search='),
+      (resp) => resp.url().includes('/api/reports') && !resp.url().includes('search='),
     );
     await searchBtn.click();
     await clearResponse;
@@ -235,10 +243,12 @@ test.describe('Admin Reports', () => {
     // (`reports.js:694` falls back to 1 when no input is `:checked`).
     // Set `checked` and dispatch `change` directly so the chosen severity
     // is actually applied.
-    await firstCard.locator(`input[name="sev-${uid}"][value="2"]`).evaluate((el: HTMLInputElement) => {
-      el.checked = true;
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    });
+    await firstCard
+      .locator(`input[name="sev-${uid}"][value="2"]`)
+      .evaluate((el: HTMLInputElement) => {
+        el.checked = true;
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+      });
 
     // Click Resolve Latest
     const resolveBtn = firstCard.locator(`button[data-resolve-first="${uid}"]`);
@@ -254,7 +264,7 @@ test.describe('Admin Reports', () => {
     // Cross-check: verify warning exists via API
     try {
       const warnings = await testData.api.get(`/api/user/${testData.user.uniqueId}/warnings`);
-      const warningList = Array.isArray(warnings) ? warnings : (warnings.warnings || []);
+      const warningList = Array.isArray(warnings) ? warnings : warnings.warnings || [];
       const recentWarning = warningList.find((w: any) => w.severity === 2);
       expect(recentWarning).toBeTruthy();
     } catch (err) {
@@ -479,7 +489,7 @@ test.describe('Admin Reports', () => {
     await filterReports(page, 'pending');
 
     const viewConvLink = page.locator('.view-conversation-btn').first();
-    const hasConversation = await viewConvLink.count() > 0;
+    const hasConversation = (await viewConvLink.count()) > 0;
 
     if (!hasConversation) {
       test.skip(true, 'No reports with conversation context available');
@@ -526,7 +536,7 @@ test.describe('Admin Reports', () => {
     await filterReports(page, 'pending');
 
     const navigateLink = page.locator(`[data-navigate-uid="${testData.user.uniqueId}"]`).first();
-    const hasLink = await navigateLink.count() > 0;
+    const hasLink = (await navigateLink.count()) > 0;
 
     if (!hasLink) {
       test.skip(true, 'No navigable user link in current pending reports');
@@ -575,7 +585,7 @@ test.describe('Admin Reports', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    const cardExists = await firstCard.count() > 0;
+    const cardExists = (await firstCard.count()) > 0;
     if (!cardExists) {
       test.skip(true, 'No pending reports for keyboard shortcuts');
       return;
@@ -598,7 +608,7 @@ test.describe('Admin Reports', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    const cardExists = await firstCard.count() > 0;
+    const cardExists = (await firstCard.count()) > 0;
     if (!cardExists) {
       test.skip(true, 'No pending reports for keyboard shortcuts');
       return;
@@ -628,7 +638,7 @@ test.describe('Admin Reports', () => {
     try {
       const auditLog = await testData.api.get('/api/admin/audit-log?limit=5');
       expect(auditLog).toBeTruthy();
-      const entries = Array.isArray(auditLog) ? auditLog : (auditLog.entries || auditLog.logs || []);
+      const entries = Array.isArray(auditLog) ? auditLog : auditLog.entries || auditLog.logs || [];
       expect(Array.isArray(entries)).toBe(true);
     } catch (err: any) {
       // If 404, endpoint may not exist yet

@@ -10,8 +10,27 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 
 export const PORTAL_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+  'en',
+  'ar',
+  'de',
+  'es',
+  'fr',
+  'hi',
+  'id',
+  'it',
+  'ja',
+  'km',
+  'ko',
+  'nl',
+  'pl',
+  'pt',
+  'ru',
+  'sv',
+  'th',
+  'tr',
+  'uk',
+  'vi',
+  'zh',
 ] as const;
 
 export type PortalLocale = (typeof PORTAL_LOCALES)[number];

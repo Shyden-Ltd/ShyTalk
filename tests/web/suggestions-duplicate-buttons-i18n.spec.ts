@@ -25,14 +25,35 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  */
 
 const SG_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+  'en',
+  'ar',
+  'de',
+  'es',
+  'fr',
+  'hi',
+  'id',
+  'it',
+  'ja',
+  'km',
+  'ko',
+  'nl',
+  'pl',
+  'pt',
+  'ru',
+  'sv',
+  'th',
+  'tr',
+  'uk',
+  'vi',
+  'zh',
 ];
 
 const KEYS = ['duplicate_match', 'duplicate_different'];
 
 test.describe('Suggestions-board duplicate-detection buttons i18n', () => {
-  test('SG_LABELS defines duplicate_match + duplicate_different for all 21 locales', async ({ request }) => {
+  test('SG_LABELS defines duplicate_match + duplicate_different for all 21 locales', async ({
+    request,
+  }) => {
     const res = await request.get(`${BASE}/js/suggestions-i18n.js`);
     expect(res.ok()).toBe(true);
     const src = await res.text();
@@ -47,19 +68,31 @@ test.describe('Suggestions-board duplicate-detection buttons i18n', () => {
     }
   });
 
-  test('suggestions-board.js no longer hardcodes the duplicate-button English strings', async ({ request }) => {
+  test('suggestions-board.js no longer hardcodes the duplicate-button English strings', async ({
+    request,
+  }) => {
     const res = await request.get(`${BASE}/js/suggestions-board.js`);
     const src = await res.text();
-    expect(src, 'should not contain hardcoded "Yes, this is what I meant"').not.toContain('Yes, this is what I meant');
-    expect(src, 'should not contain hardcoded "No, my idea is different"').not.toContain('No, my idea is different');
+    expect(src, 'should not contain hardcoded "Yes, this is what I meant"').not.toContain(
+      'Yes, this is what I meant',
+    );
+    expect(src, 'should not contain hardcoded "No, my idea is different"').not.toContain(
+      'No, my idea is different',
+    );
     // Sanity: confirms we DID swap to sgT
     expect(src, 'should now use sgT("duplicate_match")').toContain('sgT("duplicate_match")');
-    expect(src, 'should now use sgT("duplicate_different")').toContain('sgT("duplicate_different")');
+    expect(src, 'should now use sgT("duplicate_different")').toContain(
+      'sgT("duplicate_different")',
+    );
   });
 
   test('Korean locale: sgT returns Hangul for both keys', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('shytalk_language', 'ko');
+      } catch {
+        /* ignore */
+      }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(

@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures/scenarios";
+import { test, expect } from './fixtures/scenarios';
 
 /**
  * Integration test #10 — IAP replay protection.
@@ -33,8 +33,8 @@ import { test, expect } from "./fixtures/scenarios";
  * (express-api/tests/routes/economy-purchase.test.js).
  */
 
-const API_BASE = process.env.API_BASE_URL || "http://localhost:3000";
-const TEST_API_KEY = process.env.TEST_API_KEY || "local-test-key";
+const API_BASE = process.env.API_BASE_URL || 'http://localhost:3000';
+const TEST_API_KEY = process.env.TEST_API_KEY || 'local-test-key';
 
 interface Balance {
   coins: number;
@@ -42,7 +42,7 @@ interface Balance {
 }
 
 async function readBalance(
-  api: import("@playwright/test").APIRequestContext,
+  api: import('@playwright/test').APIRequestContext,
   idToken: string,
 ): Promise<Balance> {
   const res = await api.get(`${API_BASE}/api/economy/balance`, {
@@ -61,14 +61,14 @@ async function readBalance(
  * avoid cross-test contamination.
  */
 async function seedCoinPackage(
-  api: import("@playwright/test").APIRequestContext,
+  api: import('@playwright/test').APIRequestContext,
   testRunId: string,
   productId: string,
   coins: number,
   bonusCoins = 0,
 ): Promise<void> {
   const res = await api.post(`${API_BASE}/api/test/write/coinPackages`, {
-    headers: { "X-Test-API-Key": TEST_API_KEY },
+    headers: { 'X-Test-API-Key': TEST_API_KEY },
     data: {
       id: `${testRunId}_pkg_${productId}`,
       productId,
@@ -93,7 +93,7 @@ async function seedCoinPackage(
  * "package leaks across runs," not test failure.
  */
 async function senderTestRunId(
-  api: import("@playwright/test").APIRequestContext,
+  api: import('@playwright/test').APIRequestContext,
   uniqueId: number,
 ): Promise<string> {
   // The sender fixture provisions via /api/test/setup which creates
@@ -111,11 +111,8 @@ async function senderTestRunId(
   return `test_iap_replay_${uniqueId}_${Date.now()}`;
 }
 
-test.describe("Integration — IAP replay protection", () => {
-  test("same purchaseToken accepted once; second attempt 409s", async ({
-    api,
-    sender,
-  }) => {
+test.describe('Integration — IAP replay protection', () => {
+  test('same purchaseToken accepted once; second attempt 409s', async ({ api, sender }) => {
     const testRunId = await senderTestRunId(api, sender.uniqueId);
     const productId = `${testRunId}_coins_500`;
     const COINS = 500;
@@ -130,7 +127,7 @@ test.describe("Integration — IAP replay protection", () => {
       const first = await api.post(`${API_BASE}/api/economy/purchase`, {
         headers: {
           Authorization: `Bearer ${sender.idToken}`,
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         data: { productId, purchaseToken },
       });
@@ -155,7 +152,7 @@ test.describe("Integration — IAP replay protection", () => {
       const replay = await api.post(`${API_BASE}/api/economy/purchase`, {
         headers: {
           Authorization: `Bearer ${sender.idToken}`,
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         data: { productId, purchaseToken },
       });
@@ -172,16 +169,13 @@ test.describe("Integration — IAP replay protection", () => {
 
       // Different token, same product → MUST succeed (proves the
       // dedup is keyed on the token, not on the user×product pair).
-      const secondPurchase = await api.post(
-        `${API_BASE}/api/economy/purchase`,
-        {
-          headers: {
-            Authorization: `Bearer ${sender.idToken}`,
-            "Content-Type": "application/json",
-          },
-          data: { productId, purchaseToken: `${testRunId}_token_second` },
+      const secondPurchase = await api.post(`${API_BASE}/api/economy/purchase`, {
+        headers: {
+          Authorization: `Bearer ${sender.idToken}`,
+          'Content-Type': 'application/json',
         },
-      );
+        data: { productId, purchaseToken: `${testRunId}_token_second` },
+      });
       expect(secondPurchase.ok()).toBe(true);
       const afterSecond = await readBalance(api, sender.idToken);
       expect(afterSecond.coins).toBe(2000);
@@ -193,7 +187,7 @@ test.describe("Integration — IAP replay protection", () => {
       // the local emulator resets on next start.sh.
       await api
         .post(`${API_BASE}/api/test/teardown`, {
-          headers: { "X-Test-API-Key": TEST_API_KEY },
+          headers: { 'X-Test-API-Key': TEST_API_KEY },
           data: { testRunId },
         })
         .catch(() => {
@@ -202,10 +196,7 @@ test.describe("Integration — IAP replay protection", () => {
     }
   });
 
-  test("returns 404 when productId has no matching coinPackage", async ({
-    api,
-    sender,
-  }) => {
+  test('returns 404 when productId has no matching coinPackage', async ({ api, sender }) => {
     // Token must be unique per run. The route's pre-flight check at
     // economy.js:1477 looks up `purchaseReceipts/sha256(token)`
     // BEFORE the unknown-package check — so a stale receipt from a
@@ -214,10 +205,10 @@ test.describe("Integration — IAP replay protection", () => {
     const res = await api.post(`${API_BASE}/api/economy/purchase`, {
       headers: {
         Authorization: `Bearer ${sender.idToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       data: {
-        productId: "does-not-exist",
+        productId: 'does-not-exist',
         purchaseToken: `no_pkg_${sender.uniqueId}_${Date.now()}`,
       },
     });
@@ -230,25 +221,22 @@ test.describe("Integration — IAP replay protection", () => {
     expect(after.coins).toBe(1000);
   });
 
-  test("returns 400 when productId or purchaseToken missing", async ({
-    api,
-    sender,
-  }) => {
+  test('returns 400 when productId or purchaseToken missing', async ({ api, sender }) => {
     const noProduct = await api.post(`${API_BASE}/api/economy/purchase`, {
       headers: {
         Authorization: `Bearer ${sender.idToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
-      data: { purchaseToken: "x" },
+      data: { purchaseToken: 'x' },
     });
     expect(noProduct.status()).toBe(400);
 
     const noToken = await api.post(`${API_BASE}/api/economy/purchase`, {
       headers: {
         Authorization: `Bearer ${sender.idToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
-      data: { productId: "x" },
+      data: { productId: 'x' },
     });
     expect(noToken.status()).toBe(400);
   });

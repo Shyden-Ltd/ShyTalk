@@ -16,9 +16,7 @@ async function seedOwnAlert(testData: TestData, prefix: string): Promise<string>
 /** Expand the alerts section in the Logs tab. */
 async function expandAlertsSection(page: Page): Promise<void> {
   const alertsSection = page.locator('#logs-alerts-section');
-  const isCollapsed = await alertsSection.evaluate(
-    (el) => el.classList.contains('collapsed'),
-  );
+  const isCollapsed = await alertsSection.evaluate((el) => el.classList.contains('collapsed'));
   if (isCollapsed) {
     await page.locator('#logs-alerts-section .logs-section-header').click();
   }
@@ -47,7 +45,7 @@ test.describe('Admin Alerts', () => {
     // Check via API how many new alerts exist
     try {
       const alertsData = await testData.api.get('/api/admin/alerts?status=new');
-      const alerts = Array.isArray(alertsData) ? alertsData : (alertsData.alerts || []);
+      const alerts = Array.isArray(alertsData) ? alertsData : alertsData.alerts || [];
       const count = alerts.length;
 
       if (count > 0) {
@@ -128,7 +126,7 @@ test.describe('Admin Alerts', () => {
 
     // Find and click the Ack button
     const ackBtn = page.locator('#alerts-tbody .alert-btn').filter({ hasText: 'Ack' }).first();
-    const hasAckBtn = await ackBtn.count() > 0;
+    const hasAckBtn = (await ackBtn.count()) > 0;
 
     if (!hasAckBtn) {
       test.skip(true, 'No acknowledgeable alerts visible');
@@ -159,7 +157,7 @@ test.describe('Admin Alerts', () => {
 
     // Find and click a Resolve button
     const resolveBtn = page.locator('#alerts-tbody .alert-btn-resolve').first();
-    const hasResolveBtn = await resolveBtn.count() > 0;
+    const hasResolveBtn = (await resolveBtn.count()) > 0;
 
     if (!hasResolveBtn) {
       test.skip(true, 'No resolvable alerts visible');
@@ -198,7 +196,7 @@ test.describe('Admin Alerts', () => {
 
     // Find and change the first threshold input
     const firstInput = page.locator('#alert-config-grid input[type="number"]').first();
-    if (await firstInput.count() === 0) {
+    if ((await firstInput.count()) === 0) {
       test.skip(true, 'No alert config fields available');
       return;
     }
@@ -240,7 +238,7 @@ test.describe('Admin Alerts', () => {
 
     // Look for trace links in alerts
     const traceLinks = page.locator('#alerts-tbody .log-trace-link, #alerts-tbody [data-trace-id]');
-    const hasTraceLink = await traceLinks.count() > 0;
+    const hasTraceLink = (await traceLinks.count()) > 0;
 
     if (!hasTraceLink) {
       test.skip(true, 'No trace links in current alerts');

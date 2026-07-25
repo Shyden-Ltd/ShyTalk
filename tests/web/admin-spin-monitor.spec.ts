@@ -50,20 +50,23 @@ test.describe('Admin Spin Monitor', () => {
 
     // Status should not be visible (no user monitored)
     // The monitor-status div has display:none by default
-    const statusDisplay = await page.locator('#monitor-status').evaluate(
-      (el: HTMLElement) => window.getComputedStyle(el).display,
-    );
+    const statusDisplay = await page
+      .locator('#monitor-status')
+      .evaluate((el: HTMLElement) => window.getComputedStyle(el).display);
     expect(statusDisplay).toBe('none');
 
     // Stats should not be visible
-    const statsDisplay = await page.locator('#monitor-stats').evaluate(
-      (el: HTMLElement) => window.getComputedStyle(el).display,
-    );
+    const statsDisplay = await page
+      .locator('#monitor-stats')
+      .evaluate((el: HTMLElement) => window.getComputedStyle(el).display);
     expect(statsDisplay).toBe('none');
   });
 
   // ── Test 2: Start monitoring ──
-  test('start monitoring — enter uniqueId, click Start, verify status and name', async ({ page, testData }) => {
+  test('start monitoring — enter uniqueId, click Start, verify status and name', async ({
+    page,
+    testData,
+  }) => {
     await startMonitoringUser(page, testData.user.uniqueId);
 
     // Verify status dot is live (green)
@@ -87,7 +90,10 @@ test.describe('Admin Spin Monitor', () => {
   });
 
   // ── Test 3: Start via Enter key ──
-  test('start via Enter key — type uniqueId, press Enter, verify starts', async ({ page, testData }) => {
+  test('start via Enter key — type uniqueId, press Enter, verify starts', async ({
+    page,
+    testData,
+  }) => {
     const input = page.locator('#monitor-uid-input');
     await input.fill(String(testData.user.uniqueId));
     // Use page.keyboard.press — WebKit does not reliably fire keydown
@@ -127,7 +133,10 @@ test.describe('Admin Spin Monitor', () => {
   });
 
   // ── Test 5: Live coin display ──
-  test('live coin display — verify #monitor-coins shows current coins', async ({ page, testData }) => {
+  test('live coin display — verify #monitor-coins shows current coins', async ({
+    page,
+    testData,
+  }) => {
     await startMonitoringUser(page, testData.user.uniqueId);
 
     // #monitor-coins should show a numeric value (not the placeholder dash)
@@ -154,9 +163,9 @@ test.describe('Admin Spin Monitor', () => {
     expect(pityText).toContain('/'); // format is "X / Y"
 
     // Pity bar should have a width style set
-    const barWidth = await page.locator('#monitor-pity-bar').evaluate(
-      (el: HTMLElement) => el.style.width,
-    );
+    const barWidth = await page
+      .locator('#monitor-pity-bar')
+      .evaluate((el: HTMLElement) => el.style.width);
     expect(barWidth).toBeTruthy();
 
     // Clean up
@@ -164,7 +173,10 @@ test.describe('Admin Spin Monitor', () => {
   });
 
   // ── Test 7: Guarantee set ──
-  test('guarantee set — select gift, click Set, verify status and API', async ({ page, testData }) => {
+  test('guarantee set — select gift, click Set, verify status and API', async ({
+    page,
+    testData,
+  }) => {
     await startMonitoringUser(page, testData.user.uniqueId);
 
     // Wait for guarantee gift dropdown to be populated
@@ -280,7 +292,10 @@ test.describe('Admin Spin Monitor', () => {
   });
 
   // ── Test 10: Spin history collapsible ──
-  test('spin history collapsible — click toggle, verify expands/collapses', async ({ page, testData }) => {
+  test('spin history collapsible — click toggle, verify expands/collapses', async ({
+    page,
+    testData,
+  }) => {
     await startMonitoringUser(page, testData.user.uniqueId);
 
     const toggle = page.locator('#spin-history-toggle');

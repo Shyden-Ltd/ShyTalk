@@ -9,8 +9,7 @@ async function waitForLogsLoaded(page: Page): Promise<void> {
       const tbody = document.getElementById('logs-tbody');
       const empty = document.getElementById('logs-empty');
       if (!tbody) return false;
-      return tbody.querySelectorAll('tr').length > 0 ||
-        (empty && empty.style.display !== 'none');
+      return tbody.querySelectorAll('tr').length > 0 || (empty && empty.style.display !== 'none');
     },
     { timeout: 15_000 },
   );
@@ -260,12 +259,13 @@ test.describe('Admin Logs', () => {
   });
 
   // ── Test 10: Alerts section — expand, verify seeded alert ──
-  test('alerts section shows seeded alert with message and severity', async ({ page, testData }) => {
+  test('alerts section shows seeded alert with message and severity', async ({
+    page,
+    testData,
+  }) => {
     // Expand alerts section (it may already be expanded)
     const alertsSection = page.locator('#logs-alerts-section');
-    const isCollapsed = await alertsSection.evaluate(
-      (el) => el.classList.contains('collapsed'),
-    );
+    const isCollapsed = await alertsSection.evaluate((el) => el.classList.contains('collapsed'));
     if (isCollapsed) {
       await page.locator('#logs-alerts-section .logs-section-header').click();
     }
@@ -278,7 +278,7 @@ test.describe('Admin Logs', () => {
     const alertsTable = page.locator('#alerts-tbody');
     const alertsEmpty = page.locator('#alerts-empty');
 
-    const hasAlerts = await alertsTable.locator('tr').count() > 0;
+    const hasAlerts = (await alertsTable.locator('tr').count()) > 0;
     const isEmpty = await alertsEmpty.isVisible();
 
     // Exactly one of these must be true (mutually exclusive)
@@ -309,9 +309,7 @@ test.describe('Admin Logs', () => {
 
     // Expand alerts section
     const alertsSection = page.locator('#logs-alerts-section');
-    const isCollapsed = await alertsSection.evaluate(
-      (el) => el.classList.contains('collapsed'),
-    );
+    const isCollapsed = await alertsSection.evaluate((el) => el.classList.contains('collapsed'));
     if (isCollapsed) {
       await page.locator('#logs-alerts-section .logs-section-header').click();
     }
@@ -321,7 +319,7 @@ test.describe('Admin Logs', () => {
 
     // Find and click the Ack button on any alert
     const ackBtn = page.locator('#alerts-tbody .alert-btn').filter({ hasText: 'Ack' }).first();
-    const hasAckBtn = await ackBtn.count() > 0;
+    const hasAckBtn = (await ackBtn.count()) > 0;
 
     if (!hasAckBtn) {
       test.skip(true, 'No acknowledgeable alerts visible');
@@ -348,9 +346,7 @@ test.describe('Admin Logs', () => {
   test('resolve alert removes it from active list', async ({ page, testData }) => {
     // Expand alerts section
     const alertsSection = page.locator('#logs-alerts-section');
-    const isCollapsed = await alertsSection.evaluate(
-      (el) => el.classList.contains('collapsed'),
-    );
+    const isCollapsed = await alertsSection.evaluate((el) => el.classList.contains('collapsed'));
     if (isCollapsed) {
       await page.locator('#logs-alerts-section .logs-section-header').click();
     }
@@ -359,7 +355,7 @@ test.describe('Admin Logs', () => {
 
     // Find and click a Resolve button
     const resolveBtn = page.locator('#alerts-tbody .alert-btn-resolve').first();
-    const hasResolveBtn = await resolveBtn.count() > 0;
+    const hasResolveBtn = (await resolveBtn.count()) > 0;
 
     if (!hasResolveBtn) {
       test.skip(true, 'No resolvable alerts visible');
@@ -382,9 +378,7 @@ test.describe('Admin Logs', () => {
     test('alert config threshold change persists after reload', async ({ page, testData }) => {
       // Expand alerts section
       const alertsSection = page.locator('#logs-alerts-section');
-      const isCollapsed = await alertsSection.evaluate(
-        (el) => el.classList.contains('collapsed'),
-      );
+      const isCollapsed = await alertsSection.evaluate((el) => el.classList.contains('collapsed'));
       if (isCollapsed) {
         await page.locator('#logs-alerts-section .logs-section-header').click();
       }
@@ -408,7 +402,7 @@ test.describe('Admin Logs', () => {
 
       // Find the first threshold input and change it
       const firstInput = page.locator('#alert-config-grid input[type="number"]').first();
-      const hasInput = await firstInput.count() > 0;
+      const hasInput = (await firstInput.count()) > 0;
 
       if (!hasInput) {
         test.skip(true, 'No alert config fields available');
@@ -434,8 +428,8 @@ test.describe('Admin Logs', () => {
 
       // Re-expand and re-open config
       const alertsSectionAfter = page.locator('#logs-alerts-section');
-      const isCollapsedAfter = await alertsSectionAfter.evaluate(
-        (el) => el.classList.contains('collapsed'),
+      const isCollapsedAfter = await alertsSectionAfter.evaluate((el) =>
+        el.classList.contains('collapsed'),
       );
       if (isCollapsedAfter) {
         await page.locator('#logs-alerts-section .logs-section-header').click();
@@ -499,7 +493,9 @@ test.describe('Admin Logs', () => {
 
       // Re-expand settings
       await page.locator('#logs-settings-section .logs-section-header').click();
-      await expect(page.locator('#logs-settings-section')).not.toHaveClass(/collapsed/, { timeout: 3_000 });
+      await expect(page.locator('#logs-settings-section')).not.toHaveClass(/collapsed/, {
+        timeout: 3_000,
+      });
 
       await expect(page.locator('#log-cfg-retention')).toHaveValue(newRetention);
 

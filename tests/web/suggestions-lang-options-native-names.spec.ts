@@ -56,7 +56,9 @@ test.describe('Suggestions-board LANG_OPTIONS native names', () => {
     const arrSrc = langBlock![1];
 
     for (const [code, native] of Object.entries(NATIVE_NAMES)) {
-      const re = new RegExp(`value:\\s*"${code}",\\s*label:\\s*"${native.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&')}"`);
+      const re = new RegExp(
+        `value:\\s*"${code}",\\s*label:\\s*"${native.replace(/[.*+?^${}()|[\]\\]/g, '\\\\$&')}"`,
+      );
       expect(arrSrc, `${code} label should be native "${native}"`).toMatch(re);
     }
   });
@@ -68,10 +70,26 @@ test.describe('Suggestions-board LANG_OPTIONS native names', () => {
     const arrSrc = langBlock![1];
     // English language NAMES that should NOT appear (en is intentional).
     const englishNames = [
-      'Arabic', 'German', 'Spanish', 'French', 'Hindi', 'Indonesian',
-      'Italian', 'Japanese', 'Khmer', 'Korean', 'Dutch', 'Polish',
-      'Portuguese', 'Russian', 'Swedish', 'Thai', 'Turkish', 'Ukrainian',
-      'Vietnamese', 'Chinese',
+      'Arabic',
+      'German',
+      'Spanish',
+      'French',
+      'Hindi',
+      'Indonesian',
+      'Italian',
+      'Japanese',
+      'Khmer',
+      'Korean',
+      'Dutch',
+      'Polish',
+      'Portuguese',
+      'Russian',
+      'Swedish',
+      'Thai',
+      'Turkish',
+      'Ukrainian',
+      'Vietnamese',
+      'Chinese',
     ];
     for (const name of englishNames) {
       expect(arrSrc, `English name "${name}" should not be in LANG_OPTIONS`).not.toMatch(

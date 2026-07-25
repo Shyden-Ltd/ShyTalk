@@ -78,10 +78,14 @@ test.describe('Suggestions-board subscribe-dialog i18n', () => {
 
     // Runtime sites: button states + toasts + Event header
     expect(src, 'Saving... should use sgT').toMatch(/sgT\("subscribe_btn_saving"\)/);
-    expect(src, 'Save reset should use sgT("save")').toMatch(/saveBtn\.textContent = sgT\("save"\)/);
+    expect(src, 'Save reset should use sgT("save")').toMatch(
+      /saveBtn\.textContent = sgT\("save"\)/,
+    );
     expect(src, 'success toast should use sgT').toMatch(/sgT\("subscribe_toast_saved"\)/);
     expect(src, 'failure toast should use sgT').toMatch(/sgT\("subscribe_toast_save_failed"\)/);
-    expect(src, 'unknown_error fallback should use sgT').toMatch(/sgT\("subscribe_unknown_error"\)/);
+    expect(src, 'unknown_error fallback should use sgT').toMatch(
+      /sgT\("subscribe_unknown_error"\)/,
+    );
     expect(src, 'Event header should use sgT').toMatch(/sgT\("subscribe_event_header"\)/);
 
     // Hardcoded fail-cases: must NOT appear as bare quoted strings
@@ -101,9 +105,7 @@ test.describe('Suggestions-board subscribe-dialog i18n', () => {
     expect(src, 'Should not hardcode "Failed to save: " in showToast').not.toMatch(
       /showToast\("Failed to save: "/,
     );
-    expect(src, 'Should not hardcode ">Event<" in HTML').not.toMatch(
-      />Event</,
-    );
+    expect(src, 'Should not hardcode ">Event<" in HTML').not.toMatch(/>Event</);
   });
 
   test('All 21 locales define every subscribe key in SG_LABELS', async ({ request }) => {
@@ -113,8 +115,26 @@ test.describe('Suggestions-board subscribe-dialog i18n', () => {
 
     const locales = [
       'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+      'ar',
+      'de',
+      'es',
+      'fr',
+      'hi',
+      'id',
+      'it',
+      'ja',
+      'km',
+      'ko',
+      'nl',
+      'pl',
+      'pt',
+      'ru',
+      'sv',
+      'th',
+      'tr',
+      'uk',
+      'vi',
+      'zh',
     ];
 
     for (const locale of locales) {
@@ -126,16 +146,18 @@ test.describe('Suggestions-board subscribe-dialog i18n', () => {
       const block = localeBlock![1];
 
       for (const key of SUBSCRIBE_KEYS) {
-        expect(block, `${locale} should define ${key}`).toMatch(
-          new RegExp(`${key}\\s*:`),
-        );
+        expect(block, `${locale} should define ${key}`).toMatch(new RegExp(`${key}\\s*:`));
       }
     }
   });
 
   test('Korean locale: sgT() returns Hangul for all subscribe keys', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('shytalk_language', 'ko');
+      } catch {
+        /* ignore */
+      }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(

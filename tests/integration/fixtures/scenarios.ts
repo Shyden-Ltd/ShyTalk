@@ -1,8 +1,4 @@
-import {
-  test as base,
-  request as pwRequest,
-  type APIRequestContext,
-} from "@playwright/test";
+import { test as base, request as pwRequest, type APIRequestContext } from '@playwright/test';
 
 /**
  * Multi-account scenario fixtures for integration tests.
@@ -38,8 +34,8 @@ import {
  * deliberate.
  */
 
-const API_BASE = process.env.API_BASE_URL || "http://localhost:3000";
-const TEST_API_KEY = process.env.TEST_API_KEY || "local-test-key";
+const API_BASE = process.env.API_BASE_URL || 'http://localhost:3000';
+const TEST_API_KEY = process.env.TEST_API_KEY || 'local-test-key';
 
 export interface IntegrationUser {
   /** Server-assigned numeric user ID. */
@@ -92,7 +88,7 @@ async function provisionUser(
   name: string,
 ): Promise<{ testRunId: string; user: IntegrationUser }> {
   const setupRes = await api.post(`${API_BASE}/api/test/setup`, {
-    headers: { "X-Test-API-Key": TEST_API_KEY },
+    headers: { 'X-Test-API-Key': TEST_API_KEY },
     data: {
       users: [{ name, shyCoins: 1000, shyBeans: 0 }],
     },
@@ -111,8 +107,8 @@ async function provisionUser(
   // ever yielded 0 surfaces as a clear shape error.
   if (
     !userRecord ||
-    typeof userRecord.uid !== "string" ||
-    typeof userRecord.uniqueId !== "number"
+    typeof userRecord.uid !== 'string' ||
+    typeof userRecord.uniqueId !== 'number'
   ) {
     throw new Error(
       `provisionUser: /test/setup returned unexpected shape: ${JSON.stringify(setupBody)}`,
@@ -120,7 +116,7 @@ async function provisionUser(
   }
 
   const mintRes = await api.post(`${API_BASE}/api/test/mint-id-token`, {
-    headers: { "X-Test-API-Key": TEST_API_KEY },
+    headers: { 'X-Test-API-Key': TEST_API_KEY },
     data: { uid: userRecord.uid },
   });
   if (!mintRes.ok()) {
@@ -130,7 +126,7 @@ async function provisionUser(
   }
   const { idToken } = await mintRes.json();
   if (!idToken) {
-    throw new Error("provisionUser: /test/mint-id-token returned no idToken");
+    throw new Error('provisionUser: /test/mint-id-token returned no idToken');
   }
 
   return {
@@ -148,22 +144,17 @@ async function provisionUser(
  * Mint a Firebase ID token for the given Firebase UID via the local
  * Auth emulator. Throws on any failure.
  */
-async function mintIdToken(
-  api: APIRequestContext,
-  uid: string,
-): Promise<string> {
+async function mintIdToken(api: APIRequestContext, uid: string): Promise<string> {
   const mintRes = await api.post(`${API_BASE}/api/test/mint-id-token`, {
-    headers: { "X-Test-API-Key": TEST_API_KEY },
+    headers: { 'X-Test-API-Key': TEST_API_KEY },
     data: { uid },
   });
   if (!mintRes.ok()) {
-    throw new Error(
-      `mintIdToken failed: ${mintRes.status()}: ${await mintRes.text()}`,
-    );
+    throw new Error(`mintIdToken failed: ${mintRes.status()}: ${await mintRes.text()}`);
   }
   const { idToken } = await mintRes.json();
   if (!idToken) {
-    throw new Error("mintIdToken: emulator returned no idToken");
+    throw new Error('mintIdToken: emulator returned no idToken');
   }
   return idToken;
 }
@@ -177,13 +168,13 @@ async function mintIdToken(
  */
 async function provisionPair(api: APIRequestContext): Promise<IntegrationPair> {
   const setupRes = await api.post(`${API_BASE}/api/test/setup`, {
-    headers: { "X-Test-API-Key": TEST_API_KEY },
+    headers: { 'X-Test-API-Key': TEST_API_KEY },
     data: {
       users: [
-        { name: "sender", shyCoins: 1000, shyBeans: 0 },
-        { name: "recipient", shyCoins: 0, shyBeans: 0 },
+        { name: 'sender', shyCoins: 1000, shyBeans: 0 },
+        { name: 'recipient', shyCoins: 0, shyBeans: 0 },
       ],
-      gifts: [{ name: "Test gift", coinValue: 100 }],
+      gifts: [{ name: 'Test gift', coinValue: 100 }],
     },
   });
   if (!setupRes.ok()) {
@@ -202,10 +193,10 @@ async function provisionPair(api: APIRequestContext): Promise<IntegrationPair> {
   if (
     userRecords.length !== 2 ||
     giftRecords.length !== 1 ||
-    typeof userRecords[0].uniqueId !== "number" ||
-    typeof userRecords[1].uniqueId !== "number" ||
-    typeof giftRecords[0].id !== "string" ||
-    typeof giftRecords[0].coinValue !== "number"
+    typeof userRecords[0].uniqueId !== 'number' ||
+    typeof userRecords[1].uniqueId !== 'number' ||
+    typeof giftRecords[0].id !== 'string' ||
+    typeof giftRecords[0].coinValue !== 'number'
   ) {
     throw new Error(
       `provisionPair: /test/setup returned unexpected shape: ${JSON.stringify(setupBody)}`,
@@ -222,13 +213,13 @@ async function provisionPair(api: APIRequestContext): Promise<IntegrationPair> {
     sender: {
       uniqueId: userRecords[0].uniqueId,
       uid: userRecords[0].uid,
-      displayName: userRecords[0].displayName || "sender",
+      displayName: userRecords[0].displayName || 'sender',
       idToken: senderToken,
     },
     recipient: {
       uniqueId: userRecords[1].uniqueId,
       uid: userRecords[1].uid,
-      displayName: userRecords[1].displayName || "recipient",
+      displayName: userRecords[1].displayName || 'recipient',
       idToken: recipientToken,
     },
     gift: {
@@ -246,13 +237,10 @@ async function provisionPair(api: APIRequestContext): Promise<IntegrationPair> {
  * leaves emulator state for subsequent runs (which retries=0
  * cannot tolerate without restarting the stack).
  */
-async function teardown(
-  api: APIRequestContext,
-  testRunId: string,
-): Promise<void> {
+async function teardown(api: APIRequestContext, testRunId: string): Promise<void> {
   try {
     const res = await api.post(`${API_BASE}/api/test/teardown`, {
-      headers: { "X-Test-API-Key": TEST_API_KEY },
+      headers: { 'X-Test-API-Key': TEST_API_KEY },
       data: { testRunId },
     });
     if (!res.ok()) {
@@ -260,14 +248,12 @@ async function teardown(
       console.warn(
         `scenarios.teardown: /api/test/teardown returned ${res.status()}: ${await res
           .text()
-          .catch(() => "<no body>")}. testRunId=${testRunId}`,
+          .catch(() => '<no body>')}. testRunId=${testRunId}`,
       );
     }
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.warn(
-      `scenarios.teardown: ${(err as Error).message}. testRunId=${testRunId}`,
-    );
+    console.warn(`scenarios.teardown: ${(err as Error).message}. testRunId=${testRunId}`);
   }
 }
 
@@ -281,7 +267,7 @@ export const test = base.extend<IntegrationFixtures>({
     }
   },
   sender: async ({ api }, use) => {
-    const { testRunId, user } = await provisionUser(api, "sender");
+    const { testRunId, user } = await provisionUser(api, 'sender');
     try {
       await use(user);
     } finally {
@@ -298,4 +284,4 @@ export const test = base.extend<IntegrationFixtures>({
   },
 });
 
-export { expect } from "@playwright/test";
+export { expect } from '@playwright/test';

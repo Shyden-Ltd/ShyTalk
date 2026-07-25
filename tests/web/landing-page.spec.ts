@@ -76,7 +76,9 @@ test.describe('Landing Page', () => {
   });
 
   test('loads logger script', async ({ page }) => {
-    const loggerLoaded = await page.evaluate(() => typeof (window as any).ShyTalkLogger !== 'undefined');
+    const loggerLoaded = await page.evaluate(
+      () => typeof (window as any).ShyTalkLogger !== 'undefined',
+    );
     expect(loggerLoaded).toBe(true);
   });
 

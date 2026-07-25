@@ -19,11 +19,9 @@
  * never contain whitespace, and the rules-level comparison is the
  * arbiter, so the helper does not second-guess the token.
  */
-export function deriveOwnerFirebaseUid(
-  payload: Record<string, unknown>,
-): string | undefined {
+export function deriveOwnerFirebaseUid(payload: Record<string, unknown>): string | undefined {
   for (const claim of [payload.user_id, payload.sub]) {
-    if (typeof claim === "string" && claim !== "") return claim;
+    if (typeof claim === 'string' && claim !== '') return claim;
   }
   return undefined;
 }

@@ -20,7 +20,7 @@ async function reloadAndNavigateToEconomy(
  * the "Saved" feedback.  The eco-pity input fires autoSaveEconomyField on blur.
  */
 async function waitForPityAutoSave(page: import('@playwright/test').Page): Promise<void> {
-  await page.locator('#eco-pity').evaluate(el => el.blur());
+  await page.locator('#eco-pity').evaluate((el) => el.blur());
   const container = page.locator('#eco-pity').locator('..');
   await expect(container.locator('.field-feedback.saved')).toBeVisible();
 }
@@ -68,7 +68,8 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Restore: deduct 500 via API
     await testData.api.post(`/api/users/${uid}/adjust-balance`, {
-      currency: 'coins', amount: -500,
+      currency: 'coins',
+      amount: -500,
     });
   });
 
@@ -95,7 +96,8 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Restore: add 200 via API
     await testData.api.post(`/api/users/${uid}/adjust-balance`, {
-      currency: 'coins', amount: 200,
+      currency: 'coins',
+      amount: 200,
     });
   });
 
@@ -125,7 +127,8 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Restore: deduct 300 via API
     await testData.api.post(`/api/users/${uid}/adjust-balance`, {
-      currency: 'beans', amount: -300,
+      currency: 'beans',
+      amount: -300,
     });
   });
 
@@ -135,7 +138,7 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Ensure at least one gift exists in the catalog
     const allGifts = await testData.api.get('/api/gifts/all');
-    const giftList = Array.isArray(allGifts) ? allGifts : (allGifts.gifts || []);
+    const giftList = Array.isArray(allGifts) ? allGifts : allGifts.gifts || [];
     if (giftList.length === 0) {
       await testData.api.testWrite('gifts', {
         name: 'E2E Backpack Gift',
@@ -179,12 +182,16 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Reload and verify persistence
     await reloadAndNavigateToEconomy(page, uid);
-    const giftCardAfter = page.locator(`#backpack-grid .backpack-item[data-gift-id="${firstGiftId}"]`);
+    const giftCardAfter = page.locator(
+      `#backpack-grid .backpack-item[data-gift-id="${firstGiftId}"]`,
+    );
     await expect(giftCardAfter).toBeVisible();
 
     // Clean up: remove the gift via API
     await testData.api.post(`/api/users/${uid}/backpack`, {
-      giftId: firstGiftId, quantity: 0, silent: true,
+      giftId: firstGiftId,
+      quantity: 0,
+      silent: true,
     });
   });
 
@@ -194,13 +201,15 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Get a gift ID from the API
     const allGifts = await testData.api.get('/api/gifts/all');
-    const giftList = Array.isArray(allGifts) ? allGifts : (allGifts.gifts || []);
+    const giftList = Array.isArray(allGifts) ? allGifts : allGifts.gifts || [];
     expect(giftList.length).toBeGreaterThan(0);
     const firstGiftId = giftList[0].id;
 
     // Add the gift via API and trigger a backpack refresh in the UI
     await testData.api.post(`/api/users/${uid}/backpack`, {
-      giftId: firstGiftId, quantity: 2, silent: true,
+      giftId: firstGiftId,
+      quantity: 2,
+      silent: true,
     });
 
     // Re-search the user to reload backpack data (subtab switch doesn't reload)
@@ -222,12 +231,14 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Reload and verify the gift is gone
     await reloadAndNavigateToEconomy(page, uid);
-    const giftCardAfter = page.locator(`#backpack-grid .backpack-item[data-gift-id="${firstGiftId}"]`);
+    const giftCardAfter = page.locator(
+      `#backpack-grid .backpack-item[data-gift-id="${firstGiftId}"]`,
+    );
     await expect(giftCardAfter).not.toBeVisible();
 
     // Verify via API: backpack should not contain this gift
     const backpack = await testData.api.get(`/api/users/${uid}/backpack`);
-    const items = Array.isArray(backpack) ? backpack : (backpack.items || []);
+    const items = Array.isArray(backpack) ? backpack : backpack.items || [];
     const found = items.find((item: any) => item.giftId === firstGiftId);
     expect(found).toBeUndefined();
   });
@@ -240,7 +251,8 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Create a transaction directly via API (reliable, avoids UI timing issues)
     await testData.api.post(`/api/users/${uid}/adjust-balance`, {
-      currency: 'coins', amount: 100,
+      currency: 'coins',
+      amount: 100,
     });
 
     // Click Load to load transaction history in the UI
@@ -252,7 +264,8 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Restore: deduct 100 via API
     await testData.api.post(`/api/users/${uid}/adjust-balance`, {
-      currency: 'coins', amount: -100,
+      currency: 'coins',
+      amount: -100,
     });
   });
 
@@ -291,7 +304,8 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Restore: deduct 50 via API
     await testData.api.post(`/api/users/${uid}/adjust-balance`, {
-      currency: 'coins', amount: -50,
+      currency: 'coins',
+      amount: -50,
     });
   });
 
@@ -343,7 +357,8 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Restore: add 1000 to get back to seeded amount
     await testData.api.post(`/api/users/${uid}/adjust-balance`, {
-      currency: 'coins', amount: 1000,
+      currency: 'coins',
+      amount: 1000,
     });
   });
 });

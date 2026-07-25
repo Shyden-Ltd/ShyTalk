@@ -7,7 +7,7 @@ import type { Page } from '@playwright/test';
  * the "Saved" feedback to appear next to the field.
  */
 async function waitForAutoSave(page: Page, fieldSelector: string): Promise<void> {
-  await page.locator(fieldSelector).evaluate(el => el.blur());
+  await page.locator(fieldSelector).evaluate((el) => el.blur());
   const container = page.locator(fieldSelector).locator('..');
   await expect(container.locator('.field-feedback.saved')).toBeVisible();
 }
@@ -22,21 +22,26 @@ test.describe('Admin Validation', () => {
   });
 
   // ── Test 1: Empty required field ──
-  test('empty display name triggers validation feedback or toast error', async ({ page, testData }) => {
+  test('empty display name triggers validation feedback or toast error', async ({
+    page,
+    testData,
+  }) => {
     const displayNameInput = page.locator('[data-field="displayName"]');
     const originalName = testData.user.displayName;
 
     // Clear the display name
     await displayNameInput.fill('');
-    await displayNameInput.evaluate(el => el.blur());
+    await displayNameInput.evaluate((el) => el.blur());
 
     // Wait briefly for any validation to fire
     await page.waitForTimeout(2_000);
 
     // Check for validation feedback or that the field was not saved empty
     const container = displayNameInput.locator('..');
-    const errorFeedback = container.locator('.field-feedback.error, .field-feedback.invalid, .field-feedback.failed');
-    const hasFeedback = await errorFeedback.count() > 0;
+    const errorFeedback = container.locator(
+      '.field-feedback.error, .field-feedback.invalid, .field-feedback.failed',
+    );
+    const hasFeedback = (await errorFeedback.count()) > 0;
 
     // Also check that an error toast or validation message appeared
     const errorToast = page.locator('.toast.error');
@@ -79,7 +84,8 @@ test.describe('Admin Validation', () => {
     // Restore if coins were deducted
     if (coinsNum < 1000) {
       await testData.api.post(`/api/users/${testData.user.uniqueId}/adjust-balance`, {
-        currency: 'COINS', amount: 1000 - coinsNum,
+        currency: 'COINS',
+        amount: 1000 - coinsNum,
       });
     }
   });
@@ -109,7 +115,8 @@ test.describe('Admin Validation', () => {
     // Restore if needed
     if (coinsNum !== 1000) {
       await testData.api.post(`/api/users/${testData.user.uniqueId}/adjust-balance`, {
-        currency: 'COINS', amount: 1000 - coinsNum,
+        currency: 'COINS',
+        amount: 1000 - coinsNum,
       });
     }
   });
@@ -140,12 +147,15 @@ test.describe('Admin Validation', () => {
   });
 
   // ── Test 5: URL format validation ──
-  test('non-URL value in profile photo field is accepted or rejected gracefully', async ({ page, testData }) => {
+  test('non-URL value in profile photo field is accepted or rejected gracefully', async ({
+    page,
+    testData,
+  }) => {
     const profileUrlInput = page.locator('[data-field="profilePhotoUrl"]');
 
     // Enter a non-URL value
     await profileUrlInput.fill('not-a-url');
-    await profileUrlInput.evaluate(el => el.blur());
+    await profileUrlInput.evaluate((el) => el.blur());
 
     // Wait for auto-save attempt
     await page.waitForTimeout(2_000);
@@ -183,8 +193,8 @@ test.describe('Admin Validation', () => {
     await page.waitForTimeout(2_000);
 
     // No XSS-related console errors should have fired
-    const xssErrors = consoleErrors.filter(e =>
-      e.includes('script') || e.includes('XSS') || e.includes('injection'),
+    const xssErrors = consoleErrors.filter(
+      (e) => e.includes('script') || e.includes('XSS') || e.includes('injection'),
     );
     expect(xssErrors.length).toBe(0);
   });
@@ -240,7 +250,10 @@ test.describe('Admin Validation', () => {
   });
 
   // ── Test 9: Double-click prevention ──
-  test('double-click prevention on warning button prevents duplicate warnings', async ({ page, testData }) => {
+  test('double-click prevention on warning button prevents duplicate warnings', async ({
+    page,
+    testData,
+  }) => {
     const uid = String(testData.user.uniqueId);
 
     // Auto-accept all dialogs
@@ -280,9 +293,7 @@ test.describe('Admin Validation', () => {
     // have suppressed the second queued click event).
     const after = await testData.api.get(`/api/user/${uid}/warnings`);
     const warnings = after.warnings || [];
-    const newWarnings = warnings.filter(
-      (w: any) => !beforeIds.has(w.id) && w.reason === 'Spam',
-    );
+    const newWarnings = warnings.filter((w: any) => !beforeIds.has(w.id) && w.reason === 'Spam');
     expect(newWarnings.length).toBe(1);
 
     // Clean up: revoke warning and reset GCS
@@ -315,7 +326,7 @@ test.describe('Admin Validation', () => {
     }
 
     // Blur to trigger save
-    await displayNameInput.evaluate(el => el.blur());
+    await displayNameInput.evaluate((el) => el.blur());
 
     // Wait for save to complete
     await page.waitForTimeout(3_000);

@@ -33,9 +33,12 @@ test.describe('Admin Login Flow', () => {
     const emailInput = page.locator('#login-email');
     const loginError = page.locator('#login-error');
     const hasValidation = await emailInput.evaluate(
-      (el: HTMLInputElement) => el.validationMessage !== ''
+      (el: HTMLInputElement) => el.validationMessage !== '',
     );
-    const hasAppError = await loginError.textContent().then((t: string) => (t ?? '').length > 0).catch(() => false);
+    const hasAppError = await loginError
+      .textContent()
+      .then((t: string) => (t ?? '').length > 0)
+      .catch(() => false);
     expect(hasValidation || hasAppError).toBe(true);
   });
 
@@ -46,9 +49,12 @@ test.describe('Admin Login Flow', () => {
     const passwordInput = page.locator('#login-password');
     const loginError = page.locator('#login-error');
     const hasValidation = await passwordInput.evaluate(
-      (el: HTMLInputElement) => el.validationMessage !== ''
+      (el: HTMLInputElement) => el.validationMessage !== '',
     );
-    const hasAppError = await loginError.textContent().then((t: string) => (t ?? '').length > 0).catch(() => false);
+    const hasAppError = await loginError
+      .textContent()
+      .then((t: string) => (t ?? '').length > 0)
+      .catch(() => false);
     expect(hasValidation || hasAppError).toBe(true);
   });
 
@@ -82,9 +88,18 @@ test.describe('Admin Login Flow', () => {
     await expect(page.locator('#dashboard-screen')).toBeVisible({ timeout: 30_000 });
 
     const expectedTabs = [
-      'Users', 'Appeals', 'Reports', 'Gifts',
-      'Economy', 'Maintenance', 'Spin Monitor', 'Banners',
-      'Fun Facts', 'Backups', 'Logs', 'Devices',
+      'Users',
+      'Appeals',
+      'Reports',
+      'Gifts',
+      'Economy',
+      'Maintenance',
+      'Spin Monitor',
+      'Banners',
+      'Fun Facts',
+      'Backups',
+      'Logs',
+      'Devices',
       'Age Segregation',
     ];
     for (const tabName of expectedTabs) {

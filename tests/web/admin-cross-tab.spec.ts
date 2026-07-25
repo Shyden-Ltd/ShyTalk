@@ -4,19 +4,22 @@ import type { Page } from '@playwright/test';
 
 /** Wait for the reports list to finish loading. */
 async function waitForReportsLoaded(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () => {
-      const list = document.getElementById('reports-list');
-      if (!list) return false;
-      return list.querySelector('.report-card') !== null ||
-        list.textContent!.includes('No reports') ||
-        list.textContent!.includes('Failed');
-    },
-  );
+  await page.waitForFunction(() => {
+    const list = document.getElementById('reports-list');
+    if (!list) return false;
+    return (
+      list.querySelector('.report-card') !== null ||
+      list.textContent!.includes('No reports') ||
+      list.textContent!.includes('Failed')
+    );
+  });
 }
 
 /** Filter reports by status. */
-async function filterReports(page: Page, status: 'pending' | 'resolved' | 'archived'): Promise<void> {
+async function filterReports(
+  page: Page,
+  status: 'pending' | 'resolved' | 'archived',
+): Promise<void> {
   const btn = page.locator(`#report-filter-bar button[data-report-filter="${status}"]`);
   await btn.click();
   await expect(btn).toHaveClass(/active/);
@@ -63,22 +66,22 @@ async function unsuspendAndResetGcs(testData: TestData): Promise<void> {
 
 /** Wait for appeals list to load. */
 async function waitForAppealsLoaded(page: Page): Promise<void> {
-  await page.waitForFunction(
-    () => {
-      const list = document.getElementById('appeals-list');
-      if (!list) return false;
-      return list.querySelector('.appeal-card') !== null ||
-        list.textContent!.includes('No appeals') ||
-        list.textContent!.includes('Failed');
-    },
-  );
+  await page.waitForFunction(() => {
+    const list = document.getElementById('appeals-list');
+    if (!list) return false;
+    return (
+      list.querySelector('.appeal-card') !== null ||
+      list.textContent!.includes('No appeals') ||
+      list.textContent!.includes('Failed')
+    );
+  });
 }
 
 /** Wait for devices table to load. */
 async function waitForDevicesLoaded(page: Page): Promise<void> {
-  await expect(
-    page.locator('#devices-tbody tr, #devices-empty[style*="block"]'),
-  ).not.toHaveCount(0);
+  await expect(page.locator('#devices-tbody tr, #devices-empty[style*="block"]')).not.toHaveCount(
+    0,
+  );
 }
 
 test.describe('Admin Cross-Tab Interactions', () => {
@@ -97,7 +100,9 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // sev-1. See reports.js:340 + [[feedback-test-isolation-no-leaks]].
     // Production code never sets this flag — only tests.
     await page.addInitScript(() => {
-      (window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
+      (
+        window as Window & { __SHYTALK_PAUSE_REPORTS_POLL__?: boolean }
+      ).__SHYTALK_PAUSE_REPORTS_POLL__ = true;
     });
     await adminLogin(page);
   });
@@ -115,7 +120,10 @@ test.describe('Admin Cross-Tab Interactions', () => {
   });
 
   // ── Test 1: Report resolve-as-warned → warning in user history ──
-  test('report warned resolution creates warning in user moderation history', async ({ page, testData }) => {
+  test('report warned resolution creates warning in user moderation history', async ({
+    page,
+    testData,
+  }) => {
     // Seed a fresh report
     await seedReport(testData);
 
@@ -166,10 +174,14 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // `resolveInProgress = true`, so subsequent polls are also suppressed.
     await firstCard.evaluate((card: HTMLElement, evalUid: string) => {
       const group = card.querySelectorAll<HTMLInputElement>(`input[name="sev-${evalUid}"]`);
-      for (const r of group) r.checked = (r.value === '2');
-      const target = card.querySelector<HTMLInputElement>(`input[name="sev-${evalUid}"][value="2"]`);
+      for (const r of group) r.checked = r.value === '2';
+      const target = card.querySelector<HTMLInputElement>(
+        `input[name="sev-${evalUid}"][value="2"]`,
+      );
       if (target) target.dispatchEvent(new Event('change', { bubbles: true }));
-      const resolveBtn = card.querySelector<HTMLButtonElement>(`button[data-resolve-first="${evalUid}"]`);
+      const resolveBtn = card.querySelector<HTMLButtonElement>(
+        `button[data-resolve-first="${evalUid}"]`,
+      );
       if (resolveBtn) resolveBtn.click();
     }, uid);
 
@@ -199,7 +211,7 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // subtab loads warnings on activation, but may cache stale state).
     const warningList = page.locator('#warning-history-list');
     for (let retry = 0; retry < 3; retry++) {
-      if (await warningList.locator('.warning-item').count() > 0) break;
+      if ((await warningList.locator('.warning-item').count()) > 0) break;
       await page.waitForTimeout(2_000);
       await searchUser(page, userUniqueId);
       await switchUserSubtab(page, 'moderation');
@@ -281,7 +293,10 @@ test.describe('Admin Cross-Tab Interactions', () => {
   });
 
   // ── Test 3: Device ban → appears in user ban list ──
-  test('device ban from Devices tab appears in user moderation bans', async ({ page, testData }) => {
+  test('device ban from Devices tab appears in user moderation bans', async ({
+    page,
+    testData,
+  }) => {
     const deviceId = `e2e-${testData.prefix}-device`;
 
     // Navigate to Devices
@@ -349,7 +364,7 @@ test.describe('Admin Cross-Tab Interactions', () => {
 
     // Expand alerts section
     const alertsSection = page.locator('#logs-alerts-section');
-    const isCollapsed = await alertsSection.evaluate(el => el.classList.contains('collapsed'));
+    const isCollapsed = await alertsSection.evaluate((el) => el.classList.contains('collapsed'));
     if (isCollapsed) {
       await page.locator('#logs-alerts-section .logs-section-header').click();
     }
@@ -357,7 +372,7 @@ test.describe('Admin Cross-Tab Interactions', () => {
 
     // Look for trace links
     const traceLinks = page.locator('#alerts-tbody .log-trace-link, #alerts-tbody [data-trace-id]');
-    if (await traceLinks.count() === 0) {
+    if ((await traceLinks.count()) === 0) {
       test.skip(true, 'No trace links in current alerts');
       return;
     }
@@ -380,7 +395,7 @@ test.describe('Admin Cross-Tab Interactions', () => {
     await filterReports(page, 'pending');
 
     const navigateLink = page.locator(`[data-navigate-uid="${testData.user.uniqueId}"]`).first();
-    if (await navigateLink.count() === 0) {
+    if ((await navigateLink.count()) === 0) {
       test.skip(true, 'No navigable user link in current pending reports');
       return;
     }
@@ -414,9 +429,9 @@ test.describe('Admin Cross-Tab Interactions', () => {
     await navigateToTab(page, 'Devices');
     await waitForDevicesLoaded(page);
     const rows = page.locator('#devices-tbody tr:not(:has(.device-detail))');
-    if (await rows.count() > 0) {
+    if ((await rows.count()) > 0) {
       const unbindBtn = rows.first().locator('[data-unbind]');
-      if (await unbindBtn.count() > 0) {
+      if ((await unbindBtn.count()) > 0) {
         await unbindBtn.click();
         await page.waitForTimeout(500);
         // Device should still be there
@@ -449,7 +464,7 @@ test.describe('Admin Cross-Tab Interactions', () => {
 
     // Wait for auto-dismiss (4s timer + buffer)
     await page.waitForTimeout(5_000);
-    const hasVisible = await toast.evaluate(el => el.classList.contains('visible'));
+    const hasVisible = await toast.evaluate((el) => el.classList.contains('visible'));
     expect(hasVisible).toBe(false);
   });
 
@@ -475,7 +490,7 @@ test.describe('Admin Cross-Tab Interactions', () => {
     } else {
       // If no error toast appears, verify some other form of error feedback is shown
       const noResultsMsg = page.locator('.no-results, .user-not-found, .toast');
-      const hasAnyFeedback = await noResultsMsg.count() > 0;
+      const hasAnyFeedback = (await noResultsMsg.count()) > 0;
       expect(hasAnyFeedback).toBe(true);
     }
   });
@@ -488,8 +503,8 @@ test.describe('Admin Cross-Tab Interactions', () => {
     const searchInput = page.getByRole('spinbutton', { name: 'ShyTalk User ID' });
     await searchInput.fill('0'); // Invalid user ID
 
-    const responsePromise = page.waitForResponse(
-      resp => resp.url().includes('/api/search/uniqueId/0'),
+    const responsePromise = page.waitForResponse((resp) =>
+      resp.url().includes('/api/search/uniqueId/0'),
     );
 
     await page.getByRole('button', { name: 'Search' }).click();
@@ -501,7 +516,7 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // The user form should NOT become visible
     const userForm = page.locator('#user-form');
     await page.waitForTimeout(1_000);
-    const isVisible = await userForm.evaluate(el => el.classList.contains('visible'));
+    const isVisible = await userForm.evaluate((el) => el.classList.contains('visible'));
     expect(isVisible).toBe(false);
   });
 

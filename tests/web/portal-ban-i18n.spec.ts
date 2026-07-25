@@ -82,8 +82,12 @@ const STATE_ROOTS: Record<(typeof PORTAL_LOCALES)[number], readonly [string, str
 };
 
 const BANNED_KEYS = [
-  'banned_heading', 'banned_reason', 'banned_until',
-  'banned_appeal', 'banned_contact', 'banned_signout',
+  'banned_heading',
+  'banned_reason',
+  'banned_until',
+  'banned_appeal',
+  'banned_contact',
+  'banned_signout',
 ];
 
 /**
@@ -93,8 +97,12 @@ const BANNED_KEYS = [
  * whole. That asymmetry is why this list is seven keys, not six.
  */
 const SUSPENDED_KEYS = [
-  'suspended_heading', 'suspended_reason', 'suspended_until',
-  'suspended_appeal', 'suspended_contact', 'suspended_signout',
+  'suspended_heading',
+  'suspended_reason',
+  'suspended_until',
+  'suspended_appeal',
+  'suspended_contact',
+  'suspended_signout',
   'suspended_reason_label',
 ];
 
@@ -152,7 +160,9 @@ test.describe('Portal ban screen — i18n completeness across all 21 locales', (
           problems.push(`${lang}: ${bannedKey} carries "${suspendRoot}", the suspension root`);
         }
         if (!suspended.includes(suspendRoot)) {
-          problems.push(`${lang}: ${suspendedKey} does not carry "${suspendRoot}" — "${suspended}"`);
+          problems.push(
+            `${lang}: ${suspendedKey} does not carry "${suspendRoot}" — "${suspended}"`,
+          );
         }
         if (suspended.includes(banRoot)) {
           problems.push(`${lang}: ${suspendedKey} carries "${banRoot}", the ban root`);
@@ -192,7 +202,7 @@ test.describe('Parser guards — the detect-branch, on synthetic fixtures', () =
 
     // A nested object's four-space closer is not a block close — the count
     // stays honest about how many LOCALE blocks the file finishes.
-    const nestedClose = "  en: {\n    o: {\n    },\n  },\n";
+    const nestedClose = '  en: {\n    o: {\n    },\n  },\n';
     expect(localeBlockCount(nestedClose)).toBe(1);
 
     expect(localeBlockCount('')).toBe(0);

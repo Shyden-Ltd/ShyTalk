@@ -20,13 +20,39 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  */
 
 const TAG_KEYS = [
-  'tagVoice', 'tagChat', 'tagModeration', 'tagUi', 'tagPrivacy',
-  'tagSocial', 'tagEconomy', 'tagAccessibility', 'tagOther',
+  'tagVoice',
+  'tagChat',
+  'tagModeration',
+  'tagUi',
+  'tagPrivacy',
+  'tagSocial',
+  'tagEconomy',
+  'tagAccessibility',
+  'tagOther',
 ];
 
 const SG_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+  'en',
+  'ar',
+  'de',
+  'es',
+  'fr',
+  'hi',
+  'id',
+  'it',
+  'ja',
+  'km',
+  'ko',
+  'nl',
+  'pl',
+  'pt',
+  'ru',
+  'sv',
+  'th',
+  'tr',
+  'uk',
+  'vi',
+  'zh',
 ];
 
 test.describe('Suggestions-board TAG_OPTIONS i18n', () => {
@@ -38,7 +64,17 @@ test.describe('Suggestions-board TAG_OPTIONS i18n', () => {
     expect(tagBlock, 'TAG_OPTIONS array not found').not.toBeNull();
     const arrSrc = tagBlock![1];
 
-    const hardcoded = ['"Voice"', '"Chat"', '"Moderation"', '"UI/UX"', '"Privacy"', '"Social"', '"Economy"', '"Accessibility"', '"Other"'];
+    const hardcoded = [
+      '"Voice"',
+      '"Chat"',
+      '"Moderation"',
+      '"UI/UX"',
+      '"Privacy"',
+      '"Social"',
+      '"Economy"',
+      '"Accessibility"',
+      '"Other"',
+    ];
     for (const lit of hardcoded) {
       expect(arrSrc, `TAG_OPTIONS should not hardcode label: ${lit}`).not.toMatch(
         new RegExp(`label:\\s*${lit.replace(/[.*+?^${}()|[\]\\\/]/g, '\\\\$&')}\\b`),
@@ -67,7 +103,11 @@ test.describe('Suggestions-board TAG_OPTIONS i18n', () => {
 
   test('Korean locale: sgT() returns Hangul for all 9 tag keys', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('shytalk_language', 'ko');
+      } catch {
+        /* ignore */
+      }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(
@@ -86,7 +126,9 @@ test.describe('Suggestions-board TAG_OPTIONS i18n', () => {
     for (const key of TAG_KEYS) {
       const v = results[key];
       expect(v, `sgT(${key}) in ko`).toBeTruthy();
-      expect(v, `sgT(${key}) in ko should contain Hangul or be UI/UX literal`).toMatch(/[가-힯]|UI\/UX/);
+      expect(v, `sgT(${key}) in ko should contain Hangul or be UI/UX literal`).toMatch(
+        /[가-힯]|UI\/UX/,
+      );
     }
   });
 });

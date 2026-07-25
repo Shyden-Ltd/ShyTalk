@@ -1,19 +1,19 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from '@playwright/test';
 
-test.describe("Admin Panel", () => {
+test.describe('Admin Panel', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/admin/");
+    await page.goto('/admin/');
   });
 
-  test("loads with correct title", async ({ page }) => {
+  test('loads with correct title', async ({ page }) => {
     await expect(page).toHaveTitle(/ShyTalk Admin/i);
   });
 
-  test("shows login screen with Sign In button", async ({ page }) => {
-    await expect(page.getByRole("button", { name: "Sign In" })).toBeVisible();
+  test('shows login screen with Sign In button', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'Sign In' })).toBeVisible();
   });
 
-  test("has email and password inputs", async ({ page }) => {
+  test('has email and password inputs', async ({ page }) => {
     const emailInput = page.locator(
       '#login-screen input[type="email"], #login-screen input[placeholder*="mail" i]',
     );
@@ -22,22 +22,20 @@ test.describe("Admin Panel", () => {
     await expect(passwordInput).toBeVisible();
   });
 
-  test("login box has admin panel heading", async ({ page }) => {
-    const heading = page.locator(".login-box h2");
+  test('login box has admin panel heading', async ({ page }) => {
+    const heading = page.locator('.login-box h2');
     await expect(heading).toBeVisible();
-    await expect(heading).toContainText("Admin");
+    await expect(heading).toContainText('Admin');
   });
 
-  test("shows correct API endpoint from config", async ({ page }) => {
-    const apiBase = await page.evaluate(
-      () => (window as any).SHYTALK_CONFIG?.API_BASE,
-    );
+  test('shows correct API endpoint from config', async ({ page }) => {
+    const apiBase = await page.evaluate(() => (window as any).SHYTALK_CONFIG?.API_BASE);
     expect(apiBase).toBeTruthy();
     // In CI/local mode the API_BASE is localhost; in dev/prod it's the domain
     expect(apiBase).toMatch(/shytalk\.shyden\.co\.uk|localhost/);
   });
 
-  test("has Firebase config loaded", async ({ page }) => {
+  test('has Firebase config loaded', async ({ page }) => {
     const firebaseConfig = await page.evaluate(
       () => (window as any).SHYTALK_CONFIG?.FIREBASE_CONFIG,
     );
@@ -45,29 +43,27 @@ test.describe("Admin Panel", () => {
     expect(firebaseConfig.projectId).toBeTruthy();
   });
 
-  test("dashboard screen exists but is hidden before login", async ({
-    page,
-  }) => {
-    const dashboard = page.locator("#dashboard-screen");
+  test('dashboard screen exists but is hidden before login', async ({ page }) => {
+    const dashboard = page.locator('#dashboard-screen');
     await expect(dashboard).not.toBeVisible();
   });
 
-  test("dashboard has all expected tab buttons", async ({ page }) => {
+  test('dashboard has all expected tab buttons', async ({ page }) => {
     const expectedTabs = [
-      "tab-users",
-      "tab-appeals",
-      "tab-reports",
-      "tab-gifts",
-      "tab-economy",
-      "tab-maintenance",
-      "tab-monitor",
-      "tab-banners",
-      "tab-funfacts",
-      "tab-backups",
-      "tab-logs",
-      "tab-devices",
-      "tab-starting-screens",
-      "tab-age-segregation",
+      'tab-users',
+      'tab-appeals',
+      'tab-reports',
+      'tab-gifts',
+      'tab-economy',
+      'tab-maintenance',
+      'tab-monitor',
+      'tab-banners',
+      'tab-funfacts',
+      'tab-backups',
+      'tab-logs',
+      'tab-devices',
+      'tab-starting-screens',
+      'tab-age-segregation',
     ];
     for (const tabId of expectedTabs) {
       const tab = page.locator(`#${tabId}`);
@@ -75,15 +71,15 @@ test.describe("Admin Panel", () => {
     }
   });
 
-  test("loads logger script with admin-panel source", async ({ page }) => {
+  test('loads logger script with admin-panel source', async ({ page }) => {
     const loggerLoaded = await page.evaluate(
-      () => typeof (window as any).ShyTalkLogger !== "undefined",
+      () => typeof (window as any).ShyTalkLogger !== 'undefined',
     );
     expect(loggerLoaded).toBe(true);
   });
 
-  test("login screen shows error area for failed login", async ({ page }) => {
-    const errorArea = page.locator("#login-error, .login-error");
+  test('login screen shows error area for failed login', async ({ page }) => {
+    const errorArea = page.locator('#login-error, .login-error');
     await expect(errorArea).toBeAttached();
   });
 });

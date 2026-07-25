@@ -108,7 +108,9 @@ test.describe('Admin Age Segregation tab', () => {
     await expect(apply).toBeEnabled();
   });
 
-  test('clicking apply opens a confirm modal showing the target + new cohort + reason', async ({ page }) => {
+  test('clicking apply opens a confirm modal showing the target + new cohort + reason', async ({
+    page,
+  }) => {
     await navigateToTab(page, 'Age Segregation');
 
     await page.locator('#age-seg-target-uid').fill('99999999');
@@ -124,18 +126,21 @@ test.describe('Admin Age Segregation tab', () => {
     await expect(modal).toContainText('staff override for testing');
 
     // Cancel keeps modal closed without firing the POST.
-    const cancelPromise = page.waitForRequest(
-      (req) =>
-        req.url().includes('/cohort-override') && req.method() === 'POST',
-      { timeout: 1500 },
-    ).catch(() => null);
+    const cancelPromise = page
+      .waitForRequest((req) => req.url().includes('/cohort-override') && req.method() === 'POST', {
+        timeout: 1500,
+      })
+      .catch(() => null);
     await page.locator('[data-testid="ageSeg_confirmCancel"]').click();
     await expect(modal).toBeHidden();
     const captured = await cancelPromise;
     expect(captured).toBeNull(); // no POST fired
   });
 
-  test('regular MEMBER target → 422 with CANNOT_OVERRIDE_REGULAR_USER surfaced to admin', async ({ page, testData }) => {
+  test('regular MEMBER target → 422 with CANNOT_OVERRIDE_REGULAR_USER surfaced to admin', async ({
+    page,
+    testData,
+  }) => {
     await navigateToTab(page, 'Age Segregation');
 
     // testData.user is created with default userType (MEMBER). The
@@ -153,7 +158,10 @@ test.describe('Admin Age Segregation tab', () => {
     await expect(result).toHaveAttribute('data-status', 'error');
   });
 
-  test('staff target → 200, doc updates, claim refresh acknowledged', async ({ page, testData }) => {
+  test('staff target → 200, doc updates, claim refresh acknowledged', async ({
+    page,
+    testData,
+  }) => {
     // Elevate the test user to a staff role first so the override is
     // allowed. The test cleans this up by reverting to MEMBER at the
     // end so other tests in the file see the default state.
@@ -193,7 +201,10 @@ test.describe('Admin Age Segregation tab', () => {
     }
   });
 
-  test('clear-override option sends override:null + records COHORT_OVERRIDE_CLEAR audit row', async ({ page, testData }) => {
+  test('clear-override option sends override:null + records COHORT_OVERRIDE_CLEAR audit row', async ({
+    page,
+    testData,
+  }) => {
     // Seed the user with an existing override so the clear has something
     // meaningful to revert.
     await testData.api.testWrite('users', {

@@ -6,9 +6,10 @@ import type { Page } from '@playwright/test';
  * Helper: wait for the devices table to finish loading (tbody has rows or empty message shows).
  */
 async function waitForDevicesLoaded(page: Page): Promise<void> {
-  await expect(
-    page.locator('#devices-tbody tr, #devices-empty[style*="block"]'),
-  ).not.toHaveCount(0, { timeout: 15_000 });
+  await expect(page.locator('#devices-tbody tr, #devices-empty[style*="block"]')).not.toHaveCount(
+    0,
+    { timeout: 15_000 },
+  );
 }
 
 /**
@@ -71,7 +72,9 @@ test.describe('Admin Devices Tab', () => {
     await expect(firstRow).toContainText(testData.user.uniqueId.toString());
 
     // API verify: GET /api/admin/devices returns the device
-    const data = await testData.api.get(`/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=20&offset=0`);
+    const data = await testData.api.get(
+      `/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=20&offset=0`,
+    );
     const devices = data.devices || [];
     const seeded = devices.find((d: any) => d.id === deviceId);
     expect(seeded).toBeTruthy();
@@ -211,7 +214,9 @@ test.describe('Admin Devices Tab', () => {
     }
 
     // API verify: device should be gone
-    const data = await testData.api.get(`/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=20&offset=0`);
+    const data = await testData.api.get(
+      `/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=20&offset=0`,
+    );
     const devices = data.devices || [];
     const stillExists = devices.find((d: any) => d.id === deviceId);
     expect(stillExists).toBeFalsy();
@@ -239,7 +244,9 @@ test.describe('Admin Devices Tab', () => {
     expect(count).toBeGreaterThanOrEqual(1);
 
     // API verify: device still exists
-    const data = await testData.api.get(`/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=20&offset=0`);
+    const data = await testData.api.get(
+      `/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=20&offset=0`,
+    );
     const devices = data.devices || [];
     const exists = devices.find((d: any) => d.id === deviceId);
     expect(exists).toBeTruthy();
@@ -300,7 +307,9 @@ test.describe('Admin Devices Tab', () => {
     // API verify: GET /api/admin/bans → networkBans includes the IP
     const bansData = await testData.api.get('/api/admin/bans');
     const networkBans = bansData.networkBans || [];
-    const banned = networkBans.find((b: any) => b.value === '203.0.113.1' || b.ip === '203.0.113.1');
+    const banned = networkBans.find(
+      (b: any) => b.value === '203.0.113.1' || b.ip === '203.0.113.1',
+    );
     expect(banned).toBeTruthy();
 
     // Cleanup: unban the network

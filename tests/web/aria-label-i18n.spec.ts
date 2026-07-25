@@ -80,8 +80,26 @@ test.describe('Roadmap aria-label i18n', () => {
     const src = await res.text();
 
     const SUPPORTED = [
-      'es', 'fr', 'de', 'pt', 'it', 'ja', 'ko', 'zh', 'ar', 'hi',
-      'tr', 'ru', 'uk', 'th', 'vi', 'id', 'pl', 'nl', 'sv', 'km',
+      'es',
+      'fr',
+      'de',
+      'pt',
+      'it',
+      'ja',
+      'ko',
+      'zh',
+      'ar',
+      'hi',
+      'tr',
+      'ru',
+      'uk',
+      'th',
+      'vi',
+      'id',
+      'pl',
+      'nl',
+      'sv',
+      'km',
     ];
     const KEYS = [
       'aria_progress_overview',

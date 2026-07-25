@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures/scenarios";
+import { test, expect } from './fixtures/scenarios';
 
 /**
  * Integration test #4 — Photo upload → R2 (MinIO) round-trip.
@@ -25,7 +25,7 @@ import { test, expect } from "./fixtures/scenarios";
  * Per `.project/plans/2026-05-05-integration-test-framework.md` test #4.
  */
 
-const API_BASE = process.env.API_BASE_URL || "http://localhost:3000";
+const API_BASE = process.env.API_BASE_URL || 'http://localhost:3000';
 
 // 100×100 black PNG, ~130 bytes. imageCompressor.js enforces
 // MIN_DIMENSION=100 and rejects smaller PNGs with ImagePolicyError → 400,
@@ -35,40 +35,34 @@ const API_BASE = process.env.API_BASE_URL || "http://localhost:3000";
 // it to a shared helper is deferred until the third consumer arrives,
 // per the no-orphan-fixture rule.
 const TEST_PNG_100X100 = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAA" +
-    "NElEQVR4nO3BAQ0AAADCoPdPbQ43oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAujF1lAAB" +
-    "e5jSrAAAAABJRU5ErkJggg==",
-  "base64",
+  'iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAA' +
+    'NElEQVR4nO3BAQ0AAADCoPdPbQ43oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAujF1lAAB' +
+    'e5jSrAAAAABJRU5ErkJggg==',
+  'base64',
 );
 
-test.describe("Integration — Photo upload → R2 round-trip", () => {
-  test("uploads a PNG, fetches it back, then deletes it cleanly", async ({
-    api,
-    sender,
-  }) => {
+test.describe('Integration — Photo upload → R2 round-trip', () => {
+  test('uploads a PNG, fetches it back, then deletes it cleanly', async ({ api, sender }) => {
     // Phase 1 — multipart upload. Do NOT set Content-Type on the
     // request; Playwright's `multipart` option sets the
     // multipart/form-data boundary automatically.
     const upload = await api.post(`${API_BASE}/api/storage/upload`, {
       headers: { Authorization: `Bearer ${sender.idToken}` },
       multipart: {
-        path: "evidence", // ALLOWED_UPLOAD_PATHS — does NOT mutate user doc
+        path: 'evidence', // ALLOWED_UPLOAD_PATHS — does NOT mutate user doc
         file: {
-          name: "integration.png",
-          mimeType: "image/png",
+          name: 'integration.png',
+          mimeType: 'image/png',
           buffer: TEST_PNG_100X100,
         },
       },
     });
-    expect(
-      upload.ok(),
-      `upload expected 200, got ${upload.status()}: ${await upload.text()}`,
-    ).toBe(true);
+    expect(upload.ok(), `upload expected 200, got ${upload.status()}: ${await upload.text()}`).toBe(
+      true,
+    );
 
     const body = await upload.json();
-    expect(typeof body.url, `body.url shape: ${JSON.stringify(body)}`).toBe(
-      "string",
-    );
+    expect(typeof body.url, `body.url shape: ${JSON.stringify(body)}`).toBe('string');
     // Local stack: URL points at MinIO via http://localhost:9002/<bucket>/<key>.
     // This is the contract Express's r2.js produces in `isLocal` mode
     // (see express-api/src/utils/r2.js:48). Asserting on the prefix
@@ -84,25 +78,22 @@ test.describe("Integration — Photo upload → R2 round-trip", () => {
     // fixtures/scenarios.ts) — it has no R2 hook, so a mid-test
     // failure would otherwise leak one MinIO object per failed run.
     const url = new URL(body.url);
-    const pathParts = url.pathname.split("/").filter((p) => p.length > 0);
+    const pathParts = url.pathname.split('/').filter((p) => p.length > 0);
     expect(
       pathParts.length,
       `URL pathname must include bucket + key, got "${url.pathname}"`,
     ).toBeGreaterThanOrEqual(2);
-    const key = pathParts.slice(1).join("/");
+    const key = pathParts.slice(1).join('/');
 
     try {
       // Phase 2 — verify the object is publicly fetchable. MinIO is
       // strongly consistent for PUT-then-GET so no retry is needed.
       const fetched = await api.get(body.url);
-      expect(
-        fetched.ok(),
-        `fetch-back expected 200, got ${fetched.status()} for ${body.url}`,
-      ).toBe(true);
-      const ct = fetched.headers()["content-type"] || "";
-      expect(ct, `fetched content-type must be image/*, got "${ct}"`).toMatch(
-        /^image\//,
+      expect(fetched.ok(), `fetch-back expected 200, got ${fetched.status()} for ${body.url}`).toBe(
+        true,
       );
+      const ct = fetched.headers()['content-type'] || '';
+      expect(ct, `fetched content-type must be image/*, got "${ct}"`).toMatch(/^image\//);
       const bytes = await fetched.body();
       // The compressed file may be smaller than the input (sharp may
       // strip metadata or re-encode), so we only assert non-empty here.
@@ -122,10 +113,7 @@ test.describe("Integration — Photo upload → R2 round-trip", () => {
         `${API_BASE}/api/storage/delete?key=${encodeURIComponent(key)}`,
         { headers: { Authorization: `Bearer ${sender.idToken}` } },
       );
-      expect(
-        del.ok(),
-        `delete expected 200, got ${del.status()}: ${await del.text()}`,
-      ).toBe(true);
+      expect(del.ok(), `delete expected 200, got ${del.status()}: ${await del.text()}`).toBe(true);
 
       // Phase 4 — verify the object is actually gone. MinIO does
       // NOT sit behind a CDN, so unlike the dev-smoke equivalent we
@@ -145,37 +133,33 @@ test.describe("Integration — Photo upload → R2 round-trip", () => {
       // double-DELETE. Auth errors and 4xx are swallowed so a test
       // assertion failure is what surfaces, not the cleanup outcome.
       await api
-        .delete(
-          `${API_BASE}/api/storage/delete?key=${encodeURIComponent(key)}`,
-          { headers: { Authorization: `Bearer ${sender.idToken}` } },
-        )
+        .delete(`${API_BASE}/api/storage/delete?key=${encodeURIComponent(key)}`, {
+          headers: { Authorization: `Bearer ${sender.idToken}` },
+        })
         .catch(() => {
           /* swallow — leak prevention is best-effort */
         });
     }
   });
 
-  test("returns 400 for an undersized image (MIN_DIMENSION gate)", async ({
-    api,
-    sender,
-  }) => {
+  test('returns 400 for an undersized image (MIN_DIMENSION gate)', async ({ api, sender }) => {
     // 1×1 PNG to verify the policy gate works through the integration
     // chain. The ImagePolicyError → 400 mapping is unit-tested in
     // express-api/tests/storage.test.js, but the integration tier
     // proves it survives the multer layer (which is mocked in unit
     // tests) without a 500 leaking through.
     const TEST_PNG_1X1 = Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
-      "base64",
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64',
     );
 
     const upload = await api.post(`${API_BASE}/api/storage/upload`, {
       headers: { Authorization: `Bearer ${sender.idToken}` },
       multipart: {
-        path: "evidence",
+        path: 'evidence',
         file: {
-          name: "tiny.png",
-          mimeType: "image/png",
+          name: 'tiny.png',
+          mimeType: 'image/png',
           buffer: TEST_PNG_1X1,
         },
       },
@@ -188,10 +172,10 @@ test.describe("Integration — Photo upload → R2 round-trip", () => {
     // route's tests should also be re-checked. Looser regex variants
     // could mask a regression that returned a generic 400 from a
     // different gate (e.g. multer file-size limit) and silently pass.
-    expect(body.error).toContain("below minimum");
+    expect(body.error).toContain('below minimum');
   });
 
-  test("returns 400 for a disallowed upload path", async ({ api, sender }) => {
+  test('returns 400 for a disallowed upload path', async ({ api, sender }) => {
     // The path allow-list is enforced BEFORE compression
     // (storage.js:45). Catches a class of bug where a future refactor
     // moves the check after multipart parsing — would then permit a
@@ -199,10 +183,10 @@ test.describe("Integration — Photo upload → R2 round-trip", () => {
     const upload = await api.post(`${API_BASE}/api/storage/upload`, {
       headers: { Authorization: `Bearer ${sender.idToken}` },
       multipart: {
-        path: "../../etc/passwd",
+        path: '../../etc/passwd',
         file: {
-          name: "x.png",
-          mimeType: "image/png",
+          name: 'x.png',
+          mimeType: 'image/png',
           buffer: TEST_PNG_100X100,
         },
       },

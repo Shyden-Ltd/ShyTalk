@@ -22,8 +22,26 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  */
 
 const SUPPORTED_LOCALES = [
-  'es', 'fr', 'de', 'pt', 'it', 'ja', 'ko', 'zh', 'ar', 'hi',
-  'tr', 'ru', 'uk', 'th', 'vi', 'id', 'pl', 'nl', 'sv', 'km',
+  'es',
+  'fr',
+  'de',
+  'pt',
+  'it',
+  'ja',
+  'ko',
+  'zh',
+  'ar',
+  'hi',
+  'tr',
+  'ru',
+  'uk',
+  'th',
+  'vi',
+  'id',
+  'pl',
+  'nl',
+  'sv',
+  'km',
 ];
 
 test.describe('Khmer New Year — zodiac table i18n', () => {
@@ -52,8 +70,12 @@ test.describe('Khmer New Year — zodiac table i18n', () => {
     const years = await page.locator('[data-i18n="kny_zodiac_col_years"]').textContent();
 
     expect(animal?.trim(), 'Animal column header in es').toBe('Animal');
-    expect(khmer?.trim(), 'Khmer column header in es should be "Jemer", not English "Khmer"').toBe('Jemer');
-    expect(years?.trim(), 'Years column header in es should be "Años", not English "Years"').toBe('Años');
+    expect(khmer?.trim(), 'Khmer column header in es should be "Jemer", not English "Khmer"').toBe(
+      'Jemer',
+    );
+    expect(years?.trim(), 'Years column header in es should be "Años", not English "Years"').toBe(
+      'Años',
+    );
   });
 
   test('English (default) renders the inline HTML defaults', async ({ page }) => {
@@ -80,15 +102,9 @@ test.describe('Khmer New Year — zodiac table i18n', () => {
       // Every locale block must have all three column keys. Locale-block
       // boundary check would be over-engineered here — global presence
       // is enough because the orphan checker greps globally too.
-      const animalRe = new RegExp(
-        `${lang}:\\s*\\{[\\s\\S]*?kny_zodiac_col_animal:`,
-      );
-      const khmerRe = new RegExp(
-        `${lang}:\\s*\\{[\\s\\S]*?kny_zodiac_col_khmer:`,
-      );
-      const yearsRe = new RegExp(
-        `${lang}:\\s*\\{[\\s\\S]*?kny_zodiac_col_years:`,
-      );
+      const animalRe = new RegExp(`${lang}:\\s*\\{[\\s\\S]*?kny_zodiac_col_animal:`);
+      const khmerRe = new RegExp(`${lang}:\\s*\\{[\\s\\S]*?kny_zodiac_col_khmer:`);
+      const yearsRe = new RegExp(`${lang}:\\s*\\{[\\s\\S]*?kny_zodiac_col_years:`);
       expect(src, `${lang} missing kny_zodiac_col_animal`).toMatch(animalRe);
       expect(src, `${lang} missing kny_zodiac_col_khmer`).toMatch(khmerRe);
       expect(src, `${lang} missing kny_zodiac_col_years`).toMatch(yearsRe);

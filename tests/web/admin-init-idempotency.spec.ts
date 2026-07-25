@@ -26,14 +26,25 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
 const SPIED_IDS = [
   // sync-prod overlay
-  'migrate-prod-btn', 'sync-cancel', 'sync-overlay',
-  'sync-confirm-input', 'sync-mute', 'sync-proceed',
+  'migrate-prod-btn',
+  'sync-cancel',
+  'sync-overlay',
+  'sync-confirm-input',
+  'sync-mute',
+  'sync-proceed',
   // nuclear-reset overlay
-  'reset-all-btn', 'nuclear-cancel', 'nuclear-overlay',
-  'nuclear-confirm-input', 'nuclear-mute', 'nuclear-proceed',
+  'reset-all-btn',
+  'nuclear-cancel',
+  'nuclear-overlay',
+  'nuclear-confirm-input',
+  'nuclear-mute',
+  'nuclear-proceed',
   // age-verification decision buttons
-  'age-verif-approve-btn', 'age-verif-reject-btn-yes',
-  'age-verif-reject-btn-no', 'age-verif-modify-btn', 'age-verif-jump-next',
+  'age-verif-approve-btn',
+  'age-verif-reject-btn-yes',
+  'age-verif-reject-btn-no',
+  'age-verif-modify-btn',
+  'age-verif-jump-next',
 ];
 
 async function loginWith(page: any, email: string, password: string) {
@@ -43,7 +54,10 @@ async function loginWith(page: any, email: string, password: string) {
 }
 
 test.describe('Admin init idempotency (regression)', () => {
-  test('sign-out + sign-in cycle does not stack click listeners on destructive buttons', async ({ page, browserName }) => {
+  test('sign-out + sign-in cycle does not stack click listeners on destructive buttons', async ({
+    page,
+    browserName,
+  }) => {
     test.skip(!ADMIN_EMAIL, 'ADMIN_EMAIL env var not set');
     // The bug is in JavaScript event-listener accumulation — engine-independent.
     // Firefox + chromium-family give us 3 engines of coverage. WebKit's
@@ -51,7 +65,10 @@ test.describe('Admin init idempotency (regression)', () => {
     // slow in CI (the 2nd sign-in's getIdTokenResult takes >30s after
     // signOut clears local persistence), so we skip there. The test does
     // not validate any webkit-specific behaviour.
-    test.skip(browserName === 'webkit', 'Skipped on WebKit — slow Firebase Auth IDB reseat after signOut, not a webkit-specific bug');
+    test.skip(
+      browserName === 'webkit',
+      'Skipped on WebKit — slow Firebase Auth IDB reseat after signOut, not a webkit-specific bug',
+    );
 
     // Install an addEventListener spy BEFORE the page's scripts run.
     // Keyed by (elementId, eventType). Only counts adds for the IDs
@@ -81,10 +98,14 @@ test.describe('Admin init idempotency (regression)', () => {
     // Wait until module inits have finished — `migrate-prod-btn` is wired
     // by sync-prod.init(), so once it has a click listener we know all
     // three sync inits have run.
-    await page.waitForFunction(() => {
-      const counts = (window as any).__addListenerCounts as Record<string, number> | undefined;
-      return !!counts && (counts['migrate-prod-btn:click'] || 0) > 0;
-    }, null, { timeout: 30_000 });
+    await page.waitForFunction(
+      () => {
+        const counts = (window as any).__addListenerCounts as Record<string, number> | undefined;
+        return !!counts && (counts['migrate-prod-btn:click'] || 0) > 0;
+      },
+      null,
+      { timeout: 30_000 },
+    );
 
     const baseline = await page.evaluate(() => ({
       ...((window as any).__addListenerCounts as Record<string, number>),

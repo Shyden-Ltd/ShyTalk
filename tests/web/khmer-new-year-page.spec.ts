@@ -6,7 +6,9 @@ const PAGE_URL = `${BASE}/events/khmer-new-year.html`;
 test.describe('Khmer New Year Page', () => {
   test('page loads without errors', async ({ page }) => {
     const errors: string[] = [];
-    page.on('console', msg => { if (msg.type() === 'error') errors.push(msg.text()); });
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') errors.push(msg.text());
+    });
     const response = await page.goto(PAGE_URL);
     expect(response?.ok()).toBe(true);
     expect(errors).toHaveLength(0);

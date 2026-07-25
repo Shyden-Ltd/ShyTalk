@@ -40,7 +40,9 @@ test.describe('Static SEO + 404 surfaces', () => {
   test('404.html link returns user to homepage on click', async ({ page }) => {
     await page.goto(`${BASE}/404.html`);
     await Promise.all([
-      page.waitForURL((url) => url.pathname === '/' || url.pathname === '/index.html', { timeout: 5_000 }),
+      page.waitForURL((url) => url.pathname === '/' || url.pathname === '/index.html', {
+        timeout: 5_000,
+      }),
       page.locator('[data-testid="404-home-link"]').click(),
     ]);
     expect(page.url().replace(/\/index\.html$/, '/')).toBe(`${BASE}/`);

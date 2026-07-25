@@ -25,8 +25,27 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  */
 
 const SG_LOCALES = [
-  'en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-  'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+  'en',
+  'ar',
+  'de',
+  'es',
+  'fr',
+  'hi',
+  'id',
+  'it',
+  'ja',
+  'km',
+  'ko',
+  'nl',
+  'pl',
+  'pt',
+  'ru',
+  'sv',
+  'th',
+  'tr',
+  'uk',
+  'vi',
+  'zh',
 ];
 
 const NEW_ARIA_KEYS = ['close', 'aria_upvote', 'aria_downvote', 'aria_watch'];
@@ -53,7 +72,9 @@ test.describe('Suggestions-board aria-label i18n', () => {
     }
   });
 
-  test('suggestions-board.js no longer contains hardcoded English aria-labels', async ({ request }) => {
+  test('suggestions-board.js no longer contains hardcoded English aria-labels', async ({
+    request,
+  }) => {
     const res = await request.get(`${BASE}/js/suggestions-board.js`);
     expect(res.ok()).toBe(true);
     const src = await res.text();
@@ -62,13 +83,20 @@ test.describe('Suggestions-board aria-label i18n', () => {
     // `aria-label='"+sgT(...)` etc., but reject pure-string english.
     // The matches we'd care about are inside JS string literals.
     const hardcoded = [...src.matchAll(/aria-label="([A-Z][a-z]+(?: [a-z]+)*)"/g)];
-    expect(hardcoded.map(m => m[1]), 'all aria-labels should be sgT()-driven').toEqual([]);
+    expect(
+      hardcoded.map((m) => m[1]),
+      'all aria-labels should be sgT()-driven',
+    ).toEqual([]);
   });
 
   test('Korean locale: voting button aria-labels translate to Hangul', async ({ page }) => {
     // Suggestions board mounts on roadmap.html.
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('shytalk_language', 'ko');
+      } catch {
+        /* ignore */
+      }
     });
     await page.goto(`${BASE}/roadmap.html`);
     // Wait for the suggestions board to render at least one card with a

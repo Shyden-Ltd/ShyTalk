@@ -34,7 +34,9 @@ const PHASE_2B_KEYS = [
 ];
 
 test.describe('Admin users-tab confirm/alert i18n (Phase 2b)', () => {
-  test('translations.js exposes window.tAdminFmt with {placeholder} substitution', async ({ request }) => {
+  test('translations.js exposes window.tAdminFmt with {placeholder} substitution', async ({
+    request,
+  }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const src = await res.text();
@@ -57,7 +59,10 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2b)', () => {
       ['Failed to schedule deletion', /alert\("Failed to schedule deletion: "/],
       ['Failed to cancel deletion', /alert\("Failed to cancel deletion: "/],
       ['Ban IP', /confirm\("Ban IP "/],
-      ['Suspend identity graph (interpolated)', /confirm\("Suspend identity graph for this user \("/],
+      [
+        'Suspend identity graph (interpolated)',
+        /confirm\("Suspend identity graph for this user \("/,
+      ],
     ];
     for (const [name, re] of hardcoded) {
       expect(src, `Should not hardcode: ${name}`).not.toMatch(re);
@@ -77,8 +82,26 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2b)', () => {
 
     const locales = [
       'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+      'ar',
+      'de',
+      'es',
+      'fr',
+      'hi',
+      'id',
+      'it',
+      'ja',
+      'km',
+      'ko',
+      'nl',
+      'pl',
+      'pt',
+      'ru',
+      'sv',
+      'th',
+      'tr',
+      'uk',
+      'vi',
+      'zh',
     ];
     const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
 
@@ -94,14 +117,15 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2b)', () => {
       const block = localeBlock![1];
 
       for (const key of PHASE_2B_KEYS) {
-        expect(block, `${locale} should define ${key}`).toMatch(
-          new RegExp(`${key}\\s*:`),
-        );
+        expect(block, `${locale} should define ${key}`).toMatch(new RegExp(`${key}\\s*:`));
       }
     }
   });
 
-  test('tAdminFmt runtime: placeholder substitution works for Korean', async ({ page, request }) => {
+  test('tAdminFmt runtime: placeholder substitution works for Korean', async ({
+    page,
+    request,
+  }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();
@@ -113,7 +137,9 @@ test.describe('Admin users-tab confirm/alert i18n (Phase 2b)', () => {
     await page.addScriptTag({ content: translationsSrc });
 
     const result = await page.evaluate(() => {
-      const w = window as Window & { tAdminFmt?: (k: string, v: Record<string, unknown>) => string };
+      const w = window as Window & {
+        tAdminFmt?: (k: string, v: Record<string, unknown>) => string;
+      };
       if (typeof w.tAdminFmt !== 'function') return null;
       return {
         warning: w.tAdminFmt('confirm_revoke_warning', { deduction: 5 }),

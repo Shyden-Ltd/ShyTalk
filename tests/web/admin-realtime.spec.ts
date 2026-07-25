@@ -8,9 +8,11 @@ async function waitForReportsLoaded(page: Page): Promise<void> {
     () => {
       const list = document.getElementById('reports-list');
       if (!list) return false;
-      return list.querySelector('.report-card') !== null ||
+      return (
+        list.querySelector('.report-card') !== null ||
         list.textContent!.includes('No reports') ||
-        list.textContent!.includes('Failed');
+        list.textContent!.includes('Failed')
+      );
     },
     { timeout: 15_000 },
   );
@@ -53,8 +55,7 @@ async function waitForLogsLoaded(page: Page): Promise<void> {
       const tbody = document.getElementById('logs-tbody');
       const empty = document.getElementById('logs-empty');
       if (!tbody) return false;
-      return tbody.querySelectorAll('tr').length > 0 ||
-        (empty && empty.style.display !== 'none');
+      return tbody.querySelectorAll('tr').length > 0 || (empty && empty.style.display !== 'none');
     },
     { timeout: 15_000 },
   );
@@ -82,7 +83,10 @@ test.describe('Admin Realtime Features', () => {
   });
 
   // ── Test 1: Reports onSnapshot — new report appears without refresh ──
-  test('new report seeded via API appears in Reports tab without refresh', async ({ page, testData }) => {
+  test('new report seeded via API appears in Reports tab without refresh', async ({
+    page,
+    testData,
+  }) => {
     await navigateToTab(page, 'Reports');
     await waitForReportsLoaded(page);
     await filterPendingReports(page);
@@ -111,7 +115,10 @@ test.describe('Admin Realtime Features', () => {
   });
 
   // ── Test 2: Spin monitor live coins update ──
-  test('spin monitor coins display updates after API balance change', async ({ page, testData }) => {
+  test('spin monitor coins display updates after API balance change', async ({
+    page,
+    testData,
+  }) => {
     await navigateToTab(page, 'Spin Monitor');
     await expect(page.locator('#monitor-panel')).toHaveClass(/visible/, { timeout: 10_000 });
 
@@ -123,7 +130,8 @@ test.describe('Admin Realtime Features', () => {
 
     // Add coins via API
     await testData.api.post(`/api/users/${testData.user.uniqueId}/adjust-balance`, {
-      currency: 'COINS', amount: 100,
+      currency: 'COINS',
+      amount: 100,
     });
 
     // Poll for the live monitor to pick up the change (Firestore listener).
@@ -136,7 +144,8 @@ test.describe('Admin Realtime Features', () => {
 
     // Restore coins
     await testData.api.post(`/api/users/${testData.user.uniqueId}/adjust-balance`, {
-      currency: 'COINS', amount: -100,
+      currency: 'COINS',
+      amount: -100,
     });
 
     await stopMonitoring(page);
@@ -216,8 +225,8 @@ test.describe('Admin Realtime Features', () => {
     await page.waitForTimeout(3_000);
 
     // No Firestore listener errors should have occurred
-    const firestoreErrors = consoleErrors.filter(e =>
-      e.includes('Firestore') || e.includes('onSnapshot') || e.includes('listener'),
+    const firestoreErrors = consoleErrors.filter(
+      (e) => e.includes('Firestore') || e.includes('onSnapshot') || e.includes('listener'),
     );
     expect(firestoreErrors.length).toBe(0);
   });
@@ -239,8 +248,8 @@ test.describe('Admin Realtime Features', () => {
     await page.waitForTimeout(3_000);
 
     // No listener cleanup errors
-    const listenerErrors = consoleErrors.filter(e =>
-      e.includes('listener') || e.includes('unsubscribe') || e.includes('detached'),
+    const listenerErrors = consoleErrors.filter(
+      (e) => e.includes('listener') || e.includes('unsubscribe') || e.includes('detached'),
     );
     expect(listenerErrors.length).toBe(0);
   });
@@ -268,8 +277,8 @@ test.describe('Admin Realtime Features', () => {
     await page.waitForTimeout(3_000);
 
     // No errors from orphaned intervals
-    const intervalErrors = consoleErrors.filter(e =>
-      e.includes('interval') || e.includes('poll') || e.includes('timeout'),
+    const intervalErrors = consoleErrors.filter(
+      (e) => e.includes('interval') || e.includes('poll') || e.includes('timeout'),
     );
     expect(intervalErrors.length).toBe(0);
   });
@@ -300,9 +309,12 @@ test.describe('Admin Realtime Features', () => {
     await page.waitForTimeout(5_000);
 
     // No console errors from listener cleanup after sign-out
-    const postSignOutErrors = consoleErrors.filter(e =>
-      e.includes('permission') || e.includes('unauthenticated') ||
-      e.includes('Firestore') || e.includes('listener'),
+    const postSignOutErrors = consoleErrors.filter(
+      (e) =>
+        e.includes('permission') ||
+        e.includes('unauthenticated') ||
+        e.includes('Firestore') ||
+        e.includes('listener'),
     );
     expect(postSignOutErrors.length).toBe(0);
   });

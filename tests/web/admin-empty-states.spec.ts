@@ -8,9 +8,11 @@ async function waitForAppealsLoaded(page: Page): Promise<void> {
     () => {
       const list = document.getElementById('appeals-list');
       if (!list) return false;
-      return list.querySelector('.appeal-card') !== null ||
+      return (
+        list.querySelector('.appeal-card') !== null ||
         list.textContent!.includes('No appeals') ||
-        list.textContent!.includes('Failed');
+        list.textContent!.includes('Failed')
+      );
     },
     { timeout: 15_000 },
   );
@@ -22,9 +24,11 @@ async function waitForReportsLoaded(page: Page): Promise<void> {
     () => {
       const list = document.getElementById('reports-list');
       if (!list) return false;
-      return list.querySelector('.report-card') !== null ||
+      return (
+        list.querySelector('.report-card') !== null ||
         list.textContent!.includes('No reports') ||
-        list.textContent!.includes('Failed');
+        list.textContent!.includes('Failed')
+      );
     },
     { timeout: 15_000 },
   );
@@ -37,8 +41,7 @@ async function waitForLogsLoaded(page: Page): Promise<void> {
       const tbody = document.getElementById('logs-tbody');
       const empty = document.getElementById('logs-empty');
       if (!tbody) return false;
-      return tbody.querySelectorAll('tr').length > 0 ||
-        (empty && empty.style.display !== 'none');
+      return tbody.querySelectorAll('tr').length > 0 || (empty && empty.style.display !== 'none');
     },
     { timeout: 15_000 },
   );
@@ -46,9 +49,10 @@ async function waitForLogsLoaded(page: Page): Promise<void> {
 
 /** Wait for devices table to load. */
 async function waitForDevicesLoaded(page: Page): Promise<void> {
-  await expect(
-    page.locator('#devices-tbody tr, #devices-empty[style*="block"]'),
-  ).not.toHaveCount(0, { timeout: 15_000 });
+  await expect(page.locator('#devices-tbody tr, #devices-empty[style*="block"]')).not.toHaveCount(
+    0,
+    { timeout: 15_000 },
+  );
 }
 
 test.describe('Admin Empty States', () => {
@@ -237,9 +241,9 @@ test.describe('Admin Empty States', () => {
     await expect(page.locator('#monitor-stop-btn')).toBeHidden();
 
     // Stats should not be visible
-    const statsDisplay = await page.locator('#monitor-stats').evaluate(
-      (el: HTMLElement) => window.getComputedStyle(el).display,
-    );
+    const statsDisplay = await page
+      .locator('#monitor-stats')
+      .evaluate((el: HTMLElement) => window.getComputedStyle(el).display);
     expect(statsDisplay).toBe('none');
   });
 
@@ -289,12 +293,14 @@ test.describe('Admin Empty States', () => {
     // First ensure the backpack is empty via API
     try {
       const backpack = await testData.api.get(`/api/users/${uid}/backpack`);
-      const items = Array.isArray(backpack) ? backpack : (backpack.items || []);
+      const items = Array.isArray(backpack) ? backpack : backpack.items || [];
 
       // Clean up any existing items
       for (const item of items) {
         await testData.api.post(`/api/users/${uid}/backpack`, {
-          giftId: item.giftId, quantity: 0, silent: true,
+          giftId: item.giftId,
+          quantity: 0,
+          silent: true,
         });
       }
     } catch (err) {

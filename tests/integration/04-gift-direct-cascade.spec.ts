@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures/scenarios";
+import { test, expect } from './fixtures/scenarios';
 
 /**
  * Integration test #6 — Gift-direct state cascade.
@@ -29,7 +29,7 @@ import { test, expect } from "./fixtures/scenarios";
  * Per `.project/plans/2026-05-05-integration-test-framework.md` test #6.
  */
 
-const API_BASE = process.env.API_BASE_URL || "http://localhost:3000";
+const API_BASE = process.env.API_BASE_URL || 'http://localhost:3000';
 
 // /api/economy/balance defines the response shape: `{coins, beans}`.
 // The `shyCoins`/`shyBeans` aliases are server-internal — the public
@@ -37,7 +37,7 @@ const API_BASE = process.env.API_BASE_URL || "http://localhost:3000";
 // shape (not the doc-field shape) catches a future doc rename that
 // forgot to update the read path.
 async function readBalance(
-  api: import("@playwright/test").APIRequestContext,
+  api: import('@playwright/test').APIRequestContext,
   idToken: string,
 ): Promise<{ coins: number; beans: number }> {
   const res = await api.get(`${API_BASE}/api/economy/balance`, {
@@ -49,8 +49,8 @@ async function readBalance(
   return res.json();
 }
 
-test.describe("Integration — gift-direct state cascade", () => {
-  test("sender→recipient gift decrements coins, credits beans, returns the canonical reward", async ({
+test.describe('Integration — gift-direct state cascade', () => {
+  test('sender→recipient gift decrements coins, credits beans, returns the canonical reward', async ({
     api,
     pair,
   }) => {
@@ -65,7 +65,7 @@ test.describe("Integration — gift-direct state cascade", () => {
     const res = await api.post(`${API_BASE}/api/economy/gift-direct`, {
       headers: {
         Authorization: `Bearer ${pair.sender.idToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       data: {
         recipientId: pair.recipient.uniqueId,
@@ -73,10 +73,9 @@ test.describe("Integration — gift-direct state cascade", () => {
         quantity: 1,
       },
     });
-    expect(
-      res.ok(),
-      `gift-direct expected 200, got ${res.status()}: ${await res.text()}`,
-    ).toBe(true);
+    expect(res.ok(), `gift-direct expected 200, got ${res.status()}: ${await res.text()}`).toBe(
+      true,
+    );
 
     const body = await res.json();
     // Default beanConversionRate is 0.6 (see test-helpers.js
@@ -99,17 +98,14 @@ test.describe("Integration — gift-direct state cascade", () => {
     expect(recipientAfter).toEqual({ coins: 0, beans: 60 });
   });
 
-  test("returns 402 when sender has insufficient coins", async ({
-    api,
-    pair,
-  }) => {
+  test('returns 402 when sender has insufficient coins', async ({ api, pair }) => {
     // Drain the sender first by gifting all 1000 coins (10 × 100).
     // This proves the transactional check at economy.js:954 fires
     // on a real-Firestore read, not just the pre-check.
     const drain = await api.post(`${API_BASE}/api/economy/gift-direct`, {
       headers: {
         Authorization: `Bearer ${pair.sender.idToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       data: {
         recipientId: pair.recipient.uniqueId,
@@ -123,7 +119,7 @@ test.describe("Integration — gift-direct state cascade", () => {
     const res = await api.post(`${API_BASE}/api/economy/gift-direct`, {
       headers: {
         Authorization: `Bearer ${pair.sender.idToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       data: {
         recipientId: pair.recipient.uniqueId,
@@ -145,14 +141,11 @@ test.describe("Integration — gift-direct state cascade", () => {
     expect(recipientAfter.beans).toBe(600);
   });
 
-  test("returns 400 when sender tries to gift themselves", async ({
-    api,
-    pair,
-  }) => {
+  test('returns 400 when sender tries to gift themselves', async ({ api, pair }) => {
     const res = await api.post(`${API_BASE}/api/economy/gift-direct`, {
       headers: {
         Authorization: `Bearer ${pair.sender.idToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       data: {
         recipientId: pair.sender.uniqueId,
@@ -172,15 +165,15 @@ test.describe("Integration — gift-direct state cascade", () => {
     expect(senderAfter.coins).toBe(1000);
   });
 
-  test("returns 404 when gift does not exist", async ({ api, pair }) => {
+  test('returns 404 when gift does not exist', async ({ api, pair }) => {
     const res = await api.post(`${API_BASE}/api/economy/gift-direct`, {
       headers: {
         Authorization: `Bearer ${pair.sender.idToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       data: {
         recipientId: pair.recipient.uniqueId,
-        giftId: "nonexistent-gift-id",
+        giftId: 'nonexistent-gift-id',
         quantity: 1,
       },
     });

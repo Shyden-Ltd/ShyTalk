@@ -23,7 +23,7 @@ test.describe('Console Errors — All Pages', () => {
     test(`${name} page loads with zero console errors`, async ({ page }) => {
       const errors: string[] = [];
       const warnings: string[] = [];
-      page.on('console', msg => {
+      page.on('console', (msg) => {
         if (msg.type() === 'error') errors.push(msg.text());
         if (msg.type() === 'warning') warnings.push(msg.text());
       });
@@ -39,9 +39,10 @@ test.describe('Console Errors — All Pages', () => {
       // <link rel="icon"> points to .svg) and the resource-load mask
       // would have hidden any future broken-asset regression. Now narrowed
       // to only the specific Firebase-config-might-not-be-up case.
-      const realErrors = errors.filter(e =>
-        !e.includes('ERR_CONNECTION_REFUSED') &&
-        !(e.includes('Failed to load resource') && e.includes('firebase-config'))
+      const realErrors = errors.filter(
+        (e) =>
+          !e.includes('ERR_CONNECTION_REFUSED') &&
+          !(e.includes('Failed to load resource') && e.includes('firebase-config')),
       );
 
       if (realErrors.length > 0) {

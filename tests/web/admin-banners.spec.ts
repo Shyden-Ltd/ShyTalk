@@ -7,18 +7,16 @@ async function waitForBannersLoaded(page: Page): Promise<void> {
   // Wait for either banner cards OR the empty-state <p> with "No banners yet".
   // Do NOT treat an empty/cleared list as loaded — that's a transient state between
   // clearing the old content and rendering the new content in renderBannersList().
-  await page.waitForFunction(
-    () => {
-      const list = document.getElementById('banners-list');
-      if (!list) return false;
-      // Banner cards have been rendered
-      if (list.querySelector('.banner-card') !== null) return true;
-      // Empty state: a <p> element containing the "No banners yet" message
-      const p = list.querySelector('p');
-      if (p && p.textContent && p.textContent.includes('No banners yet')) return true;
-      return false;
-    },
-  );
+  await page.waitForFunction(() => {
+    const list = document.getElementById('banners-list');
+    if (!list) return false;
+    // Banner cards have been rendered
+    if (list.querySelector('.banner-card') !== null) return true;
+    // Empty state: a <p> element containing the "No banners yet" message
+    const p = list.querySelector('p');
+    if (p && p.textContent && p.textContent.includes('No banners yet')) return true;
+    return false;
+  });
 }
 
 /** Open the Add Banner dialog. */
@@ -108,7 +106,7 @@ test.describe('Admin Banners', () => {
   test('seeded banner appears in list with API verification', async ({ page, testData }) => {
     // Verify the seeded banner card is visible in the UI (retry once on reload if not found)
     const card = page.locator(`.banner-card[data-banner-id="${testData.banner.id}"]`);
-    if (!await card.isVisible().catch(() => false)) {
+    if (!(await card.isVisible().catch(() => false))) {
       // Banner not yet rendered — reload and retry once
       await page.reload();
       await adminLogin(page);
@@ -177,9 +175,9 @@ test.describe('Admin Banners', () => {
     await waitForBannersLoaded(page);
 
     await expect(page.locator(`.banner-card[data-banner-id="${newBannerId}"]`)).toBeVisible();
-    await expect(
-      page.locator(`.banner-card[data-banner-id="${newBannerId}"] strong`),
-    ).toHaveText(newTitle);
+    await expect(page.locator(`.banner-card[data-banner-id="${newBannerId}"] strong`)).toHaveText(
+      newTitle,
+    );
 
     // Cleanup: delete the created banner
     await deleteBannerViaApi(testData, newBannerId!);
@@ -433,7 +431,7 @@ test.describe('Admin Banners', () => {
 
     const idsBefore: string[] = [];
     for (let i = 0; i < countBefore; i++) {
-      idsBefore.push(await cardsBefore.nth(i).getAttribute('data-banner-id') || '');
+      idsBefore.push((await cardsBefore.nth(i).getAttribute('data-banner-id')) || '');
     }
 
     // Find the indices of our two banners
@@ -468,7 +466,7 @@ test.describe('Admin Banners', () => {
     const idsAfterReload: string[] = [];
     const countAfterReload = await cardsAfterReload.count();
     for (let i = 0; i < countAfterReload; i++) {
-      idsAfterReload.push(await cardsAfterReload.nth(i).getAttribute('data-banner-id') || '');
+      idsAfterReload.push((await cardsAfterReload.nth(i).getAttribute('data-banner-id')) || '');
     }
 
     // The order should have changed from the original

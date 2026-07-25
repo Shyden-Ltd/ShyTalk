@@ -3,7 +3,7 @@ import { Page } from '@playwright/test';
 if (!process.env.API_BASE_URL) {
   throw new Error(
     'API_BASE_URL must be explicitly set for Playwright tests. ' +
-    'Use http://localhost:3000 for local or set it in CI workflows.',
+      'Use http://localhost:3000 for local or set it in CI workflows.',
   );
 }
 const API_BASE = process.env.API_BASE_URL;
@@ -114,7 +114,11 @@ export class AdminApi {
     return Promise.race([
       this.tokenPromise,
       new Promise<string>((_, reject) =>
-        setTimeout(() => reject(new Error('Token not captured within 15s — no authenticated API call detected')), 15_000),
+        setTimeout(
+          () =>
+            reject(new Error('Token not captured within 15s — no authenticated API call detected')),
+          15_000,
+        ),
       ),
     ]);
   }
@@ -183,7 +187,8 @@ export class AdminApi {
       headers: { 'X-Test-API-Key': TEST_API_KEY, 'Content-Type': 'application/json' },
       data,
     });
-    if (!res.ok()) throw new Error(`test/write/${collection} → ${res.status()}: ${await res.text()}`);
+    if (!res.ok())
+      throw new Error(`test/write/${collection} → ${res.status()}: ${await res.text()}`);
     return res.json();
   }
 
@@ -191,7 +196,8 @@ export class AdminApi {
     const res = await this.page.request.get(`${API_BASE}/api/test/verify/${collection}/${docId}`, {
       headers: { 'X-Test-API-Key': TEST_API_KEY },
     });
-    if (!res.ok()) throw new Error(`test/verify/${collection}/${docId} → ${res.status()}: ${await res.text()}`);
+    if (!res.ok())
+      throw new Error(`test/verify/${collection}/${docId} → ${res.status()}: ${await res.text()}`);
     return res.json();
   }
 }

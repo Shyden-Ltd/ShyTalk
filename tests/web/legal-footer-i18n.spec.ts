@@ -56,11 +56,9 @@ test.describe('Legal footer i18n — every page, every locale-switch', () => {
       });
       await page.goto(`${BASE}${path}`);
       // Wait for the inline init script to apply translations.
-      await page.waitForFunction(
-        () => document.documentElement.lang === 'ar',
-        null,
-        { timeout: 5_000 },
-      );
+      await page.waitForFunction(() => document.documentElement.lang === 'ar', null, {
+        timeout: 5_000,
+      });
 
       // Every footer link visible on this page must NOT contain its English
       // default text after the locale switch. (The page's self-link isn't
@@ -81,11 +79,34 @@ test.describe('Legal footer i18n — every page, every locale-switch', () => {
     });
   }
 
-  test('legal-translations.js defines footer_privacy + footer_do_not_sell for all 20 locales', async ({ request }) => {
+  test('legal-translations.js defines footer_privacy + footer_do_not_sell for all 20 locales', async ({
+    request,
+  }) => {
     const res = await request.get(`${BASE}/js/legal-translations.js`);
     expect(res.status()).toBe(200);
     const text = await res.text();
-    const locales = ['ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko', 'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh'];
+    const locales = [
+      'ar',
+      'de',
+      'es',
+      'fr',
+      'hi',
+      'id',
+      'it',
+      'ja',
+      'km',
+      'ko',
+      'nl',
+      'pl',
+      'pt',
+      'ru',
+      'sv',
+      'th',
+      'tr',
+      'uk',
+      'vi',
+      'zh',
+    ];
     for (const locale of locales) {
       // Find this locale's line in the footer object (locale: { ... })
       const localeLineMatch = new RegExp(`\\s${locale}: \\{ [^\\n]*footer_copy:`, 'g').exec(text);

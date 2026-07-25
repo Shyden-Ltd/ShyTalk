@@ -1,13 +1,5 @@
-import {
-  test,
-  expect,
-  request as pwRequest,
-  APIRequestContext,
-} from "@playwright/test";
-import {
-  deriveOwnerFirebaseUid,
-  buildRoomsCreateFailureHint,
-} from "./helpers/dev-smoke";
+import { test, expect, request as pwRequest, APIRequestContext } from '@playwright/test';
+import { deriveOwnerFirebaseUid, buildRoomsCreateFailureHint } from './helpers/dev-smoke';
 
 /**
  * Dev deployment smoke tests — exercise critical user-facing API
@@ -49,7 +41,7 @@ const DEV_BASIC_AUTH_PASSWORD = process.env.DEV_BASIC_AUTH_PASSWORD;
 // doc (created via Firestore REST API as the smoke user), so we need
 // the project ID for the REST endpoint URL. Default keeps the suite
 // runnable against dev without a per-job override.
-const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || "shytalk-dev";
+const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'shytalk-dev';
 // Target user the smoke account follows/unfollows during the journey
 // test. MUST be a different uniqueId than the smoke account (the route
 // rejects self-follow with 400). On dev, uniqueId 10000008/10000009
@@ -66,14 +58,14 @@ const FIREBASE_SIGN_IN_URL = `https://identitytoolkit.googleapis.com/v1/accounts
 // playwright test` runnable locally without the full secret bundle.
 test.skip(
   !API_BASE || !FIREBASE_API_KEY || !SMOKE_EMAIL || !SMOKE_PASSWORD || !SMOKE_TARGET_UNIQUE_ID,
-  "dev-smoke requires API_BASE_URL, SMOKE_FIREBASE_API_KEY, SMOKE_TEST_EMAIL, SMOKE_TEST_PASSWORD, SMOKE_TARGET_UNIQUE_ID",
+  'dev-smoke requires API_BASE_URL, SMOKE_FIREBASE_API_KEY, SMOKE_TEST_EMAIL, SMOKE_TEST_PASSWORD, SMOKE_TARGET_UNIQUE_ID',
 );
 
 // HTTP Basic credentials for the dev web gate (NOT for API). Only
 // applies to web pages; the API has its own auth.
 if (DEV_BASIC_AUTH_PASSWORD) {
   test.use({
-    httpCredentials: { username: "dev", password: DEV_BASIC_AUTH_PASSWORD },
+    httpCredentials: { username: 'dev', password: DEV_BASIC_AUTH_PASSWORD },
   });
 }
 
@@ -92,7 +84,7 @@ test.beforeAll(async () => {
   //    take. A regression here means the entire app cannot sign in.
   const api = await pwRequest.newContext();
   const signIn = await api.post(FIREBASE_SIGN_IN_URL, {
-    headers: { "Content-Type": "application/json" },
+    headers: { 'Content-Type': 'application/json' },
     data: {
       email: SMOKE_EMAIL,
       password: SMOKE_PASSWORD,
@@ -108,10 +100,10 @@ test.beforeAll(async () => {
   const signInBody = await signIn.json();
   const idToken: string = signInBody.idToken;
   const refreshToken: string = signInBody.refreshToken;
-  expect(idToken, "idToken returned").toBeTruthy();
+  expect(idToken, 'idToken returned').toBeTruthy();
   expect(
     refreshToken,
-    "refreshToken returned (needed to refresh claims after Express sign-in)",
+    'refreshToken returned (needed to refresh claims after Express sign-in)',
   ).toBeTruthy();
 
   // 2. Sign in to Express — exchanges the Firebase token for the
@@ -129,9 +121,9 @@ test.beforeAll(async () => {
   const expressSignIn = await api.post(`${API_BASE}/api/users/sign-in`, {
     headers: {
       Authorization: `Bearer ${idToken}`,
-      "Content-Type": "application/json",
+      'Content-Type': 'application/json',
     },
-    data: { provider: "email", identifier: SMOKE_EMAIL },
+    data: { provider: 'email', identifier: SMOKE_EMAIL },
   });
   expect(
     expressSignIn.ok(),
@@ -144,7 +136,7 @@ test.beforeAll(async () => {
   // a downstream test produce a confusing 404.
   expect(me.found, `sign-in returned found=${me.found}: ${JSON.stringify(me)}`).toBe(true);
   const uniqueId: number = me.uniqueId;
-  expect(uniqueId, "uniqueId returned by Express sign-in").toBeTruthy();
+  expect(uniqueId, 'uniqueId returned by Express sign-in').toBeTruthy();
 
   // Parse target uniqueId. Strict integer parse so a typo'd secret
   // (e.g., trailing whitespace, hex value) fails the suite up-front
@@ -156,7 +148,7 @@ test.beforeAll(async () => {
   ).toBe(true);
   expect(
     targetUniqueId,
-    "SMOKE_TARGET_UNIQUE_ID must differ from smoke account uniqueId — follow rejects self-follow",
+    'SMOKE_TARGET_UNIQUE_ID must differ from smoke account uniqueId — follow rejects self-follow',
   ).not.toBe(uniqueId);
 
   smoke = { api, idToken, refreshToken, uniqueId, targetUniqueId };
@@ -169,19 +161,19 @@ test.afterAll(async () => {
 function authedHeaders() {
   return {
     Authorization: `Bearer ${smoke.idToken}`,
-    "Content-Type": "application/json",
+    'Content-Type': 'application/json',
   };
 }
 
-test.describe("Dev Smoke — critical user-facing API journeys", () => {
-  test("GET /api/health responds OK", async () => {
+test.describe('Dev Smoke — critical user-facing API journeys', () => {
+  test('GET /api/health responds OK', async () => {
     // First-line infra check — also covered by dev-sanity, repeated
     // here so this suite is self-contained when run in isolation.
     const res = await smoke.api.get(`${API_BASE}/api/health`);
     expect(res.ok(), `${res.status()}`).toBe(true);
   });
 
-  test("GET /api/users/:uniqueId returns the smoke user (auth round-trip)", async () => {
+  test('GET /api/users/:uniqueId returns the smoke user (auth round-trip)', async () => {
     // Catches: Firebase token verify, firebaseUid → uniqueId lookup,
     // user-doc Firestore read, suspension-cache miss path. Failure
     // here means real users can't sign in.
@@ -193,7 +185,7 @@ test.describe("Dev Smoke — critical user-facing API journeys", () => {
     expect(user.uniqueId).toBe(smoke.uniqueId);
   });
 
-  test("GET /api/economy/balance returns numeric coin + bean balances", async () => {
+  test('GET /api/economy/balance returns numeric coin + bean balances', async () => {
     // Catches: economy module Firestore reads, transactional balance
     // resolver, response shape contract used by every wallet UI.
     const res = await smoke.api.get(`${API_BASE}/api/economy/balance`, {
@@ -205,11 +197,11 @@ test.describe("Dev Smoke — critical user-facing API journeys", () => {
     // user-doc `shyCoins`/`shyBeans` fields). Both must be numbers —
     // every wallet/IAP/gift flow on the app side reads these. A field
     // rename or omission would hard-break the app.
-    expect(typeof body.coins, `coins shape: ${JSON.stringify(body)}`).toBe("number");
-    expect(typeof body.beans, `beans shape: ${JSON.stringify(body)}`).toBe("number");
+    expect(typeof body.coins, `coins shape: ${JSON.stringify(body)}`).toBe('number');
+    expect(typeof body.beans, `beans shape: ${JSON.stringify(body)}`).toBe('number');
   });
 
-  test("POST /api/economy/daily-reward succeeds OR returns 409 already-claimed (idempotent)", async () => {
+  test('POST /api/economy/daily-reward succeeds OR returns 409 already-claimed (idempotent)', async () => {
     // Catches: transactional Firestore daily-reward update,
     // streak/milestone computation, gift-grant + transaction-log
     // writes. Idempotent across runs — the second smoke run on the
@@ -223,7 +215,7 @@ test.describe("Dev Smoke — critical user-facing API journeys", () => {
     ).toBe(true);
   });
 
-  test("POST /api/suggestions accepts a smoke submission (public-write path + sanitisation)", async () => {
+  test('POST /api/suggestions accepts a smoke submission (public-write path + sanitisation)', async () => {
     // Catches: input sanitisation, language detection, tag
     // validation, Firestore rule on the `suggestions` collection.
     //
@@ -246,9 +238,9 @@ test.describe("Dev Smoke — critical user-facing API journeys", () => {
     const minePreBody = (await minePre.json()) as { suggestions?: Array<Record<string, unknown>> };
     const orphans = (minePreBody.suggestions ?? []).filter(
       (s) =>
-        s.status === "pending" &&
-        typeof s.title === "string" &&
-        (s.title as string).startsWith("[smoke]"),
+        s.status === 'pending' &&
+        typeof s.title === 'string' &&
+        (s.title as string).startsWith('[smoke]'),
     );
     for (const s of orphans) {
       const del = await smoke.api.delete(`${API_BASE}/api/suggestions/${s.id}`, {
@@ -266,15 +258,15 @@ test.describe("Dev Smoke — critical user-facing API journeys", () => {
       data: {
         title: `[smoke] dev-deploy smoke ${stamp}`,
         description:
-          "Automated smoke submission from dev-deploy pipeline. Safe to delete. " +
+          'Automated smoke submission from dev-deploy pipeline. Safe to delete. ' +
           `stamp=${stamp}`,
-        language: "en",
+        language: 'en',
       },
     });
     expect(res.ok(), `${res.status()}: ${await res.text()}`).toBe(true);
     const body = await res.json();
     const newId = (body.id || body.suggestionId) as string | undefined;
-    expect(newId, "suggestion id returned").toBeTruthy();
+    expect(newId, 'suggestion id returned').toBeTruthy();
 
     // Post-clean: withdraw the suggestion we just created. Best-effort
     // — the next run's pre-clean catches anything we miss here.
@@ -286,7 +278,7 @@ test.describe("Dev Smoke — critical user-facing API journeys", () => {
   });
 });
 
-test.describe("Dev Smoke — follow / unfollow journey", () => {
+test.describe('Dev Smoke — follow / unfollow journey', () => {
   // Catches: requireOwner auth gate, atomic two-doc batch write to
   // `users/{me}.followingIds` + `users/{target}.followerIds`, public
   // GET path on a non-self user. A regression here breaks the entire
@@ -306,7 +298,7 @@ test.describe("Dev Smoke — follow / unfollow journey", () => {
   // into sequential `await`s, this assertion catches the regression.
   // It also gives the suite its only GET-other-user coverage.
 
-  test("POST follow → GET target shows smoke as a follower → POST unfollow leaves no trace", async () => {
+  test('POST follow → GET target shows smoke as a follower → POST unfollow leaves no trace', async () => {
     const followBody = { targetUserId: smoke.targetUniqueId };
 
     // Pre-clean: unconditional unfollow. arrayRemove is idempotent
@@ -324,33 +316,32 @@ test.describe("Dev Smoke — follow / unfollow journey", () => {
     // process is allowed to set it. This contract is enforced by
     // the dev environment having ONLY this smoke suite using
     // SMOKE_TARGET_UNIQUE_ID = 10000008.
-    const preClean = await smoke.api.post(
-      `${API_BASE}/api/users/${smoke.uniqueId}/unfollow`,
-      { headers: authedHeaders(), data: followBody },
-    );
+    const preClean = await smoke.api.post(`${API_BASE}/api/users/${smoke.uniqueId}/unfollow`, {
+      headers: authedHeaders(),
+      data: followBody,
+    });
     expect(
       preClean.ok(),
       `pre-clean unfollow expected 200 (idempotent), got ${preClean.status()}: ${await preClean.text()}`,
     ).toBe(true);
 
     // Phase 1 — follow.
-    const followRes = await smoke.api.post(
-      `${API_BASE}/api/users/${smoke.uniqueId}/follow`,
-      { headers: authedHeaders(), data: followBody },
-    );
+    const followRes = await smoke.api.post(`${API_BASE}/api/users/${smoke.uniqueId}/follow`, {
+      headers: authedHeaders(),
+      data: followBody,
+    });
     expect(
       followRes.ok(),
       `follow expected 200, got ${followRes.status()}: ${await followRes.text()}`,
     ).toBe(true);
-    expect((await followRes.json()).success, "follow body.success=true").toBe(true);
+    expect((await followRes.json()).success, 'follow body.success=true').toBe(true);
 
     // Phase 2a — verify the TARGET's view of the fan-out. This
     // catches a regression where the SECOND batch.update fails
     // (target's followerIds doesn't update).
-    const targetAfterFollow = await smoke.api.get(
-      `${API_BASE}/api/users/${smoke.targetUniqueId}`,
-      { headers: authedHeaders() },
-    );
+    const targetAfterFollow = await smoke.api.get(`${API_BASE}/api/users/${smoke.targetUniqueId}`, {
+      headers: authedHeaders(),
+    });
     expect(
       targetAfterFollow.ok(),
       `target GET expected 200, got ${targetAfterFollow.status()}: ${await targetAfterFollow.text()}`,
@@ -367,7 +358,7 @@ test.describe("Dev Smoke — follow / unfollow journey", () => {
     // pass against corrupt data. Asserting strict-number type AND
     // post-coerce dedup catches the drift loud.
     expect(
-      targetBody.followerIds.every((x: unknown) => typeof x === "number"),
+      targetBody.followerIds.every((x: unknown) => typeof x === 'number'),
       `target.followerIds must be strict numbers, got ${JSON.stringify(targetBody.followerIds)}`,
     ).toBe(true);
     const followerIds: number[] = targetBody.followerIds.map(Number);
@@ -385,10 +376,9 @@ test.describe("Dev Smoke — follow / unfollow journey", () => {
     // batch.update fails (smoke's followingIds doesn't update).
     // Together with Phase 2a, asserts both sides of the atomic
     // batch — a partial-write split would now fail one of them.
-    const smokeAfterFollow = await smoke.api.get(
-      `${API_BASE}/api/users/${smoke.uniqueId}`,
-      { headers: authedHeaders() },
-    );
+    const smokeAfterFollow = await smoke.api.get(`${API_BASE}/api/users/${smoke.uniqueId}`, {
+      headers: authedHeaders(),
+    });
     expect(
       smokeAfterFollow.ok(),
       `smoke GET expected 200, got ${smokeAfterFollow.status()}: ${await smokeAfterFollow.text()}`,
@@ -400,7 +390,7 @@ test.describe("Dev Smoke — follow / unfollow journey", () => {
     ).toBe(true);
     // Same type-strictness + dedup check as Phase 2a.
     expect(
-      smokeBody.followingIds.every((x: unknown) => typeof x === "number"),
+      smokeBody.followingIds.every((x: unknown) => typeof x === 'number'),
       `smoke.followingIds must be strict numbers, got ${JSON.stringify(smokeBody.followingIds)}`,
     ).toBe(true);
     const followingIds: number[] = smokeBody.followingIds.map(Number);
@@ -414,10 +404,10 @@ test.describe("Dev Smoke — follow / unfollow journey", () => {
     ).toBe(true);
 
     // Phase 3 — unfollow.
-    const unfollowRes = await smoke.api.post(
-      `${API_BASE}/api/users/${smoke.uniqueId}/unfollow`,
-      { headers: authedHeaders(), data: followBody },
-    );
+    const unfollowRes = await smoke.api.post(`${API_BASE}/api/users/${smoke.uniqueId}/unfollow`, {
+      headers: authedHeaders(),
+      data: followBody,
+    });
     expect(
       unfollowRes.ok(),
       `unfollow expected 200, got ${unfollowRes.status()}: ${await unfollowRes.text()}`,
@@ -430,9 +420,7 @@ test.describe("Dev Smoke — follow / unfollow journey", () => {
       { headers: authedHeaders() },
     );
     expect(targetAfterUnfollow.ok()).toBe(true);
-    const cleanFollowerIds: number[] = (await targetAfterUnfollow.json()).followerIds.map(
-      Number,
-    );
+    const cleanFollowerIds: number[] = (await targetAfterUnfollow.json()).followerIds.map(Number);
     expect(
       cleanFollowerIds.includes(smoke.uniqueId),
       `target.followerIds=${JSON.stringify(cleanFollowerIds)} must NOT include smoke uniqueId=${smoke.uniqueId} after unfollow`,
@@ -441,35 +429,32 @@ test.describe("Dev Smoke — follow / unfollow journey", () => {
     // Phase 4b — verify SMOKE cleanup. Symmetric to 4a.
     // The leave-clean promise applies to BOTH users — partial
     // cleanup is just as bad as partial follow.
-    const smokeAfterUnfollow = await smoke.api.get(
-      `${API_BASE}/api/users/${smoke.uniqueId}`,
-      { headers: authedHeaders() },
-    );
+    const smokeAfterUnfollow = await smoke.api.get(`${API_BASE}/api/users/${smoke.uniqueId}`, {
+      headers: authedHeaders(),
+    });
     expect(smokeAfterUnfollow.ok()).toBe(true);
-    const cleanFollowingIds: number[] = (await smokeAfterUnfollow.json()).followingIds.map(
-      Number,
-    );
+    const cleanFollowingIds: number[] = (await smokeAfterUnfollow.json()).followingIds.map(Number);
     expect(
       cleanFollowingIds.includes(smoke.targetUniqueId),
       `smoke.followingIds=${JSON.stringify(cleanFollowingIds)} must NOT include target uniqueId=${smoke.targetUniqueId} after unfollow`,
     ).toBe(false);
   });
 
-  test("POST follow with targetUserId === self is rejected with 400", async () => {
+  test('POST follow with targetUserId === self is rejected with 400', async () => {
     // Invariant assertion: the same endpoint that succeeds for a real
     // target must reject self-follow. Costs one extra request and
     // pins down a contract that the app UI relies on (the Follow
     // button is hidden on the user's own profile but the server is
     // the authoritative gate).
-    const res = await smoke.api.post(
-      `${API_BASE}/api/users/${smoke.uniqueId}/follow`,
-      { headers: authedHeaders(), data: { targetUserId: smoke.uniqueId } },
-    );
+    const res = await smoke.api.post(`${API_BASE}/api/users/${smoke.uniqueId}/follow`, {
+      headers: authedHeaders(),
+      data: { targetUserId: smoke.uniqueId },
+    });
     expect(res.status(), `expected 400 for self-follow, got ${res.status()}`).toBe(400);
   });
 });
 
-test.describe("Dev Smoke — voice-room token issuance", () => {
+test.describe('Dev Smoke — voice-room token issuance', () => {
   // Catches: LiveKit AccessToken signing on Express, region resolution
   // (`getRegion`/`getRegionConfig`), LIVEKIT_KEY_*/SECRET_* env vars,
   // auth → identity mapping, response shape contract.
@@ -519,8 +504,8 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
     const refreshRes = await smoke.api.post(
       `https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`,
       {
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        form: { grant_type: "refresh_token", refresh_token: smoke.refreshToken },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        form: { grant_type: 'refresh_token', refresh_token: smoke.refreshToken },
       },
     );
     expect(
@@ -531,10 +516,7 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
     // securetoken endpoint returns id_token (snake_case), distinct
     // from signInWithPassword's idToken (camelCase).
     livekitFreshIdToken = refreshBody.id_token;
-    expect(
-      livekitFreshIdToken,
-      "id_token returned from securetoken refresh",
-    ).toBeTruthy();
+    expect(livekitFreshIdToken, 'id_token returned from securetoken refresh').toBeTruthy();
 
     // 2. Decode the fresh JWT to read the cohort claim. Match the
     //    firestore.rules fallback exactly: `token.get('cohort',
@@ -543,11 +525,9 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
     //    same fallback (`effectiveCohort` / `cohortFromClaim`), so
     //    stamping 'minor' on the room keeps everything consistent.
     smokeRoomName = `smoke-livekit-${Date.now()}`;
-    const jwtParts = livekitFreshIdToken.split(".");
-    const jwtPayload = JSON.parse(
-      Buffer.from(jwtParts[1], "base64url").toString(),
-    );
-    smokeCohort = jwtPayload.cohort === "adult" ? "adult" : "minor";
+    const jwtParts = livekitFreshIdToken.split('.');
+    const jwtPayload = JSON.parse(Buffer.from(jwtParts[1], 'base64url').toString());
+    smokeCohort = jwtPayload.cohort === 'adult' ? 'adult' : 'minor';
 
     // SHY-0029 tightened rooms-create to require `ownerFirebaseUid`
     // present AND equal to `request.auth.uid` (an omitted field
@@ -558,7 +538,7 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
     const ownerFirebaseUid = deriveOwnerFirebaseUid(jwtPayload);
     expect(
       ownerFirebaseUid,
-      `smoke JWT must carry a string uid claim (user_id/sub); payload keys: ${Object.keys(jwtPayload).join(",")}`,
+      `smoke JWT must carry a string uid claim (user_id/sub); payload keys: ${Object.keys(jwtPayload).join(',')}`,
     ).toBeTruthy();
 
     // 3. Create the room doc via Firestore REST as the smoke user —
@@ -572,12 +552,11 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
     //    plus auth-state gates the payload can't fix: signed-in
     //    (request.auth != null) and not banned (SHY-0150 isBanned()).
     //    If any rule check fails the response is 403.
-    const docUrl =
-      `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms?documentId=${smokeRoomName}`;
+    const docUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms?documentId=${smokeRoomName}`;
     const writeRes = await smoke.api.post(docUrl, {
       headers: {
         Authorization: `Bearer ${livekitFreshIdToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       data: {
         // Firestore REST `fields` syntax — typed values per the v1
@@ -591,7 +570,7 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
           ownerId: { stringValue: String(smoke.uniqueId) },
           ownerFirebaseUid: { stringValue: ownerFirebaseUid },
           name: { stringValue: `[SMOKE] LiveKit test room` },
-          state: { stringValue: "ACTIVE" },
+          state: { stringValue: 'ACTIVE' },
           createdAt: { integerValue: String(Date.now()) },
         },
       },
@@ -622,8 +601,7 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
     // red without aborting the remaining teardown. Use the SAME fresh
     // token from beforeAll so the rules-layer delete check
     // (owner-only) passes.
-    const docUrl =
-      `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms/${smokeRoomName}`;
+    const docUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms/${smokeRoomName}`;
     try {
       const del = await smoke.api.delete(docUrl, {
         headers: {
@@ -655,20 +633,19 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
     negName: string,
     ownerFirebaseUidField?: { stringValue: string },
   ) {
-    const negUrl =
-      `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms?documentId=${negName}`;
+    const negUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/rooms?documentId=${negName}`;
     const fields: Record<string, unknown> = {
       cohort: { stringValue: smokeCohort },
       ownerId: { stringValue: String(smoke.uniqueId) },
       name: { stringValue: `[SMOKE] negative-control room` },
-      state: { stringValue: "ACTIVE" },
+      state: { stringValue: 'ACTIVE' },
       createdAt: { integerValue: String(Date.now()) },
     };
     if (ownerFirebaseUidField) fields.ownerFirebaseUid = ownerFirebaseUidField;
     const res = await smoke.api.post(negUrl, {
       headers: {
         Authorization: `Bearer ${livekitFreshIdToken}`,
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       data: { fields },
     });
@@ -685,32 +662,28 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
     return res;
   }
 
-  test("rooms-create WITHOUT ownerFirebaseUid is denied (SHY-0029 clause live)", async () => {
-    const res = await attemptNegativeRoomCreate(
-      `smoke-negctl-omit-${Date.now()}`,
-    );
+  test('rooms-create WITHOUT ownerFirebaseUid is denied (SHY-0029 clause live)', async () => {
+    const res = await attemptNegativeRoomCreate(`smoke-negctl-omit-${Date.now()}`);
     expect(
       res.status(),
-      "omitting ownerFirebaseUid must be denied — a pass means the " +
-        "SHY-0029 present-and-matching clause was reverted",
+      'omitting ownerFirebaseUid must be denied — a pass means the ' +
+        'SHY-0029 present-and-matching clause was reverted',
     ).toBe(403);
-    expect(await res.text()).toContain("PERMISSION_DENIED");
+    expect(await res.text()).toContain('PERMISSION_DENIED');
   });
 
-  test("rooms-create with a FORGED ownerFirebaseUid is denied", async () => {
-    const res = await attemptNegativeRoomCreate(
-      `smoke-negctl-forge-${Date.now()}`,
-      { stringValue: "not-the-callers-uid" },
-    );
+  test('rooms-create with a FORGED ownerFirebaseUid is denied', async () => {
+    const res = await attemptNegativeRoomCreate(`smoke-negctl-forge-${Date.now()}`, {
+      stringValue: 'not-the-callers-uid',
+    });
     expect(
       res.status(),
-      "a forged ownerFirebaseUid must be denied — the field is bound " +
-        "to the signed JWT uid",
+      'a forged ownerFirebaseUid must be denied — the field is bound ' + 'to the signed JWT uid',
     ).toBe(403);
-    expect(await res.text()).toContain("PERMISSION_DENIED");
+    expect(await res.text()).toContain('PERMISSION_DENIED');
   });
 
-  test("POST /api/livekit/token returns a signed JWT with correct grants", async () => {
+  test('POST /api/livekit/token returns a signed JWT with correct grants', async () => {
     // Use the pre-created same-cohort room (beforeAll above) so the
     // PR 7 cohort gate matches. We still assert the JWT's `video.room`
     // claim equals exactly what we asked for, so a regression in the
@@ -724,7 +697,7 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
     expect(res.ok(), `${res.status()}: ${await res.text()}`).toBe(true);
 
     const body = await res.json();
-    expect(typeof body.token, `token shape: ${JSON.stringify(body)}`).toBe("string");
+    expect(typeof body.token, `token shape: ${JSON.stringify(body)}`).toBe('string');
 
     // The dev environment MUST include the LiveKit server URL — only
     // local mode (NODE_ENV === 'local') omits it. Missing URL on dev
@@ -733,7 +706,7 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
     expect(
       typeof body.url,
       `url must be returned on dev (NODE_ENV !== 'local'): ${JSON.stringify(body)}`,
-    ).toBe("string");
+    ).toBe('string');
     expect(body.url, `LiveKit URL must be wss:// or ws://`).toMatch(/^wss?:\/\//);
 
     // Decode JWT payload without signature verification. The smoke
@@ -741,14 +714,14 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
     // so we trust the server's claim and inspect structure only. A
     // future signature-verifying test would require giving CI the
     // secret, which we deliberately avoid.
-    const parts: string[] = body.token.split(".");
+    const parts: string[] = body.token.split('.');
     expect(parts.length, `JWT must have 3 segments, got ${parts.length}`).toBe(3);
-    const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
 
     // Identity = stringified uniqueId (route does String(req.auth.uniqueId)).
     // A drift here means auth → identity mapping is broken; users would
     // appear with random or empty identities in voice rooms.
-    expect(payload.sub, "JWT sub must equal stringified smoke uniqueId").toBe(
+    expect(payload.sub, 'JWT sub must equal stringified smoke uniqueId').toBe(
       String(smoke.uniqueId),
     );
 
@@ -765,13 +738,13 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
     // Grants: must allow joining the requested room AND publishing AND
     // subscribing. Missing canPublish would silently mute every user;
     // missing canSubscribe would silently deafen them.
-    expect(payload.video?.roomJoin, "video.roomJoin grant").toBe(true);
-    expect(payload.video?.room, "video.room must equal requested roomName").toBe(roomName);
-    expect(payload.video?.canPublish, "video.canPublish grant").toBe(true);
-    expect(payload.video?.canSubscribe, "video.canSubscribe grant").toBe(true);
+    expect(payload.video?.roomJoin, 'video.roomJoin grant').toBe(true);
+    expect(payload.video?.room, 'video.room must equal requested roomName').toBe(roomName);
+    expect(payload.video?.canPublish, 'video.canPublish grant').toBe(true);
+    expect(payload.video?.canSubscribe, 'video.canSubscribe grant').toBe(true);
   });
 
-  test("POST /api/livekit/token without roomName is rejected with 400", async () => {
+  test('POST /api/livekit/token without roomName is rejected with 400', async () => {
     // Invariant: roomName is required. Missing roomName must reject
     // pre-flight rather than minting a useless empty-room token (which
     // would burn a LiveKit signing operation and produce a token that
@@ -796,13 +769,13 @@ test.describe("Dev Smoke — voice-room token issuance", () => {
 // fixture means the assertion can only fail for the reason we're
 // testing — not because the PNG is malformed.
 const TEST_PNG_100X100 = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAA" +
-    "NElEQVR4nO3BAQ0AAADCoPdPbQ43oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAujF1lAAB" +
-    "e5jSrAAAAABJRU5ErkJggg==",
-  "base64",
+  'iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAIAAAD/gAIDAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAA' +
+    'NElEQVR4nO3BAQ0AAADCoPdPbQ43oAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAujF1lAAB' +
+    'e5jSrAAAAABJRU5ErkJggg==',
+  'base64',
 );
 
-test.describe("Dev Smoke — R2 image upload", () => {
+test.describe('Dev Smoke — R2 image upload', () => {
   // Catches: R2 credentials, R2 PUT path, multer multipart parsing,
   // sharp/imageCompressor pipeline, public-read URL signing.
   //
@@ -813,43 +786,41 @@ test.describe("Dev Smoke — R2 image upload", () => {
   // any user-doc field (vs 'profiles' which would mutate
   // smoke.profilePhotoUrl).
 
-  test("POST /api/storage/upload accepts a PNG, URL is reachable, DELETE cleans up", async () => {
+  test('POST /api/storage/upload accepts a PNG, URL is reachable, DELETE cleans up', async () => {
     // Phase 1 — upload via multipart. NOTE: do NOT include
     // Content-Type in headers; Playwright's `multipart` option sets
     // the multipart/form-data boundary automatically.
     const upload = await smoke.api.post(`${API_BASE}/api/storage/upload`, {
       headers: { Authorization: `Bearer ${smoke.idToken}` },
       multipart: {
-        path: "evidence",
+        path: 'evidence',
         file: {
-          name: "smoke.png",
-          mimeType: "image/png",
+          name: 'smoke.png',
+          mimeType: 'image/png',
           buffer: TEST_PNG_100X100,
         },
       },
     });
-    expect(
-      upload.ok(),
-      `upload expected 200, got ${upload.status()}: ${await upload.text()}`,
-    ).toBe(true);
+    expect(upload.ok(), `upload expected 200, got ${upload.status()}: ${await upload.text()}`).toBe(
+      true,
+    );
 
     const body = await upload.json();
-    expect(typeof body.url, `body.url shape: ${JSON.stringify(body)}`).toBe("string");
+    expect(typeof body.url, `body.url shape: ${JSON.stringify(body)}`).toBe('string');
     expect(body.url, `URL must be https://`).toMatch(/^https:\/\//);
 
     // Phase 2 — verify the object is publicly reachable. R2 has
     // read-after-write consistency so no retry is needed.
     const fetched = await smoke.api.get(body.url);
-    expect(
-      fetched.ok(),
-      `fetch-back expected 200, got ${fetched.status()} for ${body.url}`,
-    ).toBe(true);
-    const ct = fetched.headers()["content-type"] || "";
+    expect(fetched.ok(), `fetch-back expected 200, got ${fetched.status()} for ${body.url}`).toBe(
+      true,
+    );
+    const ct = fetched.headers()['content-type'] || '';
     expect(ct, `fetched content-type must be image/*, got "${ct}"`).toMatch(/^image\//);
 
     // Phase 3 — cleanup. Extract the R2 key from the public URL
     // pathname (DELETE expects ?key=, NOT the full URL).
-    const key = new URL(body.url).pathname.replace(/^\//, "");
+    const key = new URL(body.url).pathname.replace(/^\//, '');
     const del = await smoke.api.delete(
       `${API_BASE}/api/storage/delete?key=${encodeURIComponent(key)}`,
       { headers: authedHeaders() },
@@ -886,7 +857,7 @@ test.describe("Dev Smoke — R2 image upload", () => {
     ).toBe(404);
   });
 
-  test("POST /api/storage/upload with disallowed path is rejected with 400", async () => {
+  test('POST /api/storage/upload with disallowed path is rejected with 400', async () => {
     // Invariant: the path-allowlist is the upload-target ACL. If
     // someone adds a new path-handling code branch but forgets to
     // update ALLOWED_UPLOAD_PATHS, the gate would silently fail open.
@@ -899,10 +870,10 @@ test.describe("Dev Smoke — R2 image upload", () => {
     const res = await smoke.api.post(`${API_BASE}/api/storage/upload`, {
       headers: { Authorization: `Bearer ${smoke.idToken}` },
       multipart: {
-        path: "smoke-invalid-path",
+        path: 'smoke-invalid-path',
         file: {
-          name: "x.png",
-          mimeType: "image/png",
+          name: 'x.png',
+          mimeType: 'image/png',
           buffer: TEST_PNG_100X100,
         },
       },
@@ -914,7 +885,7 @@ test.describe("Dev Smoke — R2 image upload", () => {
   });
 });
 
-test.describe("Dev Smoke — IAP coin purchase (sandbox)", () => {
+test.describe('Dev Smoke — IAP coin purchase (sandbox)', () => {
   // Catches: GET /api/coin-packages catalog shape, purchase
   // verification bypass on non-prod (`economy.js:1300-1330`),
   // atomic balance increment + purchaseReceipts write + transaction
@@ -980,7 +951,7 @@ test.describe("Dev Smoke — IAP coin purchase (sandbox)", () => {
   // be created. The right test design remains REALISTIC user
   // behavior, not artificially-isolated state.
 
-  test("GET catalog → POST purchase → balance reflects → replay rejected with 409", async () => {
+  test('GET catalog → POST purchase → balance reflects → replay rejected with 409', async () => {
     // Phase 1 — discover the catalog. Despite the route handler not
     // checking auth itself (config.js:786), the global auth
     // middleware (index.js:82-113) gates every /api path NOT in the
@@ -992,13 +963,10 @@ test.describe("Dev Smoke — IAP coin purchase (sandbox)", () => {
     });
     expect(cat.ok(), `catalog: ${cat.status()}: ${await cat.text()}`).toBe(true);
     const packages = await cat.json();
-    expect(Array.isArray(packages), "catalog must be an array").toBe(true);
-    expect(
-      packages.length,
-      "dev must expose at least one active coin package",
-    ).toBeGreaterThan(0);
+    expect(Array.isArray(packages), 'catalog must be an array').toBe(true);
+    expect(packages.length, 'dev must expose at least one active coin package').toBeGreaterThan(0);
     const pkg = packages[0];
-    expect(typeof pkg.productId, "package productId").toBe("string");
+    expect(typeof pkg.productId, 'package productId').toBe('string');
     // The route reads `pkg.coins`/`pkg.bonusCoins` as camelCase
     // (economy.js:1387-1389). If a future migration moves the
     // coinPackages schema to snake_case (the codebase does this
@@ -1016,7 +984,7 @@ test.describe("Dev Smoke — IAP coin purchase (sandbox)", () => {
     });
     expect(before.ok()).toBe(true);
     const coinsBefore: number = (await before.json()).coins;
-    expect(typeof coinsBefore, "coins must be a number").toBe("number");
+    expect(typeof coinsBefore, 'coins must be a number').toBe('number');
 
     // Phase 3 — purchase. Ephemeral purchaseToken to avoid colliding
     // with purchaseReceipts from previous smoke runs (replay-protected).
@@ -1025,18 +993,14 @@ test.describe("Dev Smoke — IAP coin purchase (sandbox)", () => {
     const purchaseToken = `smoke-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const buy = await smoke.api.post(`${API_BASE}/api/economy/purchase`, {
       headers: authedHeaders(),
-      data: { productId: pkg.productId, purchaseToken, platform: "google" },
+      data: { productId: pkg.productId, purchaseToken, platform: 'google' },
     });
-    expect(
-      buy.ok(),
-      `purchase expected 200, got ${buy.status()}: ${await buy.text()}`,
-    ).toBe(true);
+    expect(buy.ok(), `purchase expected 200, got ${buy.status()}: ${await buy.text()}`).toBe(true);
     const buyBody = await buy.json();
-    expect(buyBody.success, "purchase body.success").toBe(true);
-    expect(
-      buyBody.coinsAdded,
-      `coinsAdded must equal package total ${expectedTotal}`,
-    ).toBe(expectedTotal);
+    expect(buyBody.success, 'purchase body.success').toBe(true);
+    expect(buyBody.coinsAdded, `coinsAdded must equal package total ${expectedTotal}`).toBe(
+      expectedTotal,
+    );
 
     // Phase 4 — verify balance increment is exactly the granted amount.
     // Catches a regression where the purchase succeeds but the increment
@@ -1058,13 +1022,12 @@ test.describe("Dev Smoke — IAP coin purchase (sandbox)", () => {
       headers: authedHeaders(),
       data: { productId: pkg.productId, purchaseToken },
     });
-    expect(
-      replay.status(),
-      `replay must 409, got ${replay.status()}: ${await replay.text()}`,
-    ).toBe(409);
+    expect(replay.status(), `replay must 409, got ${replay.status()}: ${await replay.text()}`).toBe(
+      409,
+    );
   });
 
-  test("POST /api/economy/purchase without productId is rejected with 400", async () => {
+  test('POST /api/economy/purchase without productId is rejected with 400', async () => {
     // Invariant: both productId and purchaseToken are required. The
     // route checks at line 1279-1280 before any DB query, so this
     // 400 is fast and pre-authorized.
@@ -1072,10 +1035,7 @@ test.describe("Dev Smoke — IAP coin purchase (sandbox)", () => {
       headers: authedHeaders(),
       data: { purchaseToken: `smoke-noprod-${Date.now()}` },
     });
-    expect(
-      res.status(),
-      `expected 400 for missing productId, got ${res.status()}`,
-    ).toBe(400);
+    expect(res.status(), `expected 400 for missing productId, got ${res.status()}`).toBe(400);
   });
 });
 
@@ -1085,7 +1045,7 @@ test.describe("Dev Smoke — IAP coin purchase (sandbox)", () => {
 // pull would 402 and the failure message would be unambiguous.
 const GACHA_MIN_COINS = 10;
 
-test.describe("Dev Smoke — gacha wheel spin (transactional coin deduction)", () => {
+test.describe('Dev Smoke — gacha wheel spin (transactional coin deduction)', () => {
   // Catches: atomic coin decrement on user doc, gifts collection
   // read with showOnWheel=true filter, weighted gift selection,
   // pity/luck state writes, transaction log, backpack subcollection
@@ -1117,10 +1077,7 @@ test.describe("Dev Smoke — gacha wheel spin (transactional coin deduction)", (
       const bal = await smoke.api.get(`${API_BASE}/api/economy/balance`, {
         headers: authedHeaders(),
       });
-      expect(
-        bal.ok(),
-        `gacha-seed balance check: ${bal.status()}: ${await bal.text()}`,
-      ).toBe(true);
+      expect(bal.ok(), `gacha-seed balance check: ${bal.status()}: ${await bal.text()}`).toBe(true);
       return (await bal.json()).coins;
     }
 
@@ -1138,10 +1095,7 @@ test.describe("Dev Smoke — gacha wheel spin (transactional coin deduction)", (
     // regression), not a gacha-specific bug. The IAP describe block
     // will surface the actual root cause separately.
     const cat = await smoke.api.get(`${API_BASE}/api/coin-packages`);
-    expect(
-      cat.ok(),
-      `gacha-seed: coin-packages catalog ${cat.status()}`,
-    ).toBe(true);
+    expect(cat.ok(), `gacha-seed: coin-packages catalog ${cat.status()}`).toBe(true);
     const packages = await cat.json();
     expect(
       Array.isArray(packages) && packages.length > 0,
@@ -1162,7 +1116,7 @@ test.describe("Dev Smoke — gacha wheel spin (transactional coin deduction)", (
         data: {
           productId: pkg.productId,
           purchaseToken: `gacha-seed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          platform: "google",
+          platform: 'google',
         },
       });
       expect(
@@ -1184,7 +1138,7 @@ test.describe("Dev Smoke — gacha wheel spin (transactional coin deduction)", (
     ).toBeGreaterThanOrEqual(GACHA_MIN_COINS);
   });
 
-  test("POST /api/economy/gacha (1 pull) deducts coins, returns gift, balance reflects", async () => {
+  test('POST /api/economy/gacha (1 pull) deducts coins, returns gift, balance reflects', async () => {
     // Phase 1 — snapshot balance.
     const before = await smoke.api.get(`${API_BASE}/api/economy/balance`, {
       headers: authedHeaders(),
@@ -1215,11 +1169,11 @@ test.describe("Dev Smoke — gacha wheel spin (transactional coin deduction)", (
     ).toBeFalsy();
 
     // Phase 4 — verify happy-path response shape.
-    expect(Array.isArray(body.gifts), "body.gifts must be an array").toBe(true);
-    expect(body.gifts.length, "1 pull returns 1 gift").toBe(1);
-    expect(typeof body.coinsSpent, "coinsSpent must be a number").toBe("number");
-    expect(body.coinsSpent, "coinsSpent must be > 0").toBeGreaterThan(0);
-    expect(typeof body.newBalance, "newBalance must be a number").toBe("number");
+    expect(Array.isArray(body.gifts), 'body.gifts must be an array').toBe(true);
+    expect(body.gifts.length, '1 pull returns 1 gift').toBe(1);
+    expect(typeof body.coinsSpent, 'coinsSpent must be a number').toBe('number');
+    expect(body.coinsSpent, 'coinsSpent must be > 0').toBeGreaterThan(0);
+    expect(typeof body.newBalance, 'newBalance must be a number').toBe('number');
 
     // Phase 5 — verify exact deduction reflects in /economy/balance.
     // newBalance from the gacha response and coins from /balance must
@@ -1238,21 +1192,18 @@ test.describe("Dev Smoke — gacha wheel spin (transactional coin deduction)", (
     ).toBe(coinsAfter);
   });
 
-  test("POST /api/economy/gacha with invalid pullCount is rejected with 400", async () => {
+  test('POST /api/economy/gacha with invalid pullCount is rejected with 400', async () => {
     // Invariant: pullCount must be 1, 10, or 100 (route line 448-450).
     // pullCount=5 is invalid and short-circuits before any DB read.
     const res = await smoke.api.post(`${API_BASE}/api/economy/gacha`, {
       headers: authedHeaders(),
       data: { pullCount: 5 },
     });
-    expect(
-      res.status(),
-      `expected 400 for pullCount=5, got ${res.status()}`,
-    ).toBe(400);
+    expect(res.status(), `expected 400 for pullCount=5, got ${res.status()}`).toBe(400);
   });
 });
 
-test.describe("Dev Smoke — push notification token + settings", () => {
+test.describe('Dev Smoke — push notification token + settings', () => {
   // Per `feedback-dev-deploy-smoke-tests` Tier 1 follow-ups: push smoke
   // was one of 4 missing journeys. Exercises POST/DELETE on the FCM
   // token endpoint plus PATCH on notification settings — covers the
@@ -1271,12 +1222,10 @@ test.describe("Dev Smoke — push notification token + settings", () => {
   let smokeFcmToken: string;
 
   test.beforeAll(() => {
-    smokeFcmToken = `smoke-test-fake-fcm-${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2, 10)}`;
+    smokeFcmToken = `smoke-test-fake-fcm-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   });
 
-  test("POST /api/notifications/token saves a fake token (auth + Firestore arrayUnion)", async () => {
+  test('POST /api/notifications/token saves a fake token (auth + Firestore arrayUnion)', async () => {
     // Pre-clean: idempotent DELETE to ensure the token isn't lingering
     // from a previous failed run that didn't reach its own cleanup.
     // arrayRemove is a no-op when the value isn't present, so this
@@ -1303,7 +1252,7 @@ test.describe("Dev Smoke — push notification token + settings", () => {
     expect(body.success, `expected success=true, got ${JSON.stringify(body)}`).toBe(true);
   });
 
-  test("POST same token twice is idempotent (arrayUnion semantic)", async () => {
+  test('POST same token twice is idempotent (arrayUnion semantic)', async () => {
     // Saving the same token a second time MUST NOT 5xx and MUST NOT
     // produce a duplicate in the array — Firestore's arrayUnion handles
     // de-dup. The smoke test verifies the route doesn't accidentally
@@ -1323,15 +1272,14 @@ test.describe("Dev Smoke — push notification token + settings", () => {
     ).toBe(true);
   });
 
-  test("DELETE /api/notifications/token removes the token (cleanup)", async () => {
+  test('DELETE /api/notifications/token removes the token (cleanup)', async () => {
     const remove = await smoke.api.delete(`${API_BASE}/api/notifications/token`, {
       headers: authedHeaders(),
       data: { token: smokeFcmToken },
     });
-    expect(
-      remove.ok(),
-      `DELETE must succeed (${remove.status()}: ${await remove.text()})`,
-    ).toBe(true);
+    expect(remove.ok(), `DELETE must succeed (${remove.status()}: ${await remove.text()})`).toBe(
+      true,
+    );
 
     // Idempotent re-DELETE — arrayRemove on a missing value is a no-op
     // at the Firestore level. Asserting 200 here documents the route's
@@ -1348,7 +1296,7 @@ test.describe("Dev Smoke — push notification token + settings", () => {
     ).toBe(true);
   });
 
-  test("POST /api/notifications/token without token field is rejected with 400", async () => {
+  test('POST /api/notifications/token without token field is rejected with 400', async () => {
     // Invariant: route line 16 — `token` must be a non-empty string ≤500
     // chars. A missing/empty body is the most common client bug
     // (forgetting to JSON-stringify, or sending an empty object after
@@ -1365,7 +1313,7 @@ test.describe("Dev Smoke — push notification token + settings", () => {
     ).toBe(400);
   });
 
-  test("PATCH /api/notifications/settings updates pmNotificationsEnabled", async () => {
+  test('PATCH /api/notifications/settings updates pmNotificationsEnabled', async () => {
     // Toggle to true then back to false to leave the smoke account in
     // its prior state (assuming default false). The PATCH route writes
     // a sparse update — only the keys we send — so we don't disturb
@@ -1391,7 +1339,7 @@ test.describe("Dev Smoke — push notification token + settings", () => {
     ).toBe(true);
   });
 
-  test("PATCH /api/notifications/settings with no allowed fields is rejected with 400", async () => {
+  test('PATCH /api/notifications/settings with no allowed fields is rejected with 400', async () => {
     // The route allowlist is: pmNotificationsEnabled, pmSoundEnabled,
     // pmShowTimestamps, pmShowDateSeparators, pmNotificationPreview.
     // Anything else gets dropped, and if no allowed key is present
@@ -1401,7 +1349,7 @@ test.describe("Dev Smoke — push notification token + settings", () => {
     // other).
     const res = await smoke.api.patch(`${API_BASE}/api/notifications/settings`, {
       headers: authedHeaders(),
-      data: { someUnknownField: true, anotherUnknown: "x" },
+      data: { someUnknownField: true, anotherUnknown: 'x' },
     });
     expect(
       res.status(),

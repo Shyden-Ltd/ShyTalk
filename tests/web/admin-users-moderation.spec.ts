@@ -194,7 +194,9 @@ test.describe('Admin Users - Moderation Subtab', () => {
 
     // Wait for unsuspend to take effect
     await expect(page.locator('#suspended-banner')).toBeHidden({ timeout: 15_000 });
-    await expect(page.locator('#suspension-status')).toHaveClass(/not-suspended/, { timeout: 15_000 });
+    await expect(page.locator('#suspension-status')).toHaveClass(/not-suspended/, {
+      timeout: 15_000,
+    });
 
     // Reload → verify cleared
     await reloadAndNavigateToModeration(page, uid);
@@ -248,9 +250,9 @@ test.describe('Admin Users - Moderation Subtab', () => {
 
     // The "already unsuspended" neutral toast must appear instead of the
     // affirmative "User unsuspended" lift toast.
-    await expect(
-      page.locator('text=User is already unsuspended').first(),
-    ).toBeVisible({ timeout: 5_000 });
+    await expect(page.locator('text=User is already unsuspended').first()).toBeVisible({
+      timeout: 5_000,
+    });
     // Negative assertion: the affirmative "User unsuspended" toast
     // must NOT appear (would imply the UI branch was bypassed).
     await expect(page.locator('text=/^User unsuspended$/').first()).toBeHidden();
@@ -415,7 +417,9 @@ test.describe('Admin Users - Moderation Subtab', () => {
 
       // Wait for the warning button to re-enable (indicates the previous warning was processed)
       await expect(page.locator('#direct-warn-btn')).toBeEnabled({ timeout: 15_000 });
-      await expect(page.locator('#direct-warn-btn')).toContainText('Issue Warning', { timeout: 15_000 });
+      await expect(page.locator('#direct-warn-btn')).toContainText('Issue Warning', {
+        timeout: 15_000,
+      });
     }
 
     // Verify at least 3 warnings appear in history (previous tests may have left revoked warnings).

@@ -113,16 +113,20 @@ test.describe('Translations', () => {
   });
 
   test('language switcher present on page', async ({ page }) => {
-    const switcher = page.locator('.lang-selector, [data-testid="language-selector"], .language-btn');
+    const switcher = page.locator(
+      '.lang-selector, [data-testid="language-selector"], .language-btn',
+    );
     await expect(switcher).toBeVisible({ timeout: 10_000 });
   });
 
   test('switch language: all headings translated', async ({ page }) => {
-    const switcher = page.locator('.lang-selector, [data-testid="language-selector"], .language-btn');
-    if (await switcher.count() > 0) {
+    const switcher = page.locator(
+      '.lang-selector, [data-testid="language-selector"], .language-btn',
+    );
+    if ((await switcher.count()) > 0) {
       await switcher.click();
       const deOption = page.locator('[data-lang="de"], .lang-option:has-text("Deutsch")');
-      if (await deOption.count() > 0) {
+      if ((await deOption.count()) > 0) {
         await deOption.click();
         await page.waitForTimeout(1000);
         // Page content should be in German
@@ -159,7 +163,28 @@ test.describe('Translations', () => {
   });
 
   test('test all 20 languages render correctly', async ({ page }) => {
-    const languages = ['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'ko', 'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh'];
+    const languages = [
+      'en',
+      'ar',
+      'de',
+      'es',
+      'fr',
+      'hi',
+      'id',
+      'it',
+      'ja',
+      'ko',
+      'nl',
+      'pl',
+      'pt',
+      'ru',
+      'sv',
+      'th',
+      'tr',
+      'uk',
+      'vi',
+      'zh',
+    ];
     for (const lang of languages) {
       await page.goto(`/roadmap.html?lang=${lang}`);
       await page.waitForTimeout(500);
@@ -334,7 +359,7 @@ test.describe('Error States', () => {
 
   test('API returns 500 on suggestions list: error message shown', async ({ page }) => {
     await page.route('**/api/suggestions*', (route) =>
-      route.fulfill({ status: 500, body: '{"error":"Internal server error"}' })
+      route.fulfill({ status: 500, body: '{"error":"Internal server error"}' }),
     );
     await page.goto('/roadmap.html');
     await page.waitForTimeout(3000);

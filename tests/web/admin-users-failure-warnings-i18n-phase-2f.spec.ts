@@ -62,7 +62,10 @@ test.describe('Admin users-tab failure + warnings i18n (Phase 2f)', () => {
     }
     // toast_action_failed must appear at least 6 times (shared across 6 catch sites)
     const actionFailedMatches = src.match(/tAdminFmt\("toast_action_failed"/g) || [];
-    expect(actionFailedMatches.length, 'toast_action_failed should cover ≥6 sites').toBeGreaterThanOrEqual(6);
+    expect(
+      actionFailedMatches.length,
+      'toast_action_failed should cover ≥6 sites',
+    ).toBeGreaterThanOrEqual(6);
   });
 
   test('All 21 locales define every Phase 2f key in ADMIN_TRANSLATIONS', async ({ request }) => {
@@ -72,8 +75,26 @@ test.describe('Admin users-tab failure + warnings i18n (Phase 2f)', () => {
 
     const locales = [
       'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+      'ar',
+      'de',
+      'es',
+      'fr',
+      'hi',
+      'id',
+      'it',
+      'ja',
+      'km',
+      'ko',
+      'nl',
+      'pl',
+      'pt',
+      'ru',
+      'sv',
+      'th',
+      'tr',
+      'uk',
+      'vi',
+      'zh',
     ];
     const multiLine = new Set(['en', 'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko']);
 
@@ -85,14 +106,15 @@ test.describe('Admin users-tab failure + warnings i18n (Phase 2f)', () => {
       const block = localeBlock![1];
 
       for (const key of PHASE_2F_KEYS) {
-        expect(block, `${locale} should define ${key}`).toMatch(
-          new RegExp(`${key}\\s*:`),
-        );
+        expect(block, `${locale} should define ${key}`).toMatch(new RegExp(`${key}\\s*:`));
       }
     }
   });
 
-  test('Korean runtime: generic failure + warning + device-binding interpolate', async ({ page, request }) => {
+  test('Korean runtime: generic failure + warning + device-binding interpolate', async ({
+    page,
+    request,
+  }) => {
     const res = await request.get(`${BASE}/admin/translations.js`);
     expect(res.ok()).toBe(true);
     const translationsSrc = await res.text();

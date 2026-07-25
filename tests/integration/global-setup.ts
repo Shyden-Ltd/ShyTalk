@@ -1,5 +1,5 @@
-import type { FullConfig } from "@playwright/test";
-import { request as pwRequest } from "@playwright/test";
+import type { FullConfig } from '@playwright/test';
+import { request as pwRequest } from '@playwright/test';
 
 /**
  * Integration test global-setup.
@@ -34,16 +34,15 @@ interface ProbeTarget {
 
 const PROBES: ProbeTarget[] = [
   {
-    name: "Express API",
-    url: "http://localhost:3000/api/health",
+    name: 'Express API',
+    url: 'http://localhost:3000/api/health',
     check: (status, body) => {
       if (status !== 200) return `expected 200, got ${status}`;
       try {
         const json = JSON.parse(body);
         // health.js returns `{status: 'ok', timestamp, subsystems}` — see
         // express-api/src/routes/health.js. The "ok" field does NOT exist.
-        if (json.status !== "ok")
-          return `body.status must be "ok", got ${JSON.stringify(json)}`;
+        if (json.status !== 'ok') return `body.status must be "ok", got ${JSON.stringify(json)}`;
       } catch {
         return `body must be JSON, got: ${body.slice(0, 200)}`;
       }
@@ -51,21 +50,19 @@ const PROBES: ProbeTarget[] = [
     },
   },
   {
-    name: "Firebase Emulator UI",
-    url: "http://localhost:4000",
+    name: 'Firebase Emulator UI',
+    url: 'http://localhost:4000',
     check: (status) => (status === 200 ? null : `expected 200, got ${status}`),
   },
   {
-    name: "MinIO (R2 mock)",
-    url: "http://localhost:9002/minio/health/live",
+    name: 'MinIO (R2 mock)',
+    url: 'http://localhost:9002/minio/health/live',
     check: (status) => (status === 200 ? null : `expected 200, got ${status}`),
   },
 ];
 
 async function probe(
-  api: ReturnType<typeof pwRequest.newContext> extends Promise<infer T>
-    ? T
-    : never,
+  api: ReturnType<typeof pwRequest.newContext> extends Promise<infer T> ? T : never,
   target: ProbeTarget,
 ): Promise<string | null> {
   try {
@@ -90,18 +87,18 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
 
     if (failures.length > 0) {
       const message = [
-        "",
-        "Integration test stack is not ready. Probes that failed:",
+        '',
+        'Integration test stack is not ready. Probes that failed:',
         ...failures.map((f) => `  - ${f}`),
-        "",
-        "If running locally, start the stack with:",
-        "  bash local/start.sh",
-        "  cd express-api && npm run local",
-        "",
-        "If running in CI, the workflow step that brings up the stack",
+        '',
+        'If running locally, start the stack with:',
+        '  bash local/start.sh',
+        '  cd express-api && npm run local',
+        '',
+        'If running in CI, the workflow step that brings up the stack',
         "either failed or hadn't completed before tests started.",
-        "",
-      ].join("\n");
+        '',
+      ].join('\n');
       throw new Error(message);
     }
   } finally {

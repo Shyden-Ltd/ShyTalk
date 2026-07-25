@@ -24,9 +24,14 @@ test.describe('Portal — XSS Prevention via Hash Routing', () => {
   test('only allowlisted routes are valid', async ({ page }) => {
     // These should all fall back to login
     const invalidRoutes = [
-      'admin', 'settings', 'config', 'debug',
-      '../admin', '../../etc/passwd',
-      'dashboard/admin', 'profile/../admin',
+      'admin',
+      'settings',
+      'config',
+      'debug',
+      '../admin',
+      '../../etc/passwd',
+      'dashboard/admin',
+      'profile/../admin',
     ];
     for (const route of invalidRoutes) {
       await page.goto(`/portal/#${route}`);
@@ -42,9 +47,7 @@ test.describe('Portal — CSP & Security Headers', () => {
     await expect(page.locator('#login-section')).toBeVisible({ timeout: 15_000 });
     // Verify CSS is applied — login section should have styles from portal.css
     const loginSection = page.locator('#login-section');
-    const display = await loginSection.evaluate(
-      (el) => window.getComputedStyle(el).display,
-    );
+    const display = await loginSection.evaluate((el) => window.getComputedStyle(el).display);
     // Should not be 'none' — the section should be visible via CSS
     expect(display).not.toBe('none');
   });
@@ -65,8 +68,16 @@ test.describe('Portal — CSP & Security Headers', () => {
       const allElements = document.querySelectorAll('*');
       let count = 0;
       const handlerAttrs = [
-        'onclick', 'onload', 'onerror', 'onsubmit', 'onchange',
-        'onfocus', 'onblur', 'onkeydown', 'onkeyup', 'onmouseover',
+        'onclick',
+        'onload',
+        'onerror',
+        'onsubmit',
+        'onchange',
+        'onfocus',
+        'onblur',
+        'onkeydown',
+        'onkeyup',
+        'onmouseover',
       ];
       for (const el of allElements) {
         for (const attr of handlerAttrs) {
@@ -119,7 +130,8 @@ test.describe('Portal — Environment Isolation', () => {
   test('no network requests to dev API when running locally', async ({ page }) => {
     const devRequests: string[] = [];
     page.on('request', (req) => {
-      if (req.url().includes('dev-api.shytalk.shyden.co.uk')) { // localhost isolation check
+      if (req.url().includes('dev-api.shytalk.shyden.co.uk')) {
+        // localhost isolation check
         devRequests.push(req.url());
       }
     });
@@ -132,7 +144,8 @@ test.describe('Portal — Environment Isolation', () => {
     const prodRequests: string[] = [];
     page.on('request', (req) => {
       const url = req.url();
-      if (url.includes('api.shytalk.shyden.co.uk') && !url.includes('dev-api')) { // localhost isolation check
+      if (url.includes('api.shytalk.shyden.co.uk') && !url.includes('dev-api')) {
+        // localhost isolation check
         prodRequests.push(url);
       }
     });

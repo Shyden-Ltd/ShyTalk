@@ -40,11 +40,17 @@ test.describe('Suggestions-board relativeTime() locale-aware', () => {
 
   test('Korean locale: Intl.RelativeTimeFormat produces Hangul output', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('shytalk_language', 'ko');
+      } catch {
+        /* ignore */
+      }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(
-      () => typeof (window as Window & { ShyTalkLanguage?: { get: () => string } }).ShyTalkLanguage !== 'undefined',
+      () =>
+        typeof (window as Window & { ShyTalkLanguage?: { get: () => string } }).ShyTalkLanguage !==
+        'undefined',
       undefined,
       { timeout: 10_000 },
     );
@@ -71,11 +77,17 @@ test.describe('Suggestions-board relativeTime() locale-aware', () => {
 
   test('Arabic locale: Intl.RelativeTimeFormat produces Arabic script output', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ar'); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('shytalk_language', 'ar');
+      } catch {
+        /* ignore */
+      }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(
-      () => typeof (window as Window & { ShyTalkLanguage?: { get: () => string } }).ShyTalkLanguage !== 'undefined',
+      () =>
+        typeof (window as Window & { ShyTalkLanguage?: { get: () => string } }).ShyTalkLanguage !==
+        'undefined',
       undefined,
       { timeout: 10_000 },
     );

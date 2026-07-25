@@ -42,7 +42,9 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     expect(href).toContain('apps.apple.com');
   });
 
-  test('welcome prompt visible in suggestions section specifically (not header)', async ({ page }) => {
+  test('welcome prompt visible in suggestions section specifically (not header)', async ({
+    page,
+  }) => {
     const suggestionsSection = page.locator('#suggestions, [data-section="suggestions"]');
     if ((await suggestionsSection.count()) > 0) {
       const loginPrompt = suggestionsSection.locator(
@@ -385,7 +387,9 @@ test.describe('Roadmap Auth — No Account Found', () => {
 
   test('download prompt shows Play Store link', async ({ page }) => {
     await page.goto('/roadmap.html');
-    const playStoreLink = page.locator('[data-testid="download-android"], a[href*="play.google.com"]');
+    const playStoreLink = page.locator(
+      '[data-testid="download-android"], a[href*="play.google.com"]',
+    );
     // Should be visible in the no-account state
   });
 
@@ -562,7 +566,7 @@ test.describe('Roadmap Auth — Logged In State', () => {
     );
     await page.goto('/roadmap.html');
     const userName = page.locator('[data-testid="auth-display-name"], .auth-display-name');
-    if (await userName.count() > 0) {
+    if ((await userName.count()) > 0) {
       await expect(userName).toContainText('Alice');
     }
   });
@@ -590,7 +594,7 @@ test.describe('Roadmap Auth — Logged In State', () => {
     );
     await page.goto('/roadmap.html');
     const signOutBtn = page.locator('[data-testid="auth-signout-btn"], .auth-signout-btn');
-    if (await signOutBtn.count() > 0) {
+    if ((await signOutBtn.count()) > 0) {
       await signOutBtn.click();
       // Login prompt should reappear
       const loginPrompt = page.locator('[data-testid="auth-login-prompt"], .auth-login-prompt');
@@ -646,7 +650,7 @@ test.describe('Roadmap Auth — Logged In State', () => {
     );
     await page.goto('/roadmap.html');
     const avatar = page.locator('[data-testid="auth-avatar"], .auth-avatar');
-    if (await avatar.count() > 0) {
+    if ((await avatar.count()) > 0) {
       const src = await avatar.getAttribute('src');
       expect(src).toContain('avatar');
     }
@@ -670,7 +674,7 @@ test.describe('Roadmap Auth — Logged In State', () => {
     await page.goto('/roadmap.html');
     // Interactive buttons should not be disabled
     const suggestBtn = page.locator('[data-testid="suggest-btn"]');
-    if (await suggestBtn.count() > 0) {
+    if ((await suggestBtn.count()) > 0) {
       await expect(suggestBtn).not.toBeDisabled();
     }
   });
@@ -685,7 +689,7 @@ test.describe('Roadmap Auth — Logged In State', () => {
     );
     await page.goto('/roadmap.html');
     const authArea = page.locator('[data-testid="auth-user-info"], .auth-user-info, .auth-status');
-    if (await authArea.count() > 0) {
+    if ((await authArea.count()) > 0) {
       const text = await authArea.textContent();
       expect(text).toContain('SuperUser42');
     }
@@ -1007,7 +1011,7 @@ test.describe('Roadmap Auth — No Account Download Prompt Details', () => {
     );
     await page.goto('/roadmap.html');
     const noAccount = page.locator('[data-testid="auth-no-account"], .auth-no-account');
-    if (await noAccount.count() > 0) {
+    if ((await noAccount.count()) > 0) {
       const text = await noAccount.textContent();
       expect(text?.toLowerCase()).toMatch(/download|create|account/);
     }
@@ -1027,7 +1031,7 @@ test.describe('Roadmap Auth — No Account Download Prompt Details', () => {
     await page.goto('/roadmap.html');
     // User should be able to browse suggestions read-only even without account
     const suggestionsSection = page.locator('#suggestions, [data-section="suggestions"]');
-    if (await suggestionsSection.count() > 0) {
+    if ((await suggestionsSection.count()) > 0) {
       await expect(suggestionsSection).toBeVisible();
     }
   });
@@ -1209,7 +1213,9 @@ test.describe('Roadmap Auth — Bell icon auth behaviour', () => {
     await expect(page.locator('[data-testid="login-modal-overlay"]')).toHaveCount(0);
   });
 
-  test('bell icon while profile still loading opens subscribe modal — NOT login modal (W1 race window)', async ({ page }) => {
+  test('bell icon while profile still loading opens subscribe modal — NOT login modal (W1 race window)', async ({
+    page,
+  }) => {
     // Reproduces the exact W1-bundled "Watch bells re-prompt sign-in"
     // bug. When `onAuthStateChanged` fires, `roadmap-auth.js` sets
     // `currentUser` immediately but then asynchronously fetches the
@@ -1322,7 +1328,7 @@ test.describe('Roadmap Auth — Redirect-based OAuth', () => {
       return res.text();
     });
     // Apple sign-in should also use redirect
-    expect(source).not.toMatch(/signInWithPopup.*apple|apple.*signInWithPopup/si);
+    expect(source).not.toMatch(/signInWithPopup.*apple|apple.*signInWithPopup/is);
   });
 
   test('getRedirectResult called on page load', async ({ page }) => {

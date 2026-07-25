@@ -54,7 +54,11 @@ async function applyAndConfirm(page: Page): Promise<void> {
 /**
  * Helper: trigger an input event on a field (needed for the inline change handler).
  */
-async function fillAndTrigger(page: Page, locator: ReturnType<Page['locator']>, value: string): Promise<void> {
+async function fillAndTrigger(
+  page: Page,
+  locator: ReturnType<Page['locator']>,
+  value: string,
+): Promise<void> {
   await locator.fill(value);
   await locator.dispatchEvent('input');
   await locator.dispatchEvent('change');
@@ -88,7 +92,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // API verify: fetch all gifts and confirm this gift exists
     const apiGifts = await testData.api.get('/api/gifts/all');
-    const giftList = Array.isArray(apiGifts) ? apiGifts : (apiGifts.gifts || []);
+    const giftList = Array.isArray(apiGifts) ? apiGifts : apiGifts.gifts || [];
     const apiGift = giftList.find((g: any) => g.id === giftId);
     expect(apiGift).toBeTruthy();
     expect(apiGift.name).toBe(fields.name);
@@ -126,7 +130,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // Verify save persisted via API (no reload — faster and more reliable)
     const apiGifts = await testData.api.get('/api/gifts/all');
-    const giftList = Array.isArray(apiGifts) ? apiGifts : (apiGifts.gifts || []);
+    const giftList = Array.isArray(apiGifts) ? apiGifts : apiGifts.gifts || [];
     const apiGift = giftList.find((g: any) => g.name === giftName);
     expect(apiGift).toBeTruthy();
     expect(apiGift.coinValue).toBe(42);
@@ -174,7 +178,10 @@ test.describe('Admin Gifts Tab', () => {
   });
 
   // ── Test 4: Delete gift ──
-  test('delete gift — row marked, Apply removes it, re-seed afterward', async ({ page, testData }) => {
+  test('delete gift — row marked, Apply removes it, re-seed afterward', async ({
+    page,
+    testData,
+  }) => {
     // First, create a temporary gift to delete
     const tempName = `e2e-delete-${Date.now()}`;
     await page.locator('#gift-add-btn').click();
@@ -227,7 +234,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // API verify: gift should not exist
     const apiGifts = await testData.api.get('/api/gifts/all');
-    const giftList = Array.isArray(apiGifts) ? apiGifts : (apiGifts.gifts || []);
+    const giftList = Array.isArray(apiGifts) ? apiGifts : apiGifts.gifts || [];
     const found = giftList.find((g: any) => g.id === targetId);
     expect(found).toBeUndefined();
   });
@@ -292,7 +299,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // Delete another gift (second row if it exists)
     const secondRow = page.locator('#gifts-tbody tr[data-gift-id]').nth(1);
-    if (await secondRow.count() > 0) {
+    if ((await secondRow.count()) > 0) {
       await secondRow.locator('.gift-delete-btn').click();
     }
 
@@ -305,7 +312,7 @@ test.describe('Admin Gifts Tab', () => {
     const body = page.locator('#gift-confirm-body');
     await expect(body.locator('h4:has-text("New Gifts")')).toBeVisible();
     await expect(body.locator('h4:has-text("Modified Gifts")')).toBeVisible();
-    if (await secondRow.count() > 0) {
+    if ((await secondRow.count()) > 0) {
       await expect(body.locator('h4:has-text("Deleted Gifts")')).toBeVisible();
     }
 
@@ -388,7 +395,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // API verify
     const apiGifts = await testData.api.get('/api/gifts/all');
-    const giftList = Array.isArray(apiGifts) ? apiGifts : (apiGifts.gifts || []);
+    const giftList = Array.isArray(apiGifts) ? apiGifts : apiGifts.gifts || [];
     const apiGift = giftList.find((g: any) => g.id === giftId);
     expect(apiGift).toBeTruthy();
     expect(apiGift.showOnWheel).toBe(!originalWheel);
@@ -483,7 +490,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // API verify
     const apiGifts = await testData.api.get('/api/gifts/all');
-    const giftList = Array.isArray(apiGifts) ? apiGifts : (apiGifts.gifts || []);
+    const giftList = Array.isArray(apiGifts) ? apiGifts : apiGifts.gifts || [];
     const apiGift = giftList.find((g: any) => g.id === giftId);
     expect(apiGift).toBeTruthy();
     expect(apiGift.animationUrl).toBe(testAnim);
@@ -509,7 +516,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // Read current weight via API
     const apiGifts = await testData.api.get('/api/gifts/all');
-    const giftList = Array.isArray(apiGifts) ? apiGifts : (apiGifts.gifts || []);
+    const giftList = Array.isArray(apiGifts) ? apiGifts : apiGifts.gifts || [];
     const apiGift = giftList.find((g: any) => g.id === giftId);
     expect(apiGift).toBeTruthy();
     const originalWeight = apiGift.weight ?? 1.0;
@@ -523,7 +530,7 @@ test.describe('Admin Gifts Tab', () => {
 
     // Verify via API
     const verifyGifts = await testData.api.get('/api/gifts/all');
-    const verifyList = Array.isArray(verifyGifts) ? verifyGifts : (verifyGifts.gifts || []);
+    const verifyList = Array.isArray(verifyGifts) ? verifyGifts : verifyGifts.gifts || [];
     const verifyGift = verifyList.find((g: any) => g.id === giftId);
     expect(verifyGift).toBeTruthy();
     expect(verifyGift.weight).toBe(2.5);

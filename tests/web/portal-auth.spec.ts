@@ -182,9 +182,7 @@ test.describe('Portal — Login Form Validation', () => {
     await page.locator('#login-password').fill('password123');
     await page.locator('#login-submit-btn').click();
     const emailInput = page.locator('#login-email');
-    const hasValidation = await emailInput.evaluate(
-      (el: HTMLInputElement) => !el.validity.valid,
-    );
+    const hasValidation = await emailInput.evaluate((el: HTMLInputElement) => !el.validity.valid);
     expect(hasValidation).toBe(true);
   });
 });
@@ -501,7 +499,9 @@ test.describe('Portal — Google OAuth provider configuration (W1 bundled bug fi
   // returns the previously-signed-in Google account silently, removing the
   // user's ability to pick a different one. Roadmap-auth.js already does
   // this; portal.js was missing it (caught during W1 bundled-bug pass).
-  test('signInWithGoogle calls setCustomParameters with prompt select_account', async ({ page }) => {
+  test('signInWithGoogle calls setCustomParameters with prompt select_account', async ({
+    page,
+  }) => {
     await page.goto('/portal/');
     const source = await page.evaluate(async () => {
       const res = await fetch('/portal/portal.js');
@@ -510,7 +510,9 @@ test.describe('Portal — Google OAuth provider configuration (W1 bundled bug fi
     // Source-level assertion: the literal pattern must be present in the
     // signInWithGoogle path. A simple `select_account` substring is too
     // broad (would also match a comment); pin the actual API call shape.
-    expect(source).toMatch(/setCustomParameters\s*\(\s*\{\s*prompt:\s*['"]select_account['"]\s*\}\s*\)/);
+    expect(source).toMatch(
+      /setCustomParameters\s*\(\s*\{\s*prompt:\s*['"]select_account['"]\s*\}\s*\)/,
+    );
   });
 
   test('GoogleAuthProvider is configured before any sign-in call', async ({ page }) => {
@@ -531,7 +533,9 @@ test.describe('Portal — Google OAuth provider configuration (W1 bundled bug fi
     expect(popupIdx).toBeGreaterThan(paramsIdx);
   });
 
-  test('Apple OAuthProvider intentionally does NOT pass select_account (Apple ignores Google params)', async ({ page }) => {
+  test('Apple OAuthProvider intentionally does NOT pass select_account (Apple ignores Google params)', async ({
+    page,
+  }) => {
     // Apple's OAuthProvider does not honour Google's `prompt` parameter.
     // This negative test documents the asymmetry — if someone later "fixes"
     // portal.js by setCustomParameters-ing the Apple provider too, this
@@ -569,7 +573,8 @@ test.describe('Portal — Console & Environment Checks', () => {
     const prodRequests: string[] = [];
     page.on('request', (req) => {
       const url = req.url();
-      if (url.includes('api.shytalk.shyden.co.uk') && !url.includes('dev-api')) { // localhost isolation check
+      if (url.includes('api.shytalk.shyden.co.uk') && !url.includes('dev-api')) {
+        // localhost isolation check
         prodRequests.push(url);
       }
     });

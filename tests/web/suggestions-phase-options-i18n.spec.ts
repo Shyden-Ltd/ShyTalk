@@ -73,8 +73,26 @@ test.describe('Suggestions-board PHASE_OPTIONS i18n', () => {
 
     const locales = [
       'en',
-      'ar', 'de', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'km', 'ko',
-      'nl', 'pl', 'pt', 'ru', 'sv', 'th', 'tr', 'uk', 'vi', 'zh',
+      'ar',
+      'de',
+      'es',
+      'fr',
+      'hi',
+      'id',
+      'it',
+      'ja',
+      'km',
+      'ko',
+      'nl',
+      'pl',
+      'pt',
+      'ru',
+      'sv',
+      'th',
+      'tr',
+      'uk',
+      'vi',
+      'zh',
     ];
 
     for (const locale of locales) {
@@ -86,16 +104,18 @@ test.describe('Suggestions-board PHASE_OPTIONS i18n', () => {
       const block = localeBlock![1];
 
       for (const key of PHASE_KEYS) {
-        expect(block, `${locale} should define ${key}`).toMatch(
-          new RegExp(`${key}\\s*:`),
-        );
+        expect(block, `${locale} should define ${key}`).toMatch(new RegExp(`${key}\\s*:`));
       }
     }
   });
 
   test('Korean locale: sgT() returns Hangul for all 7 phase keys', async ({ page }) => {
     await page.addInitScript(() => {
-      try { localStorage.setItem('shytalk_language', 'ko'); } catch { /* ignore */ }
+      try {
+        localStorage.setItem('shytalk_language', 'ko');
+      } catch {
+        /* ignore */
+      }
     });
     await page.goto(`${BASE}/roadmap.html`);
     await page.waitForFunction(
@@ -114,7 +134,9 @@ test.describe('Suggestions-board PHASE_OPTIONS i18n', () => {
     for (const key of PHASE_KEYS) {
       const value = t[key];
       expect(value, `sgT(${key}) should not be null`).not.toBeNull();
-      expect(englishValues.has(value!), `sgT(${key}) should not be English: got ${value}`).toBe(false);
+      expect(englishValues.has(value!), `sgT(${key}) should not be English: got ${value}`).toBe(
+        false,
+      );
       expect(value, `sgT(${key}) in ko should contain Hangul`).toMatch(/[가-힯]/);
     }
   });

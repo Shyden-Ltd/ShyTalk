@@ -48,12 +48,22 @@ export async function goToAdmin(page: Page): Promise<void> {
  * once the ES module's init() + activate() have completed.
  */
 const TAB_PANEL_MAP: Record<string, string> = {
-  Users: 'user-form', Appeals: 'appeals-panel', Reports: 'reports-panel',
-  Gifts: 'gifts-panel', Economy: 'economy-panel', Maintenance: 'maintenance-panel',
-  Monitor: 'monitor-panel', Banners: 'banners-panel', 'Fun Facts': 'funfacts-panel',
-  Backups: 'backups-panel', Logs: 'logs-panel', Devices: 'devices-panel',
-  'Starting Screens': 'starting-screens-panel', Suggestions: 'suggestions-panel',
-  'Audit Log': 'audit-log-panel', 'Age Segregation': 'age-segregation-panel',
+  Users: 'user-form',
+  Appeals: 'appeals-panel',
+  Reports: 'reports-panel',
+  Gifts: 'gifts-panel',
+  Economy: 'economy-panel',
+  Maintenance: 'maintenance-panel',
+  Monitor: 'monitor-panel',
+  Banners: 'banners-panel',
+  'Fun Facts': 'funfacts-panel',
+  Backups: 'backups-panel',
+  Logs: 'logs-panel',
+  Devices: 'devices-panel',
+  'Starting Screens': 'starting-screens-panel',
+  Suggestions: 'suggestions-panel',
+  'Audit Log': 'audit-log-panel',
+  'Age Segregation': 'age-segregation-panel',
 };
 
 export async function navigateToTab(page: Page, tabName: string): Promise<void> {
@@ -127,8 +137,12 @@ export async function searchUser(page: Page, uniqueId: string): Promise<void> {
 
     // Both attempts failed — build a full diagnostic message
     const lines: string[] = [`User search failed after 2 attempts (user ${uniqueId})`];
-    lines.push(`  Attempt 1: API=[${firstAttemptDiag.api.join('; ')}] Net=[${firstAttemptDiag.net.join('; ')}] Console=[${firstAttemptDiag.console.join('; ')}]`);
-    lines.push(`  Attempt 2: API=[${apiResponses.join('; ')}] Net=[${networkErrors.join('; ')}] Console=[${consoleErrors.join('; ')}]`);
+    lines.push(
+      `  Attempt 1: API=[${firstAttemptDiag.api.join('; ')}] Net=[${firstAttemptDiag.net.join('; ')}] Console=[${firstAttemptDiag.console.join('; ')}]`,
+    );
+    lines.push(
+      `  Attempt 2: API=[${apiResponses.join('; ')}] Net=[${networkErrors.join('; ')}] Console=[${consoleErrors.join('; ')}]`,
+    );
     throw new Error(lines.join('\n'));
   } finally {
     page.off('response', onResponse);

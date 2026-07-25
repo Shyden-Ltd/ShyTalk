@@ -83,7 +83,8 @@ test.describe('Shared Header — Sign In fallback on pages without login modal',
   test('Sign In on /community-guidelines.html redirects to /portal/', async ({ page }) => {
     await page.goto('/community-guidelines.html');
     const hasModalHook = await page.evaluate(
-      () => typeof (window as { shytalkShowLoginModal?: unknown }).shytalkShowLoginModal === 'function',
+      () =>
+        typeof (window as { shytalkShowLoginModal?: unknown }).shytalkShowLoginModal === 'function',
     );
     expect(hasModalHook).toBe(false);
     const signInBtn = page.locator('[data-testid="header-signin-btn"]');
@@ -136,7 +137,10 @@ test.describe('Shared Header — Authenticated state', () => {
       };
       document.dispatchEvent(
         new CustomEvent('shytalk-auth-changed', {
-          detail: { user: { uid: 'test-123' }, profile: { uniqueId: 1001, displayName: 'TestUser' } },
+          detail: {
+            user: { uid: 'test-123' },
+            profile: { uniqueId: 1001, displayName: 'TestUser' },
+          },
         }),
       );
     });
@@ -170,7 +174,10 @@ test.describe('Shared Header — Authenticated state', () => {
       };
       document.dispatchEvent(
         new CustomEvent('shytalk-auth-changed', {
-          detail: { user: { uid: 'test-123' }, profile: { uniqueId: 1001, displayName: 'TestUser' } },
+          detail: {
+            user: { uid: 'test-123' },
+            profile: { uniqueId: 1001, displayName: 'TestUser' },
+          },
         }),
       );
     });
@@ -271,7 +278,9 @@ test.describe('Shared Header — Responsive', () => {
     await page.setViewportSize({ width: 320, height: 568 });
     await page.goto('/roadmap.html');
     await expect(page.locator('[data-testid="header-logo"]')).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('[data-testid="header-signin-btn"]')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-testid="header-signin-btn"]')).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });
 

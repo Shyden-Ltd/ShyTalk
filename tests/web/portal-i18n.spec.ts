@@ -65,15 +65,14 @@ test.describe('Portal i18n', () => {
       localStorage.setItem('shytalk_language', 'en');
     });
     await page.goto(`${BASE}/portal/`);
-    await page.waitForFunction(
-      () => document.documentElement.dir !== '',
-      null,
-      { timeout: 5_000 },
-    );
+    await page.waitForFunction(() => document.documentElement.dir !== '', null, { timeout: 5_000 });
     expect(await page.locator('html').getAttribute('dir')).toBe('ltr');
   });
 
-  test('extracted CSS file is served and language-selector.js skips injection', async ({ page, request }) => {
+  test('extracted CSS file is served and language-selector.js skips injection', async ({
+    page,
+    request,
+  }) => {
     // The CSS file must be available — pages relying on the sentinel
     // would silently lose styles if it 404s.
     const cssRes = await request.get(`${BASE}/css/language-selector.css`);
@@ -84,9 +83,7 @@ test.describe('Portal i18n', () => {
     // language-selector.js (since the link sentinel is present, the
     // guard should fire). The link tag itself IS present.
     await page.goto(`${BASE}/portal/`);
-    const linkExists = await page
-      .locator('link[data-language-selector-styles]')
-      .count();
+    const linkExists = await page.locator('link[data-language-selector-styles]').count();
     expect(linkExists).toBe(1);
     // Count style elements that contain `.stl-lang-btn` — there should
     // be ZERO since injection was skipped.
@@ -101,20 +98,23 @@ test.describe('Portal i18n', () => {
     ).toBe(0);
   });
 
-  test('legacy pages (no link sentinel) still get inline-injected styles — backwards compat', async ({ page }) => {
+  test('legacy pages (no link sentinel) still get inline-injected styles — backwards compat', async ({
+    page,
+  }) => {
     await page.goto(`${BASE}/terms.html`);
     // terms.html does NOT have the data-language-selector-styles link
     // (it's still using inline injection). So the JS should inject
     // styles as before — backwards-compat for non-CSP pages.
-    const linkExists = await page
-      .locator('link[data-language-selector-styles]')
-      .count();
+    const linkExists = await page.locator('link[data-language-selector-styles]').count();
     expect(linkExists, 'terms.html should NOT have the link sentinel').toBe(0);
     const injectedStyleCount = await page.evaluate(() => {
       return Array.from(document.querySelectorAll('style')).filter((s) =>
         (s.textContent || '').includes('.stl-lang-btn'),
       ).length;
     });
-    expect(injectedStyleCount, 'terms.html should still get inline-injected styles').toBeGreaterThanOrEqual(1);
+    expect(
+      injectedStyleCount,
+      'terms.html should still get inline-injected styles',
+    ).toBeGreaterThanOrEqual(1);
   });
 });

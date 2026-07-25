@@ -50,7 +50,12 @@ async function fillField(page: Page, selector: string, value: string): Promise<v
 /**
  * Helper: set a range slider value and verify the live display updates.
  */
-async function setSlider(page: Page, sliderId: string, displayId: string, value: string): Promise<void> {
+async function setSlider(
+  page: Page,
+  sliderId: string,
+  displayId: string,
+  value: string,
+): Promise<void> {
   const slider = page.locator(sliderId);
   await slider.fill(value);
   await slider.dispatchEvent('input');
@@ -150,7 +155,10 @@ test.describe('Admin Economy Config', () => {
   });
 
   // ── Test 5: Drop rate exponent slider ──
-  test('drop rate exponent slider — drag, verify live display, save, reload', async ({ page, testData }) => {
+  test('drop rate exponent slider — drag, verify live display, save, reload', async ({
+    page,
+    testData,
+  }) => {
     await setSlider(page, '#eco-dropRateExponent', '#eco-dropRateExponent-val', '2.3');
     await saveEconomyConfig(page);
 
@@ -235,7 +243,10 @@ test.describe('Admin Economy Config', () => {
   });
 
   // ── Test 10: Pity soft max shift slider ──
-  test('pity soft max shift slider — set, verify live display, save, reload', async ({ page, testData }) => {
+  test('pity soft max shift slider — set, verify live display, save, reload', async ({
+    page,
+    testData,
+  }) => {
     await setSlider(page, '#eco-pitySoftMaxShift', '#eco-pitySoftMaxShift-val', '0.25');
     await saveEconomyConfig(page);
 

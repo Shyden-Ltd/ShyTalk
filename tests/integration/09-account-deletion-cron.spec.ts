@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures/scenarios";
+import { test, expect } from './fixtures/scenarios';
 
 /**
  * Integration test #8 — Account-deletion cron cascade.
@@ -23,113 +23,85 @@ import { test, expect } from "./fixtures/scenarios";
  * test #8.
  */
 
-const API_BASE = process.env.API_BASE_URL || "http://localhost:3000";
-const TEST_API_KEY = process.env.TEST_API_KEY || "local-test-key";
+const API_BASE = process.env.API_BASE_URL || 'http://localhost:3000';
+const TEST_API_KEY = process.env.TEST_API_KEY || 'local-test-key';
 
-test.describe("Integration — account-deletion cron cascade", () => {
-  test("cron deletes a user whose grace period has expired", async ({
-    api,
-    sender,
-  }) => {
+test.describe('Integration — account-deletion cron cascade', () => {
+  test('cron deletes a user whose grace period has expired', async ({ api, sender }) => {
     // Mark the sender for deletion with `deletionExecuteAt` in the
     // past so the cron's "<=now()" predicate matches on first run.
     // /api/test/write/users does a merge:true into the existing doc.
     const setDeletion = await api.post(`${API_BASE}/api/test/write/users`, {
-      headers: { "X-Test-API-Key": TEST_API_KEY },
+      headers: { 'X-Test-API-Key': TEST_API_KEY },
       data: {
         id: String(sender.uniqueId),
         deletionScheduledAt: Date.now() - 31 * 86400000,
         deletionExecuteAt: 1, // any positive past timestamp matches
-        deletionReason: "user_request",
+        deletionReason: 'user_request',
       },
     });
-    expect(
-      setDeletion.ok(),
-      `mark-for-deletion: ${await setDeletion.text()}`,
-    ).toBe(true);
+    expect(setDeletion.ok(), `mark-for-deletion: ${await setDeletion.text()}`).toBe(true);
 
     // Confirm the user exists pre-cron via /api/test/verify so the
     // post-cron 404 is meaningful (not "we never wrote the doc in
     // the first place").
-    const pre = await api.get(
-      `${API_BASE}/api/test/verify/users/${sender.uniqueId}`,
-      { headers: { "X-Test-API-Key": TEST_API_KEY } },
-    );
+    const pre = await api.get(`${API_BASE}/api/test/verify/users/${sender.uniqueId}`, {
+      headers: { 'X-Test-API-Key': TEST_API_KEY },
+    });
     expect(pre.status(), `pre-cron user must exist`).toBe(200);
 
     // Trigger the cron. The endpoint loops over all users matching
     // the deletion predicate; our test user is the only one in this
     // emulator with `deletionExecuteAt` set (other test runs are
     // teardown-isolated by `_testRun`).
-    const trigger = await api.post(
-      `${API_BASE}/api/test/run-cron/account-deletion`,
-      {
-        headers: {
-          "X-Test-API-Key": TEST_API_KEY,
-          "Content-Type": "application/json",
-        },
-        data: {},
+    const trigger = await api.post(`${API_BASE}/api/test/run-cron/account-deletion`, {
+      headers: {
+        'X-Test-API-Key': TEST_API_KEY,
+        'Content-Type': 'application/json',
       },
-    );
-    expect(
-      trigger.ok(),
-      `cron trigger: ${trigger.status()}: ${await trigger.text()}`,
-    ).toBe(true);
+      data: {},
+    });
+    expect(trigger.ok(), `cron trigger: ${trigger.status()}: ${await trigger.text()}`).toBe(true);
 
     // Verify the user doc is GONE. /api/test/verify returns 404
     // when the doc doesn't exist. This is the integration-tier
     // proof that the cron's cascade actually committed.
-    const post = await api.get(
-      `${API_BASE}/api/test/verify/users/${sender.uniqueId}`,
-      { headers: { "X-Test-API-Key": TEST_API_KEY } },
-    );
-    expect(
-      post.status(),
-      `post-cron user must be deleted, got status ${post.status()}`,
-    ).toBe(404);
+    const post = await api.get(`${API_BASE}/api/test/verify/users/${sender.uniqueId}`, {
+      headers: { 'X-Test-API-Key': TEST_API_KEY },
+    });
+    expect(post.status(), `post-cron user must be deleted, got status ${post.status()}`).toBe(404);
   });
 
-  test("cron is a no-op for users without deletionExecuteAt", async ({
-    api,
-    sender,
-  }) => {
+  test('cron is a no-op for users without deletionExecuteAt', async ({ api, sender }) => {
     // Sender doc exists but has NO deletionExecuteAt field. The
     // cron's predicate `where('deletionExecuteAt', '>', 0)` must
     // skip this user — verified by checking the doc still exists
     // after a trigger.
-    const trigger = await api.post(
-      `${API_BASE}/api/test/run-cron/account-deletion`,
-      {
-        headers: {
-          "X-Test-API-Key": TEST_API_KEY,
-          "Content-Type": "application/json",
-        },
-        data: {},
+    const trigger = await api.post(`${API_BASE}/api/test/run-cron/account-deletion`, {
+      headers: {
+        'X-Test-API-Key': TEST_API_KEY,
+        'Content-Type': 'application/json',
       },
-    );
+      data: {},
+    });
     expect(trigger.ok()).toBe(true);
 
-    const post = await api.get(
-      `${API_BASE}/api/test/verify/users/${sender.uniqueId}`,
-      { headers: { "X-Test-API-Key": TEST_API_KEY } },
+    const post = await api.get(`${API_BASE}/api/test/verify/users/${sender.uniqueId}`, {
+      headers: { 'X-Test-API-Key': TEST_API_KEY },
+    });
+    expect(post.status(), 'user without deletionExecuteAt must NOT be deleted by the cron').toBe(
+      200,
     );
-    expect(
-      post.status(),
-      "user without deletionExecuteAt must NOT be deleted by the cron",
-    ).toBe(200);
   });
 
-  test("cron rejects unknown cron name with 400", async ({ api }) => {
-    const res = await api.post(
-      `${API_BASE}/api/test/run-cron/totally-fake-cron`,
-      {
-        headers: {
-          "X-Test-API-Key": TEST_API_KEY,
-          "Content-Type": "application/json",
-        },
-        data: {},
+  test('cron rejects unknown cron name with 400', async ({ api }) => {
+    const res = await api.post(`${API_BASE}/api/test/run-cron/totally-fake-cron`, {
+      headers: {
+        'X-Test-API-Key': TEST_API_KEY,
+        'Content-Type': 'application/json',
       },
-    );
+      data: {},
+    });
     expect(res.status()).toBe(400);
     const body = await res.json();
     expect(body.error).toMatch(/not allowed/i);

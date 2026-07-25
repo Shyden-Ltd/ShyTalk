@@ -10,12 +10,16 @@ async function goToFunFacts(page: Page): Promise<void> {
   // Wait for the list to settle (loader disappears)
   await page.locator('#funfacts-list').waitFor({ state: 'visible', timeout: 15_000 });
   // Give the API call time to populate the list
-  await expect(page.locator('#funfacts-list').locator('.list-loader')).toBeHidden({ timeout: 15_000 }).catch((err) => console.warn('Loader wait failed:', err.message));
+  await expect(page.locator('#funfacts-list').locator('.list-loader'))
+    .toBeHidden({ timeout: 15_000 })
+    .catch((err) => console.warn('Loader wait failed:', err.message));
 }
 
 /** Wait for the fun-facts list to finish loading after a mutation (reload / save / delete). */
 async function waitForListLoaded(page: Page): Promise<void> {
-  await expect(page.locator('#funfacts-list').locator('.list-loader')).toBeHidden({ timeout: 15_000 }).catch((err) => console.warn('Loader wait failed:', err.message));
+  await expect(page.locator('#funfacts-list').locator('.list-loader'))
+    .toBeHidden({ timeout: 15_000 })
+    .catch((err) => console.warn('Loader wait failed:', err.message));
 }
 
 /** Find the first card in #funfacts-list whose text content includes the given substring.
@@ -32,7 +36,8 @@ async function fillDialogAndSave(
   await page.locator('#funfact-text-input').fill(opts.text);
   if (opts.category) await page.locator('#funfact-category-input').selectOption(opts.category);
   if (opts.emoji !== undefined) await page.locator('#funfact-emoji-input').fill(opts.emoji);
-  if (opts.sourceLang !== undefined) await page.locator('#funfact-sourcelang-input').fill(opts.sourceLang);
+  if (opts.sourceLang !== undefined)
+    await page.locator('#funfact-sourcelang-input').fill(opts.sourceLang);
   if (opts.active === false) await page.locator('#funfact-active-check').uncheck();
   else if (opts.active === true) await page.locator('#funfact-active-check').check();
   await page.locator('#funfact-dialog-save').click();
@@ -84,13 +89,21 @@ async function readFactIsActive(
 
 /** Delete a fun fact via the API (for cleanup). */
 async function apiDeleteFact(api: TestData['api'], factId: string): Promise<void> {
-  await api.delete(`/api/admin/fun-facts/${factId}`).catch((err) => { console.warn('apiDeleteFact failed:', err); });
+  await api.delete(`/api/admin/fun-facts/${factId}`).catch((err) => {
+    console.warn('apiDeleteFact failed:', err);
+  });
 }
 
 /** Create a fun fact via the API (for re-seeding). */
 async function apiCreateFact(
   api: TestData['api'],
-  body: { text: string; category?: string; emoji?: string; source_language?: string; is_active?: boolean },
+  body: {
+    text: string;
+    category?: string;
+    emoji?: string;
+    source_language?: string;
+    is_active?: boolean;
+  },
 ): Promise<{ id: string }> {
   return api.post('/api/admin/fun-facts', body);
 }
@@ -203,14 +216,20 @@ test.describe('Admin Fun Facts', () => {
     // Create a dedicated fun fact to delete — do NOT delete the seeded one,
     // as serial block retries would then fail on the "seeded fact appears" test.
     const factText = `e2e-delete-${Date.now()}`;
-    await testData.api.testWrite('funFacts', { text: factText, category: 'Science', emoji: '🧪', isActive: true, createdAt: Date.now() });
+    await testData.api.testWrite('funFacts', {
+      text: factText,
+      category: 'Science',
+      emoji: '🧪',
+      isActive: true,
+      createdAt: Date.now(),
+    });
     await reloadAndReturn(page);
 
     const card = factCard(page, factText);
     await expect(card).toBeVisible({ timeout: 15_000 });
 
     // Accept the confirmation dialog that appears on delete
-    page.on('dialog', dialog => dialog.accept());
+    page.on('dialog', (dialog) => dialog.accept());
 
     // Click Delete
     await card.getByRole('button', { name: 'Delete' }).click();
@@ -242,7 +261,7 @@ test.describe('Admin Fun Facts', () => {
     await expect(card).toBeVisible({ timeout: 15_000 });
 
     // Dismiss the confirmation dialog
-    page.on('dialog', dialog => dialog.dismiss());
+    page.on('dialog', (dialog) => dialog.dismiss());
 
     await card.getByRole('button', { name: 'Delete' }).click();
 
@@ -287,7 +306,9 @@ test.describe('Admin Fun Facts', () => {
       await waitForListLoaded(page);
 
       // Verify the badge shows the correct label
-      await expect(factCard(page, factText)).toContainText(categoryLabels[cat], { timeout: 10_000 });
+      await expect(factCard(page, factText)).toContainText(categoryLabels[cat], {
+        timeout: 10_000,
+      });
     }
 
     // Reload and verify last category stuck

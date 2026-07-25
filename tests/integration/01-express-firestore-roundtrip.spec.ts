@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from '@playwright/test';
 
 /**
  * Integration test #1 — Express → Firestore round-trip.
@@ -26,23 +26,19 @@ import { test, expect } from "@playwright/test";
  * makes it inappropriate for a foundation/no-fixture test.
  */
 
-const API_BASE = process.env.API_BASE_URL || "http://localhost:3000";
+const API_BASE = process.env.API_BASE_URL || 'http://localhost:3000';
 
-test.describe("Integration — Express ↔ Firestore", () => {
-  test("GET /api/health responds OK from a real Express instance", async ({
-    request,
-  }) => {
+test.describe('Integration — Express ↔ Firestore', () => {
+  test('GET /api/health responds OK from a real Express instance', async ({ request }) => {
     const res = await request.get(`${API_BASE}/api/health`);
     expect(res.ok(), `${res.status()}: ${await res.text()}`).toBe(true);
     const body = await res.json();
     // health.js returns `{status: 'ok', timestamp, subsystems}` — see
     // express-api/src/routes/health.js. There is no `ok` field.
-    expect(body.status).toBe("ok");
+    expect(body.status).toBe('ok');
   });
 
-  test("GET /api/config/startingScreens does a real Firestore round-trip", async ({
-    request,
-  }) => {
+  test('GET /api/config/startingScreens does a real Firestore round-trip', async ({ request }) => {
     // Public endpoint (allow-listed in src/index.js), so no fixture
     // setup needed. Express performs `db.doc('config/startingScreens').get()`
     // — a real Firestore round-trip. A 500 here means Express can't
@@ -54,12 +50,8 @@ test.describe("Integration — Express ↔ Firestore", () => {
     // Body is an object (possibly empty if no config doc exists). We
     // assert shape rather than contents — content tests belong to the
     // route's unit tests, not the integration tier.
-    expect(typeof body, `body must be object, got ${typeof body}`).toBe(
-      "object",
-    );
-    expect(body, "body must not be null").not.toBeNull();
-    expect(Array.isArray(body), "body must be plain object, not array").toBe(
-      false,
-    );
+    expect(typeof body, `body must be object, got ${typeof body}`).toBe('object');
+    expect(body, 'body must not be null').not.toBeNull();
+    expect(Array.isArray(body), 'body must be plain object, not array').toBe(false);
   });
 });

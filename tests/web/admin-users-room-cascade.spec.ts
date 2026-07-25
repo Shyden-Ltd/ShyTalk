@@ -176,10 +176,9 @@ test.describe('Admin Users — Suspension Cascade & Warning Preservation', () =>
 
     // Cascade is fire-and-forget — poll until participant is removed
     await expect
-      .poll(
-        async () => (await testData.api.testVerify('rooms', roomId)).participantIds,
-        { timeout: 15_000 },
-      )
+      .poll(async () => (await testData.api.testVerify('rooms', roomId)).participantIds, {
+        timeout: 15_000,
+      })
       .not.toContain(targetId);
     const room = await testData.api.testVerify('rooms', roomId);
     expect(room.state).toBe('ACTIVE');
@@ -223,10 +222,9 @@ test.describe('Admin Users — Suspension Cascade & Warning Preservation', () =>
 
     // Cascade is fire-and-forget — poll until visitor is removed from participants
     await expect
-      .poll(
-        async () => (await testData.api.testVerify('rooms', roomId)).participantIds,
-        { timeout: 15_000 },
-      )
+      .poll(async () => (await testData.api.testVerify('rooms', roomId)).participantIds, {
+        timeout: 15_000,
+      })
       .not.toContain(visitorId);
     const room = await testData.api.testVerify('rooms', roomId);
     expect(room.state).toBe('ACTIVE');

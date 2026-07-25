@@ -17,7 +17,6 @@ async function reloadAndNavigateToSecurity(
 }
 
 test.describe('Admin Users - Security Subtab', () => {
-
   test.beforeEach(async ({ page, testData }) => {
     await adminLogin(page);
     await navigateToTab(page, 'Users');
@@ -87,7 +86,9 @@ test.describe('Admin Users - Security Subtab', () => {
     const uid = String(testData.user.uniqueId);
 
     // Verify heading "Biometric Keys" is visible under security subpanel
-    const heading = page.locator('.user-subpanel[data-subtab="security"] h3', { hasText: 'Biometric Keys' });
+    const heading = page.locator('.user-subpanel[data-subtab="security"] h3', {
+      hasText: 'Biometric Keys',
+    });
     await expect(heading).toBeVisible({ timeout: 15_000 });
 
     // Verify #biometric-keys-list is present
@@ -211,13 +212,17 @@ test.describe('Admin Users - Security Subtab', () => {
     await switchUserSubtab(page, 'profile');
 
     // Wait for profile to be visible
-    await expect(page.locator('.user-subpanel[data-subtab="profile"]')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.user-subpanel[data-subtab="profile"]')).toBeVisible({
+      timeout: 15_000,
+    });
 
     // Switch back to Security subtab
     await switchUserSubtab(page, 'security');
 
     // Wait for security panel to be visible
-    await expect(page.locator('.user-subpanel[data-subtab="security"]')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.user-subpanel[data-subtab="security"]')).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(pinStatusGrid).toBeVisible({ timeout: 15_000 });
 
     // Verify all PIN fields still show correct data (not stale or empty)
@@ -299,9 +304,9 @@ test.describe('Admin Users - Security Subtab', () => {
     // isLocked: Firestore `pinLockedUntil` exists and is in the future → "Yes", otherwise "No"
     const lockedUntil = firestoreDoc.pinLockedUntil;
     const isCurrentlyLocked = lockedUntil
-      ? (typeof lockedUntil === 'object' && lockedUntil._seconds
+      ? typeof lockedUntil === 'object' && lockedUntil._seconds
         ? lockedUntil._seconds * 1000 > Date.now()
-        : new Date(lockedUntil).getTime() > Date.now())
+        : new Date(lockedUntil).getTime() > Date.now()
       : false;
     const expectedIsLocked = isCurrentlyLocked ? 'Yes' : 'No';
     expect(pinIsLockedText).toBe(expectedIsLocked);

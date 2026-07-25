@@ -7,7 +7,7 @@ import type { Page } from '@playwright/test';
  * the "Saved" feedback to appear next to the field.
  */
 async function waitForAutoSave(page: Page, fieldSelector: string): Promise<void> {
-  await page.locator(fieldSelector).evaluate(el => el.blur());
+  await page.locator(fieldSelector).evaluate((el) => el.blur());
   const container = page.locator(fieldSelector).locator('..');
   await expect(container.locator('.field-feedback.saved')).toBeVisible();
 }
@@ -216,7 +216,10 @@ test.describe('Admin Users - Extra Profile Fields', () => {
   });
 
   // ── Test 8: Clear buttons for clearable fields ──
-  test('clear buttons work for nationality, description, and date of birth', async ({ page, testData }) => {
+  test('clear buttons work for nationality, description, and date of birth', async ({
+    page,
+    testData,
+  }) => {
     const uid = String(testData.user.uniqueId);
 
     // Set nationality to GB first
@@ -336,12 +339,12 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Remove the user by clicking the remove button
     const removeBtn = blockedWidget.locator(`[data-remove="${secondUid}"]`).first();
-    if (await removeBtn.count() > 0) {
+    if ((await removeBtn.count()) > 0) {
       await removeBtn.click();
     } else {
       // Try the X button next to the item
       const itemRemove = blockedWidget.locator('.list-item-remove').first();
-      if (await itemRemove.count() > 0) {
+      if ((await itemRemove.count()) > 0) {
         await itemRemove.click();
       }
     }
@@ -375,11 +378,11 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Remove
     const removeBtn = followingWidget.locator(`[data-remove="${secondUid}"]`).first();
-    if (await removeBtn.count() > 0) {
+    if ((await removeBtn.count()) > 0) {
       await removeBtn.click();
     } else {
       const itemRemove = followingWidget.locator('.list-item-remove').first();
-      if (await itemRemove.count() > 0) {
+      if ((await itemRemove.count()) > 0) {
         await itemRemove.click();
       }
     }
@@ -412,11 +415,11 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Remove
     const removeBtn = followerWidget.locator(`[data-remove="${secondUid}"]`).first();
-    if (await removeBtn.count() > 0) {
+    if ((await removeBtn.count()) > 0) {
       await removeBtn.click();
     } else {
       const itemRemove = followerWidget.locator('.list-item-remove').first();
-      if (await itemRemove.count() > 0) {
+      if ((await itemRemove.count()) > 0) {
         await itemRemove.click();
       }
     }

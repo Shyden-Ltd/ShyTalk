@@ -76,7 +76,7 @@ test.describe('Admin Backups Tab', () => {
 
     // Refresh the list to show the new/updated backup
     const refreshBtn = page.locator('#backup-refresh-btn');
-    if (await refreshBtn.count() > 0) {
+    if ((await refreshBtn.count()) > 0) {
       await refreshBtn.click();
     } else {
       await navigateToTab(page, 'Backups');
@@ -228,7 +228,7 @@ test.describe('Admin Backups Tab', () => {
     const text = await list.textContent();
 
     // Should either have backup cards with dates or show "No backups yet"
-    const hasBackups = await backupRows(page).count() > 0;
+    const hasBackups = (await backupRows(page).count()) > 0;
     if (hasBackups) {
       expect(text).toMatch(/\d{4}-\d{2}-\d{2}/);
     } else {

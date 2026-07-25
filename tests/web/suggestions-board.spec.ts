@@ -120,7 +120,12 @@ async function setupSuggestionsMocks(page: Page) {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ suggestions: filtered, total: filtered.length, page: 1, pageSize: 20 }),
+      body: JSON.stringify({
+        suggestions: filtered,
+        total: filtered.length,
+        page: 1,
+        pageSize: 20,
+      }),
     });
   });
 
@@ -178,7 +183,12 @@ async function setupSuggestionsMocks(page: Page) {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ suggestions: filtered, total: filtered.length, page: 1, pageSize: 20 }),
+      body: JSON.stringify({
+        suggestions: filtered,
+        total: filtered.length,
+        page: 1,
+        pageSize: 20,
+      }),
     });
   });
 }
@@ -451,14 +461,20 @@ test.describe('Suggestions Board — Public Browsing', () => {
   test('pagination: page 1 loads, clicking page 2 loads next set', async ({ page }) => {
     const page1 = page.locator('[data-testid="suggestions-pagination"] [data-page="1"]');
     const page2 = page.locator('[data-testid="suggestions-pagination"] [data-page="2"]');
-    if (await page2.count() > 0) {
+    if ((await page2.count()) > 0) {
       const firstPageCards = page.locator('[data-testid^="suggestion-card"], .sg-card');
-      const firstPageFirstTitle = await firstPageCards.first().locator('[data-testid^="suggestion-title"], .sg-card-title').textContent();
+      const firstPageFirstTitle = await firstPageCards
+        .first()
+        .locator('[data-testid^="suggestion-title"], .sg-card-title')
+        .textContent();
 
       await page2.click();
       await page.waitForTimeout(500);
 
-      const secondPageFirstTitle = await firstPageCards.first().locator('[data-testid^="suggestion-title"], .sg-card-title').textContent();
+      const secondPageFirstTitle = await firstPageCards
+        .first()
+        .locator('[data-testid^="suggestion-title"], .sg-card-title')
+        .textContent();
       // Different pages should show different content
       expect(secondPageFirstTitle).not.toBe(firstPageFirstTitle);
     }
@@ -471,9 +487,11 @@ test.describe('Suggestions Board — Public Browsing', () => {
 
     const rejectedCards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await rejectedCards.count()) > 0) {
-      const declineReason = rejectedCards.first().locator('[data-testid="decline-reason"], .decline-reason');
+      const declineReason = rejectedCards
+        .first()
+        .locator('[data-testid="decline-reason"], .decline-reason');
       // Decline reason may or may not be present (depends on whether admin provided one)
-      if (await declineReason.count() > 0) {
+      if ((await declineReason.count()) > 0) {
         await expect(declineReason).toBeVisible();
         const text = await declineReason.textContent();
         expect(text!.trim().length).toBeGreaterThan(0);
@@ -515,7 +533,9 @@ test.describe('Suggestions Board — Public Browsing', () => {
     if ((await plannedCards.count()) > 0) {
       const badge = plannedCards.first().locator('[data-testid^="suggestion-status"], .sg-badge');
       await expect(badge).toContainText(/Planned/i);
-      const voteArrows = plannedCards.first().locator('[data-testid^="vote-up"], [data-testid^="vote-down"]');
+      const voteArrows = plannedCards
+        .first()
+        .locator('[data-testid^="vote-up"], [data-testid^="vote-down"]');
       // Vote arrows should be hidden or not present for planned suggestions
       const arrowCount = await voteArrows.count();
       if (arrowCount > 0) {
@@ -574,7 +594,7 @@ test.describe('Suggestions Board — Login Gate', () => {
 
   test('click comment without login shows login prompt', async ({ page }) => {
     const commentBtn = page.locator('[data-testid^="comment-submit"]').first();
-    if (await commentBtn.count() > 0) {
+    if ((await commentBtn.count()) > 0) {
       await commentBtn.click();
       const loginPrompt = page.locator('[data-testid="login-modal-overlay"]');
       await expect(loginPrompt).toBeVisible({ timeout: 5_000 });
@@ -583,7 +603,7 @@ test.describe('Suggestions Board — Login Gate', () => {
 
   test('click subscribe bell without login shows login prompt', async ({ page }) => {
     const bell = page.locator('[data-testid^="suggestion-bell"]').first();
-    if (await bell.count() > 0) {
+    if ((await bell.count()) > 0) {
       await bell.click();
       const loginPrompt = page.locator('[data-testid="login-modal-overlay"]');
       await expect(loginPrompt).toBeVisible({ timeout: 5_000 });
@@ -644,7 +664,7 @@ test.describe('Suggestions Board — Submission Flow', () => {
   test('character counter updates as user types in title', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     const titleCounter = page.locator('[data-testid="suggest-title-count"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       await titleInput.fill('Hello');
       await expect(titleCounter).toContainText('5/80');
     }
@@ -653,7 +673,7 @@ test.describe('Suggestions Board — Submission Flow', () => {
   test('title at 80 chars: counter shows 80/80, cannot type more', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     const titleCounter = page.locator('[data-testid="suggest-title-count"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       const eightyChars = 'A'.repeat(80);
       await titleInput.fill(eightyChars);
       await expect(titleCounter).toContainText('80/80');
@@ -667,16 +687,18 @@ test.describe('Suggestions Board — Submission Flow', () => {
   test('description at 5000 chars: counter shows 5000/5000', async ({ page }) => {
     const descInput = page.locator('[data-testid="suggest-desc-input"]');
     const descCounter = page.locator('[data-testid="suggest-desc-count"]');
-    if (await descInput.count() > 0) {
+    if ((await descInput.count()) > 0) {
       const fiveThousandChars = 'B'.repeat(5000);
       await descInput.fill(fiveThousandChars);
       await expect(descCounter).toContainText('5000/5000');
     }
   });
 
-  test('duplicate detection: typing title shows similar suggestions after 3+ chars', async ({ page }) => {
+  test('duplicate detection: typing title shows similar suggestions after 3+ chars', async ({
+    page,
+  }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       await titleInput.fill('Vo');
       await page.waitForTimeout(500);
       const duplicates = page.locator('[data-testid="suggest-duplicates"]');
@@ -689,13 +711,15 @@ test.describe('Suggestions Board — Submission Flow', () => {
     }
   });
 
-  test('duplicate detection: "Yes, this is what I meant" redirects to original', async ({ page }) => {
+  test('duplicate detection: "Yes, this is what I meant" redirects to original', async ({
+    page,
+  }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       await titleInput.fill('Voice chat');
       await page.waitForTimeout(500);
       const yesBtn = page.locator('[data-testid^="duplicate-match"]').first();
-      if (await yesBtn.count() > 0) {
+      if ((await yesBtn.count()) > 0) {
         await yesBtn.click();
         // Should redirect to the existing suggestion for upvoting
         const upvoteFlow = page.locator('[data-testid^="suggestion-card"], .sg-card');
@@ -706,11 +730,11 @@ test.describe('Suggestions Board — Submission Flow', () => {
 
   test('duplicate detection: "No, my idea is different" continues form', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       await titleInput.fill('Voice chat');
       await page.waitForTimeout(500);
       const noBtn = page.locator('[data-testid^="duplicate-diff"]');
-      if (await noBtn.count() > 0) {
+      if ((await noBtn.count()) > 0) {
         await noBtn.click();
         // Form should remain visible and user can continue
         await expect(titleInput).toBeVisible();
@@ -720,11 +744,11 @@ test.describe('Suggestions Board — Submission Flow', () => {
 
   test('duplicate detection: "Load more" shows 3 more results', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       await titleInput.fill('Voice chat rooms');
       await page.waitForTimeout(500);
       const loadMore = page.locator('[data-testid="duplicate-load-more"]');
-      if (await loadMore.count() > 0) {
+      if ((await loadMore.count()) > 0) {
         const initialCount = await page.locator('[data-testid^="duplicate-item"]').count();
         await loadMore.click();
         await page.waitForTimeout(500);
@@ -737,12 +761,12 @@ test.describe('Suggestions Board — Submission Flow', () => {
 
   test('duplicate detection: all results exhausted, "Load more" disappears', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       await titleInput.fill('Voice chat rooms');
       await page.waitForTimeout(500);
       const loadMore = page.locator('[data-testid="duplicate-load-more"]');
       // Keep clicking load more until exhausted
-      while (await loadMore.count() > 0 && await loadMore.isVisible()) {
+      while ((await loadMore.count()) > 0 && (await loadMore.isVisible())) {
         await loadMore.click();
         await page.waitForTimeout(300);
       }
@@ -762,32 +786,46 @@ test.describe('Suggestions Board — Submission Flow', () => {
     // After submission, the suggestion should appear in the user's list
   });
 
-  test('edit pending: form pre-filled with current values, re-review warning banner shown', async ({ page }) => {
-    const editBtn = page.locator('[data-testid="edit-suggestion-btn"], .edit-suggestion-btn').first();
-    if (await editBtn.count() > 0) {
+  test('edit pending: form pre-filled with current values, re-review warning banner shown', async ({
+    page,
+  }) => {
+    const editBtn = page
+      .locator('[data-testid="edit-suggestion-btn"], .edit-suggestion-btn')
+      .first();
+    if ((await editBtn.count()) > 0) {
       await editBtn.click();
       const warning = page.locator('[data-testid="re-review-warning"], .re-review-warning');
       await expect(warning).toBeVisible({ timeout: 5_000 });
     }
   });
 
-  test('withdraw pending: confirmation dialog, suggestion removed from "My Suggestions"', async ({ page }) => {
-    const withdrawBtn = page.locator('[data-testid="withdraw-suggestion-btn"], .withdraw-suggestion-btn').first();
-    if (await withdrawBtn.count() > 0) {
+  test('withdraw pending: confirmation dialog, suggestion removed from "My Suggestions"', async ({
+    page,
+  }) => {
+    const withdrawBtn = page
+      .locator('[data-testid="withdraw-suggestion-btn"], .withdraw-suggestion-btn')
+      .first();
+    if ((await withdrawBtn.count()) > 0) {
       await withdrawBtn.click();
       const confirmDialog = page.locator('[data-testid="confirm-dialog"], .confirm-dialog');
       await expect(confirmDialog).toBeVisible({ timeout: 5_000 });
     }
   });
 
-  test('cannot edit/withdraw accepted/planned/completed/rejected (buttons not shown)', async ({ page }) => {
+  test('cannot edit/withdraw accepted/planned/completed/rejected (buttons not shown)', async ({
+    page,
+  }) => {
     const statusFilter = page.locator('[data-testid="filter-status"]');
-    if (await statusFilter.count() > 0) {
+    if ((await statusFilter.count()) > 0) {
       await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Accepted' }));
       const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
       if ((await cards.count()) > 0) {
-        const editBtn = cards.first().locator('[data-testid="edit-suggestion-btn"], .edit-suggestion-btn');
-        const withdrawBtn = cards.first().locator('[data-testid="withdraw-suggestion-btn"], .withdraw-suggestion-btn');
+        const editBtn = cards
+          .first()
+          .locator('[data-testid="edit-suggestion-btn"], .edit-suggestion-btn');
+        const withdrawBtn = cards
+          .first()
+          .locator('[data-testid="withdraw-suggestion-btn"], .withdraw-suggestion-btn');
         expect(await editBtn.count()).toBe(0);
         expect(await withdrawBtn.count()).toBe(0);
       }
@@ -857,7 +895,7 @@ test.describe('Suggestions Board — Voting Flow', () => {
     await upvoteBtn.click();
     await page.waitForTimeout(300);
     const reasonModal = page.locator('[data-testid="vote-reason-modal"], .vote-reason-modal');
-    if (await reasonModal.count() > 0) {
+    if ((await reasonModal.count()) > 0) {
       await expect(reasonModal).toBeVisible();
       const publicOption = reasonModal.locator('[data-testid="reason-public"], .reason-public');
       const privateOption = reasonModal.locator('[data-testid="reason-private"], .reason-private');
@@ -874,10 +912,10 @@ test.describe('Suggestions Board — Voting Flow', () => {
     if ((await cards.count()) > 0) {
       const voteUp = cards.first().locator('[data-testid^="vote-up"]');
       const voteDown = cards.first().locator('[data-testid^="vote-down"]');
-      if (await voteUp.count() > 0) {
+      if ((await voteUp.count()) > 0) {
         await expect(voteUp).toBeDisabled();
       }
-      if (await voteDown.count() > 0) {
+      if ((await voteDown.count()) > 0) {
         await expect(voteDown).toBeDisabled();
       }
     }
@@ -891,10 +929,10 @@ test.describe('Suggestions Board — Voting Flow', () => {
     if ((await cards.count()) > 0) {
       const voteUp = cards.first().locator('[data-testid^="vote-up"]');
       const voteDown = cards.first().locator('[data-testid^="vote-down"]');
-      if (await voteUp.count() > 0) {
+      if ((await voteUp.count()) > 0) {
         await expect(voteUp).toBeDisabled();
       }
-      if (await voteDown.count() > 0) {
+      if ((await voteDown.count()) > 0) {
         await expect(voteDown).toBeDisabled();
       }
     }
@@ -918,7 +956,7 @@ test.describe('Suggestions Board — Comment Flow', () => {
     const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await cards.count()) > 0) {
       const commentForm = cards.first().locator('[data-testid^="comments-section"]');
-      if (await commentForm.count() > 0) {
+      if ((await commentForm.count()) > 0) {
         await expect(commentForm).toBeVisible();
       }
     }
@@ -930,8 +968,10 @@ test.describe('Suggestions Board — Comment Flow', () => {
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Planned' }));
     const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await cards.count()) > 0) {
-      const readOnlyLabel = cards.first().locator('[data-testid="comments-read-only"], .comments-read-only');
-      if (await readOnlyLabel.count() > 0) {
+      const readOnlyLabel = cards
+        .first()
+        .locator('[data-testid="comments-read-only"], .comments-read-only');
+      if ((await readOnlyLabel.count()) > 0) {
         await expect(readOnlyLabel).toBeVisible();
       }
       const commentForm = cards.first().locator('[data-testid^="comments-section"]');
@@ -942,7 +982,7 @@ test.describe('Suggestions Board — Comment Flow', () => {
   test('submit comment: appears in comment list', async ({ page }) => {
     const commentInput = page.locator('[data-testid^="comment-input"]').first();
     const commentSubmit = page.locator('[data-testid^="comment-submit"]').first();
-    if (await commentInput.count() > 0) {
+    if ((await commentInput.count()) > 0) {
       await commentInput.fill('Great idea!');
       await commentSubmit.click();
       await page.waitForTimeout(500);
@@ -955,7 +995,7 @@ test.describe('Suggestions Board — Comment Flow', () => {
     const commentItems = page.locator('.sg-comment');
     if ((await commentItems.count()) > 0) {
       const authorLabel = commentItems.first().locator('.sg-comment-author');
-      if (await authorLabel.count() > 0) {
+      if ((await authorLabel.count()) > 0) {
         const text = await authorLabel.textContent();
         // Public comments should show "Anonymous" label
         expect(text).toBeDefined();
@@ -982,22 +1022,24 @@ test.describe('Suggestion Submission Edge Cases', () => {
 
   test('submit with exactly 80 char title: succeeds', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       const eightyChars = 'A'.repeat(80);
       await titleInput.fill(eightyChars);
       const value = await titleInput.inputValue();
       expect(value.length).toBe(80);
       // Form should allow submission
       const submitBtn = page.locator('[data-testid="suggest-modal-submit"]');
-      if (await submitBtn.count() > 0) {
+      if ((await submitBtn.count()) > 0) {
         await expect(submitBtn).not.toBeDisabled();
       }
     }
   });
 
-  test('submit with 81 char title: prevented by form (client-side validation)', async ({ page }) => {
+  test('submit with 81 char title: prevented by form (client-side validation)', async ({
+    page,
+  }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       const eightyOneChars = 'A'.repeat(81);
       await titleInput.fill(eightyOneChars);
       const value = await titleInput.inputValue();
@@ -1008,7 +1050,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
 
   test('submit with exactly 5000 char description: succeeds', async ({ page }) => {
     const descInput = page.locator('[data-testid="suggest-desc-input"]');
-    if (await descInput.count() > 0) {
+    if ((await descInput.count()) > 0) {
       const fiveThousandChars = 'B'.repeat(5000);
       await descInput.fill(fiveThousandChars);
       const value = await descInput.inputValue();
@@ -1018,7 +1060,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
 
   test('submit with 5001 char description: prevented by form', async ({ page }) => {
     const descInput = page.locator('[data-testid="suggest-desc-input"]');
-    if (await descInput.count() > 0) {
+    if ((await descInput.count()) > 0) {
       const overLimit = 'B'.repeat(5001);
       await descInput.fill(overLimit);
       const value = await descInput.inputValue();
@@ -1029,7 +1071,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
   test('submit with only whitespace title: form validation error', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     const submitBtn = page.locator('[data-testid="suggest-modal-submit"]');
-    if (await titleInput.count() > 0 && await submitBtn.count() > 0) {
+    if ((await titleInput.count()) > 0 && (await submitBtn.count()) > 0) {
       await titleInput.fill('   ');
       await submitBtn.click();
       const error = page.locator('[data-testid="title-error"], .title-error');
@@ -1039,7 +1081,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
 
   test('submit with emoji in title: succeeds, displayed correctly', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       await titleInput.fill('Add dark mode toggle 🌙');
       const value = await titleInput.inputValue();
       expect(value).toContain('🌙');
@@ -1048,7 +1090,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
 
   test('submit with RTL text (Arabic): layout correct, language tag set', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       await titleInput.fill('إضافة الوضع المظلم');
       const value = await titleInput.inputValue();
       expect(value).toBe('إضافة الوضع المظلم');
@@ -1057,7 +1099,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
 
   test('duplicate detection: no matches shows no "Load more"', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       await titleInput.fill('zzzzuniquezzzznotexist');
       await page.waitForTimeout(500);
       const loadMore = page.locator('[data-testid="duplicate-load-more"]');
@@ -1068,7 +1110,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
   test('duplicate detection: exactly 3 matches shown, no "Load more"', async ({ page }) => {
     // When there are exactly 3 matches, all should show and no load more button
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       await titleInput.fill('Voice');
       await page.waitForTimeout(500);
       const items = page.locator('[data-testid^="duplicate-item"]');
@@ -1080,27 +1122,31 @@ test.describe('Suggestion Submission Edge Cases', () => {
     }
   });
 
-  test('duplicate detection: 4+ matches shows 3 initially, "Load more" appears', async ({ page }) => {
+  test('duplicate detection: 4+ matches shows 3 initially, "Load more" appears', async ({
+    page,
+  }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       await titleInput.fill('Voice');
       await page.waitForTimeout(500);
       const items = page.locator('[data-testid^="duplicate-item"]');
       const loadMore = page.locator('[data-testid="duplicate-load-more"]');
-      if (await loadMore.count() > 0) {
+      if ((await loadMore.count()) > 0) {
         expect(await items.count()).toBe(3);
         await expect(loadMore).toBeVisible();
       }
     }
   });
 
-  test('duplicate detection: click "Yes, this is what I meant" on 2nd page upvotes correct suggestion', async ({ page }) => {
+  test('duplicate detection: click "Yes, this is what I meant" on 2nd page upvotes correct suggestion', async ({
+    page,
+  }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       await titleInput.fill('Voice');
       await page.waitForTimeout(500);
       const loadMore = page.locator('[data-testid="duplicate-load-more"]');
-      if (await loadMore.count() > 0) {
+      if ((await loadMore.count()) > 0) {
         await loadMore.click();
         await page.waitForTimeout(300);
         // Click "Yes" on a result from the second page
@@ -1116,7 +1162,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
 
   test('back button during submission: form state preserved', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       await titleInput.fill('Test suggestion title');
       await page.goBack();
       await page.goForward();
@@ -1129,12 +1175,12 @@ test.describe('Suggestion Submission Edge Cases', () => {
     await page.route('**/api/suggestions', (route) => route.abort());
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     const submitBtn = page.locator('[data-testid="suggest-modal-submit"]');
-    if (await titleInput.count() > 0 && await submitBtn.count() > 0) {
+    if ((await titleInput.count()) > 0 && (await submitBtn.count()) > 0) {
       await titleInput.fill('Test suggestion');
       await submitBtn.click();
       await page.waitForTimeout(1000);
       const errorMsg = page.locator('[data-testid="submit-error"], .submit-error');
-      if (await errorMsg.count() > 0) {
+      if ((await errorMsg.count()) > 0) {
         await expect(errorMsg).toBeVisible();
       }
       // Form should not be cleared
@@ -1145,7 +1191,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
 
   test('double-click submit button: only one submission created', async ({ page }) => {
     const submitBtn = page.locator('[data-testid="suggest-modal-submit"]');
-    if (await submitBtn.count() > 0) {
+    if ((await submitBtn.count()) > 0) {
       await submitBtn.dblclick();
       await page.waitForTimeout(500);
       // Button should be disabled after first click to prevent double submission
@@ -1163,7 +1209,9 @@ test.describe('Voting Edge Cases', () => {
     await page.goto('/roadmap.html');
   });
 
-  test('rapid-fire voting (click up, click down, click up quickly): final state correct', async ({ page }) => {
+  test('rapid-fire voting (click up, click down, click up quickly): final state correct', async ({
+    page,
+  }) => {
     const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
     const upvoteBtn = card.locator('[data-testid^="vote-up"]');
@@ -1176,7 +1224,9 @@ test.describe('Voting Edge Cases', () => {
     await page.waitForTimeout(1000);
 
     // Final state should be upvoted
-    const isUpvoted = await upvoteBtn.evaluate((el) => el.classList.contains('active') || el.getAttribute('aria-pressed') === 'true');
+    const isUpvoted = await upvoteBtn.evaluate(
+      (el) => el.classList.contains('active') || el.getAttribute('aria-pressed') === 'true',
+    );
     // The UI should settle into a consistent state
   });
 
@@ -1197,8 +1247,14 @@ test.describe('Voting Edge Cases', () => {
     // Vote state should be preserved
   });
 
-  test('two browser tabs: vote in one, other tab reflects updated count on refresh', async ({ page, context }) => {
-    await page.locator('[data-testid^="suggestion-card"], .sg-card').first().waitFor({ timeout: 10_000 });
+  test('two browser tabs: vote in one, other tab reflects updated count on refresh', async ({
+    page,
+    context,
+  }) => {
+    await page
+      .locator('[data-testid^="suggestion-card"], .sg-card')
+      .first()
+      .waitFor({ timeout: 10_000 });
     const voteCount = page.locator('[data-testid^="vote-score"], .sg-vote-score').first();
     const initialCount = await voteCount.textContent();
 
@@ -1206,7 +1262,10 @@ test.describe('Voting Edge Cases', () => {
     const page2 = await context.newPage();
     await setupSuggestionsMocks(page2);
     await page2.goto('/roadmap.html');
-    await page2.locator('[data-testid^="suggestion-card"], .sg-card').first().waitFor({ timeout: 10_000 });
+    await page2
+      .locator('[data-testid^="suggestion-card"], .sg-card')
+      .first()
+      .waitFor({ timeout: 10_000 });
 
     // Vote in first tab
     const upvoteBtn = page.locator('[data-testid^="vote-up"]').first();
@@ -1215,8 +1274,14 @@ test.describe('Voting Edge Cases', () => {
 
     // Refresh second tab and check count
     await page2.reload();
-    await page2.locator('[data-testid^="suggestion-card"], .sg-card').first().waitFor({ timeout: 10_000 });
-    const updatedCount = await page2.locator('[data-testid^="vote-score"], .sg-vote-score').first().textContent();
+    await page2
+      .locator('[data-testid^="suggestion-card"], .sg-card')
+      .first()
+      .waitFor({ timeout: 10_000 });
+    const updatedCount = await page2
+      .locator('[data-testid^="vote-score"], .sg-vote-score')
+      .first()
+      .textContent();
     // Count should reflect the vote from the first tab
 
     await page2.close();
@@ -1240,7 +1305,7 @@ test.describe('Voting Edge Cases', () => {
     await upvoteBtn.click();
     await page.waitForTimeout(300);
     const reasonModal = page.locator('[data-testid="vote-reason-modal"], .vote-reason-modal');
-    if (await reasonModal.count() > 0) {
+    if ((await reasonModal.count()) > 0) {
       const submitReason = reasonModal.locator('[data-testid="reason-submit"], .reason-submit');
       // Submit with empty reason should be accepted
       await submitReason.click();
@@ -1255,7 +1320,7 @@ test.describe('Voting Edge Cases', () => {
     await upvoteBtn.click();
     await page.waitForTimeout(300);
     const reasonModal = page.locator('[data-testid="vote-reason-modal"], .vote-reason-modal');
-    if (await reasonModal.count() > 0) {
+    if ((await reasonModal.count()) > 0) {
       const reasonInput = reasonModal.locator('[data-testid="reason-input"], .reason-input');
       await reasonInput.fill('A'.repeat(500));
       const value = await reasonInput.inputValue();
@@ -1263,12 +1328,16 @@ test.describe('Voting Edge Cases', () => {
     }
   });
 
-  test('toggle vote reason visibility after submission: not possible (immutable)', async ({ page }) => {
+  test('toggle vote reason visibility after submission: not possible (immutable)', async ({
+    page,
+  }) => {
     // Once a vote reason is submitted with a visibility choice, it cannot be changed
     const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
     // After voting, the visibility toggle should not be available on the existing reason
-    const changeVisibility = card.locator('[data-testid="change-reason-visibility"], .change-reason-visibility');
+    const changeVisibility = card.locator(
+      '[data-testid="change-reason-visibility"], .change-reason-visibility',
+    );
     expect(await changeVisibility.count()).toBe(0);
   });
 });
@@ -1329,7 +1398,9 @@ test.describe('Mobile-Specific Interactions', () => {
   });
 
   test('touch: swipe on suggestion list does not interfere with scroll', async ({ page }) => {
-    const suggestionsSection = page.locator('[data-testid="suggestions-section"], .suggestions-section, #suggestions');
+    const suggestionsSection = page.locator(
+      '[data-testid="suggestions-section"], .suggestions-section, #suggestions',
+    );
     await suggestionsSection.waitFor({ timeout: 10_000 });
     // Scroll should work naturally on the suggestions list
     const initialScroll = await page.evaluate(() => window.scrollY);
@@ -1341,15 +1412,17 @@ test.describe('Mobile-Specific Interactions', () => {
 
   test('touch: pinch-to-zoom on ring chart behaves correctly', async ({ page }) => {
     const chart = page.locator('[data-testid="ring-chart"], .ring-chart');
-    if (await chart.count() > 0) {
+    if ((await chart.count()) > 0) {
       await expect(chart).toBeVisible({ timeout: 10_000 });
       // Chart should handle zoom gesture without breaking layout
     }
   });
 
-  test('soft keyboard: suggestion form scrolls to keep input visible when keyboard opens', async ({ page }) => {
+  test('soft keyboard: suggestion form scrolls to keep input visible when keyboard opens', async ({
+    page,
+  }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       await titleInput.focus();
       await page.waitForTimeout(500);
       // Input should be visible within the viewport
@@ -1360,7 +1433,7 @@ test.describe('Mobile-Specific Interactions', () => {
 
   test('soft keyboard: description field does not get hidden behind keyboard', async ({ page }) => {
     const descInput = page.locator('[data-testid="suggest-desc-input"]');
-    if (await descInput.count() > 0) {
+    if ((await descInput.count()) > 0) {
       await descInput.focus();
       await page.waitForTimeout(500);
       const box = await descInput.boundingBox();
@@ -1387,7 +1460,9 @@ test.describe('Mobile-Specific Interactions', () => {
     }
   });
 
-  test('orientation: portrait to landscape transition preserves scroll position', async ({ page }) => {
+  test('orientation: portrait to landscape transition preserves scroll position', async ({
+    page,
+  }) => {
     // Scroll down in portrait
     await page.evaluate(() => window.scrollTo(0, 500));
     await page.waitForTimeout(300);
@@ -1419,7 +1494,7 @@ test.describe('Suggestion Card UI States', () => {
     await expect(card).toBeVisible();
     // No active/highlighted state on vote arrows
     const upvote = card.locator('[data-testid^="vote-up"]');
-    if (await upvote.count() > 0) {
+    if ((await upvote.count()) > 0) {
       const isActive = await upvote.evaluate((el) => el.classList.contains('active'));
       expect(isActive).toBe(false);
     }
@@ -1438,10 +1513,12 @@ test.describe('Suggestion Card UI States', () => {
     const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
     const upvoteBtn = card.locator('[data-testid^="vote-up"]');
-    if (await upvoteBtn.count() > 0) {
+    if ((await upvoteBtn.count()) > 0) {
       // When user has upvoted, the upvote arrow should have an active class
       const ariaPressed = await upvoteBtn.getAttribute('aria-pressed');
-      const isActive = await upvoteBtn.evaluate((el) => el.classList.contains('active') || el.classList.contains('upvoted'));
+      const isActive = await upvoteBtn.evaluate(
+        (el) => el.classList.contains('active') || el.classList.contains('upvoted'),
+      );
       // Verify the state can be detected
     }
   });
@@ -1450,8 +1527,10 @@ test.describe('Suggestion Card UI States', () => {
     const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
     const downvoteBtn = card.locator('[data-testid^="vote-down"]');
-    if (await downvoteBtn.count() > 0) {
-      const isActive = await downvoteBtn.evaluate((el) => el.classList.contains('active') || el.classList.contains('downvoted'));
+    if ((await downvoteBtn.count()) > 0) {
+      const isActive = await downvoteBtn.evaluate(
+        (el) => el.classList.contains('active') || el.classList.contains('downvoted'),
+      );
       // Verify the state can be detected
     }
   });
@@ -1459,7 +1538,7 @@ test.describe('Suggestion Card UI States', () => {
   test('card: user is the submitter (shows "Your suggestion" badge)', async ({ page }) => {
     const submitterBadge = page.locator('[data-testid="submitter-badge"], .submitter-badge');
     // When logged in and viewing own suggestion, badge should appear
-    if (await submitterBadge.count() > 0) {
+    if ((await submitterBadge.count()) > 0) {
       await expect(submitterBadge.first()).toContainText(/Your suggestion/i);
     }
   });
@@ -1475,7 +1554,9 @@ test.describe('Suggestion Card UI States', () => {
     }
   });
 
-  test('card: planned status (accent border, "Planned" badge, vote arrows hidden)', async ({ page }) => {
+  test('card: planned status (accent border, "Planned" badge, vote arrows hidden)', async ({
+    page,
+  }) => {
     const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Planned' }));
@@ -1485,21 +1566,27 @@ test.describe('Suggestion Card UI States', () => {
       const badge = card.locator('[data-testid^="suggestion-status"], .sg-badge');
       await expect(badge).toContainText(/Planned/i);
       // Accent border
-      const border = await card.evaluate((el) => getComputedStyle(el).borderColor || getComputedStyle(el).borderLeftColor);
+      const border = await card.evaluate(
+        (el) => getComputedStyle(el).borderColor || getComputedStyle(el).borderLeftColor,
+      );
       expect(border).toBeDefined();
       // Vote arrows should be hidden
       const voteUp = card.locator('[data-testid^="vote-up"]');
-      if (await voteUp.count() > 0) {
+      if ((await voteUp.count()) > 0) {
         const isHidden = await voteUp.evaluate((el) => {
           const style = getComputedStyle(el);
-          return style.display === 'none' || style.visibility === 'hidden' || el.hasAttribute('disabled');
+          return (
+            style.display === 'none' || style.visibility === 'hidden' || el.hasAttribute('disabled')
+          );
         });
         expect(isHidden).toBe(true);
       }
     }
   });
 
-  test('card: completed status ("Shipped!" badge, vote arrows hidden, green accent)', async ({ page }) => {
+  test('card: completed status ("Shipped!" badge, vote arrows hidden, green accent)', async ({
+    page,
+  }) => {
     const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Completed' }));
@@ -1517,17 +1604,21 @@ test.describe('Suggestion Card UI States', () => {
       expect(hasGreenAccent).toBeDefined();
       // Vote arrows hidden
       const voteUp = card.locator('[data-testid^="vote-up"]');
-      if (await voteUp.count() > 0) {
+      if ((await voteUp.count()) > 0) {
         const isHidden = await voteUp.evaluate((el) => {
           const style = getComputedStyle(el);
-          return style.display === 'none' || style.visibility === 'hidden' || el.hasAttribute('disabled');
+          return (
+            style.display === 'none' || style.visibility === 'hidden' || el.hasAttribute('disabled')
+          );
         });
         expect(isHidden).toBe(true);
       }
     }
   });
 
-  test('card: rejected status (dimmed, decline reason expanded, vote arrows hidden)', async ({ page }) => {
+  test('card: rejected status (dimmed, decline reason expanded, vote arrows hidden)', async ({
+    page,
+  }) => {
     const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Rejected' }));
@@ -1540,15 +1631,17 @@ test.describe('Suggestion Card UI States', () => {
       expect(opacity).toBeDefined();
       // Decline reason should be expanded if present
       const declineReason = card.locator('[data-testid="decline-reason"], .decline-reason');
-      if (await declineReason.count() > 0) {
+      if ((await declineReason.count()) > 0) {
         await expect(declineReason).toBeVisible();
       }
       // Vote arrows hidden
       const voteUp = card.locator('[data-testid^="vote-up"]');
-      if (await voteUp.count() > 0) {
+      if ((await voteUp.count()) > 0) {
         const isHidden = await voteUp.evaluate((el) => {
           const style = getComputedStyle(el);
-          return style.display === 'none' || style.visibility === 'hidden' || el.hasAttribute('disabled');
+          return (
+            style.display === 'none' || style.visibility === 'hidden' || el.hasAttribute('disabled')
+          );
         });
         expect(isHidden).toBe(true);
       }
@@ -1557,15 +1650,19 @@ test.describe('Suggestion Card UI States', () => {
 
   test('card: merged/duplicate (hidden from public view)', async ({ page }) => {
     // Merged/duplicate suggestions should not be visible to the public
-    const mergedCards = page.locator('.sg-card[data-status="merged"], [data-testid^="suggestion-card"][data-status="merged"]');
+    const mergedCards = page.locator(
+      '.sg-card[data-status="merged"], [data-testid^="suggestion-card"][data-status="merged"]',
+    );
     expect(await mergedCards.count()).toBe(0);
   });
 
-  test('card: creator\'s upvote shown in count but creator sees "Your vote" indicator', async ({ page }) => {
+  test('card: creator\'s upvote shown in count but creator sees "Your vote" indicator', async ({
+    page,
+  }) => {
     // When logged in as the creator, should see "Your vote" indicator
     const yourVote = page.locator('[data-testid="your-vote-indicator"], .your-vote-indicator');
     // This is only visible when logged in as the suggestion creator
-    if (await yourVote.count() > 0) {
+    if ((await yourVote.count()) > 0) {
       await expect(yourVote.first()).toBeVisible();
     }
   });
@@ -1574,9 +1671,9 @@ test.describe('Suggestion Card UI States', () => {
     const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
     const desc = card.locator('[data-testid^="suggestion-desc"], .sg-card-desc');
-    if (await desc.count() > 0) {
+    if ((await desc.count()) > 0) {
       const expandBtn = card.locator('[data-testid^="suggestion-expand"], .sg-expand-btn');
-      if (await expandBtn.count() > 0) {
+      if ((await expandBtn.count()) > 0) {
         const beforeHeight = (await desc.boundingBox())?.height || 0;
         await expandBtn.click();
         await page.waitForTimeout(300);
@@ -1589,9 +1686,12 @@ test.describe('Suggestion Card UI States', () => {
 
   test('card: tags overflow wraps to next line (no horizontal scroll)', async ({ page }) => {
     const tags = page.locator('[data-testid^="suggestion-tag"], .sg-tag').first();
-    if (await tags.count() > 0) {
+    if ((await tags.count()) > 0) {
       const box = await tags.boundingBox();
-      const cardBox = await page.locator('[data-testid^="suggestion-card"], .sg-card').first().boundingBox();
+      const cardBox = await page
+        .locator('[data-testid^="suggestion-card"], .sg-card')
+        .first()
+        .boundingBox();
       if (box && cardBox) {
         // Tags should not exceed the card width
         expect(box.width).toBeLessThanOrEqual(cardBox.width + 5);
@@ -1668,7 +1768,7 @@ test.describe('Filter & Search Combination Edge Cases', () => {
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Accepted' }));
 
     const clearBtn = page.locator('[data-testid="clear-filters"], .clear-filters');
-    if (await clearBtn.count() > 0) {
+    if ((await clearBtn.count()) > 0) {
       await clearBtn.click();
       await page.waitForTimeout(500);
       // All filters should be reset
@@ -1678,19 +1778,23 @@ test.describe('Filter & Search Combination Edge Cases', () => {
     }
   });
 
-  test('filter produces 0 results: "No suggestions match your filters" message with clear button', async ({ page }) => {
+  test('filter produces 0 results: "No suggestions match your filters" message with clear button', async ({
+    page,
+  }) => {
     const searchInput = page.locator('[data-testid="suggestions-search-input"]');
     await searchInput.waitFor({ timeout: 10_000 });
     await searchInput.fill('xxxxxxxxxnonexistentsuggestion');
     await page.waitForTimeout(500);
 
-    const emptyState = page.locator('[data-testid="filter-empty"], [data-testid="suggestions-empty"]');
+    const emptyState = page.locator(
+      '[data-testid="filter-empty"], [data-testid="suggestions-empty"]',
+    );
     await expect(emptyState).toBeVisible({ timeout: 5_000 });
     const text = await emptyState.textContent();
     expect(text!.toLowerCase()).toMatch(/no suggestions|no results/);
 
     const clearBtn = emptyState.locator('[data-testid="clear-filters"], .clear-filters, button');
-    if (await clearBtn.count() > 0) {
+    if ((await clearBtn.count()) > 0) {
       await expect(clearBtn).toBeVisible();
     }
   });
@@ -1732,7 +1836,9 @@ test.describe('Filter & Search Combination Edge Cases', () => {
     // Results should be filtered (may be fewer or same, but search was executed)
   });
 
-  test('search debounce: typing fast does not fire request per keystroke (300ms debounce)', async ({ page }) => {
+  test('search debounce: typing fast does not fire request per keystroke (300ms debounce)', async ({
+    page,
+  }) => {
     const searchInput = page.locator('[data-testid="suggestions-search-input"]');
     await searchInput.waitFor({ timeout: 10_000 });
 
@@ -1770,7 +1876,7 @@ test.describe('Filter & Search Combination Edge Cases', () => {
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Accepted' }));
 
     const filterBadge = page.locator('[data-testid="filter-badge"], .filter-badge');
-    if (await filterBadge.count() > 0) {
+    if ((await filterBadge.count()) > 0) {
       const text = await filterBadge.textContent();
       // Should show count of active filters (at least 1)
       expect(parseInt(text || '0')).toBeGreaterThanOrEqual(1);
@@ -1790,14 +1896,15 @@ test.describe('Suggestion Description Display', () => {
 
   test('plain text with newlines: rendered with line breaks', async ({ page }) => {
     const desc = page.locator('[data-testid^="suggestion-desc"], .sg-card-desc').first();
-    if (await desc.count() > 0) {
+    if ((await desc.count()) > 0) {
       await desc.waitFor({ timeout: 10_000 });
       // Description should render newlines as line breaks
       const html = await desc.innerHTML();
       // Newlines should be rendered as <br> or within block-level elements
       // Or white-space: pre-wrap/pre-line should be set
       const whiteSpace = await desc.evaluate((el) => getComputedStyle(el).whiteSpace);
-      const hasBreaks = html.includes('<br') || ['pre-wrap', 'pre-line', 'pre'].includes(whiteSpace);
+      const hasBreaks =
+        html.includes('<br') || ['pre-wrap', 'pre-line', 'pre'].includes(whiteSpace);
       expect(hasBreaks || true).toBe(true); // Layout preserves newlines
     }
   });
@@ -1807,7 +1914,7 @@ test.describe('Suggestion Description Display', () => {
     const count = await descriptions.count();
     for (let i = 0; i < Math.min(count, 10); i++) {
       const links = descriptions.nth(i).locator('a[href]');
-      if (await links.count() > 0) {
+      if ((await links.count()) > 0) {
         // URLs in description should be rendered as clickable links
         const href = await links.first().getAttribute('href');
         expect(href).toMatch(/^https?:\/\//);
@@ -1818,8 +1925,8 @@ test.describe('Suggestion Description Display', () => {
 
   test('plain text with very long URL: truncated in display', async ({ page }) => {
     const links = page.locator('[data-testid^="suggestion-desc"] a, .sg-card-desc a');
-    if (await links.count() > 0) {
-      for (let i = 0; i < await links.count(); i++) {
+    if ((await links.count()) > 0) {
+      for (let i = 0; i < (await links.count()); i++) {
         const linkText = await links.nth(i).textContent();
         // Very long URLs should be truncated in display text
         if (linkText && linkText.length > 100) {
@@ -1833,16 +1940,23 @@ test.describe('Suggestion Description Display', () => {
 
   test('description with 5000 chars: scrollable within card', async ({ page }) => {
     const descriptions = page.locator('[data-testid^="suggestion-desc"], .sg-card-desc');
-    if (await descriptions.count() > 0) {
-      for (let i = 0; i < await descriptions.count(); i++) {
+    if ((await descriptions.count()) > 0) {
+      for (let i = 0; i < (await descriptions.count()); i++) {
         const desc = descriptions.nth(i);
         const text = await desc.textContent();
         if (text && text.length > 1000) {
           // Long descriptions should be scrollable or truncated with expand option
-          const overflow = await desc.evaluate((el) => getComputedStyle(el).overflow || getComputedStyle(el).overflowY);
+          const overflow = await desc.evaluate(
+            (el) => getComputedStyle(el).overflow || getComputedStyle(el).overflowY,
+          );
           const maxHeight = await desc.evaluate((el) => getComputedStyle(el).maxHeight);
           // Should have some overflow handling
-          expect(overflow === 'auto' || overflow === 'scroll' || overflow === 'hidden' || maxHeight !== 'none').toBe(true);
+          expect(
+            overflow === 'auto' ||
+              overflow === 'scroll' ||
+              overflow === 'hidden' ||
+              maxHeight !== 'none',
+          ).toBe(true);
           break;
         }
       }
@@ -1852,18 +1966,23 @@ test.describe('Suggestion Description Display', () => {
   test('description in RTL language: text aligned right', async ({ page }) => {
     // Filter for Arabic language suggestions
     const langFilter = page.locator('[data-testid="filter-lang"]');
-    if (await langFilter.count() > 0) {
+    if ((await langFilter.count()) > 0) {
       const options = langFilter.locator('option');
-      for (let i = 0; i < await options.count(); i++) {
+      for (let i = 0; i < (await options.count()); i++) {
         const val = await options.nth(i).getAttribute('value');
-        if (val === 'ar' || (await options.nth(i).textContent())?.toLowerCase().includes('arabic')) {
+        if (
+          val === 'ar' ||
+          (await options.nth(i).textContent())?.toLowerCase().includes('arabic')
+        ) {
           await withSuggestionsFetch(page, () => langFilter.selectOption(val!));
           const desc = page.locator('[data-testid^="suggestion-desc"], .sg-card-desc').first();
-          if (await desc.count() > 0) {
+          if ((await desc.count()) > 0) {
             const direction = await desc.evaluate((el) => getComputedStyle(el).direction);
             const textAlign = await desc.evaluate((el) => getComputedStyle(el).textAlign);
             // RTL text should be right-aligned
-            expect(direction === 'rtl' || textAlign === 'right' || textAlign === 'start').toBe(true);
+            expect(direction === 'rtl' || textAlign === 'right' || textAlign === 'start').toBe(
+              true,
+            );
           }
           break;
         }
@@ -1888,17 +2007,21 @@ test.describe('Empty & Extreme States', () => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ phases: [], stats: { done: 0, inProgress: 0, planned: 0, total: 0, percentage: 0 }, lastUpdated: '2026-04-01' }),
-      })
+        body: JSON.stringify({
+          phases: [],
+          stats: { done: 0, inProgress: 0, planned: 0, total: 0, percentage: 0 },
+          lastUpdated: '2026-04-01',
+        }),
+      }),
     );
     await page.goto('/roadmap.html');
     await boardSettled(page);
     const chart = page.locator('[data-testid="ring-chart"], .ring-chart');
-    if (await chart.count() > 0) {
+    if ((await chart.count()) > 0) {
       // Chart should show 0%
     }
     const emptyMsg = page.locator('[data-testid="no-features"], .no-features');
-    if (await emptyMsg.count() > 0) {
+    if ((await emptyMsg.count()) > 0) {
       await expect(emptyMsg).toContainText(/No features/i);
     }
   });
@@ -1913,12 +2036,12 @@ test.describe('Empty & Extreme States', () => {
           stats: { done: 1, inProgress: 0, planned: 0, total: 1, percentage: 100 },
           lastUpdated: '2026-04-01',
         }),
-      })
+      }),
     );
     await page.goto('/roadmap.html');
     await boardSettled(page);
     const chart = page.locator('[data-testid="ring-chart"], .ring-chart');
-    if (await chart.count() > 0) {
+    if ((await chart.count()) > 0) {
       await expect(chart).toBeVisible();
     }
   });
@@ -1933,12 +2056,12 @@ test.describe('Empty & Extreme States', () => {
           stats: { done: 1, inProgress: 0, planned: 0, total: 1, percentage: 100 },
           lastUpdated: '2026-04-01',
         }),
-      })
+      }),
     );
     await page.goto('/roadmap.html');
     await boardSettled(page);
     const phases = page.locator('.phase-card, [data-testid="phase-card"]');
-    if (await phases.count() > 0) {
+    if ((await phases.count()) > 0) {
       expect(await phases.count()).toBe(1);
     }
   });
@@ -1950,12 +2073,12 @@ test.describe('Empty & Extreme States', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ suggestions: [], total: 0 }),
-      })
+      }),
     );
     await page.goto('/roadmap.html');
     await boardSettled(page);
     const emptyState = page.locator('[data-testid="suggestions-empty"]');
-    if (await emptyState.count() > 0) {
+    if ((await emptyState.count()) > 0) {
       await expect(emptyState).toBeVisible();
       const text = await emptyState.textContent();
       expect(text!.toLowerCase()).toMatch(/no suggestions/);
@@ -1968,24 +2091,26 @@ test.describe('Empty & Extreme States', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          suggestions: [{
-            id: 'sug-1',
-            title: 'Single Suggestion',
-            description: 'This is the only suggestion.',
-            status: 'accepted',
-            score: 5,
-            tags: ['feature'],
-            language: 'en',
-            createdAt: new Date().toISOString(),
-          }],
+          suggestions: [
+            {
+              id: 'sug-1',
+              title: 'Single Suggestion',
+              description: 'This is the only suggestion.',
+              status: 'accepted',
+              score: 5,
+              tags: ['feature'],
+              language: 'en',
+              createdAt: new Date().toISOString(),
+            },
+          ],
           total: 1,
         }),
-      })
+      }),
     );
     await page.goto('/roadmap.html');
     await boardSettled(page);
     const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
-    if (await cards.count() > 0) {
+    if ((await cards.count()) > 0) {
       expect(await cards.count()).toBe(1);
       const title = cards.first().locator('[data-testid^="suggestion-title"], .sg-card-title');
       await expect(title).toContainText('Single Suggestion');
@@ -1995,11 +2120,14 @@ test.describe('Empty & Extreme States', () => {
   test('suggestions 1000 items: pagination, loads < 3s', async ({ page }) => {
     const start = Date.now();
     await page.goto('/roadmap.html');
-    await page.locator('[data-testid^="suggestion-card"], .sg-card').first().waitFor({ timeout: 10_000 });
+    await page
+      .locator('[data-testid^="suggestion-card"], .sg-card')
+      .first()
+      .waitFor({ timeout: 10_000 });
     const loadTime = Date.now() - start;
     // With 1000 suggestions, pagination should exist
     const pagination = page.locator('[data-testid="suggestions-pagination"]');
-    if (await pagination.count() > 0) {
+    if ((await pagination.count()) > 0) {
       await expect(pagination).toBeVisible();
     }
     // Load time should be under 3 seconds
@@ -2011,7 +2139,7 @@ test.describe('Empty & Extreme States', () => {
     const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await cards.count()) > 0) {
       const voteCounts = page.locator('[data-testid^="vote-score"], .sg-vote-score');
-      for (let i = 0; i < await voteCounts.count(); i++) {
+      for (let i = 0; i < (await voteCounts.count()); i++) {
         const text = await voteCounts.nth(i).textContent();
         const score = parseInt(text || '0');
         // Minimum score with auto-upvote is 1
@@ -2038,7 +2166,7 @@ test.describe('Empty & Extreme States', () => {
     const voteCounts = page.locator('[data-testid^="vote-score"], .sg-vote-score');
     if ((await voteCounts.count()) > 0) {
       // The format should support negative numbers
-      for (let i = 0; i < await voteCounts.count(); i++) {
+      for (let i = 0; i < (await voteCounts.count()); i++) {
         const text = await voteCounts.nth(i).textContent();
         expect(text).toMatch(/^-?\d+$/);
       }
@@ -2049,9 +2177,9 @@ test.describe('Empty & Extreme States', () => {
     const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     if ((await cards.count()) > 0) {
       const commentSection = cards.first().locator('[data-testid^="comments-section"]');
-      if (await commentSection.count() > 0) {
+      if ((await commentSection.count()) > 0) {
         const noComments = commentSection.locator('[data-testid="no-comments"], .no-comments');
-        if (await noComments.count() > 0) {
+        if ((await noComments.count()) > 0) {
           await expect(noComments).toContainText(/No comments/i);
         }
       }
@@ -2059,27 +2187,31 @@ test.describe('Empty & Extreme States', () => {
   });
 
   test('comments 500: paginated correctly', async ({ page }) => {
-    const commentPagination = page.locator('[data-testid="comment-pagination"], .comment-pagination');
-    if (await commentPagination.count() > 0) {
+    const commentPagination = page.locator(
+      '[data-testid="comment-pagination"], .comment-pagination',
+    );
+    if ((await commentPagination.count()) > 0) {
       await expect(commentPagination).toBeVisible();
     }
   });
 
   test('watch list 0 items: "Not watching anything"', async ({ page }) => {
     const watchList = page.locator('[data-testid="watch-list"], .watch-list');
-    if (await watchList.count() > 0) {
+    if ((await watchList.count()) > 0) {
       const emptyWatch = watchList.locator('[data-testid="watch-empty"], .watch-empty');
-      if (await emptyWatch.count() > 0) {
+      if ((await emptyWatch.count()) > 0) {
         await expect(emptyWatch).toContainText(/Not watching/i);
       }
     }
   });
 
   test('notification inbox 0: "All caught up!"', async ({ page }) => {
-    const notifDropdown = page.locator('[data-testid="notification-dropdown"], .notification-dropdown');
-    if (await notifDropdown.count() > 0) {
+    const notifDropdown = page.locator(
+      '[data-testid="notification-dropdown"], .notification-dropdown',
+    );
+    if ((await notifDropdown.count()) > 0) {
       const emptyNotif = notifDropdown.locator('[data-testid="notif-empty"], .notif-empty');
-      if (await emptyNotif.count() > 0) {
+      if ((await emptyNotif.count()) > 0) {
         await expect(emptyNotif).toContainText(/caught up/i);
       }
     }
@@ -2155,7 +2287,10 @@ test.describe('URL & Navigation Edge Cases', () => {
 
   test('back button after voting: state preserved', async ({ page }) => {
     await page.goto('/roadmap.html');
-    await page.locator('[data-testid^="suggestion-card"], .sg-card').first().waitFor({ timeout: 10_000 });
+    await page
+      .locator('[data-testid^="suggestion-card"], .sg-card')
+      .first()
+      .waitFor({ timeout: 10_000 });
     const upvoteBtn = page.locator('[data-testid^="vote-up"]').first();
     await upvoteBtn.click();
     await page.waitForTimeout(300);
@@ -2193,13 +2328,13 @@ test.describe('URL & Navigation Edge Cases', () => {
   test('refresh mid-submission: form cleared, no duplicate', async ({ page }) => {
     await page.goto('/roadmap.html');
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if (await titleInput.count() > 0) {
+    if ((await titleInput.count()) > 0) {
       await titleInput.fill('Draft suggestion');
       await page.reload();
       await boardSettled(page);
       // After refresh, form should be cleared (no stale draft)
       const newTitleInput = page.locator('[data-testid="suggest-title-input"]');
-      if (await newTitleInput.count() > 0) {
+      if ((await newTitleInput.count()) > 0) {
         const value = await newTitleInput.inputValue();
         expect(value).toBe('');
       }
@@ -2277,7 +2412,9 @@ test.describe('Suggestions Board — Race-window auth (W1 follow-up)', () => {
     await expect(loginModal).toHaveCount(0, { timeout: 1500 });
   });
 
-  test('vote click when fully authenticated (profile is an object) opens NO login modal', async ({ page }) => {
+  test('vote click when fully authenticated (profile is an object) opens NO login modal', async ({
+    page,
+  }) => {
     // Preserved behavior: the non-race "happy path". Pins the
     // object-profile branch of `hasValidAccount` so a future inversion of
     // the comparison (`auth.profile === false` instead of `!== false`)
@@ -2300,7 +2437,9 @@ test.describe('Suggestions Board — Race-window auth (W1 follow-up)', () => {
     await expect(loginModal).toHaveCount(0, { timeout: 1500 });
   });
 
-  test('vote click when profile is explicitly false (no ShyTalk account) STILL opens login modal', async ({ page }) => {
+  test('vote click when profile is explicitly false (no ShyTalk account) STILL opens login modal', async ({
+    page,
+  }) => {
     // Negative-pin: `profile === false` means the user has a Firebase
     // identity but no corresponding ShyTalk account — the gate MUST close
     // to route them to sign-up. Without this asymmetry, a future
@@ -2325,7 +2464,9 @@ test.describe('Suggestions Board — Race-window auth (W1 follow-up)', () => {
     await expect(loginModal).toBeVisible({ timeout: 3_000 });
   });
 
-  test('vote click when signed out (currentUser null) STILL opens login modal', async ({ page }) => {
+  test('vote click when signed out (currentUser null) STILL opens login modal', async ({
+    page,
+  }) => {
     // Negative-pin: the `getUser()` half of the combined gate. Profile
     // contract aside, null currentUser means truly signed out and the
     // requireAuth short-circuit MUST fire regardless of profile state.
@@ -2343,7 +2484,9 @@ test.describe('Suggestions Board — Race-window auth (W1 follow-up)', () => {
     await expect(loginModal).toBeVisible({ timeout: 3_000 });
   });
 
-  test('source-level: hasValidAccount uses `profile !== false`, not a truthy check', async ({ page }) => {
+  test('source-level: hasValidAccount uses `profile !== false`, not a truthy check', async ({
+    page,
+  }) => {
     // Pins the fix at source level so a future "cleanup" that reverts to
     // `!!(auth && auth.profile)` is rejected here. Mirrors source-pin
     // tests in portal-auth.spec.ts (PR #654) and roadmap-auth.spec.ts
@@ -2357,9 +2500,13 @@ test.describe('Suggestions Board — Race-window auth (W1 follow-up)', () => {
     });
     // Positive pin: the new comparison must appear inside the
     // hasValidAccount function body.
-    expect(source).toMatch(/function\s+hasValidAccount\s*\(\s*\)\s*\{[\s\S]*?auth\.profile\s*!==\s*false[\s\S]*?\}/);
+    expect(source).toMatch(
+      /function\s+hasValidAccount\s*\(\s*\)\s*\{[\s\S]*?auth\.profile\s*!==\s*false[\s\S]*?\}/,
+    );
     // Negative pin: the old truthy-check anti-pattern must NOT be
     // present anywhere in the file (catches partial reverts too).
-    expect(source).not.toMatch(/return\s+!!\(\s*window\.shytalkAuth\s*&&\s*window\.shytalkAuth\.profile\s*\)\s*;/);
+    expect(source).not.toMatch(
+      /return\s+!!\(\s*window\.shytalkAuth\s*&&\s*window\.shytalkAuth\.profile\s*\)\s*;/,
+    );
   });
 });

@@ -60,7 +60,9 @@ test.describe('Admin Maintenance Tab', () => {
 
     // Verify the device binding exists first
     const deviceId = `e2e-${testData.prefix}-device`;
-    const devicesBefore = await testData.api.get(`/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=5&offset=0`);
+    const devicesBefore = await testData.api.get(
+      `/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=5&offset=0`,
+    );
     const hasBefore = (devicesBefore.devices || []).some((d: any) => d.id === deviceId);
 
     if (hasBefore) {
@@ -68,7 +70,9 @@ test.describe('Admin Maintenance Tab', () => {
       await testData.api.post(`/api/cleanup/device-binding/${uniqueId}`);
 
       // API verify: device should be removed
-      const devicesAfter = await testData.api.get(`/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=5&offset=0`);
+      const devicesAfter = await testData.api.get(
+        `/api/admin/devices?q=${encodeURIComponent(deviceId)}&limit=5&offset=0`,
+      );
       const hasAfter = (devicesAfter.devices || []).some((d: any) => d.id === deviceId);
       expect(hasAfter).toBe(false);
 

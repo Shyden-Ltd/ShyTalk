@@ -5,16 +5,16 @@ import { Page } from '@playwright/test';
 /** Wait for the appeals list to finish loading. */
 async function waitForAppealsLoaded(page: Page): Promise<void> {
   // Wait for either appeal cards or the empty/no-appeals message
-  await page.waitForFunction(
-    () => {
-      const list = document.getElementById('appeals-list');
-      if (!list) return false;
-      // Either we have appeal cards, or a "No appeals" message
-      return list.querySelector('.appeal-card') !== null ||
-        list.textContent!.includes('No appeals') ||
-        list.textContent!.includes('Failed');
-    },
-  );
+  await page.waitForFunction(() => {
+    const list = document.getElementById('appeals-list');
+    if (!list) return false;
+    // Either we have appeal cards, or a "No appeals" message
+    return (
+      list.querySelector('.appeal-card') !== null ||
+      list.textContent!.includes('No appeals') ||
+      list.textContent!.includes('Failed')
+    );
+  });
 }
 
 /** Click a filter button (Pending, Approved, Denied). */
@@ -28,7 +28,7 @@ async function filterAppeals(page: Page, status: 'pending' | 'approved' | 'denie
 /** Get all appeals via API with a status filter. */
 async function getAppealsViaApi(testData: TestData, status: string): Promise<any[]> {
   const raw = await testData.api.get(`/api/appeals?status=${status}`);
-  return Array.isArray(raw) ? raw : (raw.appeals || []);
+  return Array.isArray(raw) ? raw : raw.appeals || [];
 }
 
 /** Re-seed appeal: suspend user, enable canAppeal, create a new appeal. */
@@ -104,7 +104,10 @@ test.describe('Admin Appeals', () => {
   });
 
   // ── Test 1: Seeded appeal appears in pending list — API verify ──
-  test('seeded appeal appears in pending list with API verification', async ({ page, testData }) => {
+  test('seeded appeal appears in pending list with API verification', async ({
+    page,
+    testData,
+  }) => {
     // Filter to pending (default, but be explicit)
     await filterAppeals(page, 'pending');
 
@@ -119,9 +122,10 @@ test.describe('Admin Appeals', () => {
     // API verification
     const appeals = await getAppealsViaApi(testData, 'pending');
     expect(appeals.length).toBeGreaterThanOrEqual(1);
-    const seeded = appeals.find((a: any) =>
-      a.appealText?.includes('I did not do this') ||
-      String(a.userUniqueId) === String(testData.user.uniqueId),
+    const seeded = appeals.find(
+      (a: any) =>
+        a.appealText?.includes('I did not do this') ||
+        String(a.userUniqueId) === String(testData.user.uniqueId),
     );
     expect(seeded).toBeTruthy();
   });
@@ -240,7 +244,10 @@ test.describe('Admin Appeals', () => {
   });
 
   // ── Test 6: User profile preview — avatar, name, uniqueId in card ──
-  test('appeal card shows user profile preview with name and uniqueId', async ({ page, testData }) => {
+  test('appeal card shows user profile preview with name and uniqueId', async ({
+    page,
+    testData,
+  }) => {
     // Ensure a pending appeal exists (previous test may have failed before reseeding)
     await reseedAppeal(testData);
 
@@ -335,7 +342,7 @@ test.describe('Admin Appeals', () => {
 
     // Look for the <details>/<summary> element for reports
     const reportsSummary = firstCard.locator('.appeal-reports summary');
-    const reportsExist = await reportsSummary.count() > 0;
+    const reportsExist = (await reportsSummary.count()) > 0;
 
     if (!reportsExist) {
       test.skip(true, 'No related reports section in current appeals');
@@ -351,7 +358,7 @@ test.describe('Admin Appeals', () => {
 
     // Verify report has a reason
     const reportReason = firstCard.locator('.appeal-report-item .report-reason');
-    if (await reportReason.count() > 0) {
+    if ((await reportReason.count()) > 0) {
       await expect(reportReason.first()).toBeVisible();
     }
   });
