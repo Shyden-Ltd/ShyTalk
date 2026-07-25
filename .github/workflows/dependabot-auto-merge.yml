@@ -2,7 +2,11 @@ name: Dependabot Auto-merge
 
 on:
   pull_request:
-    branches: [main]
+    # SHY-0242: Dependabot now targets develop (dependabot.yml target-branch),
+    # so its auto-merge fires on develop PRs. --auto waits for the develop
+    # ruleset's required checks (Detect Changes / Analyze JavaScript / PR Gate),
+    # so a bump merges only once CI is green — the same gate as main.
+    branches: [develop]
     types: [opened, synchronize, reopened]
 
 permissions:
