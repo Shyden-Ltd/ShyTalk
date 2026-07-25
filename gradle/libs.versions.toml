@@ -8,7 +8,12 @@ lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.13.0"
 appcompat = "1.7.1"
 navigationCompose = "2.9.8"
-firebaseBom = "34.15.0"
+# Held at 34.14.1 — 34.15.0 pulls firebase-messaging 25.1.0, which deprecates
+# getToken()/deleteToken()/onNewToken() in favour of V1 Installation-ID
+# registration. That is a push-architecture migration, not a bump; it is tracked
+# by SHY-0244 and MUST NOT be raised until that story lands (`-Werror` would fail
+# the build, and suppressing the warnings is not an option).
+firebaseBom = "34.14.1"
 googleServices = "4.5.0"
 coroutines = "1.11.0"
 coil3 = "3.5.0"
