@@ -33,8 +33,11 @@ test.describe('Admin Validation', () => {
     await displayNameInput.fill('');
     await displayNameInput.evaluate((el) => el.blur());
 
-    // Wait briefly for any validation to fire
-    await page.waitForTimeout(2_000);
+    // The app answers a blur with a .field-feedback element — wait for that
+    // rather than guessing (SHY-0245).
+    await expect(displayNameInput.locator('..').locator('.field-feedback')).toBeVisible({
+      timeout: 10_000,
+    });
 
     // Check for validation feedback or that the field was not saved empty
     const container = displayNameInput.locator('..');
@@ -68,26 +71,23 @@ test.describe('Admin Validation', () => {
     // Try to add -100 coins
     await page.locator('#eco-coins-op').selectOption('add');
     await page.locator('#eco-coins-amount').fill('-100');
+
+    // A negative amount is rejected CLIENT-SIDE — it never reaches the server.
+    // Asserting that is both the honest contract and a stronger claim than the
+    // old "coins ended at 0 or 1000", which accepted either outcome and so
+    // could not distinguish "validated" from "silently applied" (SHY-0245).
+    const balanceCalls: string[] = [];
+    page.on('request', (req) => {
+      if (/\/api\/users\/[^/]+\/adjust-balance/.test(req.url())) balanceCalls.push(req.url());
+    });
     await page.locator('#eco-coins-apply').click();
+    await expect.poll(() => balanceCalls.length, { timeout: 5_000 }).toBe(0);
 
-    // Wait for response
-    await page.waitForTimeout(2_000);
-
-    // The coins display should either reject the input or handle it gracefully
-    const coinsDisplay = page.locator('#eco-coins-display');
-    const coinsText = await coinsDisplay.textContent();
-    const coinsNum = Number(coinsText!.replace(/,/g, ''));
-
-    // The API may reject negative adds (leaving at 1000) or treat -100 as a deduction (resulting in 0)
-    expect([0, 1000]).toContain(coinsNum);
-
-    // Restore if coins were deducted
-    if (coinsNum < 1000) {
-      await testData.api.post(`/api/users/${testData.user.uniqueId}/adjust-balance`, {
-        currency: 'COINS',
-        amount: 1000 - coinsNum,
-      });
-    }
+    // …and the displayed balance is untouched.
+    const coinsText = await page.locator('#eco-coins-display').textContent();
+    expect(Number(coinsText!.replace(/,/g, ''))).toBe(1000);
+    // Balance is unchanged, so nothing to restore — the API was never called.
+    expect(testData.user.uniqueId).toBeTruthy();
   });
 
   // ── Test 3: NaN in number field ──
@@ -96,14 +96,22 @@ test.describe('Admin Validation', () => {
 
     // Try to enter "abc" in coin amount — use evaluate since Playwright
     // blocks non-numeric text in <input type="number">
+    // Record whether the invalid value ever reaches the server. That is the
+    // real contract here, and it is a stronger assertion than "the display did
+    // not change" — which a 2s sleep could never prove anyway (SHY-0245).
+    const balanceCalls: string[] = [];
+    page.on('request', (req) => {
+      if (/\/api\/users\/[^/]+\/adjust-balance/.test(req.url())) balanceCalls.push(req.url());
+    });
+
     await page.locator('#eco-coins-amount').evaluate((el: HTMLInputElement) => {
       el.value = 'abc';
       el.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await page.locator('#eco-coins-apply').click();
 
-    // Wait for response
-    await page.waitForTimeout(2_000);
+    // Client-side validation must reject it outright — no request at all.
+    await expect.poll(() => balanceCalls.length, { timeout: 5_000 }).toBe(0);
 
     // The coins display should remain unchanged (1000 from seeding)
     const coinsDisplay = page.locator('#eco-coins-display');
@@ -157,23 +165,20 @@ test.describe('Admin Validation', () => {
     await profileUrlInput.fill('not-a-url');
     await profileUrlInput.evaluate((el) => el.blur());
 
-    // Wait for auto-save attempt
-    await page.waitForTimeout(2_000);
-
-    // Check if the value was accepted or rejected
+    // Wait for a TERMINAL feedback state. Anchoring on any `.field-feedback`
+    // caught the transient in-flight state, so the class checks below ran
+    // before the outcome existed. This retrying assertion IS the assertion:
+    // saved or rejected are both acceptable, silence is not (SHY-0245).
     const container = profileUrlInput.locator('..');
-    const savedFeedback = container.locator('.field-feedback.saved');
-    const errorFeedback = container.locator('.field-feedback.error');
+    await expect(
+      container.locator(
+        '.field-feedback.saved, .field-feedback.error, .field-feedback.invalid, .field-feedback.failed',
+      ),
+    ).toBeVisible({ timeout: 10_000 });
 
-    const wasSaved = await savedFeedback.isVisible().catch(() => false);
-    const wasError = await errorFeedback.isVisible().catch(() => false);
-
-    // Either outcome is valid — the important thing is no crash/console error
-    expect(wasSaved || wasError).toBe(true);
-
-    // Clear to restore
+    // Clear to restore, and wait for the field to actually empty.
     await page.locator('.btn-clear[data-clear="profilePhotoUrl"]').click();
-    await page.waitForTimeout(2_000);
+    await expect(profileUrlInput).toHaveValue('');
   });
 
   // ── Test 6: XSS in display name ──

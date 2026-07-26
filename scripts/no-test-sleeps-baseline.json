@@ -46,7 +46,7 @@
   "tests/web/admin-starting-screens.spec.ts": 1,
   "tests/web/admin-suggestions.spec.ts": 3,
   "tests/web/admin-users-extra.spec.ts": 4,
-  "tests/web/admin-validation.spec.ts": 9,
+  "tests/web/admin-validation.spec.ts": 4,
   "tests/web/console-errors-all-pages.spec.ts": 1,
   "tests/web/dev-sanity.spec.ts": 1,
   "tests/web/portal-a11y.spec.ts": 1,
