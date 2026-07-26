@@ -123,42 +123,52 @@ test.describe('Translations', () => {
     const switcher = page.locator(
       '.lang-selector, [data-testid="language-selector"], .language-btn',
     );
-    if ((await switcher.count()) > 0) {
-      await switcher.click();
-      const deOption = page.locator('[data-lang="de"], .lang-option:has-text("Deutsch")');
-      if ((await deOption.count()) > 0) {
-        await deOption.click();
-        await page.waitForTimeout(1000);
-        // Page content should be in German
-      }
-    }
+    // Previously every step sat inside `if (count > 0)` and ended on a comment,
+    // so this test asserted NOTHING and could not fail (SHY-0245).
+    await expect(switcher.first()).toBeVisible();
+    await switcher.first().click();
+    const deOption = page.locator('[data-lang="de"], .lang-option:has-text("Deutsch")').first();
+    await expect(deOption).toBeVisible();
+    await deOption.click();
+    // The applied locale is the observable outcome — retrying, so it doubles as
+    // the wait for the translation pass to run.
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.lang), { timeout: 10_000 })
+      .toBe('de');
   });
 
-  test('switch language: all buttons translated', async ({ page }) => {
+  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
+  test.fixme('switch language: all buttons translated', async ({ page }) => {
     // After language switch, button labels should be translated
   });
 
-  test('switch language: all status badges translated', async ({ page }) => {
+  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
+  test.fixme('switch language: all status badges translated', async ({ page }) => {
     // Status badges (Done, In Progress, Planned) should be translated
   });
 
-  test('switch language: info banner translated', async ({ page }) => {
+  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
+  test.fixme('switch language: info banner translated', async ({ page }) => {
     // Suggestions info banner text should be translated
   });
 
-  test('switch language: filter labels translated', async ({ page }) => {
+  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
+  test.fixme('switch language: filter labels translated', async ({ page }) => {
     // Filter dropdown labels should be translated
   });
 
-  test('switch language: suggestion form labels translated', async ({ page }) => {
+  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
+  test.fixme('switch language: suggestion form labels translated', async ({ page }) => {
     // Form field labels should be translated
   });
 
-  test('switch language: subscribe modal labels translated', async ({ page }) => {
+  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
+  test.fixme('switch language: subscribe modal labels translated', async ({ page }) => {
     // Modal labels and toggles should be translated
   });
 
-  test('switch language: error messages translated', async ({ page }) => {
+  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
+  test.fixme('switch language: error messages translated', async ({ page }) => {
     // Error messages should appear in selected language
   });
 
@@ -185,19 +195,45 @@ test.describe('Translations', () => {
       'vi',
       'zh',
     ];
+    // The loop previously ended on two comments — no console listener, no
+    // assertions — so it loaded 20 locales and verified nothing (SHY-0245).
+    // Uncaught JS exceptions only. A blanket console-error assertion is
+    // dominated here by a real but SEPARATE finding: /api/translate 404s when
+    // the page is served statically on :8888 (the API lives on :3000), so every
+    // non-English locale logs "[translate] item translation round failed —
+    // showing English". That is a config gap worth its own ticket, not a
+    // per-locale rendering fault, and folding it in here would only make this
+    // test permanently red for an unrelated reason.
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+
     for (const lang of languages) {
       await page.goto(`/roadmap.html?lang=${lang}`);
-      await page.waitForTimeout(500);
-      // Page should not have console errors
-      // All visible text should be non-empty
+      // The applied locale is the settled signal; then the page must have content.
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.lang), { timeout: 10_000 })
+        .toBe(lang);
+      await expect(page.locator('body')).not.toBeEmpty();
     }
+    // Exclude the two KNOWN infra endpoints — RECORDED as a finding in the
+    // SHY-0245 story, not swallowed: roadmap-app.js fetches "/api/translate"
+    // RELATIVELY, while every other API call on the page uses an env-derived
+    // base, so it resolves against the WEB origin instead of the API's.
+    // Anything else is a real fault and still fails this test.
+    const unexpected = pageErrors.filter((e) => !/\/api\/(translate|logs)/.test(e));
+    expect(unexpected, `uncaught page errors across locales: ${unexpected.join(' | ')}`).toEqual(
+      [],
+    );
   });
 
   test('RTL layout correct for Arabic', async ({ page }) => {
     await page.goto('/roadmap.html?lang=ar');
-    await page.waitForTimeout(1000);
-    const dir = await page.evaluate(() => document.dir || document.documentElement.dir);
-    // Should be RTL or have RTL styling applied
+    // Previously read `dir` into a variable and then asserted nothing at all.
+    await expect
+      .poll(() => page.evaluate(() => document.dir || document.documentElement.dir), {
+        timeout: 10_000,
+      })
+      .toBe('rtl');
   });
 });
 
@@ -273,7 +309,8 @@ test.describe('Anti-Abuse', () => {
     await expect(page.getByTestId('standing-banner')).toBeVisible({ timeout: 15_000 });
 
     await page.getByTestId('suggestions-search-input').fill('voice');
-    await page.waitForTimeout(1500); // debounce + refetch of the public list
+    // Wait for the debounced refetch itself rather than guessing 1.5s (SHY-0245).
+    await page.waitForResponse((r) => /\/api\/suggestions/.test(r.url()), { timeout: 15_000 });
 
     await expect(page.getByTestId('standing-banner')).toBeVisible();
     await expect(page.getByTestId('suggest-btn')).toHaveCount(0);
@@ -319,7 +356,13 @@ test.describe('CSP & Security Headers', () => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
     await page.goto('/roadmap.html');
-    await page.waitForTimeout(3000);
+    // Anchor on the board having rendered — otherwise "no errors" only means
+    // the page had not finished loading yet (SHY-0245).
+    await expect(
+      page
+        .locator('[data-testid^="suggestion-card"], .sg-card, [data-testid="suggestions-empty"]')
+        .first(),
+    ).toBeVisible({ timeout: 15_000 });
     expect(errors).toHaveLength(0);
   });
 
@@ -366,7 +409,8 @@ test.describe('Error States', () => {
     // Should show error state
   });
 
-  test('stale data: user votes on just-planned suggestion gets error', async ({ page }) => {
+  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
+  test.fixme('stale data: user votes on just-planned suggestion gets error', async ({ page }) => {
     // If suggestion state changed between load and vote, user should see error
   });
 });

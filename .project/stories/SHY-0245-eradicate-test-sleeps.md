@@ -131,6 +131,16 @@ Because SHY-0242 made the develop gate force `playwright-web` on **every backend
 - Remove the settled-state anchor from a fixed test → the race returns and the test fails in CI.
 - Point the ratchet at an empty directory → it reports 0 and passes, proving a zero result means "scanned and clean" rather than "scanned nothing" ([[feedback-mutation-passed-means-investigate]]).
 
+## Findings surfaced by de-sleeping (each needs its own follow-up)
+
+1. **219 web tests contain no `expect(` at all**, across 44 files. Of those, **35 had comment-only bodies** — they passed unconditionally while asserting nothing (e.g. *"switch language: all buttons translated"*, whose entire body was `// After language switch, button labels should be translated`). Those 35 are now `test.fixme`, so they report as **not implemented** instead of green. The remaining 184 have code but no assertion; some may assert through helpers, the rest are the `if (count > 0)` skip-everything shape. **This is a bigger quality problem than the sleeps and deserves its own story.**
+
+2. **`/api/translate` is fetched RELATIVELY** (`public/js/roadmap-app.js:1130`) while every other API call on the page uses an env-derived base. It therefore resolves against the **web** origin, not the API's. Locally that 404s on :8888 and every non-English locale silently falls back to English with `[translate] item translation round failed — showing English`. **If dev/prod serve the web and API from different origins — which `## Environments` says they do — public translations are broken there too.** NOT changed here: a blind switch to the API base could break prod if a proxy fronts `/api/*`, and that topology needs confirming first ([[feedback-never-guess-always-investigate]]). The locale test excludes this one endpoint explicitly and still fails on any other page error.
+
+3. **`suggestions-board` fixture tags were outside the app's taxonomy** — `quality-of-life`/`entertainment` vs the real `voice/chat/moderation/ui/privacy/social/economy/accessibility/other`. Every tag-filter test therefore ran against an empty list. Fixed here.
+
+4. **`sticky-nav` "disappears when scrolling back to top"** asserted behaviour the product never had (it is `position: sticky`). Fixed here.
+
 ## Known adjacent defect (recorded, NOT silently patched)
 
 `express-api/tests/scripts/50-matrix-cmd-stop.test.js` passes alone (9/9) but fails inside the full `tests/scripts/` run: *"reaps a process tagged with THIS run_id … → exit 0"* returns 1.
