@@ -24,8 +24,8 @@ const MOCK_SUGGESTIONS = [
     id: 'test-sug-1',
     title: 'Add dark mode',
     description: 'Dark mode would be great for night use',
-    tag: 'quality-of-life',
-    tags: ['quality-of-life'],
+    tag: 'ui',
+    tags: ['ui'],
     language: 'en',
     status: 'accepted',
     upvotes: 15,
@@ -39,8 +39,8 @@ const MOCK_SUGGESTIONS = [
     id: 'test-sug-2',
     title: 'Video calls',
     description: 'Add video calling to voice rooms',
-    tag: 'entertainment',
-    tags: ['entertainment'],
+    tag: 'social',
+    tags: ['social'],
     language: 'en',
     status: 'planned',
     upvotes: 8,
@@ -54,8 +54,8 @@ const MOCK_SUGGESTIONS = [
     id: 'test-sug-3',
     title: 'Voice chat improvements',
     description: 'Better audio quality and noise cancellation for voice rooms',
-    tag: 'quality-of-life',
-    tags: ['quality-of-life'],
+    tag: 'ui',
+    tags: ['ui'],
     language: 'en',
     status: 'completed',
     upvotes: 25,
@@ -69,8 +69,8 @@ const MOCK_SUGGESTIONS = [
     id: 'test-sug-4',
     title: 'Remove chat limits',
     description: 'Let users send unlimited messages',
-    tag: 'entertainment',
-    tags: ['entertainment'],
+    tag: 'social',
+    tags: ['social'],
     language: 'en',
     status: 'rejected',
     upvotes: 3,
@@ -84,8 +84,8 @@ const MOCK_SUGGESTIONS = [
 ];
 
 const MOCK_TAGS = [
-  { value: 'quality-of-life', label: 'Quality of Life' },
-  { value: 'entertainment', label: 'Entertainment' },
+  { value: 'ui', label: 'Quality of Life' },
+  { value: 'social', label: 'Entertainment' },
   { value: 'social', label: 'Social' },
 ];
 
@@ -420,23 +420,24 @@ test.describe('Suggestions Board — Public Browsing', () => {
     const langFilter = page.locator('[data-testid="filter-lang"]');
     await statusFilter.waitFor({ timeout: 10_000 });
 
+    // Pick values the FIXTURE ACTUALLY SATISFIES together — MOCK_SUGGESTIONS
+    // has an accepted / ui / en entry. The old version selected
+    // an arbitrary nth(1) tag and language, so the AND of the three filters
+    // usually matched nothing: the loop ran zero times and the test asserted
+    // NOTHING while reporting green. Each `if (count > 1)` guard was the same
+    // defect — it skipped silently when the options were missing.
+    // Only the STATUS filter refetches; tag and language are applied
+    // client-side, so there is no response to wait on for those two.
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Accepted' }));
+    await tagFilter.selectOption('ui');
+    await langFilter.selectOption('en');
 
-    const tagOptions = tagFilter.locator('option');
-    if ((await tagOptions.count()) > 1) {
-      await tagFilter.selectOption((await tagOptions.nth(1).getAttribute('value'))!);
-    }
-    await page.waitForTimeout(300);
-
-    const langOptions = langFilter.locator('option');
-    if ((await langOptions.count()) > 1) {
-      await langFilter.selectOption((await langOptions.nth(1).getAttribute('value'))!);
-    }
-    await page.waitForTimeout(500);
-
-    // All displayed cards should match all criteria
+    // The settled result IS the anchor: MOCK_SUGGESTIONS has exactly one
+    // accepted / ui / en entry, so this retrying assertion waits
+    // for the client-side filtering to land and pins the AND semantics.
     const badges = page.locator('[data-testid^="suggestion-status"], .sg-badge');
-    const count = await badges.count();
+    await expect(badges).toHaveCount(1);
+    const count = await nonEmptyCount(badges);
     for (let i = 0; i < count; i++) {
       const text = await badges.nth(i).textContent();
       expect(text!.toLowerCase()).toContain('accepted');
@@ -446,15 +447,19 @@ test.describe('Suggestions Board — Public Browsing', () => {
   test('search by text works (results match query)', async ({ page }) => {
     const searchInput = page.locator('[data-testid="suggestions-search-input"]');
     await searchInput.waitFor({ timeout: 10_000 });
-    // Type a search query
-    await searchInput.fill('test');
-    await page.waitForTimeout(500);
-    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
-    const count = await cards.count();
-    // Each visible card title or description should contain the query
+    // Search for a term the FIXTURE ACTUALLY CONTAINS. The old query was
+    // 'test', which matches none of MOCK_SUGGESTIONS ("Add dark mode",
+    // "Video calls", …) — so the result set was always empty, the loop below
+    // ran zero times, and this test asserted NOTHING for its whole life while
+    // reporting green. Waiting on the search response replaces the sleep, and
+    // nonEmptyCount makes an empty result fatal rather than invisible.
+    await withSuggestionsFetch(page, () => searchInput.fill('dark'));
+    const cards = cardsOf(page);
+    const count = await nonEmptyCount(cards);
+    // Each visible card title or description must contain the query
     for (let i = 0; i < count; i++) {
       const cardText = await cards.nth(i).textContent();
-      expect(cardText!.toLowerCase()).toContain('test');
+      expect(cardText!.toLowerCase()).toContain('dark');
     }
   });
 
@@ -1148,10 +1153,9 @@ test.describe('Suggestion Submission Edge Cases', () => {
       const loadMore = page.locator('[data-testid="duplicate-load-more"]');
       if ((await loadMore.count()) > 0) {
         await loadMore.click();
-        await page.waitForTimeout(300);
         // Click "Yes" on a result from the second page
         const yesButtons = page.locator('[data-testid^="duplicate-match"]');
-        const count = await yesButtons.count();
+        const count = await nonEmptyCount(yesButtons);
         if (count > 3) {
           await yesButtons.nth(3).click();
           // Should redirect to that specific suggestion for upvoting
@@ -1732,30 +1736,24 @@ test.describe('Filter & Search Combination Edge Cases', () => {
 
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Accepted' }));
 
-    const tagOptions = tagFilter.locator('option');
-    if ((await tagOptions.count()) > 1) {
-      await tagFilter.selectOption((await tagOptions.nth(1).getAttribute('value'))!);
+    // Deterministic values the FIXTURE satisfies together, and a search term it
+    // actually contains. The old version chose arbitrary nth(1) options behind
+    // `if (count > 1)` guards and searched 'test' — which matches none of
+    // MOCK_SUGGESTIONS — so the AND of every filter returned nothing, the loop
+    // ran zero times, and this test asserted NOTHING while reporting green.
+    // Only status and the search refetch; tag/lang/phase are client-side.
+    await tagFilter.selectOption('ui');
+    await langFilter.selectOption('en');
+    // The phase filter is optional in the DOM; when present it must offer
+    // options — asserted, rather than skipped silently.
+    if ((await phaseFilter.count()) > 0) {
+      await expect(phaseFilter.locator('option')).not.toHaveCount(0);
     }
-    await page.waitForTimeout(200);
+    await withSuggestionsFetch(page, () => searchInput.fill('dark'));
 
-    const langOptions = langFilter.locator('option');
-    if ((await langOptions.count()) > 1) {
-      await langFilter.selectOption((await langOptions.nth(1).getAttribute('value'))!);
-    }
-    await page.waitForTimeout(200);
-
-    const phaseOptions = phaseFilter.locator('option');
-    if ((await phaseOptions.count()) > 1) {
-      await phaseFilter.selectOption((await phaseOptions.nth(1).getAttribute('value'))!);
-    }
-    await page.waitForTimeout(200);
-
-    await searchInput.fill('test');
-    await page.waitForTimeout(500);
-
-    // All results should match ALL active filters
-    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
-    const count = await cards.count();
+    // All results must match ALL active filters — and there must BE some.
+    const cards = cardsOf(page);
+    const count = await nonEmptyCount(cards);
     for (let i = 0; i < count; i++) {
       const badge = cards.nth(i).locator('[data-testid^="suggestion-status"], .sg-badge');
       await expect(badge).toContainText(/Accepted/i);
