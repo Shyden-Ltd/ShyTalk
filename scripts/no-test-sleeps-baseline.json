@@ -51,7 +51,7 @@
   "tests/web/dev-sanity.spec.ts": 1,
   "tests/web/portal-a11y.spec.ts": 1,
   "tests/web/roadmap-i18n-lazy.spec.ts": 1,
-  "tests/web/roadmap-redesign.spec.ts": 12,
+  "tests/web/roadmap-redesign.spec.ts": 6,
   "tests/web/seasonal-theme.spec.ts": 3,
   "tests/web/shared-header-signin-fallback.spec.ts": 1,
   "tests/web/suggestions-board.spec.ts": 34,

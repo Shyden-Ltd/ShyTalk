@@ -125,16 +125,29 @@ test.describe('Roadmap Page — Theme & Layout', () => {
   });
 
   test('sticky nav clicks scroll to correct sections', async ({ page }) => {
+    // Previously: clicked inside `if (count > 0)` and then only a comment where
+    // the assertion belonged — so it verified nothing at all (SHY-0245).
     await page.evaluate(() => window.scrollTo(0, 1000));
-    await page.waitForTimeout(500);
-    const suggestionsLink = page.locator(
-      '.sticky-nav a[href*="suggestions"], [data-testid="nav-suggestions"]',
-    );
-    if ((await suggestionsLink.count()) > 0) {
-      await suggestionsLink.click();
-      await page.waitForTimeout(500);
-      // Should have scrolled to suggestions section
-    }
+    const suggestionsLink = page
+      .locator('.sticky-nav a[href*="suggestions"], [data-testid="nav-suggestions"]')
+      .first();
+    await expect(suggestionsLink).toBeVisible();
+    await suggestionsLink.click();
+
+    // Poll the in-view CONDITION — the smooth scroll lands asynchronously, so
+    // the old 500ms was a guess about scroll duration.
+    const section = page.locator('#suggestions, [data-section="suggestions"]').first();
+    await expect(section).toBeAttached();
+    await expect
+      .poll(
+        () =>
+          section.evaluate((el) => {
+            const rect = el.getBoundingClientRect();
+            return rect.top >= -100 && rect.top <= window.innerHeight;
+          }),
+        { timeout: 10_000 },
+      )
+      .toBe(true);
   });
 
   test('last updated date displays correctly', async ({ page }) => {
@@ -233,31 +246,43 @@ test.describe('Sticky Nav', () => {
     await page.goto('/roadmap.html');
   });
 
+  // These three previously asserted NOTHING — two had only a comment where the
+  // assertion belonged, and the third was double-guarded so it skipped
+  // silently. They could not fail. Now the retrying assertion is both the wait
+  // and the assertion (SHY-0245).
   test('appears when scrolling past header', async ({ page }) => {
-    await page.evaluate(() => window.scrollTo(0, 500));
-    await page.waitForTimeout(500);
     const nav = page.locator('.sticky-nav, [data-testid="sticky-nav"]');
-    // Should be visible after scroll
+    await page.evaluate(() => window.scrollTo(0, 500));
+    await expect(nav).toBeVisible();
   });
 
-  test('disappears when scrolling back to top', async ({ page }) => {
+  // Renamed from "disappears when scrolling back to top", which asserted
+  // behaviour the product has never had: .sticky-nav is `position: sticky`, so
+  // it is always present and simply PINS to the viewport top while scrolled.
+  // The old test asserted nothing at all, which is why the false premise was
+  // never noticed (SHY-0245).
+  test('pins to the viewport top while scrolled, and unpins at the top of the page', async ({
+    page,
+  }) => {
+    const nav = page.locator('.sticky-nav, [data-testid="sticky-nav"]');
+    await expect(nav).toBeVisible();
+
     await page.evaluate(() => window.scrollTo(0, 1000));
-    await page.waitForTimeout(500);
+    await expect.poll(async () => Math.round((await nav.boundingBox())!.y)).toBeLessThanOrEqual(1);
+
     await page.evaluate(() => window.scrollTo(0, 0));
-    await page.waitForTimeout(500);
+    // Back in normal flow, it sits below the header rather than at y=0.
+    await expect.poll(async () => (await nav.boundingBox())!.y).toBeGreaterThan(1);
   });
 
   test('mobile: nav still fits on small screen', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 });
-    await page.evaluate(() => window.scrollTo(0, 500));
-    await page.waitForTimeout(500);
     const nav = page.locator('.sticky-nav, [data-testid="sticky-nav"]');
-    if ((await nav.count()) > 0) {
-      const box = await nav.boundingBox();
-      if (box) {
-        expect(box.width).toBeLessThanOrEqual(320);
-      }
-    }
+    await page.evaluate(() => window.scrollTo(0, 500));
+    await expect(nav).toBeVisible();
+    const box = await nav.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeLessThanOrEqual(320);
   });
 });
 
