@@ -306,7 +306,6 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // Search for the test device
     await page.locator('#devices-search-input').fill(deviceId);
     await page.locator('#devices-search-btn').click();
-    await page.waitForTimeout(1_000);
     await waitForDevicesLoaded(page);
 
     // Accept confirm and prompt dialogs
@@ -340,7 +339,6 @@ test.describe('Admin Cross-Tab Interactions', () => {
 
     await page.locator('#devices-search-input').fill(deviceId);
     await page.locator('#devices-search-btn').click();
-    await page.waitForTimeout(1_000);
     await waitForDevicesLoaded(page);
 
     // Click View Logs
