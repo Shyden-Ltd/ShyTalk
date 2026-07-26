@@ -54,7 +54,7 @@
   "tests/web/roadmap-redesign.spec.ts": 12,
   "tests/web/seasonal-theme.spec.ts": 3,
   "tests/web/shared-header-signin-fallback.spec.ts": 1,
-  "tests/web/suggestions-board.spec.ts": 42,
+  "tests/web/suggestions-board.spec.ts": 34,
   "tests/web/suggestions-security.spec.ts": 11,
   "tests/web/translation-verification.spec.ts": 5
 }

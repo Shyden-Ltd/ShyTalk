@@ -229,6 +229,24 @@ async function withSuggestionsFetch(page: Page, action: () => Promise<unknown>) 
 }
 
 /**
+ * Types a suggestion title and waits for the debounced duplicate-detection
+ * lookup to answer. The lookup hits /api/suggestions/search, so the response
+ * is the honest signal that the panel below reflects THIS title rather than
+ * the previous one — a fixed delay could only ever guess at the debounce.
+ */
+async function typeTitleAwaitingDuplicates(
+  page: Page,
+  input: ReturnType<Page['locator']>,
+  text: string,
+) {
+  const response = page.waitForResponse((r) => /\/api\/suggestions\/search/.test(r.url()), {
+    timeout: 15_000,
+  });
+  await input.fill(text);
+  await response;
+}
+
+/**
  * Snapshots a count only AFTER proving the list is non-empty, so a loop over
  * the result can never run zero times and report green ([[feedback-test-must-
  * fail-if-logic-skipped]] — the vacuous-loop trap that de-sleeping exposes).
@@ -708,8 +726,7 @@ test.describe('Suggestions Board — Submission Flow', () => {
       // At 2 chars, no results should show
       await expect(duplicates).not.toBeVisible();
 
-      await titleInput.fill('Voice');
-      await page.waitForTimeout(500);
+      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice');
       // At 5 chars, duplicate detection should trigger
     }
   });
@@ -719,8 +736,7 @@ test.describe('Suggestions Board — Submission Flow', () => {
   }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if ((await titleInput.count()) > 0) {
-      await titleInput.fill('Voice chat');
-      await page.waitForTimeout(500);
+      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice chat');
       const yesBtn = page.locator('[data-testid^="duplicate-match"]').first();
       if ((await yesBtn.count()) > 0) {
         await yesBtn.click();
@@ -734,8 +750,7 @@ test.describe('Suggestions Board — Submission Flow', () => {
   test('duplicate detection: "No, my idea is different" continues form', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if ((await titleInput.count()) > 0) {
-      await titleInput.fill('Voice chat');
-      await page.waitForTimeout(500);
+      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice chat');
       const noBtn = page.locator('[data-testid^="duplicate-diff"]');
       if ((await noBtn.count()) > 0) {
         await noBtn.click();
@@ -748,8 +763,7 @@ test.describe('Suggestions Board — Submission Flow', () => {
   test('duplicate detection: "Load more" shows 3 more results', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if ((await titleInput.count()) > 0) {
-      await titleInput.fill('Voice chat rooms');
-      await page.waitForTimeout(500);
+      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice chat rooms');
       const loadMore = page.locator('[data-testid="duplicate-load-more"]');
       if ((await loadMore.count()) > 0) {
         const initialCount = await page.locator('[data-testid^="duplicate-item"]').count();
@@ -765,8 +779,7 @@ test.describe('Suggestions Board — Submission Flow', () => {
   test('duplicate detection: all results exhausted, "Load more" disappears', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if ((await titleInput.count()) > 0) {
-      await titleInput.fill('Voice chat rooms');
-      await page.waitForTimeout(500);
+      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice chat rooms');
       const loadMore = page.locator('[data-testid="duplicate-load-more"]');
       // Keep clicking load more until exhausted
       while ((await loadMore.count()) > 0 && (await loadMore.isVisible())) {
@@ -1113,8 +1126,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
     // When there are exactly 3 matches, all should show and no load more button
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if ((await titleInput.count()) > 0) {
-      await titleInput.fill('Voice');
-      await page.waitForTimeout(500);
+      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice');
       const items = page.locator('[data-testid^="duplicate-item"]');
       const loadMore = page.locator('[data-testid="duplicate-load-more"]');
       const count = await items.count();
@@ -1129,8 +1141,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
   }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if ((await titleInput.count()) > 0) {
-      await titleInput.fill('Voice');
-      await page.waitForTimeout(500);
+      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice');
       const items = page.locator('[data-testid^="duplicate-item"]');
       const loadMore = page.locator('[data-testid="duplicate-load-more"]');
       if ((await loadMore.count()) > 0) {
@@ -1145,8 +1156,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
   }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if ((await titleInput.count()) > 0) {
-      await titleInput.fill('Voice');
-      await page.waitForTimeout(500);
+      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice');
       const loadMore = page.locator('[data-testid="duplicate-load-more"]');
       if ((await loadMore.count()) > 0) {
         await loadMore.click();
