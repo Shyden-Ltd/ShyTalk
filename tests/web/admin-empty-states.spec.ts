@@ -204,7 +204,6 @@ test.describe('Admin Empty States', () => {
     // Search for nonsense
     await page.locator('#devices-search-input').fill('zzz-nonexistent-device-e2e-999999');
     await page.locator('#devices-search-btn').click();
-    await page.waitForTimeout(1_000);
 
     // Empty message should be visible
     const empty = page.locator('#devices-empty');
@@ -216,7 +215,6 @@ test.describe('Admin Empty States', () => {
     await navigateToTab(page, 'Backups');
 
     // Wait for backups to load
-    await page.waitForTimeout(3_000);
 
     // Check for backup cards/list or empty message
     const backupPanel = page.locator('#backups-panel, #backup-list');

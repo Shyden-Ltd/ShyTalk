@@ -495,7 +495,6 @@ test.describe('Starting Screens Admin Section', () => {
   test('direct navigation to #starting-screens activates the tab', async ({ page }) => {
     await page.goto('/admin/#starting-screens');
     await adminLogin(page);
-    await page.waitForTimeout(2_000);
     const tab = page.locator('#tab-starting-screens');
     await expect(tab).toBeAttached();
   });

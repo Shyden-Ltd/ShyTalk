@@ -219,7 +219,6 @@ test.describe('Admin Alerts', () => {
     await expandAlertsSection(page);
     await page.locator('#alerts-config-toggle').click();
     await expect(page.locator('#alert-config-panel')).toBeVisible();
-    await page.waitForTimeout(2_000);
 
     const inputAfter = page.locator('#alert-config-grid input[type="number"]').first();
     await expect(inputAfter).toHaveValue(newValue);

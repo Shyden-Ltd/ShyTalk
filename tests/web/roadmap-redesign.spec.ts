@@ -120,7 +120,6 @@ test.describe('Roadmap Page — Theme & Layout', () => {
   test('sticky nav visible when scrolling', async ({ page }) => {
     // Scroll down past header
     await page.evaluate(() => window.scrollTo(0, 1000));
-    await page.waitForTimeout(500);
     const stickyNav = page.locator('.sticky-nav, [data-testid="sticky-nav"]');
     await expect(stickyNav).toBeVisible();
   });

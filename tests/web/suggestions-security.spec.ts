@@ -471,7 +471,6 @@ test.describe('Third-Party Script Failure', () => {
     // Block Firebase
     await page.route('**/firebase**', (route) => route.abort());
     await page.goto('/roadmap.html');
-    await page.waitForTimeout(3000);
     // Roadmap data should still render (static JSON)
     const body = page.locator('body');
     await expect(body).toBeVisible();

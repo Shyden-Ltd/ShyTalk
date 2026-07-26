@@ -436,7 +436,6 @@ test.describe('Admin Logs', () => {
       }
       await page.locator('#alerts-config-toggle').click();
       await expect(page.locator('#alert-config-panel')).toBeVisible();
-      await page.waitForTimeout(2_000);
 
       // Verify the value persisted
       const inputAfter = page.locator('#alert-config-grid input[type="number"]').first();

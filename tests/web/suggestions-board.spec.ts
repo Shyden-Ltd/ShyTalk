@@ -565,7 +565,6 @@ test.describe('Suggestions Board — Public Browsing', () => {
     const searchInput = page.locator('[data-testid="suggestions-search-input"]');
     await searchInput.waitFor({ timeout: 10_000 });
     await searchInput.fill('zzzzzzzzzzzzzzzzzznonexistent');
-    await page.waitForTimeout(500);
     const emptyState = page.locator('[data-testid="suggestions-empty"]');
     await expect(emptyState).toBeVisible();
   });
@@ -705,7 +704,6 @@ test.describe('Suggestions Board — Submission Flow', () => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if ((await titleInput.count()) > 0) {
       await titleInput.fill('Vo');
-      await page.waitForTimeout(500);
       const duplicates = page.locator('[data-testid="suggest-duplicates"]');
       // At 2 chars, no results should show
       await expect(duplicates).not.toBeVisible();
@@ -1106,7 +1104,6 @@ test.describe('Suggestion Submission Edge Cases', () => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     if ((await titleInput.count()) > 0) {
       await titleInput.fill('zzzzuniquezzzznotexist');
-      await page.waitForTimeout(500);
       const loadMore = page.locator('[data-testid="duplicate-load-more"]');
       await expect(loadMore).not.toBeVisible();
     }
