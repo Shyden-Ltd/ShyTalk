@@ -54,6 +54,11 @@
 			</array>
 		</dict>
 	</array>
+	<!-- HOST ONLY, never the full URL: Xcode's Info.plist variable expansion
+	     runs a C-preprocessor-style pass that treats the "//" in "http://" as
+	     a comment and truncates the value to "http:". Swift composes the URL. -->
+	<key>LOCAL_HOST</key>
+	<string>$(LOCAL_HOST)</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

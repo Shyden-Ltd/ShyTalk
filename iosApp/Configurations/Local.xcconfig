@@ -83,3 +83,9 @@ LOCAL_API_BASE_URL = http://$(LOCAL_HOST):3000
 LOCAL_LIVEKIT_URL = ws://$(LOCAL_HOST):7880
 LOCAL_FIREBASE_PROJECT_ID = demo-shytalk
 LOCAL_FIREBASE_RTDB_URL = http://$(LOCAL_HOST):9000?ns=demo-shytalk-default-rtdb
+
+// Without this the Debug-Local device build links the RELEASE Kotlin/Native
+// framework against a debug app and the build fails — Dev.xcconfig:49 has
+// carried it since the dev flavour was wired up, Local never did, so
+// Debug-Local was the only configuration that could not build for a device.
+KOTLIN_FRAMEWORK_BUILD_TYPE = debug

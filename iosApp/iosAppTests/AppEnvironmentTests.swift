@@ -89,6 +89,49 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertNil(cfg.googleWebClientId, "no real Google OAuth client against the emulator")
     }
 
+    // ── .local — LOCAL_HOST override must actually reach the app ──
+    // Regression: `localApiBaseUrl` was a hardcoded Swift constant, so
+    // Local.xcconfig's documented `LOCAL_HOST` override (and the
+    // `xcodebuild LOCAL_HOST=…` build argument it tells you to use) was DEAD
+    // CODE. A physical iPhone therefore always called `localhost:3000` —
+    // itself — and could never reach the Mac's stack. The Simulator hid this
+    // because it shares the Mac's network, and the Simulator is retired.
+
+    func test_localApiBaseUrl_honoursBuildTimeOverride() {
+        XCTAssertEqual(
+            AppEnvironment.localApiBaseUrl(fromInfoPlistValue: "192.168.1.13"),
+            "http://192.168.1.13:3000",
+            "a physical iPhone must reach the Mac by LAN IP, not localhost"
+        )
+    }
+
+    func test_localApiBaseUrl_takesHostNotUrl() {
+        // Xcode's Info.plist expansion truncates "http://…" to "http:" (it
+        // treats "//" as a comment), so a full URL can never arrive intact.
+        // A value carrying a scheme is therefore a misconfiguration, not
+        // something to concatenate into "http://http://…".
+        XCTAssertEqual(
+            AppEnvironment.localApiBaseUrl(fromInfoPlistValue: "http://192.168.1.13:3000"),
+            AppEnvironment.localApiBaseUrlFallback
+        )
+    }
+
+    func test_localApiBaseUrl_fallsBackWhenUnset() {
+        XCTAssertEqual(AppEnvironment.localApiBaseUrl(fromInfoPlistValue: nil),
+                       AppEnvironment.localApiBaseUrlFallback)
+    }
+
+    func test_localApiBaseUrl_rejectsUnsubstitutedAndMalformedValues() {
+        // An unsubstituted build variable must never reach the network layer
+        // as a literal — that would fail as an opaque DNS error rather than
+        // an obvious misconfiguration.
+        for bad in ["$(LOCAL_HOST)", "http://$(LOCAL_HOST):3000", "", "   ", "192.168.1.13/api"] {
+            XCTAssertEqual(AppEnvironment.localApiBaseUrl(fromInfoPlistValue: bad),
+                           AppEnvironment.localApiBaseUrlFallback,
+                           "must reject \(bad)")
+        }
+    }
+
     func test_local_withEmptyPassword_coercesToNil() {
         let cfg = AppEnvironment.resolve(variant: .local, personasPassword: "")
         XCTAssertNil(cfg.devPersonasPassword)
