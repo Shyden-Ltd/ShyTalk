@@ -389,11 +389,12 @@ describe('evictSuspendedUser - via suspend', () => {
       .post('/api/admin/users/u1/suspend')
       .send({ reason: 'Test', canAppeal: false });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
     // Non-owner eviction now writes via batch.update (race-safe arrayRemove +
     // dot-path seat keys); user-doc currentRoomId clear still uses batch.set.
-    expect(mockBatchUpdate).toHaveBeenCalled();
-    expect(mockBatchCommit).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(mockBatchUpdate).toHaveBeenCalled();
+      expect(mockBatchCommit).toHaveBeenCalled();
+    });
   });
 
   it('closes room when user is owner', async () => {
@@ -405,11 +406,11 @@ describe('evictSuspendedUser - via suspend', () => {
       .post('/api/admin/users/u1/suspend')
       .send({ reason: 'Test', canAppeal: false });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
-    const closed = mockBatchSet.mock.calls.find((c) => c[1]?.state === 'CLOSED');
-    expect(closed).toBeDefined();
-    expect(mockRtdbSet).toHaveBeenCalled();
-    expect(mockRtdbRemove).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(mockBatchSet.mock.calls.find((c) => c[1]?.state === 'CLOSED')).toBeDefined();
+      expect(mockRtdbSet).toHaveBeenCalled();
+      expect(mockRtdbRemove).toHaveBeenCalled();
+    });
   });
 
   it('skips eviction when not in any rooms', async () => {
@@ -448,11 +449,12 @@ describe('evictSuspendedUser - via suspend', () => {
       .post('/api/admin/users/u1/suspend')
       .send({ reason: 'Test', canAppeal: false });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
-    expect(log.warn).toHaveBeenCalledWith(
-      'evict-suspended-user',
-      expect.stringContaining('Failed to write'),
-      expect.any(Object),
+    await waitFor(() =>
+      expect(log.warn).toHaveBeenCalledWith(
+        'evict-suspended-user',
+        expect.stringContaining('Failed to write'),
+        expect.any(Object),
+      ),
     );
   });
 
@@ -467,11 +469,12 @@ describe('evictSuspendedUser - via suspend', () => {
       .post('/api/admin/users/u1/suspend')
       .send({ reason: 'Test', canAppeal: false });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
-    expect(log.warn).toHaveBeenCalledWith(
-      'evict-suspended-user',
-      expect.stringContaining('Failed to remove'),
-      expect.any(Object),
+    await waitFor(() =>
+      expect(log.warn).toHaveBeenCalledWith(
+        'evict-suspended-user',
+        expect.stringContaining('Failed to remove'),
+        expect.any(Object),
+      ),
     );
   });
 
@@ -492,10 +495,13 @@ describe('evictSuspendedUser - via suspend', () => {
       .post('/api/admin/users/u1/suspend')
       .send({ reason: 'Test', canAppeal: false });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
     // New shape: dot-path seat key on the batch.update payload, not a full
     // `seats` map on a batch.set+merge call.
-    const call = mockBatchUpdate.mock.calls.find((c) => c[1]?.['seats.0'] !== undefined);
+    let call;
+    await waitFor(() => {
+      call = mockBatchUpdate.mock.calls.find((c) => c[1]?.['seats.0'] !== undefined);
+      expect(call).toBeDefined();
+    });
     expect(call[1]['seats.0']).toEqual({ userId: null, state: 'EMPTY', isMuted: false });
     // Seat 1 was occupied by 'other' — must NOT be touched in our write.
     expect(call[1]['seats.1']).toBeUndefined();
@@ -511,11 +517,12 @@ describe('evictSuspendedUser - via suspend', () => {
       .post('/api/admin/users/u1/suspend')
       .send({ reason: 'Test', canAppeal: false });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
     // 1 batch.set (owner closure of room-2) + 1 batch.set (user-doc currentRoomId)
     // + 1 batch.update (non-owner room-1 eviction).
-    expect(mockBatchSet).toHaveBeenCalledTimes(2);
-    expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(mockBatchSet).toHaveBeenCalledTimes(2);
+      expect(mockBatchUpdate).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

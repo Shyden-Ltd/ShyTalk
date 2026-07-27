@@ -17,7 +17,6 @@
   "express-api/tests/routes/data-export.test.js": 4,
   "express-api/tests/routes/device-info.test.js": 1,
   "express-api/tests/routes/livekit-cohort.test.js": 1,
-  "express-api/tests/routes/reports-coverage-admin.test.js": 6,
   "express-api/tests/routes/suggestions-integration-b.test.js": 2,
   "express-api/tests/routes/translate-cache.test.js": 1,
   "express-api/tests/safety/gate-rate-limit.test.js": 2,
