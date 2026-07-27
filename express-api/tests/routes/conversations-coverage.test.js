@@ -250,8 +250,23 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
   });
 
   test('sends notifications with DND not active (lines 91-105)', async () => {
+    // conversations.js:106-116 evaluates DND against the LIVE UTC clock, so a
+    // FIXED window leaves this test's verdict to whatever time it happens to
+    // run. It used to hardcode 23:00-06:00, which made "DND not active" a lie
+    // for seven hours of every day — it duly went red on CI at 23:00:53Z, and
+    // only because the assertion below is new; the old body asserted nothing
+    // and so passed around the clock.
+    //
+    // Derive a window that provably EXCLUDES now instead: [now+2h, now+3h).
+    // Two hours ahead rather than one so that an hour rolling over between
+    // here and the request cannot slide `now` into the window. Holds for every
+    // hour, including the 21/22/23 cases where the window wraps past midnight
+    // and conversations.js:116 takes its start > end branch.
+    const dndStartHour = (new Date().getUTCHours() + 2) % 24;
+    const dndEndHour = (dndStartHour + 1) % 24;
+
     // To exercise the notification code paths, we need db.getAll to return user/settings data
-    // User B: has DND but not currently in DND window
+    // User B: has DND enabled but is not currently inside the DND window
     // User C: no DND, has FCM tokens
     mockGetAll.mockImplementation((...refs) => {
       // First call: user docs, Second call: settings docs
@@ -267,9 +282,9 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
                 data: () => ({
                   pmNotificationsEnabled: true,
                   dndEnabled: true,
-                  dndStartHour: 23, // 23:00
+                  dndStartHour,
                   dndStartMinute: 0,
-                  dndEndHour: 6, // 06:00
+                  dndEndHour,
                   dndEndMinute: 0,
                   fcmTokens: ['token-b-1'],
                   pmNotificationPreview: true,
@@ -483,7 +498,10 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
   });
 
   test('handles DND with start <= end (same-day window, line 100-101)', async () => {
-    // DND 8:00-17:00 — test runs at some time, this exercises line 100
+    // DND 00:00-23:59 — a window spanning the WHOLE day, so the user is inside
+    // it whatever time this runs. That is what makes this test clock-independent
+    // while still taking the same-day (start <= end) branch at conversations.js:114.
+    // (The comment here used to claim 8:00-17:00, which the fixture never was.)
     let getAllCallCount = 0;
     mockGetAll.mockImplementation((...refs) => {
       getAllCallCount++;
