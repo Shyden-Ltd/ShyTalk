@@ -94,14 +94,26 @@ describe('iosApp/Configurations/Local.xcconfig', () => {
     );
   });
 
+  // Without this the Debug-Local device build links the RELEASE Kotlin/Native
+  // framework against a debug app and fails — Dev.xcconfig has carried it
+  // since the dev flavour was wired up, Local never did, which made
+  // Debug-Local the ONE configuration that could not build for a device
+  // (found 2026-07-27, when the iPhone could not be brought up at all).
+  test('declares KOTLIN_FRAMEWORK_BUILD_TYPE = debug so Debug-Local can build for a device', () => {
+    expect(xcconfigText).toMatch(/^KOTLIN_FRAMEWORK_BUILD_TYPE\s*=\s*debug$/m);
+  });
+
   // Pin the total variable count so a stray addition (typo, copy-paste,
   // experimental key) doesn't silently land alongside the documented
-  // six. Six values × 1 line each, no continuation lines in the
-  // current file.
-  test('contains exactly six variable declarations', () => {
+  // seven. Seven values × 1 line each, no continuation lines in the
+  // current file. Bumped 6 → 7 with KOTLIN_FRAMEWORK_BUILD_TYPE above;
+  // the count alone is a weak assertion, so it is paired with a named
+  // check per variable — bumping this number without adding one would
+  // let an unreviewed key in.
+  test('contains exactly seven variable declarations', () => {
     const varLines = xcconfigText.match(/^[A-Z_][A-Z0-9_]*\s*=/gm);
     expect(varLines).not.toBeNull();
-    expect(varLines.length).toBe(6);
+    expect(varLines.length).toBe(7);
   });
 
   // Phase 3.2 may add `#include "Pods/Target Support Files/…"` once
