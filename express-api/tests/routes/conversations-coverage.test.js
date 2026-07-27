@@ -105,7 +105,21 @@ beforeEach(() => {
 // ─── App setup ───────────────────────────────────────────────────
 
 const conversationsRouter = require('../../src/routes/conversations');
-const { waitFor } = require('../_helpers/wait-for.js');
+const { waitFor, waitForCall } = require('../_helpers/wait-for.js');
+
+/**
+ * Asserts the fire-and-forget notification path did NOT push, without sleeping.
+ *
+ * A negative can't be proven by `waitFor` — it holds at t=0, so the poll would
+ * return instantly and the test would look rigorous while proving nothing.
+ * Instead give a push the same window it demonstrably lands inside on the
+ * positive-path tests and require that none arrives: `waitForCall` REJECTS on
+ * timeout, so the rejection IS the pass and an arriving push fails the test.
+ */
+async function expectNoPush(mockFn, windowMs = 500) {
+  await expect(waitForCall(mockFn, 1, { timeout: windowMs })).rejects.toThrow();
+  expect(mockFn).not.toHaveBeenCalled();
+}
 
 function createApp(uniqueId = 'user-A') {
   const app = express();
@@ -286,8 +300,28 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
       .send({ text: 'Hello group', senderName: 'Alice', type: 'TEXT' });
 
     expect(res.status).toBe(200);
-    // Allow time for fire-and-forget notifications
-    await new Promise((r) => setTimeout(r, 50));
+    // This test previously ended on a bare 50ms sleep with NOTHING asserted
+    // about the notification it exists to cover — a guaranteed pass. Assert
+    // the real contract instead: recipient C has pmNotificationPreview:false,
+    // so conversations.js:172-180 must redact the body and say so explicitly,
+    // and a group send must carry the group name in senderName.
+    await waitFor(() => expect(mockSendFcmToTokens).toHaveBeenCalledTimes(2));
+    // Locate each recipient by its OWN tokens rather than by call order —
+    // recipient order is an implementation detail of the getAll fan-out, and
+    // indexing calls[0] silently asserted against whichever push happened to
+    // go first (it was B's, which is why this caught a wrong assumption).
+    const pushFor = (token) =>
+      mockSendFcmToTokens.mock.calls.find(([tokens]) => tokens.includes(token))[1];
+
+    // B opted INTO previews: the real body goes through.
+    expect(pushFor('token-b-1').messageText).toBe('Hello group');
+    expect(pushFor('token-b-1').showPreview).toBe('true');
+    // C opted OUT: conversations.js:177 redacts the body and :180 says so.
+    expect(pushFor('token-c-1').messageText).toBe('New message');
+    expect(pushFor('token-c-1').showPreview).toBe('false');
+    // Group sends carry the group name in senderName for both.
+    expect(pushFor('token-c-1').isGroup).toBe('true');
+    expect(pushFor('token-c-1').senderName).toContain('Alice');
   });
 
   test('skips notification when user has pmNotificationsEnabled=false (line 91)', async () => {
@@ -310,9 +344,8 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
       .send({ text: 'Hello', senderName: 'Alice', type: 'TEXT' });
 
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
     // FCM should NOT have been called for user-B
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    await expectNoPush(mockSendFcmToTokens);
   });
 
   test('skips notification when conversation is muted (line 109)', async () => {
@@ -379,9 +412,8 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
       .send({ text: 'Hello', senderName: 'Alice', type: 'TEXT' });
 
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
     // sendFcmToTokens should not have been called
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    await expectNoPush(mockSendFcmToTokens);
   });
 
   test('cleans up invalid FCM tokens (lines 127-129)', async () => {
@@ -414,9 +446,7 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
       .send({ text: 'Hello', senderName: 'Alice', type: 'TEXT' });
 
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
-
-    expect(mockSendFcmToTokens).toHaveBeenCalled();
+    await waitFor(() => expect(mockSendFcmToTokens).toHaveBeenCalled());
     // UK OSA #17 PR 11 — the DM push must thread sender + recipient
     // identities so the FCM dispatcher's cohort filter can fire as a
     // last line of defence. Asserting the shape here pins the contract
@@ -483,9 +513,8 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
       .send({ text: 'Hello', senderName: 'Alice', type: 'TEXT' });
 
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
     // User is in DND, so no FCM call
-    expect(mockSendFcmToTokens).not.toHaveBeenCalled();
+    await expectNoPush(mockSendFcmToTokens);
   });
 
   test('handles DND with start > end (overnight window, line 102-103)', async () => {
@@ -641,12 +670,13 @@ describe('POST /api/conversations/:id/messages — fire-and-forget error handlin
 
     // Should still return 200 — un-hide is fire-and-forget
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
     // Error should have been logged
-    expect(log.error).toHaveBeenCalledWith(
-      'conversations',
-      expect.stringContaining('un-hide'),
-      expect.any(Object),
+    await waitFor(() =>
+      expect(log.error).toHaveBeenCalledWith(
+        'conversations',
+        expect.stringContaining('un-hide'),
+        expect.any(Object),
+      ),
     );
   });
 
@@ -669,11 +699,12 @@ describe('POST /api/conversations/:id/messages — fire-and-forget error handlin
       .send({ text: 'Hello', senderName: 'Alice' });
 
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
-    expect(log.error).toHaveBeenCalledWith(
-      'conversations',
-      expect.stringContaining('RTDB'),
-      expect.any(Object),
+    await waitFor(() =>
+      expect(log.error).toHaveBeenCalledWith(
+        'conversations',
+        expect.stringContaining('RTDB'),
+        expect.any(Object),
+      ),
     );
   });
 
@@ -696,9 +727,8 @@ describe('POST /api/conversations/:id/messages — fire-and-forget error handlin
       .send({ text: 'Hello', senderName: 'Alice' });
 
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
     // Either the notification error or the outer catch should log
-    expect(log.error).toHaveBeenCalled();
+    await waitFor(() => expect(log.error).toHaveBeenCalled());
   });
 });
 
@@ -815,13 +845,13 @@ describe('POST /api/conversations/:id/messages — reply and optional fields', (
       .send({ text: 'Hey everyone', senderName: 'Alice', type: 'TEXT' });
 
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 100));
-    // Check FCM was called with group name in senderName
-    if (mockSendFcmToTokens.mock.calls.length > 0) {
-      const data = mockSendFcmToTokens.mock.calls[0][1];
-      expect(data.senderName).toContain('Best Friends');
-      expect(data.isGroup).toBe('true');
-    }
+    // The old `if (calls.length > 0)` guard meant a push that never fired
+    // skipped both assertions and the test still passed — the exact thing this
+    // test exists to catch. Wait for the push, then assert unconditionally.
+    await waitFor(() => expect(mockSendFcmToTokens).toHaveBeenCalled());
+    const data = mockSendFcmToTokens.mock.calls[0][1];
+    expect(data.senderName).toContain('Best Friends');
+    expect(data.isGroup).toBe('true');
   });
 });
 

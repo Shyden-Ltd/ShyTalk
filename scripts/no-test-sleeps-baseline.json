@@ -13,7 +13,6 @@
   "express-api/tests/routes/admin-users-warn-room-cascade.test.js": 1,
   "express-api/tests/routes/admin-users-write.test.js": 1,
   "express-api/tests/routes/banned-claim-lifecycle.test.js": 2,
-  "express-api/tests/routes/conversations-coverage.test.js": 9,
   "express-api/tests/routes/cron-account-deletion.test.js": 1,
   "express-api/tests/routes/data-export.test.js": 4,
   "express-api/tests/routes/device-info.test.js": 1,
