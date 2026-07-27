@@ -136,10 +136,11 @@ describe('POST /api/reports - FCM + cleanupInvalidAdminTokens', () => {
       .post('/api/reports')
       .send({ reportedUserId: 'target', reason: 'spam' });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(sendFcmToTokens).toHaveBeenCalledWith(
-      ['t1', 't2', 't3'],
-      expect.objectContaining({ type: 'ADMIN_NEW_REPORT' }),
+    await waitFor(() =>
+      expect(sendFcmToTokens).toHaveBeenCalledWith(
+        ['t1', 't2', 't3'],
+        expect.objectContaining({ type: 'ADMIN_NEW_REPORT' }),
+      ),
     );
   });
 
@@ -214,10 +215,11 @@ describe('POST /api/reports - FCM + cleanupInvalidAdminTokens', () => {
       .post('/api/reports')
       .send({ reportedUserId: 'target', reason: 'spam' });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(sendFcmToTokens).toHaveBeenCalledWith(
-      ['t1'],
-      expect.objectContaining({ reportedUserName: 'Unknown' }),
+    await waitFor(() =>
+      expect(sendFcmToTokens).toHaveBeenCalledWith(
+        ['t1'],
+        expect.objectContaining({ reportedUserName: 'Unknown' }),
+      ),
     );
   });
 
@@ -355,11 +357,12 @@ describe('POST /api/reports/:id/resolve - edge cases', () => {
     });
     const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'warned' });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(log.error).toHaveBeenCalledWith(
-      'reports',
-      'Failed to send warning PM',
-      expect.any(Object),
+    await waitFor(() =>
+      expect(log.error).toHaveBeenCalledWith(
+        'reports',
+        'Failed to send warning PM',
+        expect.any(Object),
+      ),
     );
   });
 
@@ -445,8 +448,11 @@ describe('POST /api/reports/:id/resolve - edge cases', () => {
       .post('/api/reports/r1/resolve')
       .send({ action: 'suspended', canAppeal: true });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
-    const pm = sendSystemPm.mock.calls.find((c) => c[0] === 't' && c[1].includes('suspended'));
+    let pm;
+    await waitFor(() => {
+      pm = sendSystemPm.mock.calls.find((c) => c[0] === 't' && c[1].includes('suspended'));
+      expect(pm).toBeDefined();
+    });
     expect(pm[1]).toContain('submit an appeal');
   });
 
@@ -465,8 +471,11 @@ describe('POST /api/reports/:id/resolve - edge cases', () => {
       .post('/api/reports/r1/resolve')
       .send({ action: 'suspended', canAppeal: false });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
-    const pm = sendSystemPm.mock.calls.find((c) => c[0] === 't' && c[1].includes('suspended'));
+    let pm;
+    await waitFor(() => {
+      pm = sendSystemPm.mock.calls.find((c) => c[0] === 't' && c[1].includes('suspended'));
+      expect(pm).toBeDefined();
+    });
     expect(pm[1]).not.toContain('submit an appeal');
   });
 
@@ -723,9 +732,9 @@ describe('POST /api/reports/resolve-all/:userId - warn + suspend', () => {
       .post('/api/reports/resolve-all/target')
       .send({ action: 'dismissed' });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
-    const calls = sendSystemPm.mock.calls.filter((c) => c[1].includes('reviewed'));
-    expect(calls).toHaveLength(2);
+    await waitFor(() =>
+      expect(sendSystemPm.mock.calls.filter((c) => c[1].includes('reviewed'))).toHaveLength(2),
+    );
   });
 
   it('returns 500 on error', async () => {
@@ -751,9 +760,9 @@ describe('POST /api/reports/resolve-all/:userId - warn + suspend', () => {
       .post('/api/reports/resolve-all/target')
       .send({ action: 'warned' });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
-    const pm = sendSystemPm.mock.calls.find((c) => c[1].includes('warning'));
-    expect(pm).toBeDefined();
+    await waitFor(() =>
+      expect(sendSystemPm.mock.calls.find((c) => c[1].includes('warning'))).toBeDefined(),
+    );
   });
 
   it('sends suspension PM with appeal text in bulk', async () => {
@@ -772,8 +781,11 @@ describe('POST /api/reports/resolve-all/:userId - warn + suspend', () => {
       .post('/api/reports/resolve-all/target')
       .send({ action: 'suspended', canAppeal: true });
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 50));
-    const pm = sendSystemPm.mock.calls.find((c) => c[1].includes('suspended'));
+    let pm;
+    await waitFor(() => {
+      pm = sendSystemPm.mock.calls.find((c) => c[1].includes('suspended'));
+      expect(pm).toBeDefined();
+    });
     expect(pm[1]).toContain('submit an appeal');
   });
 
@@ -1201,9 +1213,11 @@ describe('Pass-7/8 backfill: bulk-resolve audit-log resilience', () => {
       .send({ action: 'dismissed' });
 
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 20));
-    const auditEntry = findLastAuditWrite(mockDocSet);
-    expect(auditEntry).not.toBeNull();
+    let auditEntry;
+    await waitFor(() => {
+      auditEntry = findLastAuditWrite(mockDocSet);
+      expect(auditEntry).not.toBeNull();
+    });
     expect(auditEntry.action).toBe('RESOLVE_ALL_REPORTS');
     expect(auditEntry.targetUserId).toBe('firebase-uid-77');
     // Lock release IS critical-path even on resolveUniqueId throw.
@@ -1237,11 +1251,12 @@ describe('Pass-7/8 backfill: bulk-resolve audit-log resilience', () => {
 
     // Critical: audit-log throw must not 500 the request after state has committed.
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(log.error).toHaveBeenCalledWith(
-      'reports',
-      'Failed to write RESOLVE_ALL_REPORTS audit log',
-      expect.any(Object),
+    await waitFor(() =>
+      expect(log.error).toHaveBeenCalledWith(
+        'reports',
+        'Failed to write RESOLVE_ALL_REPORTS audit log',
+        expect.any(Object),
+      ),
     );
     // Lock release IS critical-path even when audit fails.
     const { db } = require('../../src/utils/firebase');
@@ -1277,11 +1292,12 @@ describe('Pass-8 backfill: single-resolve audit-log .set() fire-and-forget', () 
     const res = await request(app).post('/api/reports/r1/resolve').send({ action: 'dismissed' });
 
     expect(res.status).toBe(200);
-    await new Promise((r) => setTimeout(r, 20));
-    expect(log.error).toHaveBeenCalledWith(
-      'reports',
-      'Failed to write RESOLVE_REPORT audit log',
-      expect.any(Object),
+    await waitFor(() =>
+      expect(log.error).toHaveBeenCalledWith(
+        'reports',
+        'Failed to write RESOLVE_REPORT audit log',
+        expect.any(Object),
+      ),
     );
     // Lock release IS critical-path even when audit fails. Path-tight to
     // catch a regression where the route deletes a different document.
