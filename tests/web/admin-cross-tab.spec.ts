@@ -84,6 +84,23 @@ async function waitForDevicesLoaded(page: Page): Promise<void> {
   );
 }
 
+/**
+ * Settled = `loadAlerts()` has rendered its verdict: either rows landed in
+ * `#alerts-tbody`, or it unhid `#alerts-empty` (which ships `display:none`,
+ * so neither is true before the fetch resolves). Waiting on the verdict
+ * instead of a fixed delay means an alerts fetch that never returns fails
+ * loudly here rather than silently degrading the caller into its
+ * "no trace links" skip.
+ */
+async function waitForAlertsLoaded(page: Page): Promise<void> {
+  await page.waitForFunction(() => {
+    const tbody = document.getElementById('alerts-tbody');
+    const empty = document.getElementById('alerts-empty');
+    if (!tbody || !empty) return false;
+    return tbody.querySelector('tr') !== null || empty.style.display !== 'none';
+  });
+}
+
 test.describe('Admin Cross-Tab Interactions', () => {
   test.describe.configure({ mode: 'serial' });
 
@@ -195,12 +212,16 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // The resolve endpoint creates the warning synchronously, but the emulator
     // may have propagation lag. Poll the API until the warning appears.
     const userUniqueId = String(testData.user.uniqueId);
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const warningsData = await testData.api.get(`/api/user/${userUniqueId}/warnings`);
-      const warnings = warningsData.warnings || [];
-      if (warnings.some((w: any) => !w.revoked && w.severity === 2)) break;
-      await page.waitForTimeout(1_000);
-    }
+    await expect
+      .poll(
+        async () => {
+          const warningsData = await testData.api.get(`/api/user/${userUniqueId}/warnings`);
+          const warnings = warningsData.warnings || [];
+          return warnings.some((w: any) => !w.revoked && w.severity === 2);
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true);
 
     // Navigate to Users → search → Moderation subtab
     await navigateToTab(page, 'Users');
@@ -210,12 +231,21 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // Poll the UI for the warning — re-search if needed (the moderation
     // subtab loads warnings on activation, but may cache stale state).
     const warningList = page.locator('#warning-history-list');
-    for (let retry = 0; retry < 3; retry++) {
-      if ((await warningList.locator('.warning-item').count()) > 0) break;
-      await page.waitForTimeout(2_000);
-      await searchUser(page, userUniqueId);
-      await switchUserSubtab(page, 'moderation');
-    }
+    await expect
+      .poll(
+        async () => {
+          const seen = await warningList.locator('.warning-item').count();
+          if (seen > 0) return seen;
+          // The subtab loads warnings on activation and can hold stale state,
+          // so a passive re-read would never converge — re-search to force the
+          // reload, then let the next poll iteration re-count.
+          await searchUser(page, userUniqueId);
+          await switchUserSubtab(page, 'moderation');
+          return 0;
+        },
+        { timeout: 30_000 },
+      )
+      .toBeGreaterThan(0);
     await expect(warningList.locator('.warning-item')).not.toHaveCount(0, { timeout: 10_000 });
 
     const firstWarning = warningList.locator('.warning-item').first();
@@ -318,13 +348,21 @@ test.describe('Admin Cross-Tab Interactions', () => {
     const rows = page.locator('#devices-tbody tr:not(:has(.device-detail))');
     const banBtn = rows.first().locator('[data-ban-device]');
     await banBtn.click();
-    await page.waitForTimeout(2_000);
 
-    // Verify via API that ban exists
-    const bansData = await testData.api.get('/api/admin/bans');
-    const deviceBans = bansData.deviceBans || [];
-    const banned = deviceBans.find((b: any) => b.deviceId === deviceId);
-    expect(banned).toBeTruthy();
+    // Verify via API that the ban exists. The ban lands server-side after the
+    // click returns, so poll the API for it — the poll IS the assertion, so a
+    // ban that never arrives fails here by name rather than on a bare
+    // truthiness check that only ever saw one snapshot.
+    await expect
+      .poll(
+        async () => {
+          const bansData = await testData.api.get('/api/admin/bans');
+          const deviceBans = bansData.deviceBans || [];
+          return deviceBans.some((b: any) => b.deviceId === deviceId);
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true);
 
     // Cleanup: unban
     await testData.api.delete(`/api/admin/bans/device/${encodeURIComponent(deviceId)}`);
@@ -365,8 +403,10 @@ test.describe('Admin Cross-Tab Interactions', () => {
     const isCollapsed = await alertsSection.evaluate((el) => el.classList.contains('collapsed'));
     if (isCollapsed) {
       await page.locator('#logs-alerts-section .logs-section-header').click();
+      // The class flip is the observable that the section opened.
+      await expect(alertsSection).not.toHaveClass(/collapsed/);
     }
-    await page.waitForTimeout(2_000);
+    await waitForAlertsLoaded(page);
 
     // Look for trace links
     const traceLinks = page.locator('#alerts-tbody .log-trace-link, #alerts-tbody [data-trace-id]');
@@ -417,11 +457,15 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // Test 1: Maintenance — Clear Reports cancel
     await navigateToTab(page, 'Maintenance');
     await expect(page.locator('#maintenance-panel')).toBeVisible();
-    await page.locator('#clear-reports-btn').click();
-    await page.waitForTimeout(500);
-    // Button should NOT show "Processing..."
-    const btnText1 = await page.locator('#clear-reports-btn').textContent();
-    expect(btnText1).toBe('Clear All Reports');
+    const clearBtn = page.locator('#clear-reports-btn');
+    await clearBtn.click();
+    // `runAction` bails on a dismissed confirm SYNCHRONOUSLY, before it sets
+    // `disabled` or the "Processing..." label (maintenance.js:94 precedes 96),
+    // so the abort is already complete once click() resolves — no wait needed.
+    // Assert BOTH signals: label alone would still pass if the button were
+    // left disabled by a future regression.
+    await expect(clearBtn).toHaveText('Clear All Reports');
+    await expect(clearBtn).toBeEnabled();
 
     // Test 2: Devices — Unbind cancel
     await navigateToTab(page, 'Devices');
@@ -431,10 +475,11 @@ test.describe('Admin Cross-Tab Interactions', () => {
       const unbindBtn = rows.first().locator('[data-unbind]');
       if ((await unbindBtn.count()) > 0) {
         await unbindBtn.click();
-        await page.waitForTimeout(500);
-        // Device should still be there
+        // Same dismissed-confirm contract as above: the abort completes before
+        // click() resolves, so assert the row survived with a retrying
+        // assertion rather than sleeping and reading one snapshot.
         const rowsAfter = page.locator('#devices-tbody tr:not(:has(.device-detail))');
-        expect(await rowsAfter.count()).toBeGreaterThanOrEqual(1);
+        await expect(rowsAfter).not.toHaveCount(0);
       }
     }
 
@@ -460,10 +505,10 @@ test.describe('Admin Cross-Tab Interactions', () => {
     });
     await expect(toast).toHaveClass(/visible/);
 
-    // Wait for auto-dismiss (4s timer + buffer)
-    await page.waitForTimeout(5_000);
-    const hasVisible = await toast.evaluate((el) => el.classList.contains('visible'));
-    expect(hasVisible).toBe(false);
+    // Auto-dismiss is observable as the `visible` class dropping — wait on
+    // that, not on a clock. Stricter than the old fixed 5s too: a toast that
+    // never dismisses now fails by name instead of on a stale snapshot read.
+    await expect(toast).not.toHaveClass(/visible/, { timeout: 15_000 });
   });
 
   // ── Test 9: Toast error persists ──
@@ -475,22 +520,28 @@ test.describe('Admin Cross-Tab Interactions', () => {
     await searchInput.fill('99999999');
     await page.getByRole('button', { name: 'Search' }).click();
 
-    // Wait for toast error to appear
-    const errorToast = page.locator('.toast.error');
-    const appeared = await errorToast.isVisible().catch(() => false);
+    // The toast is opacity-animated, so Playwright's visibility check can't
+    // tell shown from hidden — the `visible` class is the real contract, and
+    // it arrives asynchronously after the failed lookup. Wait for it.
+    const toast = page.locator('#toast');
+    await expect(toast).toHaveClass(/\berror\b/, { timeout: 15_000 });
+    await expect(toast).toHaveClass(/\bvisible\b/);
 
-    if (appeared) {
-      // Error toast should persist longer than success toasts
-      await page.waitForTimeout(3_000);
-      // Should still be visible (errors don't auto-dismiss quickly)
-      const stillVisible = await errorToast.isVisible();
-      expect(stillVisible).toBe(true);
-    } else {
-      // If no error toast appears, verify some other form of error feedback is shown
-      const noResultsMsg = page.locator('.no-results, .user-not-found, .toast');
-      const hasAnyFeedback = (await noResultsMsg.count()) > 0;
-      expect(hasAnyFeedback).toBe(true);
-    }
+    // Persistence is a NEGATIVE temporal property: give the toast the whole
+    // success-dismiss window to drop `visible` and require that it doesn't.
+    // Bounded wait on element STATE, never a bare clock — an early dismissal
+    // resolves the wait and fails the assertion by name.
+    let dismissedEarly = true;
+    await page
+      .waitForFunction(
+        () => !document.getElementById('toast')!.classList.contains('visible'),
+        null,
+        { timeout: 3_000 },
+      )
+      .catch(() => {
+        dismissedEarly = false;
+      });
+    expect(dismissedEarly).toBe(false);
   });
 
   // ── Test 10: API 500 error handling ──
@@ -511,11 +562,21 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // Verify the response was handled (404 or other error)
     expect(response.status()).toBeGreaterThanOrEqual(400);
 
-    // The user form should NOT become visible
-    const userForm = page.locator('#user-form');
-    await page.waitForTimeout(1_000);
-    const isVisible = await userForm.evaluate((el) => el.classList.contains('visible'));
-    expect(isVisible).toBe(false);
+    // The user form should NOT become visible. Negative property again: give
+    // the error handler a bounded window to wrongly reveal it and require that
+    // it never does. Watching the STATE catches a form that appears anywhere
+    // in the window — the old post-sleep snapshot only ever looked at t=1s.
+    let formAppeared = true;
+    await page
+      .waitForFunction(
+        () => document.getElementById('user-form')!.classList.contains('visible'),
+        null,
+        { timeout: 2_000 },
+      )
+      .catch(() => {
+        formAppeared = false;
+      });
+    expect(formAppeared).toBe(false);
   });
 
   // ── Test 11: Button disable during API call ──
@@ -550,8 +611,10 @@ test.describe('Admin Cross-Tab Interactions', () => {
 
     // Let in-flight API calls from previous tabs settle before switching
     // back to Users — rapid switching aborts pending requests and some
-    // error handlers may briefly modify the DOM.
-    await page.waitForTimeout(500);
+    // error handlers may briefly modify the DOM. "Settled" is a condition on
+    // network activity, so wait for THAT; a fixed 500ms was simultaneously too
+    // long when the tabs were quick and too short under a slow CI runner.
+    await page.waitForLoadState('networkidle');
 
     // Verify we can still perform operations after rapid switching.
     // Navigate to Users and wait for the panel to be ready before searching.

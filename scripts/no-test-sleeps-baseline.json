@@ -35,7 +35,6 @@
   "tests/web/admin-audit-log.spec.ts": 6,
   "tests/web/admin-banners.spec.ts": 1,
   "tests/web/admin-console-errors.spec.ts": 6,
-  "tests/web/admin-cross-tab.spec.ts": 10,
   "tests/web/admin-devices.spec.ts": 3,
   "tests/web/admin-empty-states.spec.ts": 3,
   "tests/web/admin-init-idempotency.spec.ts": 1,
