@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { publishAuthIdentity } from './helpers/auth-identity';
 
 /**
  * Shared header component tests.
@@ -125,16 +126,12 @@ test.describe('Shared Header — Authenticated state', () => {
 
   test('shows sign out option when authenticated', async ({ page }) => {
     await page.goto('/roadmap.html');
+    await publishAuthIdentity(page, {
+      uid: 'test-123',
+      displayName: 'TestUser',
+      profile: { uniqueId: 1001, displayName: 'TestUser' },
+    });
     await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-123',
-          displayName: 'TestUser',
-          getIdToken: () => Promise.resolve('fake'),
-        },
-        profile: { uniqueId: 1001, displayName: 'TestUser' },
-      };
       document.dispatchEvent(
         new CustomEvent('shytalk-auth-changed', {
           detail: {
@@ -156,22 +153,20 @@ test.describe('Shared Header — Authenticated state', () => {
 
   test('Sign In button hidden when authenticated', async ({ page }) => {
     await page.goto('/roadmap.html');
-    // Wait for the REAL auth bootstrap to settle before injecting, or it races:
     // shared-header.js re-renders on every `shytalk-auth-changed`, so a late
-    // onAuthStateChanged(null) would land AFTER the injection and restore the
-    // Sign In button. That is exactly what failed on webkit/mobile-safari in CI
-    // while passing locally — the old 1s sleep was the guess (SHY-0245).
+    // onAuthStateChanged(null) landing AFTER the injection restores the Sign In
+    // button. Waiting for the signed-out render (as this test used to) is NOT
+    // enough — it proves the header rendered once, not that the app's
+    // updateGlobalAuth() has already run, so a later one still clobbers. That
+    // is why this kept failing on webkit/mobile-safari in CI. publishAuthIdentity
+    // pins the identity across reassignment, so ordering stops mattering.
     await expect(page.locator('[data-testid="header-signin-btn"]')).toBeVisible();
+    await publishAuthIdentity(page, {
+      uid: 'test-123',
+      displayName: 'TestUser',
+      profile: { uniqueId: 1001, displayName: 'TestUser' },
+    });
     await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-123',
-          displayName: 'TestUser',
-          getIdToken: () => Promise.resolve('fake'),
-        },
-        profile: { uniqueId: 1001, displayName: 'TestUser' },
-      };
       document.dispatchEvent(
         new CustomEvent('shytalk-auth-changed', {
           detail: {

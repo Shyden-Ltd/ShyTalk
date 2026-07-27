@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { publishAuthIdentity } from './helpers/auth-identity';
 
 /**
  * Roadmap page authentication flow tests.
@@ -1187,17 +1188,11 @@ test.describe('Roadmap Auth — Bell icon auth behaviour', () => {
   });
 
   test('bell icon when authenticated does NOT open login modal', async ({ page }) => {
-    // Simulate authenticated state
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-123',
-          displayName: 'TestUser',
-          getIdToken: () => Promise.resolve('fake'),
-        },
-        profile: { uniqueId: 1001, displayName: 'TestUser' },
-      };
+    // Simulate authenticated state — clobber-proof (see publishAuthIdentity).
+    await publishAuthIdentity(page, {
+      uid: 'test-123',
+      displayName: 'TestUser',
+      profile: { uniqueId: 1001, displayName: 'TestUser' },
     });
 
     const bell = page.locator('[data-testid="feature-bell"]').first();
@@ -1243,18 +1238,14 @@ test.describe('Roadmap Auth — Bell icon auth behaviour', () => {
       }),
     );
 
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-race-456',
-          displayName: 'RaceUser',
-          getIdToken: () => Promise.resolve('fake'),
-        },
-        // Critical: profile is null (still loading), NOT undefined or false.
-        // This is the exact race-window state that produced the bug.
-        profile: null,
-      };
+    // Critical: profile is null (still loading), NOT undefined or false — the
+    // exact race-window state that produced the bug. publishAuthIdentity also
+    // re-pins it across the app's own reassignment, so a bootstrap that lands
+    // mid-test can't quietly turn this into the "profile loaded" case.
+    await publishAuthIdentity(page, {
+      uid: 'test-race-456',
+      displayName: 'RaceUser',
+      profile: null,
     });
 
     const bell = page.locator('[data-testid="feature-bell"]').first();
@@ -1269,17 +1260,11 @@ test.describe('Roadmap Auth — Bell icon auth behaviour', () => {
   });
 
   test('bell icon when authenticated opens subscribe modal', async ({ page }) => {
-    // Simulate authenticated state with profile
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-123',
-          displayName: 'TestUser',
-          getIdToken: () => Promise.resolve('fake'),
-        },
-        profile: { uniqueId: 1001, displayName: 'TestUser' },
-      };
+    // Simulate authenticated state with profile — clobber-proof.
+    await publishAuthIdentity(page, {
+      uid: 'test-123',
+      displayName: 'TestUser',
+      profile: { uniqueId: 1001, displayName: 'TestUser' },
     });
 
     // Mock the subscribe API to avoid real network call

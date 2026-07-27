@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { publishAuthIdentity } from './helpers/auth-identity';
 
 /**
  * Suggestions board tests.
@@ -2394,17 +2395,13 @@ test.describe('Suggestions Board — Race-window auth (W1 follow-up)', () => {
   test('vote click while profile is loading (null) opens NO login modal', async ({ page }) => {
     // Race-window state as published by `roadmap-auth.js` between
     // onAuthStateChanged firing and the ShyTalk profile fetch resolving.
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-race-sb-1',
-          displayName: 'RaceSBUser',
-          getIdToken: () => Promise.resolve('fake-token'),
-        },
-        // Critical: profile is null (loading), NOT undefined or false.
-        profile: null,
-      };
+    // Critical: profile is null (loading), NOT undefined or false.
+    // publishAuthIdentity keeps it that way across the app's own reassignment.
+    await publishAuthIdentity(page, {
+      uid: 'test-race-sb-1',
+      displayName: 'RaceSBUser',
+      idToken: 'fake-token',
+      profile: null,
     });
 
     await page.locator('[data-testid="vote-up-test-sug-1"]').click();
@@ -2424,16 +2421,11 @@ test.describe('Suggestions Board — Race-window auth (W1 follow-up)', () => {
     // object-profile branch of `hasValidAccount` so a future inversion of
     // the comparison (`auth.profile === false` instead of `!== false`)
     // is loudly rejected here, not silently in production.
-    await page.evaluate(() => {
-      (window as any).shytalkAuth = {
-        ...(window as any).shytalkAuth,
-        currentUser: {
-          uid: 'test-auth-sb',
-          displayName: 'AuthUser',
-          getIdToken: () => Promise.resolve('fake-token'),
-        },
-        profile: { uniqueId: 1001, displayName: 'AuthUser' },
-      };
+    await publishAuthIdentity(page, {
+      uid: 'test-auth-sb',
+      displayName: 'AuthUser',
+      idToken: 'fake-token',
+      profile: { uniqueId: 1001, displayName: 'AuthUser' },
     });
 
     await page.locator('[data-testid="vote-up-test-sug-1"]').click();
