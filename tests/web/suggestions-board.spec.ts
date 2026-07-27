@@ -101,7 +101,24 @@ const MOCK_SUGGESTIONS_RESPONSE = {
  * Sets up API route interception so tests get consistent mock data
  * instead of relying on the dev database. Must be called BEFORE page.goto().
  */
-async function setupSuggestionsMocks(page: Page) {
+/**
+ * @param persistVotes when true the fixture RECORDS votes and replays them in
+ *   the `myVotes` map of subsequent list responses — the same contract the real
+ *   API has (suggestions-board.js:379 seeds `state.myVotes` from it, and :1305
+ *   renders `sg-vote-btn--active` off it).
+ *
+ *   Off by default so every existing test keeps the exact static payloads it
+ *   was written against. Without it a "vote survives navigation" test is
+ *   unprovable BY CONSTRUCTION: the vote endpoint returns a fixed body and the
+ *   list is a constant, so a reload always renders an unvoted board no matter
+ *   what the product does.
+ */
+async function setupSuggestionsMocks(page: Page, { persistVotes = false } = {}) {
+  // suggestionId → 'up' | 'down', mutated by the vote route below and read by
+  // both list routes. Survives page.goto: route handlers outlive navigation.
+  const castVotes: Record<string, string> = {};
+  const withMyVotes = (payload: Record<string, unknown>) =>
+    persistVotes ? { ...payload, myVotes: castVotes } : payload;
   // Mock the main suggestions list endpoint (also covers search via query params)
   await page.route('**/api/suggestions/search*', (route) => {
     const url = new URL(route.request().url());
@@ -121,12 +138,14 @@ async function setupSuggestionsMocks(page: Page) {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        suggestions: filtered,
-        total: filtered.length,
-        page: 1,
-        pageSize: 20,
-      }),
+      body: JSON.stringify(
+        withMyVotes({
+          suggestions: filtered,
+          total: filtered.length,
+          page: 1,
+          pageSize: 20,
+        }),
+      ),
     });
   });
 
@@ -140,6 +159,17 @@ async function setupSuggestionsMocks(page: Page) {
 
   // Mock vote endpoints
   await page.route('**/api/suggestions/*/vote', (route) => {
+    if (persistVotes) {
+      // Mirror the real contract: POST {direction} casts/changes, DELETE
+      // toggles off (suggestions-board.js:400-407).
+      const id = new URL(route.request().url()).pathname.split('/').at(-2) ?? '';
+      if (route.request().method() === 'DELETE') {
+        delete castVotes[id];
+      } else {
+        const direction = route.request().postDataJSON()?.direction;
+        if (direction) castVotes[id] = direction;
+      }
+    }
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -184,12 +214,14 @@ async function setupSuggestionsMocks(page: Page) {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        suggestions: filtered,
-        total: filtered.length,
-        page: 1,
-        pageSize: 20,
-      }),
+      body: JSON.stringify(
+        withMyVotes({
+          suggestions: filtered,
+          total: filtered.length,
+          page: 1,
+          pageSize: 20,
+        }),
+      ),
     });
   });
 }
@@ -1243,20 +1275,58 @@ test.describe('Voting Edge Cases', () => {
   });
 
   test('vote on suggestion, navigate away, come back: vote state preserved', async ({ page }) => {
+    // THREE full navigations plus two board settles do not fit the global 20s
+    // budget on webkit — it timed out mid-`goto` while chromium/firefox had
+    // room to spare. The budget was the failure, not the product, so raise it
+    // for this journey rather than trimming the journey to fit the clock.
+    test.setTimeout(60_000);
+
+    // Re-arm the fixture so it RECORDS the vote; the beforeEach installed the
+    // static one. Registering again takes precedence for these routes.
+    await setupSuggestionsMocks(page, { persistVotes: true });
+    await page.reload();
+    await boardSettled(page);
+
+    // AFTER the reload, never before: publishAuthIdentity writes into the
+    // CURRENT document, and reload() builds a fresh one — injecting first
+    // silently threw the identity away and the click just opened the login
+    // modal. The vote path is auth-gated (`gated: true`), so an anonymous
+    // click never reaches the API at all; the old version of this test voted
+    // as nobody and then asserted nothing, so it passed while proving nothing.
+    await publishAuthIdentity(page, {
+      uid: 'test-vote-persist',
+      displayName: 'VotePersistUser',
+      profile: { uniqueId: 1001, displayName: 'VotePersistUser' },
+    });
+
     const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
     const upvoteBtn = card.locator('[data-testid^="vote-up"]');
-    await upvoteBtn.click();
-    await page.waitForTimeout(300);
+    // Anchor on the vote landing server-side, not on a fixed delay: the
+    // reload below must not race the POST that is meant to be persisted.
+    await Promise.all([
+      page.waitForResponse(
+        (r) => /\/api\/suggestions\/.*\/vote/.test(r.url()) && r.request().method() === 'POST',
+        { timeout: 15_000 },
+      ),
+      upvoteBtn.click(),
+    ]);
+    await expect(upvoteBtn).toHaveClass(/sg-vote-btn--active/);
 
-    // Navigate away
+    // Navigate away, then come back.
     await page.goto('/');
-
-    // Come back
     await page.goto('/roadmap.html');
     await boardSettled(page);
 
-    // Vote state should be preserved
+    // THE POINT OF THE TEST: the board re-seeds `state.myVotes` from the list
+    // response (suggestions-board.js:379) and re-renders the arrow active
+    // (:1305/:1326). If that wiring breaks, the arrow comes back inert — which
+    // is exactly the regression the old assertion-free body could never catch.
+    const upvoteAfter = page
+      .locator('[data-testid^="suggestion-card"], .sg-card')
+      .first()
+      .locator('[data-testid^="vote-up"]');
+    await expect(upvoteAfter).toHaveClass(/sg-vote-btn--active/);
   });
 
   test('two browser tabs: vote in one, other tab reflects updated count on refresh', async ({
