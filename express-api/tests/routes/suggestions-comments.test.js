@@ -101,6 +101,16 @@ jest.mock('../../src/utils/roadmap-notify', () => ({
   notifyRoadmapSubscribers: jest.fn().mockResolvedValue(),
 }));
 
+// SHY-0246: the comment route now notifies subscribers, so the delivery
+// transports must be stubbed here — this suite predates that fan-out.
+jest.mock('../../src/utils/system-pm', () => ({
+  sendSystemPm: jest.fn().mockResolvedValue(),
+}));
+
+jest.mock('../../src/utils/fcm', () => ({
+  sendFcmToTokens: jest.fn().mockResolvedValue([]),
+}));
+
 // ─── App setup ──────────────────────────────────────────────────
 
 let suggestionsRouter;
@@ -602,6 +612,77 @@ describe('Comment Validation & Limits', () => {
     await request(app)
       .post('/api/suggestions/sug1/comments')
       .send({ text: 'Comment 3', isPublic: true })
+      .expect(201);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// SHY-0246 — comment notifications
+//
+// `comment` is one of RoadmapNotification.VALID_TYPES
+// (shared/.../core/model/RoadmapNotification.kt:20) but the route created the
+// comment and returned without telling anybody, so subscribing to a suggestion
+// never produced a comment notification.
+// ═══════════════════════════════════════════════════════════════
+
+describe('POST /suggestions/:id/comments — subscriber notifications (SHY-0246)', () => {
+  const { sendSystemPm } = require('../../src/utils/system-pm');
+
+  function commentableSuggestion(overrides = {}) {
+    mockDocGet.mockImplementation((path) => {
+      if (typeof path === 'string' && path.includes('suggestions/sug1')) {
+        return Promise.resolve(
+          makeSuggestionDoc('sug1', {
+            status: 'accepted',
+            submitterUid: 1001,
+            subscribers: [2002, 3003],
+            ...overrides,
+          }),
+        );
+      }
+      return Promise.resolve({ exists: false });
+    });
+  }
+
+  const notifRecipients = () =>
+    mockCollectionAdd.mock.calls.filter(([name]) => name === 'notifications').map(([, d]) => d.uid);
+
+  test('notifies subscribers and the submitter with a `comment` notification', async () => {
+    commentableSuggestion();
+    // Comment author is someone else entirely.
+    await request(createApp({ uniqueId: 9999 }))
+      .post('/api/suggestions/sug1/comments')
+      .send({ text: 'Great idea, I want this too' })
+      .expect(201);
+
+    expect(notifRecipients().sort()).toEqual([1001, 2002, 3003]);
+    const types = mockCollectionAdd.mock.calls
+      .filter(([name]) => name === 'notifications')
+      .map(([, d]) => d.type);
+    expect(new Set(types)).toEqual(new Set(['suggestion_comment']));
+  });
+
+  test('does NOT notify the comment author about their own comment', async () => {
+    commentableSuggestion();
+    // 2002 is a subscriber AND the author.
+    await request(createApp({ uniqueId: 2002 }))
+      .post('/api/suggestions/sug1/comments')
+      .send({ text: 'Adding my own thoughts' })
+      .expect(201);
+
+    expect(notifRecipients()).not.toContain(2002);
+    expect(notifRecipients().sort()).toEqual([1001, 3003]);
+    expect(sendSystemPm.mock.calls.some(([uid]) => String(uid) === '2002')).toBe(false);
+  });
+
+  test('a comment still succeeds when notification delivery throws', async () => {
+    commentableSuggestion();
+    sendSystemPm.mockRejectedValueOnce(new Error('system pm down'));
+
+    // Fire-and-forget: a delivery failure must never fail the comment itself.
+    await request(createApp({ uniqueId: 9999 }))
+      .post('/api/suggestions/sug1/comments')
+      .send({ text: 'Still posts' })
       .expect(201);
   });
 });

@@ -26,10 +26,43 @@ const SUBJECTS = {
     vi: 'Đề xuất của bạn đã được chấp nhận!',
     zh: '您的建议已被接受！',
   },
-  rejected: { en: 'Your suggestion was declined' },
-  planned: { en: 'Your suggestion has been added to the roadmap' },
-  completed: { en: 'A feature you suggested has shipped!' },
-  merged: { en: 'Your suggestion was merged with an existing one' },
+  // SHY-0246: these four were English-only, and getSubject() falls back to
+  // `en` SILENTLY — a zh/id/vi recipient got English with nothing failing.
+  // Filled for the four supported locales (SHY-0194: en, zh, id, vi); the
+  // other 16 keep the existing English fallback, as they already did here.
+  rejected: {
+    en: 'Your suggestion was declined',
+    zh: '您的建议未被采纳',
+    id: 'Saran Anda ditolak',
+    vi: 'Đề xuất của bạn đã bị từ chối',
+  },
+  planned: {
+    en: 'Your suggestion has been added to the roadmap',
+    zh: '您的建议已加入路线图',
+    id: 'Saran Anda telah ditambahkan ke peta jalan',
+    vi: 'Đề xuất của bạn đã được thêm vào lộ trình',
+  },
+  completed: {
+    en: 'A feature you suggested has shipped!',
+    zh: '您建议的功能已上线！',
+    id: 'Fitur yang Anda sarankan telah dirilis!',
+    vi: 'Tính năng bạn đề xuất đã ra mắt!',
+  },
+  merged: {
+    en: 'Your suggestion was merged with an existing one',
+    zh: '您的建议已与现有建议合并',
+    id: 'Saran Anda telah digabungkan dengan saran yang sudah ada',
+    vi: 'Đề xuất của bạn đã được gộp với một đề xuất hiện có',
+  },
+  // `comment` had NO entry, and an unknown key falls back to SUBJECTS.accepted
+  // — so every comment notification was labelled "Your suggestion was
+  // accepted!". Silently wrong words, not merely untranslated.
+  comment: {
+    en: 'New comment on a suggestion you follow',
+    zh: '您关注的建议有新评论',
+    id: 'Komentar baru pada saran yang Anda ikuti',
+    vi: 'Bình luận mới về đề xuất bạn theo dõi',
+  },
 };
 
 function escapeHtml(text) {

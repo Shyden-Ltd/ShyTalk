@@ -854,6 +854,20 @@ router.post('/suggestions/:id/comments', async (req, res) => {
     };
 
     await db.doc(`suggestions/${id}/comments/${commentId}`).set(comment);
+
+    // SHY-0246: tell the people following this suggestion. `comment` is one of
+    // RoadmapNotification.VALID_TYPES but nothing ever emitted it, so
+    // subscribing produced no comment notifications at all. Awaited rather
+    // than fire-and-forget so the in-app records exist before the client is
+    // told the comment landed; notifySubscribers never throws (it catches per
+    // recipient and again at the top level), so a delivery outage cannot fail
+    // the comment itself.
+    await notifySubscribers(
+      sugData,
+      'comment',
+      { suggestionId: id },
+      { excludeUid: req.auth.uniqueId },
+    );
     // Defensive spread order: even though `comment` is server-built from
     // cherry-picked body fields (authorUid, text, isPublic, createdAt) and
     // therefore has no current `id` input vector, place the spread BEFORE
@@ -891,7 +905,14 @@ async function createAuditEntry(adminUid, action, targetType, targetId, details)
   }
 }
 
-async function notifySubscribers(suggestionData, eventType, extraData = {}) {
+/**
+ * @param {object} [options]
+ * @param {string|number} [options.excludeUid] Recipient to leave out — the
+ *   person who caused the event. Nobody should be notified about their own
+ *   action (SHY-0246). Compared as strings because uids arrive as numbers from
+ *   `req.auth.uniqueId` but as strings from some stored subscriber lists.
+ */
+async function notifySubscribers(suggestionData, eventType, extraData = {}, options = {}) {
   try {
     const subscribers = suggestionData.subscribers || [];
     const submitterUid = suggestionData.submitterUid;
@@ -906,6 +927,17 @@ async function notifySubscribers(suggestionData, eventType, extraData = {}) {
     // to be falsy today but the contract should not depend on that.
     if (submitterUid && !suggestionData.submitterDeleted) {
       uidsToNotify.add(submitterUid);
+    }
+
+    // Nobody is notified about their own action. Compared as strings because
+    // the excluded uid comes from req.auth.uniqueId (a number, auth.js:90)
+    // while stored subscriber lists are not guaranteed to be numeric.
+    if (options.excludeUid !== undefined && options.excludeUid !== null) {
+      for (const candidate of uidsToNotify) {
+        if (String(candidate) === String(options.excludeUid)) {
+          uidsToNotify.delete(candidate);
+        }
+      }
     }
 
     // Reuse the localised email subjects rather than adding a parallel set of

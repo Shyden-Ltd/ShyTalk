@@ -870,3 +870,44 @@ describe('environment-aware fallbacks (env-isolation regression)', () => {
     expect(email.headers['List-Unsubscribe']).toContain('https://api.staging.example.test');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// SHY-0246 — subject coverage across the four supported locales
+//
+// getSubject() falls back to `SUBJECTS.accepted` for an unknown key and to
+// `en` for an unknown locale. Both fallbacks are SILENT, so a missing entry
+// does not fail anything — it just ships the wrong words. `comment` had no
+// entry at all, so a comment notification read "Your suggestion was
+// accepted!", and four of the five keys were English-only.
+// Locale set is en/zh/id/vi per SHY-0194.
+// ═══════════════════════════════════════════════════════════════
+
+describe('getSubject — locale coverage (SHY-0246)', () => {
+  const { getSubject } = require('../../src/utils/suggestion-email-templates');
+  const SUPPORTED = ['zh', 'id', 'vi'];
+  const KEYS = ['accepted', 'rejected', 'planned', 'completed', 'merged', 'comment'];
+
+  test.each(KEYS)('"%s" is translated in every supported locale', (key) => {
+    const en = getSubject(key, 'en');
+    expect(en).toBeTruthy();
+    for (const loc of SUPPORTED) {
+      const translated = getSubject(key, loc);
+      expect(translated).toBeTruthy();
+      // Equal to English means the locale entry is missing and getSubject
+      // silently fell back — the exact failure this test exists to catch.
+      expect(translated).not.toBe(en);
+    }
+  });
+
+  test('"comment" has its OWN subject, not the accepted fallback', () => {
+    // An unknown key returns SUBJECTS.accepted, so without a real entry a
+    // comment notification is labelled as an acceptance.
+    expect(getSubject('comment', 'en')).not.toBe(getSubject('accepted', 'en'));
+    expect(getSubject('comment', 'en')).toMatch(/comment/i);
+  });
+
+  test('an unknown key still returns a non-empty string (no crash)', () => {
+    expect(typeof getSubject('totally_unknown_event', 'en')).toBe('string');
+    expect(getSubject('totally_unknown_event', 'en').length).toBeGreaterThan(0);
+  });
+});
