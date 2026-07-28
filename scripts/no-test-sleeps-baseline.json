@@ -50,7 +50,7 @@
   "tests/web/roadmap-redesign.spec.ts": 6,
   "tests/web/seasonal-theme.spec.ts": 3,
   "tests/web/shared-header-signin-fallback.spec.ts": 1,
-  "tests/web/suggestions-board.spec.ts": 32,
+  "tests/web/suggestions-board.spec.ts": 30,
   "tests/web/suggestions-security.spec.ts": 6,
   "tests/web/translation-verification.spec.ts": 5
 }

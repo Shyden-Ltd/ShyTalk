@@ -144,7 +144,7 @@ function sortLikeApi<T extends { createdAt: number; score?: number }>(
 
 async function setupSuggestionsMocks(
   page: Page,
-  { persistVotes = false, paginate = false, sortable = false } = {},
+  { persistVotes = false, paginate = false, sortable = false, duplicateMatches = 0 } = {},
 ) {
   // suggestionId → 'up' | 'down', mutated by the vote route below and read by
   // both list routes. Survives page.goto: route handlers outlive navigation.
@@ -155,6 +155,30 @@ async function setupSuggestionsMocks(
   await page.route('**/api/suggestions/search*', (route) => {
     const url = new URL(route.request().url());
     const query = url.searchParams.get('q') || '';
+
+    // Duplicate-detection candidates. The board asks for `&limit=3`
+    // (suggestions-board.js:456) AND caps again at render with
+    // `Math.min(suggestions.length, 3)` (:907). Returning MORE than the cap —
+    // deliberately ignoring `limit` — is the only way to prove the CLIENT-side
+    // cap rather than the server's. Opt-in so no other search test moves.
+    if (duplicateMatches > 0) {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          suggestions: Array.from({ length: duplicateMatches }, (_, i) => ({
+            ...MOCK_SUGGESTIONS[i % MOCK_SUGGESTIONS.length],
+            id: `dup-${i + 1}`,
+            title: `Duplicate candidate ${i + 1}`,
+          })),
+          total: duplicateMatches,
+          page: 1,
+          pageSize: duplicateMatches,
+        }),
+      });
+      return;
+    }
+
     const status = url.searchParams.get('status') || '';
     let filtered = MOCK_SUGGESTIONS;
     if (query) {
@@ -778,40 +802,77 @@ test.describe('Suggestions Board — Login Gate', () => {
 // 11.11 — Submission Flow
 // ═══════════════════════════════════════════════════════════════
 
+/**
+ * Opens the suggestion form for real.
+ *
+ * The form is auth-gated twice: `suggest-btn` renders only when `canAct()`
+ * (suggestions-board.js:1116) and `openSuggestModal()` bails through
+ * `requireAuth()` (:766), showing the login modal instead. Every test in this
+ * describe used to guard its body on `if (titleInput.count() > 0)` or assert
+ * nothing at all — because nobody ever signed in, so the form never opened and
+ * the guards were permanently false.
+ */
+async function openSuggestForm(page: Page): Promise<void> {
+  await publishAuthIdentity(page, {
+    uid: 'submitter-1',
+    displayName: 'Submitter',
+    profile: { uniqueId: 1001 },
+  });
+  const suggestBtn = page.locator('[data-testid="suggest-btn"]');
+  await expect(suggestBtn).toBeVisible();
+  await suggestBtn.click();
+  // The title input appearing is the form-open signal; anything else means
+  // requireAuth() sent us to the login modal instead.
+  await expect(page.locator('[data-testid="suggest-title-input"]')).toBeVisible();
+}
+
 test.describe('Suggestions Board — Submission Flow', () => {
   test.beforeEach(async ({ page }) => {
     await setupSuggestionsMocks(page);
     await page.goto('/roadmap.html');
+    await boardSettled(page);
   });
 
-  test('form displays title field with 80 char limit visible', async ({ page }) => {
-    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
-    await suggestBtn.waitFor({ timeout: 10_000 });
-    // Form should show title field with character limit
-    const titleField = page.locator('[data-testid="suggest-title-input"]');
-    const titleLimit = page.locator('[data-testid="suggest-title-count"]');
-    // These will be visible once form is opened (may require login first)
+  test('form displays title field with its character limit', async ({ page }) => {
+    await openSuggestForm(page);
+    await expect(page.locator('[data-testid="suggest-title-input"]')).toBeVisible();
+    const counter = page.locator('[data-testid="suggest-title-count"]');
+    await expect(counter).toBeVisible();
+    // The limit is part of the contract, not just the presence of a counter.
+    await expect(counter).toContainText('80');
   });
 
-  test('form displays description field with 5000 char limit visible', async ({ page }) => {
-    const descField = page.locator('[data-testid="suggest-desc-input"]');
-    const descLimit = page.locator('[data-testid="suggest-desc-count"]');
-    // Description field should show 5000 char limit
+  test('form displays description field with its character limit', async ({ page }) => {
+    await openSuggestForm(page);
+    await expect(page.locator('[data-testid="suggest-desc-input"]')).toBeVisible();
+    const counter = page.locator('[data-testid="suggest-desc-count"]');
+    await expect(counter).toBeVisible();
+    await expect(counter).toContainText('5000');
   });
 
-  test('form displays tags selection', async ({ page }) => {
-    const tagsField = page.locator('[data-testid="suggest-tag-select"]');
-    // Tags picker should be present in the form
+  test('form displays a tag picker with selectable options', async ({ page }) => {
+    await openSuggestForm(page);
+    const tags = page.locator('[data-testid="suggest-tag-select"]');
+    await expect(tags).toBeVisible();
+    // A picker with no options is indistinguishable from a broken one.
+    expect(await tags.locator('option').count()).toBeGreaterThan(0);
   });
 
-  test('form displays language dropdown pre-selected from user pref', async ({ page }) => {
-    const langDropdown = page.locator('[data-testid="suggest-lang-select"]');
-    // Language should be pre-selected based on user's language preference
+  test('form displays a language dropdown with a value selected', async ({ page }) => {
+    await openSuggestForm(page);
+    const lang = page.locator('[data-testid="suggest-lang-select"]');
+    await expect(lang).toBeVisible();
+    expect(await lang.locator('option').count()).toBeGreaterThan(0);
+    // Pre-selected, not left blank — the field is submitted as-is.
+    expect(await lang.inputValue()).not.toBe('');
   });
 
-  test('form displays contact opt-in checkbox', async ({ page }) => {
+  test('form displays the contact opt-in, unchecked by default', async ({ page }) => {
+    await openSuggestForm(page);
     const optIn = page.locator('[data-testid="suggest-contact-optin"]');
-    // Contact opt-in checkbox should be present
+    await expect(optIn).toBeVisible();
+    // Opt-IN: consent must never be pre-granted.
+    await expect(optIn).not.toBeChecked();
   });
 
   test('character counter updates as user types in title', async ({ page }) => {
@@ -891,35 +952,31 @@ test.describe('Suggestions Board — Submission Flow', () => {
     }
   });
 
-  test('duplicate detection: "Load more" shows 3 more results', async ({ page }) => {
+  // Two tests here asserted a "Load more" control for the duplicate panel.
+  // `duplicate-load-more` does not exist in public/js — and it is not a gap:
+  // suggestions-board.js:907 renders `Math.min(suggestions.length, 3)`, i.e.
+  // the panel deliberately shows the top three matches and nothing else.
+  // Building a Load-more to satisfy a stale test name would change product
+  // behaviour to match the test rather than the other way round.
+  //
+  // Both were dead anyway — one guarded its body on a control that can never
+  // exist, the other looped `while (loadMore.count() > 0)` (never once) and
+  // then asserted the missing element was not visible, which is true by
+  // construction. Replaced with the cap the product actually implements.
+  test('duplicate detection: shows at most three matches', async ({ page }) => {
+    // Five candidates offered, three allowed.
+    await setupSuggestionsMocks(page, { duplicateMatches: 5 });
+    await page.reload();
+    await boardSettled(page);
+    await openSuggestForm(page);
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice chat rooms');
-      const loadMore = page.locator('[data-testid="duplicate-load-more"]');
-      if ((await loadMore.count()) > 0) {
-        const initialCount = await page.locator('[data-testid^="duplicate-item"]').count();
-        await loadMore.click();
-        await page.waitForTimeout(500);
-        const newCount = await page.locator('[data-testid^="duplicate-item"]').count();
-        expect(newCount).toBeGreaterThan(initialCount);
-        expect(newCount - initialCount).toBeLessThanOrEqual(3);
-      }
-    }
-  });
+    await typeTitleAwaitingDuplicates(page, titleInput, 'Voice chat rooms');
 
-  test('duplicate detection: all results exhausted, "Load more" disappears', async ({ page }) => {
-    const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice chat rooms');
-      const loadMore = page.locator('[data-testid="duplicate-load-more"]');
-      // Keep clicking load more until exhausted
-      while ((await loadMore.count()) > 0 && (await loadMore.isVisible())) {
-        await loadMore.click();
-        await page.waitForTimeout(300);
-      }
-      // Load more should no longer be visible
-      await expect(loadMore).not.toBeVisible();
-    }
+    const items = page.locator('[data-testid^="duplicate-item-"]');
+    // The fixture supplies more candidates than the cap, so a missing cap
+    // would render more than three and fail here.
+    await expect(items.first()).toBeVisible();
+    expect(await items.count()).toBeLessThanOrEqual(3);
   });
 
   test('submit success: toast message shown with "don\'t re-submit" text', async ({ page }) => {
