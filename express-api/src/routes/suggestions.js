@@ -912,33 +912,73 @@ async function createAuditEntry(adminUid, action, targetType, targetId, details)
  *   action (SHY-0246). Compared as strings because uids arrive as numbers from
  *   `req.auth.uniqueId` but as strings from some stored subscriber lists.
  */
+/**
+ * Resolve who is watching a suggestion from the CANONICAL record.
+ *
+ * `POST /subscriptions/me/watch` (routes/subscriptions.js:147) stores a watch
+ * as `subscriptions/<uid>.watchedSuggestions`. The `suggestions/<id>.subscribers`
+ * array that notifySubscribers used to read is a denormalised field that
+ * NOTHING in src/ ever writes — so it was permanently empty and the entire
+ * watch feature delivered nothing: only the submitter was ever notified, for
+ * every event type. Queried server-side on an array-contains (indexed), never
+ * a full-collection scan, for the same cost reason as `roadmapUpdateOptedIn`.
+ */
+async function resolveWatchers(suggestionId) {
+  if (!suggestionId) return [];
+  try {
+    const snap = await db
+      .collection('subscriptions')
+      .where('watchedSuggestions', 'array-contains', suggestionId)
+      .get();
+    return (snap.docs || []).map((d) => d.data()?.uid ?? d.id);
+  } catch (err) {
+    // Never block the notification the submitter is still owed.
+    log.error('admin-suggestions', 'Failed to resolve suggestion watchers', {
+      suggestionId,
+      error: err.message,
+    });
+    return [];
+  }
+}
+
 async function notifySubscribers(suggestionData, eventType, extraData = {}, options = {}) {
   try {
-    const subscribers = suggestionData.subscribers || [];
+    const watchers = await resolveWatchers(extraData.suggestionId);
+    // Keep reading the legacy denormalised array too: harmless when empty
+    // (which is always, today) and correct if it is ever backfilled.
+    const subscribers = [...(suggestionData.subscribers || []), ...watchers];
     const submitterUid = suggestionData.submitterUid;
     // SHY-0246: a rejection is private. Telling everyone who followed a
     // suggestion that it was turned down exposes a moderation outcome about
     // someone else's submission, so only the submitter hears about it. Every
     // other transition is public news and goes to the whole audience.
     const isPrivateToSubmitter = eventType === 'rejected';
-    const uidsToNotify = new Set(isPrivateToSubmitter ? [] : subscribers);
+    // Keyed by String(uid) so the same person cannot be notified twice when
+    // the two sources disagree on type — watchers come from a Firestore doc
+    // id (always a string) while submitterUid is often numeric, so a plain
+    // Set would treat 1001 and '1001' as different people. First occurrence
+    // wins, preserving the ORIGINAL value so downstream lookups are unchanged.
+    const byKey = new Map();
+    const addUid = (uid) => {
+      const key = String(uid);
+      if (!byKey.has(key)) byKey.set(key, uid);
+    };
+    if (!isPrivateToSubmitter) subscribers.forEach(addUid);
     // Skip notifying a GDPR-deleted submitter. The `submitterDeleted` flag is
     // canonical here, not the sentinel value of `submitterUid` — `0` happens
     // to be falsy today but the contract should not depend on that.
     if (submitterUid && !suggestionData.submitterDeleted) {
-      uidsToNotify.add(submitterUid);
+      addUid(submitterUid);
     }
 
-    // Nobody is notified about their own action. Compared as strings because
-    // the excluded uid comes from req.auth.uniqueId (a number, auth.js:90)
-    // while stored subscriber lists are not guaranteed to be numeric.
+    // Nobody is notified about their own action. Keyed lookup, so this works
+    // regardless of whether the excluded uid arrives as a number
+    // (req.auth.uniqueId, auth.js:90) or a string (a subscription doc id).
     if (options.excludeUid !== undefined && options.excludeUid !== null) {
-      for (const candidate of uidsToNotify) {
-        if (String(candidate) === String(options.excludeUid)) {
-          uidsToNotify.delete(candidate);
-        }
-      }
+      byKey.delete(String(options.excludeUid));
     }
+
+    const uidsToNotify = byKey.values();
 
     // Reuse the localised email subjects rather than adding a parallel set of
     // English-only strings (utils/suggestion-email-templates.js SUBJECTS

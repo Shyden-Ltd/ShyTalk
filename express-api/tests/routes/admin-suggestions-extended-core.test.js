@@ -1116,3 +1116,116 @@ describe('PUT /admin/suggestions/:id/status — subscriber notifications (SHY-02
     expect(recipients.sort()).toEqual(['sub-2', 'submitter-1']);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// SHY-0246 — watchers are the CANONICAL subscriber source
+//
+// `POST /subscriptions/me/watch` (routes/subscriptions.js:147) records a watch
+// as `subscriptions/<uid>.watchedSuggestions`. notifySubscribers read
+// `suggestionData.subscribers`, a field NOTHING in src/ ever writes — so the
+// array was always empty and the entire watch feature delivered nothing:
+// only the submitter was ever notified, for every event type.
+// ═══════════════════════════════════════════════════════════════
+
+describe('PUT /admin/suggestions/:id/status — watchers are notified (SHY-0246)', () => {
+  function watchedBy(uids) {
+    mockCollectionGet.mockResolvedValue({
+      empty: uids.length === 0,
+      size: uids.length,
+      docs: uids.map((uid) => ({ id: String(uid), data: () => ({ uid }) })),
+    });
+  }
+
+  const notifRecipients = () =>
+    mockCollectionAdd.mock.calls.filter(([name]) => name === 'notifications').map(([, d]) => d.uid);
+
+  test('a user who watched the suggestion is notified on a status change', async () => {
+    setupDocMocks({
+      'suggestions/sug-1': makeSuggestionSnap('sug-1', {
+        status: 'pending',
+        title: 'Dark mode please',
+        submitterUid: 'submitter-1',
+        // deliberately EMPTY: the denormalised field nothing writes
+        subscribers: [],
+      }),
+    });
+    watchedBy(['watcher-7']);
+
+    const app = createAdminApp();
+    await request(app)
+      .put('/api/admin/suggestions/sug-1/status')
+      .send({ status: 'accepted' })
+      .expect(200);
+
+    expect(notifRecipients().sort()).toEqual(['submitter-1', 'watcher-7']);
+  });
+
+  test('no watchers → only the submitter, and no crash on an empty query', async () => {
+    setupDocMocks({
+      'suggestions/sug-1': makeSuggestionSnap('sug-1', {
+        status: 'pending',
+        submitterUid: 'submitter-1',
+        subscribers: [],
+      }),
+    });
+    watchedBy([]);
+
+    const app = createAdminApp();
+    await request(app)
+      .put('/api/admin/suggestions/sug-1/status')
+      .send({ status: 'accepted' })
+      .expect(200);
+
+    expect(notifRecipients()).toEqual(['submitter-1']);
+  });
+
+  test('a watcher who is also the submitter is notified exactly once', async () => {
+    setupDocMocks({
+      'suggestions/sug-1': makeSuggestionSnap('sug-1', {
+        status: 'pending',
+        submitterUid: 'submitter-1',
+        subscribers: [],
+      }),
+    });
+    watchedBy(['submitter-1']);
+
+    const app = createAdminApp();
+    await request(app)
+      .put('/api/admin/suggestions/sug-1/status')
+      .send({ status: 'accepted' })
+      .expect(200);
+
+    expect(notifRecipients()).toEqual(['submitter-1']);
+  });
+});
+
+describe('PUT /admin/suggestions/:id/status — recipient de-duplication by type (SHY-0246)', () => {
+  test('a numeric submitter and a string watcher for the same person notify once', async () => {
+    // Watchers come from a Firestore doc id (always a STRING) while
+    // submitterUid is typically numeric, so a plain Set would treat 1001 and
+    // '1001' as two different people and notify them twice.
+    setupDocMocks({
+      'suggestions/sug-1': makeSuggestionSnap('sug-1', {
+        status: 'pending',
+        submitterUid: 1001,
+        subscribers: [],
+      }),
+    });
+    mockCollectionGet.mockResolvedValue({
+      empty: false,
+      size: 1,
+      docs: [{ id: '1001', data: () => ({}) }], // no uid field → falls back to doc id
+    });
+
+    const app = createAdminApp();
+    await request(app)
+      .put('/api/admin/suggestions/sug-1/status')
+      .send({ status: 'accepted' })
+      .expect(200);
+
+    const recipients = mockCollectionAdd.mock.calls
+      .filter(([name]) => name === 'notifications')
+      .map(([, d]) => String(d.uid));
+    expect(recipients).toEqual(['1001']);
+  });
+});
