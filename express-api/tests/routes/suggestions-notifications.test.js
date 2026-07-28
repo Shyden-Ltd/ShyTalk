@@ -307,21 +307,43 @@ describe('GET /api/notifications — Inbox', () => {
 // 11.60 — Notification Deduplication
 // ═══════════════════════════════════════════════════════════════
 
+// ─── PARKED: features that do not exist yet (SHY-0246) ─────────────────
+//
+// The twelve test.skip cases below were ACTIVE with empty bodies — running,
+// asserting nothing, reporting green, and making three whole feature areas
+// look covered. They are parked rather than implemented because each needs a
+// product decision I should not invent, and rather than deleted because the
+// names are an accurate backlog:
+//
+//   Deduplication — needs a debounce WINDOW (the "within 1 minute" here is a
+//     guess) and a rule for whether two different events on one suggestion
+//     collapse. No dedup logic exists anywhere in src/.
+//   Inbox management — needs a cap VALUE (200 is asserted but unsourced) and a
+//     retention policy. Note "auto-cleaned by cron" contradicts this repo's
+//     cron-elimination architecture; the sanctioned pattern is lazy on-access
+//     reaping, so the test name itself needs rewriting when this is built.
+//   Admin notification — needs a notification TYPE. Every existing type is in
+//     RoadmapNotification.VALID_TYPES, which is user-facing; an admin type
+//     would be classified by nothing, so the surface has to be designed first.
+//
+// Parked is honest: Jest skips these, so they can no longer report success.
+// Tracked in .project/stories/SHY-0246-implement-missing-notification-types.md.
+
 describe('Notification Deduplication', () => {
-  test('same event fired twice: only one notification created', async () => {
+  test.skip('same event fired twice: only one notification created', async () => {
     // If the same event is dispatched twice (e.g. double webhook),
     // deduplication should prevent a second notification
   });
 
-  test('roadmap feature updated twice in 1 minute: one notification (debounced)', async () => {
+  test.skip('roadmap feature updated twice in 1 minute: one notification (debounced)', async () => {
     // Rapid status changes should be debounced
   });
 
-  test('user subscribed to both "all updates" and specific feature: receives one notification', async () => {
+  test.skip('user subscribed to both "all updates" and specific feature: receives one notification', async () => {
     // Dedup by user+event+relatedId
   });
 
-  test('admin approves then immediately overturns: two separate notifications (different events)', async () => {
+  test.skip('admin approves then immediately overturns: two separate notifications (different events)', async () => {
     // These are different events so both should be sent
   });
 });
@@ -331,11 +353,11 @@ describe('Notification Deduplication', () => {
 // ═══════════════════════════════════════════════════════════════
 
 describe('Notification Inbox Management', () => {
-  test('max 200 notifications stored per user', async () => {
+  test.skip('max 200 notifications stored per user', async () => {
     // When a 201st notification is created, the oldest should be deleted
   });
 
-  test('201st notification: oldest auto-deleted', async () => {
+  test.skip('201st notification: oldest auto-deleted', async () => {
     const docs = Array.from({ length: 200 }, (_, i) =>
       makeNotifDoc(`n${i}`, { createdAt: i * 1000 }),
     );
@@ -343,7 +365,7 @@ describe('Notification Inbox Management', () => {
     // On next notification creation, oldest (n0) should be deleted
   });
 
-  test('notification TTL: older than 90 days auto-cleaned by cron', async () => {
+  test.skip('notification TTL: older than 90 days auto-cleaned by cron', async () => {
     // This is a cron job test, verified in cron tests
     // Here we verify the data model supports it
     const ninetyOneDaysAgo = Date.now() - 91 * 24 * 60 * 60 * 1000;
@@ -351,7 +373,7 @@ describe('Notification Inbox Management', () => {
     // Cron should delete this
   });
 
-  test('notification deletion does not affect subscription preferences', async () => {
+  test.skip('notification deletion does not affect subscription preferences', async () => {
     // Deleting notifications should not touch the subscriptions collection
     mockDocGet.mockResolvedValue(makeNotifDoc('n1', { uid: 1001 }));
     const app = createApp();
@@ -376,16 +398,16 @@ describe('Notification Inbox Management', () => {
 // ═══════════════════════════════════════════════════════════════
 
 describe('Admin Notification of New Suggestions', () => {
-  test('new suggestion submitted: admin notification created', async () => {
+  test.skip('new suggestion submitted: admin notification created', async () => {
     // When a suggestion is created, admins should be notified
   });
 
-  test('admin panel: suggestion count badge updates', async () => {
+  test.skip('admin panel: suggestion count badge updates', async () => {
     // This is an admin panel UI test, verified in Playwright
     // Here we verify the API returns pending count
   });
 
-  test('admin panel: pending count shown in response', async () => {
+  test.skip('admin panel: pending count shown in response', async () => {
     const docs = Array.from({ length: 3 }, (_, i) =>
       makeNotifDoc(`n${i}`, { type: 'new_suggestion' }),
     );
@@ -394,7 +416,7 @@ describe('Admin Notification of New Suggestions', () => {
     // Admin should be able to get pending suggestion count
   });
 
-  test('admin notification includes submitter identity summary', async () => {
+  test.skip('admin notification includes submitter identity summary', async () => {
     // Admin notification should include who submitted + basic identity info
   });
 });

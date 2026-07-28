@@ -189,6 +189,25 @@ reading their own paths". No such client path exists — the only in-app inbox i
 - Express suite green via canonical `npm test`; mutation proofs recorded in Notes.
 - Reviewer 100% clean; CI green by name; journey matrix per the pre-merge protocol.
 
+## Deferred sub-features (parked, NOT silently dropped)
+
+Twelve tests in `express-api/tests/routes/suggestions-notifications.test.js`
+named features that do not exist. They were ACTIVE with empty bodies — running,
+asserting nothing and reporting green. They are now `test.skip`, so they can no
+longer report success, and each needs a product decision before it can be built:
+
+- **Deduplication (4)** — needs a debounce WINDOW ("within 1 minute" in the test
+  name is unsourced) and a rule for whether two different events on one
+  suggestion collapse into one notification. No dedup logic exists in `src/`.
+- **Inbox management (4)** — needs a cap VALUE (200 is asserted but unsourced)
+  and a retention policy. One test name says "auto-cleaned by cron", which
+  contradicts the cron-elimination architecture; the sanctioned pattern is lazy
+  on-access reaping, so the name itself needs rewriting when this is built.
+- **Admin notification of new suggestions (4)** — needs a notification TYPE.
+  Every existing type is in `RoadmapNotification.VALID_TYPES`, which is
+  user-facing; an admin type would be classified by nothing, so the surface has
+  to be designed before it is emitted.
+
 ## Notes (running log)
 
 - **2026-07-28** — Filed from SHY-0245 de-sleeping. Root evidence: only three notification-creating
@@ -196,3 +215,17 @@ reading their own paths". No such client path exists — the only in-app inbox i
   `inApp` despite its JSDoc; the shipped default roadmap preference is in-app only, so the default
   configuration is a guaranteed silent no-op. Operator direction (2026-07-28): implement the
   features rather than park the tests — "fix forward".
+- **2026-07-28** — Delivered: the in-app channel, the `roadmap_update` type fix,
+  in-app records for accepted/planned/completed/rejected, comment notifications
+  with author exclusion, watcher resolution from the canonical
+  `watchedSuggestions` record, watch release on terminal status, and localised
+  subjects for all four supported locales. Two adjacent defects fixed en route:
+  the system-PM body was an object where a string belongs, and a GDPR guard was
+  passing vacuously (every case used `submitterUid: 0`, which the truthiness
+  check already rejects, so the `submitterDeleted` flag was never exercised).
+- **2026-07-28** — Separate pre-existing bug recorded, NOT fixed here:
+  `utils/data-export-builder.js:262` queries `participantIds` with a NUMERIC
+  uid, but SHY-0130 migrated that field to strings
+  (`scripts/migrate-participant-ids.js:44`), so the GDPR export matches nothing
+  post-migration. Needs its own story — it is a data-subject-rights defect, not
+  a notification one.
