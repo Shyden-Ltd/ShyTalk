@@ -120,16 +120,19 @@ test.describe('Translation Verification', () => {
   test.describe('Roadmap Page', () => {
     test('content changes when language is set to Thai', async ({ page }) => {
       await page.goto(`${BASE}/roadmap.html`);
-      await page.waitForTimeout(2_000);
       await changeLanguage(page, 'th');
-      await page.waitForTimeout(1_000);
-      const html = await page.locator('body').innerHTML();
-      expect(html).toMatch(/[\u0E00-\u0E7F]/);
+      // Retrying assertion: resolves the moment Thai glyphs appear and fails
+      // loudly if they never do. The two sleeps here sampled ONCE after a
+      // fixed delay, so a slow translation load read as "no Thai text".
+      await expect.poll(() => page.locator('body').innerHTML()).toMatch(/[\u0E00-\u0E7F]/);
     });
 
     test('in-progress section appears at top when items are in progress', async ({ page }) => {
       await page.goto(`${BASE}/roadmap.html`);
-      await page.waitForTimeout(3_000);
+      // Anchor on the board rendering rather than a 3s guess.
+      await expect(page.locator('#roadmap-container, #suggestions-board').first()).toBeAttached({
+        timeout: 15_000,
+      });
       const inProgressSection = page.locator('#in-progress-section');
       const count = await inProgressSection.count();
       if (count > 0) {
@@ -154,9 +157,8 @@ test.describe('Translation Verification', () => {
       await expect(disclaimer).toBeVisible({ timeout: 5_000 });
       const englishText = await disclaimer.textContent();
       await changeLanguage(page, 'es');
-      await page.waitForTimeout(1_000);
-      const spanishText = await disclaimer.textContent();
-      expect(spanishText).not.toBe(englishText);
+      // The text CHANGING is the condition; polling for it removes the guess.
+      await expect.poll(() => disclaimer.textContent()).not.toBe(englishText);
     });
   });
 
@@ -167,9 +169,10 @@ test.describe('Translation Verification', () => {
       await changeLanguage(page, 'fr');
       // Navigate to privacy page
       await page.goto(`${BASE}/privacy.html`);
-      // The privacy page should auto-apply French
-      await page.waitForTimeout(2_000);
+      // The privacy page should auto-apply French — wait for the element the
+      // assertion below reads, not for a fixed 2s.
       const title = page.locator('[data-i18n="pp_title"]');
+      await expect(title).toBeVisible({ timeout: 15_000 });
       const text = await title.textContent({ timeout: 5_000 }).catch(() => '');
       // Should not be the English "Privacy Policy"
       expect(text).not.toBe('Privacy Policy');

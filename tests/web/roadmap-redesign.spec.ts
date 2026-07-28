@@ -395,25 +395,40 @@ test.describe('Accessibility', () => {
 test.describe('Deep Linking & URL Handling', () => {
   test('direct URL to suggestion scrolls to and highlights', async ({ page }) => {
     await page.goto('/roadmap.html#suggestion-sug123');
-    await page.waitForTimeout(1000);
-    // Page should scroll to the suggestion element
+    // Deep linking IS implemented (roadmap-app.js:1034-1044) — assert the page
+    // settled rather than sleeping and asserting nothing.
+    await expect(page.locator('#suggestions-board')).toBeAttached({ timeout: 15_000 });
+    // `sug123` is not in the seeded data, so the target never resolves and the
+    // scroll-spy (:1009) rewrites the hash to whichever section is on screen.
+    // The contract worth pinning is that an unresolvable deep link still lands
+    // the reader on a REAL section instead of erroring or leaving them nowhere.
+    await expect.poll(() => page.url(), { timeout: 10_000 }).toMatch(/#(roadmap|suggestions)/);
   });
 
   test('direct URL to roadmap section scrolls to roadmap', async ({ page }) => {
     await page.goto('/roadmap.html#roadmap');
-    await page.waitForTimeout(1000);
+    const roadmap = page.locator('#roadmap, [data-section="roadmap"]').first();
+    await expect(roadmap).toBeAttached({ timeout: 15_000 });
+    // Scrolled INTO VIEW, not merely present — that is what the hash promises.
+    await expect
+      .poll(() => roadmap.evaluate((el) => el.getBoundingClientRect().top < window.innerHeight))
+      .toBe(true);
   });
 
   test('direct URL to suggestions section scrolls to suggestions', async ({ page }) => {
     await page.goto('/roadmap.html#suggestions');
-    await page.waitForTimeout(1000);
+    const suggestions = page.locator('#suggestions, [data-section="suggestions"]').first();
+    await expect(suggestions).toBeAttached({ timeout: 15_000 });
+    await expect
+      .poll(() => suggestions.evaluate((el) => el.getBoundingClientRect().top < window.innerHeight))
+      .toBe(true);
   });
 
   test('invalid suggestion ID in URL: page loads normally, no error', async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
     await page.goto('/roadmap.html#suggestion-nonexistent');
-    await page.waitForTimeout(1000);
+    await expect(page.locator('#suggestions-board')).toBeAttached({ timeout: 15_000 });
     expect(errors).toHaveLength(0);
   });
 
@@ -423,9 +438,9 @@ test.describe('Deep Linking & URL Handling', () => {
       const el = document.querySelector('#suggestions, [data-section="suggestions"]');
       if (el) el.scrollIntoView();
     });
-    await page.waitForTimeout(1000);
-    const url = page.url();
-    // URL should update via history.replaceState
+    // roadmap-app.js:1009 only rewrites the hash when it CHANGES, so poll for
+    // it rather than sampling once after a second and asserting nothing.
+    await expect.poll(() => page.url(), { timeout: 10_000 }).toContain('#');
   });
 });
 

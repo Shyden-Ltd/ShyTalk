@@ -382,7 +382,16 @@ test.describe('CSP & Security Headers', () => {
       }
     });
     await page.goto('/roadmap.html');
-    await page.waitForTimeout(2000);
+    // The board has rendered its verdict — cards, empty state, or error.
+    // Waiting for that instead of a fixed delay means a board that never
+    // renders FAILS here rather than quietly reporting "no errors seen".
+    await expect(
+      page
+        .locator(
+          '[data-testid="suggestions-list"], [data-testid="suggestions-empty"], [data-testid="suggestions-error"]',
+        )
+        .first(),
+    ).toBeVisible({ timeout: 15_000 });
     expect(warnings).toHaveLength(0);
   });
 });
@@ -396,8 +405,13 @@ test.describe('Error States', () => {
     // Block API requests
     await page.route('**/api/**', (route) => route.abort());
     await page.goto('/roadmap.html');
-    await page.waitForTimeout(3000);
-    // Should show fallback message
+    // This test used to sleep 3s and end on a comment. The board DOES render
+    // a fallback (suggestions-board.js:1221-1228) — assert it, and the retry
+    // that makes the state recoverable rather than a dead end.
+    await expect(page.locator('[data-testid="suggestions-error"]')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.locator('[data-testid="suggestions-retry"]')).toBeVisible();
   });
 
   test('API returns 500 on suggestions list: error message shown', async ({ page }) => {
@@ -405,8 +419,10 @@ test.describe('Error States', () => {
       route.fulfill({ status: 500, body: '{"error":"Internal server error"}' }),
     );
     await page.goto('/roadmap.html');
-    await page.waitForTimeout(3000);
-    // Should show error state
+    await expect(page.locator('[data-testid="suggestions-error"]')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.locator('[data-testid="suggestions-retry"]')).toBeVisible();
   });
 
   // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
@@ -424,7 +440,16 @@ test.describe('Browser Compatibility', () => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
     await page.goto('/roadmap.html');
-    await page.waitForTimeout(2000);
+    // The board has rendered its verdict — cards, empty state, or error.
+    // Waiting for that instead of a fixed delay means a board that never
+    // renders FAILS here rather than quietly reporting "no errors seen".
+    await expect(
+      page
+        .locator(
+          '[data-testid="suggestions-list"], [data-testid="suggestions-empty"], [data-testid="suggestions-error"]',
+        )
+        .first(),
+    ).toBeVisible({ timeout: 15_000 });
     expect(errors).toHaveLength(0);
   });
 
@@ -463,7 +488,16 @@ test.describe('Incognito & Storage Restrictions', () => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
     await page.goto('/roadmap.html');
-    await page.waitForTimeout(2000);
+    // The board has rendered its verdict — cards, empty state, or error.
+    // Waiting for that instead of a fixed delay means a board that never
+    // renders FAILS here rather than quietly reporting "no errors seen".
+    await expect(
+      page
+        .locator(
+          '[data-testid="suggestions-list"], [data-testid="suggestions-empty"], [data-testid="suggestions-error"]',
+        )
+        .first(),
+    ).toBeVisible({ timeout: 15_000 });
     expect(errors).toHaveLength(0);
     await context.close();
   });
@@ -526,7 +560,16 @@ test.describe('Third-Party Script Failure', () => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
     await page.goto('/roadmap.html');
-    await page.waitForTimeout(2000);
+    // The board has rendered its verdict — cards, empty state, or error.
+    // Waiting for that instead of a fixed delay means a board that never
+    // renders FAILS here rather than quietly reporting "no errors seen".
+    await expect(
+      page
+        .locator(
+          '[data-testid="suggestions-list"], [data-testid="suggestions-empty"], [data-testid="suggestions-error"]',
+        )
+        .first(),
+    ).toBeVisible({ timeout: 15_000 });
     expect(errors).toHaveLength(0);
   });
 });
