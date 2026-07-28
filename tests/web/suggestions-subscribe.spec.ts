@@ -530,7 +530,9 @@ test.describe('Error Recovery & Retry', () => {
     });
     const scoreBefore = await page.locator(`[data-testid="vote-score-${seeded.id}"]`).textContent();
 
-    await page.route('**/api/suggestions/*/vote', (route) => route.abort());
+    // A REAL dropped connection, not an intercepted one — same code path a
+    // person on a flaky train hits, and no in-process double (EPIC-0003).
+    await page.context().setOffline(true);
     await page.locator(`[data-testid="vote-up-${seeded.id}"]`).click();
 
     await expect(page.locator('#login-toast')).toContainText(/fail/i);
@@ -543,10 +545,6 @@ test.describe('Error Recovery & Retry', () => {
 
   test('suggestion submit fails: form retains input, retry shown', async ({ page }) => {
     await signInToRoadmap(page, user);
-    await page.route('**/api/suggestions', (route) =>
-      route.request().method() === 'POST' ? route.abort() : route.continue(),
-    );
-
     await page.locator('[data-testid="suggest-btn"]').click();
     const title = `Retained title ${user.testRunId}`;
     await page.locator('[data-testid="suggest-title-input"]').fill(title);
@@ -557,6 +555,9 @@ test.describe('Error Recovery & Retry', () => {
     await page.locator('[data-testid="suggest-tag-select"]').selectOption('social');
     const submit = page.locator('[data-testid="suggest-modal-submit"]');
     await expect(submit).toBeEnabled();
+    // Drop the connection only once the form is filled, so the failure lands
+    // on the submit and nothing else.
+    await page.context().setOffline(true);
     await submit.click();
 
     await expect(page.locator('#login-toast')).toContainText(/fail/i);
@@ -568,11 +569,9 @@ test.describe('Error Recovery & Retry', () => {
   test('subscribe save fails: error toast, modal stays open', async ({ page }) => {
     await signInToRoadmap(page, user);
     await openSubscribeModal(page);
-    await page.route('**/api/subscriptions/me', (route) =>
-      route.request().method() === 'PUT' ? route.abort() : route.continue(),
-    );
-
+    // Offline AFTER the preferences have loaded, so only the save fails.
     await toggle(page, 'roadmapUpdate', 'email').check();
+    await page.context().setOffline(true);
     await page.locator('[data-testid="subscribe-modal-save"]').click();
 
     await expect(page.locator('#login-toast')).toContainText(/fail/i);
@@ -585,15 +584,26 @@ test.describe('Error Recovery & Retry', () => {
   test('partial page failure: working sections shown, failed sections show error', async ({
     page,
   }) => {
-    // Kill only the suggestions board. The roadmap phases above it come from a
-    // static JSON file and must survive — graceful degradation means the whole
-    // page does not go down with one section.
-    await page.route('**/api/suggestions?*', (route) => route.abort());
+    // Let the page load fully, THEN drop the connection and ask the board to
+    // refetch. The roadmap phases stay rendered while the suggestions section
+    // fails — real graceful degradation, with a real network fault rather than
+    // an intercepted one.
+    // The board starts empty on a fresh stack, so give it something to fail
+    // to reload — an empty board has no error state to reach.
+    await createSuggestion({ testRunId: user.testRunId, title: `Partial ${user.testRunId}` });
     await page.goto('/roadmap.html');
+    await expect(page.locator('#roadmap-container')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('[data-testid^="suggestion-card-"]').first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await page.context().setOffline(true);
+    await page.locator('[data-testid="sort-newest"]').click();
 
     await expect(page.locator('[data-testid="suggestions-error"]')).toBeVisible({
       timeout: 15_000,
     });
+    // The section that did NOT depend on the API is still there.
     await expect(page.locator('#roadmap-container')).toBeVisible();
   });
 
@@ -601,18 +611,28 @@ test.describe('Error Recovery & Retry', () => {
     // The original name promised exponential backoff, which the product does
     // not do and does not need — it retries on an explicit click, so nothing
     // is spammed. What matters is that the button works.
+    // Count REAL requests rather than intercepting them, so the retry has to
+    // actually reach the server for the count to move.
     let attempts = 0;
-    await page.route('**/api/suggestions?*', (route) => {
-      attempts++;
-      return attempts === 1 ? route.abort() : route.continue();
+    page.on('request', (req) => {
+      if (req.url().includes('/api/suggestions?')) attempts++;
     });
+
+    await createSuggestion({ testRunId: user.testRunId, title: `Retry ${user.testRunId}` });
     await page.goto('/roadmap.html');
+    await expect(page.locator('[data-testid^="suggestion-card-"]').first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await page.context().setOffline(true);
+    await page.locator('[data-testid="sort-newest"]').click();
     await expect(page.locator('[data-testid="suggestions-error"]')).toBeVisible({
       timeout: 15_000,
     });
 
+    const attemptsBeforeRetry = attempts;
+    await page.context().setOffline(false);
     await page.locator('[data-testid="suggestions-retry"]').click();
-    await expect.poll(() => attempts, { timeout: 15_000 }).toBeGreaterThan(1);
+    await expect.poll(() => attempts, { timeout: 15_000 }).toBeGreaterThan(attemptsBeforeRetry);
     await expect(page.locator('[data-testid="suggestions-error"]')).toHaveCount(0);
   });
 });
