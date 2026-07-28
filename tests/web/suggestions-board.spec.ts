@@ -113,7 +113,39 @@ const MOCK_SUGGESTIONS_RESPONSE = {
  *   list is a constant, so a reload always renders an unvoted board no matter
  *   what the product does.
  */
-async function setupSuggestionsMocks(page: Page, { persistVotes = false } = {}) {
+/**
+ * A dataset big enough to paginate. The board paginates at PAGE_SIZE 10 and
+ * only renders controls when `Math.ceil(total / 10) > 1`
+ * (suggestions-board.js:26,1262), so the default 4-item MOCK_SUGGESTIONS can
+ * NEVER produce a page-2 button — which is why the pagination test used to
+ * guard its whole body behind `if (page2.count() > 0)` and pass without ever
+ * running. Opt-in, so no other test's counts or ordering assertions move.
+ */
+const PAGINATED_SUGGESTIONS = Array.from({ length: 25 }, (_, i) => ({
+  ...MOCK_SUGGESTIONS[i % MOCK_SUGGESTIONS.length],
+  id: `paged-sug-${i + 1}`,
+  title: `Paged suggestion ${String(i + 1).padStart(2, '0')}`,
+}));
+
+/**
+ * Orders rows the way the REAL API does for a given `sort` param. Sorting is
+ * server-side — suggestions-board.js:358 sends `&sort=`, and :377 renders
+ * `data.suggestions` in whatever order came back — so a fixture that ignores
+ * the param can only ever prove the fixture's own order, never the product's.
+ * Opt-in (`sortable`) so the other tests' assumed row order does not move.
+ */
+function sortLikeApi<T extends { createdAt: number; score?: number }>(
+  rows: T[],
+  sort: string,
+): T[] {
+  const by = sort === 'newest' ? (r: T) => r.createdAt : (r: T) => r.score ?? 0;
+  return [...rows].sort((a, b) => by(b) - by(a));
+}
+
+async function setupSuggestionsMocks(
+  page: Page,
+  { persistVotes = false, paginate = false, sortable = false } = {},
+) {
   // suggestionId → 'up' | 'down', mutated by the vote route below and read by
   // both list routes. Survives page.goto: route handlers outlive navigation.
   const castVotes: Record<string, string> = {};
@@ -198,6 +230,29 @@ async function setupSuggestionsMocks(page: Page, { persistVotes = false } = {}) 
   // Main suggestions endpoint (must be registered AFTER more-specific routes above)
   await page.route('**/api/suggestions*', (route) => {
     const url = new URL(route.request().url());
+
+    // Real paging, driven by the client's own ?page=N&limit=N contract
+    // (suggestions-board.js:357), so clicking page 2 returns genuinely
+    // different rows instead of the same list every time.
+    if (paginate) {
+      const pageNum = Math.max(1, Number(url.searchParams.get('page') || '1'));
+      const limit = Math.max(1, Number(url.searchParams.get('limit') || '10'));
+      const start = (pageNum - 1) * limit;
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          withMyVotes({
+            suggestions: PAGINATED_SUGGESTIONS.slice(start, start + limit),
+            total: PAGINATED_SUGGESTIONS.length,
+            page: pageNum,
+            pageSize: limit,
+          }),
+        ),
+      });
+      return;
+    }
+
     const status = url.searchParams.get('status') || '';
     const tag = url.searchParams.get('tag') || '';
     const lang = url.searchParams.get('lang') || '';
@@ -210,6 +265,9 @@ async function setupSuggestionsMocks(page: Page, { persistVotes = false } = {}) 
     }
     if (lang) {
       filtered = filtered.filter((s) => s.language === lang);
+    }
+    if (sortable) {
+      filtered = sortLikeApi(filtered, url.searchParams.get('sort') || 'votes');
     }
     route.fulfill({
       status: 200,
@@ -381,14 +439,46 @@ test.describe('Suggestions Board — Public Browsing', () => {
   });
 
   test('sort "Newest" works (verify order)', async ({ page }) => {
+    // Sorting is SERVER-side: the board sends `&sort=` (suggestions-board.js:358)
+    // and renders whatever order comes back (:377). Opt the fixture into real
+    // sorting, otherwise the DOM order is the fixture's own row order whatever
+    // is clicked, and any order assertion would be a tautology.
+    await setupSuggestionsMocks(page, { sortable: true });
+    await page.reload();
+    await boardSettled(page);
+
     const sortBtn = page.locator('[data-testid="sort-newest"]');
     await sortBtn.waitFor({ timeout: 10_000 });
-    // Sorting is CLIENT-SIDE — no refetch to wait on (SHY-0245).
-    await sortBtn.click();
-    const timestamps = page.locator('[data-testid^="suggestion-time"], .sg-timestamp');
-    const count = await timestamps.count();
-    expect(count).toBeGreaterThan(0);
-    // Verify newest appear first (timestamps should be in descending order)
+
+    // The old comment here claimed sorting was client-side with "no refetch to
+    // wait on". That is wrong — :1458 calls fetchSuggestions() — and reading
+    // count() straight after the click raced that refetch, which is why this
+    // test flaked. The default sort is "votes" (:118), so Newest genuinely
+    // changes state and does fire a request (:1455 no-ops on the active sort).
+    const sortRequest = page.waitForRequest(
+      (r) => r.url().includes('/api/suggestions') && r.url().includes('sort=newest'),
+      { timeout: 15_000 },
+    );
+    await withSuggestionsFetch(page, () => sortBtn.click());
+    await sortRequest;
+
+    // The part the name promised and the body never delivered: newest FIRST.
+    // Card test ids carry the suggestion id; the visible text is relativeTime()
+    // and cannot be compared for order.
+    const newestFirst = sortLikeApi(MOCK_SUGGESTIONS, 'newest').map((s) => s.id);
+    await expect
+      .poll(() =>
+        page
+          .locator('[data-testid^="suggestion-time-"]')
+          .evaluateAll((els) =>
+            els.map((e) => (e.getAttribute('data-testid') || '').replace('suggestion-time-', '')),
+          ),
+      )
+      .toEqual(newestFirst);
+
+    // Tautology guard: newest order MUST differ from the default votes order,
+    // or the assertion above would still hold if the click did nothing at all.
+    expect(newestFirst).not.toEqual(sortLikeApi(MOCK_SUGGESTIONS, 'votes').map((s) => s.id));
   });
 
   test('filter by status works (each status individually)', async ({ page }) => {
@@ -515,25 +605,33 @@ test.describe('Suggestions Board — Public Browsing', () => {
   });
 
   test('pagination: page 1 loads, clicking page 2 loads next set', async ({ page }) => {
-    const page1 = page.locator('[data-testid="suggestions-pagination"] [data-page="1"]');
-    const page2 = page.locator('[data-testid="suggestions-pagination"] [data-page="2"]');
-    if ((await page2.count()) > 0) {
-      const firstPageCards = page.locator('[data-testid^="suggestion-card"], .sg-card');
-      const firstPageFirstTitle = await firstPageCards
-        .first()
-        .locator('[data-testid^="suggestion-title"], .sg-card-title')
-        .textContent();
+    // The default fixture holds 4 suggestions and the board only renders
+    // pagination when ceil(total / 10) > 1, so the page-2 control could never
+    // exist and the old `if (page2.count() > 0)` guard skipped this entire
+    // body — it passed while asserting nothing about pagination. Opt into a
+    // 25-row dataset so the assertions below actually run.
+    await setupSuggestionsMocks(page, { paginate: true });
+    await page.reload();
+    await boardSettled(page);
 
-      await page2.click();
-      await page.waitForTimeout(500);
+    // Target the numbered button by its OWN test id: `[data-page="2"]` also
+    // matches "Next »" while on page 1 (it renders data-page=currentPage+1),
+    // so the bare attribute selector is ambiguous in strict mode.
+    const page2 = page.locator('[data-testid="suggestions-pagination"] [data-testid="page-2"]');
+    // No conditional: a missing control is now a FAILURE, not a silent skip.
+    await expect(page2).toBeVisible();
 
-      const secondPageFirstTitle = await firstPageCards
-        .first()
-        .locator('[data-testid^="suggestion-title"], .sg-card-title')
-        .textContent();
-      // Different pages should show different content
-      expect(secondPageFirstTitle).not.toBe(firstPageFirstTitle);
-    }
+    const firstTitle = cardsOf(page)
+      .first()
+      .locator('[data-testid^="suggestion-title"], .sg-card-title');
+    const page1Title = await firstTitle.textContent();
+    expect(page1Title).toBeTruthy();
+
+    await withSuggestionsFetch(page, () => page2.click());
+
+    // Anchor on the CONTENT changing, not on the fetch alone: the response
+    // resolving does not prove the list has re-rendered from it.
+    await expect.poll(() => firstTitle.textContent()).not.toBe(page1Title);
   });
 
   test('rejected suggestion shows decline reason (if provided)', async ({ page }) => {
