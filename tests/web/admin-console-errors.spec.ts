@@ -279,14 +279,17 @@ test.describe('Admin Console Error Checks', () => {
         { timeout: 15_000 },
       );
 
+      // The worker fixture seeds a report (fixtures/admin.ts `reports`), so a
+      // card is guaranteed. Guarding this meant the third of three scenarios
+      // could vanish while the test still reported "zero console errors" —
+      // an assertion about code that had not run.
       const firstCard = page.locator('.report-card').first();
-      if ((await firstCard.count()) > 0) {
-        const uid = await firstCard.getAttribute('data-uid');
-        const actionSelect = firstCard.locator(`select[data-action-select="${uid}"]`);
-        await actionSelect.selectOption('dismiss');
-        // Don't click resolve — just verify the select took the value.
-        await expect(actionSelect).toHaveValue('dismiss');
-      }
+      await expect(firstCard).toBeVisible();
+      const uid = await firstCard.getAttribute('data-uid');
+      const actionSelect = firstCard.locator(`select[data-action-select="${uid}"]`);
+      await actionSelect.selectOption('dismiss');
+      // Don't click resolve — just verify the select took the value.
+      await expect(actionSelect).toHaveValue('dismiss');
     });
 
     const realErrors = filterBenignErrors(errors);

@@ -74,13 +74,12 @@ test.describe('Admin Backups Tab', () => {
     const toast = page.locator('#toast');
     await expect(toast).toContainText('Backup complete', { timeout: 10_000 });
 
-    // Refresh the list to show the new/updated backup
-    const refreshBtn = page.locator('#backup-refresh-btn');
-    if ((await refreshBtn.count()) > 0) {
-      await refreshBtn.click();
-    } else {
-      await navigateToTab(page, 'Backups');
-    }
+    // Refresh the list to show the new/updated backup. `#backup-refresh-btn`
+    // is part of the Backups tab (admin/index.html:4544) and is not
+    // conditional on anything — the old fallback to a full tab re-navigation
+    // could only ever fire if the button had been removed, which is a
+    // regression this test should report rather than route around.
+    await page.locator('#backup-refresh-btn').click();
     await waitForBackupsLoaded(page);
 
     // Verify at least one backup is in the list (a backup for today may

@@ -454,18 +454,25 @@ test.describe('Admin Cross-Tab Interactions', () => {
     // Test 2: Devices — Unbind cancel
     await navigateToTab(page, 'Devices');
     await waitForDevicesLoaded(page);
+    // The worker fixture seeds a device for user 0 (fixtures/admin.ts
+    // `deviceInfo`), so a row and its Unbind button are guaranteed here. The
+    // two nested count-guards this replaces meant a broken seed produced a
+    // PASSING test that had silently checked 2 of the 3 dialogs its name
+    // promises.
     const rows = page.locator('#devices-tbody tr:not(:has(.device-detail))');
-    if ((await rows.count()) > 0) {
-      const unbindBtn = rows.first().locator('[data-unbind]');
-      if ((await unbindBtn.count()) > 0) {
-        await unbindBtn.click();
-        // Same dismissed-confirm contract as above: the abort completes before
-        // click() resolves, so assert the row survived with a retrying
-        // assertion rather than sleeping and reading one snapshot.
-        const rowsAfter = page.locator('#devices-tbody tr:not(:has(.device-detail))');
-        await expect(rowsAfter).not.toHaveCount(0);
-      }
-    }
+    await expect(rows.first()).toBeVisible();
+    const unbindBtn = rows.first().locator('[data-unbind]');
+    await expect(unbindBtn).toBeVisible();
+    const rowsBefore = await rows.count();
+
+    await unbindBtn.click();
+    // Same dismissed-confirm contract as above: the abort completes before
+    // click() resolves, so assert the row survived with a retrying
+    // assertion rather than sleeping and reading one snapshot. Pinning the
+    // exact count, not just "not zero" — cancelling must remove nothing.
+    await expect(page.locator('#devices-tbody tr:not(:has(.device-detail))')).toHaveCount(
+      rowsBefore,
+    );
 
     // Test 3: Maintenance — Nuclear reset cancel
     await navigateToTab(page, 'Maintenance');
