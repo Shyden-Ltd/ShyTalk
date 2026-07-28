@@ -3,10 +3,15 @@ const mockSendFcmToTokens = jest.fn();
 const mockSendSystemPm = jest.fn();
 const mockDocUpdate = jest.fn();
 const mockDoc = jest.fn(() => ({ update: mockDocUpdate }));
+// The in-app channel writes a `notifications` doc (SHY-0246); the mock only
+// stubbed db.doc before, because no code path used db.collection here.
+const mockCollectionAdd = jest.fn();
+const mockCollection = jest.fn(() => ({ add: mockCollectionAdd }));
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
     doc: (...args) => mockDoc(...args),
+    collection: (...args) => mockCollection(...args),
   },
 }));
 
@@ -37,6 +42,7 @@ beforeEach(() => {
   mockSendFcmToTokens.mockResolvedValue([]);
   mockSendSystemPm.mockResolvedValue(undefined);
   mockDocUpdate.mockResolvedValue(undefined);
+  mockCollectionAdd.mockResolvedValue({ id: 'notif-1' });
 });
 
 describe('dispatchNotificationInline — email channel', () => {
@@ -299,6 +305,8 @@ describe('dispatchNotificationInline — multi-channel + edge cases', () => {
       email: 'sent',
       push: 'sent',
       systemMessage: 'sent',
+      // SHY-0246 added a fourth channel; not requested here, so null.
+      inApp: null,
     });
   });
 
@@ -332,6 +340,7 @@ describe('dispatchNotificationInline — multi-channel + edge cases', () => {
       email: null,
       push: null,
       systemMessage: null,
+      inApp: null,
     });
   });
 
@@ -342,6 +351,7 @@ describe('dispatchNotificationInline — multi-channel + edge cases', () => {
       email: null,
       push: null,
       systemMessage: null,
+      inApp: null,
     });
   });
 
@@ -364,25 +374,126 @@ describe('dispatchNotificationInline — multi-channel + edge cases', () => {
       }),
     );
   });
+});
 
-  test('inApp channel flag is accepted in payload but has no dispatch side effect', async () => {
-    // The inApp flag is carried in `channels` for completeness — in-app
-    // notifications are surfaced by clients reading their own paths,
-    // not by server-side dispatch. The function should ignore the flag
-    // without erroring.
+// ═══════════════════════════════════════════════════════════════
+// SHY-0246 — the in-app channel
+//
+// This block replaces a test titled "inApp channel flag is accepted in
+// payload but has no dispatch side effect", which asserted the DEFECT as
+// intended behaviour. Its stated rationale — that "in-app notifications are
+// surfaced by clients reading their own paths, not by server-side dispatch" —
+// is false: the only in-app inbox is GET /api/notifications, which reads the
+// `notifications` collection by `uid`, and nothing wrote a doc for these.
+// Because the shipped DEFAULT roadmap preference is in-app only
+// (routes/subscriptions.js:21), every default-configured subscriber was
+// dispatched and received nothing on any channel, while the dispatcher
+// returned success and logged "Notification dispatched".
+// ═══════════════════════════════════════════════════════════════
+
+describe('dispatchNotificationInline — inApp channel', () => {
+  test('writes a notifications doc when channels.inApp is true and uid is present', async () => {
     const result = await dispatchNotificationInline({
       channels: { inApp: true },
-      uid: 1,
-      body: 'No-op',
+      uid: 42,
+      type: 'roadmapUpdate',
+      title: 'Roadmap Update',
+      body: 'We shipped voice rooms',
+      relatedId: 'sug-9',
     });
 
+    expect(mockCollection).toHaveBeenCalledWith('notifications');
+    expect(mockCollectionAdd).toHaveBeenCalledTimes(1);
+    // Shape must match what the inbox reads (suggestions-notifications.js:29
+    // filters on `uid`) and what existing rows carry (suggestions.js:1422).
+    expect(mockCollectionAdd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        uid: '42',
+        userId: '42',
+        recipientUid: '42',
+        type: 'roadmapUpdate',
+        title: 'Roadmap Update',
+        body: 'We shipped voice rooms',
+        relatedId: 'sug-9',
+        isRead: false,
+        createdAt: expect.any(Number),
+      }),
+    );
+    expect(result.inApp).toBe('sent');
+  });
+
+  test('skips the in-app write when channels.inApp is false', async () => {
+    const result = await dispatchNotificationInline({
+      channels: { inApp: false },
+      uid: 42,
+      body: 'nope',
+    });
+
+    expect(mockCollectionAdd).not.toHaveBeenCalled();
+    expect(result.inApp).toBeNull();
+  });
+
+  test('skips the in-app write when uid is missing (no addressee)', async () => {
+    const result = await dispatchNotificationInline({
+      channels: { inApp: true },
+      body: 'nobody to address',
+    });
+
+    expect(mockCollectionAdd).not.toHaveBeenCalled();
+    expect(result.inApp).toBeNull();
+  });
+
+  test('returns failed and logs when the notifications write throws', async () => {
+    mockCollectionAdd.mockRejectedValueOnce(new Error('firestore down'));
+
+    const result = await dispatchNotificationInline({
+      channels: { inApp: true },
+      uid: 42,
+      body: 'boom',
+    });
+
+    expect(result.inApp).toBe('failed');
+    expect(log.error).toHaveBeenCalledWith(
+      'notification-channels',
+      expect.stringContaining('In-app'),
+      expect.objectContaining({ uid: 42, error: 'firestore down' }),
+    );
+  });
+
+  test('a failing in-app write does not block the other channels', async () => {
+    mockCollectionAdd.mockRejectedValueOnce(new Error('firestore down'));
+
+    const result = await dispatchNotificationInline({
+      channels: { inApp: true, email: true, push: true, systemMessage: true },
+      uid: 42,
+      email: 'u@example.com',
+      pushToken: 'tok',
+      body: 'still deliver the rest',
+    });
+
+    expect(result.inApp).toBe('failed');
+    expect(result.email).toBe('sent');
+    expect(result.push).toBe('sent');
+    expect(result.systemMessage).toBe('sent');
+  });
+
+  test('the DEFAULT roadmap preference (in-app only) actually delivers something', async () => {
+    // routes/subscriptions.js:21 ships this exact preference object. Before
+    // SHY-0246 this combination produced no side effect whatsoever, so the
+    // default configuration was a guaranteed silent no-op.
+    const result = await dispatchNotificationInline({
+      channels: { email: false, push: false, inApp: true, systemMessage: false },
+      uid: 7,
+      type: 'roadmapUpdate',
+      title: 'Roadmap Update',
+      body: 'Something changed',
+    });
+
+    expect(mockCollectionAdd).toHaveBeenCalledTimes(1);
+    expect(result.inApp).toBe('sent');
+    // and specifically NOT via a channel the user did not ask for
     expect(mockSendEmail).not.toHaveBeenCalled();
     expect(mockSendFcmToTokens).not.toHaveBeenCalled();
     expect(mockSendSystemPm).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      email: null,
-      push: null,
-      systemMessage: null,
-    });
   });
 });

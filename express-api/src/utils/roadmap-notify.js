@@ -48,7 +48,13 @@ async function notifyRoadmapSubscribers(message) {
 
       dispatches.push(
         dispatchNotificationInline({
-          type: 'roadmapUpdate',
+          // SHY-0246: snake_case, matching RoadmapNotification.VALID_TYPES in
+          // shared/.../core/model/RoadmapNotification.kt:20. `isRoadmapType`
+          // there compares for EXACT equality with `roadmap_update` (:49), so
+          // the previous camelCase `roadmapUpdate` produced notifications no
+          // client could classify. Not to be confused with the PREFERENCE key
+          // `channelPreferences.roadmapUpdate`, which stays camelCase.
+          type: 'roadmap_update',
           uid: sub.uid || doc.id,
           title: 'Roadmap Update',
           body: message,

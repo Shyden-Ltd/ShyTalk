@@ -38,7 +38,42 @@ const log = require('./log');
 async function dispatchNotificationInline(notif) {
   const { channels, uid, type, title, body, email, pushToken, relatedId } = notif || {};
   const correlationId = `notif-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-  const results = { email: null, push: null, systemMessage: null };
+  const results = { email: null, push: null, systemMessage: null, inApp: null };
+
+  // In-app FIRST, deliberately. This is the durable record the inbox reads
+  // (routes/suggestions-notifications.js:29 filters `notifications` by `uid`),
+  // so it must not be contingent on a transport succeeding — an SMTP outage
+  // should still leave the user something to find.
+  //
+  // SHY-0246: this channel was documented in the JSDoc above but never
+  // implemented, so `{email:false, push:false, inApp:true, systemMessage:false}`
+  // — the DEFAULT roadmap preference shipped at routes/subscriptions.js:21 —
+  // dispatched successfully and delivered nothing at all.
+  if (channels?.inApp && uid) {
+    try {
+      await db.collection('notifications').add({
+        // Three spellings of the recipient, matching the rows already written
+        // at routes/suggestions.js:1422 so the inbox and clients need no change.
+        uid: String(uid),
+        userId: String(uid),
+        recipientUid: String(uid),
+        type: type || 'notification',
+        title: title || '',
+        body: body || '',
+        relatedId: relatedId || null,
+        isRead: false,
+        createdAt: Date.now(),
+      });
+      results.inApp = 'sent';
+    } catch (err) {
+      log.error('notification-channels', 'In-app notification write failed', {
+        correlationId,
+        uid,
+        error: err.message,
+      });
+      results.inApp = 'failed';
+    }
+  }
 
   if (channels?.email && email) {
     try {

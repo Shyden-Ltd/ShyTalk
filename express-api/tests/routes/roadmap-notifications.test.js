@@ -118,7 +118,11 @@ describe('notifyRoadmapSubscribers', () => {
 
     expect(mockDispatchNotificationInline).toHaveBeenCalledTimes(1);
     const [payload] = mockDispatchNotificationInline.mock.calls[0];
-    expect(payload.type).toBe('roadmapUpdate');
+    // SHY-0246: snake_case, per RoadmapNotification.VALID_TYPES
+    // (shared/.../core/model/RoadmapNotification.kt:20, exact-match at :49).
+    // NOTE: this file duplicates much of tests/utils/roadmap-notify.test.js —
+    // both pinned this same wrong value, so the mistake had to be corrected twice.
+    expect(payload.type).toBe('roadmap_update');
     expect(payload.uid).toBe('user1');
     expect(payload.title).toContain('Roadmap');
     expect(payload.body).toContain('voice rooms');

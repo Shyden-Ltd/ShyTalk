@@ -135,7 +135,13 @@ describe('notifyRoadmapSubscribers — inline dispatch fan-out', () => {
     expect(mockDispatchNotificationInline).toHaveBeenCalledTimes(1);
     const [payload] = mockDispatchNotificationInline.mock.calls[0];
     expect(payload).toMatchObject({
-      type: 'roadmapUpdate',
+      // SHY-0246: must be the snake_case spelling the clients actually key on.
+      // `RoadmapNotification.VALID_TYPES` (shared/.../core/model/RoadmapNotification.kt:20)
+      // lists `roadmap_update`, and `isRoadmapType` compares for EXACT equality
+      // (:49) — a doc typed `roadmapUpdate` is unclassifiable by the client.
+      // Nothing anywhere keys on the camelCase spelling except the *preference*
+      // key `channelPreferences.roadmapUpdate`, which is a different namespace.
+      type: 'roadmap_update',
       uid: 300,
       title: 'Roadmap Update',
       body: 'A new feature shipped',
