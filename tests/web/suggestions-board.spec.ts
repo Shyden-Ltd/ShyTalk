@@ -1454,7 +1454,17 @@ test.describe('Suggestion Submission Edge Cases', () => {
     if ((await titleInput.count()) > 0 && (await submitBtn.count()) > 0) {
       await titleInput.fill('Test suggestion');
       await submitBtn.click();
-      await page.waitForTimeout(1000);
+      // Either the modal closes (accepted) or an error renders. Waiting for
+      // that fork is the condition; 1s was a guess at it.
+      await expect
+        .poll(async () =>
+          (await page.locator('[data-testid="suggest-title-input"]').count()) === 0
+            ? 'closed'
+            : (await page.locator('[data-testid="submit-error"], .submit-error').count()) > 0
+              ? 'error'
+              : 'pending',
+        )
+        .not.toBe('pending');
       const errorMsg = page.locator('[data-testid="submit-error"], .submit-error');
       if ((await errorMsg.count()) > 0) {
         await expect(errorMsg).toBeVisible();
@@ -1469,8 +1479,9 @@ test.describe('Suggestion Submission Edge Cases', () => {
     const submitBtn = page.locator('[data-testid="suggest-modal-submit"]');
     if ((await submitBtn.count()) > 0) {
       await submitBtn.dblclick();
-      await page.waitForTimeout(500);
-      // Button should be disabled after first click to prevent double submission
+      // The double-submit guard disables the button (suggestions-board.js:972-973).
+      // This used to sleep and end on a comment describing that.
+      await expect(submitBtn).toBeDisabled();
     }
   });
 });
@@ -1786,7 +1797,8 @@ test.describe('Mobile-Specific Interactions', () => {
 
     // Switch to landscape
     await page.setViewportSize({ width: 812, height: 375 });
-    await page.waitForTimeout(500);
+    // Poll for the relayout to settle rather than betting 500ms on it.
+    await expect.poll(() => page.evaluate(() => document.readyState)).toBe('complete');
     const landscapeScroll = await page.evaluate(() => window.scrollY);
 
     // Scroll position should be approximately preserved
@@ -1992,7 +2004,10 @@ test.describe('Suggestion Card UI States', () => {
       if ((await expandBtn.count()) > 0) {
         const beforeHeight = (await desc.boundingBox())?.height || 0;
         await expandBtn.click();
-        await page.waitForTimeout(300);
+        // Poll the measurement the assertion reads — the expand animates.
+        await expect
+          .poll(async () => (await desc.boundingBox())?.height || 0)
+          .toBeGreaterThanOrEqual(beforeHeight);
         const afterHeight = (await desc.boundingBox())?.height || 0;
         // Description should expand
         expect(afterHeight).toBeGreaterThanOrEqual(beforeHeight);
@@ -2080,8 +2095,8 @@ test.describe('Filter & Search Combination Edge Cases', () => {
     const clearBtn = page.locator('[data-testid="clear-filters"], .clear-filters');
     if ((await clearBtn.count()) > 0) {
       await clearBtn.click();
-      await page.waitForTimeout(500);
-      // All filters should be reset
+      // Poll the control the assertion reads.
+      await expect.poll(() => statusFilter.inputValue()).toBe('');
       const statusValue = await statusFilter.inputValue();
       // Default should show all statuses
       expect(statusValue).toBeFalsy();
@@ -2094,7 +2109,7 @@ test.describe('Filter & Search Combination Edge Cases', () => {
     const searchInput = page.locator('[data-testid="suggestions-search-input"]');
     await searchInput.waitFor({ timeout: 10_000 });
     await searchInput.fill('xxxxxxxxxnonexistentsuggestion');
-    await page.waitForTimeout(500);
+    await boardSettled(page);
 
     const emptyState = page.locator(
       '[data-testid="filter-empty"], [data-testid="suggestions-empty"]',
@@ -2117,8 +2132,7 @@ test.describe('Filter & Search Combination Edge Cases', () => {
     const filteredCount = await page.locator('[data-testid^="suggestion-card"], .sg-card').count();
 
     const searchInput = page.locator('[data-testid="suggestions-search-input"]');
-    await searchInput.fill('voice');
-    await page.waitForTimeout(500);
+    await withSuggestionsFetch(page, () => searchInput.fill('voice'));
 
     const searchedCount = await page.locator('[data-testid^="suggestion-card"], .sg-card').count();
     // Search should narrow results (or keep same if all match)
@@ -2129,8 +2143,9 @@ test.describe('Filter & Search Combination Edge Cases', () => {
     const searchInput = page.locator('[data-testid="suggestions-search-input"]');
     await searchInput.waitFor({ timeout: 10_000 });
     const initialCards = await page.locator('[data-testid^="suggestion-card"], .sg-card').count();
-    await searchInput.fill('a');
-    await page.waitForTimeout(500);
+    // Below the 2-char minimum, so the claim is that NO search fires. Absence
+    // has no state to wait for, so the window is bounded deliberately.
+    await new Promise((r) => setTimeout(r, 500)); // sleep-ok: bounded window for a no-request assertion
     const afterCards = await page.locator('[data-testid^="suggestion-card"], .sg-card').count();
     // With only 1 character, card count should remain the same (no filtering)
     expect(afterCards).toBe(initialCards);
@@ -2139,8 +2154,7 @@ test.describe('Filter & Search Combination Edge Cases', () => {
   test('search with 2 characters: search triggered', async ({ page }) => {
     const searchInput = page.locator('[data-testid="suggestions-search-input"]');
     await searchInput.waitFor({ timeout: 10_000 });
-    await searchInput.fill('vo');
-    await page.waitForTimeout(500);
+    await withSuggestionsFetch(page, () => searchInput.fill('vo'));
     // Search should be triggered at 2 chars
     const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     // Results should be filtered (may be fewer or same, but search was executed)
@@ -2161,10 +2175,11 @@ test.describe('Filter & Search Combination Edge Cases', () => {
 
     // Type quickly
     await searchInput.pressSequentially('voice chat', { delay: 50 });
-    await page.waitForTimeout(500);
+    // Bounded window: we are counting requests that may or may not arrive.
+    await new Promise((r) => setTimeout(r, 500)); // sleep-ok: bounded window for a request-count assertion
 
-    // Should have far fewer requests than characters typed (debounced)
-    // With 300ms debounce and 50ms per char, most keystrokes should be batched
+    // Assert the batching this test describes. It used to end on the comment.
+    expect(requests.length).toBeLessThan('voice chat'.length);
   });
 
   test('filter state preserved on page reload (URL params or sessionStorage)', async ({ page }) => {
@@ -2542,7 +2557,7 @@ test.describe('URL & Navigation Edge Cases', () => {
     await expect(page.locator('body')).toBeVisible();
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
-    await page.waitForTimeout(1000);
+    await page.waitForLoadState('domcontentloaded');
     expect(errors).toHaveLength(0);
   });
 
@@ -2603,7 +2618,6 @@ test.describe('URL & Navigation Edge Cases', () => {
       .waitFor({ timeout: 10_000 });
     const upvoteBtn = page.locator('[data-testid^="vote-up"]').first();
     await upvoteBtn.click();
-    await page.waitForTimeout(300);
 
     // Navigate away
     await page.goto('/');
@@ -2625,14 +2639,17 @@ test.describe('URL & Navigation Edge Cases', () => {
     await page.goBack();
     await boardSettled(page);
 
+    // Forward returns to '/', which has no suggestions board — wait for THAT
+    // destination, not for the board (an earlier pass waited for the board
+    // here and timed out, correctly).
     await page.goForward();
-    await page.waitForTimeout(500);
+    await expect.poll(() => page.url()).not.toContain('roadmap.html');
 
     await page.goBack();
     await boardSettled(page);
-
-    // Roadmap page should be visible again
-    await expect(page.locator('body')).toBeVisible();
+    // Back on the roadmap, with its board rendered — a stronger check than
+    // "body is visible", which is true on every page ever served.
+    await expect(page.locator('#suggestions-board')).toBeAttached();
   });
 
   test('refresh mid-submission: form cleared, no duplicate', async ({ page }) => {
@@ -2659,11 +2676,9 @@ test.describe('URL & Navigation Edge Cases', () => {
       const el = document.querySelector('#suggestions, [data-section="suggestions"]');
       if (el) el.scrollIntoView();
     });
-    await page.waitForTimeout(1000);
-
-    const url = page.url();
-    // URL should include hash for the current section
-    // This may use history.replaceState to update the hash
+    // roadmap-app.js:1009 rewrites the hash as sections come into view — poll
+    // for it instead of sleeping and then reading a URL nothing asserted on.
+    await expect.poll(() => page.url(), { timeout: 10_000 }).toMatch(/#(roadmap|suggestions)/);
   });
 });
 

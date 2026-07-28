@@ -14,6 +14,5 @@
   "scripts/lib/google-translate.js": 1,
   "tests/integration/06-pm-realtime-delivery.spec.ts": 1,
   "tests/integration/08-fcm-message-shape.spec.ts": 2,
-  "tests/web/admin-validation.spec.ts": 1,
-  "tests/web/suggestions-board.spec.ts": 14
+  "tests/web/admin-validation.spec.ts": 1
 }
