@@ -165,6 +165,24 @@ own story rather than a quiet addition to the de-sleeping work.
 - Every parked test in `suggestions-board.spec.ts` that names one of these features is unskipped and passing.
 - Reviewer 100% clean; CI green by name; journey matrix per the pre-merge protocol.
 
+## Additional scope — a testability seam for roadmap auth
+
+Seven tests in `tests/web/roadmap-auth.spec.ts` are parked for a different
+reason from the rest of this story: the FEATURE exists, but there is no way to
+reach it from a test.
+
+`renderAuthUI` (`public/js/roadmap-auth.js:35`) renders from module-local
+`shytalkProfile` / `authStateKnown`, which are set only by the Firebase auth
+callback. Mocking `/api/roadmap/me` does not touch them, and
+`publishAuthIdentity` only sets `window.shytalkAuth`, which that module never
+reads. So the logged-in and no-account states are unreachable, and the tests
+covering them were wrapped in `if (x.count() > 0)` — running nothing and
+reporting green.
+
+- [ ] Provide a seam so a test can put the roadmap auth UI into its logged-in
+      and no-account states without driving real Firebase.
+- [ ] Unskip the seven parked tests in `roadmap-auth.spec.ts`.
+
 ## Notes (running log)
 
 - **2026-07-28** — Filed from SHY-0245 de-sleeping. The tests were not merely unasserted; the

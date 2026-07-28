@@ -47,12 +47,10 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     page,
   }) => {
     const suggestionsSection = page.locator('#suggestions, [data-section="suggestions"]');
-    if ((await suggestionsSection.count()) > 0) {
-      const loginPrompt = suggestionsSection.locator(
-        '[data-testid="auth-login-prompt"], .auth-login-prompt',
-      );
-      await expect(loginPrompt).toBeVisible({ timeout: 10_000 });
-    }
+    const loginPrompt = suggestionsSection.locator(
+      '[data-testid="auth-login-prompt"], .auth-login-prompt',
+    );
+    await expect(loginPrompt).toBeVisible({ timeout: 10_000 });
   });
 
   test('no Google/Apple login buttons shown on initial page load', async ({ page }) => {
@@ -137,24 +135,20 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     page,
   }) => {
     const googleBtn = page.locator('[data-testid="auth-google-btn"], .auth-google-btn');
-    if ((await googleBtn.count()) > 0) {
-      // Buttons should be focusable
-      await googleBtn.focus();
-      await expect(googleBtn).toBeFocused();
-    }
+    // Buttons should be focusable
+    await googleBtn.focus();
+    await expect(googleBtn).toBeFocused();
   });
 
   test('i18n: login prompt text translatable (data-i18n attributes)', async ({ page }) => {
     const prompt = page.locator('[data-testid="auth-login-prompt"], .auth-login-prompt');
-    if ((await prompt.count()) > 0) {
-      // Check for i18n markers — either data-i18n or data-translate attributes
-      const hasI18n =
-        (await prompt.locator('[data-i18n], [data-translate]').count()) > 0 ||
-        (await prompt.getAttribute('data-i18n')) !== null;
-      // If i18n is not yet implemented, at least the text should exist
-      const text = await prompt.textContent();
-      expect(text?.length).toBeGreaterThan(0);
-    }
+    // Check for i18n markers — either data-i18n or data-translate attributes
+    const hasI18n =
+      (await prompt.locator('[data-i18n], [data-translate]').count()) > 0 ||
+      (await prompt.getAttribute('data-i18n')) !== null;
+    // If i18n is not yet implemented, at least the text should exist
+    const text = await prompt.textContent();
+    expect(text?.length).toBeGreaterThan(0);
   });
 });
 
@@ -422,14 +416,12 @@ test.describe('Roadmap Auth — No Account Found', () => {
     );
     await page.goto('/roadmap.html');
     const noAccount = page.locator('[data-testid="auth-no-account"], .auth-no-account');
-    if ((await noAccount.count()) > 0) {
-      // Should not be styled with error-red colors
-      const color = await noAccount.evaluate((el) => getComputedStyle(el).color);
-      const bgColor = await noAccount.evaluate((el) => getComputedStyle(el).backgroundColor);
-      // Error red is typically rgb(255, 0, 0) or similar — should not be pure red
-      expect(color).not.toBe('rgb(255, 0, 0)');
-      expect(bgColor).not.toBe('rgb(255, 0, 0)');
-    }
+    // Should not be styled with error-red colors
+    const color = await noAccount.evaluate((el) => getComputedStyle(el).color);
+    const bgColor = await noAccount.evaluate((el) => getComputedStyle(el).backgroundColor);
+    // Error red is typically rgb(255, 0, 0) or similar — should not be pure red
+    expect(color).not.toBe('rgb(255, 0, 0)');
+    expect(bgColor).not.toBe('rgb(255, 0, 0)');
   });
 
   test('download links open in new tab (target="_blank")', async ({ page }) => {
@@ -451,15 +443,20 @@ test.describe('Roadmap Auth — No Account Found', () => {
       '[data-testid="download-android"], a[href*="play.google.com"]',
     );
     const iosLink = page.locator('[data-testid="download-ios"], a[href*="apps.apple.com"]');
-    if ((await androidLink.count()) > 0) {
-      expect(await androidLink.getAttribute('target')).toBe('_blank');
-    }
-    if ((await iosLink.count()) > 0) {
-      expect(await iosLink.getAttribute('target')).toBe('_blank');
-    }
+    expect(await androidLink.getAttribute('target')).toBe('_blank');
+
+    expect(await iosLink.getAttribute('target')).toBe('_blank');
   });
 
-  test('download links have rel="noopener noreferrer"', async ({ page }) => {
+  // PARKED (SHY-0247): these need the logged-in / no-account UI, and there is no
+  // seam to reach it. renderAuthUI (public/js/roadmap-auth.js:35) renders from
+  // MODULE-LOCAL `shytalkProfile` / `authStateKnown`, set only by the Firebase
+  // auth callback — mocking /api/roadmap/me does not touch them, and
+  // publishAuthIdentity only sets window.shytalkAuth, which this module never
+  // reads. They were previously wrapped in `if (x.count() > 0)`, so they ran
+  // nothing and reported green; unguarding them is what exposed the gap.
+  // Fix is a testability seam on roadmap-auth.js, tracked in SHY-0247.
+  test.skip('download links have rel="noopener noreferrer"', async ({ page }) => {
     await page.route('**/api/roadmap/me', (route) =>
       route.fulfill({
         status: 404,
@@ -478,19 +475,16 @@ test.describe('Roadmap Auth — No Account Found', () => {
       '[data-testid="download-android"], a[href*="play.google.com"]',
     );
     const iosLink = page.locator('[data-testid="download-ios"], a[href*="apps.apple.com"]');
-    if ((await androidLink.count()) > 0) {
-      const rel = await androidLink.getAttribute('rel');
-      expect(rel).toMatch(/noopener/);
-      expect(rel).toMatch(/noreferrer/);
-    }
-    if ((await iosLink.count()) > 0) {
-      const rel = await iosLink.getAttribute('rel');
-      expect(rel).toMatch(/noopener/);
-      expect(rel).toMatch(/noreferrer/);
-    }
+    const rel = await androidLink.getAttribute('rel');
+    expect(rel).toMatch(/noopener/);
+    expect(rel).toMatch(/noreferrer/);
+
+    const rel7 = await iosLink.getAttribute('rel7');
+    expect(rel7).toMatch(/noopener/);
+    expect(rel7).toMatch(/noreferrer/);
   });
 
-  test('i18n: download prompt text translatable', async ({ page }) => {
+  test.skip('i18n: download prompt text translatable', async ({ page }) => {
     await page.route('**/api/roadmap/me', (route) =>
       route.fulfill({
         status: 404,
@@ -503,14 +497,12 @@ test.describe('Roadmap Auth — No Account Found', () => {
     );
     await page.goto('/roadmap.html');
     const noAccount = page.locator('[data-testid="auth-no-account"], .auth-no-account');
-    if ((await noAccount.count()) > 0) {
-      // Check for i18n markers or at minimum non-empty text
-      const text = await noAccount.textContent();
-      expect(text?.length).toBeGreaterThan(0);
-    }
+    // Check for i18n markers or at minimum non-empty text
+    const text = await noAccount.textContent();
+    expect(text?.length).toBeGreaterThan(0);
   });
 
-  test('mobile: download prompt fits on 320px screen', async ({ page }) => {
+  test.skip('mobile: download prompt fits on 320px screen', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 });
     await page.route('**/api/roadmap/me', (route) =>
       route.fulfill({
@@ -527,13 +519,11 @@ test.describe('Roadmap Auth — No Account Found', () => {
     );
     await page.goto('/roadmap.html');
     const noAccount = page.locator('[data-testid="auth-no-account"], .auth-no-account');
-    if ((await noAccount.count()) > 0) {
-      const box = await noAccount.boundingBox();
-      if (box) {
-        // Should not overflow beyond viewport width
-        expect(box.x + box.width).toBeLessThanOrEqual(320);
-        expect(box.x).toBeGreaterThanOrEqual(0);
-      }
+    const box = await noAccount.boundingBox();
+    if (box) {
+      // Should not overflow beyond viewport width
+      expect(box.x + box.width).toBeLessThanOrEqual(320);
+      expect(box.x).toBeGreaterThanOrEqual(0);
     }
   });
 });
@@ -637,7 +627,7 @@ test.describe('Roadmap Auth — Logged In State', () => {
     await expect(errorMsg).toHaveCount(0);
   });
 
-  test('displays user avatar when available', async ({ page }) => {
+  test.skip('displays user avatar when available', async ({ page }) => {
     await page.route('**/api/roadmap/me', (route) =>
       route.fulfill({
         status: 200,
@@ -651,10 +641,8 @@ test.describe('Roadmap Auth — Logged In State', () => {
     );
     await page.goto('/roadmap.html');
     const avatar = page.locator('[data-testid="auth-avatar"], .auth-avatar');
-    if ((await avatar.count()) > 0) {
-      const src = await avatar.getAttribute('src');
-      expect(src).toContain('avatar');
-    }
+    const src = await avatar.getAttribute('src');
+    expect(src).toContain('avatar');
   });
 
   test('vote/suggest/comment buttons enabled when logged in', async ({ page }) => {
@@ -788,7 +776,7 @@ test.describe('Roadmap Auth — Logged In State', () => {
     }
   });
 
-  test('vote arrows enabled after login', async ({ page }) => {
+  test.skip('vote arrows enabled after login', async ({ page }) => {
     await page.route('**/api/roadmap/me', (route) =>
       route.fulfill({
         status: 200,
@@ -821,9 +809,7 @@ test.describe('Roadmap Auth — Logged In State', () => {
     const voteBtn = page
       .locator('.vote-btn, [data-testid="vote-up"], .upvote-btn, .vote-arrow')
       .first();
-    if ((await voteBtn.count()) > 0) {
-      await expect(voteBtn).not.toBeDisabled();
-    }
+    await expect(voteBtn).not.toBeDisabled();
   });
 
   test('comment form visible on accepted suggestions after login', async ({ page }) => {
@@ -865,9 +851,7 @@ test.describe('Roadmap Auth — Logged In State', () => {
         '[data-testid="comment-form"], .comment-form, textarea[placeholder*="comment" i]',
       );
       // Comment form should be visible for logged-in users
-      if ((await commentForm.count()) > 0) {
-        await expect(commentForm.first()).toBeVisible();
-      }
+      await expect(commentForm.first()).toBeVisible();
     }
   });
 
@@ -999,7 +983,7 @@ test.describe('Roadmap Auth — No Account Download Prompt Details', () => {
     // Both store links should be present somewhere on the page
   });
 
-  test('download prompt has clear call-to-action text', async ({ page }) => {
+  test.skip('download prompt has clear call-to-action text', async ({ page }) => {
     await page.route('**/api/roadmap/me', (route) =>
       route.fulfill({
         status: 404,
@@ -1012,10 +996,8 @@ test.describe('Roadmap Auth — No Account Download Prompt Details', () => {
     );
     await page.goto('/roadmap.html');
     const noAccount = page.locator('[data-testid="auth-no-account"], .auth-no-account');
-    if ((await noAccount.count()) > 0) {
-      const text = await noAccount.textContent();
-      expect(text?.toLowerCase()).toMatch(/download|create|account/);
-    }
+    const text = await noAccount.textContent();
+    expect(text?.toLowerCase()).toMatch(/download|create|account/);
   });
 
   test('download prompt allows dismissal to browse as guest', async ({ page }) => {
@@ -1032,9 +1014,7 @@ test.describe('Roadmap Auth — No Account Download Prompt Details', () => {
     await page.goto('/roadmap.html');
     // User should be able to browse suggestions read-only even without account
     const suggestionsSection = page.locator('#suggestions, [data-section="suggestions"]');
-    if ((await suggestionsSection.count()) > 0) {
-      await expect(suggestionsSection).toBeVisible();
-    }
+    await expect(suggestionsSection).toBeVisible();
   });
 });
 
@@ -1142,19 +1122,17 @@ test.describe('Roadmap Auth — Error Handling', () => {
     await expect(jsError).toHaveCount(0);
   });
 
-  test('auth popup blocked by browser shows helpful message', async ({ page }) => {
+  test.skip('auth popup blocked by browser shows helpful message', async ({ page }) => {
     // Block popups by intercepting window.open
     await page.addInitScript(() => {
       window.open = () => null;
     });
     await page.goto('/roadmap.html');
     const googleBtn = page.locator('[data-testid="auth-google-btn"], .auth-google-btn');
-    if ((await googleBtn.count()) > 0) {
-      await googleBtn.click();
-      // `toBeVisible` auto-retries; the "did not crash" contract holds without
-      // guessing how long a blocked popup takes to surface (SHY-0245).
-      await expect(page.locator('body')).toBeVisible();
-    }
+    await googleBtn.click();
+    // `toBeVisible` auto-retries; the "did not crash" contract holds without
+    // guessing how long a blocked popup takes to surface (SHY-0245).
+    await expect(page.locator('body')).toBeVisible();
   });
 });
 
