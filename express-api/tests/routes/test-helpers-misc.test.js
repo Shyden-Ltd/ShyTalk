@@ -714,7 +714,7 @@ describe('POST /api/test/setup', () => {
 
     expect(res.body.appeals).toHaveLength(1);
     const appeal = res.body.appeals[0];
-    expect(appeal.userId).toBe(res.body.users[0].uniqueId);
+    expect(appeal.uniqueId).toBe(res.body.users[0].uniqueId);
     expect(appeal.appealText).toBe('Please reconsider');
     expect(appeal.status).toBe('pending');
     expect(appeal._testRun).toBe(res.body.testRunId);

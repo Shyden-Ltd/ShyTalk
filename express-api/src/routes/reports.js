@@ -1412,6 +1412,58 @@ router.post('/appeals', async (req, res) => {
 });
 
 // ── List appeals (admin) ──
+/**
+ * Which account an appeal belongs to.
+ *
+ * Three spellings are in circulation. `POST /api/users/:uniqueId/appeal`
+ * (users.js) writes `uniqueId`; older documents and the test fixture write
+ * `userId`; `user_id` is the snake_case legacy. Before SHY-0249 the reader
+ * checked only the last two, so every appeal submitted through the app
+ * resolved to nobody — the admin saw appeal text with no name, no id and no
+ * suspension reason attached to it.
+ *
+ * Accepting all three is deliberately cheaper than a backfill: a migration
+ * over live appeals can fail halfway and leave both shapes anyway.
+ */
+function appealAccountId(appeal) {
+  return appeal.uniqueId ?? appeal.userId ?? appeal.user_id ?? null;
+}
+
+/** Newest-first cap. An appellant with a long history does not need to push
+ *  the decision buttons off the admin's screen to make the point. */
+const APPEAL_REPORT_LIMIT = 20;
+
+/**
+ * The reports filed against an appealing account, newest first.
+ *
+ * The Appeals tab has always rendered a "Reports & Evidence (N)" disclosure
+ * from `appeal.reports`; nothing ever populated it, so the section never
+ * appeared. An admin was deciding a suspension appeal without being shown what
+ * the suspension was for.
+ *
+ * Failures here degrade to an empty list: one unreadable appellant must not
+ * blank the whole queue.
+ */
+async function appealReports(accountUniqueId, appealId) {
+  try {
+    const snap = await db
+      .collection('reports')
+      .where('reportedUserUniqueId', '==', Number(accountUniqueId))
+      .limit(APPEAL_REPORT_LIMIT)
+      .get();
+    const reports = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    reports.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return reports;
+  } catch (err) {
+    log.warn('reports', 'Could not load reports for appeal', {
+      appealId,
+      accountUniqueId,
+      error: err.message,
+    });
+    return [];
+  }
+}
+
 router.get('/appeals', async (req, res) => {
   try {
     if (await requireAdmin(req, res)) return;
@@ -1427,14 +1479,21 @@ router.get('/appeals', async (req, res) => {
     const appeals = await queryDocs(query);
     appeals.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
-    // Enrich with user data (display name, uniqueId, suspension info)
+    // Enrich with user data (display name, uniqueId, suspension info) and the
+    // reports that led to the suspension. Both are what the Appeals tab needs
+    // to make the decision on evidence rather than on the appellant's own
+    // account of it (SHY-0249).
     const enriched = await Promise.all(
       appeals.map(async (a) => {
-        const uid = a.userId ?? a.user_id;
-        const userData = uid ? await getDoc(`users/${uid}`) : null;
+        const uid = appealAccountId(a);
+        const [userData, reports] = await Promise.all([
+          uid ? getDoc(`users/${uid}`) : null,
+          uid ? appealReports(uid, a.id) : [],
+        ]);
         const userUniqueId = userData?.uniqueId ?? userData?.unique_id ?? null;
         return {
           ...a,
+          reports,
           userUniqueId,
           uniqueId: userUniqueId,
           userDisplayName: userData?.displayName ?? userData?.display_name ?? null,
@@ -1476,7 +1535,19 @@ router.patch('/appeals/:id', async (req, res) => {
     if (!appeal) return res.status(404).json({ error: 'Appeal not found' });
 
     const timestamp = now();
-    const userId = appeal.userId ?? appeal.user_id;
+    // Same three-spelling resolution as the list endpoint. This one mattered
+    // most: with the old `appeal.userId ?? appeal.user_id`, an appeal
+    // submitted from the app resolved to undefined and the handler went on to
+    // update `users/undefined` — so approving a real appeal errored out and
+    // the person stayed suspended (SHY-0249).
+    const userId = appealAccountId(appeal);
+    if (!userId) {
+      // Fail loudly rather than writing somewhere harmless-looking. An appeal
+      // nobody can be identified from is a data problem an admin needs told
+      // about, not one to paper over with a success response.
+      log.warn('reports', 'Appeal has no resolvable account', { appealId: req.params.id });
+      return res.status(422).json({ error: 'Appeal has no resolvable account' });
+    }
 
     // Update the appeal document
     const appealUpdate = {

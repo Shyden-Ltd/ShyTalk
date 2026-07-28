@@ -247,8 +247,17 @@ router.post('/test/setup', async (req, res) => {
         reportedUserName: reportedUser.displayName,
         reporterId: reporterUser.uid,
         reporterName: reporterUser.displayName,
+        // Production sets this (reports.js, POST /reports) and the admin
+        // panel renders it as "Reported by: #<id> <name>". Omitting it here
+        // meant every seeded report displayed a bare "#" — the same
+        // fixture-vs-production divergence as the appeal account field.
+        reporterUniqueId: reporterUser.uniqueId,
         reason: reportSpec.reason || 'Spam',
         status: reportSpec.status || 'pending',
+        // Evidence attachments. Two admin-appeals tests ("evidence thumbnail
+        // opens lightbox", "evidence lightbox closes via Esc/overlay/X") could
+        // never run without these — there was no way to seed them.
+        evidenceUrls: reportSpec.evidenceUrls || [],
         ...(linkedConv ? { conversationId: linkedConv.id } : {}),
         createdAt: now,
         _testRun: testRunId,
@@ -266,7 +275,12 @@ router.post('/test/setup', async (req, res) => {
       if (!appealUser) throw new Error('Appeal seed requires users to be seeded first');
       const appealData = {
         id: appealId,
-        userId: appealUser.uniqueId,
+        // `uniqueId` is what POST /api/users/:uniqueId/appeal writes. This
+        // seeded `userId` instead, which is the field the read path happened
+        // to want — so the whole appeals suite was green against a document
+        // shape only the fixture produced, and the real one resolved to
+        // nobody. Pinned by appeals-fixture-contract.test.js (SHY-0249).
+        uniqueId: appealUser.uniqueId,
         appealText: appealSpec.appealText || 'I did not do this',
         status: appealSpec.status || 'pending',
         createdAt: now,

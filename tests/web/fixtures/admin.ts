@@ -4,6 +4,21 @@ import { AdminApi, SetupResult } from '../helpers/api';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
+/**
+ * A 200x120 PNG carried inline, used as report evidence by the seeded report.
+ *
+ * Inline rather than a CDN URL so the evidence-lightbox tests never turn into
+ * a network-availability test, and sized rather than 1x1 so the lightbox image
+ * has a real box for a visibility assertion to mean something.
+ */
+export const EVIDENCE_IMAGE =
+  'data:image/svg+xml;base64,' +
+  Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120">' +
+      '<rect width="200" height="120" fill="#4a90d9"/>' +
+      '<text x="12" y="66" font-size="18" fill="#fff">evidence</text></svg>',
+  ).toString('base64');
+
 export interface TestData {
   testRunId: string;
   prefix: string;
@@ -113,7 +128,17 @@ export const test = base.extend<{}, { adminContext: BrowserContext; testData: Te
             },
           ],
           reports: [
-            { reportedUserIndex: 0, reporterUserIndex: 1, reason: 'Spam', conversationIndex: 0 },
+            {
+              reportedUserIndex: 0,
+              reporterUserIndex: 1,
+              reason: 'Spam',
+              conversationIndex: 0,
+              // Real image bytes the browser genuinely decodes, inline so the
+              // suite never depends on a CDN being up. Without evidence on the
+              // seeded report, the two evidence-lightbox tests in
+              // admin-appeals.spec.ts skipped themselves every run.
+              evidenceUrls: [EVIDENCE_IMAGE],
+            },
           ],
           appeals: [{ userIndex: 0, appealText: 'I did not do this' }],
           alerts: [{ type: 'error_rate', severity: 'high', message: `e2e-${prefix}-alert` }],
