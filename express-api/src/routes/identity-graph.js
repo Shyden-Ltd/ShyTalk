@@ -258,6 +258,21 @@ router.post('/admin/identity-graph/:id/node/:nodeId/unsuspend', async (req, res)
     const data = doc.data();
     const nodes = (data.nodes || []).map((n) => (n.id === nodeId ? { ...n, suspended: false } : n));
     await ref.update({ nodes, updatedAt: now() });
+    // Lifting a suspension is as consequential as applying one, and the
+    // unsuspend-ALL route beside this has always been audited — this one was
+    // not, so a single node could be quietly released with no record of who
+    // did it (SHY-0245).
+    const entryId = generateId();
+    await db.doc(`adminAuditLog/${entryId}`).set({
+      adminUid: req.auth.uniqueId,
+      action: 'identity_node_unsuspend',
+      actionType: 'unsuspend',
+      targetType: 'identityNode',
+      targetId: nodeId,
+      target: nodeId,
+      details: { graphId: id },
+      timestamp: now(),
+    });
     res.json({ success: true });
   } catch (err) {
     log.error('identity-graph', 'Node unsuspend failed', { error: err.message });

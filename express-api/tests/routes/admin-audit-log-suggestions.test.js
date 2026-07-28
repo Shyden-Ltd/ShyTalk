@@ -149,21 +149,16 @@ function makeAuditDoc(id, overrides = {}) {
 // ═══════════════════════════════════════════════════════════════
 
 describe('Admin Audit Log', () => {
-  test('every suggestion action creates entry', async () => {
-    // Verified by checking mockCollectionAdd calls after admin actions
-  });
-
-  test('every ban/suspension action creates entry', async () => {
-    // Verified by checking audit log writes after ban operations
-  });
-
-  test('every identity graph change logged', async () => {
-    // New identifier additions and cascade events create entries
-  });
-
-  test('every dispute resolution logged', async () => {
-    // Dispute uphold/reject creates audit entry
-  });
+  // The four "every <thing> creates entry" tests that used to sit here had
+  // empty bodies with a comment where the assertions should be — they passed
+  // while proving nothing. "Every" is a completeness claim, and no per-route
+  // test can deliver it: a NEW unaudited admin route leaves every existing
+  // per-route test green.
+  //
+  // They now live in `admin-audit-completeness.test.js`, which scans the route
+  // sources for mutating /admin/ handlers and requires each to write an audit
+  // entry. Writing it exposed four genuinely unaudited routes — dispute
+  // open/uphold/reject and single-node identity unsuspend (SHY-0245).
 
   test('audit log: list paginated', async () => {
     const docs = Array.from({ length: 5 }, (_, i) => makeAuditDoc(`log${i}`));

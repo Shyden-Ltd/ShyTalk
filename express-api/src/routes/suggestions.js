@@ -1701,6 +1701,9 @@ router.post('/admin/suggestions/:id/dispute', async (req, res) => {
       disputedAt: now(),
       updatedAt: now(),
     });
+    await createAuditEntry(req.auth.uniqueId, 'suggestion_dispute_open', 'suggestion', id, {
+      reason: reason || null,
+    });
     res.json({ success: true });
   } catch (err) {
     log.error('admin-suggestions', 'Dispute failed', { error: err.message });
@@ -1741,6 +1744,11 @@ router.post('/admin/suggestions/:id/dispute/uphold', async (req, res) => {
         createdAt: now(),
       });
     }
+    // An admin action nobody can trace is not an admin action anyone can
+    // answer for. SHY-0245 found this route wrote no audit entry at all.
+    await createAuditEntry(req.auth.uniqueId, 'suggestion_dispute_uphold', 'suggestion', id, {
+      previousStatus: data.status || null,
+    });
     res.json({ success: true });
   } catch (err) {
     log.error('admin-suggestions', 'Dispute uphold failed', { error: err.message });
@@ -1767,6 +1775,14 @@ router.post('/admin/suggestions/:id/dispute/reject', async (req, res) => {
       mergedIntoSuggestionId: null,
       mergedInto: null,
       updatedAt: now(),
+    });
+    // An admin action nobody can trace is not an admin action anyone can
+    // answer for. SHY-0245 found this route wrote no audit entry at all.
+    await createAuditEntry(req.auth.uniqueId, 'suggestion_dispute_reject', 'suggestion', id, {
+      // This handler never reads the doc's data — only its existence — so take
+      // the previous status from the snapshot rather than a `data` binding
+      // that does not exist here.
+      previousStatus: doc.data()?.status ?? null,
     });
     res.json({ success: true });
   } catch (err) {
