@@ -214,9 +214,11 @@ test.describe('Portal — Accessibility: Keyboard Navigation', () => {
     await page.locator('#login-password').press('Enter');
     // Form should be submitted — we'll see an error since the credentials are invalid
     // but the form submission should have triggered
-    // Wait for either an error message or a network request
-    await page.waitForTimeout(2000);
-    // The form should have attempted to submit
+    // Assert the submission actually happened rather than sleeping and ending
+    // on a comment: an invalid login must surface an error, not fail silently.
+    await expect(page.locator('#totp-error, .error-message, [role="alert"]').first()).toBeVisible({
+      timeout: 15_000,
+    });
   });
 });
 

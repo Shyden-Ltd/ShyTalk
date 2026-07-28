@@ -513,7 +513,7 @@ test.describe('Performance', () => {
     const errors: string[] = [];
     page.on('pageerror', (err) => errors.push(err.message));
     await page.goto('/roadmap.html');
-    await page.waitForTimeout(2000);
+    await expect(page.locator('#suggestions-board')).toBeAttached({ timeout: 15_000 });
     expect(errors).toHaveLength(0);
   });
 });

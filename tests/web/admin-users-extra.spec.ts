@@ -429,7 +429,9 @@ test.describe('Admin Users - Extra Profile Fields', () => {
       }
     }
 
-    await page.waitForTimeout(2_000);
+    await expect
+      .poll(async () => ((await testData.api.get(`/api/user/${uid}`)).followerIds || []).length)
+      .toBe(0);
     const apiAfter = await testData.api.get(`/api/user/${uid}`);
     const followersAfter = apiAfter.followerIds || [];
     expect(followersAfter).not.toContain(Number(secondUid));

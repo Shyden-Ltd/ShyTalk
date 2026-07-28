@@ -113,8 +113,9 @@ async function setupPage(
 test.describe('English visitors pay zero translate cost', () => {
   test('no translate request fires and links navigate without a dialog', async ({ page }) => {
     const { translateCalls } = await setupPage(page);
-    // Default locale is en — give any stray async a tick, then assert.
-    await page.waitForTimeout(250);
+    // Default locale is en, so the claim is that NO translate request fires —
+    // absence, with no state to wait for, so the window is bounded on purpose.
+    await new Promise((r) => setTimeout(r, 250)); // sleep-ok: bounded window for a no-request assertion
     expect(translateCalls).toHaveLength(0);
     const link = page.locator('a.shy-badge', { hasText: 'SHY-9001' });
     await expect(link).toHaveAttribute(

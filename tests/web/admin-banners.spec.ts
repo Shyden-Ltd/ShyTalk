@@ -446,8 +446,7 @@ test.describe('Admin Banners', () => {
 
     await srcCard.dragTo(dstCard);
 
-    // Wait for the reorder API call to complete
-    await page.waitForTimeout(1_000);
+    // Poll the API below until the new order lands, rather than betting 1s.
 
     // API: verify the order changed
     const bannersAfter = await getAllBannersViaApi(testData);

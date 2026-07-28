@@ -125,7 +125,7 @@ test.describe('Admin init idempotency (regression)', () => {
     // Give the post-login init flow a moment to settle. We can't poll
     // for "init done" cleanly because the contract is "no new listeners"
     // — we have to wait long enough that any new ones would have landed.
-    await page.waitForTimeout(2_000);
+    await new Promise((r) => setTimeout(r, 2_000)); // sleep-ok: bounded window — the contract is "NO new listeners", which has no state to wait for
 
     const afterReinit = await page.evaluate(() => ({
       ...((window as any).__addListenerCounts as Record<string, number>),

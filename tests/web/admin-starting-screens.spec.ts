@@ -41,8 +41,7 @@ async function deleteScreenViaApi(page: Page, screenId: string): Promise<void> {
       const evt = new Event('visibilitychange');
       document.dispatchEvent(evt);
     });
-    // Brief wait
-    await page.waitForTimeout(500);
+    await new Promise((r) => setTimeout(r, 500)); // sleep-ok: bounded window — collecting requests that may never fire
   }
   page.off('request', handler);
 

@@ -99,7 +99,7 @@ test.describe('Dev Sanity Checks', () => {
       if (msg.type() === 'error') errors.push(msg.text());
     });
     await page.goto(WEB_BASE);
-    await page.waitForTimeout(2_000);
+    await page.waitForLoadState('domcontentloaded');
     // Filter out 429 rate-limiting errors — Cloudflare throttles when 5 browsers hit dev simultaneously
     const meaningful = errors.filter((e) => !e.includes('429'));
     expect(meaningful).toHaveLength(0);

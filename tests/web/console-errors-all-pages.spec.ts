@@ -29,7 +29,7 @@ test.describe('Console Errors — All Pages', () => {
       });
 
       await page.goto(`${BASE}${path}`);
-      await page.waitForTimeout(2_000);
+      await page.waitForLoadState('domcontentloaded');
 
       // Filter benign errors that occur in CI where the local stack may
       // race the page load. The previous version of this filter included

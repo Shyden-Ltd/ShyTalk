@@ -340,9 +340,19 @@ test.describe('Admin Reports', () => {
 
     await waitForReportsLoaded(page);
 
-    // API verify: no more pending reports for this user — Firestore emulator
-    // may need a moment to propagate the writes from the resolve-all batch.
-    await page.waitForTimeout(1_000);
+    // Poll for the ACTUAL claim — this user gone from pending — not for a
+    // proxy. A first attempt polled `users.length <= 1`, which was already
+    // true (this user was the only one) and so returned instantly while the
+    // reports were still pending. Polling the wrong condition is just a
+    // shorter sleep.
+    await expect
+      .poll(async () => {
+        const pending = await getReportsViaApi(testData, 'pending');
+        return (pending.users ?? []).some(
+          (u: any) => String(u.uniqueId) === String(testData.user.uniqueId),
+        );
+      })
+      .toBe(false);
     const result = await getReportsViaApi(testData, 'pending');
     const userReports = result.users?.find(
       (u: any) => String(u.uniqueId) === String(testData.user.uniqueId),

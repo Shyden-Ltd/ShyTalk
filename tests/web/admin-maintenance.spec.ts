@@ -125,8 +125,8 @@ test.describe('Admin Maintenance Tab', () => {
     // Click Clear All Reports
     await page.locator('#clear-reports-btn').click();
 
-    // Result should not appear (no action taken)
-    await page.waitForTimeout(1_000);
+    // Asserting ABSENCE (cancel means nothing happened) — bounded window.
+    await new Promise((r) => setTimeout(r, 1_000)); // sleep-ok: bounded window for a nothing-happened assertion
 
     // The result div should remain hidden
     const result = page.locator('#clear-reports-result');
