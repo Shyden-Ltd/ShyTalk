@@ -1,5 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { publishAuthIdentity } from './helpers/auth-identity';
+import {
+  SEEDED_ROADMAP_USER,
+  createRoadmapUser,
+  createSuggestion,
+  roadmapLogin,
+  signInToRoadmap,
+  signInWithoutShyTalkAccount,
+  teardownTestRun,
+} from './helpers/roadmap-auth';
 
 /**
  * Roadmap page authentication flow tests.
@@ -131,24 +140,32 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     expect(await appleSvg.count()).toBeGreaterThan(0);
   });
 
-  test.skip('accessibility: keyboard navigable (tab to login buttons, enter to activate)', async ({
+  test('accessibility: keyboard navigable (tab to login buttons, enter to activate)', async ({
     page,
   }) => {
-    const googleBtn = page.locator('[data-testid="auth-google-btn"], .auth-google-btn');
-    // Buttons should be focusable
-    await googleBtn.focus();
-    await expect(googleBtn).toBeFocused();
+    // The sign-in buttons live in the shared login modal, not on the page — so
+    // the original version focused a locator that matched nothing and was
+    // parked as unbuilt. Opening the modal first is all it needed.
+    const bell = page.locator('[data-testid="feature-bell"]').first();
+    await bell.waitFor({ timeout: 10_000 });
+    await bell.click();
+    await expect(page.locator('[data-testid="login-modal-overlay"]')).toBeVisible();
+
+    for (const id of ['auth-google-btn', 'auth-apple-btn']) {
+      const btn = page.locator(`[data-testid="${id}"]`);
+      await btn.focus();
+      await expect(btn, `${id} must be reachable by keyboard`).toBeFocused();
+    }
   });
 
   test('i18n: login prompt text translatable (data-i18n attributes)', async ({ page }) => {
-    const prompt = page.locator('[data-testid="auth-login-prompt"], .auth-login-prompt');
-    // Check for i18n markers — either data-i18n or data-translate attributes
-    const hasI18n =
-      (await prompt.locator('[data-i18n], [data-translate]').count()) > 0 ||
-      (await prompt.getAttribute('data-i18n')) !== null;
-    // If i18n is not yet implemented, at least the text should exist
-    const text = await prompt.textContent();
-    expect(text?.length).toBeGreaterThan(0);
+    const prompt = page.locator('[data-testid="auth-login-prompt"]');
+    await expect(prompt).toBeVisible();
+    // The copy must carry a translation key, not just be non-empty — an
+    // untranslatable prompt strands every non-English reader on the one screen
+    // that explains how to take part.
+    await expect(prompt.locator('[data-i18n]')).toHaveCount(1);
+    expect((await prompt.textContent())?.trim().length).toBeGreaterThan(0);
   });
 });
 
@@ -358,65 +375,51 @@ test.describe('Roadmap Auth — Subscribe uses shared login modal', () => {
   });
 });
 
+/**
+ * The REAL "signed in, no ShyTalk account" state: a Firebase identity with no
+ * `users/{uniqueId}` doc, so `/api/roadmap/me` genuinely answers 404.
+ *
+ * These previously route-mocked that 404 and then simply navigated — but the
+ * fetch only happens from the real auth callback, so the mock was never
+ * requested and the state was never reached. Unguarding them exposed a real
+ * defect: the branch rendered its explanation and then immediately called
+ * `auth.signOut()`, whose `onAuthStateChanged(null)` re-render overwrote it
+ * with the generic prompt. Fixed in `roadmap-auth.js` (SHY-0245).
+ */
 test.describe('Roadmap Auth — No Account Found', () => {
+  test.beforeEach(async ({ page }) => {
+    await signInWithoutShyTalkAccount(page);
+  });
+
   test('shows download prompt when Google login has no ShyTalk account', async ({ page }) => {
-    // Simulate: user authenticated with Google but API returns 404
-    await page.goto('/roadmap.html');
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 404,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'No ShyTalk account found. Download the app to create one.',
-          downloadLinks: {
-            android: 'https://play.google.com/store/apps/details?id=com.shyden.shytalk',
-            ios: 'https://apps.apple.com/app/shytalk/id123456789',
-          },
-        }),
-      }),
-    );
-    // Trigger the auth check
-    const noAccountMsg = page.locator('[data-testid="auth-no-account"], .auth-no-account');
-    // The no-account message should appear after failed auth
+    const noAccount = page.locator('[data-testid="auth-no-account"]');
+    await expect(noAccount).toBeVisible();
+    await expect(noAccount).toContainText(/couldn.t find a ShyTalk account/i);
+    // The generic "want to vote…" prompt must NOT be what the user is left
+    // with — that is the regression this state kept hitting.
+    await expect(page.locator('[data-testid="auth-login-prompt"]')).toHaveCount(0);
   });
 
   test('download prompt shows Play Store link', async ({ page }) => {
-    await page.goto('/roadmap.html');
-    const playStoreLink = page.locator(
-      '[data-testid="download-android"], a[href*="play.google.com"]',
-    );
-    // Should be visible in the no-account state
+    const playStoreLink = page.locator('[data-testid="download-android"]');
+    await expect(playStoreLink).toBeVisible();
+    await expect(playStoreLink).toHaveAttribute('href', /play\.google\.com/);
   });
 
   test('download prompt shows App Store link', async ({ page }) => {
-    await page.goto('/roadmap.html');
-    const appStoreLink = page.locator('[data-testid="download-ios"], a[href*="apps.apple.com"]');
-    // Should be visible in the no-account state
+    const appStoreLink = page.locator('[data-testid="download-ios"]');
+    await expect(appStoreLink).toBeVisible();
+    await expect(appStoreLink).toHaveAttribute('href', /apps\.apple\.com/);
   });
 
   test('download prompt message invites user to create account', async ({ page }) => {
-    await page.goto('/roadmap.html');
-    const msg = page.locator('[data-testid="auth-no-account"], .auth-no-account');
-    // Should contain text about downloading the app
+    await expect(page.locator('[data-testid="auth-no-account"]')).toContainText(
+      /create your free account in the app/i,
+    );
   });
 
-  test.skip('no-account message styled as warning/info (not error red)', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 404,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'No ShyTalk account found. Download the app to create one.',
-          downloadLinks: {
-            android: 'https://play.google.com/store/apps/details?id=com.shyden.shytalk',
-            ios: 'https://apps.apple.com/app/shytalk/id6741488545',
-          },
-        }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const noAccount = page.locator('[data-testid="auth-no-account"], .auth-no-account');
-    // Should not be styled with error-red colors
+  test('no-account message styled as warning/info (not error red)', async ({ page }) => {
+    const noAccount = page.locator('[data-testid="auth-no-account"]');
     const color = await noAccount.evaluate((el) => getComputedStyle(el).color);
     const bgColor = await noAccount.evaluate((el) => getComputedStyle(el).backgroundColor);
     // Error red is typically rgb(255, 0, 0) or similar — should not be pure red
@@ -425,593 +428,256 @@ test.describe('Roadmap Auth — No Account Found', () => {
   });
 
   test('download links open in new tab (target="_blank")', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 404,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'No ShyTalk account found',
-          downloadLinks: {
-            android: 'https://play.google.com/store/apps/details?id=com.shyden.shytalk',
-            ios: 'https://apps.apple.com/app/shytalk/id6741488545',
-          },
-        }),
-      }),
+    await expect(page.locator('[data-testid="download-android"]')).toHaveAttribute(
+      'target',
+      '_blank',
     );
-    await page.goto('/roadmap.html');
-    const androidLink = page.locator(
-      '[data-testid="download-android"], a[href*="play.google.com"]',
-    );
-    const iosLink = page.locator('[data-testid="download-ios"], a[href*="apps.apple.com"]');
-    expect(await androidLink.getAttribute('target')).toBe('_blank');
-
-    expect(await iosLink.getAttribute('target')).toBe('_blank');
+    await expect(page.locator('[data-testid="download-ios"]')).toHaveAttribute('target', '_blank');
   });
 
-  // PARKED (SHY-0247): these need the logged-in / no-account UI, and there is no
-  // seam to reach it. renderAuthUI (public/js/roadmap-auth.js:35) renders from
-  // MODULE-LOCAL `shytalkProfile` / `authStateKnown`, set only by the Firebase
-  // auth callback — mocking /api/roadmap/me does not touch them, and
-  // publishAuthIdentity only sets window.shytalkAuth, which this module never
-  // reads. They were previously wrapped in `if (x.count() > 0)`, so they ran
-  // nothing and reported green; unguarding them is what exposed the gap.
-  // Fix is a testability seam on roadmap-auth.js, tracked in SHY-0247.
-  test.skip('download links have rel="noopener noreferrer"', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 404,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'No ShyTalk account found',
-          downloadLinks: {
-            android: 'https://play.google.com/store/apps/details?id=com.shyden.shytalk',
-            ios: 'https://apps.apple.com/app/shytalk/id6741488545',
-          },
-        }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const androidLink = page.locator(
-      '[data-testid="download-android"], a[href*="play.google.com"]',
-    );
-    const iosLink = page.locator('[data-testid="download-ios"], a[href*="apps.apple.com"]');
-    const rel = await androidLink.getAttribute('rel');
-    expect(rel).toMatch(/noopener/);
-    expect(rel).toMatch(/noreferrer/);
-
-    const rel7 = await iosLink.getAttribute('rel7');
-    expect(rel7).toMatch(/noopener/);
-    expect(rel7).toMatch(/noreferrer/);
-  });
-
-  test.skip('i18n: download prompt text translatable', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 404,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'No ShyTalk account found',
-          downloadLinks: { android: '#', ios: '#' },
-        }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const noAccount = page.locator('[data-testid="auth-no-account"], .auth-no-account');
-    // Check for i18n markers or at minimum non-empty text
-    const text = await noAccount.textContent();
-    expect(text?.length).toBeGreaterThan(0);
-  });
-
-  test.skip('mobile: download prompt fits on 320px screen', async ({ page }) => {
-    await page.setViewportSize({ width: 320, height: 568 });
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 404,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'No ShyTalk account found',
-          downloadLinks: {
-            android: 'https://play.google.com/store/apps/details?id=com.shyden.shytalk',
-            ios: 'https://apps.apple.com/app/shytalk/id6741488545',
-          },
-        }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const noAccount = page.locator('[data-testid="auth-no-account"], .auth-no-account');
-    const box = await noAccount.boundingBox();
-    if (box) {
-      // Should not overflow beyond viewport width
-      expect(box.x + box.width).toBeLessThanOrEqual(320);
-      expect(box.x).toBeGreaterThanOrEqual(0);
+  test('download links have rel="noopener noreferrer"', async ({ page }) => {
+    // Both links open in a new tab, so both need the opener severed — a
+    // `target="_blank"` without it hands the new page a `window.opener`
+    // handle back into ours.
+    for (const id of ['download-android', 'download-ios']) {
+      const rel = await page.locator(`[data-testid="${id}"]`).getAttribute('rel');
+      expect(rel, `${id} rel`).toMatch(/noopener/);
+      expect(rel, `${id} rel`).toMatch(/noreferrer/);
     }
+  });
+
+  test('i18n: download prompt text translatable', async ({ page }) => {
+    // The prompt carries a `data-i18n` key so the language switcher can
+    // replace it; a hardcoded string would leave non-English readers with
+    // English copy in the one place that explains why they cannot sign in.
+    const prompt = page.locator('[data-testid="auth-no-account"] .auth-prompt-text');
+    await expect(prompt).toHaveAttribute('data-i18n', /.+/);
+    expect((await prompt.textContent())?.trim().length).toBeGreaterThan(0);
+  });
+
+  test('mobile: download prompt fits on 320px screen', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    const noAccount = page.locator('[data-testid="auth-no-account"]');
+    await expect(noAccount).toBeVisible();
+    const box = await noAccount.boundingBox();
+    expect(box, 'no-account prompt must have a layout box').not.toBeNull();
+    // Should not overflow beyond viewport width
+    expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+    expect(box!.x).toBeGreaterThanOrEqual(0);
   });
 });
 
+/**
+ * Every test here used to `page.route('**​/api/roadmap/me')` and then simply
+ * navigate — but that fetch only ever happens inside `checkShyTalkAccount()`,
+ * which only runs from the real `onAuthStateChanged` callback. No sign-in ever
+ * occurred, so the route was never requested and the signed-in UI never
+ * rendered. An `if (locator.count() > 0)` guard around each body then turned
+ * "nothing rendered" into a green tick.
+ *
+ * They now sign in for REAL against the Auth emulator (`signInToRoadmap`),
+ * which is wired end-to-end: `local/seed.js` seeds `user@test.com` with a
+ * `users/100000002` doc carrying `firebaseUid`, `authMiddleware` resolves it,
+ * and `/api/roadmap/me` answers 200. No mock, no seam — SHY-0245.
+ */
 test.describe('Roadmap Auth — Logged In State', () => {
+  // One real public suggestion for the whole block — the local stack starts
+  // with an empty board, so a card, a vote arrow and a comment box all have
+  // nothing to attach to without it. Swept in afterAll so the board does not
+  // accumulate rows across runs.
+  const boardRunId = `test_roadmap_board_${Date.now()}`;
+
+  test.beforeAll(async () => {
+    await createSuggestion({ testRunId: boardRunId, title: 'Accepted Feature' });
+  });
+
+  test.afterAll(async () => {
+    await teardownTestRun(boardRunId);
+  });
+
+  test.beforeEach(async ({ page }) => {
+    await signInToRoadmap(page);
+  });
+
   test('shows "Logged in as: {name}" when authenticated', async ({ page }) => {
-    // Mock successful auth
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          uniqueId: 1001,
-          displayName: 'TestUser',
-          avatarUrl: 'https://example.com/avatar.png',
-        }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const userInfo = page.locator('[data-testid="auth-user-info"], .auth-user-info');
-    // Should show user name
+    await expect(page.locator('[data-testid="auth-user-info"]')).toBeVisible();
+    await expect(page.locator('[data-testid="auth-display-name"]')).toContainText('Logged in as:');
   });
 
   test('displays user display name', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'Alice' }),
-      }),
+    await expect(page.locator('[data-testid="auth-display-name"]')).toContainText(
+      SEEDED_ROADMAP_USER.displayName,
     );
-    await page.goto('/roadmap.html');
-    const userName = page.locator('[data-testid="auth-display-name"], .auth-display-name');
-    if ((await userName.count()) > 0) {
-      await expect(userName).toContainText('Alice');
-    }
   });
 
   test('shows sign out button when logged in', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'TestUser' }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const signOutBtn = page.locator('[data-testid="auth-signout-btn"], .auth-signout-btn');
-    // Sign out button should be visible when logged in
+    await expect(page.locator('[data-testid="auth-signout-btn"]')).toBeVisible();
   });
 
   test('sign out clears user state and shows login prompt again', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'TestUser' }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const signOutBtn = page.locator('[data-testid="auth-signout-btn"], .auth-signout-btn');
-    if ((await signOutBtn.count()) > 0) {
-      await signOutBtn.click();
-      // Login prompt should reappear
-      const loginPrompt = page.locator('[data-testid="auth-login-prompt"], .auth-login-prompt');
-      await expect(loginPrompt).toBeVisible({ timeout: 5_000 });
-    }
+    await page.locator('[data-testid="auth-signout-btn"]').click();
+    await expect(page.locator('[data-testid="auth-login-prompt"]')).toBeVisible();
+    await expect(page.locator('[data-testid="auth-user-info"]')).toHaveCount(0);
   });
 
   test('login prompt hidden when user is logged in', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'TestUser' }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const loginPrompt = page.locator('[data-testid="auth-login-prompt"], .auth-login-prompt');
-    // When logged in, login prompt should be hidden
+    await expect(page.locator('[data-testid="auth-login-prompt"]')).toHaveCount(0);
   });
 
   test('suggestions section usable when logged in (no auth error)', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'TestUser' }),
-      }),
-    );
-    await page.route('**/api/suggestions*', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ suggestions: [], total: 0, page: 1, pageSize: 20 }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    // No "Missing or invalid Authorization header" error should appear
-    const errorMsg = page.locator('text=Missing or invalid Authorization');
-    await expect(errorMsg).toHaveCount(0);
+    // The board fetches suggestions with the real token once signed in; a
+    // rejected token surfaces as this banner, so its absence is the assertion.
+    await expect(page.locator('text=Missing or invalid Authorization')).toHaveCount(0);
   });
 
-  test.skip('displays user avatar when available', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          uniqueId: 1001,
-          displayName: 'TestUser',
-          avatarUrl: 'https://example.com/avatar.png',
-        }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const avatar = page.locator('[data-testid="auth-avatar"], .auth-avatar');
-    const src = await avatar.getAttribute('src');
-    expect(src).toContain('avatar');
-  });
-
-  test('vote/suggest/comment buttons enabled when logged in', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'TestUser' }),
-      }),
-    );
-    await page.route('**/api/suggestions*', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ suggestions: [], total: 0, page: 1, pageSize: 20 }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    // Interactive buttons should not be disabled
-    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
-    if ((await suggestBtn.count()) > 0) {
-      await expect(suggestBtn).not.toBeDisabled();
+  test('displays user avatar when available', async ({ page }) => {
+    // The seeded user has no avatar, so this needs its own real profile that
+    // carries one — the avatar branch (`roadmap-auth.js:57`) is otherwise
+    // unreachable and was parked as unimplemented.
+    const user = await createRoadmapUser({
+      prefix: 'avatar',
+      avatarUrl: 'https://example.com/avatar.png',
+    });
+    try {
+      await signInToRoadmap(page, user);
+      const avatar = page.locator('[data-testid="auth-avatar"]');
+      await expect(avatar).toBeVisible();
+      await expect(avatar).toHaveAttribute('src', user.avatarUrl!);
+    } finally {
+      await teardownTestRun(user.testRunId);
     }
   });
 
+  test('vote/suggest/comment buttons enabled when logged in', async ({ page }) => {
+    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
+    await expect(suggestBtn).toBeVisible();
+    await expect(suggestBtn).not.toBeDisabled();
+  });
+
   test('"Logged in as" text includes the display name', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'SuperUser42' }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const authArea = page.locator('[data-testid="auth-user-info"], .auth-user-info, .auth-status');
-    if ((await authArea.count()) > 0) {
-      const text = await authArea.textContent();
-      expect(text).toContain('SuperUser42');
+    // A distinctive name proves the UI renders THIS profile, not a hardcoded
+    // string that would also satisfy the seeded-user assertion above.
+    const user = await createRoadmapUser({ prefix: 'named', displayName: 'SuperUser42' });
+    try {
+      await signInToRoadmap(page, user);
+      await expect(page.locator('[data-testid="auth-user-info"]')).toContainText('SuperUser42');
+    } finally {
+      await teardownTestRun(user.testRunId);
     }
   });
 
   // ─── New tests: login state features ───────────────────────────
 
   test('after successful login, suggestions list refreshes automatically', async ({ page }) => {
+    // Count real requests to the real endpoint — signing in must trigger a
+    // reload so the board reflects the viewer's own votes.
     let suggestionsCallCount = 0;
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'TestUser' }),
-      }),
-    );
-    await page.route('**/api/suggestions*', (route) => {
-      suggestionsCallCount++;
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ suggestions: [], total: 0, page: 1, pageSize: 20 }),
-      });
+    page.on('request', (req) => {
+      if (req.url().includes('/api/suggestions')) suggestionsCallCount++;
     });
-    await page.goto('/roadmap.html');
-    // Poll the counter until the call actually happens; the timeout bounds the
-    // failure rather than being the wait (SHY-0245).
+    await signInToRoadmap(page);
     await expect.poll(() => suggestionsCallCount, { timeout: 15_000 }).toBeGreaterThanOrEqual(1);
   });
 
   test('after login, bell icons become clickable (not showing login toast)', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'TestUser' }),
-      }),
-    );
-    await page.route('**/api/suggestions*', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          suggestions: [
-            {
-              id: 'sug-1',
-              title: 'Test Feature',
-              status: 'open',
-              votes: 5,
-              authorUniqueId: 2002,
-              authorDisplayName: 'OtherUser',
-            },
-          ],
-          total: 1,
-          page: 1,
-          pageSize: 20,
-        }),
-      }),
-    );
-    await page.goto('/roadmap.html');
     const bellIcon = page.locator('.bell-icon, [data-testid="subscribe-btn"]').first();
-    if ((await bellIcon.count()) > 0) {
-      await bellIcon.click();
-      // Anchor on the click's real effect — the subscribe modal opening — so
-      // the "no login toast" assertion is made AFTER the app has responded,
-      // not before it could have shown one (SHY-0245).
-      await expect(
-        page.locator('[data-testid="subscribe-modal"], .subscribe-modal, [role="dialog"]').first(),
-      ).toBeVisible();
-      await expect(page.locator('text=log in, text=sign in')).toHaveCount(0);
-    }
+    await expect(bellIcon).toBeVisible();
+    await bellIcon.click();
+    // Anchor on the click's real effect — the subscribe modal opening — so
+    // the "no login toast" assertion is made AFTER the app has responded,
+    // not before it could have shown one (SHY-0245).
+    await expect(
+      page.locator('[data-testid="subscribe-modal"], .subscribe-modal, [role="dialog"]').first(),
+    ).toBeVisible();
+    await expect(page.locator('[data-testid="login-modal-overlay"]')).toHaveCount(0);
   });
 
   test('after login, "+ Suggest" button enabled', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'TestUser' }),
-      }),
-    );
-    await page.route('**/api/suggestions*', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ suggestions: [], total: 0, page: 1, pageSize: 20 }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const suggestBtn = page.locator(
-      '[data-testid="suggest-btn"], button:has-text("Suggest"), button:has-text("suggest")',
-    );
-    if ((await suggestBtn.count()) > 0) {
-      await expect(suggestBtn.first()).not.toBeDisabled();
-    }
+    const suggestBtn = page.locator('[data-testid="suggest-btn"]');
+    await expect(suggestBtn).toBeVisible();
+    await expect(suggestBtn).not.toBeDisabled();
   });
 
-  test.skip('vote arrows enabled after login', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'TestUser' }),
-      }),
-    );
-    await page.route('**/api/suggestions*', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          suggestions: [
-            {
-              id: 'sug-1',
-              title: 'Test Feature',
-              status: 'open',
-              votes: 5,
-              authorUniqueId: 2002,
-              authorDisplayName: 'OtherUser',
-            },
-          ],
-          total: 1,
-          page: 1,
-          pageSize: 20,
-        }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const voteBtn = page
-      .locator('.vote-btn, [data-testid="vote-up"], .upvote-btn, .vote-arrow')
-      .first();
+  test('vote arrows enabled after login', async ({ page }) => {
+    const voteBtn = page.locator('[data-testid^="vote-up-"]').first();
+    await expect(voteBtn).toBeVisible();
     await expect(voteBtn).not.toBeDisabled();
   });
 
   test('comment form visible on accepted suggestions after login', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'TestUser' }),
-      }),
-    );
-    await page.route('**/api/suggestions*', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          suggestions: [
-            {
-              id: 'sug-accepted',
-              title: 'Accepted Feature',
-              status: 'accepted',
-              votes: 10,
-              authorUniqueId: 2002,
-              authorDisplayName: 'OtherUser',
-              comments: [],
-            },
-          ],
-          total: 1,
-          page: 1,
-          pageSize: 20,
-        }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    // Click on the accepted suggestion to open detail view if needed
-    const suggestion = page.locator('text=Accepted Feature');
-    if ((await suggestion.count()) > 0) {
-      await suggestion.click();
-      const commentForm = page.locator(
-        '[data-testid="comment-form"], .comment-form, textarea[placeholder*="comment" i]',
-      );
-      // Comment form should be visible for logged-in users
-      await expect(commentForm.first()).toBeVisible();
-    }
+    // Comments live behind the detail view of a suggestion card.
+    const card = page.locator('[data-testid^="suggestion-card-"]').first();
+    await expect(card).toBeVisible();
+    await card.click();
+    await expect(page.locator('[data-testid^="comment-input-"]').first()).toBeVisible();
   });
 
   test('auth state indicator in header area (small avatar + name)', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          uniqueId: 1001,
-          displayName: 'HeaderUser',
-          avatarUrl: 'https://example.com/avatar.png',
-        }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const authStatus = page.locator(
-      '[data-testid="auth-user-info"], .auth-user-info, .auth-status',
-    );
-    if ((await authStatus.count()) > 0) {
-      const text = await authStatus.textContent();
-      expect(text).toContain('HeaderUser');
-    }
+    const authStatus = page.locator('[data-testid="auth-user-info"]');
+    await expect(authStatus).toBeVisible();
+    await expect(authStatus).toContainText(SEEDED_ROADMAP_USER.displayName);
   });
 
   test('sign out button has aria-label for accessibility', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'TestUser' }),
-      }),
+    await expect(page.locator('[data-testid="auth-signout-btn"]')).toHaveAttribute(
+      'aria-label',
+      /sign.?out/i,
     );
-    await page.goto('/roadmap.html');
-    const signOutBtn = page.locator('[data-testid="auth-signout-btn"], .auth-signout-btn');
-    if ((await signOutBtn.count()) > 0) {
-      const label =
-        (await signOutBtn.getAttribute('aria-label')) ||
-        (await signOutBtn.getAttribute('title')) ||
-        (await signOutBtn.textContent());
-      expect(label?.toLowerCase()).toMatch(/sign.out|log.out/);
-    }
   });
 
   test('after sign out, page does NOT reload (SPA behavior)', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'TestUser' }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const signOutBtn = page.locator('[data-testid="auth-signout-btn"], .auth-signout-btn');
-    if ((await signOutBtn.count()) > 0) {
-      let navigationOccurred = false;
-      page.on('load', () => {
-        navigationOccurred = true;
-      });
-      await signOutBtn.click();
-      // Anchor on sign-out completing — the login prompt returns — so "no
-      // navigation" is asserted after the app has actually acted (SHY-0245).
-      await expect(page.locator('[data-testid="auth-login-prompt"]')).toBeVisible();
-      // Page should not have fully reloaded — SPA behavior
-      expect(navigationOccurred).toBe(false);
-    }
+    let navigationOccurred = false;
+    page.on('load', () => {
+      navigationOccurred = true;
+    });
+    await page.locator('[data-testid="auth-signout-btn"]').click();
+    // Anchor on sign-out completing — the login prompt returns — so "no
+    // navigation" is asserted after the app has actually acted (SHY-0245).
+    await expect(page.locator('[data-testid="auth-login-prompt"]')).toBeVisible();
+    // Page should not have fully reloaded — SPA behavior
+    expect(navigationOccurred).toBe(false);
   });
 
   test('after sign out, cached user data cleared', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'CachedUser' }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const signOutBtn = page.locator('[data-testid="auth-signout-btn"], .auth-signout-btn');
-    if ((await signOutBtn.count()) > 0) {
-      await signOutBtn.click();
-      // Anchor on the signed-out UI rendering before asserting the name is
-      // gone, or the absence could pass before sign-out took effect (SHY-0245).
-      await expect(page.locator('[data-testid="auth-login-prompt"]')).toBeVisible();
-      await expect(page.locator('text=CachedUser')).toHaveCount(0);
-    }
+    await page.locator('[data-testid="auth-signout-btn"]').click();
+    // Anchor on the signed-out UI rendering before asserting the name is
+    // gone, or the absence could pass before sign-out took effect (SHY-0245).
+    await expect(page.locator('[data-testid="auth-login-prompt"]')).toBeVisible();
+    await expect(page.locator('[data-testid="auth-display-name"]')).toHaveCount(0);
+    expect(await page.evaluate(() => (window as any).shytalkAuth?.profile ?? null)).toBeNull();
   });
 
   test('sign out button is instant (no confirmation dialog)', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'TestUser' }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const signOutBtn = page.locator('[data-testid="auth-signout-btn"], .auth-signout-btn');
-    if ((await signOutBtn.count()) > 0) {
-      let dialogAppeared = false;
-      page.on('dialog', async (dialog) => {
-        dialogAppeared = true;
-        await dialog.accept();
-      });
-      await signOutBtn.click();
-      // Sign out completed (login prompt back) — only then is "no dialog
-      // appeared" a real observation rather than an early guess (SHY-0245).
-      await expect(page.locator('[data-testid="auth-login-prompt"]')).toBeVisible();
-      expect(dialogAppeared).toBe(false);
-    }
+    let dialogAppeared = false;
+    page.on('dialog', async (dialog) => {
+      dialogAppeared = true;
+      await dialog.accept();
+    });
+    await page.locator('[data-testid="auth-signout-btn"]').click();
+    // Sign out completed (login prompt back) — only then is "no dialog
+    // appeared" a real observation rather than an early guess (SHY-0245).
+    await expect(page.locator('[data-testid="auth-login-prompt"]')).toBeVisible();
+    expect(dialogAppeared).toBe(false);
   });
 });
 
 test.describe('Roadmap Auth — No Account Download Prompt Details', () => {
-  test('download prompt shows both store badges/links', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 404,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'No ShyTalk account found',
-          downloadLinks: {
-            android: 'https://play.google.com/store/apps/details?id=com.shyden.shytalk',
-            ios: 'https://apps.apple.com/app/shytalk/id6741488545',
-          },
-        }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    // Both store links should be present somewhere on the page
+  test.beforeEach(async ({ page }) => {
+    await signInWithoutShyTalkAccount(page);
   });
 
-  test.skip('download prompt has clear call-to-action text', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 404,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'No ShyTalk account found. Download the app to create one.',
-          downloadLinks: { android: '#', ios: '#' },
-        }),
-      }),
-    );
-    await page.goto('/roadmap.html');
-    const noAccount = page.locator('[data-testid="auth-no-account"], .auth-no-account');
-    const text = await noAccount.textContent();
+  test('download prompt shows both store badges/links', async ({ page }) => {
+    const prompt = page.locator('[data-testid="auth-no-account"]');
+    await expect(prompt.locator('[data-testid="download-android"]')).toBeVisible();
+    await expect(prompt.locator('[data-testid="download-ios"]')).toBeVisible();
+  });
+
+  test('download prompt has clear call-to-action text', async ({ page }) => {
+    const text = await page.locator('[data-testid="auth-no-account"]').textContent();
     expect(text?.toLowerCase()).toMatch(/download|create|account/);
   });
 
   test('download prompt allows dismissal to browse as guest', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 404,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'No ShyTalk account found',
-          downloadLinks: { android: '#', ios: '#' },
-        }),
-      }),
-    );
-    await page.goto('/roadmap.html');
     // User should be able to browse suggestions read-only even without account
     const suggestionsSection = page.locator('#suggestions, [data-section="suggestions"]');
     await expect(suggestionsSection).toBeVisible();
@@ -1020,32 +686,46 @@ test.describe('Roadmap Auth — No Account Download Prompt Details', () => {
 
 test.describe('Roadmap Auth — Session Persistence', () => {
   test('auth state persists across page reload', async ({ page }) => {
-    await page.route('**/api/roadmap/me', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ uniqueId: 1001, displayName: 'PersistUser' }),
-      }),
-    );
-    await page.goto('/roadmap.html');
+    // Firebase persists the session in IndexedDB, so a reload must land back
+    // in the signed-in UI without another sign-in. Mocking /api/roadmap/me
+    // could never prove this — the fetch only fires from the real auth
+    // callback, so the old version reloaded an anonymous page and asserted
+    // nothing (SHY-0245).
+    await signInToRoadmap(page);
     await page.reload();
-    // After reload, user should still appear logged in
-    // (Firebase auth persists in localStorage)
+    await expect(page.locator('[data-testid="auth-user-info"]')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('[data-testid="auth-display-name"]')).toContainText(
+      SEEDED_ROADMAP_USER.displayName,
+    );
   });
 
   test('sign out removes auth from subsequent API calls', async ({ page }) => {
-    let authHeaderSeen = false;
-    await page.route('**/api/suggestions*', (route) => {
-      const headers = route.request().headers();
-      if (headers.authorization) authHeaderSeen = true;
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ suggestions: [], total: 0, page: 1, pageSize: 20 }),
-      });
+    await signInToRoadmap(page);
+
+    // Watch the REAL requests. Signing out must stop the board sending a
+    // bearer token — otherwise a revoked session keeps acting as the user.
+    const authHeadersAfterSignOut: boolean[] = [];
+    let watching = false;
+    page.on('request', (req) => {
+      if (watching && req.url().includes('/api/suggestions')) {
+        authHeadersAfterSignOut.push(Boolean(req.headers().authorization));
+      }
     });
-    await page.goto('/roadmap.html');
-    // After sign out, subsequent API calls should not include auth header
+
+    watching = true;
+    await page.locator('[data-testid="auth-signout-btn"]').click();
+    await expect(page.locator('[data-testid="auth-login-prompt"]')).toBeVisible();
+
+    // Force a post-sign-out fetch from the SAME page instance. Reloading
+    // instead would prove nothing: a fresh page has no session to leak, so the
+    // assertion would hold even if sign-out left the token intact — a mutant
+    // that kept serving the old token survived exactly that version.
+    await page.locator('[data-testid="sort-newest"]').click();
+    await expect.poll(() => authHeadersAfterSignOut.length).toBeGreaterThan(0);
+    expect(authHeadersAfterSignOut).not.toContain(true);
+
+    // And the app must not be ABLE to mint one any more.
+    expect(await page.evaluate(() => (window as any).shytalkAuth.getToken())).toBeNull();
   });
 
   test('login spinner/loading state shown during auth check', async ({ page }) => {
@@ -1074,6 +754,10 @@ test.describe('Roadmap Auth — Session Persistence', () => {
 
 test.describe('Roadmap Auth — Error Handling', () => {
   test('API error on /roadmap/me shows generic error, not raw error', async ({ page }) => {
+    // A 500 from the profile lookup must not leak the server's own wording,
+    // and must leave the page usable rather than stuck. Signing in for real is
+    // what makes the route fire at all — the previous version mocked it and
+    // never signed in, so nothing ever requested it (SHY-0245).
     await page.route('**/api/roadmap/me', (route) =>
       route.fulfill({
         status: 500,
@@ -1082,9 +766,13 @@ test.describe('Roadmap Auth — Error Handling', () => {
       }),
     );
     await page.goto('/roadmap.html');
-    // Should show a user-friendly error, not "Internal server error"
-    const rawError = page.locator('text=Internal server error');
-    // Raw error should not be displayed to user
+    await roadmapLogin(page, SEEDED_ROADMAP_USER.email, SEEDED_ROADMAP_USER.password);
+    // `shytalkProfile` stays null on a non-404 failure, so the page falls back
+    // to the signed-out prompt rather than a half-rendered signed-in state.
+    await expect(page.locator('[data-testid="auth-login-prompt"]')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.locator('text=Internal server error')).toHaveCount(0);
   });
 
   test('network failure on auth check allows read-only browsing', async ({ page }) => {
@@ -1122,17 +810,25 @@ test.describe('Roadmap Auth — Error Handling', () => {
     await expect(jsError).toHaveCount(0);
   });
 
-  test.skip('auth popup blocked by browser shows helpful message', async ({ page }) => {
-    // Block popups by intercepting window.open
+  test('blocked popups cannot break sign-in, because sign-in never uses one', async ({ page }) => {
+    // The original test clicked an `auth-google-btn` that has never existed and
+    // asserted a popup-blocked message that the product cannot produce: sign-in
+    // is redirect-based (`signInWithRedirect`, roadmap-auth.js:218/225), so a
+    // popup blocker is not a failure mode at all. Pinning the redirect choice
+    // is the assertion that actually protects the user here — switching to
+    // `signInWithPopup` would reintroduce the whole class of problem.
     await page.addInitScript(() => {
-      window.open = () => null;
+      (window as any).open = () => null;
     });
     await page.goto('/roadmap.html');
-    const googleBtn = page.locator('[data-testid="auth-google-btn"], .auth-google-btn');
-    await googleBtn.click();
-    // `toBeVisible` auto-retries; the "did not crash" contract holds without
-    // guessing how long a blocked popup takes to surface (SHY-0245).
-    await expect(page.locator('body')).toBeVisible();
+    await page.waitForFunction(() => !!(window as any).shytalkAuth?.signInWithGoogle, {
+      timeout: 15_000,
+    });
+    const usesPopup = await page.evaluate(() =>
+      String((window as any).shytalkAuth.signInWithGoogle).includes('signInWithPopup'),
+    );
+    expect(usesPopup, 'roadmap sign-in must stay redirect-based').toBe(false);
+    await expect(page.locator('[data-testid="auth-login-prompt"]')).toBeVisible();
   });
 });
 
@@ -1140,15 +836,13 @@ test.describe('Roadmap Auth — Mobile Responsiveness', () => {
   test('mobile: login prompt fits on 320px screen', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 });
     await page.goto('/roadmap.html');
-    const loginPrompt = page.locator('[data-testid="auth-login-prompt"], .auth-login-prompt');
-    if ((await loginPrompt.count()) > 0) {
-      const box = await loginPrompt.boundingBox();
-      if (box) {
-        // Should not overflow beyond viewport width
-        expect(box.x + box.width).toBeLessThanOrEqual(320);
-        expect(box.x).toBeGreaterThanOrEqual(0);
-      }
-    }
+    const loginPrompt = page.locator('[data-testid="auth-login-prompt"]');
+    await expect(loginPrompt).toBeVisible();
+    const box = await loginPrompt.boundingBox();
+    expect(box, 'login prompt must have a layout box').not.toBeNull();
+    // Should not overflow beyond viewport width
+    expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+    expect(box!.x).toBeGreaterThanOrEqual(0);
   });
 });
 

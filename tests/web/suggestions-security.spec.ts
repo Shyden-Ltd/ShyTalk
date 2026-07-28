@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { createTestUser, roadmapLogin } from './helpers/roadmap-auth';
+import { createTestUser, roadmapLogin, teardownTestRun, testWrite } from './helpers/roadmap-auth';
 
 /**
  * Translations, anti-abuse, security, sessions, and compatibility tests.
@@ -17,7 +17,6 @@ import { createTestUser, roadmapLogin } from './helpers/roadmap-auth';
  */
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:3000';
-const TEST_API_KEY = process.env.TEST_API_KEY || 'local-test-key';
 const BAN_REASON = 'SHY-0149 web anti-abuse spec';
 // The ban reason is admin-authored and rendered into the blocked banner.
 const XSS_REASON = '<img src=x id="xss-probe" onerror="window.__xss=1">';
@@ -31,17 +30,9 @@ interface StandingUser {
   testRunId: string;
 }
 
-/** Seed a doc through the REAL API's test-write route (no direct Firestore). */
-async function testWrite(collection: string, doc: Record<string, unknown>): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/test/write/${collection}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Test-API-Key': TEST_API_KEY },
-    body: JSON.stringify(doc),
-  });
-  if (!res.ok) {
-    throw new Error(`test-write ${collection} failed: ${res.status} ${await res.text()}`);
-  }
-}
+// `testWrite` + `teardownTestRun` live in ./helpers/roadmap-auth — the same
+// real-API seeding path roadmap-auth.spec.ts uses. Kept there rather than
+// duplicated per-spec so one fact has one home.
 
 /**
  * Create a REAL Firebase-Auth user with a REAL ShyTalk profile, put them in
@@ -94,13 +85,7 @@ async function signInWithStanding(
 
 /** Remove the seeded ban + profile so the next test starts clean. */
 async function teardownStanding(user: StandingUser): Promise<void> {
-  await fetch(`${API_BASE}/api/test/teardown`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Test-API-Key': TEST_API_KEY },
-    body: JSON.stringify({ testRunId: user.testRunId }),
-  }).catch(() => {
-    /* teardown is best-effort; a leaked test user cannot fail a later test */
-  });
+  await teardownTestRun(user.testRunId);
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -248,6 +248,8 @@ describe('POST /api/test/teardown', () => {
       'alerts',
       'reportLocks',
       'coinPackages',
+      'suggestions',
+      'ageVerificationSubmissions',
     ];
     for (const col of expectedCollections) {
       expect(mockCollection).toHaveBeenCalledWith(col);

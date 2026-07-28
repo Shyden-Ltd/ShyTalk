@@ -15,6 +15,7 @@ const { getFcmCaptures, clearFcmCaptures } = require('../utils/fcm');
 const { clearBanCache } = require('../utils/bans');
 const { nextUniqueIdFrom, restoreUniqueIdCounter } = require('../utils/unique-id-counter');
 const log = require('../utils/log');
+const { WRITEABLE_COLLECTIONS, SWEPT_BY_TEST_RUN } = require('../utils/test-collections');
 
 const TEST_PREFIX = 'test_';
 
@@ -414,37 +415,7 @@ router.post('/test/write/:collection', async (req, res) => {
     if (requireTestApiKey(req, res)) return;
 
     const { collection } = req.params;
-    const ALLOWED_COLLECTIONS = [
-      'users',
-      'rooms',
-      'gifts',
-      'conversations',
-      'banners',
-      'funFacts',
-      'reports',
-      'suspensionAppeals',
-      'alerts',
-      'suggestions',
-      'ageVerificationSubmissions',
-      // Phase 3 PR F (integration test #10): seed real coinPackages
-      // docs so /api/economy/purchase can match a productId during
-      // tests. Teardown sweeps these via the `_testRun` field
-      // (deleteTestData → otherCollections list).
-      'coinPackages',
-      // Allow tests that DELETE a device binding to re-seed it after
-      // verifying deletion, so worker-scoped shared state is restored
-      // for subsequent test files (per
-      // [[feedback-test-isolation-no-leaks]]: never leak state between
-      // tests). admin-maintenance.spec.ts:58 was the first caller.
-      'deviceBindings',
-      // SHY-0149: the web anti-abuse specs must seed a REAL ban and prove
-      // the server-side gate refuses a banned user — a route-mocked ban
-      // would prove nothing (§ No Stubs). Teardown sweeps both by
-      // linkedUniqueId (see deleteTestData).
-      'deviceBans',
-      'networkBans',
-    ];
-    if (!ALLOWED_COLLECTIONS.includes(collection)) {
+    if (!WRITEABLE_COLLECTIONS.includes(collection)) {
       return res.status(400).json({ error: 'Collection not allowed' });
     }
 
@@ -718,23 +689,7 @@ async function deleteTestData(testRunId) {
 
   // 4. Delete other top-level test docs (gifts, rooms, banners, funFacts, conversations, etc.)
   // Note: system PMs created by admin actions won't have _testRun set — accepted trade-off
-  const otherCollections = [
-    'gifts',
-    'rooms',
-    'banners',
-    'funFacts',
-    'conversations',
-    'reports',
-    'suspensionAppeals',
-    'alerts',
-    'reportLocks',
-    // Phase 3 PR F: integration tests seed coinPackages tagged with
-    // `_testRun` for /api/economy/purchase tests. Without this entry
-    // tested packages would persist across runs and pollute later
-    // queries on `coinPackages`.
-    'coinPackages',
-  ];
-  for (const col of otherCollections) {
+  for (const col of SWEPT_BY_TEST_RUN) {
     let query;
     if (testRunId) {
       query = db.collection(col).where('_testRun', '==', testRunId);
