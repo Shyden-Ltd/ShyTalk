@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { createSuggestion, teardownTestRun } from './helpers/roadmap-auth';
 
 /**
  * Roadmap page redesign tests.
@@ -195,15 +196,21 @@ test.describe('Ring Chart Details', () => {
 
   test('resize: chart scales on mobile without distortion', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 });
-    const chart = page.locator('.ring-chart, [data-testid="ring-chart"]');
-    if ((await chart.count()) > 0) {
-      const box = await chart.boundingBox();
-      if (box) {
-        // Should maintain aspect ratio
-        expect(box.width).toBeGreaterThan(0);
-        expect(box.height).toBeGreaterThan(0);
-      }
-    }
+    const chart = page.locator('[data-testid="ring-chart"]');
+    await expect(chart).toBeVisible();
+    const box = await chart.boundingBox();
+    expect(box, 'ring chart must have a layout box').not.toBeNull();
+    // "Without distortion" has to mean something measurable: a ring drawn into
+    // a stretched box reads as an ellipse. Two nested guards previously meant
+    // this asserted nothing at all, so a chart squashed flat on a phone would
+    // have passed.
+    expect(box!.width).toBeGreaterThan(0);
+    expect(box!.height).toBeGreaterThan(0);
+    const ratio = box!.width / box!.height;
+    expect(ratio, `ring chart aspect ratio was ${ratio.toFixed(2)}`).toBeGreaterThan(0.8);
+    expect(ratio, `ring chart aspect ratio was ${ratio.toFixed(2)}`).toBeLessThan(1.25);
+    // And it must fit the 320px viewport rather than forcing a sideways scroll.
+    expect(box!.x + box!.width).toBeLessThanOrEqual(320);
   });
 });
 
@@ -220,13 +227,24 @@ test.describe('Per-Phase Progress', () => {
   });
 
   test('collapsed phase: click expands feature list', async ({ page }) => {
-    const phase = page.locator('.phase-card, [data-testid="phase-card"]').first();
+    const phase = page.locator('[data-testid^="phase-card"]').first();
     await phase.waitFor({ timeout: 10_000 });
-    await phase.click();
-    // Feature list should expand
-    const features = phase.locator('.feature-list, [data-testid="feature-list"]');
-    if ((await features.count()) > 0) {
-      await expect(features).toBeVisible();
+    const header = phase.locator('.phase-header');
+    const body = phase.locator('.phase-body');
+    await expect(phase.locator('[data-testid^="feature-list"]')).toHaveCount(1);
+
+    // Collapsing shrinks .phase-body (max-height + overflow:hidden). The
+    // feature list INSIDE keeps its own box and is merely clipped, so asserting
+    // on the list would never see a change — the collapse is a property of the
+    // body. Clicking has to CHANGE something, so both directions are checked;
+    // asserting one end state would pass on a card already in it.
+    const expandedBefore = (await header.getAttribute('aria-expanded')) === 'true';
+    await header.click();
+    await expect(header).toHaveAttribute('aria-expanded', String(!expandedBefore));
+    if (expandedBefore) {
+      await expect.poll(async () => (await body.boundingBox())!.height).toBeLessThan(5);
+    } else {
+      await expect.poll(async () => (await body.boundingBox())!.height).toBeGreaterThan(20);
     }
   });
 
@@ -324,15 +342,17 @@ test.describe('Accessibility', () => {
 
   test('keyboard navigation: escape closes modals', async ({ page }) => {
     // Open a modal first, then press Escape
-    const bell = page.locator('.feature-bell, [data-testid="feature-bell"]').first();
-    if ((await bell.count()) > 0) {
-      await bell.click();
-      await page.keyboard.press('Escape');
-      const modal = page.locator('.modal, [data-testid="modal"]');
-      if ((await modal.count()) > 0) {
-        await expect(modal).not.toBeVisible();
-      }
-    }
+    // Signed out, the bell opens the shared login modal. Anchoring on it being
+    // OPEN first is what makes "Escape closed it" mean anything — the old
+    // version pressed Escape against a page that may have had no modal at all,
+    // then guarded the assertion away.
+    const bell = page.locator('[data-testid="feature-bell"]').first();
+    await bell.waitFor({ timeout: 10_000 });
+    await bell.click();
+    const modal = page.locator('[data-testid="login-modal-overlay"]');
+    await expect(modal).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(modal).toHaveCount(0);
   });
 
   test('screen reader: form fields have labels', async ({ page }) => {
@@ -351,12 +371,23 @@ test.describe('Accessibility', () => {
   });
 
   test('screen reader: vote buttons have descriptive aria-labels', async ({ page }) => {
-    const upvote = page.locator('[data-testid="upvote-btn"], .vote-up');
-    if ((await upvote.count()) > 0) {
-      const ariaLabel = await upvote.first().getAttribute('aria-label');
-      if (ariaLabel) {
-        expect(ariaLabel.toLowerCase()).toContain('vote');
-      }
+    // The testid is `vote-up-<id>`; `upvote-btn` has never existed, so the old
+    // locator matched nothing and both guards swallowed it. An unlabelled vote
+    // arrow is announced as just "button" by a screen reader.
+    // The board starts empty on a fresh stack, so seed a real suggestion —
+    // otherwise there is no vote button to inspect and the assertion is
+    // unreachable, which is how it ended up guarded.
+    const runId = `test_redesign_a11y_${Date.now()}`;
+    const seeded = await createSuggestion({ testRunId: runId, title: `A11y vote ${runId}` });
+    try {
+      await page.reload();
+      const upvote = page.locator(`[data-testid="vote-up-${seeded.id}"]`);
+      await expect(upvote).toBeVisible({ timeout: 15_000 });
+      const ariaLabel = await upvote.getAttribute('aria-label');
+      expect(ariaLabel, 'vote button must carry an aria-label').toBeTruthy();
+      expect(ariaLabel!.trim().length).toBeGreaterThan(0);
+    } finally {
+      await teardownTestRun(runId);
     }
   });
 
