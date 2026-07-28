@@ -165,15 +165,45 @@ async function setupSuggestionsMocks(
     paginate = false,
     sortable = false,
     duplicateMatches = 0,
+    withComments = false,
     store = newVoteStore(),
   }: {
     persistVotes?: boolean;
     paginate?: boolean;
     sortable?: boolean;
     duplicateMatches?: number;
+    withComments?: boolean;
     store?: VoteStore;
   } = {},
 ) {
+  // Comments render only on ACCEPTED suggestions. Opt-in so the default
+  // fixture keeps its empty-comments case, which the "No comments yet" empty
+  // state depends on.
+  const withCommentRows = (rows: typeof MOCK_SUGGESTIONS) =>
+    withComments
+      ? rows.map((r) =>
+          r.status === 'accepted'
+            ? {
+                ...r,
+                comments: [
+                  {
+                    id: 'c1',
+                    text: 'First comment.',
+                    authorName: 'Commenter One',
+                    createdAt: Date.now() - 60_000,
+                  },
+                  {
+                    id: 'c2',
+                    text: 'Their account is gone.',
+                    authorName: 'Commenter Two',
+                    authorDeleted: true,
+                    createdAt: Date.now() - 30_000,
+                  },
+                ],
+              }
+            : r,
+        )
+      : rows;
   // suggestionId → 'up' | 'down', mutated by the vote route below and read by
   // both list routes. Survives page.goto: route handlers outlive navigation.
   const castVotes = store.castVotes;
@@ -182,9 +212,11 @@ async function setupSuggestionsMocks(
   // fixture's original score, and any cross-tab assertion is unfalsifiable.
   const scoreDelta = store.scoreDelta;
   const applyScores = (rows: typeof MOCK_SUGGESTIONS) =>
-    persistVotes
-      ? rows.map((r) => ({ ...r, score: (r.score ?? 0) + (scoreDelta[r.id] ?? 0) }))
-      : rows;
+    withCommentRows(
+      persistVotes
+        ? rows.map((r) => ({ ...r, score: (r.score ?? 0) + (scoreDelta[r.id] ?? 0) }))
+        : rows,
+    );
   const withMyVotes = (payload: Record<string, unknown>) =>
     persistVotes ? { ...payload, myVotes: castVotes } : payload;
   // Mock the main suggestions list endpoint (also covers search via query params)
@@ -202,9 +234,13 @@ async function setupSuggestionsMocks(
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
+          // Keep the REAL id while there are distinct fixture rows to draw on,
+          // so a candidate corresponds to a card that is actually on the board
+          // — confirming a match navigates to that card, and a synthetic id
+          // would have nowhere to go.
           suggestions: Array.from({ length: duplicateMatches }, (_, i) => ({
             ...MOCK_SUGGESTIONS[i % MOCK_SUGGESTIONS.length],
-            id: `dup-${i + 1}`,
+            id: i < MOCK_SUGGESTIONS.length ? MOCK_SUGGESTIONS[i].id : `dup-${i + 1}`,
             title: `Duplicate candidate ${i + 1}`,
           })),
           total: duplicateMatches,
@@ -701,21 +737,19 @@ test.describe('Suggestions Board — Public Browsing', () => {
     await expect.poll(() => firstTitle.textContent()).not.toBe(page1Title);
   });
 
-  test('rejected suggestion shows decline reason (if provided)', async ({ page }) => {
+  // PARKED (SHY-0247): a declined suggestion never shows why it was declined — the testid appears nowhere in public/, so
+  // there is nothing to assert against. Was an `if (count > 0)` guard, which
+  // ran nothing and reported green.
+  test.skip('rejected suggestion shows decline reason (if provided)', async ({ page }) => {
     const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Rejected' }));
-
-    const rejectedCards = page.locator('[data-testid^="suggestion-card"], .sg-card');
-    const declineReason = rejectedCards
+    const declineReason = page
+      .locator('[data-testid^="suggestion-card"]')
       .first()
-      .locator('[data-testid="decline-reason"], .decline-reason');
-    // Decline reason may or may not be present (depends on whether admin provided one)
-    if ((await declineReason.count()) > 0) {
-      await expect(declineReason).toBeVisible();
-      const text = await declineReason.textContent();
-      expect(text!.trim().length).toBeGreaterThan(0);
-    }
+      .locator('[data-testid="decline-reason"]');
+    await expect(declineReason).toBeVisible();
+    expect((await declineReason.textContent())!.trim().length).toBeGreaterThan(0);
   });
 
   test('rejected suggestion without reason shows no reason text', async ({ page }) => {
@@ -1048,30 +1082,26 @@ test.describe('Suggestions Board — Submission Flow', () => {
     // After submission, the suggestion should appear in the user's list
   });
 
-  test('edit pending: form pre-filled with current values, re-review warning banner shown', async ({
+  // PARKED (SHY-0247): editing your own pending suggestion does not exist — the testid appears nowhere in public/, so
+  // there is nothing to assert against. Was an `if (count > 0)` guard, which
+  // ran nothing and reported green.
+  test.skip('edit pending: form pre-filled with current values, re-review warning banner shown', async ({
     page,
   }) => {
-    const editBtn = page
-      .locator('[data-testid="edit-suggestion-btn"], .edit-suggestion-btn')
-      .first();
-    if ((await editBtn.count()) > 0) {
-      await editBtn.click();
-      const warning = page.locator('[data-testid="re-review-warning"], .re-review-warning');
-      await expect(warning).toBeVisible({ timeout: 5_000 });
-    }
+    const editBtn = page.locator('[data-testid="edit-suggestion-btn"]').first();
+    await editBtn.click();
+    await expect(page.locator('[data-testid="re-review-warning"]')).toBeVisible();
   });
 
-  test('withdraw pending: confirmation dialog, suggestion removed from "My Suggestions"', async ({
+  // PARKED (SHY-0247): withdrawing your own suggestion does not exist — the testid appears nowhere in public/, so
+  // there is nothing to assert against. Was an `if (count > 0)` guard, which
+  // ran nothing and reported green.
+  test.skip('withdraw pending: confirmation dialog, suggestion removed from "My Suggestions"', async ({
     page,
   }) => {
-    const withdrawBtn = page
-      .locator('[data-testid="withdraw-suggestion-btn"], .withdraw-suggestion-btn')
-      .first();
-    if ((await withdrawBtn.count()) > 0) {
-      await withdrawBtn.click();
-      const confirmDialog = page.locator('[data-testid="confirm-dialog"], .confirm-dialog');
-      await expect(confirmDialog).toBeVisible({ timeout: 5_000 });
-    }
+    const withdrawBtn = page.locator('[data-testid="withdraw-suggestion-btn"]').first();
+    await withdrawBtn.click();
+    await expect(page.locator('[data-testid="confirm-dialog"]')).toBeVisible();
   });
 
   test('cannot edit/withdraw accepted/planned/completed/rejected (buttons not shown)', async ({
@@ -1210,19 +1240,19 @@ test.describe('Suggestions Board — Comment Flow', () => {
     await expect(commentForm).toBeVisible();
   });
 
-  test('planned suggestions: "Comments are read-only" label, no form', async ({ page }) => {
+  test('planned suggestions carry no comment section at all', async ({ page }) => {
+    // The original title expected a "Comments are read-only" label, which the
+    // product has never had: renderCommentSection returns '' for anything that
+    // is not accepted, so a planned suggestion simply has no comments UI. The
+    // label half sat behind an `if (count > 0)` guard and never ran; what the
+    // product actually guarantees is the absence, so that is what is asserted.
     const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Planned' }));
-    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
-    const readOnlyLabel = cards
-      .first()
-      .locator('[data-testid="comments-read-only"], .comments-read-only');
-    if ((await readOnlyLabel.count()) > 0) {
-      await expect(readOnlyLabel).toBeVisible();
-    }
-    const commentForm = cards.first().locator('[data-testid^="comments-section"]');
-    expect(await commentForm.count()).toBe(0);
+    const card = page.locator('[data-testid^="suggestion-card"]').first();
+    await expect(card).toBeVisible();
+    await expect(card.locator('[data-testid^="comments-section"]')).toHaveCount(0);
+    await expect(card.locator('[data-testid^="comment-input"]')).toHaveCount(0);
   });
 
   test('submit comment: appears in comment list', async ({ page }) => {
@@ -1236,16 +1266,17 @@ test.describe('Suggestions Board — Comment Flow', () => {
     // Comment should appear in the list
   });
 
-  test('anonymous label on public comments', async ({ page }) => {
-    const commentItems = page.locator('.sg-comment');
-    if ((await commentItems.count()) > 0) {
-      const authorLabel = commentItems.first().locator('.sg-comment-author');
-      if ((await authorLabel.count()) > 0) {
-        const text = await authorLabel.textContent();
-        // Public comments should show "Anonymous" label
-        expect(text).toBeDefined();
-      }
-    }
+  test('a comment shows its author, and a deleted author shows a placeholder', async ({ page }) => {
+    // There is no "Anonymous" concept in the product — comments carry their
+    // author's display name, with a translated placeholder once that account
+    // has been deleted. Two nested `if (count > 0)` guards meant the old
+    // version asserted `expect(text).toBeDefined()` on nothing at all.
+    await setupSuggestionsMocks(page, { withComments: true });
+    await page.goto('/roadmap.html');
+    const comments = page.locator('.sg-comment');
+    await expect(comments).toHaveCount(2);
+    await expect(comments.nth(0).locator('.sg-comment-author')).toHaveText('Commenter One');
+    await expect(comments.nth(1).locator('.sg-comment-text')).not.toHaveText('');
   });
 
   test('private comment not visible to non-admins', async ({ page }) => {
@@ -1371,37 +1402,50 @@ test.describe('Suggestion Submission Edge Cases', () => {
     }
   });
 
-  test('duplicate detection: 4+ matches shows 3 initially, "Load more" appears', async ({
+  test('duplicate detection: 4+ matches stay capped at 3, with no "Load more"', async ({
     page,
   }) => {
+    // The original expected a Load-more control. There is none, and there
+    // should not be: the panel caps at Math.min(suggestions.length, 3)
+    // (suggestions-board.js:907) and the lookup asks for &limit=3 (:456), so a
+    // pager would contradict a deliberate design. The cap itself is what needs
+    // guarding — the old `if (loadMore.count() > 0)` asserted nothing at all.
+    await setupSuggestionsMocks(page, { duplicateMatches: 5 });
+    await page.goto('/roadmap.html');
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     await openSuggestForm(page);
     await typeTitleAwaitingDuplicates(page, titleInput, 'Voice');
-    const items = page.locator('[data-testid^="duplicate-item"]');
-    const loadMore = page.locator('[data-testid="duplicate-load-more"]');
-    if ((await loadMore.count()) > 0) {
-      expect(await items.count()).toBe(3);
-      await expect(loadMore).toBeVisible();
-    }
+    await expect(page.locator('[data-testid^="duplicate-item"]')).toHaveCount(3);
+    await expect(page.locator('[data-testid="duplicate-load-more"]')).toHaveCount(0);
   });
 
-  test('duplicate detection: click "Yes, this is what I meant" on 2nd page upvotes correct suggestion', async ({
+  test('duplicate detection: "Yes, this is what I meant" acts on the chosen match', async ({
     page,
   }) => {
+    // There is no second page (see the cap above), so the meaningful behaviour
+    // is that confirming a match acts on THAT match. The old version needed a
+    // Load-more that does not exist, then ended on a comment — no assertion at
+    // all, even had the guard opened.
+    await setupSuggestionsMocks(page, { duplicateMatches: 5 });
+    await page.goto('/roadmap.html');
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     await openSuggestForm(page);
     await typeTitleAwaitingDuplicates(page, titleInput, 'Voice');
-    const loadMore = page.locator('[data-testid="duplicate-load-more"]');
-    if ((await loadMore.count()) > 0) {
-      await loadMore.click();
-      // Click "Yes" on a result from the second page
-      const yesButtons = page.locator('[data-testid^="duplicate-match"]');
-      const count = await nonEmptyCount(yesButtons);
-      if (count > 3) {
-        await yesButtons.nth(3).click();
-        // Should redirect to that specific suggestion for upvoting
-      }
-    }
+
+    const matches = page.locator('[data-testid^="duplicate-match-"]');
+    await expect(matches).toHaveCount(3);
+    const chosen = matches.nth(1);
+    // The testid is positional (`duplicate-match-<index>`); the suggestion it
+    // refers to is on `data-id`. Using the testid's number as an id is exactly
+    // the kind of near-miss that makes a test pass against the wrong row.
+    const chosenId = (await chosen.getAttribute('data-id'))!;
+
+    await chosen.click();
+    // "Yes, this is what I meant" promises to take you to the existing
+    // suggestion. It used to close the form, toast "Redirecting to existing
+    // suggestion", and go nowhere — the button's own `data-id` was never read.
+    await expect(page).toHaveURL(new RegExp(`#suggestion-${chosenId}` + '$'));
+    await expect(page.locator(`[data-testid="suggestion-card-${chosenId}"]`)).toBeInViewport();
   });
 
   test('back button during submission: form state preserved', async ({ page }) => {
@@ -1413,34 +1457,13 @@ test.describe('Suggestion Submission Edge Cases', () => {
     // Form state should be preserved
   });
 
-  test('network error during submit: error message shown, form not cleared', async ({ page }) => {
-    // Simulate network failure
-    await page.route('**/api/suggestions', (route) => route.abort());
-    const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    const submitBtn = page.locator('[data-testid="suggest-modal-submit"]');
-    if ((await titleInput.count()) > 0 && (await submitBtn.count()) > 0) {
-      await titleInput.fill('Test suggestion');
-      await submitBtn.click();
-      // Either the modal closes (accepted) or an error renders. Waiting for
-      // that fork is the condition; 1s was a guess at it.
-      await expect
-        .poll(async () =>
-          (await page.locator('[data-testid="suggest-title-input"]').count()) === 0
-            ? 'closed'
-            : (await page.locator('[data-testid="submit-error"], .submit-error').count()) > 0
-              ? 'error'
-              : 'pending',
-        )
-        .not.toBe('pending');
-      const errorMsg = page.locator('[data-testid="submit-error"], .submit-error');
-      if ((await errorMsg.count()) > 0) {
-        await expect(errorMsg).toBeVisible();
-      }
-      // Form should not be cleared
-      const value = await titleInput.inputValue();
-      expect(value).toBe('Test suggestion');
-    }
-  });
+  // A failed submission — toast shown, typed text retained, button re-enabled —
+  // is covered by `suggestions-subscribe.spec.ts` →
+  // "suggestion submit fails: form retains input, retry shown", which drives it
+  // through a REAL signed-in session rather than a route-mocked board. The
+  // version that lived here asserted the same contract against a
+  // `[data-testid="submit-error"]` element the product does not have (it shows
+  // a toast), behind an `if (count > 0)` guard that made the mismatch invisible.
 
   test.skip('double-click submit button: only one submission created', async ({ page }) => {
     const submitBtn = page.locator('[data-testid="suggest-modal-submit"]');
@@ -1818,12 +1841,12 @@ test.describe('Suggestion Card UI States', () => {
     // Verify the state can be detected
   });
 
-  test('card: user is the submitter (shows "Your suggestion" badge)', async ({ page }) => {
-    const submitterBadge = page.locator('[data-testid="submitter-badge"], .submitter-badge');
-    // When logged in and viewing own suggestion, badge should appear
-    if ((await submitterBadge.count()) > 0) {
-      await expect(submitterBadge.first()).toContainText(/Your suggestion/i);
-    }
+  // PARKED (SHY-0247): a "Your suggestion" badge does not exist — the testid appears nowhere in public/, so
+  // there is nothing to assert against. Was an `if (count > 0)` guard, which
+  // ran nothing and reported green.
+  test.skip('card: user is the submitter (shows "Your suggestion" badge)', async ({ page }) => {
+    const submitterBadge = page.locator('[data-testid="submitter-badge"]');
+    await expect(submitterBadge.first()).toContainText(/Your suggestion/i);
   });
 
   test('card: accepted status (default card style)', async ({ page }) => {
@@ -1925,15 +1948,14 @@ test.describe('Suggestion Card UI States', () => {
     expect(await mergedCards.count()).toBe(0);
   });
 
-  test('card: creator\'s upvote shown in count but creator sees "Your vote" indicator', async ({
+  // PARKED (SHY-0247): a "Your vote" indicator does not exist — the testid
+  // appears nowhere in public/, so a card never tells you which way you voted.
+  // Was an `if (count > 0)` guard, which ran nothing and reported green.
+  test.skip('card: creator\'s upvote shown in count but creator sees "Your vote" indicator', async ({
     page,
   }) => {
-    // When logged in as the creator, should see "Your vote" indicator
-    const yourVote = page.locator('[data-testid="your-vote-indicator"], .your-vote-indicator');
-    // This is only visible when logged in as the suggestion creator
-    if ((await yourVote.count()) > 0) {
-      await expect(yourVote.first()).toBeVisible();
-    }
+    const yourVote = page.locator('[data-testid="your-vote-indicator"]');
+    await expect(yourVote.first()).toBeVisible();
   });
 
   test.skip('card: truncated description expands on click', async ({ page }) => {
@@ -2125,17 +2147,15 @@ test.describe('Filter & Search Combination Edge Cases', () => {
     // Value should indicate "Accepted" is still selected
   });
 
-  test('filter badge counts: show number of active filters', async ({ page }) => {
+  // PARKED (SHY-0247): there is no active-filter count badge — the testid
+  // appears nowhere in public/. Was an `if (count > 0)` guard.
+  test.skip('filter badge counts: show number of active filters', async ({ page }) => {
     const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Accepted' }));
 
-    const filterBadge = page.locator('[data-testid="filter-badge"], .filter-badge');
-    if ((await filterBadge.count()) > 0) {
-      const text = await filterBadge.textContent();
-      // Should show count of active filters (at least 1)
-      expect(parseInt(text || '0')).toBeGreaterThanOrEqual(1);
-    }
+    const filterBadge = page.locator('[data-testid="filter-badge"]');
+    expect(parseInt((await filterBadge.textContent()) || '0')).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -2256,13 +2276,15 @@ test.describe('Empty & Extreme States', () => {
     );
     await page.goto('/roadmap.html');
     await boardSettled(page);
-    const chart = page.locator('[data-testid="ring-chart"], .ring-chart');
-    // Chart should show 0%
-
-    const emptyMsg = page.locator('[data-testid="no-features"], .no-features');
-    if ((await emptyMsg.count()) > 0) {
-      await expect(emptyMsg).toContainText(/No features/i);
-    }
+    // The old `if (count > 0)` guard meant this asserted NOTHING — chart
+    // included — and hid two real faults: an empty roadmap rendered the "Could
+    // not load the roadmap." error, and the donut kept its "--" placeholder as
+    // though it were still fetching.
+    const emptyMsg = page.locator('[data-testid="no-features"]');
+    await expect(emptyMsg).toBeVisible();
+    await expect(emptyMsg).not.toContainText(/could not load/i);
+    await expect(page.locator('[data-testid="ring-chart"]')).toBeVisible();
+    await expect(page.locator('#donut-percent')).toHaveText('0%');
   });
 
   test('roadmap all features done: ring chart 100%, green colour', async ({ page }) => {
@@ -2402,41 +2424,36 @@ test.describe('Empty & Extreme States', () => {
   });
 
   test('comments 0: "No comments yet"', async ({ page }) => {
-    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
-    const commentSection = cards.first().locator('[data-testid^="comments-section"]');
-    const noComments = commentSection.locator('[data-testid="no-comments"], .no-comments');
-    if ((await noComments.count()) > 0) {
-      await expect(noComments).toContainText(/No comments/i);
-    }
+    // Comments only render on accepted suggestions; the fixture's accepted
+    // entry has none, so this is the zero case.
+    const accepted = MOCK_SUGGESTIONS.find((s) => s.status === 'accepted')!;
+    const empty = page.locator(`[data-testid="no-comments-${accepted.id}"]`);
+    await expect(empty).toBeVisible();
+    await expect(empty).toContainText(/No comments/i);
   });
 
-  test('comments 500: paginated correctly', async ({ page }) => {
-    const commentPagination = page.locator(
-      '[data-testid="comment-pagination"], .comment-pagination',
-    );
-    if ((await commentPagination.count()) > 0) {
-      await expect(commentPagination).toBeVisible();
-    }
+  // The empty watch list lives inside the subscribe modal, which needs a real
+  // signed-in session — so it is covered by
+  // `suggestions-subscribe.spec.ts` → "open from header: no suggestion is
+  // added", which asserts the same `watch-empty` state with the machinery to
+  // reach it. Duplicating it here behind a route-mocked board would only
+  // re-create the silent guard this pass removed.
+
+  // PARKED (SHY-0247): comment pagination does not exist — `renderCommentSection`
+  // renders every comment in one list with no pager, so there is nothing to
+  // assert against. Previously `if (count > 0)` around the whole body, which
+  // ran nothing and reported green.
+  test.skip('comments 500: paginated correctly', async ({ page }) => {
+    const commentPagination = page.locator('[data-testid="comment-pagination"]');
+    await expect(commentPagination).toBeVisible();
   });
 
-  test('watch list 0 items: "Not watching anything"', async ({ page }) => {
-    const watchList = page.locator('[data-testid="watch-list"], .watch-list');
-    const emptyWatch = watchList.locator('[data-testid="watch-empty"], .watch-empty');
-    if ((await emptyWatch.count()) > 0) {
-      await expect(emptyWatch).toContainText(/Not watching/i);
-    }
-  });
-
-  test('notification inbox 0: "All caught up!"', async ({ page }) => {
-    const notifDropdown = page.locator(
-      '[data-testid="notification-dropdown"], .notification-dropdown',
-    );
-    if ((await notifDropdown.count()) > 0) {
-      const emptyNotif = notifDropdown.locator('[data-testid="notif-empty"], .notif-empty');
-      if ((await emptyNotif.count()) > 0) {
-        await expect(emptyNotif).toContainText(/caught up/i);
-      }
-    }
+  // PARKED (SHY-0247): there is no notification inbox on the web board at all —
+  // no dropdown, no empty state, no testids anywhere in public/. Same silent
+  // guard as above.
+  test.skip('notification inbox 0: "All caught up!"', async ({ page }) => {
+    const emptyNotif = page.locator('[data-testid="notif-empty"]');
+    await expect(emptyNotif).toContainText(/caught up/i);
   });
 });
 

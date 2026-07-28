@@ -1064,8 +1064,23 @@
               );
               for (var m = 0; m < matchBtns.length; m++) {
                 matchBtns[m].addEventListener("click", function () {
+                  // The toast promises a redirect, so actually go there. This
+                  // used to close the form, say "Redirecting to existing
+                  // suggestion", and do nothing at all — the `data-id` written
+                  // onto the button was never read, so the whole point of
+                  // duplicate detection (send me to the one that exists
+                  // instead of making another) quietly failed (SHY-0245).
+                  var targetId = this.getAttribute("data-id");
                   close();
                   showToast(sgT("toast_redirecting_to_existing"));
+                  if (!targetId) return;
+                  location.hash = "suggestion-" + targetId;
+                  var card = document.querySelector(
+                    '[data-testid="suggestion-card-' + targetId + '"]',
+                  );
+                  if (card && card.scrollIntoView) {
+                    card.scrollIntoView({ behavior: "smooth", block: "center" });
+                  }
                 });
               }
 
@@ -1202,7 +1217,11 @@
       html += "</div>";
     } else {
       html +=
-        '<p class="sg-text-muted sg-comment-empty">No comments yet. Be the first!</p>';
+        '<p class="sg-text-muted sg-comment-empty" data-testid="no-comments-' +
+        suggestion.id +
+        '">' +
+        escapeHtml(sgT("comments_empty")) +
+        "</p>";
     }
 
     html += "</div>";

@@ -34,6 +34,7 @@
       plan: "Planned",
       lastUpdated: "Last updated",
       loadFail: "Could not load the roadmap.",
+      noFeatures: "No features on the roadmap yet — check back soon.",
       tryAgain: "Try again",
       notifyPrompt: "Sign in to the app to get notified about this feature.",
       disclaimer: "Features and priorities may change as development progresses and user feedback is received.",
@@ -154,6 +155,7 @@
       plan: "Direncanakan",
       lastUpdated: "Terakhir diperbarui",
       loadFail: "Gagal memuat peta jalan.",
+      noFeatures: "Belum ada fitur di peta jalan — periksa lagi nanti.",
       tryAgain: "Coba lagi",
       notifyPrompt: "Masuk ke aplikasi untuk mendapat notifikasi.",
     },
@@ -410,6 +412,7 @@
       plan: "K\u1EBF ho\u1EA1ch",
       lastUpdated: "C\u1EADp nh\u1EADt l\u1EA7n cu\u1ED1i",
       loadFail: "Kh\u00F4ng th\u1EC3 t\u1EA3i l\u1ED9 tr\u00ECnh.",
+      noFeatures: "Chưa có tính năng nào trên lộ trình — hãy quay lại sau nhé.",
       tryAgain: "Th\u1EED l\u1EA1i",
       notifyPrompt:
         "\u0110\u0103ng nh\u1EADp v\u00E0o \u1EE9ng d\u1EE5ng \u0111\u1EC3 nh\u1EADn th\u00F4ng b\u00E1o.",
@@ -429,6 +432,7 @@
       plan: "\u5DF2\u8BA1\u5212",
       lastUpdated: "\u6700\u540E\u66F4\u65B0",
       loadFail: "\u65E0\u6CD5\u52A0\u8F7D\u8DEF\u7EBF\u56FE\u3002",
+      noFeatures: "路线图上还没有功能，敬请期待。",
       tryAgain: "\u91CD\u8BD5",
       notifyPrompt:
         "\u767B\u5F55\u5E94\u7528\u4EE5\u63A5\u6536\u901A\u77E5\u3002",
@@ -492,7 +496,22 @@
 
   function renderDonutChart(done, inProgress, planned) {
     var total = done + inProgress + planned;
-    if (total === 0) return;
+    if (total === 0) {
+      // Bailing here left the centre reading "--", the loading placeholder from
+      // roadmap.html — so an empty roadmap looked like a chart still fetching
+      // rather than one with nothing to show (SHY-0245). Say 0% and zero the
+      // legend instead.
+      var emptyPercentEl = document.getElementById("donut-percent");
+      if (emptyPercentEl) emptyPercentEl.textContent = "0%";
+      var emptySvg = document.getElementById("donut-chart");
+      if (emptySvg) emptySvg.innerHTML = "";
+      var emptyIds = ["count-done", "count-in-progress", "count-planned"];
+      for (var e = 0; e < emptyIds.length; e++) {
+        var el = document.getElementById(emptyIds[e]);
+        if (el) el.textContent = "0";
+      }
+      return;
+    }
 
     var percent = Math.round((done / total) * 100);
     var svg = document.getElementById("donut-chart");
@@ -683,10 +702,15 @@
 
     var phases = data.phases;
     if (!phases || phases.length === 0) {
+      // An empty roadmap is not a failed one. This used to show "Could not load
+      // the roadmap.", so a legitimately-empty board looked broken, and the
+      // donut was never rendered — it kept the "--" placeholder from the HTML
+      // as though it were still fetching (SHY-0245).
       container.innerHTML =
-        '<div class="error-state"><p>' +
-        escapeHtml(t("loadFail")) +
+        '<div class="empty-state" data-testid="no-features"><p>' +
+        escapeHtml(t("noFeatures")) +
         "</p></div>";
+      renderDonutChart(0, 0, 0);
       return;
     }
 
