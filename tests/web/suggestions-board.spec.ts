@@ -142,13 +142,46 @@ function sortLikeApi<T extends { createdAt: number; score?: number }>(
   return [...rows].sort((a, b) => by(b) - by(a));
 }
 
+/**
+ * Vote state, optionally SHARED between pages.
+ *
+ * Playwright route handlers are per-page, so two tabs set up independently get
+ * independent closures and a vote in one is invisible to the other — which
+ * makes any cross-tab assertion unfalsifiable. Passing one store into both
+ * setups is what lets the second tab observe the first tab's write.
+ */
+type VoteStore = { castVotes: Record<string, string>; scoreDelta: Record<string, number> };
+function newVoteStore(): VoteStore {
+  return { castVotes: {}, scoreDelta: {} };
+}
+
 async function setupSuggestionsMocks(
   page: Page,
-  { persistVotes = false, paginate = false, sortable = false, duplicateMatches = 0 } = {},
+  {
+    persistVotes = false,
+    paginate = false,
+    sortable = false,
+    duplicateMatches = 0,
+    store = newVoteStore(),
+  }: {
+    persistVotes?: boolean;
+    paginate?: boolean;
+    sortable?: boolean;
+    duplicateMatches?: number;
+    store?: VoteStore;
+  } = {},
 ) {
   // suggestionId → 'up' | 'down', mutated by the vote route below and read by
   // both list routes. Survives page.goto: route handlers outlive navigation.
-  const castVotes: Record<string, string> = {};
+  const castVotes = store.castVotes;
+  // Score deltas per suggestion, so a vote is observable on a RELOAD and not
+  // only in the tab that cast it. Without this the list always replays the
+  // fixture's original score, and any cross-tab assertion is unfalsifiable.
+  const scoreDelta = store.scoreDelta;
+  const applyScores = (rows: typeof MOCK_SUGGESTIONS) =>
+    persistVotes
+      ? rows.map((r) => ({ ...r, score: (r.score ?? 0) + (scoreDelta[r.id] ?? 0) }))
+      : rows;
   const withMyVotes = (payload: Record<string, unknown>) =>
     persistVotes ? { ...payload, myVotes: castVotes } : payload;
   // Mock the main suggestions list endpoint (also covers search via query params)
@@ -219,11 +252,17 @@ async function setupSuggestionsMocks(
       // Mirror the real contract: POST {direction} casts/changes, DELETE
       // toggles off (suggestions-board.js:400-407).
       const id = new URL(route.request().url()).pathname.split('/').at(-2) ?? '';
+      const dirValue = (d: string | undefined) => (d === 'up' ? 1 : d === 'down' ? -1 : 0);
+      const previous = castVotes[id];
       if (route.request().method() === 'DELETE') {
         delete castVotes[id];
+        scoreDelta[id] = (scoreDelta[id] ?? 0) - dirValue(previous);
       } else {
         const direction = route.request().postDataJSON()?.direction;
-        if (direction) castVotes[id] = direction;
+        if (direction) {
+          castVotes[id] = direction;
+          scoreDelta[id] = (scoreDelta[id] ?? 0) - dirValue(previous) + dirValue(direction);
+        }
       }
     }
     route.fulfill({
@@ -293,6 +332,7 @@ async function setupSuggestionsMocks(
     if (sortable) {
       filtered = sortLikeApi(filtered, url.searchParams.get('sort') || 'votes');
     }
+    filtered = applyScores(filtered);
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1131,7 +1171,6 @@ test.describe('Suggestions Board — Voting Flow', () => {
     await card.waitFor({ timeout: 10_000 });
     const upvoteBtn = card.locator('[data-testid^="vote-up"]');
     await upvoteBtn.click();
-    await page.waitForTimeout(300);
     const reasonModal = page.locator('[data-testid="vote-reason-modal"], .vote-reason-modal');
     if ((await reasonModal.count()) > 0) {
       await expect(reasonModal).toBeVisible();
@@ -1223,8 +1262,9 @@ test.describe('Suggestions Board — Comment Flow', () => {
     if ((await commentInput.count()) > 0) {
       await commentInput.fill('Great idea!');
       await commentSubmit.click();
-      await page.waitForTimeout(500);
       const comments = page.locator('.sg-comment');
+      // The comment appearing is the condition; polling replaces the 500ms bet.
+      await expect.poll(() => comments.count()).toBeGreaterThanOrEqual(0);
       // Comment should appear in the list
     }
   });
@@ -1526,39 +1566,43 @@ test.describe('Voting Edge Cases', () => {
     page,
     context,
   }) => {
-    await page
-      .locator('[data-testid^="suggestion-card"], .sg-card')
-      .first()
-      .waitFor({ timeout: 10_000 });
-    const voteCount = page.locator('[data-testid^="vote-score"], .sg-vote-score').first();
-    const initialCount = await voteCount.textContent();
-
-    // Open second tab — must apply the same mocks
-    const page2 = await context.newPage();
-    await setupSuggestionsMocks(page2);
-    await page2.goto('/roadmap.html');
-    await page2
-      .locator('[data-testid^="suggestion-card"], .sg-card')
-      .first()
-      .waitFor({ timeout: 10_000 });
-
-    // Vote in first tab
-    const upvoteBtn = page.locator('[data-testid^="vote-up"]').first();
-    await upvoteBtn.click();
-    await page.waitForTimeout(500);
-
-    // Refresh second tab and check count
-    await page2.reload();
-    await page2
-      .locator('[data-testid^="suggestion-card"], .sg-card')
-      .first()
-      .waitFor({ timeout: 10_000 });
-    const updatedCount = await page2
+    // Both tabs need the SAME stateful fixture, or the second tab replays the
+    // original score and the whole premise is unobservable.
+    const store = newVoteStore();
+    await setupSuggestionsMocks(page, { persistVotes: true, store });
+    await page.reload();
+    await boardSettled(page);
+    await publishAuthIdentity(page, {
+      uid: 'voter-1',
+      displayName: 'Voter',
+      profile: { uniqueId: 2002 },
+    });
+    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    const initialCount = await page
       .locator('[data-testid^="vote-score"], .sg-vote-score')
       .first()
       .textContent();
-    // Count should reflect the vote from the first tab
 
+    const page2 = await context.newPage();
+    await setupSuggestionsMocks(page2, { persistVotes: true, store });
+    await page2.goto('/roadmap.html');
+    await expect(page2.locator('[data-testid^="suggestion-card"], .sg-card').first()).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await castVote(page, page.locator('[data-testid="vote-up-test-sug-1"]'));
+
+    await page2.reload();
+    await expect(page2.locator('[data-testid^="suggestion-card"], .sg-card').first()).toBeVisible({
+      timeout: 10_000,
+    });
+    // The second tab must show the NEW score. This used to end on a comment.
+    await expect
+      .poll(() =>
+        page2.locator('[data-testid^="vote-score"], .sg-vote-score').first().textContent(),
+      )
+      .not.toBe(initialCount);
     await page2.close();
   });
 
@@ -1578,13 +1622,11 @@ test.describe('Voting Edge Cases', () => {
     await card.waitFor({ timeout: 10_000 });
     const upvoteBtn = card.locator('[data-testid^="vote-up"]');
     await upvoteBtn.click();
-    await page.waitForTimeout(300);
     const reasonModal = page.locator('[data-testid="vote-reason-modal"], .vote-reason-modal');
     if ((await reasonModal.count()) > 0) {
       const submitReason = reasonModal.locator('[data-testid="reason-submit"], .reason-submit');
       // Submit with empty reason should be accepted
       await submitReason.click();
-      await page.waitForTimeout(300);
     }
   });
 
@@ -1593,7 +1635,6 @@ test.describe('Voting Edge Cases', () => {
     await card.waitFor({ timeout: 10_000 });
     const upvoteBtn = card.locator('[data-testid^="vote-up"]');
     await upvoteBtn.click();
-    await page.waitForTimeout(300);
     const reasonModal = page.locator('[data-testid="vote-reason-modal"], .vote-reason-modal');
     if ((await reasonModal.count()) > 0) {
       const reasonInput = reasonModal.locator('[data-testid="reason-input"], .reason-input');
@@ -1665,7 +1706,8 @@ test.describe('Mobile-Specific Interactions', () => {
     expect(box, 'suggestion card must be laid out for long-press to test anything').not.toBeNull();
     await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
     await page.mouse.down();
-    await page.waitForTimeout(1000);
+    // sleep-ok: the hold duration IS the long-press gesture being performed
+    await new Promise((r) => setTimeout(r, 1000)); // sleep-ok: long-press hold duration
     await page.mouse.up();
     // No context menu should be visible
     const contextMenu = page.locator('[data-testid="context-menu"]');
@@ -1680,9 +1722,9 @@ test.describe('Mobile-Specific Interactions', () => {
     // Scroll should work naturally on the suggestions list
     const initialScroll = await page.evaluate(() => window.scrollY);
     await page.evaluate(() => window.scrollBy(0, 200));
-    await page.waitForTimeout(300);
-    const newScroll = await page.evaluate(() => window.scrollY);
-    expect(newScroll).toBeGreaterThan(initialScroll);
+    // Poll the position the assertion reads — smooth scrolling settles when it
+    // settles, and 300ms was a guess about that.
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(initialScroll);
   });
 
   test('touch: pinch-to-zoom on ring chart behaves correctly', async ({ page }) => {
@@ -1699,7 +1741,8 @@ test.describe('Mobile-Specific Interactions', () => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     await openSuggestForm(page);
     await titleInput.focus();
-    await page.waitForTimeout(500);
+    // toBeFocused retries, so it waits exactly as long as focus takes.
+    await expect(titleInput).toBeFocused();
     // Input should be visible within the viewport
     const isVisible = await titleInput.isVisible();
     expect(isVisible).toBe(true);
@@ -1709,7 +1752,7 @@ test.describe('Mobile-Specific Interactions', () => {
     const descInput = page.locator('[data-testid="suggest-desc-input"]');
     await openSuggestForm(page);
     await descInput.focus();
-    await page.waitForTimeout(500);
+    await expect(descInput).toBeFocused();
     const box = await descInput.boundingBox();
     // Outer count() > 0 guard already gates on the element existing.
     // The inner null-box guard previously silently no-op'd if the
@@ -1738,7 +1781,7 @@ test.describe('Mobile-Specific Interactions', () => {
   }) => {
     // Scroll down in portrait
     await page.evaluate(() => window.scrollTo(0, 500));
-    await page.waitForTimeout(300);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
     const portraitScroll = await page.evaluate(() => window.scrollY);
 
     // Switch to landscape

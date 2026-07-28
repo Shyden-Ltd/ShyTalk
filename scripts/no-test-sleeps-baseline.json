@@ -31,5 +31,5 @@
   "tests/web/roadmap-redesign.spec.ts": 1,
   "tests/web/seasonal-theme.spec.ts": 3,
   "tests/web/shared-header-signin-fallback.spec.ts": 1,
-  "tests/web/suggestions-board.spec.ts": 25
+  "tests/web/suggestions-board.spec.ts": 14
 }
