@@ -183,12 +183,12 @@ else
   # stderr is intentionally NOT discarded (SHY-0069): a wedged/failing run
   # must be visible — `2>/dev/null` here cost hours of blind diagnosis.
   echo "  → Express tests with coverage..."
-  cd express-api && node --experimental-vm-modules node_modules/.bin/jest --coverage --coverageReporters=lcov --forceExit --silent
+  cd express-api && node --experimental-vm-modules node_modules/.bin/jest --coverage --coverageReporters=lcov --forceExit --silent </dev/null
   cd ..
 
   # Kotlin JVM tests (for coverage reports)
   echo "  → Kotlin JVM tests..."
-  ./gradlew :shared:jvmTest --quiet 2>/dev/null
+  ./gradlew :shared:jvmTest --quiet 2>/dev/null </dev/null
 
   # Run SonarCloud analysis with the quality-gate wait. Analysed as `main`
   # (no sonar.branch.name — the free plan can't gate a named non-main branch),
@@ -198,7 +198,7 @@ else
     -Dsonar.token="$SONAR_TOKEN" \
     -Dsonar.qualitygate.wait=true \
     -x :app:sonar \
-    --no-configuration-cache; then
+    --no-configuration-cache </dev/null; then
     echo ""
     echo "✗ SonarCloud quality gate FAILED — push blocked"
     echo "  Fix the issues and try again."
@@ -231,12 +231,21 @@ if [ "$HAS_WEB" = "true" ]; then
     # Do NOT use --reporter=line here: it uses ANSI cursor movement that gets
     # swallowed when stdout is captured/piped, producing 0-byte output files.
     # Do NOT pipe to `tail -N`: tail buffers until EOF, hiding live progress.
+    #
+    # `</dev/null` is load-bearing, not tidiness. This hook's stdin IS git's
+    # pre-push protocol pipe (the `<local ref> <local sha> …` lines the while
+    # loop at the top reads). Handing that same descriptor to Playwright lets
+    # it — and every browser it spawns — inherit and disturb the pipe, and git
+    # then died with SIGPIPE (exit 141) AFTER printing "✓ Playwright chromium
+    # tests passed", so the gate looked green while the push silently never
+    # happened. Proven 2026-07-28: identical trees pushed fine whenever this
+    # branch was skipped and failed 141 every time it ran.
     if ! API_BASE_URL=http://localhost:3000 \
       WEB_BASE_URL=http://localhost:8888 \
       ADMIN_EMAIL=claude-test@shytalk.dev \
       ADMIN_PASSWORD=localdev123 \
       TEST_API_KEY=local-test-key \
-      npx playwright test --project=chromium --reporter=list; then
+      npx playwright test --project=chromium --reporter=list </dev/null; then
       echo ""
       echo "✗ Playwright chromium tests FAILED — push blocked"
       echo "  ALL failing tests must be fixed (including pre-existing failures)."
