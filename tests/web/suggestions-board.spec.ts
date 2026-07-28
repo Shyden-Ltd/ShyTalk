@@ -812,6 +812,35 @@ test.describe('Suggestions Board — Login Gate', () => {
  * nothing at all — because nobody ever signed in, so the form never opened and
  * the guards were permanently false.
  */
+/**
+ * A board where votes actually stick and the viewer is signed in.
+ *
+ * Voting needs both: `canAct()` gates the controls, and the active-arrow class
+ * is driven by `state.myVotes` (suggestions-board.js:1305), which only arrives
+ * if the fixture echoes votes back. Without this, a vote test can click all
+ * day and observe nothing.
+ */
+async function votingBoard(page: Page): Promise<void> {
+  await setupSuggestionsMocks(page, { persistVotes: true });
+  await page.reload();
+  await boardSettled(page);
+  // AFTER the reload — a reload builds a fresh document and discards it.
+  await publishAuthIdentity(page, {
+    uid: 'voter-1',
+    displayName: 'Voter',
+    profile: { uniqueId: 2002 },
+  });
+}
+
+/** Clicks a vote arrow and waits for the write it triggers to land. */
+async function castVote(page: Page, arrow: ReturnType<Page['locator']>): Promise<void> {
+  const response = page.waitForResponse((r) => /\/api\/suggestions\/[^/]+\/vote/.test(r.url()), {
+    timeout: 15_000,
+  });
+  await arrow.click();
+  await response;
+}
+
 async function openSuggestForm(page: Page): Promise<void> {
   await publishAuthIdentity(page, {
     uid: 'submitter-1',
@@ -979,7 +1008,15 @@ test.describe('Suggestions Board — Submission Flow', () => {
     // This tests the expected toast behavior post-submit
   });
 
-  test('submit: suggestion appears in "My Suggestions" view', async ({ page }) => {
+  // PARKED (SHY-0247): the testids these reference — my-suggestions,
+  // withdraw-suggestion-btn, edit-suggestion-btn, re-review-warning,
+  // vote-reason-modal, reason-public/private/submit — appear NOWHERE in
+  // public/. They were guarded on `if (x.count() > 0)`, permanently false, so
+  // they ran nothing and reported green. Unguarding them is not enough:
+  // there is nothing to assert against until the feature exists. Skipped so
+  // they stop reporting success; see
+  // .project/stories/SHY-0247-web-features-named-by-tests-but-never-built.md
+  test.skip('submit: suggestion appears in "My Suggestions" view', async ({ page }) => {
     const mySuggestions = page.locator('[data-testid="my-suggestions"], .my-suggestions');
     // After submission, the suggestion should appear in the user's list
   });
@@ -1061,32 +1098,35 @@ test.describe('Suggestions Board — Voting Flow', () => {
     // When authenticated, count should decrement
   });
 
-  test('toggle: clicking opposite arrow switches vote, counts update', async ({ page }) => {
-    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
-    await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
-    const downvoteBtn = card.locator('[data-testid^="vote-down"]');
-    // Click upvote, then downvote — should toggle
-    await upvoteBtn.click();
-    await page.waitForTimeout(300);
-    await downvoteBtn.click();
-    await page.waitForTimeout(300);
-    // Final state should be downvoted
+  test('toggle: clicking opposite arrow switches vote', async ({ page }) => {
+    // Both of these used to click, sleep, and end on a comment describing the
+    // outcome they never checked ("// Final state should be downvoted").
+    await votingBoard(page);
+    const up = page.locator('[data-testid="vote-up-test-sug-1"]');
+    const down = page.locator('[data-testid="vote-down-test-sug-1"]');
+
+    await castVote(page, up);
+    await expect(up).toHaveClass(/sg-vote-btn--active/);
+
+    await castVote(page, down);
+    // Switching must MOVE the vote, not add a second one.
+    await expect(down).toHaveClass(/sg-vote-btn--active/);
+    await expect(up).not.toHaveClass(/sg-vote-btn--active/);
   });
 
-  test('remove vote: clicking same arrow again removes vote', async ({ page }) => {
-    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
-    await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
-    // Click upvote twice — should toggle off
-    await upvoteBtn.click();
-    await page.waitForTimeout(300);
-    await upvoteBtn.click();
-    await page.waitForTimeout(300);
-    // Vote should be removed
+  test('remove vote: clicking the same arrow again removes it', async ({ page }) => {
+    await votingBoard(page);
+    const up = page.locator('[data-testid="vote-up-test-sug-1"]');
+
+    await castVote(page, up);
+    await expect(up).toHaveClass(/sg-vote-btn--active/);
+
+    // Second click sends DELETE (suggestions-board.js:400-407) and clears it.
+    await castVote(page, up);
+    await expect(up).not.toHaveClass(/sg-vote-btn--active/);
   });
 
-  test('vote reason: optional modal appears, can choose public/private', async ({ page }) => {
+  test.skip('vote reason: optional modal appears, can choose public/private', async ({ page }) => {
     const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
     const upvoteBtn = card.locator('[data-testid^="vote-up"]');
@@ -1408,22 +1448,23 @@ test.describe('Voting Edge Cases', () => {
   test('rapid-fire voting (click up, click down, click up quickly): final state correct', async ({
     page,
   }) => {
-    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
-    await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
-    const downvoteBtn = card.locator('[data-testid^="vote-down"]');
+    await votingBoard(page);
+    const up = page.locator('[data-testid="vote-up-test-sug-1"]');
+    const down = page.locator('[data-testid="vote-down-test-sug-1"]');
 
-    // Rapid clicks
-    await upvoteBtn.click();
-    await downvoteBtn.click();
-    await upvoteBtn.click();
-    await page.waitForTimeout(1000);
+    // Deliberately NOT awaiting each response — the point is three clicks
+    // landing faster than the writes complete.
+    await up.click();
+    await down.click();
+    await up.click();
 
-    // Final state should be upvoted
-    const isUpvoted = await upvoteBtn.evaluate(
-      (el) => el.classList.contains('active') || el.getAttribute('aria-pressed') === 'true',
-    );
-    // The UI should settle into a consistent state
+    // toHaveClass RETRIES until the expect timeout, so this waits for the UI
+    // to settle without guessing how long that takes. The old version slept a
+    // second, read the class into `isUpvoted`, and then never asserted it —
+    // and read the wrong class anyway (`active`, not `sg-vote-btn--active`),
+    // so it could not have passed even if it had been checked.
+    await expect(up).toHaveClass(/sg-vote-btn--active/);
+    await expect(down).not.toHaveClass(/sg-vote-btn--active/);
   });
 
   test('vote on suggestion, navigate away, come back: vote state preserved', async ({ page }) => {
@@ -1532,7 +1573,7 @@ test.describe('Voting Edge Cases', () => {
     expect(text).toMatch(/^-?\d+$/);
   });
 
-  test('vote reason with 0 chars: accepted (no reason)', async ({ page }) => {
+  test.skip('vote reason with 0 chars: accepted (no reason)', async ({ page }) => {
     const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
     const upvoteBtn = card.locator('[data-testid^="vote-up"]');
@@ -1547,7 +1588,7 @@ test.describe('Voting Edge Cases', () => {
     }
   });
 
-  test('vote reason with max chars: accepted', async ({ page }) => {
+  test.skip('vote reason with max chars: accepted', async ({ page }) => {
     const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
     await card.waitFor({ timeout: 10_000 });
     const upvoteBtn = card.locator('[data-testid^="vote-up"]');
