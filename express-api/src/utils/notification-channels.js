@@ -54,9 +54,11 @@ async function dispatchNotificationInline(notif) {
       await db.collection('notifications').add({
         // Three spellings of the recipient, matching the rows already written
         // at routes/suggestions.js:1422 so the inbox and clients need no change.
-        uid: String(uid),
-        userId: String(uid),
-        recipientUid: String(uid),
+        // RAW uid, never String(uid) — the inbox query is type-sensitive
+        // (see routes/suggestions.js notifySubscribers for the full note).
+        uid,
+        userId: uid,
+        recipientUid: uid,
         type: type || 'notification',
         title: title || '',
         body: body || '',

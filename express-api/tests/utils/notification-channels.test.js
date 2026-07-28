@@ -408,9 +408,12 @@ describe('dispatchNotificationInline — inApp channel', () => {
     // filters on `uid`) and what existing rows carry (suggestions.js:1422).
     expect(mockCollectionAdd).toHaveBeenCalledWith(
       expect.objectContaining({
-        uid: '42',
-        userId: '42',
-        recipientUid: '42',
+        // RAW uid (42, not '42'): the inbox query
+        // .where('uid','==',req.auth.uniqueId) is type-sensitive and
+        // auth.js:90 resolves uniqueId via parseInt.
+        uid: 42,
+        userId: 42,
+        recipientUid: 42,
         type: 'roadmapUpdate',
         title: 'Roadmap Update',
         body: 'We shipped voice rooms',

@@ -1019,3 +1019,100 @@ describe('POST /suggestions/:id/dispute', () => {
     );
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// SHY-0246 — subscriber notifications on status change
+//
+// `notifySubscribers` (routes/suggestions.js:891) already fans out to
+// subscribers + submitter over FCM and system PM, but every suite mocked
+// sendSystemPm as a bare jest.fn() and never asserted its arguments — which
+// is exactly why the defects below survived.
+// ═══════════════════════════════════════════════════════════════
+
+const { sendSystemPm: mockSendSystemPm } = require('../../src/utils/system-pm');
+
+describe('PUT /admin/suggestions/:id/status — subscriber notifications (SHY-0246)', () => {
+  const suggestionWithAudience = (status) =>
+    makeSuggestionSnap('sug-1', {
+      status,
+      title: 'Dark mode please',
+      submitterUid: 'submitter-1',
+      subscribers: ['sub-1', 'sub-2'],
+    });
+
+  test('system PM body is a human-readable STRING, not an object', async () => {
+    setupDocMocks({ 'suggestions/sug-1': suggestionWithAudience('pending') });
+    const app = createAdminApp();
+    await request(app)
+      .put('/api/admin/suggestions/sug-1/status')
+      .send({ status: 'accepted' })
+      .expect(200);
+
+    expect(mockSendSystemPm).toHaveBeenCalled();
+    for (const [, text] of mockSendSystemPm.mock.calls) {
+      // sendSystemPm(recipientUid, text) writes `text` verbatim into
+      // conversations/<id>/messages.text and lastMessage.text
+      // (utils/system-pm.js:41,56,77). Every other caller in the codebase
+      // passes a string; an object is stored as a Firestore map and renders
+      // as nothing (or "[object Object]") in the conversation list.
+      expect(typeof text).toBe('string');
+      expect(text).toContain('Dark mode please');
+    }
+  });
+
+  test('creates an in-app notification doc for the submitter and every subscriber', async () => {
+    setupDocMocks({ 'suggestions/sug-1': suggestionWithAudience('pending') });
+    const app = createAdminApp();
+    await request(app)
+      .put('/api/admin/suggestions/sug-1/status')
+      .send({ status: 'accepted' })
+      .expect(200);
+
+    const notifWrites = mockCollectionAdd.mock.calls.filter(([name]) => name === 'notifications');
+    const recipients = notifWrites.map(([, doc]) => doc.uid).sort();
+    expect(recipients).toEqual(['sub-1', 'sub-2', 'submitter-1']);
+    // The type must be one the clients can classify —
+    // RoadmapNotification.VALID_TYPES (shared/.../core/model/RoadmapNotification.kt:20).
+    notifWrites.forEach(([, doc]) => {
+      expect(doc.type).toBe('suggestion_accepted');
+      expect(doc.isRead).toBe(false);
+      expect(doc.suggestionId).toBe('sug-1');
+    });
+  });
+
+  test('rejection notifies the submitter ONLY — subscribers are not told', async () => {
+    setupDocMocks({ 'suggestions/sug-1': suggestionWithAudience('pending') });
+    const app = createAdminApp();
+    await request(app)
+      .put('/api/admin/suggestions/sug-1/status')
+      .send({ status: 'rejected', reason: 'duplicate' })
+      .expect(200);
+
+    const recipients = mockCollectionAdd.mock.calls
+      .filter(([name]) => name === 'notifications')
+      .map(([, doc]) => doc.uid);
+    expect(recipients).toEqual(['submitter-1']);
+  });
+
+  test('a submitter who is also a subscriber is notified exactly once', async () => {
+    setupDocMocks({
+      'suggestions/sug-1': makeSuggestionSnap('sug-1', {
+        status: 'pending',
+        title: 'Dark mode please',
+        submitterUid: 'submitter-1',
+        subscribers: ['submitter-1', 'sub-2'],
+      }),
+    });
+    const app = createAdminApp();
+    await request(app)
+      .put('/api/admin/suggestions/sug-1/status')
+      .send({ status: 'accepted' })
+      .expect(200);
+
+    const recipients = mockCollectionAdd.mock.calls
+      .filter(([name]) => name === 'notifications')
+      .map(([, doc]) => doc.uid);
+    expect(recipients.filter((u) => u === 'submitter-1')).toHaveLength(1);
+    expect(recipients.sort()).toEqual(['sub-2', 'submitter-1']);
+  });
+});

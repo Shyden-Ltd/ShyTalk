@@ -41,6 +41,9 @@ function requireJson(req, res, next) {
 }
 router.use(requireJson);
 const { generateId, now } = require('../utils/helpers');
+// SHY-0246: reuse the localised email subjects for in-app notifications and
+// system PMs so there is ONE set of translated strings, not two.
+const { getSubject } = require('../utils/suggestion-email-templates');
 const log = require('../utils/log');
 const { sanitise, sanitiseTitle } = require('../utils/text-sanitiser');
 const { similarity } = require('../utils/similarity');
@@ -892,13 +895,30 @@ async function notifySubscribers(suggestionData, eventType, extraData = {}) {
   try {
     const subscribers = suggestionData.subscribers || [];
     const submitterUid = suggestionData.submitterUid;
-    const uidsToNotify = new Set(subscribers);
+    // SHY-0246: a rejection is private. Telling everyone who followed a
+    // suggestion that it was turned down exposes a moderation outcome about
+    // someone else's submission, so only the submitter hears about it. Every
+    // other transition is public news and goes to the whole audience.
+    const isPrivateToSubmitter = eventType === 'rejected';
+    const uidsToNotify = new Set(isPrivateToSubmitter ? [] : subscribers);
     // Skip notifying a GDPR-deleted submitter. The `submitterDeleted` flag is
     // canonical here, not the sentinel value of `submitterUid` — `0` happens
     // to be falsy today but the contract should not depend on that.
     if (submitterUid && !suggestionData.submitterDeleted) {
       uidsToNotify.add(submitterUid);
     }
+
+    // Reuse the localised email subjects rather than adding a parallel set of
+    // English-only strings (utils/suggestion-email-templates.js SUBJECTS
+    // covers every supported locale). The suggestion's own language is the
+    // best signal available here — recipient locale is not carried on the
+    // subscription record.
+    const language = suggestionData.language || 'en';
+    const headline = getSubject(eventType, language);
+    const messageText = getSubject(eventType, language, suggestionData.title);
+    // `suggestion_<event>` is the spelling the clients classify on —
+    // RoadmapNotification.VALID_TYPES, shared/.../core/model/RoadmapNotification.kt:20.
+    const notifType = `suggestion_${eventType}`;
 
     let notified = 0;
     const failedUids = [];
@@ -910,17 +930,55 @@ async function notifySubscribers(suggestionData, eventType, extraData = {}) {
           const tokens = userData.fcmTokens || [];
           if (tokens.length > 0) {
             await sendFcmToTokens(tokens, {
-              title: `Suggestion ${eventType}`,
+              // `type` lets the client route the tap; it was previously absent
+              // from the push payload even though the clients key on it.
+              type: notifType,
+              title: headline,
               body: suggestionData.title || 'A suggestion you follow has been updated',
               ...extraData,
             });
           }
         }
-        await sendSystemPm(uid, {
-          type: `suggestion_${eventType}`,
-          title: suggestionData.title,
-          ...extraData,
+
+        // SHY-0246: the in-app record. Without this the inbox
+        // (routes/suggestions-notifications.js:29, filtered on `uid`) stayed
+        // empty for every status change — push and system PM were the only
+        // delivery, so anyone who had notifications muted saw nothing at all
+        // and had no history to come back to.
+        await db.collection('notifications').add({
+          // RAW uid, never String(uid): auth.js:90 resolves uniqueId with
+          // parseInt, the inbox queries .where('uid','==',req.auth.uniqueId)
+          // (suggestions-notifications.js:29) and Firestore equality is
+          // TYPE-SENSITIVE — a stringified uid writes notifications the
+          // owner's inbox can never match. Existing rows (:512, :1467) are raw.
+          uid,
+          userId: uid,
+          recipientUid: uid,
+          type: notifType,
+          title: headline,
+          body: suggestionData.title || '',
+          suggestionId: extraData.suggestionId || null,
+          relatedId: extraData.suggestionId || null,
+          isRead: false,
+          createdAt: now(),
         });
+
+        // sendSystemPm(recipientUid, text) writes `text` VERBATIM into
+        // conversations/<id>/messages.text and lastMessage.text
+        // (utils/system-pm.js:41,56,77). This call passed an OBJECT, so every
+        // status-change system message stored a Firestore map where a string
+        // belongs and rendered as nothing in the conversation list. Every
+        // other caller in the codebase passes a string; this was the outlier.
+        // STRING uid. sendSystemPm stores recipientUid verbatim into
+        // conversations.participantIds, and SHY-0130 migrated that field to
+        // strings (scripts/migrate-participant-ids.js:44 maps String(id)), so a
+        // numeric uid would write a value the migration exists to eliminate.
+        // Matches the sibling caller at :542 and notification-channels.js:126.
+        // NOTE (separate pre-existing bug, recorded in SHY-0246): the GDPR
+        // export queries this field with a NUMERIC uid
+        // (utils/data-export-builder.js:262), so post-migration it matches
+        // nothing — that is a bug in the export, not a reason to write numbers.
+        await sendSystemPm(String(uid), messageText);
         notified++;
       } catch (notifyErr) {
         // Don't block main operation, but log per-uid so admins can see

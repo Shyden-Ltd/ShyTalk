@@ -825,6 +825,34 @@ describe('11.115 — Error Recovery Flows', () => {
 // ever changes — these tests force the contract to be load-bearing.
 
 describe('11.115b — GDPR-Deleted Submitter Guards', () => {
+  // SHY-0246: the block comment above says these tests "force the contract to
+  // be load-bearing", but every case below used `submitterUid: 0`, which the
+  // plain truthiness check `if (submitterUid)` already rejects on its own.
+  // Deleting the `!submitterDeleted` clause entirely left the whole suite
+  // green — a passing mutation, i.e. the flag this guard exists to honour was
+  // never actually exercised. This case uses a NON-zero uid so only the flag
+  // can suppress the notification.
+  test('deleted submitter with a NON-zero uid is still not notified (flag, not falsiness)', async () => {
+    setupDocMocks({
+      'suggestions/sug-9': makeSuggestionDoc('sug-9', {
+        status: 'pending',
+        submitterUid: 1001,
+        submitterDeleted: true,
+        subscribers: [],
+      }),
+      'users/1001': makeUserDoc(1001),
+    });
+
+    await request(createApp({ uniqueId: 9999, isAdmin: true }))
+      .put('/api/admin/suggestions/sug-9/status')
+      .send({ status: 'accepted' });
+
+    const pmTargeted = sendSystemPm.mock.calls.some(([uid]) => String(uid) === '1001');
+    expect(pmTargeted).toBe(false);
+    const fcmTargeted = sendFcmToTokens.mock.calls.length;
+    expect(fcmTargeted).toBe(0);
+  });
+
   test('admin status-change on anonymised suggestion does NOT notify uid=0', async () => {
     setupDocMocks({
       'suggestions/sug-1': makeSuggestionDoc('sug-1', {
@@ -844,7 +872,10 @@ describe('11.115b — GDPR-Deleted Submitter Guards', () => {
       ([tokens]) => Array.isArray(tokens) && tokens.includes(0),
     );
     expect(fcmTargetedUid0).toBe(false);
-    const pmTargetedUid0 = sendSystemPm.mock.calls.some(([uid]) => uid === 0);
+    // Compare as STRINGS: sendSystemPm receives String(uid) (participantIds
+    // are strings post-SHY-0130). A strict `=== 0` here would pass even if the
+    // deleted submitter WERE notified, silently defanging this GDPR guard.
+    const pmTargetedUid0 = sendSystemPm.mock.calls.some(([uid]) => String(uid) === '0');
     expect(pmTargetedUid0).toBe(false);
   });
 
@@ -864,7 +895,8 @@ describe('11.115b — GDPR-Deleted Submitter Guards', () => {
       .put('/api/admin/suggestions/sug-2/status')
       .send({ status: 'accepted' });
 
-    const pmTargetedSubmitter = sendSystemPm.mock.calls.some(([uid]) => uid === 1001);
+    // Type-agnostic for the same reason as the guard above.
+    const pmTargetedSubmitter = sendSystemPm.mock.calls.some(([uid]) => String(uid) === '1001');
     expect(pmTargetedSubmitter).toBe(true);
   });
 

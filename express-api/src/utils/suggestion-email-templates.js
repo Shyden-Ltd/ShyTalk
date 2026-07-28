@@ -169,4 +169,8 @@ module.exports = {
   buildPlannedEmail,
   buildCompletedEmail,
   buildMergedEmail,
+  // Exported for SHY-0246 so in-app notifications and system PMs reuse the
+  // SAME localised strings as the emails, rather than introducing a parallel
+  // set of English-only ones. Pure function, no side effects.
+  getSubject,
 };
