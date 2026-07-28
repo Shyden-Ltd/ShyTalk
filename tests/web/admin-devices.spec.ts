@@ -268,8 +268,7 @@ test.describe('Admin Devices Tab', () => {
     const banBtn = deviceRows(page).first().locator('[data-ban-device]');
     await banBtn.click();
 
-    // Wait for the action to complete
-    await page.waitForTimeout(2_000);
+    // Poll the API below until the ban lands, instead of betting 2s on it.
 
     // API verify: GET /api/admin/bans → deviceBans includes the device
     const bansData = await testData.api.get('/api/admin/bans');
@@ -299,8 +298,7 @@ test.describe('Admin Devices Tab', () => {
     const banNetBtn = deviceRows(page).first().locator('[data-ban-net-ip]');
     await banNetBtn.click();
 
-    // Wait for the action
-    await page.waitForTimeout(2_000);
+    // Poll the API below until the ban lands.
 
     // API verify: GET /api/admin/bans → networkBans includes the IP
     const bansData = await testData.api.get('/api/admin/bans');

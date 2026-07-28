@@ -725,9 +725,9 @@ async function cleanupSuggestions(testData: TestData, ids: string[]): Promise<vo
  * Calls loadSuggestions() directly via evaluate, avoiding expensive tab switches.
  * Retries once after a short delay to handle Firestore write propagation. */
 async function refreshSuggestionsList(page: Page): Promise<void> {
-  // Small delay to let Firestore writes from seedSuggestion propagate
-  // before the API query runs (emulator writes are async).
-  await page.waitForTimeout(200);
+  // No fixed delay: every caller's assertions use retrying matchers, so a
+  // write that has not propagated yet is waited out by the assertion itself
+  // rather than by a 200ms guess applied to every call.
   await page
     .evaluate(() => {
       if (typeof (window as any).loadSuggestions === 'function') {
@@ -1698,9 +1698,17 @@ test.describe('Admin Moderation Edge Cases (11.30)', () => {
   });
 
   test('sort pending queue by submission date works', async ({ page, testData }) => {
-    const first = await seedSuggestion(testData, { title: 'SortTest First' });
-    await page.waitForTimeout(500);
-    const second = await seedSuggestion(testData, { title: 'SortTest Second' });
+    // Explicit timestamps beat sleeping 500ms and hoping the clock moved:
+    // seedSuggestion takes overrides, so the ordering under test is stated
+    // rather than raced for.
+    const first = await seedSuggestion(testData, {
+      title: 'SortTest First',
+      createdAt: Date.now() - 60_000,
+    });
+    const second = await seedSuggestion(testData, {
+      title: 'SortTest Second',
+      createdAt: Date.now(),
+    });
     seededIds.push(first.id, second.id);
     await navigateToSuggestions(page);
     await waitForPendingQueueLoaded(page);
@@ -1873,7 +1881,8 @@ test.describe('Admin Identity Graph Visualization (11.65)', () => {
     await c.scrollIntoViewIfNeeded();
     await c.hover();
     await page.mouse.wheel(0, -100);
-    await page.waitForTimeout(500);
+    // Poll until the element has a laid-out box rather than betting on 500ms.
+    await expect.poll(async () => (await c.boundingBox()) !== null).toBe(true);
     const box = await c.boundingBox();
     if (box) {
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);

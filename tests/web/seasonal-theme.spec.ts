@@ -9,7 +9,9 @@ test.describe('Seasonal Theme System', () => {
       if (msg.type() === 'error') errors.push(msg.text());
     });
     await page.goto(BASE);
-    await page.waitForTimeout(1_000);
+    // The theme script runs on load; wait for the document to be interactive
+    // rather than for a second to pass.
+    await page.waitForLoadState('domcontentloaded');
     expect(errors.filter((e) => e.includes('seasonal'))).toHaveLength(0);
   });
 
@@ -95,7 +97,15 @@ test.describe('Seasonal Theme System', () => {
       (globalThis as any).Date = MockDate;
     });
     await page.goto(BASE);
-    await page.waitForTimeout(2_000);
+    // Poll the variable the assertion reads — the theme applies when it
+    // applies, and 2s was a guess about that.
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(),
+        ),
+      )
+      .not.toBe('');
     const primary = await page.evaluate(() =>
       getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(),
     );
@@ -117,7 +127,15 @@ test.describe('Seasonal Theme System', () => {
       (globalThis as any).Date = MockDate;
     });
     await page.goto(BASE);
-    await page.waitForTimeout(2_000);
+    // Poll the variable the assertion reads — the theme applies when it
+    // applies, and 2s was a guess about that.
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(),
+        ),
+      )
+      .not.toBe('');
     const primary = await page.evaluate(() =>
       getComputedStyle(document.documentElement).getPropertyValue('--primary').trim(),
     );

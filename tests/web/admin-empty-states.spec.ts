@@ -117,9 +117,10 @@ test.describe('Admin Empty States', () => {
   test('gifts tab shows table with data or appropriate empty state', async ({ page }) => {
     await navigateToTab(page, 'Gifts');
 
-    // Wait for gifts to load
+    // navigateToTab already blocks on the panel's data-module-ready flag
+    // (helpers/admin-auth.ts:76), so the table is loaded by the time we get
+    // here — the 3s sleep was redundant.
     const tbody = page.locator('#gifts-tbody');
-    await page.waitForTimeout(3_000);
 
     const rows = tbody.locator('tr');
     const rowCount = await rows.count();
@@ -139,8 +140,7 @@ test.describe('Admin Empty States', () => {
   test('banners tab shows content or appropriate empty state', async ({ page }) => {
     await navigateToTab(page, 'Banners');
 
-    // Wait for banners to load
-    await page.waitForTimeout(3_000);
+    // Loaded already — navigateToTab waits for data-module-ready.
 
     // Check for banner cards or empty state
     const bannerCards = page.locator('.banner-card');
@@ -159,8 +159,7 @@ test.describe('Admin Empty States', () => {
   test('fun facts tab shows content or appropriate empty state', async ({ page }) => {
     await navigateToTab(page, 'Fun Facts');
 
-    // Wait for fun facts to load
-    await page.waitForTimeout(3_000);
+    // Loaded already — navigateToTab waits for data-module-ready.
 
     // Check for fact cards or empty state
     const factCards = page.locator('.fact-card');

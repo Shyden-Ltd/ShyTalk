@@ -308,9 +308,9 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Verify display shows none/empty
     const currentDisplay = page.locator('#temp-id-current');
-    await page.waitForTimeout(2_000);
-    const displayText = await currentDisplay.textContent();
-    expect(displayText).not.toContain('55555555');
+    // Poll the text the assertion reads — it updates when the write lands, and
+    // 2s was a bet on that rather than an observation of it.
+    await expect.poll(() => currentDisplay.textContent()).not.toContain('55555555');
 
     // Verify via API
     const apiData = await testData.api.get(`/api/user/${uid}`);
@@ -349,8 +349,11 @@ test.describe('Admin Users - Extra Profile Fields', () => {
       }
     }
 
-    // Verify removed via API
-    await page.waitForTimeout(2_000);
+    // Poll the API until it reflects the removal, rather than sleeping and
+    // reading once — a slow write used to read as "still blocked".
+    await expect
+      .poll(async () => ((await testData.api.get(`/api/user/${uid}`)).blockedUserIds || []).length)
+      .toBe(0);
     const apiAfter = await testData.api.get(`/api/user/${uid}`);
     const blockedAfter = apiAfter.blockedUserIds || [];
     expect(blockedAfter).not.toContain(Number(secondUid));
@@ -387,7 +390,9 @@ test.describe('Admin Users - Extra Profile Fields', () => {
       }
     }
 
-    await page.waitForTimeout(2_000);
+    await expect
+      .poll(async () => ((await testData.api.get(`/api/user/${uid}`)).followingIds || []).length)
+      .toBe(0);
     const apiAfter = await testData.api.get(`/api/user/${uid}`);
     const followingAfter = apiAfter.followingIds || [];
     expect(followingAfter).not.toContain(Number(secondUid));
