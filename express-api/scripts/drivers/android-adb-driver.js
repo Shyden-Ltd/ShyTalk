@@ -2387,7 +2387,10 @@ async function createAndroidDriver({ serial: preferred } = {}) {
         `[android-driver] androidNetworkDropFor(${name}, ${seconds}) disable phase failed: ${e.message}`,
       );
     }
-    await new Promise((resolve) => setTimeout(resolve, durationMs));
+    // The outage duration IS the feature: androidNetworkDropFor(name, seconds) must hold
+    // the network down for exactly the seconds it was asked for. There is no condition to
+    // wait on — waiting less would not be the test the caller requested.
+    await new Promise((resolve) => setTimeout(resolve, durationMs)); // sleep-ok: requested outage duration
     let restoreOk = true;
     try {
       adb(['shell', 'svc', 'wifi', 'enable']);
@@ -2422,7 +2425,10 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       } catch {
         // Transient dump failures are tolerated within the wait window.
       }
-      await new Promise((r) => setTimeout(r, pollMs));
+      // Poll interval inside a poll-until-true loop: it exits the instant the condition
+      // holds, so it is correct at any machine speed — the same reasoning the guard
+      // already applies to shell polls.
+      await new Promise((r) => setTimeout(r, pollMs)); // sleep-ok: poll interval, exits on condition
     }
     return false;
   }

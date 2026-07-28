@@ -170,3 +170,38 @@ describe('check-no-test-sleeps.sh — ratchet mode (SHY-0245)', () => {
     expect(r.status).toBe(2);
   });
 });
+
+describe('check-no-test-sleeps.sh — reasoned exemption (SHY-0245)', () => {
+  test('a sleep-ok marker WITH a reason is exempt', () => {
+    const root = makeTree({
+      'driver.js':
+        'await new Promise((r) => setTimeout(r, durationMs)); // sleep-ok: the requested outage duration\n',
+    });
+    const res = runGuard(root);
+    expect(res.status).toBe(0);
+    expect(res.stdout + res.stderr).toMatch(/0 fixed-duration wait/);
+  });
+
+  test('a sleep-ok marker WITHOUT a reason is NOT exempt', () => {
+    // The reason is the whole point — an unexplained marker is just a mute
+    // button, and would let the ratchet be silenced line by line.
+    const root = makeTree({
+      'driver.js': 'await new Promise((r) => setTimeout(r, 500)); // sleep-ok:\n',
+    });
+    const res = runGuard(root);
+    expect(res.status).toBe(1);
+    expect(res.stdout + res.stderr).toMatch(/driver\.js:1:/);
+  });
+
+  test('the marker exempts ONLY its own line, not the whole file', () => {
+    const root = makeTree({
+      'driver.js':
+        'await new Promise((r) => setTimeout(r, pollMs)); // sleep-ok: poll interval\n' +
+        'await new Promise((r) => setTimeout(r, 500));\n',
+    });
+    const res = runGuard(root);
+    expect(res.status).toBe(1);
+    expect(res.stdout + res.stderr).toMatch(/1 fixed-duration wait/);
+    expect(res.stdout + res.stderr).toMatch(/driver\.js:2:/);
+  });
+});

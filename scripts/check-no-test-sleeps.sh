@@ -61,6 +61,21 @@ HITS="$(grep -rnI -E \
   --exclude-dir=Pods --exclude-dir=vendor --exclude-dir=third_party \
   "$ROOT" 2>/dev/null || true)"
 
+# ── Explicit, reasoned exemption ────────────────────────────────────────────
+# A very small number of fixed durations are NOT guesses about machine speed:
+#   * the duration IS the feature — `androidNetworkDropFor(name, seconds)` must
+#     hold the network down for exactly the seconds it was asked for;
+#   * a POLL INTERVAL inside a poll-until-true loop, which exits the instant the
+#     condition holds and is therefore correct at any machine speed (the same
+#     reasoning that already exempts shell polls, see the header).
+# Without an escape hatch those lines can never pass STRICT mode, so the ratchet
+# could never reach zero and the story could never finish.
+# The marker must carry a REASON, so it cannot be pasted in reflexively:
+#     await new Promise((r) => setTimeout(r, durationMs)); // sleep-ok: the requested outage duration
+if [ -n "$HITS" ]; then
+  HITS="$(printf '%s\n' "$HITS" | grep -v -E 'sleep-ok:[[:space:]]*[^[:space:]]' || true)"
+fi
+
 COUNT=0
 [ -n "$HITS" ] && COUNT="$(printf '%s\n' "$HITS" | grep -c . || true)"
 
