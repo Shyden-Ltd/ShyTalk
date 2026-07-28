@@ -156,9 +156,16 @@ export async function createSuggestion(opts: {
   submitterUid?: number;
   upvotes?: number;
   rejectReason?: string | null;
+  /**
+   * Epoch millis for the card's age. Always derive it from `Date.now()` at the
+   * moment of seeding — a literal timestamp passes on the day it is written and
+   * rots thereafter.
+   */
+  createdAt?: number;
 }): Promise<{ id: string; title: string }> {
   const id = `test-sug-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const now = Date.now();
+  const createdAt = opts.createdAt ?? now;
   await testWrite('suggestions', {
     id,
     title: opts.title,
@@ -174,9 +181,9 @@ export async function createSuggestion(opts: {
     submitterContactOptIn: false,
     upvotes: opts.upvotes ?? 1,
     downvotes: 0,
-    createdAt: now,
-    updatedAt: now,
-    reviewedAt: now,
+    createdAt,
+    updatedAt: createdAt,
+    reviewedAt: createdAt,
     reviewedBy: null,
     completedAt: null,
     editHistory: [],

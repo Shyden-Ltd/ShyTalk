@@ -1381,7 +1381,12 @@
         align-items: center;
         justify-content: center;
         animation: fadeInUp 0.2s ease;
-        pointer-events: none;
+        /* The backdrop MUST take pointer events. With `pointer-events: none`
+           the dialog was not modal at all: the page behind it stayed fully
+           clickable — nav, phase headers, vote buttons — despite
+           `aria-modal="true"`, and the click-outside-to-dismiss handler
+           (suggestions-board.js) could never fire because no click ever
+           reached the overlay. Found via SHY-0245 de-guarding; SHY-0248. */
       }
       .sg-modal {
         background: var(--surface);
@@ -1738,6 +1743,57 @@
         .sg-btn--xs {
           min-height: 44px;
           min-width: 44px;
+        }
+      }
+
+      /* ── Print ──────────────────────────────────────────────────
+         People do print and PDF the roadmap to share it. On paper the
+         dark theme costs a page of toner and reads badly, and every
+         control is just noise — nobody can click a button on paper. */
+      @media print {
+        :root {
+          --bg: #ffffff;
+          --surface: #ffffff;
+          --surface-2: #ffffff;
+          --text: #111111;
+          --text-secondary: #444444;
+          --border: #cccccc;
+        }
+        html,
+        body {
+          background: #ffffff !important;
+          color: #111111 !important;
+        }
+        /* Interactive chrome — nothing here survives the printer. */
+        .sh-header,
+        .sticky-nav,
+        .lang-selector,
+        .sg-modal-overlay,
+        .login-toast,
+        .sg-btn,
+        .sg-bell-btn,
+        .sg-vote-btn,
+        .sg-sort-group,
+        .sg-filters,
+        .sg-search,
+        .auth-container,
+        [data-testid='suggest-btn'],
+        [data-testid='subscribe-btn'] {
+          display: none !important;
+        }
+        /* Keep a card whole rather than splitting it across a page break. */
+        .sg-card,
+        .phase-card {
+          break-inside: avoid;
+          page-break-inside: avoid;
+          box-shadow: none !important;
+          border: 1px solid #cccccc !important;
+        }
+        a[href]::after {
+          /* A printed link is useless without its target. */
+          content: ' (' attr(href) ')';
+          font-size: 0.75em;
+          color: #444444;
         }
       }
     </style>

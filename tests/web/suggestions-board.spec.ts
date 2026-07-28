@@ -25,8 +25,8 @@ const MOCK_SUGGESTIONS = [
     id: 'test-sug-1',
     title: 'Add dark mode',
     description: 'Dark mode would be great for night use',
-    tag: 'ui',
-    tags: ['ui'],
+    tag: 'quality-of-life',
+    tags: ['quality-of-life'],
     language: 'en',
     status: 'accepted',
     upvotes: 15,
@@ -55,8 +55,8 @@ const MOCK_SUGGESTIONS = [
     id: 'test-sug-3',
     title: 'Voice chat improvements',
     description: 'Better audio quality and noise cancellation for voice rooms',
-    tag: 'ui',
-    tags: ['ui'],
+    tag: 'quality-of-life',
+    tags: ['quality-of-life'],
     language: 'en',
     status: 'completed',
     upvotes: 25,
@@ -84,9 +84,12 @@ const MOCK_SUGGESTIONS = [
   },
 ];
 
+// Tag values must be the API's real vocabulary (VALID_TAGS) — the fixture used
+// to carry `ui`, which the API rejects, and which the tag dropdown no longer
+// offers now that the client vocabulary was corrected (SHY-0248).
 const MOCK_TAGS = [
-  { value: 'ui', label: 'Quality of Life' },
-  { value: 'social', label: 'Entertainment' },
+  { value: 'quality-of-life', label: 'Quality of Life' },
+  { value: 'entertainment', label: 'Entertainment' },
   { value: 'social', label: 'Social' },
 ];
 
@@ -634,7 +637,7 @@ test.describe('Suggestions Board — Public Browsing', () => {
     // Only the STATUS filter refetches; tag and language are applied
     // client-side, so there is no response to wait on for those two.
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Accepted' }));
-    await tagFilter.selectOption('ui');
+    await tagFilter.selectOption('quality-of-life');
     await langFilter.selectOption('en');
 
     // The settled result IS the anchor: MOCK_SUGGESTIONS has exactly one
@@ -2001,7 +2004,7 @@ test.describe('Filter & Search Combination Edge Cases', () => {
     // MOCK_SUGGESTIONS — so the AND of every filter returned nothing, the loop
     // ran zero times, and this test asserted NOTHING while reporting green.
     // Only status and the search refetch; tag/lang/phase are client-side.
-    await tagFilter.selectOption('ui');
+    await tagFilter.selectOption('quality-of-life');
     await langFilter.selectOption('en');
     // The phase filter is optional in the DOM; when present it must offer
     // options — asserted, rather than skipped silently.

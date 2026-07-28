@@ -49,6 +49,10 @@ replay_pid*.log
 .playwright-mcp/
 playwright-report/
 playwright-results.xml
+# The integration config writes its own report/results pair (SHY-0245) — same
+# generated artefacts, different filenames, so they need their own entries.
+playwright-report-integration/
+playwright-results-integration.xml
 playwright-errors.log
 
 # Migration scripts (one-time use)

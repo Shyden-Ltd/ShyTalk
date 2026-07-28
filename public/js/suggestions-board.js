@@ -39,17 +39,23 @@
     { value: "rejected", label: sgT("rejected") },
   ];
 
+  // These MUST be the server's `VALID_TAGS` (utils/suggestion-constants.js:6).
+  // They used to be an invented set — voice/chat/moderation/ui/privacy/economy/
+  // accessibility/other — of which only "social" was accepted, so eight of the
+  // nine choices came back 400 "Invalid tag". A tag is required to enable
+  // Submit, so picking any of them made it impossible to post a suggestion at
+  // all (SHY-0248). The vocabulary is the roadmap's own phases, which is why
+  // the labels reuse the phase strings.
   var TAG_OPTIONS = [
     { value: "", label: sgT("allTags") },
-    { value: "voice", label: sgT("tagVoice") },
-    { value: "chat", label: sgT("tagChat") },
-    { value: "moderation", label: sgT("tagModeration") },
-    { value: "ui", label: sgT("tagUi") },
-    { value: "privacy", label: sgT("tagPrivacy") },
-    { value: "social", label: sgT("tagSocial") },
-    { value: "economy", label: sgT("tagEconomy") },
-    { value: "accessibility", label: sgT("tagAccessibility") },
-    { value: "other", label: sgT("tagOther") },
+    { value: "compliance", label: sgT("phaseCompliance") },
+    { value: "platform", label: sgT("phasePlatform") },
+    { value: "revenue", label: sgT("phaseRevenue") },
+    { value: "social", label: sgT("phaseSocial") },
+    { value: "quality-of-life", label: sgT("phaseQol") },
+    { value: "entertainment", label: sgT("phaseEntertainment") },
+    { value: "support", label: sgT("phaseSupport") },
+    { value: "website", label: sgT("phaseWebsite") },
   ];
 
   // Language names rendered in their NATIVE form so a user filtering by
@@ -82,12 +88,33 @@
     { value: "zh", label: "中文" },
   ];
 
-  var SUBSCRIBE_EVENTS = [
-    { key: "newSuggestion", label: sgT("subscribe_event_new_suggestion") },
-    { key: "statusChange", label: sgT("subscribe_event_status_change") },
-    { key: "commentReply", label: sgT("subscribe_event_comment_reply") },
-    { key: "watchedUpdate", label: sgT("subscribe_event_watched_update") },
-  ];
+  // Labels for the notification events the SERVER knows about. The event list
+  // itself is whatever `/api/subscriptions/me` returns — this map only names
+  // them. Hardcoding the list here is what caused SHY-0248: the client invented
+  // `newSuggestion`/`statusChange`/`commentReply`/`watchedUpdate`, which share
+  // no key with the server's model, so anything saved landed under names
+  // nothing reads. The server owns the vocabulary; we only translate it.
+  var SUBSCRIBE_EVENT_LABELS = {
+    roadmapUpdate: "subscribe_event_roadmap_update",
+    suggestionAccepted: "subscribe_event_suggestion_accepted",
+    suggestionPlanned: "subscribe_event_suggestion_planned",
+    suggestionCompleted: "subscribe_event_suggestion_completed",
+    suggestionRejected: "subscribe_event_suggestion_rejected",
+    suggestionMerged: "subscribe_event_suggestion_merged",
+    commentOnSuggestion: "subscribe_event_comment_on_suggestion",
+  };
+
+  /** Humanise an unlabelled key rather than rendering camelCase at someone. */
+  function subscribeEventLabel(key) {
+    var i18nKey = SUBSCRIBE_EVENT_LABELS[key];
+    if (i18nKey) {
+      var translated = sgT(i18nKey);
+      if (translated !== i18nKey) return translated;
+    }
+    return key.replace(/([A-Z])/g, " $1").replace(/^./, function (c) {
+      return c.toUpperCase();
+    });
+  }
 
   var SUBSCRIBE_CHANNELS = ["email", "push", "inApp", "systemMessage"];
 
@@ -106,9 +133,11 @@
     { value: "platform", label: sgT("phasePlatform") },
     { value: "revenue", label: sgT("phaseRevenue") },
     { value: "social", label: sgT("phaseSocial") },
-    { value: "qol", label: sgT("phaseQol") },
+    // `quality-of-life`, not `qol` — the server's vocabulary again.
+    { value: "quality-of-life", label: sgT("phaseQol") },
     { value: "entertainment", label: sgT("phaseEntertainment") },
     { value: "support", label: sgT("phaseSupport") },
+    { value: "website", label: sgT("phaseWebsite") },
   ];
 
   var state = {
@@ -475,20 +504,66 @@
     return apiFetch("/api/subscriptions/me", { gated: true });
   }
 
-  function saveSubscriptionPrefs(prefs) {
+  // The server reads `channelPreferences` + `emailConsent` (routes/
+  // subscriptions.js:73). Sending `preferences`/`gdprEmailConsent` — as this
+  // did — matched neither, so every save returned 200 with the toggles silently
+  // dropped and the UI still said "saved" (SHY-0248).
+  function saveSubscriptionPrefs(channelPreferences) {
     return apiFetch("/api/subscriptions/me", {
       method: "PUT",
-      body: prefs,
+      // Enabling an email channel IS the consent, per the GDPR notice shown in
+      // the modal; the server refuses email channels without it.
+      body: { channelPreferences: channelPreferences, emailConsent: true },
       gated: true,
     });
   }
 
+  // Server contract is `{ type, id }` — `{ suggestionId }` was rejected 400
+  // "Type and ID required" on every bell click (SHY-0248).
   function watchSuggestion(suggestionId) {
     return apiFetch("/api/subscriptions/me/watch", {
       method: "POST",
-      body: { suggestionId: suggestionId },
+      body: { type: "suggestion", id: suggestionId },
       gated: true,
     });
+  }
+
+  function unwatchSuggestion(suggestionId) {
+    return apiFetch("/api/subscriptions/me/watch/" + encodeURIComponent(suggestionId), {
+      method: "DELETE",
+      gated: true,
+    });
+  }
+
+  /** Resolve a watched id to a display title using whatever the board holds. */
+  function watchListEntry(id) {
+    for (var i = 0; i < state.suggestions.length; i++) {
+      if (state.suggestions[i].id === id) {
+        return { id: id, title: state.suggestions[i].title };
+      }
+    }
+    return { id: id, title: null };
+  }
+
+  function isWatched(id) {
+    for (var i = 0; i < state.watchList.length; i++) {
+      if (state.watchList[i].id === id) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Adopt what `/api/subscriptions/me` returned.
+   *
+   * The field names matter: the server sends `channelPreferences` and
+   * `watchedSuggestions`/`watchedFeatures`, NOT `preferences`/`watchList`.
+   * Reading the wrong ones meant the modal always rendered defaults and an
+   * empty watch list no matter what had been saved (SHY-0248).
+   */
+  function applySubscriptionState(prefs) {
+    state.subscriptionPrefs = prefs.channelPreferences || {};
+    var watched = (prefs.watchedSuggestions || []).concat(prefs.watchedFeatures || []);
+    state.watchList = watched.map(watchListEntry);
   }
 
   // ── Toast ──
@@ -640,16 +715,28 @@
       if (e.target === overlay) close();
     });
 
-    // Load preferences
+    // Load preferences, then add the bell's suggestion to the watch list if we
+    // were opened from one — the watch is the point of the click, so doing it
+    // after the fetch means the list we render already includes it.
     fetchSubscriptionPrefs()
       .then(function (prefs) {
-        state.subscriptionPrefs = prefs.preferences || {};
-        state.watchList = prefs.watchList || [];
-        renderSubscribeBody(body, featureId);
+        applySubscriptionState(prefs);
+        if (!featureId) return null;
+        if (isWatched(featureId)) return null;
+        return watchSuggestion(featureId).then(function () {
+          state.watchList = state.watchList.concat([watchListEntry(featureId)]);
+        });
       })
-      .catch(function () {
-        state.subscriptionPrefs = {};
-        state.watchList = [];
+      .catch(function (err) {
+        // Distinguish "nothing to show" from "we could not find out" — the old
+        // silent reset rendered an empty watch list either way.
+        state.subscriptionPrefs = state.subscriptionPrefs || {};
+        state.watchList = state.watchList || [];
+        showToast(
+          sgT("subscribe_load_failed") + ": " + (err.message || sgT("subscribe_unknown_error")),
+        );
+      })
+      .then(function () {
         renderSubscribeBody(body, featureId);
       });
 
@@ -657,21 +744,21 @@
       saveBtn.disabled = true;
       saveBtn.textContent = sgT("subscribe_btn_saving");
 
-      // Collect toggled values
+      // Collect toggled values. The rows come from the server's own event list
+      // (see renderSubscribeBody), so read them back off the DOM rather than a
+      // second hardcoded list that could drift from what was rendered.
       var prefs = {};
-      for (var e = 0; e < SUBSCRIBE_EVENTS.length; e++) {
-        var evt = SUBSCRIBE_EVENTS[e];
-        prefs[evt.key] = {};
-        for (var c = 0; c < SUBSCRIBE_CHANNELS.length; c++) {
-          var ch = SUBSCRIBE_CHANNELS[c];
-          var checkbox = overlay.querySelector(
-            '[data-testid="subscribe-toggle-' + evt.key + "-" + ch + '"]',
-          );
-          prefs[evt.key][ch] = checkbox ? checkbox.checked : false;
-        }
+      var toggles = overlay.querySelectorAll('[data-testid^="subscribe-toggle-"]');
+      for (var t = 0; t < toggles.length; t++) {
+        var testid = toggles[t].getAttribute("data-testid").slice("subscribe-toggle-".length);
+        var sep = testid.lastIndexOf("-");
+        var evtKey = testid.slice(0, sep);
+        var chKey = testid.slice(sep + 1);
+        if (!prefs[evtKey]) prefs[evtKey] = {};
+        prefs[evtKey][chKey] = toggles[t].checked;
       }
 
-      saveSubscriptionPrefs({ preferences: prefs, gdprEmailConsent: true })
+      saveSubscriptionPrefs(prefs)
         .then(function () {
           showToast(sgT("subscribe_toast_saved"));
           close();
@@ -707,13 +794,14 @@
     }
     html += "</div>";
 
-    for (var e = 0; e < SUBSCRIBE_EVENTS.length; e++) {
-      var evt = SUBSCRIBE_EVENTS[e];
-      var evtPrefs = prefs[evt.key] || {};
+    var eventKeys = Object.keys(prefs);
+    for (var e = 0; e < eventKeys.length; e++) {
+      var evtKey = eventKeys[e];
+      var evtPrefs = prefs[evtKey] || {};
       html += '<div class="sg-subscribe-row">';
       html +=
         '<div class="sg-subscribe-cell sg-subscribe-cell--event">' +
-        escapeHtml(evt.label) +
+        escapeHtml(subscribeEventLabel(evtKey)) +
         "</div>";
       for (var ci = 0; ci < SUBSCRIBE_CHANNELS.length; ci++) {
         var ch = SUBSCRIBE_CHANNELS[ci];
@@ -722,7 +810,7 @@
           '<div class="sg-subscribe-cell sg-subscribe-cell--channel">' +
           '<label class="sg-toggle-label">' +
           '<input type="checkbox" data-testid="subscribe-toggle-' +
-          evt.key +
+          evtKey +
           "-" +
           ch +
           '"' +
@@ -738,19 +826,32 @@
 
     // Watch list
     html += '<div class="sg-watch-section">';
-    html += "<h4>Watch list</h4>";
+    html += "<h4>" + escapeHtml(sgT("subscribe_watch_header")) + "</h4>";
     if (state.watchList.length === 0) {
       html +=
-        '<p class="sg-text-muted">No watched suggestions yet. Click the bell icon on a suggestion to watch it.</p>';
+        '<p class="sg-text-muted" data-testid="watch-empty">' +
+        escapeHtml(sgT("subscribe_watch_empty")) +
+        "</p>";
     } else {
-      html += '<ul class="sg-watch-list">';
+      html += '<ul class="sg-watch-list" data-testid="watch-list">';
       for (var w = 0; w < state.watchList.length; w++) {
         var item = state.watchList[w];
+        // The API stores watches as bare ids, so resolve a title from whatever
+        // the board has already loaded and fall back to the id — showing a raw
+        // document id is poor, but showing nothing at all is worse.
+        var watchId = item.id;
         html +=
-          '<li class="sg-watch-item">' +
+          '<li class="sg-watch-item" data-testid="watch-item">' +
           "<span>" +
-          escapeHtml(item.title || item.suggestionId) +
+          escapeHtml(item.title || watchId) +
           "</span>" +
+          '<button class="sg-watch-remove" data-id="' +
+          escapeHtml(watchId) +
+          '" data-testid="watch-remove-' +
+          escapeHtml(watchId) +
+          '" aria-label="' +
+          escapeHtml(sgT("subscribe_watch_remove")) +
+          '">&times;</button>' +
           "</li>";
       }
       html += "</ul>";
@@ -758,6 +859,30 @@
     html += "</div>";
 
     container.innerHTML = html;
+
+    var removeBtns = container.querySelectorAll(".sg-watch-remove");
+    for (var r = 0; r < removeBtns.length; r++) {
+      removeBtns[r].addEventListener("click", function () {
+        var id = this.getAttribute("data-id");
+        var btn = this;
+        btn.disabled = true;
+        unwatchSuggestion(id)
+          .then(function () {
+            state.watchList = state.watchList.filter(function (it) {
+              return it.id !== id;
+            });
+            renderSubscribeBody(container, featureId);
+          })
+          .catch(function (err) {
+            btn.disabled = false;
+            showToast(
+              sgT("subscribe_watch_remove_failed") +
+                ": " +
+                (err.message || sgT("subscribe_unknown_error")),
+            );
+          });
+      });
+    }
   }
 
   // ── Suggestion form modal ──
@@ -1427,12 +1552,17 @@
                 : "Pending",
       ) +
       "</span>";
+    // A <time datetime> carries the absolute instant alongside the relative
+    // wording, so a screen reader (and anyone hovering) can get the real date
+    // instead of only "2 min ago".
     html +=
-      '<span class="sg-timestamp" data-testid="suggestion-time-' +
+      '<time class="sg-timestamp" data-testid="suggestion-time-' +
       s.id +
+      '" datetime="' +
+      escapeHtml(new Date(s.createdAt).toISOString()) +
       '">' +
       relativeTime(s.createdAt) +
-      "</span>";
+      "</time>";
     html += "</div>";
 
     // Comments section (only for accepted)

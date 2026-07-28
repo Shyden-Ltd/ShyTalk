@@ -39,6 +39,24 @@ function requireAuth(req, res) {
 
 // ─── GET /subscriptions/me ──────────────────────────────────────
 
+/**
+ * Fill in any event the stored document has no opinion about.
+ *
+ * A subscription doc can exist WITHOUT `channelPreferences` — watching a
+ * suggestion creates one with only `watchedSuggestions` — and a doc saved
+ * before a new event type was introduced simply won't mention it. Returning
+ * that document verbatim made the web modal render an empty grid, because it
+ * builds its rows from whatever the server sends (SHY-0248). Merging keeps
+ * "what this person chose" and "what the defaults are" both true, per-event, so
+ * a caller never has to reconstruct the vocabulary itself.
+ *
+ * Per-event, not per-channel: an event the person HAS configured is theirs
+ * entirely, including the channels they turned off.
+ */
+function withDefaultPrefs(stored) {
+  return { ...DEFAULT_PREFS, ...(stored || {}) };
+}
+
 router.get('/subscriptions/me', async (req, res) => {
   try {
     if (requireAuth(req, res)) return;
@@ -57,7 +75,13 @@ router.get('/subscriptions/me', async (req, res) => {
       });
     }
 
-    res.json(doc.data());
+    const data = doc.data();
+    res.json({
+      ...data,
+      channelPreferences: withDefaultPrefs(data.channelPreferences),
+      watchedFeatures: data.watchedFeatures || [],
+      watchedSuggestions: data.watchedSuggestions || [],
+    });
   } catch (err) {
     log.error('subscriptions', 'Failed to get preferences', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });

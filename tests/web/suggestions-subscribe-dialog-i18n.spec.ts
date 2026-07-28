@@ -22,13 +22,18 @@ const BASE = process.env.WEB_BASE_URL || 'http://localhost:8888';
  * NOT in scope: vote-failed / submit-failed / post-comment-failed toast
  * prefixes elsewhere in the file. Those have their own
  * "Failed to ..." patterns that warrant a separate i18n PR.
+ *
+ * SHY-0248 update: the four event keys this used to pin —
+ * subscribe_event_new_suggestion / _status_change / _comment_reply /
+ * _watched_update — belonged to a client-invented vocabulary that shared no
+ * key with the server's model, so preferences saved under them were read by
+ * nothing. The client now renders whatever events the API returns, and the
+ * labels live in SUBSCRIBE_EVENT_LABELS. The channel/button/toast keys below
+ * are unchanged.
  */
 
+/** Keys that have shipped in all 21 web locales since the original i18n PR. */
 const SUBSCRIBE_KEYS = [
-  'subscribe_event_new_suggestion',
-  'subscribe_event_status_change',
-  'subscribe_event_comment_reply',
-  'subscribe_event_watched_update',
   'subscribe_channel_email',
   'subscribe_channel_push',
   'subscribe_channel_inapp',
@@ -49,22 +54,39 @@ const HARDCODED_LABELS = [
   'System Message',
 ];
 
+/** The notification events the API actually knows about (DEFAULT_PREFS). */
+const SERVER_EVENT_KEYS = [
+  'roadmapUpdate',
+  'suggestionAccepted',
+  'suggestionPlanned',
+  'suggestionCompleted',
+  'suggestionRejected',
+  'suggestionMerged',
+  'commentOnSuggestion',
+];
+
 test.describe('Suggestions-board subscribe-dialog i18n', () => {
   test('Hardcoded English strings have been replaced with sgT() calls', async ({ request }) => {
     const res = await request.get(`${BASE}/js/suggestions-board.js`);
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    // SUBSCRIBE_EVENTS array must use sgT(), not string literals
-    const eventsBlock = src.match(/var SUBSCRIBE_EVENTS = \[([\s\S]*?)\];/);
-    expect(eventsBlock, 'SUBSCRIBE_EVENTS array not found').not.toBeNull();
-    for (const lit of HARDCODED_LABELS.slice(0, 4)) {
-      expect(eventsBlock![1], `SUBSCRIBE_EVENTS should not hardcode "${lit}"`).not.toMatch(
-        new RegExp(`label:\\s*"${lit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`),
+    // Event rows are labelled from SUBSCRIBE_EVENT_LABELS, keyed by the
+    // SERVER's event names. Every entry must map to a translation key, never a
+    // literal — and the map must cover the whole server vocabulary, or an
+    // unlabelled event renders as a humanised camelCase key.
+    const labelsBlock = src.match(/var SUBSCRIBE_EVENT_LABELS = \{([\s\S]*?)\};/);
+    expect(labelsBlock, 'SUBSCRIBE_EVENT_LABELS object not found').not.toBeNull();
+    for (const key of SERVER_EVENT_KEYS) {
+      expect(labelsBlock![1], `SUBSCRIBE_EVENT_LABELS should label ${key}`).toMatch(
+        new RegExp(`${key}:\\s*"subscribe_event_[a-z_]+"`),
       );
     }
-    expect(eventsBlock![1]).toMatch(/sgT\("subscribe_event_new_suggestion"\)/);
-    expect(eventsBlock![1]).toMatch(/sgT\("subscribe_event_watched_update"\)/);
+    for (const lit of HARDCODED_LABELS.slice(0, 4)) {
+      expect(labelsBlock![1], `SUBSCRIBE_EVENT_LABELS should not hardcode "${lit}"`).not.toContain(
+        lit,
+      );
+    }
 
     // CHANNEL_LABELS object must use sgT() for all 4 entries
     const channelsBlock = src.match(/var CHANNEL_LABELS = \{([\s\S]*?)\};/);
@@ -178,10 +200,6 @@ test.describe('Suggestions-board subscribe-dialog i18n', () => {
     // robust check is: each translated value should NOT match the
     // English original AND should contain at least one Hangul char.
     const englishValues: Record<string, string> = {
-      subscribe_event_new_suggestion: 'New suggestions posted',
-      subscribe_event_status_change: 'Suggestion status changes',
-      subscribe_event_comment_reply: 'Replies to your comments',
-      subscribe_event_watched_update: 'Updates on watched suggestions',
       subscribe_channel_email: 'Email',
       subscribe_channel_push: 'Push',
       subscribe_channel_inapp: 'In-App',
