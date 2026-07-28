@@ -61,7 +61,7 @@ final class ManualQARemoteControl: XCTestCase {
         var lastCommandTime = Date()
         while Date().timeIntervalSince(lastCommandTime) < Self.idleTimeoutSeconds {
             guard let cmdJson = readNextCommand() else {
-                usleep(Self.pollIntervalMs * 1000)
+                usleep(Self.pollIntervalMs * 1000) // sleep-ok: poll interval, loop exits on the condition
                 continue
             }
             lastCommandTime = Date()

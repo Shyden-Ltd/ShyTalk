@@ -30,7 +30,8 @@
  */
 async function dumpWithRetry(
   dumpOnce,
-  { maxAttempts = 8, backoffMs = 800, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {},
+  // sleep-ok: injectable retry backoff — the caller overrides it in tests
+  { maxAttempts = 8, backoffMs = 800, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}, // sleep-ok: retry backoff
 ) {
   let lastErr = '';
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {

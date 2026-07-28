@@ -921,7 +921,7 @@ const matchers = [
         if (result.ok) return result;
         if (result.code === 'STEP_NOT_IMPLEMENTED') return result;
         if (Date.now() >= deadline) return result;
-        await new Promise((resolve) => setTimeout(resolve, 50));
+        await new Promise((resolve) => setTimeout(resolve, 50)); // sleep-ok: retry interval inside the deadline-bounded step loop
       }
     },
   },

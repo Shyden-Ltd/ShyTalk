@@ -375,7 +375,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
         // Brief settle so the tab content can draw before subsequent
         // dump/tap calls. Mirrors androidOpenScreen's 1.5s wait but
         // shorter — tabs swap in-place without a full activity launch.
-        await new Promise((r) => setTimeout(r, 500));
+        await new Promise((r) => setTimeout(r, 500)); // sleep-ok: device settle — no host-queryable signal between a tap and the redraw
         return true;
       }
     }
@@ -2180,7 +2180,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       // Brief settle so the activity has time to draw before subsequent
       // dump/tap calls. The 1.5s value mirrors what the existing
       // android-e2e tests use (see app/src/androidTest fixtures).
-      await new Promise((r) => setTimeout(r, 1500));
+      await new Promise((r) => setTimeout(r, 1500)); // sleep-ok: device settle after an activity launch
       driver._requestedScreen = screen;
       // If the screen identifier maps to a known MainScreen bottom-nav
       // tab, tap it so subsequent taps on `<feature>_*` testTags in
@@ -2237,7 +2237,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       // re-init + auth-state recheck), so settle a touch longer before the
       // caller begins asserting. 2500ms mirrors the warning-screen cold-start
       // budget observed on the OnePlus CPH2653.
-      await new Promise((r) => setTimeout(r, 2500));
+      await new Promise((r) => setTimeout(r, 2500)); // sleep-ok: device settle — cold-start budget measured on the OnePlus CPH2653
       return true;
     } catch (e) {
       console.error(`[android-driver] androidKillAndRelaunch(${name}) failed: ${e.message}`);
@@ -2492,7 +2492,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     }
     if (!/Claim Today|Daily Reward/i.test(dump)) return false;
     const tapped = await tapByVisibleText('Later');
-    if (tapped) await new Promise((r) => setTimeout(r, 800));
+    if (tapped) await new Promise((r) => setTimeout(r, 800)); // sleep-ok: device settle after dismissing the daily-reward popup
     return tapped;
   }
   driver._dismissDailyRewardIfPresent = dismissDailyRewardIfPresent;
@@ -2515,12 +2515,12 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       const state = classifyAndroidAuthState(dump);
       if (state === 'splash') {
         await driver.androidTapByTag('splash_continueButton');
-        await new Promise((r) => setTimeout(r, 1500));
+        await new Promise((r) => setTimeout(r, 1500)); // sleep-ok: settle before the loop re-dumps
         continue;
       }
       if (/Claim Today|Daily Reward/i.test(dump)) {
         await tapByVisibleText('Later');
-        await new Promise((r) => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 800)); // sleep-ok: settle before the loop re-dumps
         continue;
       }
       // System permission dialogs re-prompt on launch and CANNOT be pre-granted
@@ -2530,18 +2530,18 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       // enable adb security settings) is the locale-robust fix.
       if (/Display over other apps/i.test(dump)) {
         await tapByVisibleText('Not now');
-        await new Promise((r) => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 800)); // sleep-ok: settle before the loop re-dumps
         continue;
       }
       if (dump.includes('permission_allow_foreground_only_button')) {
         await driver.androidTapByTag('permission_allow_foreground_only_button');
-        await new Promise((r) => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 800)); // sleep-ok: settle before the loop re-dumps
         continue;
       }
       if (state === 'unknown') {
         // Splash/transition frame or a foreground system permission dialog —
         // wait and re-dump rather than acting on an unrecognized screen.
-        await new Promise((r) => setTimeout(r, 800));
+        await new Promise((r) => setTimeout(r, 800)); // sleep-ok: poll interval before re-dumping an unrecognised screen
         continue;
       }
       return state;
@@ -2582,7 +2582,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     if (state === 'picker') return true;
     if (state === 'warning') {
       await driver.androidTapByTag('warning_acknowledgeButton');
-      await new Promise((r) => setTimeout(r, 1500));
+      await new Promise((r) => setTimeout(r, 1500)); // sleep-ok: device settle after acknowledging the warning screen
       state = await dumpState();
       if (state === 'picker') return true;
       // AC (Error paths): a warning-acknowledge tap that does NOT advance must
@@ -2608,7 +2608,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     }
     await dismissDailyRewardIfPresent();
     await driver.androidTapByTag('main_profileTab');
-    await new Promise((r) => setTimeout(r, 800));
+    await new Promise((r) => setTimeout(r, 800)); // sleep-ok: device settle — no host-queryable signal between an input event and the redraw
     if (!(await waitForTag('main_settingsButton', 4000))) {
       throw new Error(
         `androidSignOut: "main_settingsButton" not visible after tapping main_profileTab — cannot reach settings (observed state: ${await dumpState()}). The app may be on a fresh-install gate (legal/onboarding) rather than main.`,
@@ -2676,7 +2676,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // a warm start (app process already running). Cold starts may
     // need longer; if the dump doesn't have persona_picker_open after
     // 3s, the test below will catch it with the canonical error.
-    await new Promise((r) => setTimeout(r, 3000));
+    await new Promise((r) => setTimeout(r, 3000)); // sleep-ok: device settle — app launch budget before the first dump
     // Step 0b: advance past launch gates (splash intro / daily-reward popup /
     // transition frames) then classify (SHY-0096). force-stop does NOT clear
     // the Firebase session, so the app may relaunch signed-in (or on a
@@ -2768,7 +2768,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
         );
       }
       // Settle for the LazyColumn to lay out the new viewport.
-      await new Promise((r) => setTimeout(r, 400));
+      await new Promise((r) => setTimeout(r, 400)); // sleep-ok: device settle after a swipe, for the LazyColumn to lay out
       swipes++;
     }
     if (!visible) {
@@ -2812,7 +2812,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
         );
       }
       // Settle for the tab content to render before subsequent steps.
-      await new Promise((r) => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 500)); // sleep-ok: device settle — no host-queryable signal between an input event and the redraw
     }
     return true;
   };

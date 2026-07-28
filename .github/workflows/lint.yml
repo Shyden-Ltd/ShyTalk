@@ -129,10 +129,15 @@ jobs:
       # wrong somewhere: too short and it flakes on slow hardware (telling you
       # about the machine, not the product), too long and every run pays it
       # forever. Wait on the CONDITION instead. Ratchet rather than a hard zero
-      # so the existing backlog can be worked down without blocking every PR,
-      # while a NEW sleep fails immediately.
-      - name: No NEW fixed-duration waits (SHY-0245 ratchet)
-        run: bash scripts/check-no-test-sleeps.sh --baseline scripts/no-test-sleeps-baseline.json
+      # SHY-0245 is COMPLETE: the debt reached zero on 2026-07-28, so this runs
+      # in STRICT mode — any fixed-duration wait fails the build, with no
+      # baseline to hide behind. The ratchet (--baseline) was scaffolding for
+      # working the backlog down and is gone along with the baseline file.
+      # A genuinely-necessary duration (a poll interval, a requested outage
+      # length, a simulated latency) carries an inline `// sleep-ok: <reason>`;
+      # an unexplained marker does NOT exempt.
+      - name: No fixed-duration waits (SHY-0245, strict)
+        run: bash scripts/check-no-test-sleeps.sh
 
       # SHY-0245: tests/** previously had NO formatting gate at all — neither
       # lint-staged nor CI covered it (only express-api/**/*.js, *.feature and

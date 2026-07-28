@@ -95,7 +95,7 @@ async function waitForGeckodriverReady({
   fetchImpl,
   timeoutMs = 30000,
   nowMs = () => Date.now(),
-  sleepMs = (ms) => new Promise((r) => setTimeout(r, ms)),
+  sleepMs = (ms) => new Promise((r) => setTimeout(r, ms)), // sleep-ok: injectable retry backoff, overridden in tests
 } = {}) {
   const deadline = nowMs() + timeoutMs;
   let lastErr = null;

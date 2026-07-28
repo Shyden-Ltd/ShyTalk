@@ -21,7 +21,7 @@ const dobForAge = (years) => Date.UTC(2026 - years, 6, 8);
 const setFlag = (enabled) => db.doc(SAFETY_DOC).set({ ageGatingEnabled: enabled });
 // sleep-ok: poll interval for auditRowsFor's bounded wait — it returns the
 // instant a row appears, so it is correct at any machine speed.
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms)); // sleep-ok: poll interval for auditRowsFor's bounded wait
 
 // Poll by the (unique-per-test) hashed id — the audit write is fire-and-forget
 // so it may post-date the checkFeatureAccess return. Scoped to one id so the

@@ -124,7 +124,10 @@ function parseArgs(argv) {
   return a;
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// sleep-ok: device-settle helper for real-hardware automation — see the
+// call sites, each of which waits for an emulator/device transition that
+// exposes no queryable state from the host side.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms)); // sleep-ok: device settle helper
 
 // --------------------------------------------------------------------------
 // adb primitives (all pinned to one serial)

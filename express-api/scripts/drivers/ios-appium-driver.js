@@ -446,7 +446,7 @@ async function createIosDriver({
       } catch {
         // transient — retry on next poll
       }
-      await new Promise((resolve) => setTimeout(resolve, pollMs));
+      await new Promise((resolve) => setTimeout(resolve, pollMs)); // sleep-ok: poll interval
     }
     return false;
   }

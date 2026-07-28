@@ -41,13 +41,13 @@ async function googleTranslate(text, targetLang) {
   // Long inputs come back as multiple segments — concatenate them so
   // the caller sees one continuous string back. Null sub-arrays
   // (occasional in the response) become empty strings.
-  return json[0]
-    .map((seg) => (Array.isArray(seg) ? seg[0] : ''))
-    .join('');
+  return json[0].map((seg) => (Array.isArray(seg) ? seg[0] : '')).join('');
 }
 
+// sleep-ok: rate-limit backoff between translate requests — the delay IS the
+// throttle the remote API requires, not a wait for anything observable.
 function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms)); // sleep-ok: rate-limit backoff
 }
 
 module.exports = {

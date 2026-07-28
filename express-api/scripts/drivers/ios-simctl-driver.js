@@ -224,7 +224,7 @@ async function createIosDriver({ udid: preferred } = {}) {
       } catch (_) {
         /* still polling */
       }
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 200)); // sleep-ok: poll interval, loop exits the instant the command answers
     }
     console.error(`[ios-driver] sendXcuiCommand timeout after ${timeoutMs}ms (op=${payload.op})`);
     return null;

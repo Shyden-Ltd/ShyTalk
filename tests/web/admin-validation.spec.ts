@@ -337,8 +337,9 @@ test.describe('Admin Validation', () => {
     // Blur to trigger save
     await displayNameInput.evaluate((el) => el.blur());
 
-    // Wait for save to complete
-    await page.waitForTimeout(3_000);
+    // Counting PATCHes that may or may not arrive — an absence-shaped claim
+    // ("at most 2, not 9"), so the window is bounded deliberately.
+    await new Promise((r) => setTimeout(r, 3_000)); // sleep-ok: bounded window for a request-count assertion
 
     // Should have fired at most 2 PATCH requests (debounced), not 9
     // (one per character would be un-debounced)

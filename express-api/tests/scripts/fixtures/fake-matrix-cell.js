@@ -61,13 +61,15 @@ async function main() {
       if (peers.every((p) => fs.existsSync(path.join(dir, `${p}.marker`)))) {
         process.exit(0);
       }
-      await new Promise((r) => setTimeout(r, 25));
+      await new Promise((r) => setTimeout(r, 25)); // sleep-ok: poll interval for peer markers
     }
     process.exit(7);
   }
 
   const sleepMs = parseInt(process.env.FAKE_CELL_SLEEP_MS || '0', 10);
-  if (sleepMs > 0) await new Promise((r) => setTimeout(r, sleepMs));
+  // sleep-ok: this fake cell EXISTS to simulate a cell that takes time — the
+  // duration is the scenario the dispatch tests configure, not a wait.
+  if (sleepMs > 0) await new Promise((r) => setTimeout(r, sleepMs)); // sleep-ok: simulated cell duration
   if (process.env.FAKE_CELL_EXIT_MAP) {
     for (const pair of process.env.FAKE_CELL_EXIT_MAP.split(',')) {
       const [slug, code] = pair.split('=');

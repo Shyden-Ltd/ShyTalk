@@ -119,7 +119,7 @@ test.describe('Integration — FCM payload shape', () => {
     while (Date.now() < deadline) {
       captures = await readCaptures(api);
       if (captures.length > 0) break;
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 200)); // sleep-ok: poll interval, loop breaks the instant a capture lands
     }
 
     expect(captures.length, 'exactly one FCM capture must land').toBeGreaterThanOrEqual(1);
@@ -173,8 +173,9 @@ test.describe('Integration — FCM payload shape', () => {
 
     // Wait the same window we'd wait for a real send to confirm
     // nothing arrives. A regression that suppressed the gate would
-    // produce a capture inside this window.
-    await new Promise((r) => setTimeout(r, 1000));
+    // produce a capture inside this window. Absence has no state to wait for,
+    // so the window is deliberate.
+    await new Promise((r) => setTimeout(r, 1000)); // sleep-ok: bounded window for a no-capture assertion
 
     const captures = await readCaptures(api);
     expect(captures.length, 'no FCM capture should land for a recipient with no fcmTokens').toBe(0);

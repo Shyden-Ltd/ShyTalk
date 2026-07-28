@@ -1054,7 +1054,7 @@ describe('runMatrix — parallel (per-device-serial, cross-device-parallel)', ()
   test('output cells preserve input browser order regardless of completion order', async () => {
     // android (first) finishes AFTER ios/chromium — output order must still match input.
     const dispatchOne = async ({ browser }) => {
-      if (browser === 'android') await new Promise((r) => setTimeout(r, 5));
+      if (browser === 'android') await new Promise((r) => setTimeout(r, 5)); // sleep-ok: simulated per-cell duration, orders the scenario
       return true;
     };
     const result = await runMatrix({
@@ -1070,7 +1070,7 @@ describe('runMatrix — parallel (per-device-serial, cross-device-parallel)', ()
     const dispatchOne = async ({ browser }) => {
       dispatched.push(browser);
       if (browser === 'mobile-chrome-android') return false; // first android cell fails
-      await new Promise((r) => setTimeout(r, 10)); // others block so the fail lands first
+      await new Promise((r) => setTimeout(r, 10)); // sleep-ok: simulated duration — others block so the fail lands first
       return true;
     };
     const result = await runMatrix({

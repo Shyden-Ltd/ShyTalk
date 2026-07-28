@@ -126,7 +126,7 @@ test.describe('Integration — PM real-time delivery', () => {
         pair.sender.idToken,
       );
       if (event !== null) break;
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 200)); // sleep-ok: poll interval, loop breaks the instant the event appears
     }
     expect(event, 'RTDB lastEvent did not appear within 5s').not.toBeNull();
     const evt = event as { type: string; ts: number };
