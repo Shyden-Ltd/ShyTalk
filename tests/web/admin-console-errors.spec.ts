@@ -135,9 +135,10 @@ test.describe('Admin Console Error Checks', () => {
     const errors = await collectConsoleErrors(page, async () => {
       for (const tab of tabs) {
         try {
+          // No wait needed: navigateToTab already blocks on the panel's
+          // `data-module-ready` flag (helpers/admin-auth.ts:76), so the 1s
+          // sleep that used to sit here was pure redundancy.
           await navigateToTab(page, tab);
-          // Give each tab a moment to render and make API calls
-          await page.waitForTimeout(1_000);
         } catch {
           console.warn('Tab navigation skipped (may not exist):', tab);
         }
@@ -163,9 +164,8 @@ test.describe('Admin Console Error Checks', () => {
       // Visit all 4 subtabs
       const subtabs = ['profile', 'moderation', 'security', 'economy'];
       for (const subtab of subtabs) {
+        // switchUserSubtab now waits for the subpanel itself.
         await switchUserSubtab(page, subtab);
-        // Wait for subtab content to load
-        await page.waitForTimeout(1_500);
       }
     });
 
@@ -216,10 +216,12 @@ test.describe('Admin Console Error Checks', () => {
       await navigateToTab(page, 'Logs');
       const settingsHeader = page.locator('#logs-settings-section .logs-section-header');
       await expect(settingsHeader).toBeVisible({ timeout: 10_000 });
+      // Collapse state is the observable outcome of each click.
+      const settingsSection = page.locator('#logs-settings-section');
       await settingsHeader.click();
-      await page.waitForTimeout(500);
+      await expect(settingsSection).not.toHaveClass(/collapsed/);
       await settingsHeader.click();
-      await page.waitForTimeout(500);
+      await expect(settingsSection).toHaveClass(/collapsed/);
     });
     expect(filterBenignErrors(errors).length).toBe(0);
   });
@@ -255,7 +257,12 @@ test.describe('Admin Console Error Checks', () => {
         timeout: 15_000,
       });
       await page.locator('#clear-reports-btn').click();
-      await page.waitForTimeout(500);
+      // The click opens a confirm which Playwright auto-dismisses, so the
+      // observable outcome is that we are still on Maintenance — nothing was
+      // cleared and nothing navigated. networkidle is useless on this page:
+      // the admin panel polls, so the network is never idle and the wait hung
+      // until the page was torn down.
+      await expect(page.locator('#maintenance-panel')).toBeVisible();
 
       // Test 3: Reports — select action but cancel resolve
       await navigateToTab(page, 'Reports');
@@ -277,8 +284,8 @@ test.describe('Admin Console Error Checks', () => {
         const uid = await firstCard.getAttribute('data-uid');
         const actionSelect = firstCard.locator(`select[data-action-select="${uid}"]`);
         await actionSelect.selectOption('dismiss');
-        // Don't click resolve — just verify the select worked
-        await page.waitForTimeout(500);
+        // Don't click resolve — just verify the select took the value.
+        await expect(actionSelect).toHaveValue('dismiss');
       }
     });
 

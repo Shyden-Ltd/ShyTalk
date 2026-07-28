@@ -1,6 +1,7 @@
 import { test, expect, TestData } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
 import { Page } from '@playwright/test';
+import { waitForAlertsLoaded } from './helpers/alerts';
 
 /** Wait for the logs table to finish loading. */
 async function waitForLogsLoaded(page: Page): Promise<void> {
@@ -314,8 +315,7 @@ test.describe('Admin Logs', () => {
       await page.locator('#logs-alerts-section .logs-section-header').click();
     }
 
-    // Wait for alerts table to populate
-    await page.waitForTimeout(2_000);
+    await waitForAlertsLoaded(page);
 
     // Find and click the Ack button on any alert
     const ackBtn = page.locator('#alerts-tbody .alert-btn').filter({ hasText: 'Ack' }).first();
@@ -351,7 +351,7 @@ test.describe('Admin Logs', () => {
       await page.locator('#logs-alerts-section .logs-section-header').click();
     }
 
-    await page.waitForTimeout(2_000);
+    await waitForAlertsLoaded(page);
 
     // Find and click a Resolve button
     const resolveBtn = page.locator('#alerts-tbody .alert-btn-resolve').first();
@@ -388,8 +388,12 @@ test.describe('Admin Logs', () => {
       const configPanel = page.locator('#alert-config-panel');
       await expect(configPanel).toBeVisible();
 
-      // Wait for config to load
-      await page.waitForTimeout(2_000);
+      // A populated threshold is the settled signal — the panel is visible
+      // before its values arrive, and an empty read would make
+      // `Number('') + 1` silently rewrite the threshold to 1.
+      await expect
+        .poll(() => page.locator('#alert-config-grid input[type="number"]').first().inputValue())
+        .not.toBe('');
 
       // Get current config via API for backup
       let originalConfig: any;
@@ -454,8 +458,11 @@ test.describe('Admin Logs', () => {
       await page.locator('#logs-settings-section .logs-section-header').click();
       await expect(settingsSection).not.toHaveClass(/collapsed/, { timeout: 3_000 });
 
-      // Wait for config to load
-      await page.waitForTimeout(2_000);
+      // A populated retention value is the settled signal — the section
+      // un-collapses BEFORE its config arrives. This is also why the read
+      // below defaults to 72: an empty read would make `Number('') + 1`
+      // silently rewrite retention to 1 hour.
+      await expect.poll(() => page.locator('#log-cfg-retention').inputValue()).not.toBe('');
 
       // Get current config via API for backup
       let originalConfig: any;
@@ -591,11 +598,9 @@ test.describe('Admin Logs', () => {
 
     // Click Load More
     await loadMoreBtn.click();
-    await page.waitForTimeout(3_000);
-
-    // Verify more rows appeared
-    const newCount = await getLogRowCount(page);
-    expect(newCount).toBeGreaterThan(initialCount);
+    // Retrying assertion instead of a 3s sleep: resolves the moment the next
+    // page renders and fails loudly if it never does.
+    await expect.poll(() => getLogRowCount(page)).toBeGreaterThan(initialCount);
   });
 
   // ── Test 20: Empty state — impossible filter, verify no results message ──

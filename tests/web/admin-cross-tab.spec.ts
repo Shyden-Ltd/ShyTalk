@@ -1,6 +1,7 @@
 import { test, expect, TestData } from './fixtures/admin';
 import { adminLogin, navigateToTab, searchUser, switchUserSubtab } from './helpers/admin-auth';
 import type { Page } from '@playwright/test';
+import { waitForAlertsLoaded } from './helpers/alerts';
 
 /** Wait for the reports list to finish loading. */
 async function waitForReportsLoaded(page: Page): Promise<void> {
@@ -82,23 +83,6 @@ async function waitForDevicesLoaded(page: Page): Promise<void> {
   await expect(page.locator('#devices-tbody tr, #devices-empty[style*="block"]')).not.toHaveCount(
     0,
   );
-}
-
-/**
- * Settled = `loadAlerts()` has rendered its verdict: either rows landed in
- * `#alerts-tbody`, or it unhid `#alerts-empty` (which ships `display:none`,
- * so neither is true before the fetch resolves). Waiting on the verdict
- * instead of a fixed delay means an alerts fetch that never returns fails
- * loudly here rather than silently degrading the caller into its
- * "no trace links" skip.
- */
-async function waitForAlertsLoaded(page: Page): Promise<void> {
-  await page.waitForFunction(() => {
-    const tbody = document.getElementById('alerts-tbody');
-    const empty = document.getElementById('alerts-empty');
-    if (!tbody || !empty) return false;
-    return tbody.querySelector('tr') !== null || empty.style.display !== 'none';
-  });
 }
 
 test.describe('Admin Cross-Tab Interactions', () => {

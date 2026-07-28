@@ -8,6 +8,23 @@
  */
 import { test, expect } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
+import type { Page } from '@playwright/test';
+
+/**
+ * Clicks Search and waits for the audit-log fetch it triggers.
+ *
+ * The rows are replaced asynchronously, so asserting straight after the click
+ * reads the PREVIOUS result set. Anchoring on the response is what makes the
+ * following assertions about the new set rather than the old one.
+ */
+async function searchAuditLog(page: Page): Promise<void> {
+  const response = page.waitForResponse(
+    (r) => r.url().includes('audit-log') && r.request().method() === 'GET',
+    { timeout: 15_000 },
+  );
+  await page.locator('#audit-log-search-btn').click();
+  await response;
+}
 
 test.describe('Admin Audit Log Tab', () => {
   test.beforeEach(async ({ page }) => {
@@ -160,8 +177,7 @@ test.describe('Admin Audit Log Tab', () => {
     // Select a specific action type
     if (options.length > 1) {
       await actionSelect.selectOption({ index: 1 });
-      await page.locator('#audit-log-search-btn').click();
-      await page.waitForTimeout(2_000);
+      await searchAuditLog(page);
     }
 
     // Reset filter
@@ -175,8 +191,7 @@ test.describe('Admin Audit Log Tab', () => {
 
     if (options.length > 1) {
       await targetSelect.selectOption({ index: 1 });
-      await page.locator('#audit-log-search-btn').click();
-      await page.waitForTimeout(2_000);
+      await searchAuditLog(page);
     }
 
     // Reset
@@ -250,10 +265,11 @@ test.describe('Admin Audit Log Tab', () => {
       if (isVisible) {
         const initialCount = rowCount;
         await loadMore.click();
-        await page.waitForTimeout(2_000);
-        expect(await page.locator('#audit-log-tbody tr').count()).toBeGreaterThanOrEqual(
-          initialCount,
-        );
+        // Retrying assertion instead of a fixed wait: it resolves the moment
+        // the next page lands and fails loudly if it never does.
+        await expect
+          .poll(() => page.locator('#audit-log-tbody tr').count())
+          .toBeGreaterThanOrEqual(initialCount);
       }
     }
   });
@@ -302,9 +318,10 @@ test.describe('Admin Audit Log Tab', () => {
         requests.push(req.url());
     });
 
-    // Wait for at least two polling cycles (4s each + buffer)
-    await page.waitForTimeout(10_000);
-    expect(requests.length).toBeGreaterThanOrEqual(1);
+    // Poll for the first cycle rather than sleeping through two. This returns
+    // as soon as polling is proven alive, and still FAILS if it never fires —
+    // the 10s sleep only ever proved that 10s had elapsed.
+    await expect.poll(() => requests.length, { timeout: 15_000 }).toBeGreaterThanOrEqual(1);
   });
 
   // ── Tab Lifecycle ──
@@ -312,7 +329,10 @@ test.describe('Admin Audit Log Tab', () => {
   test('switching away stops polling, switching back resumes', async ({ page }) => {
     // We're on Audit Log tab. Switch to Users, then back.
     await page.getByRole('button', { name: 'Users' }).click();
-    await page.waitForTimeout(500);
+    // The Users tab becoming visible is the switch completing; 500ms was a
+    // guess. The panel id is `tab-users` (public/admin/index.html) — an
+    // invented `#users-panel` simply never appears and times out.
+    await expect(page.locator('#tab-users')).toBeVisible({ timeout: 10_000 });
 
     // Switch back to Audit Log
     await page.getByRole('button', { name: 'Audit Log' }).click();
@@ -337,8 +357,7 @@ test.describe('Admin Audit Log Tab', () => {
     });
 
     // Interact with the tab
-    await page.locator('#audit-log-search-btn').click();
-    await page.waitForTimeout(2_000);
+    await searchAuditLog(page);
 
     // Filter out known non-issues (429 rate limiting)
     const meaningful = errors.filter((e) => !e.includes('429'));

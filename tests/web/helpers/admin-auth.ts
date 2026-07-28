@@ -158,4 +158,9 @@ export async function switchUserSubtab(page: Page, subtab: string): Promise<void
   const btn = page.locator(`.user-subtab[data-subtab="${subtab}"]`);
   await btn.click();
   await expect(btn).toHaveClass(/active/);
+  // The BUTTON going active is not the content arriving — users.js:149-151
+  // toggles the button and the panel separately, and `security`/`identity`
+  // then kick off their own loads. Callers used to paper over this with a
+  // 1.5s sleep; waiting for the panel is the actual condition (SHY-0245).
+  await expect(page.locator(`.user-subpanel[data-subtab="${subtab}"]`)).toHaveClass(/visible/);
 }

@@ -1,6 +1,7 @@
 import { test, expect, TestData } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
 import type { Page } from '@playwright/test';
+import { expectNoConsoleErrorWithin } from './helpers/console-errors';
 
 /** Wait for reports list to load. */
 async function waitForReportsLoaded(page: Page): Promise<void> {
@@ -107,10 +108,9 @@ test.describe('Admin Realtime Features', () => {
       // Nudge the UI — re-clicking the active filter re-fetches from API
       const pendingBtn = page.locator('#report-filter-bar button[data-report-filter="pending"]');
       await pendingBtn.click();
-      // Brief wait for the API response to render (not a full 15s load wait)
-      await page.waitForTimeout(1_000);
-      const updatedCount = await page.locator('.report-card').count();
-      expect(updatedCount).toBeGreaterThan(initialCount);
+      // Retrying assertion: resolves the moment the filtered list renders and
+      // fails loudly if it never grows, instead of sampling once after 1s.
+      await expect.poll(() => page.locator('.report-card').count()).toBeGreaterThan(initialCount);
     }).toPass({ timeout: 15_000 });
   });
 
@@ -221,8 +221,8 @@ test.describe('Admin Realtime Features', () => {
     // Navigate away
     await navigateToTab(page, 'Users');
 
-    // Wait to see if any listener errors fire
-    await page.waitForTimeout(3_000);
+    // Inverted window: wait FOR an error and assert none arrives.
+    await expectNoConsoleErrorWithin(page, 3_000);
 
     // No Firestore listener errors should have occurred
     const firestoreErrors = consoleErrors.filter(
@@ -244,8 +244,7 @@ test.describe('Admin Realtime Features', () => {
     await startMonitoring(page, testData.user.uniqueId);
     await stopMonitoring(page);
 
-    // Wait to see if any errors fire from orphaned listeners
-    await page.waitForTimeout(3_000);
+    await expectNoConsoleErrorWithin(page, 3_000);
 
     // No listener cleanup errors
     const listenerErrors = consoleErrors.filter(
@@ -273,8 +272,7 @@ test.describe('Admin Realtime Features', () => {
     await liveToggle.click();
     await expect(liveToggle).not.toHaveClass(/active/, { timeout: 3_000 });
 
-    // Wait for any cleanup
-    await page.waitForTimeout(3_000);
+    await expectNoConsoleErrorWithin(page, 3_000);
 
     // No errors from orphaned intervals
     const intervalErrors = consoleErrors.filter(
@@ -305,8 +303,7 @@ test.describe('Admin Realtime Features', () => {
     const signInBtn = page.getByRole('button', { name: 'Sign In' });
     await expect(signInBtn).toBeVisible({ timeout: 15_000 });
 
-    // Wait for any post-signout listener errors
-    await page.waitForTimeout(5_000);
+    await expectNoConsoleErrorWithin(page, 5_000);
 
     // No console errors from listener cleanup after sign-out
     const postSignOutErrors = consoleErrors.filter(

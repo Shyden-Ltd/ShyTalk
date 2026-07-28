@@ -1,6 +1,7 @@
 import { test, expect, TestData } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
 import type { Page } from '@playwright/test';
+import { waitForAlertsLoaded } from './helpers/alerts';
 
 /** Seed a file-specific alert for mutation tests (avoids sharing testData.alert). */
 async function seedOwnAlert(testData: TestData, prefix: string): Promise<string> {
@@ -85,9 +86,7 @@ test.describe('Admin Alerts', () => {
   test('seeded alert appears in Logs tab alerts section', async ({ page, testData }) => {
     await navigateToTab(page, 'Logs');
     await expandAlertsSection(page);
-
-    // Wait for alerts table to populate
-    await page.waitForTimeout(2_000);
+    await waitForAlertsLoaded(page);
 
     // The alerts table should have rows or an empty message
     const alertsTable = page.locator('#alerts-tbody');
@@ -122,7 +121,7 @@ test.describe('Admin Alerts', () => {
     await adminLogin(page);
     await navigateToTab(page, 'Logs');
     await expandAlertsSection(page);
-    await page.waitForTimeout(2_000);
+    await waitForAlertsLoaded(page);
 
     // Find and click the Ack button
     const ackBtn = page.locator('#alerts-tbody .alert-btn').filter({ hasText: 'Ack' }).first();
@@ -153,7 +152,7 @@ test.describe('Admin Alerts', () => {
   test('resolve alert removes it from active list', async ({ page, testData }) => {
     await navigateToTab(page, 'Logs');
     await expandAlertsSection(page);
-    await page.waitForTimeout(2_000);
+    await waitForAlertsLoaded(page);
 
     // Find and click a Resolve button
     const resolveBtn = page.locator('#alerts-tbody .alert-btn-resolve').first();
@@ -183,7 +182,13 @@ test.describe('Admin Alerts', () => {
     await page.locator('#alerts-config-toggle').click();
     const configPanel = page.locator('#alert-config-panel');
     await expect(configPanel).toBeVisible();
-    await page.waitForTimeout(2_000);
+    // The panel becomes visible BEFORE its thresholds arrive, so visibility is
+    // not the settled signal — a populated input is. Waiting on the value also
+    // means `originalValue` below can never be read as an empty string, which
+    // would make `Number('') + 1` produce 1 and silently rewrite the threshold.
+    await expect
+      .poll(() => page.locator('#alert-config-grid input[type="number"]').first().inputValue())
+      .not.toBe('');
 
     // Get current config via API for backup
     let originalConfig: any;
@@ -233,7 +238,7 @@ test.describe('Admin Alerts', () => {
   test('alert trace link navigates to logs filtered by trace ID', async ({ page, testData }) => {
     await navigateToTab(page, 'Logs');
     await expandAlertsSection(page);
-    await page.waitForTimeout(2_000);
+    await waitForAlertsLoaded(page);
 
     // Look for trace links in alerts
     const traceLinks = page.locator('#alerts-tbody .log-trace-link, #alerts-tbody [data-trace-id]');
@@ -261,7 +266,7 @@ test.describe('Admin Alerts', () => {
   test('empty alert state shows appropriate message when no alerts', async ({ page, testData }) => {
     await navigateToTab(page, 'Logs');
     await expandAlertsSection(page);
-    await page.waitForTimeout(2_000);
+    await waitForAlertsLoaded(page);
 
     // Check if alerts table is empty
     const alertRows = page.locator('#alerts-tbody tr');
