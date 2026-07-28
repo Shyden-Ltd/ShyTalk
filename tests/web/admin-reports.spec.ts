@@ -1,4 +1,4 @@
-import { test, expect, TestData } from './fixtures/admin';
+import { test, expect, TestData, EVIDENCE_IMAGE } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
 import { Page } from '@playwright/test';
 
@@ -44,7 +44,10 @@ async function getReportStatsViaApi(testData: TestData, period = '7d'): Promise<
  * and it accumulates as orphaned data ("Unknown user" cards at the top
  * of the Reports tab) once the test user is torn down.
  */
-async function seedReportViaApi(testData: TestData): Promise<string> {
+async function seedReportViaApi(
+  testData: TestData,
+  extra: Record<string, unknown> = {},
+): Promise<string> {
   const result = await testData.api.testWrite('reports', {
     reportedUserId: testData.user.uid,
     reportedUserUniqueId: testData.user.uniqueId,
@@ -55,6 +58,7 @@ async function seedReportViaApi(testData: TestData): Promise<string> {
     status: 'pending',
     createdAt: Date.now(),
     _testRun: testData.testRunId,
+    ...extra,
   });
   return result.id;
 }
@@ -495,16 +499,19 @@ test.describe('Admin Reports', () => {
   });
 
   // ── Test 14: Conversation viewer — click View, verify messages ──
-  test('conversation viewer displays messages when available', async ({ page }) => {
+  test('conversation viewer displays messages', async ({ page, testData }) => {
+    // This skipped every run. Not because reports never carry a conversation
+    // — the worker fixture seeds one — but because the resolve/bulk-resolve
+    // tests ahead of it in this serial file consume every pending report. The
+    // test was reporting green on a queue its own neighbours had emptied.
+    await seedReportViaApi(testData, { conversationId: testData.conversation.id });
+    await page.reload();
+    await adminLogin(page);
+    await navigateToTab(page, 'Reports');
     await filterReports(page, 'pending');
 
     const viewConvLink = page.locator('.view-conversation-btn').first();
-    const hasConversation = (await viewConvLink.count()) > 0;
-
-    if (!hasConversation) {
-      test.skip(true, 'No reports with conversation context available');
-      return;
-    }
+    await expect(viewConvLink).toBeVisible();
 
     await viewConvLink.click();
 
@@ -520,16 +527,17 @@ test.describe('Admin Reports', () => {
   });
 
   // ── Test 15: Evidence lightbox — click image, verify opens ──
-  test('evidence lightbox opens from report evidence thumbnail', async ({ page }) => {
+  test('evidence lightbox opens from report evidence thumbnail', async ({ page, testData }) => {
+    // Same story as test 14 — and additionally, nothing seeded evidence at
+    // all, so there was never a thumbnail for this to find.
+    await seedReportViaApi(testData, { evidenceUrls: [EVIDENCE_IMAGE] });
+    await page.reload();
+    await adminLogin(page);
+    await navigateToTab(page, 'Reports');
     await filterReports(page, 'pending');
 
     const thumbs = page.locator('#reports-list .evidence-thumb');
-    const thumbCount = await thumbs.count();
-
-    if (thumbCount === 0) {
-      test.skip(true, 'No evidence thumbnails in current reports');
-      return;
-    }
+    await expect(thumbs.first()).toBeVisible();
 
     await thumbs.first().click();
 
