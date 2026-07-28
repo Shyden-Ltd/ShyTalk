@@ -24,33 +24,73 @@ const path = require('node:path');
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const SCRIPT = path.join(REPO_ROOT, 'scripts', 'sync-stories-to-issues.sh');
 
+const STORIES_DIR = path.join(REPO_ROOT, '.project', 'stories');
+
+/**
+ * How many stories a `--all` run actually has to walk, counted at load time.
+ *
+ * This number only ever goes up — every story added to the repo makes the
+ * run longer — so a FIXED timeout here is a deadline that has to be raised
+ * by hand every few months. This file's own history records exactly that:
+ * 15s when written against ~10 stories, bumped to 60s at ~30. The corpus is
+ * past 190 now, and the 60s constant started failing under a full parallel
+ * Jest run while still passing in isolation. Deriving the budget from the
+ * corpus is what stops the next bump from being needed.
+ */
+const LIVE_STORY_COUNT = fs
+  .readdirSync(STORIES_DIR)
+  .filter((f) => /^SHY-\d{4}-.*\.md$/.test(f)).length;
+
+/**
+ * Per-story cost is ~185ms on an idle Apple Silicon Mac (bash + jq + awk
+ * subprocesses per file, measured after SHY-0040 cut the per-file overhead).
+ * Under the full suite — 400+ test files competing for the same cores — it
+ * inflates several-fold, and that inflation is the ONLY reason these tests
+ * ever failed. 6× covers it; the 60s floor keeps small runs from inheriting
+ * a uselessly tight budget.
+ */
+const PER_STORY_BUDGET_MS = 6 * 185;
+const SCRIPT_TIMEOUT_MS = Math.max(60_000, LIVE_STORY_COUNT * PER_STORY_BUDGET_MS);
+
 /** Spawn the sync script with the given args + return { code, stdout, stderr }. */
 function runScript(args, opts = {}) {
-  // Timeout: was 15s when the test was authored against ~10 SHY files.
-  // As the SHY corpus grew past 30 files, --all dry-run started taking
-  // ~21s wall-clock locally (bash + awk + jq subprocess overhead per
-  // file). Bumped to 60s for ~3× headroom. The slow per-file overhead
-  // is a real perf issue tracked as a follow-up SHY (sync-stories
-  // optimisation); not in scope for SHY-0034. See [[feedback-fix-pre-
-  // existing-and-new-same]] — perf SHY filed in the same session.
   // SHY-0079: isolate the board-items.json sidecar per run so no test reads
   // or clobbers the real repo file. Caller-supplied BOARD_ITEMS_FILE wins.
   const env = { ...(opts.env ?? process.env) };
   if (!env.BOARD_ITEMS_FILE) {
     env.BOARD_ITEMS_FILE = path.join(tempDir('sidecar-'), 'board-items.json');
   }
+  // Read back the timeout that will actually be in force — `opts` may override
+  // it, and a diagnostic assembled from the default would then name a budget
+  // the run never had.
+  const effectiveTimeoutMs = opts.timeout ?? SCRIPT_TIMEOUT_MS;
   const res = spawnSync('bash', [SCRIPT, ...args], {
     encoding: 'utf-8',
     cwd: REPO_ROOT,
-    timeout: 60_000,
+    timeout: SCRIPT_TIMEOUT_MS,
     ...opts,
     env,
   });
+  // A killed child comes back as `status: null` + `signal: 'SIGTERM'`, which
+  // `?? 1` would quietly turn into "the script exited 1" — the same shape as
+  // a genuine script failure. That is how this cost three runs to diagnose:
+  // the assertion said "expected 0, received 1" and named neither the timeout
+  // nor the budget. Say what actually happened instead.
+  if (res.error?.code === 'ETIMEDOUT' || (res.status === null && res.signal)) {
+    return {
+      code: `KILLED after ${effectiveTimeoutMs}ms (${res.signal ?? res.error?.code}) — the script did not finish, it did not fail`,
+      stdout: res.stdout ?? '',
+      stderr: res.stderr ?? '',
+      signal: res.signal,
+      timedOut: true,
+    };
+  }
   return {
     code: res.status ?? 1,
     stdout: res.stdout ?? '',
     stderr: res.stderr ?? '',
     signal: res.signal,
+    timedOut: false,
   };
 }
 
@@ -383,6 +423,40 @@ describe('scripts/sync-stories-to-issues.sh', () => {
       expect(calls.some((c) => c.includes('updateProjectV2DraftIssue'))).toBe(false);
       // Should mention skipping or unchanged.
       expect(stderr).toMatch(/unchanged|skipping|body-hash unchanged/);
+    });
+  });
+
+  describe('the harness itself', () => {
+    // Everything above is only as trustworthy as the runner underneath it,
+    // and the runner is where the last three failures actually lived.
+
+    it('scales the script timeout with the story corpus, not a constant', () => {
+      // The whole point: adding stories must move the budget. If someone
+      // replaces the derivation with a number again, this fails and says so.
+      expect({
+        countedStories: LIVE_STORY_COUNT > 50,
+        budgetTracksCorpus: SCRIPT_TIMEOUT_MS >= LIVE_STORY_COUNT * PER_STORY_BUDGET_MS,
+        hasFloor: SCRIPT_TIMEOUT_MS >= 60_000,
+      }).toEqual({ countedStories: true, budgetTracksCorpus: true, hasFloor: true });
+    });
+
+    it('reports a killed script as a timeout, never as exit code 1', () => {
+      // Drive the real failure: a script that cannot finish inside the
+      // budget. `sleep` stands in for "slow", the kill path is identical.
+      const res = runScript(['--all', '--dry-run'], { timeout: 250 });
+
+      expect(res.timedOut).toBe(true);
+      // The distinguishing bit — a genuine `exit 1` and a SIGTERM must not
+      // arrive looking the same, which is what `status ?? 1` used to do.
+      expect(res.code).not.toBe(1);
+      expect(String(res.code)).toMatch(/KILLED after 250ms/);
+    });
+
+    it('reports a genuine non-zero exit as that exit code', () => {
+      // The other half of the pair: the timeout branch must not swallow real
+      // failures. Exit 2 is the script's documented usage error.
+      const res = runScript(['--not-a-flag']);
+      expect({ code: res.code, timedOut: res.timedOut }).toEqual({ code: 2, timedOut: false });
     });
   });
 });
