@@ -941,6 +941,52 @@ async function resolveWatchers(suggestionId) {
   }
 }
 
+/**
+ * Release every watch on a suggestion that has reached a terminal state.
+ *
+ * Once a suggestion is completed or rejected there is nothing further to hear
+ * about it, so holding the watch only grows `watchedSuggestions` without bound
+ * and makes every later fan-out pay to read watchers who can never receive
+ * anything again (spec 11.7 — "completed: ... subscription cleared").
+ * Best-effort per watcher: a failed release is logged and the rest continue,
+ * because the status change itself has already happened and must not be undone
+ * by a bookkeeping failure.
+ */
+const TERMINAL_STATUSES = ['completed', 'rejected'];
+
+async function releaseWatchesForTerminalStatus(suggestionId, newStatus) {
+  if (!suggestionId || !TERMINAL_STATUSES.includes(newStatus)) return 0;
+  try {
+    const snap = await db
+      .collection('subscriptions')
+      .where('watchedSuggestions', 'array-contains', suggestionId)
+      .get();
+    let released = 0;
+    for (const d of snap.docs || []) {
+      try {
+        await db.doc(`subscriptions/${d.id}`).update({
+          watchedSuggestions: FieldValue.arrayRemove(suggestionId),
+          updatedAt: now(),
+        });
+        released++;
+      } catch (err) {
+        log.warn('admin-suggestions', 'Failed to release watch (best-effort)', {
+          suggestionId,
+          watcher: d.id,
+          error: err.message,
+        });
+      }
+    }
+    return released;
+  } catch (err) {
+    log.error('admin-suggestions', 'Failed to query watches for release', {
+      suggestionId,
+      error: err.message,
+    });
+    return 0;
+  }
+}
+
 async function notifySubscribers(suggestionData, eventType, extraData = {}, options = {}) {
   try {
     const watchers = await resolveWatchers(extraData.suggestionId);
@@ -1405,6 +1451,10 @@ router.put('/admin/suggestions/:id/status', async (req, res) => {
       previousStatus: currentStatus,
       reason: reason || null,
     });
+
+    // Release watches AFTER notifying — the watchers must still receive the
+    // message telling them why they are being released.
+    await releaseWatchesForTerminalStatus(id, newStatus);
 
     // Notify roadmap subscribers when roadmap changes (fire-and-forget)
     if (newStatus === 'planned' || newStatus === 'completed') {

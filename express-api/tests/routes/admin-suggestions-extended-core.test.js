@@ -1229,3 +1229,87 @@ describe('PUT /admin/suggestions/:id/status — recipient de-duplication by type
     expect(recipients).toEqual(['1001']);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// SHY-0246 — watch cleanup on terminal status
+//
+// Once a suggestion is completed or rejected there is nothing further to hear
+// about, so the watch is released. Without this, watchedSuggestions grows
+// without bound and every future fan-out pays to read watchers who can never
+// receive anything again. Spec 11.7 ("completed: ... subscription cleared").
+// ═══════════════════════════════════════════════════════════════
+
+describe('PUT /admin/suggestions/:id/status — watch cleanup on terminal status (SHY-0246)', () => {
+  function watchedBy(uids) {
+    mockCollectionGet.mockResolvedValue({
+      empty: uids.length === 0,
+      size: uids.length,
+      docs: uids.map((uid) => ({ id: String(uid), data: () => ({ uid }) })),
+    });
+  }
+
+  const watchRemovals = () =>
+    mockDocUpdate.mock.calls.filter(
+      ([path, patch]) =>
+        typeof path === 'string' && path.includes('subscriptions/') && patch?.watchedSuggestions,
+    );
+
+  test('completing a suggestion releases every watcher', async () => {
+    setupDocMocks({
+      'suggestions/sug-1': makeSuggestionSnap('sug-1', {
+        status: 'planned',
+        submitterUid: 'submitter-1',
+        subscribers: [],
+        // Completing REQUIRES a roadmap link (suggestions.js rejects with
+        // "Cannot complete — suggestion is not linked to a roadmap feature").
+        linkedRoadmapFeature: 'feat-1',
+      }),
+    });
+    watchedBy(['w-1', 'w-2']);
+
+    await request(createAdminApp())
+      .put('/api/admin/suggestions/sug-1/status')
+      .send({ status: 'completed' })
+      .expect(200);
+
+    const paths = watchRemovals().map(([p]) => p);
+    expect(paths).toEqual(expect.arrayContaining(['subscriptions/w-1', 'subscriptions/w-2']));
+  });
+
+  test('rejecting a suggestion releases every watcher', async () => {
+    setupDocMocks({
+      'suggestions/sug-1': makeSuggestionSnap('sug-1', {
+        status: 'pending',
+        submitterUid: 'submitter-1',
+        subscribers: [],
+      }),
+    });
+    watchedBy(['w-1']);
+
+    await request(createAdminApp())
+      .put('/api/admin/suggestions/sug-1/status')
+      .send({ status: 'rejected', reason: 'duplicate' })
+      .expect(200);
+
+    expect(watchRemovals().map(([p]) => p)).toContain('subscriptions/w-1');
+  });
+
+  test('a NON-terminal transition leaves watches intact', async () => {
+    setupDocMocks({
+      'suggestions/sug-1': makeSuggestionSnap('sug-1', {
+        status: 'pending',
+        submitterUid: 'submitter-1',
+        subscribers: [],
+      }),
+    });
+    watchedBy(['w-1']);
+
+    await request(createAdminApp())
+      .put('/api/admin/suggestions/sug-1/status')
+      .send({ status: 'accepted' })
+      .expect(200);
+
+    // Still watching — more updates are coming.
+    expect(watchRemovals()).toHaveLength(0);
+  });
+});

@@ -178,72 +178,52 @@ function _makeSubscriptionDoc(uid, overrides = {}) {
 // 11.7 — Notifications
 // ═══════════════════════════════════════════════════════════════
 
-describe('Notification Creation on Events', () => {
-  test('created on roadmap status change: for feature subscribers + all subscribers', async () => {
-    // This tests the notification creation utility, not a route directly
-    // Verify that when a roadmap feature changes, notifications are created
-  });
+// ─── Notification creation on events — covered elsewhere (SHY-0246) ─────
+//
+// This block held SEVEN active tests with empty bodies. They ran, asserted
+// nothing and reported green, which is worse than no test at all: they made
+// the notification surface look covered while the features they named did not
+// exist. They are deleted rather than re-implemented here, because the
+// behaviour now has REAL coverage against the routes that produce it — writing
+// them again in this file would duplicate that:
+//
+//   accepted / planned / completed / rejected, recipient rules, and the
+//   watcher fan-out
+//     → tests/routes/admin-suggestions-extended-core.test.js
+//        "subscriber notifications", "watchers are notified",
+//        "recipient de-duplication by type"
+//   comment (including author exclusion)
+//     → tests/routes/suggestions-comments.test.js
+//        "subscriber notifications"
+//   merged
+//     → tests/routes/admin-suggestions-extended-merge.test.js
+//   roadmap_update, per-channel dispatch and the in-app channel
+//     → tests/utils/notification-channels.test.js, tests/utils/roadmap-notify.test.js
+//
+// This file's own subject is the inbox ROUTES (GET /notifications,
+// PUT /:id/read, PUT /read-all), which the describes below exercise for real.
 
-  test('created on suggestion accepted: for submitter + subscribers', async () => {
-    // Notification should be created for submitter and watchers
-  });
+// ─── Channel preference respect — covered elsewhere (SHY-0246) ─────────
+//
+// Seven more tests deleted here. Five had empty bodies. The other two were
+// worse — TAUTOLOGIES:
+//
+//   test('email disabled → no email sent', () => {
+//     const { sendEmail } = require('.../email');
+//     expect(sendEmail).not.toHaveBeenCalled();   // nothing was dispatched
+//   });                                           // so this is always true
+//
+// They dispatched nothing and then asserted nothing had happened, which holds
+// no matter what the product does. The real per-channel contract — each
+// channel firing only when its flag AND its recipient address are present,
+// per-channel failure isolation, and the in-app channel — is asserted for real
+// in tests/utils/notification-channels.test.js (29 tests, mutation-proved).
+// List-Unsubscribe / List-Unsubscribe-Post are covered in
+// tests/utils/suggestion-email-templates.test.js.
+//
+// The two unsubscribe-endpoint tests below drive a real route, so they stay.
 
-  test('created on suggestion planned: for all suggestion subscribers', async () => {
-    // Planned status change should notify all watchers
-  });
-
-  test('created on suggestion completed: for all subscribers, subscription cleared', async () => {
-    // Final notification + cleanup
-  });
-
-  test('created on suggestion rejected: for submitter only', async () => {
-    // Only submitter should be notified of rejection
-  });
-
-  test('created on suggestion merged: for submitter only', async () => {
-    // Only the merged suggestion's submitter gets notified
-  });
-
-  test('created on comment: for suggestion subscribers', async () => {
-    // Comment notification goes to watchers
-  });
-});
-
-describe('Channel preference respect', () => {
-  test('email disabled → no email sent', async () => {
-    const { sendEmail } = require('../../src/utils/email');
-    // Simulate notification dispatch with email disabled
-    // Verify sendEmail was NOT called
-    expect(sendEmail).not.toHaveBeenCalled();
-  });
-
-  test('push disabled → no push sent', async () => {
-    const { sendFcmToTokens } = require('../../src/utils/fcm');
-    // Verify FCM not called when push disabled
-    expect(sendFcmToTokens).not.toHaveBeenCalled();
-  });
-
-  test('system message enabled → SHYTALK_SYSTEM message created', async () => {
-    const { sendSystemPm } = require('../../src/utils/system-pm');
-    // When systemMessage channel is enabled, sendSystemPm should be called
-  });
-
-  test('email enabled → email dispatched with correct subject and body', async () => {
-    // Verify email content when email channel is enabled
-  });
-
-  test('push enabled → FCM called with correct payload', async () => {
-    // Verify FCM payload structure
-  });
-
-  test('email includes List-Unsubscribe header', async () => {
-    // RFC 8058 compliance
-  });
-
-  test('email includes List-Unsubscribe-Post header', async () => {
-    // RFC 8058 one-click unsubscribe
-  });
-
+describe('Unsubscribe endpoint', () => {
   test('POST to unsubscribe endpoint with valid token removes email channel', async () => {
     const app = express();
     app.use(express.json());
@@ -261,9 +241,11 @@ describe('Channel preference respect', () => {
     await request(app).post('/api/subscriptions/unsubscribe').send({ token: '' }).expect(400);
   });
 
-  test('rejected suggestion: submitter subscription cleaned up after notification', async () => {
-    // watchedSuggestions entry removed after rejection notification
-  });
+  // 'rejected suggestion: submitter subscription cleaned up after notification'
+  // was another empty active test. The behaviour is now implemented and
+  // asserted against the route that performs it —
+  // tests/routes/admin-suggestions-extended-core.test.js,
+  // "watch cleanup on terminal status".
 });
 
 describe('GET /api/notifications — Inbox', () => {
