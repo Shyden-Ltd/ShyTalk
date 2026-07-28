@@ -878,77 +878,71 @@ test.describe('Suggestions Board — Submission Flow', () => {
   test('character counter updates as user types in title', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     const titleCounter = page.locator('[data-testid="suggest-title-count"]');
-    if ((await titleInput.count()) > 0) {
-      await titleInput.fill('Hello');
-      await expect(titleCounter).toContainText('5/80');
-    }
+    await openSuggestForm(page);
+    await titleInput.fill('Hello');
+    await expect(titleCounter).toContainText('5/80');
   });
 
   test('title at 80 chars: counter shows 80/80, cannot type more', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     const titleCounter = page.locator('[data-testid="suggest-title-count"]');
-    if ((await titleInput.count()) > 0) {
-      const eightyChars = 'A'.repeat(80);
-      await titleInput.fill(eightyChars);
-      await expect(titleCounter).toContainText('80/80');
-      // Try typing one more character
-      await titleInput.press('a');
-      const value = await titleInput.inputValue();
-      expect(value.length).toBeLessThanOrEqual(80);
-    }
+    await openSuggestForm(page);
+    const eightyChars = 'A'.repeat(80);
+    await titleInput.fill(eightyChars);
+    await expect(titleCounter).toContainText('80/80');
+    // Try typing one more character
+    await titleInput.press('a');
+    const value = await titleInput.inputValue();
+    expect(value.length).toBeLessThanOrEqual(80);
   });
 
   test('description at 5000 chars: counter shows 5000/5000', async ({ page }) => {
     const descInput = page.locator('[data-testid="suggest-desc-input"]');
     const descCounter = page.locator('[data-testid="suggest-desc-count"]');
-    if ((await descInput.count()) > 0) {
-      const fiveThousandChars = 'B'.repeat(5000);
-      await descInput.fill(fiveThousandChars);
-      await expect(descCounter).toContainText('5000/5000');
-    }
+    await openSuggestForm(page);
+    const fiveThousandChars = 'B'.repeat(5000);
+    await descInput.fill(fiveThousandChars);
+    await expect(descCounter).toContainText('5000/5000');
   });
 
   test('duplicate detection: typing title shows similar suggestions after 3+ chars', async ({
     page,
   }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      await titleInput.fill('Vo');
-      const duplicates = page.locator('[data-testid="suggest-duplicates"]');
-      // At 2 chars, no results should show
-      await expect(duplicates).not.toBeVisible();
+    await openSuggestForm(page);
+    await titleInput.fill('Vo');
+    const duplicates = page.locator('[data-testid="suggest-duplicates"]');
+    // At 2 chars, no results should show
+    await expect(duplicates).not.toBeVisible();
 
-      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice');
-      // At 5 chars, duplicate detection should trigger
-    }
+    await typeTitleAwaitingDuplicates(page, titleInput, 'Voice');
+    // At 5 chars, duplicate detection should trigger
   });
 
   test('duplicate detection: "Yes, this is what I meant" redirects to original', async ({
     page,
   }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice chat');
-      const yesBtn = page.locator('[data-testid^="duplicate-match"]').first();
-      if ((await yesBtn.count()) > 0) {
-        await yesBtn.click();
-        // Should redirect to the existing suggestion for upvoting
-        const upvoteFlow = page.locator('[data-testid^="suggestion-card"], .sg-card');
-        await expect(upvoteFlow.first()).toBeVisible({ timeout: 5_000 });
-      }
+    await openSuggestForm(page);
+    await typeTitleAwaitingDuplicates(page, titleInput, 'Voice chat');
+    const yesBtn = page.locator('[data-testid^="duplicate-match"]').first();
+    if ((await yesBtn.count()) > 0) {
+      await yesBtn.click();
+      // Should redirect to the existing suggestion for upvoting
+      const upvoteFlow = page.locator('[data-testid^="suggestion-card"], .sg-card');
+      await expect(upvoteFlow.first()).toBeVisible({ timeout: 5_000 });
     }
   });
 
   test('duplicate detection: "No, my idea is different" continues form', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice chat');
-      const noBtn = page.locator('[data-testid^="duplicate-diff"]');
-      if ((await noBtn.count()) > 0) {
-        await noBtn.click();
-        // Form should remain visible and user can continue
-        await expect(titleInput).toBeVisible();
-      }
+    await openSuggestForm(page);
+    await typeTitleAwaitingDuplicates(page, titleInput, 'Voice chat');
+    const noBtn = page.locator('[data-testid^="duplicate-diff"]');
+    if ((await noBtn.count()) > 0) {
+      await noBtn.click();
+      // Form should remain visible and user can continue
+      await expect(titleInput).toBeVisible();
     }
   });
 
@@ -1226,50 +1220,60 @@ test.describe('Suggestion Submission Edge Cases', () => {
 
   test('submit with exactly 80 char title: succeeds', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      const eightyChars = 'A'.repeat(80);
-      await titleInput.fill(eightyChars);
-      const value = await titleInput.inputValue();
-      expect(value.length).toBe(80);
-      // Form should allow submission
-      const submitBtn = page.locator('[data-testid="suggest-modal-submit"]');
-      if ((await submitBtn.count()) > 0) {
-        await expect(submitBtn).not.toBeDisabled();
-      }
-    }
+    await openSuggestForm(page);
+    const eightyChars = 'A'.repeat(80);
+    await titleInput.fill(eightyChars);
+    const value = await titleInput.inputValue();
+    expect(value.length).toBe(80);
+
+    // A tag is ALSO required — validateForm() is
+    // `title.trim().length >= 3 && tagSelect.value !== ""`
+    // (suggestions-board.js:877). This test used to fill only the title and
+    // then hide the resulting failure behind `if (submitBtn.count() > 0)`,
+    // so it never noticed the button stayed disabled.
+    const tagSelect = page.locator('[data-testid="suggest-tag-select"]');
+    await tagSelect.selectOption({ index: 1 });
+
+    await expect(page.locator('[data-testid="suggest-modal-submit"]')).not.toBeDisabled();
+  });
+
+  test('submit stays disabled with a title but no tag chosen', async ({ page }) => {
+    // The negative half of the same contract: both halves are required, so a
+    // title alone must NOT enable submission. Without this, dropping the tag
+    // check from validateForm() would go unnoticed.
+    await openSuggestForm(page);
+    await page.locator('[data-testid="suggest-title-input"]').fill('A perfectly valid title');
+    await expect(page.locator('[data-testid="suggest-modal-submit"]')).toBeDisabled();
   });
 
   test('submit with 81 char title: prevented by form (client-side validation)', async ({
     page,
   }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      const eightyOneChars = 'A'.repeat(81);
-      await titleInput.fill(eightyOneChars);
-      const value = await titleInput.inputValue();
-      // Client-side should cap at 80 or show validation error
-      expect(value.length).toBeLessThanOrEqual(80);
-    }
+    await openSuggestForm(page);
+    const eightyOneChars = 'A'.repeat(81);
+    await titleInput.fill(eightyOneChars);
+    const value = await titleInput.inputValue();
+    // Client-side should cap at 80 or show validation error
+    expect(value.length).toBeLessThanOrEqual(80);
   });
 
   test('submit with exactly 5000 char description: succeeds', async ({ page }) => {
     const descInput = page.locator('[data-testid="suggest-desc-input"]');
-    if ((await descInput.count()) > 0) {
-      const fiveThousandChars = 'B'.repeat(5000);
-      await descInput.fill(fiveThousandChars);
-      const value = await descInput.inputValue();
-      expect(value.length).toBe(5000);
-    }
+    await openSuggestForm(page);
+    const fiveThousandChars = 'B'.repeat(5000);
+    await descInput.fill(fiveThousandChars);
+    const value = await descInput.inputValue();
+    expect(value.length).toBe(5000);
   });
 
   test('submit with 5001 char description: prevented by form', async ({ page }) => {
     const descInput = page.locator('[data-testid="suggest-desc-input"]');
-    if ((await descInput.count()) > 0) {
-      const overLimit = 'B'.repeat(5001);
-      await descInput.fill(overLimit);
-      const value = await descInput.inputValue();
-      expect(value.length).toBeLessThanOrEqual(5000);
-    }
+    await openSuggestForm(page);
+    const overLimit = 'B'.repeat(5001);
+    await descInput.fill(overLimit);
+    const value = await descInput.inputValue();
+    expect(value.length).toBeLessThanOrEqual(5000);
   });
 
   test('submit with only whitespace title: form validation error', async ({ page }) => {
@@ -1285,42 +1289,38 @@ test.describe('Suggestion Submission Edge Cases', () => {
 
   test('submit with emoji in title: succeeds, displayed correctly', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      await titleInput.fill('Add dark mode toggle 🌙');
-      const value = await titleInput.inputValue();
-      expect(value).toContain('🌙');
-    }
+    await openSuggestForm(page);
+    await titleInput.fill('Add dark mode toggle 🌙');
+    const value = await titleInput.inputValue();
+    expect(value).toContain('🌙');
   });
 
   test('submit with RTL text (Arabic): layout correct, language tag set', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      await titleInput.fill('إضافة الوضع المظلم');
-      const value = await titleInput.inputValue();
-      expect(value).toBe('إضافة الوضع المظلم');
-    }
+    await openSuggestForm(page);
+    await titleInput.fill('إضافة الوضع المظلم');
+    const value = await titleInput.inputValue();
+    expect(value).toBe('إضافة الوضع المظلم');
   });
 
   test('duplicate detection: no matches shows no "Load more"', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      await titleInput.fill('zzzzuniquezzzznotexist');
-      const loadMore = page.locator('[data-testid="duplicate-load-more"]');
-      await expect(loadMore).not.toBeVisible();
-    }
+    await openSuggestForm(page);
+    await titleInput.fill('zzzzuniquezzzznotexist');
+    const loadMore = page.locator('[data-testid="duplicate-load-more"]');
+    await expect(loadMore).not.toBeVisible();
   });
 
   test('duplicate detection: exactly 3 matches shown, no "Load more"', async ({ page }) => {
     // When there are exactly 3 matches, all should show and no load more button
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice');
-      const items = page.locator('[data-testid^="duplicate-item"]');
-      const loadMore = page.locator('[data-testid="duplicate-load-more"]');
-      const count = await items.count();
-      if (count === 3) {
-        await expect(loadMore).not.toBeVisible();
-      }
+    await openSuggestForm(page);
+    await typeTitleAwaitingDuplicates(page, titleInput, 'Voice');
+    const items = page.locator('[data-testid^="duplicate-item"]');
+    const loadMore = page.locator('[data-testid="duplicate-load-more"]');
+    const count = await items.count();
+    if (count === 3) {
+      await expect(loadMore).not.toBeVisible();
     }
   });
 
@@ -1328,14 +1328,13 @@ test.describe('Suggestion Submission Edge Cases', () => {
     page,
   }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice');
-      const items = page.locator('[data-testid^="duplicate-item"]');
-      const loadMore = page.locator('[data-testid="duplicate-load-more"]');
-      if ((await loadMore.count()) > 0) {
-        expect(await items.count()).toBe(3);
-        await expect(loadMore).toBeVisible();
-      }
+    await openSuggestForm(page);
+    await typeTitleAwaitingDuplicates(page, titleInput, 'Voice');
+    const items = page.locator('[data-testid^="duplicate-item"]');
+    const loadMore = page.locator('[data-testid="duplicate-load-more"]');
+    if ((await loadMore.count()) > 0) {
+      expect(await items.count()).toBe(3);
+      await expect(loadMore).toBeVisible();
     }
   });
 
@@ -1343,30 +1342,28 @@ test.describe('Suggestion Submission Edge Cases', () => {
     page,
   }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      await typeTitleAwaitingDuplicates(page, titleInput, 'Voice');
-      const loadMore = page.locator('[data-testid="duplicate-load-more"]');
-      if ((await loadMore.count()) > 0) {
-        await loadMore.click();
-        // Click "Yes" on a result from the second page
-        const yesButtons = page.locator('[data-testid^="duplicate-match"]');
-        const count = await nonEmptyCount(yesButtons);
-        if (count > 3) {
-          await yesButtons.nth(3).click();
-          // Should redirect to that specific suggestion for upvoting
-        }
+    await openSuggestForm(page);
+    await typeTitleAwaitingDuplicates(page, titleInput, 'Voice');
+    const loadMore = page.locator('[data-testid="duplicate-load-more"]');
+    if ((await loadMore.count()) > 0) {
+      await loadMore.click();
+      // Click "Yes" on a result from the second page
+      const yesButtons = page.locator('[data-testid^="duplicate-match"]');
+      const count = await nonEmptyCount(yesButtons);
+      if (count > 3) {
+        await yesButtons.nth(3).click();
+        // Should redirect to that specific suggestion for upvoting
       }
     }
   });
 
   test('back button during submission: form state preserved', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      await titleInput.fill('Test suggestion title');
-      await page.goBack();
-      await page.goForward();
-      // Form state should be preserved
-    }
+    await openSuggestForm(page);
+    await titleInput.fill('Test suggestion title');
+    await page.goBack();
+    await page.goForward();
+    // Form state should be preserved
   });
 
   test('network error during submit: error message shown, form not cleared', async ({ page }) => {
@@ -1659,30 +1656,28 @@ test.describe('Mobile-Specific Interactions', () => {
     page,
   }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      await titleInput.focus();
-      await page.waitForTimeout(500);
-      // Input should be visible within the viewport
-      const isVisible = await titleInput.isVisible();
-      expect(isVisible).toBe(true);
-    }
+    await openSuggestForm(page);
+    await titleInput.focus();
+    await page.waitForTimeout(500);
+    // Input should be visible within the viewport
+    const isVisible = await titleInput.isVisible();
+    expect(isVisible).toBe(true);
   });
 
   test('soft keyboard: description field does not get hidden behind keyboard', async ({ page }) => {
     const descInput = page.locator('[data-testid="suggest-desc-input"]');
-    if ((await descInput.count()) > 0) {
-      await descInput.focus();
-      await page.waitForTimeout(500);
-      const box = await descInput.boundingBox();
-      // Outer count() > 0 guard already gates on the element existing.
-      // The inner null-box guard previously silently no-op'd if the
-      // focused element was still in a transient unlaid-out state,
-      // hiding any real viewport-clipping bug. Hard-fail instead.
-      expect(box, 'desc input must be laid out after focus + 500ms wait').not.toBeNull();
-      // Element should be within the viewport
-      expect(box!.y).toBeGreaterThanOrEqual(0);
-      expect(box!.y + box!.height).toBeLessThanOrEqual(812);
-    }
+    await openSuggestForm(page);
+    await descInput.focus();
+    await page.waitForTimeout(500);
+    const box = await descInput.boundingBox();
+    // Outer count() > 0 guard already gates on the element existing.
+    // The inner null-box guard previously silently no-op'd if the
+    // focused element was still in a transient unlaid-out state,
+    // hiding any real viewport-clipping bug. Hard-fail instead.
+    expect(box, 'desc input must be laid out after focus + 500ms wait').not.toBeNull();
+    // Element should be within the viewport
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(812);
   });
 
   test('orientation: landscape mode works without layout breaking', async ({ page }) => {
@@ -2559,16 +2554,15 @@ test.describe('URL & Navigation Edge Cases', () => {
   test('refresh mid-submission: form cleared, no duplicate', async ({ page }) => {
     await page.goto('/roadmap.html');
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
-    if ((await titleInput.count()) > 0) {
-      await titleInput.fill('Draft suggestion');
-      await page.reload();
-      await boardSettled(page);
-      // After refresh, form should be cleared (no stale draft)
-      const newTitleInput = page.locator('[data-testid="suggest-title-input"]');
-      if ((await newTitleInput.count()) > 0) {
-        const value = await newTitleInput.inputValue();
-        expect(value).toBe('');
-      }
+    await openSuggestForm(page);
+    await titleInput.fill('Draft suggestion');
+    await page.reload();
+    await boardSettled(page);
+    // After refresh, form should be cleared (no stale draft)
+    const newTitleInput = page.locator('[data-testid="suggest-title-input"]');
+    if ((await newTitleInput.count()) > 0) {
+      const value = await newTitleInput.inputValue();
+      expect(value).toBe('');
     }
   });
 
