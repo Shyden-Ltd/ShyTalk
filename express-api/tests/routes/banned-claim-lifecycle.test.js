@@ -131,12 +131,12 @@ async function pollClaims(uid, predicate, ms = 4000) {
   for (;;) {
     const claims = await liveClaims(uid);
     if (predicate(claims) || Date.now() - start > ms) return claims;
-    await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 100)); // sleep-ok: poll interval, loop exits on predicate
   }
 }
 
 /** Real wall-clock wait — tokensValidAfterTime has second resolution. */
-const settleClock = () => new Promise((r) => setTimeout(r, 1100));
+const settleClock = () => new Promise((r) => setTimeout(r, 1100)); // sleep-ok: tokensValidAfterTime has SECOND resolution — the wait must cross a real second boundary
 
 /** Seed a ban/binding doc directly (standing changes no route saw). */
 const seed = (path, data) => db.doc(path).set(data);

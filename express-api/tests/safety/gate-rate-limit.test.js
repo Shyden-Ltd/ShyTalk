@@ -15,6 +15,7 @@ const {
 } = require('../../src/safety/age-gating-flag');
 const { __resetGateRateLimit, MAX_PER_WINDOW } = require('../../src/safety/gate-rate-limit');
 const { hashUserId, SAFETY_AUDIT_COLLECTION } = require('../../src/safety/safety-audit');
+const { waitFor } = require('../_helpers/wait-for');
 
 const SAFETY_DOC = 'config/safety-test-ratelimit';
 const NOW = Date.UTC(2026, 6, 8);
@@ -50,7 +51,7 @@ async function clearAuditFor(userId) {
 async function waitForAuditCount(userId, expected, tries = 200, delayMs = 25) {
   for (let i = 0; i < tries; i += 1) {
     if ((await auditRowsFor(userId)).length >= expected) return;
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    await new Promise((resolve) => setTimeout(resolve, delayMs)); // sleep-ok: poll interval, returns as soon as the rows land
   }
 }
 const FILE_IDS = [67000001, 67000002, 67000003, 67000004, 67000005];
@@ -137,7 +138,14 @@ describe('checkFeatureAccess — gate-check rate limit (AC86)', () => {
 
     const limited = await checkFeatureAccess(db, 'GACHA_SPEND', minor, NOW);
     expect(limited.status).toBe(429);
-    await new Promise((resolve) => setTimeout(resolve, 100)); // give any stray write a chance to land
+    // Asserting ABSENCE: there is no state to wait for, so the window is
+    // inverted — wait FOR a new audit row and let the timeout be the pass.
+    // A plain wait would resolve at t=0 and prove nothing.
+    await expect(
+      waitFor(async () => expect((await auditRowsFor(67000005)).length).toBeGreaterThan(before), {
+        timeout: 500,
+      }),
+    ).rejects.toThrow();
     expect(await auditRowsFor(67000005)).toHaveLength(before); // the 429 audited nothing
   }, 20000);
 

@@ -170,7 +170,8 @@ function mockConfigDoc(graceDays = 30) {
   };
 }
 
-const flushPromises = () => new Promise((r) => setTimeout(r, 50));
+/** setImmediate runs after everything already queued — a real flush, not a 50ms guess. */
+const flushPromises = () => new Promise((r) => setImmediate(r));
 
 // ═══════════════════════════════════════════════════════════════════
 // POST /api/user/:uniqueId/delete (Admin)

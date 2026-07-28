@@ -242,7 +242,9 @@ describe('startCronJobs', () => {
       const callback = archiveCall[1];
       callback();
 
-      await new Promise((r) => setTimeout(r, 10));
+      // setImmediate runs after everything already queued, so the .catch chain has
+      // settled by the time it fires — a real flush rather than a 10ms bet.
+      await new Promise((r) => setImmediate(r));
 
       expect(log.error).toHaveBeenCalledWith('cron', 'archiveReports failed', {
         error: 'archive failed',
@@ -301,7 +303,9 @@ describe('startCronJobs', () => {
       const midnightCall = mockSchedule.mock.calls.find((c) => c[0] === '0 0 * * *');
       midnightCall[1]();
 
-      await new Promise((r) => setTimeout(r, 10));
+      // setImmediate runs after everything already queued, so the .catch chain has
+      // settled by the time it fires — a real flush rather than a 10ms bet.
+      await new Promise((r) => setImmediate(r));
 
       expect(log.error).toHaveBeenCalledWith('cron', 'subscriptions failed', {
         error: 'sub error',
@@ -339,7 +343,9 @@ describe('startCronJobs', () => {
       reconcileCall[1]();
 
       // Wait for the .catch chain to settle (log.error then createAlert).
-      await new Promise((r) => setTimeout(r, 10));
+      // setImmediate runs after everything already queued, so the .catch chain has
+      // settled by the time it fires — a real flush rather than a 10ms bet.
+      await new Promise((r) => setImmediate(r));
 
       expect(log.error).toHaveBeenCalledWith('cron', 'ageVerificationAuditReconcile failed', {
         error: 'Firestore unavailable',
@@ -368,7 +374,9 @@ describe('startCronJobs', () => {
       const reconcileCall = mockSchedule.mock.calls.find((c) => c[0] === '0 5 * * *');
       reconcileCall[1]();
 
-      await new Promise((r) => setTimeout(r, 10));
+      // setImmediate runs after everything already queued, so the .catch chain has
+      // settled by the time it fires — a real flush rather than a 10ms bet.
+      await new Promise((r) => setImmediate(r));
 
       expect(log.error).toHaveBeenCalledWith('cron', 'alertManager.createAlert failed', {
         error: 'alert pipe down',

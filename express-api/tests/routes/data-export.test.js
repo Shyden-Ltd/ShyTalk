@@ -19,6 +19,7 @@
 
 const express = require('express');
 const request = require('supertest');
+const { waitFor, waitForCall } = require('../_helpers/wait-for');
 
 // ─── Firebase mock ──────────────────────────────────────────────
 
@@ -433,8 +434,10 @@ describe('Async export processing', () => {
 
     await request(app).post('/api/users/10000001/data-export').expect(202);
 
-    // Wait for async processing to complete
-    await new Promise((r) => setTimeout(r, 100));
+    // Wait for the fire-and-forget export to reach the call this test
+    // asserts, instead of betting 100ms on it. waitForCall is the repo's
+    // sanctioned polling primitive (tests/_helpers/wait-for.js).
+    await waitForCall(mockBuildDataExport, 1);
 
     expect(mockBuildDataExport).toHaveBeenCalledWith('10000001');
     expect(mockPutObject).toHaveBeenCalledWith(
@@ -456,7 +459,10 @@ describe('Async export processing', () => {
 
     await request(app).post('/api/users/10000001/data-export').expect(202);
 
-    await new Promise((r) => setTimeout(r, 100));
+    // Wait for the fire-and-forget export to reach the call this test
+    // asserts, instead of betting 100ms on it. waitForCall is the repo's
+    // sanctioned polling primitive (tests/_helpers/wait-for.js).
+    await waitForCall(mockSendEmail, 1);
 
     expect(mockSendEmail).toHaveBeenCalledWith(
       'test@example.com',
@@ -475,9 +481,12 @@ describe('Async export processing', () => {
 
     await request(app).post('/api/users/10000001/data-export').expect(202);
 
-    await new Promise((r) => setTimeout(r, 100));
-
-    // Second update call should set status to ready
+    // Wait for the status the assertion reads, rather than betting 100ms on it.
+    await waitFor(() =>
+      expect(mockDocUpdate.mock.calls.some((c) => c[1] && c[1].dataExportStatus === 'ready')).toBe(
+        true,
+      ),
+    );
     const readyCall = mockDocUpdate.mock.calls.find(
       (c) => c[1] && c[1].dataExportStatus === 'ready',
     );
@@ -494,8 +503,11 @@ describe('Async export processing', () => {
 
     await request(app).post('/api/users/10000001/data-export').expect(202);
 
-    await new Promise((r) => setTimeout(r, 100));
-
+    await waitFor(() =>
+      expect(mockDocUpdate.mock.calls.some((c) => c[1] && c[1].dataExportStatus === 'failed')).toBe(
+        true,
+      ),
+    );
     const failCall = mockDocUpdate.mock.calls.find(
       (c) => c[1] && c[1].dataExportStatus === 'failed',
     );

@@ -19,6 +19,8 @@ const SAFETY_DOC = 'config/safety-test-audit';
 const NOW = Date.UTC(2026, 6, 8);
 const dobForAge = (years) => Date.UTC(2026 - years, 6, 8);
 const setFlag = (enabled) => db.doc(SAFETY_DOC).set({ ageGatingEnabled: enabled });
+// sleep-ok: poll interval for auditRowsFor's bounded wait — it returns the
+// instant a row appears, so it is correct at any machine speed.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Poll by the (unique-per-test) hashed id — the audit write is fire-and-forget

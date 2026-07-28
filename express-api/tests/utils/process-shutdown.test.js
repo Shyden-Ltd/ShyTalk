@@ -162,7 +162,7 @@ describe('wireProcessShutdown', () => {
     test('awaits an async stop function before calling proc.exit', async () => {
       const cleanupOrder = [];
       const asyncStop = jest.fn().mockImplementation(async () => {
-        await new Promise((r) => setTimeout(r, 10));
+        await new Promise((r) => setTimeout(r, 10)); // sleep-ok: simulated cleanup duration — the ordering under test
         cleanupOrder.push('async-done');
       });
       const { proc, fire } = makeMockProcess();
@@ -176,15 +176,15 @@ describe('wireProcessShutdown', () => {
     test('awaits all async stops in parallel (Promise.allSettled semantics)', async () => {
       const done = [];
       const stopA = jest.fn().mockImplementation(async () => {
-        await new Promise((r) => setTimeout(r, 30));
+        await new Promise((r) => setTimeout(r, 30)); // sleep-ok: simulated cleanup duration — the ordering under test
         done.push('A');
       });
       const stopB = jest.fn().mockImplementation(async () => {
-        await new Promise((r) => setTimeout(r, 10));
+        await new Promise((r) => setTimeout(r, 10)); // sleep-ok: simulated cleanup duration — the ordering under test
         done.push('B');
       });
       const stopC = jest.fn().mockImplementation(async () => {
-        await new Promise((r) => setTimeout(r, 20));
+        await new Promise((r) => setTimeout(r, 20)); // sleep-ok: simulated cleanup duration — the ordering under test
         done.push('C');
       });
       const { proc, fire } = makeMockProcess();
@@ -217,7 +217,7 @@ describe('wireProcessShutdown', () => {
       const done = [];
       const syncStop = jest.fn(() => done.push('sync'));
       const asyncStop = jest.fn().mockImplementation(async () => {
-        await new Promise((r) => setTimeout(r, 5));
+        await new Promise((r) => setTimeout(r, 5)); // sleep-ok: simulated cleanup duration — the ordering under test
         done.push('async');
       });
       const { proc, fire } = makeMockProcess();

@@ -786,9 +786,10 @@ describe('11.115 — Error Recovery Flows', () => {
     }
   });
   test('timeout recovery: long-running request returns within timeout', async () => {
-    mockDocSet.mockImplementationOnce(() => new Promise((r) => setTimeout(r, 100)));
+    // sleep-ok: the delay IS the simulated slow request this test exercises
+    mockDocSet.mockImplementationOnce(() => new Promise((r) => setTimeout(r, 100))); // sleep-ok: simulated latency
     mockCollectionAdd.mockImplementationOnce(
-      () => new Promise((r) => setTimeout(() => r({ id: 'slow' }), 100)),
+      () => new Promise((r) => setTimeout(() => r({ id: 'slow' }), 100)), // sleep-ok: simulated latency
     );
     const res = await request(createApp()).post('/api/suggestions').send(VALID_SUGGESTION);
     expect(res.status).toBeDefined();

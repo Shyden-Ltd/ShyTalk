@@ -165,7 +165,9 @@ describe('storage', () => {
     await submit(caller, { deviceId: 'dvi-dev-again-1' }).expect(200);
     const first = await readBinding('dvi-dev-again-1');
 
-    await new Promise((r) => setTimeout(r, 5));
+    // No delay needed: the assertion below is `>=`, which is the honest
+    // comparison at millisecond precision — two rapid writes can legitimately
+    // share a timestamp, so a 5ms sleep bought nothing the test relies on.
     await submit(caller, { deviceId: 'dvi-dev-again-1', model: 'iPhone16,2' }).expect(200);
     const second = await readBinding('dvi-dev-again-1');
 

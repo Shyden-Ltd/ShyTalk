@@ -159,6 +159,7 @@ describe('translate cache — the WRITE path persists to the message doc', () =>
     for (let i = 0; i < 40 && !stored; i += 1) {
       const snap = await db.doc('conversations/conv-tc-4/messages/msg-1').get();
       if (snap.data()?.translations?.[PROBE_LANG]) stored = snap.data();
+      // sleep-ok: poll interval — the loop breaks the moment the translation lands
       else await new Promise((resolve) => setTimeout(resolve, 25));
     }
     expect(stored?.translations?.[PROBE_LANG]).toBe(PROBE_TRANSLATION);

@@ -869,7 +869,9 @@ describe('in-flight Promise dedup (resolveUniqueId)', () => {
       request(app).get('/api/users/10000080').set('Authorization', 'Bearer t'),
     );
     // Let all 5 requests dispatch through middleware up to the inflight await.
-    await new Promise((r) => setTimeout(r, 10));
+    // setImmediate runs after everything already queued, so it is a real flush
+    // rather than a 10ms bet on how fast five requests dispatch.
+    await new Promise((r) => setImmediate(r));
 
     // Resolve the slow Firestore query with a real result so the dedup'd
     // callers all return the same uniqueId.

@@ -78,8 +78,14 @@ function createApp() {
 
 // ─── Utility ────────────────────────────────────────────────────
 
-/** Flush micro-task queue so fire-and-forget promises settle. */
-const flushPromises = () => new Promise((r) => setTimeout(r, 50));
+/**
+ * Flush pending promises so fire-and-forget work settles.
+ *
+ * setImmediate fires after the I/O phase, i.e. once everything already queued
+ * has run — a real flush rather than a 50ms guess that was simultaneously too
+ * long for a fast machine and too short for a loaded one.
+ */
+const flushPromises = () => new Promise((r) => setImmediate(r));
 
 // ─── Tests ──────────────────────────────────────────────────────
 

@@ -188,7 +188,7 @@ describe('authorized sweep', () => {
     // 5ms × 1600 = 8s worst-case budget, inside the 10s testTimeout, so a
     // slow CI worker exhausts into a clear count-assertion, never a hang.
     for (let i = 0; i < 1600 && !(resolveSweep && settled.length === 9); i++) {
-      await new Promise((r) => setTimeout(r, 5));
+      await new Promise((r) => setTimeout(r, 5)); // sleep-ok: poll interval inside the bounded settle loop
     }
     expect(typeof resolveSweep).toBe('function');
     expect(settled).toHaveLength(9);

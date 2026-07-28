@@ -158,7 +158,7 @@ async function pollSegregationEvent(sourceUniqueId, { timeoutMs = 4000, interval
   const query = db.collection(SEG_EVENTS).where('sourceUniqueId', '==', String(sourceUniqueId));
   let snap = await query.get();
   while (snap.empty && Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, intervalMs));
+    await new Promise((r) => setTimeout(r, intervalMs)); // sleep-ok: poll interval, loop exits on condition
     snap = await query.get();
   }
   return snap.empty ? [] : snap.docs.map((d) => d.data());
