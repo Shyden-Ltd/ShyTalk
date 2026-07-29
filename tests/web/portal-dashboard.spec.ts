@@ -54,8 +54,8 @@ test.describe('Portal — Dashboard Section Content', () => {
 
   test('all card icons are aria-hidden', async ({ page }) => {
     const icons = page.locator('.dashboard-card-icon');
+    await expect.poll(async () => await icons.count()).toBeGreaterThan(0);
     const count = await icons.count();
-    expect(count).toBeGreaterThan(0);
     for (let i = 0; i < count; i++) {
       await expect(icons.nth(i)).toHaveAttribute('aria-hidden', 'true');
     }
@@ -156,8 +156,7 @@ test.describe('Portal — Security Section Content', () => {
 
   test('revoke button has danger styling', async ({ page }) => {
     const revokeBtn = page.locator('#security-revoke-btn');
-    const classes = await revokeBtn.getAttribute('class');
-    expect(classes).toContain('btn--danger');
+    await expect.poll(async () => await revokeBtn.getAttribute('class')).toContain('btn--danger');
   });
 
   test('has linked providers card', async ({ page }) => {
@@ -209,8 +208,7 @@ test.describe('Portal — Data & Privacy Section Content', () => {
     await expect(deleteTitle).toHaveCount(1);
     await expect(deleteTitle).toContainText('Delete');
     const deleteBtn = page.locator('#data-delete-btn');
-    const classes = await deleteBtn.getAttribute('class');
-    expect(classes).toContain('btn--danger');
+    await expect.poll(async () => await deleteBtn.getAttribute('class')).toContain('btn--danger');
   });
 
   test('has legal section with all three links', async ({ page }) => {

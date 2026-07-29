@@ -165,8 +165,8 @@ test.describe('Admin Banners', () => {
     await expect(newCard).toBeVisible();
 
     // Extract the banner ID for cleanup
+    await expect.poll(async () => await newCard.getAttribute('data-banner-id')).toBeTruthy();
     const newBannerId = await newCard.getAttribute('data-banner-id');
-    expect(newBannerId).toBeTruthy();
 
     // Reload and verify persistence
     await page.reload();
@@ -403,9 +403,14 @@ test.describe('Admin Banners', () => {
 
     // Preview should now be visible with a data: URL (FileReader) or blob: URL
     await expect(preview).toHaveCSS('display', 'block');
-    const src = await preview.getAttribute('src');
-    expect(src).toBeTruthy();
-    expect(src!.startsWith('data:') || src!.startsWith('blob:')).toBe(true);
+    await expect.poll(async () => await preview.getAttribute('src')).toBeTruthy();
+    await expect
+      .poll(
+        async () =>
+          (await preview.getAttribute('src'))!.startsWith('data:') ||
+          (await preview.getAttribute('src'))!.startsWith('blob:'),
+      )
+      .toBe(true);
 
     await cancelDialog(page);
   });
@@ -426,8 +431,8 @@ test.describe('Admin Banners', () => {
 
     // Get the initial order of banner IDs
     const cardsBefore = page.locator('.banner-card');
+    await expect.poll(async () => await cardsBefore.count()).toBeGreaterThanOrEqual(2);
     const countBefore = await cardsBefore.count();
-    expect(countBefore).toBeGreaterThanOrEqual(2);
 
     const idsBefore: string[] = [];
     for (let i = 0; i < countBefore; i++) {
@@ -507,8 +512,8 @@ test.describe('Admin Banners', () => {
     // Find the new banner card
     const newCard = page.locator('.banner-card', { hasText: uploadTitle });
     await expect(newCard).toBeVisible();
+    await expect.poll(async () => await newCard.getAttribute('data-banner-id')).toBeTruthy();
     const newBannerId = await newCard.getAttribute('data-banner-id');
-    expect(newBannerId).toBeTruthy();
 
     // API: verify the imageUrl is a CDN URL
     const banners = await getAllBannersViaApi(testData);

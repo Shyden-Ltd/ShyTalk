@@ -63,10 +63,11 @@ test.describe('Roadmap footer i18n', () => {
       { timeout: 10_000 },
     );
 
-    const copyright = await page.locator('[data-i18n="copyright"]').textContent();
-    expect(copyright, 'copyright must contain Shyden Ltd brand even in Arabic locale').toContain(
-      'Shyden Ltd',
-    );
+    await expect
+      .poll(async () => await page.locator('[data-i18n="copyright"]').textContent(), {
+        message: 'copyright must contain Shyden Ltd brand even in Arabic locale',
+      })
+      .toContain('Shyden Ltd');
   });
 
   test('roadmap-app.js defines copyright key (orphan-checker contract)', async ({ request }) => {

@@ -74,6 +74,7 @@ test.describe('Dev Sanity Checks', () => {
       if (process.env.CI) {
         throw new Error(`API at ${API_BASE} did not respond — expected running in CI`);
       }
+      // defect-detector:allow SKIP-COND — the branch immediately above THROWS when process.env.CI is set, so this cannot hide a failure in the gate that matters; it only spares a local pre-push run that has no stack up
       test.skip(true, 'API not running — skipping (local pre-push without stack)');
     }
     expect(probe!.ok()).toBe(true);
@@ -85,6 +86,7 @@ test.describe('Dev Sanity Checks', () => {
       if (process.env.CI) {
         throw new Error(`API at ${API_BASE} did not respond — expected running in CI`);
       }
+      // defect-detector:allow SKIP-COND — the branch immediately above THROWS when process.env.CI is set, so this cannot hide a failure in the gate that matters; it only spares a local pre-push run that has no stack up
       test.skip(true, 'API not running — skipping (local pre-push without stack)');
     }
     expect(probe!.ok()).toBe(true);

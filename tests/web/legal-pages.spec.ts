@@ -10,8 +10,9 @@ test.describe('Privacy Policy', () => {
   });
 
   test('has viewport meta tag', async ({ page }) => {
-    const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
-    expect(viewport).toContain('width=device-width');
+    await expect
+      .poll(async () => await page.locator('meta[name="viewport"]').getAttribute('content'))
+      .toContain('width=device-width');
   });
 
   test('contains key privacy sections', async ({ page }) => {
@@ -47,8 +48,9 @@ test.describe('Terms of Service', () => {
   });
 
   test('has viewport meta tag', async ({ page }) => {
-    const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
-    expect(viewport).toContain('width=device-width');
+    await expect
+      .poll(async () => await page.locator('meta[name="viewport"]').getAttribute('content'))
+      .toContain('width=device-width');
   });
 
   test('contains key terms sections', async ({ page }) => {
@@ -68,8 +70,9 @@ test.describe('Community Guidelines', () => {
   });
 
   test('has viewport meta tag', async ({ page }) => {
-    const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
-    expect(viewport).toContain('width=device-width');
+    await expect
+      .poll(async () => await page.locator('meta[name="viewport"]').getAttribute('content'))
+      .toContain('width=device-width');
   });
 
   test('contains community-related content', async ({ page }) => {
@@ -89,8 +92,9 @@ test.describe('Cyber Bullying Policy', () => {
   });
 
   test('has viewport meta tag', async ({ page }) => {
-    const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
-    expect(viewport).toContain('width=device-width');
+    await expect
+      .poll(async () => await page.locator('meta[name="viewport"]').getAttribute('content'))
+      .toContain('width=device-width');
   });
 
   test('contains anti-bullying content', async ({ page }) => {

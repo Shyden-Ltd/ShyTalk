@@ -264,8 +264,7 @@ test.describe('Admin Users - Profile Subtab', () => {
     await expect(emailToggle).toContainText('Hide');
 
     // Email input should no longer be readonly
-    const readonlyAfterShow = await emailInput.getAttribute('readonly');
-    expect(readonlyAfterShow).toBeNull();
+    await expect.poll(async () => await emailInput.getAttribute('readonly')).toBeNull();
 
     // Click Hide — toggle text should change back to "Show"
     await emailToggle.click();
@@ -345,10 +344,11 @@ test.describe('Admin Users - Profile Subtab', () => {
     // Verify values match API data
     const apiData = await testData.api.get(userPath);
     if (apiData.createdAt) {
-      const createdAtText = await createdAtField.textContent();
       // The API returns ISO/epoch, the UI formats with toLocaleString — just verify it's not empty
-      expect(createdAtText).not.toBe('—');
-      expect(createdAtText!.length).toBeGreaterThan(0);
+      await expect.poll(async () => await createdAtField.textContent()).not.toBe('—');
+      await expect
+        .poll(async () => (await createdAtField.textContent())!.length)
+        .toBeGreaterThan(0);
     }
   });
 

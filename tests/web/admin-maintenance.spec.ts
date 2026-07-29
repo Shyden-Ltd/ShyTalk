@@ -43,8 +43,7 @@ test.describe('Admin Maintenance Tab', () => {
     await expect(result).toBeVisible();
 
     // Result should contain size information (KB, MB, or B)
-    const text = await result.textContent();
-    expect(text).toMatch(/[KMG]?B/i);
+    await expect.poll(async () => await result.textContent()).toMatch(/[KMG]?B/i);
 
     // Button should re-enable
     await expect(auditBtn).toBeEnabled();
@@ -133,8 +132,9 @@ test.describe('Admin Maintenance Tab', () => {
     const isVisible = await result.isVisible();
     // If it was visible from a previous test, it should not have changed
     // The key assertion: the button should NOT have changed to "Processing..."
-    const btnText = await page.locator('#clear-reports-btn').textContent();
-    expect(btnText).toBe('Clear All Reports');
+    await expect
+      .poll(async () => await page.locator('#clear-reports-btn').textContent())
+      .toBe('Clear All Reports');
   });
 
   // ── Test 5: Individual operation result display ──
@@ -275,8 +275,7 @@ test.describe('Admin Maintenance Tab', () => {
 
     // Description should explain what will be deleted
     const desc = page.locator('#nuclear-desc');
-    const descText = await desc.textContent();
-    expect(descText).toContain('maintenance');
+    await expect(desc).toContainText('maintenance');
 
     // Confirm input should NOT be visible yet
     const inputWrap = page.locator('#nuclear-input-wrap');

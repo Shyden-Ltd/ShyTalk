@@ -56,8 +56,8 @@ test.describe('Portal i18n', () => {
       null,
       { timeout: 5_000 },
     );
-    expect(await page.locator('html').getAttribute('lang')).toBe('ar');
-    expect(await page.locator('html').getAttribute('dir')).toBe('rtl');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   });
 
   test('English (default) applies dir=ltr', async ({ page }) => {
@@ -66,7 +66,7 @@ test.describe('Portal i18n', () => {
     });
     await page.goto(`${BASE}/portal/`);
     await page.waitForFunction(() => document.documentElement.dir !== '', null, { timeout: 5_000 });
-    expect(await page.locator('html').getAttribute('dir')).toBe('ltr');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
   });
 
   test('extracted CSS file is served and language-selector.js skips injection', async ({
@@ -83,8 +83,7 @@ test.describe('Portal i18n', () => {
     // language-selector.js (since the link sentinel is present, the
     // guard should fire). The link tag itself IS present.
     await page.goto(`${BASE}/portal/`);
-    const linkExists = await page.locator('link[data-language-selector-styles]').count();
-    expect(linkExists).toBe(1);
+    await expect(page.locator('link[data-language-selector-styles]')).toHaveCount(1);
     // Count style elements that contain `.stl-lang-btn` — there should
     // be ZERO since injection was skipped.
     const injectedStyleCount = await page.evaluate(() => {
@@ -105,8 +104,11 @@ test.describe('Portal i18n', () => {
     // terms.html does NOT have the data-language-selector-styles link
     // (it's still using inline injection). So the JS should inject
     // styles as before — backwards-compat for non-CSP pages.
-    const linkExists = await page.locator('link[data-language-selector-styles]').count();
-    expect(linkExists, 'terms.html should NOT have the link sentinel').toBe(0);
+    await expect
+      .poll(async () => await page.locator('link[data-language-selector-styles]').count(), {
+        message: 'terms.html should NOT have the link sentinel',
+      })
+      .toBe(0);
     const injectedStyleCount = await page.evaluate(() => {
       return Array.from(document.querySelectorAll('style')).filter((s) =>
         (s.textContent || '').includes('.stl-lang-btn'),

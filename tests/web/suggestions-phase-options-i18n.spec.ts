@@ -48,7 +48,11 @@ test.describe('Suggestions-board PHASE_OPTIONS i18n', () => {
     expect(res.ok()).toBe(true);
     const src = await res.text();
 
-    const phaseBlock = src.match(/var PHASE_OPTIONS = \[([\s\S]*?)\];/);
+    // The option lists became FUNCTIONS under SHY-0252 — as module-level
+    // `var`s they froze the locale active at script load, so a language
+    // switch could never change them. The anchor moved with them; the
+    // claim (labels are sgT()-driven) is unchanged.
+    const phaseBlock = src.match(/function phaseOptions\(\) \{\s*return \[([\s\S]*?)\];/);
     expect(phaseBlock, 'PHASE_OPTIONS array not found').not.toBeNull();
     const arrSrc = phaseBlock![1];
 

@@ -1,5 +1,12 @@
 import { test, expect, Page } from '@playwright/test';
 import { publishAuthIdentity } from './helpers/auth-identity';
+import {
+  createRoadmapUser,
+  createSuggestion,
+  signInToRoadmap,
+  teardownTestRun,
+  type RoadmapTestUser,
+} from './helpers/roadmap-auth';
 
 /**
  * Suggestions board tests.
@@ -54,7 +61,14 @@ const MOCK_SUGGESTIONS = [
   {
     id: 'test-sug-3',
     title: 'Voice chat improvements',
-    description: 'Better audio quality and noise cancellation for voice rooms',
+    // Over the product's 200-char truncation threshold, so this card renders
+    // the "Show more" affordance. Nothing exercised truncation before, which
+    // is why the expand test sat parked despite the feature existing.
+    description:
+      'Better audio quality and noise cancellation for voice rooms. ' +
+      'Background noise from one participant currently drowns out everyone else in a busy room. '.repeat(
+        3,
+      ),
     tag: 'quality-of-life',
     tags: ['quality-of-life'],
     language: 'en',
@@ -81,6 +95,106 @@ const MOCK_SUGGESTIONS = [
     submitterUid: 4004,
     createdAt: 1709654400000,
     declineReason: 'This would increase moderation burden significantly.',
+  },
+  {
+    // PENDING and owned by uniqueId 1001 — the identity `openSuggestForm` and
+    // the owner tests sign in as. Edit and Withdraw are offered only on your
+    // own pending suggestion, so without this fixture there was nothing for
+    // those controls to appear on.
+    id: 'test-sug-mine',
+    title: 'My own pending idea',
+    description: 'Mine, still awaiting review.',
+    tag: 'social',
+    tags: ['social'],
+    language: 'en',
+    status: 'pending',
+    upvotes: 1,
+    downvotes: 0,
+    score: 1,
+    netScore: 1,
+    submitterUid: 1001,
+    createdAt: 1709308800000,
+  },
+  {
+    // A description crafted to break out of the href attribute. `escapeHtml`
+    // builds a text node and reads innerHTML, so it escapes & < > but NOT
+    // quotes — linkifying already-escaped text spliced this straight into
+    // `href="..."`, where the quote closed the attribute and the remainder
+    // parsed as an event handler. Stored XSS on a public board.
+    id: 'test-sug-xss',
+    title: 'Attribute breakout probe',
+    description:
+      'Report at https://evil.example/x"onmouseover=alert(1) and also ' +
+      'https://evil.example/a" onmouseover="alert(2) plus javascript:alert(3)',
+    tag: 'social',
+    tags: ['social'],
+    language: 'en',
+    status: 'planned',
+    upvotes: 1,
+    downvotes: 0,
+    score: 1,
+    netScore: 1,
+    submitterUid: 8008,
+    createdAt: 1709308800000,
+  },
+  {
+    // Carries a bare URL so linkification has something to act on. No fixture
+    // had one, so the "URLs become links" test could not tell a working
+    // implementation from a missing one.
+    id: 'test-sug-url',
+    title: 'Link to the design doc',
+    description: 'Details live at https://example.com/shytalk-design for anyone who wants them.',
+    tag: 'social',
+    tags: ['social'],
+    language: 'en',
+    status: 'planned',
+    upvotes: 2,
+    downvotes: 0,
+    score: 2,
+    netScore: 2,
+    submitterUid: 6006,
+    createdAt: 1709481600000,
+  },
+  {
+    // Arabic, so RTL rendering has a real case to prove. `dir="auto"` derives
+    // direction from the text itself, which only means something when some of
+    // the text is actually right-to-left.
+    id: 'test-sug-rtl',
+    title: 'دعم اللغة العربية',
+    description: 'نرجو إضافة دعم كامل للغة العربية في جميع أنحاء التطبيق.',
+    tag: 'social',
+    tags: ['social'],
+    language: 'ar',
+    status: 'planned',
+    upvotes: 4,
+    downvotes: 0,
+    score: 4,
+    netScore: 4,
+    submitterUid: 7007,
+    createdAt: 1709395200000,
+  },
+  {
+    // The "only the creator's automatic upvote" case. No fixture modelled it,
+    // so the test named after it could only ever check that the score LOOKED
+    // like a number. Tagged `social` (not `quality-of-life`) so the
+    // accepted/quality-of-life/en filter test still matches exactly one card,
+    // and scored lowest so it sorts last and never displaces a `.first()`.
+    id: 'test-sug-auto',
+    title: 'Only the auto-upvote',
+    description: 'Newly posted, so it carries just its creator upvote.',
+    tag: 'social',
+    tags: ['social'],
+    language: 'en',
+    // PLANNED, not accepted: `withComments` attaches comments to every ACCEPTED
+    // fixture, so a second accepted entry would double `.sg-comment` counts in
+    // the comment-flow tests. A planned card still renders its vote score.
+    status: 'planned',
+    upvotes: 1,
+    downvotes: 0,
+    score: 1,
+    netScore: 1,
+    submitterUid: 5005,
+    createdAt: 1709568000000,
   },
 ];
 
@@ -166,6 +280,7 @@ async function setupSuggestionsMocks(
     sortable = false,
     duplicateMatches = 0,
     withComments = false,
+    commentCount = 0,
     store = newVoteStore(),
   }: {
     persistVotes?: boolean;
@@ -173,33 +288,48 @@ async function setupSuggestionsMocks(
     sortable?: boolean;
     duplicateMatches?: number;
     withComments?: boolean;
+    /** Attach N generated comments instead of the default two. */
+    commentCount?: number;
     store?: VoteStore;
   } = {},
 ) {
   // Comments render only on ACCEPTED suggestions. Opt-in so the default
   // fixture keeps its empty-comments case, which the "No comments yet" empty
   // state depends on.
+  // A long thread, when the caller asks for one — the pager cannot be tested
+  // against a list that never exceeds one page.
+  const bulkComments = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `bulk-${i}`,
+      text: `Comment number ${i + 1}.`,
+      authorName: `Commenter ${i + 1}`,
+      createdAt: Date.now() - (n - i) * 1_000,
+    }));
+
   const withCommentRows = (rows: typeof MOCK_SUGGESTIONS) =>
-    withComments
+    withComments || commentCount > 0
       ? rows.map((r) =>
           r.status === 'accepted'
             ? {
                 ...r,
-                comments: [
-                  {
-                    id: 'c1',
-                    text: 'First comment.',
-                    authorName: 'Commenter One',
-                    createdAt: Date.now() - 60_000,
-                  },
-                  {
-                    id: 'c2',
-                    text: 'Their account is gone.',
-                    authorName: 'Commenter Two',
-                    authorDeleted: true,
-                    createdAt: Date.now() - 30_000,
-                  },
-                ],
+                comments:
+                  commentCount > 0
+                    ? bulkComments(commentCount)
+                    : [
+                        {
+                          id: 'c1',
+                          text: 'First comment.',
+                          authorName: 'Commenter One',
+                          createdAt: Date.now() - 60_000,
+                        },
+                        {
+                          id: 'c2',
+                          text: 'Their account is gone.',
+                          authorName: 'Commenter Two',
+                          authorDeleted: true,
+                          createdAt: Date.now() - 30_000,
+                        },
+                      ],
               }
             : r,
         )
@@ -419,7 +549,10 @@ async function withSuggestionsFetch(page: Page, action: () => Promise<unknown>) 
     { timeout: 15_000 },
   );
   await action();
-  await response;
+  // Returned, not discarded: a filter test can only prove the choice REACHED
+  // the API by inspecting the request it produced. Counting cards afterwards
+  // proves nothing — an empty board satisfies any count assertion.
+  return response;
 }
 
 /**
@@ -447,8 +580,8 @@ async function typeTitleAwaitingDuplicates(
  */
 async function nonEmptyCount(locator: ReturnType<Page['locator']>): Promise<number> {
   await expect(locator.first()).toBeVisible({ timeout: 15_000 });
+  await expect.poll(async () => await locator.count()).toBeGreaterThan(0);
   const n = await locator.count();
-  expect(n).toBeGreaterThan(0);
   return n;
 }
 
@@ -465,8 +598,7 @@ test.describe('Suggestions Board — Public Browsing', () => {
   test('suggestions list loads with cards', async ({ page }) => {
     const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     await cards.first().waitFor({ timeout: 10_000 });
-    const count = await cards.count();
-    expect(count).toBeGreaterThan(0);
+    await expect.poll(async () => await cards.count()).toBeGreaterThan(0);
   });
 
   test('card shows title', async ({ page }) => {
@@ -474,8 +606,7 @@ test.describe('Suggestions Board — Public Browsing', () => {
     await card.waitFor({ timeout: 10_000 });
     const title = card.locator('[data-testid^="suggestion-title"], .sg-card-title');
     await expect(title).toBeVisible();
-    const text = await title.textContent();
-    expect(text!.trim().length).toBeGreaterThan(0);
+    await expect.poll(async () => (await title.textContent())!.trim().length).toBeGreaterThan(0);
   });
 
   test('card shows description', async ({ page }) => {
@@ -490,8 +621,7 @@ test.describe('Suggestions Board — Public Browsing', () => {
     await card.waitFor({ timeout: 10_000 });
     const voteCount = card.locator('[data-testid^="vote-score"], .sg-vote-score');
     await expect(voteCount).toBeVisible();
-    const text = await voteCount.textContent();
-    expect(text).toMatch(/-?\d+/);
+    await expect.poll(async () => await voteCount.textContent()).toMatch(/-?\d+/);
   });
 
   test('card shows tags', async ({ page }) => {
@@ -622,8 +752,9 @@ test.describe('Suggestions Board — Public Browsing', () => {
       // All displayed cards should have the selected tag
       for (let i = 0; i < cardCount; i++) {
         const tags = cards.nth(i).locator('[data-testid^="suggestion-tag"], .sg-tag');
-        const tagText = await tags.textContent();
-        expect(tagText!.toLowerCase()).toContain(tagValue!.toLowerCase());
+        await expect
+          .poll(async () => (await tags.textContent())!.toLowerCase())
+          .toContain(tagValue!.toLowerCase());
       }
     }
   });
@@ -639,8 +770,9 @@ test.describe('Suggestions Board — Public Browsing', () => {
       const langTags = page.locator('[data-testid^="suggestion-lang"], .sg-lang-tag');
       const count = await langTags.count();
       for (let i = 0; i < count; i++) {
-        const text = await langTags.nth(i).textContent();
-        expect(text!.toLowerCase()).toContain(langValue!.toLowerCase());
+        await expect
+          .poll(async () => (await langTags.nth(i).textContent())!.toLowerCase())
+          .toContain(langValue!.toLowerCase());
       }
     }
   });
@@ -649,13 +781,19 @@ test.describe('Suggestions Board — Public Browsing', () => {
     const phaseFilter = page.locator('[data-testid="phase-filter"], .phase-filter');
     await phaseFilter.waitFor({ timeout: 10_000 });
     const options = phaseFilter.locator('option');
-    const optionCount = await options.count();
-    if (optionCount > 1) {
-      const phaseValue = await options.nth(1).getAttribute('value');
-      await withSuggestionsFetch(page, () => phaseFilter.selectOption(phaseValue!));
-      const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
-      expect(await cards.count()).toBeGreaterThanOrEqual(0);
-    }
+    // The board must offer a real phase beyond the default "all", otherwise
+    // there is nothing to filter BY and the rest of the test is vacuous. The
+    // old `if (optionCount > 1)` swallowed exactly that case silently.
+    await expect.poll(async () => options.count()).toBeGreaterThan(1);
+
+    const phaseValue = await options.nth(1).getAttribute('value');
+    const response = await withSuggestionsFetch(page, () => phaseFilter.selectOption(phaseValue!));
+
+    // "Filtering works" means the choice REACHED THE API and stuck in the UI.
+    // The previous assertion was `cards.count() >= 0`, which is true of every
+    // list including an empty one, so this test could not fail.
+    expect(new URL(response.url()).searchParams.get('phase')).toBe(phaseValue);
+    await expect(phaseFilter).toHaveValue(phaseValue!);
   });
 
   test('combined filters work (status + tag + language)', async ({ page }) => {
@@ -683,8 +821,9 @@ test.describe('Suggestions Board — Public Browsing', () => {
     await expect(badges).toHaveCount(1);
     const count = await nonEmptyCount(badges);
     for (let i = 0; i < count; i++) {
-      const text = await badges.nth(i).textContent();
-      expect(text!.toLowerCase()).toContain('accepted');
+      await expect
+        .poll(async () => (await badges.nth(i).textContent())!.toLowerCase())
+        .toContain('accepted');
     }
   });
 
@@ -702,8 +841,9 @@ test.describe('Suggestions Board — Public Browsing', () => {
     const count = await nonEmptyCount(cards);
     // Each visible card title or description must contain the query
     for (let i = 0; i < count; i++) {
-      const cardText = await cards.nth(i).textContent();
-      expect(cardText!.toLowerCase()).toContain('dark');
+      await expect
+        .poll(async () => (await cards.nth(i).textContent())!.toLowerCase())
+        .toContain('dark');
     }
   });
 
@@ -727,8 +867,8 @@ test.describe('Suggestions Board — Public Browsing', () => {
     const firstTitle = cardsOf(page)
       .first()
       .locator('[data-testid^="suggestion-title"], .sg-card-title');
+    await expect.poll(async () => await firstTitle.textContent()).toBeTruthy();
     const page1Title = await firstTitle.textContent();
-    expect(page1Title).toBeTruthy();
 
     await withSuggestionsFetch(page, () => page2.click());
 
@@ -740,7 +880,7 @@ test.describe('Suggestions Board — Public Browsing', () => {
   // PARKED (SHY-0247): a declined suggestion never shows why it was declined — the testid appears nowhere in public/, so
   // there is nothing to assert against. Was an `if (count > 0)` guard, which
   // ran nothing and reported green.
-  test.skip('rejected suggestion shows decline reason (if provided)', async ({ page }) => {
+  test('rejected suggestion shows decline reason (if provided)', async ({ page }) => {
     const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Rejected' }));
@@ -759,8 +899,7 @@ test.describe('Suggestions Board — Public Browsing', () => {
 
     const rejectedCards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     // At least some rejected cards may not have a reason — verify no crash
-    const cards = await rejectedCards.count();
-    expect(cards).toBeGreaterThan(0);
+    await expect.poll(async () => await rejectedCards.count()).toBeGreaterThan(0);
   });
 
   test('completed suggestion shows "Shipped!" badge', async ({ page }) => {
@@ -785,21 +924,23 @@ test.describe('Suggestions Board — Public Browsing', () => {
       .first()
       .locator('[data-testid^="vote-up"], [data-testid^="vote-down"]');
     // Vote arrows should be hidden or not present for planned suggestions
-    const arrowCount = await voteArrows.count();
-    if (arrowCount > 0) {
-      for (let i = 0; i < arrowCount; i++) {
-        await expect(voteArrows.nth(i)).not.toBeVisible();
-      }
-    }
+    // Planned suggestions must not offer voting. Guarding the loop on
+    // `arrowCount > 0` meant that if the arrows were rendered AND visible the
+    // test still had to find them first — and if the board rendered nothing at
+    // all, it asserted nothing. Absence is the product's actual contract here.
+    await expect(voteArrows).toHaveCount(0);
   });
 
   test('info banner visible with moderation and duplicate warning text', async ({ page }) => {
     const infoBanner = page.locator('[data-testid="suggestions-info-banner"]');
     await infoBanner.waitFor({ timeout: 10_000 });
     await expect(infoBanner).toBeVisible();
-    const text = await infoBanner.textContent();
-    expect(text!.toLowerCase()).toContain('review');
-    expect(text!.toLowerCase()).toContain('duplicate');
+    await expect
+      .poll(async () => (await infoBanner.textContent())!.toLowerCase())
+      .toContain('review');
+    await expect
+      .poll(async () => (await infoBanner.textContent())!.toLowerCase())
+      .toContain('duplicate');
   });
 
   test('empty state: no suggestions shows appropriate message', async ({ page }) => {
@@ -898,11 +1039,29 @@ async function votingBoard(page: Page): Promise<void> {
 }
 
 /** Clicks a vote arrow and waits for the write it triggers to land. */
-async function castVote(page: Page, arrow: ReturnType<Page['locator']>): Promise<void> {
+/**
+ * Cast a vote the way a person now does: press the arrow, then confirm.
+ *
+ * A NEW vote opens the reason modal (SHY-0247) — optional to fill in, so "Just
+ * vote" is the no-reason path. UN-voting skips the modal entirely: taking a
+ * vote back needs no explanation. The helper waits on the modal's own
+ * appearance rather than probing for it, so it cannot silently take the wrong
+ * branch.
+ */
+async function castVote(
+  page: Page,
+  arrow: ReturnType<Page['locator']>,
+  opts: { alreadyVoted?: boolean } = {},
+): Promise<void> {
   const response = page.waitForResponse((r) => /\/api\/suggestions\/[^/]+\/vote/.test(r.url()), {
     timeout: 15_000,
   });
   await arrow.click();
+  if (!opts.alreadyVoted) {
+    const skip = page.locator('[data-testid="reason-skip"]');
+    await expect(skip).toBeVisible({ timeout: 10_000 });
+    await skip.click();
+  }
   await response;
 }
 
@@ -949,14 +1108,14 @@ test.describe('Suggestions Board — Submission Flow', () => {
     const tags = page.locator('[data-testid="suggest-tag-select"]');
     await expect(tags).toBeVisible();
     // A picker with no options is indistinguishable from a broken one.
-    expect(await tags.locator('option').count()).toBeGreaterThan(0);
+    await expect.poll(async () => tags.locator('option').count()).toBeGreaterThan(0);
   });
 
   test('form displays a language dropdown with a value selected', async ({ page }) => {
     await openSuggestForm(page);
     const lang = page.locator('[data-testid="suggest-lang-select"]');
     await expect(lang).toBeVisible();
-    expect(await lang.locator('option').count()).toBeGreaterThan(0);
+    await expect.poll(async () => lang.locator('option').count()).toBeGreaterThan(0);
     // Pre-selected, not left blank — the field is submitted as-is.
     expect(await lang.inputValue()).not.toBe('');
   });
@@ -986,8 +1145,7 @@ test.describe('Suggestions Board — Submission Flow', () => {
     await expect(titleCounter).toContainText('80/80');
     // Try typing one more character
     await titleInput.press('a');
-    const value = await titleInput.inputValue();
-    expect(value.length).toBeLessThanOrEqual(80);
+    await expect.poll(async () => (await titleInput.inputValue()).length).toBeLessThanOrEqual(80);
   });
 
   test('description at 5000 chars: counter shows 5000/5000', async ({ page }) => {
@@ -1060,7 +1218,7 @@ test.describe('Suggestions Board — Submission Flow', () => {
     // The fixture supplies more candidates than the cap, so a missing cap
     // would render more than three and fail here.
     await expect(items.first()).toBeVisible();
-    expect(await items.count()).toBeLessThanOrEqual(3);
+    await expect.poll(async () => items.count()).toBeLessThanOrEqual(3);
   });
 
   test('submit success: toast message shown with "don\'t re-submit" text', async ({ page }) => {
@@ -1077,31 +1235,93 @@ test.describe('Suggestions Board — Submission Flow', () => {
   // there is nothing to assert against until the feature exists. Skipped so
   // they stop reporting success; see
   // .project/stories/SHY-0247-web-features-named-by-tests-but-never-built.md
-  test.skip('submit: suggestion appears in "My Suggestions" view', async ({ page }) => {
-    const mySuggestions = page.locator('[data-testid="my-suggestions"], .my-suggestions');
-    // After submission, the suggestion should appear in the user's list
+  test('submit: suggestion appears in "My Suggestions" view', async ({ page }) => {
+    // The body was EMPTY — a locator and a comment, no assertion — against a
+    // view that did not exist (SHY-0247).
+    await publishAuthIdentity(page, {
+      uid: 'submitter-1',
+      displayName: 'Submitter',
+      profile: { uniqueId: 1001 },
+    });
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('shytalk-auth-changed')));
+
+    await page.locator('[data-testid="my-suggestions-toggle"]').click();
+
+    const mySuggestions = page.locator('[data-testid="my-suggestions"]');
+    await expect(mySuggestions).toBeVisible();
+    // MINE is in the list...
+    await expect(
+      mySuggestions.locator('[data-testid="suggestion-card-test-sug-mine"]'),
+    ).toHaveCount(1);
+    // ...and somebody else's is not. A view that showed everything would pass
+    // the first assertion just as well.
+    await expect(mySuggestions.locator('[data-testid="suggestion-card-test-sug-2"]')).toHaveCount(
+      0,
+    );
   });
 
   // PARKED (SHY-0247): editing your own pending suggestion does not exist — the testid appears nowhere in public/, so
   // there is nothing to assert against. Was an `if (count > 0)` guard, which
   // ran nothing and reported green.
-  test.skip('edit pending: form pre-filled with current values, re-review warning banner shown', async ({
+  test('edit pending: form pre-filled with current values, re-review warning banner shown', async ({
     page,
   }) => {
-    const editBtn = page.locator('[data-testid="edit-suggestion-btn"]').first();
-    await editBtn.click();
+    await publishAuthIdentity(page, {
+      uid: 'submitter-1',
+      displayName: 'Submitter',
+      profile: { uniqueId: 1001 },
+    });
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('shytalk-auth-changed')));
+
+    await page.locator('[data-testid="edit-suggestion-btn"]').first().click();
+
+    // Pre-filled: an edit form that opened blank would wipe what was written.
+    await expect(page.locator('[data-testid="suggest-title-input"]')).toHaveValue(
+      'My own pending idea',
+    );
+    await expect(page.locator('[data-testid="suggest-desc-input"]')).toHaveValue(
+      'Mine, still awaiting review.',
+    );
+    await expect(page.locator('[data-testid="suggest-tag-select"]')).toHaveValue('social');
+
+    // And the consequence is stated, because editing really does re-open review.
     await expect(page.locator('[data-testid="re-review-warning"]')).toBeVisible();
   });
 
   // PARKED (SHY-0247): withdrawing your own suggestion does not exist — the testid appears nowhere in public/, so
   // there is nothing to assert against. Was an `if (count > 0)` guard, which
   // ran nothing and reported green.
-  test.skip('withdraw pending: confirmation dialog, suggestion removed from "My Suggestions"', async ({
+  test('withdraw pending: confirmation dialog, suggestion removed from "My Suggestions"', async ({
     page,
   }) => {
-    const withdrawBtn = page.locator('[data-testid="withdraw-suggestion-btn"]').first();
-    await withdrawBtn.click();
-    await expect(page.locator('[data-testid="confirm-dialog"]')).toBeVisible();
+    await publishAuthIdentity(page, {
+      uid: 'submitter-1',
+      displayName: 'Submitter',
+      profile: { uniqueId: 1001 },
+    });
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('shytalk-auth-changed')));
+
+    await page.locator('[data-testid="withdraw-suggestion-btn"]').first().click();
+
+    // Withdrawing cannot be undone, and the button sits beside Edit — so it
+    // asks first.
+    const dialog = page.locator('[data-testid="confirm-dialog"]');
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('[data-testid="confirm-cancel"]')).toBeVisible();
+
+    // Cancelling must leave the suggestion alone.
+    await dialog.locator('[data-testid="confirm-cancel"]').click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator('[data-testid="suggestion-card-test-sug-mine"]')).toBeVisible();
+
+    // Confirming sends the DELETE the API has always accepted.
+    const deleted = page.waitForRequest(
+      (r) => r.method() === 'DELETE' && r.url().includes('/api/suggestions/test-sug-mine'),
+      { timeout: 15_000 },
+    );
+    await page.locator('[data-testid="withdraw-suggestion-btn"]').first().click();
+    await page.locator('[data-testid="confirm-withdraw"]').click();
+    await deleted;
   });
 
   test('cannot edit/withdraw accepted/planned/completed/rejected (buttons not shown)', async ({
@@ -1116,8 +1336,8 @@ test.describe('Suggestions Board — Submission Flow', () => {
     const withdrawBtn = cards
       .first()
       .locator('[data-testid="withdraw-suggestion-btn"], .withdraw-suggestion-btn');
-    expect(await editBtn.count()).toBe(0);
-    expect(await withdrawBtn.count()).toBe(0);
+    await expect(editBtn).toHaveCount(0);
+    await expect(withdrawBtn).toHaveCount(0);
   });
 });
 
@@ -1174,24 +1394,34 @@ test.describe('Suggestions Board — Voting Flow', () => {
     await castVote(page, up);
     await expect(up).toHaveClass(/sg-vote-btn--active/);
 
-    // Second click sends DELETE (suggestions-board.js:400-407) and clears it.
-    await castVote(page, up);
+    // Second click sends DELETE (suggestions-board.js:400-407) and clears it —
+    // taking a vote back asks for no reason, so no modal appears.
+    await castVote(page, up, { alreadyVoted: true });
     await expect(up).not.toHaveClass(/sg-vote-btn--active/);
   });
 
-  test.skip('vote reason: optional modal appears, can choose public/private', async ({ page }) => {
-    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
-    await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
-    await upvoteBtn.click();
-    const reasonModal = page.locator('[data-testid="vote-reason-modal"], .vote-reason-modal');
-    if ((await reasonModal.count()) > 0) {
-      await expect(reasonModal).toBeVisible();
-      const publicOption = reasonModal.locator('[data-testid="reason-public"], .reason-public');
-      const privateOption = reasonModal.locator('[data-testid="reason-private"], .reason-private');
-      await expect(publicOption).toBeAttached();
-      await expect(privateOption).toBeAttached();
-    }
+  test('vote reason: optional modal appears, can choose public/private', async ({ page }) => {
+    // Voting is auth-gated, so the modal only opens for a signed-in reader.
+    await publishAuthIdentity(page, {
+      uid: 'voter-1',
+      displayName: 'Voter',
+      profile: { uniqueId: 2002 },
+    });
+    const card = page.locator('[data-testid="suggestion-card-test-sug-1"]');
+    await expect(card).toBeVisible({ timeout: 10_000 });
+    await card.locator('[data-testid="vote-up-test-sug-1"]').click();
+
+    // The guard this replaces (`if (count > 0)`) made every assertion optional,
+    // against a modal that did not exist — so it ran nothing and passed.
+    const reasonModal = page.locator('[data-testid="vote-reason-modal"]');
+    await expect(reasonModal).toBeVisible();
+    await expect(reasonModal.locator('[data-testid="reason-public"]')).toBeChecked();
+    await expect(reasonModal.locator('[data-testid="reason-private"]')).toBeAttached();
+
+    // Choosing private must actually take.
+    await reasonModal.locator('[data-testid="reason-private"]').check();
+    await expect(reasonModal.locator('[data-testid="reason-private"]')).toBeChecked();
+    await expect(reasonModal.locator('[data-testid="reason-public"]')).not.toBeChecked();
   });
 
   test('planned suggestion: vote arrows disabled/hidden', async ({ page }) => {
@@ -1255,16 +1485,8 @@ test.describe('Suggestions Board — Comment Flow', () => {
     await expect(card.locator('[data-testid^="comment-input"]')).toHaveCount(0);
   });
 
-  test('submit comment: appears in comment list', async ({ page }) => {
-    const commentInput = page.locator('[data-testid^="comment-input"]').first();
-    const commentSubmit = page.locator('[data-testid^="comment-submit"]').first();
-    await commentInput.fill('Great idea!');
-    await commentSubmit.click();
-    const comments = page.locator('.sg-comment');
-    // The comment appearing is the condition; polling replaces the 500ms bet.
-    await expect.poll(() => comments.count()).toBeGreaterThanOrEqual(0);
-    // Comment should appear in the list
-  });
+  // 'submit comment: appears in comment list' moved OUT of this mocked block —
+  // see 'Comment Flow (real API)' below. It could never have passed here.
 
   test('a comment shows its author, and a deleted author shows a placeholder', async ({ page }) => {
     // There is no "Anonymous" concept in the product — comments carry their
@@ -1282,7 +1504,124 @@ test.describe('Suggestions Board — Comment Flow', () => {
   test('private comment not visible to non-admins', async ({ page }) => {
     const privateComments = page.locator('[data-testid="comment-private"], .comment-private');
     // Non-admin users should not see private comments
-    expect(await privateComments.count()).toBe(0);
+    await expect(privateComments).toHaveCount(0);
+  });
+});
+
+/**
+ * Comment submission, end to end against the REAL API.
+ *
+ * The mocked version of this test could never have passed, in two independent
+ * ways: the board's `beforeEach` never signed in, so `requireAuth("post
+ * comments")` returned early on every click; and the comment route mock
+ * answered EVERY method — POST included — with `{comments: [], total: 0}`, so
+ * a posted comment could not come back even if one had been sent. It reported
+ * green for its whole life because it asserted `count() >= 0`, which is true
+ * of every list including an empty one.
+ *
+ * Real user, real seeded suggestion, real endpoint — the only arrangement in
+ * which "appears in comment list" means anything.
+ */
+test.describe('Suggestions Board — Comment Flow (real API)', () => {
+  let commentUser: RoadmapTestUser;
+  let seededTitle: string;
+
+  test.beforeEach(async ({ page }) => {
+    commentUser = await createRoadmapUser({ prefix: 'comment' });
+    seededTitle = `Comment flow ${commentUser.testRunId}`;
+    // Comments render ONLY on accepted suggestions — renderCommentSection
+    // returns '' for every other status, so the card must be accepted or there
+    // is no comment box to type into.
+    await createSuggestion({
+      testRunId: commentUser.testRunId,
+      title: seededTitle,
+      status: 'accepted',
+    });
+    await signInToRoadmap(page, commentUser);
+  });
+
+  test.afterEach(async () => {
+    if (commentUser) await teardownTestRun(commentUser.testRunId);
+  });
+
+  test('submit comment: appears in comment list', async ({ page }) => {
+    const card = page
+      .locator('[data-testid^="suggestion-card"], .sg-card')
+      .filter({ hasText: seededTitle })
+      .first();
+    await expect(card).toBeVisible();
+
+    await card.locator('[data-testid^="comment-input"]').fill('Great idea!');
+    await card.locator('[data-testid^="comment-submit"]').click();
+
+    await expect(card.locator('.sg-comment-text').filter({ hasText: 'Great idea!' })).toHaveCount(
+      1,
+    );
+  });
+
+  test('a comment survives a reload — it was persisted, not just painted', async ({ page }) => {
+    const card = page
+      .locator('[data-testid^="suggestion-card"], .sg-card')
+      .filter({ hasText: seededTitle })
+      .first();
+    await card.locator('[data-testid^="comment-input"]').fill('Persisted comment');
+    await card.locator('[data-testid^="comment-submit"]').click();
+    await expect(
+      card.locator('.sg-comment-text').filter({ hasText: 'Persisted comment' }),
+    ).toHaveCount(1);
+
+    // Optimistic rendering would satisfy the assertion above on its own, so
+    // reload and demand the comment come back from the server.
+    await page.reload();
+    const afterReload = page
+      .locator('[data-testid^="suggestion-card"], .sg-card')
+      .filter({ hasText: seededTitle })
+      .first();
+    await expect(
+      afterReload.locator('.sg-comment-text').filter({ hasText: 'Persisted comment' }),
+    ).toHaveCount(1);
+  });
+});
+
+/**
+ * Voting is auth-gated (`requireAuth` in suggestions-board.js), and the card
+ * blocks above route-mock the API — so a vote test can live in neither. Its own
+ * describe, with a real user and a real suggestion, is the only arrangement in
+ * which "the voter sees their vote" means anything.
+ */
+test.describe('Suggestions Board — Vote indicator (real API)', () => {
+  test('card: a voter sees which way they voted', async ({ page }) => {
+    const voter = await createRoadmapUser({ prefix: 'vote' });
+    const title = `Vote indicator ${voter.testRunId}`;
+    const seeded = await createSuggestion({
+      testRunId: voter.testRunId,
+      title,
+      status: 'accepted',
+    });
+    try {
+      await signInToRoadmap(page, voter);
+
+      const card = page.locator(`[data-testid="suggestion-card-${seeded.id}"]`);
+      await expect(card).toBeVisible({ timeout: 15_000 });
+      // Nothing to show before a vote is cast.
+      await expect(card.locator('[data-testid="your-vote-indicator"]')).toHaveCount(0);
+
+      const voteResponse = page.waitForResponse(
+        (r) => r.url().includes(`/api/suggestions/${seeded.id}/vote`),
+        { timeout: 15_000 },
+      );
+      await card.locator(`[data-testid="vote-up-${seeded.id}"]`).click();
+      // A new vote asks why first; "Just vote" is the no-reason path.
+      await page.locator('[data-testid="reason-skip"]').click();
+      const res = await voteResponse;
+      expect(res.status(), `vote request failed: ${await res.text()}`).toBe(200);
+
+      const indicator = card.locator('[data-testid="your-vote-indicator"]');
+      await expect(indicator).toBeVisible({ timeout: 15_000 });
+      await expect(indicator).toContainText(/your vote/i);
+    } finally {
+      await teardownTestRun(voter.testRunId);
+    }
   });
 });
 
@@ -1301,8 +1640,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
     await openSuggestForm(page);
     const eightyChars = 'A'.repeat(80);
     await titleInput.fill(eightyChars);
-    const value = await titleInput.inputValue();
-    expect(value.length).toBe(80);
+    await expect.poll(async () => (await titleInput.inputValue()).length).toBe(80);
 
     // A tag is ALSO required — validateForm() is
     // `title.trim().length >= 3 && tagSelect.value !== ""`
@@ -1331,9 +1669,8 @@ test.describe('Suggestion Submission Edge Cases', () => {
     await openSuggestForm(page);
     const eightyOneChars = 'A'.repeat(81);
     await titleInput.fill(eightyOneChars);
-    const value = await titleInput.inputValue();
     // Client-side should cap at 80 or show validation error
-    expect(value.length).toBeLessThanOrEqual(80);
+    await expect.poll(async () => (await titleInput.inputValue()).length).toBeLessThanOrEqual(80);
   });
 
   test('submit with exactly 5000 char description: succeeds', async ({ page }) => {
@@ -1341,8 +1678,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
     await openSuggestForm(page);
     const fiveThousandChars = 'B'.repeat(5000);
     await descInput.fill(fiveThousandChars);
-    const value = await descInput.inputValue();
-    expect(value.length).toBe(5000);
+    await expect.poll(async () => (await descInput.inputValue()).length).toBe(5000);
   });
 
   test('submit with 5001 char description: prevented by form', async ({ page }) => {
@@ -1350,8 +1686,7 @@ test.describe('Suggestion Submission Edge Cases', () => {
     await openSuggestForm(page);
     const overLimit = 'B'.repeat(5001);
     await descInput.fill(overLimit);
-    const value = await descInput.inputValue();
-    expect(value.length).toBeLessThanOrEqual(5000);
+    await expect.poll(async () => (await descInput.inputValue()).length).toBeLessThanOrEqual(5000);
   });
 
   test('submit with only whitespace title: form validation error', async ({ page }) => {
@@ -1369,16 +1704,14 @@ test.describe('Suggestion Submission Edge Cases', () => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     await openSuggestForm(page);
     await titleInput.fill('Add dark mode toggle 🌙');
-    const value = await titleInput.inputValue();
-    expect(value).toContain('🌙');
+    await expect.poll(async () => await titleInput.inputValue()).toContain('🌙');
   });
 
   test('submit with RTL text (Arabic): layout correct, language tag set', async ({ page }) => {
     const titleInput = page.locator('[data-testid="suggest-title-input"]');
     await openSuggestForm(page);
     await titleInput.fill('إضافة الوضع المظلم');
-    const value = await titleInput.inputValue();
-    expect(value).toBe('إضافة الوضع المظلم');
+    await expect(titleInput).toHaveValue('إضافة الوضع المظلم');
   });
 
   test('duplicate detection: no matches shows no "Load more"', async ({ page }) => {
@@ -1396,10 +1729,13 @@ test.describe('Suggestion Submission Edge Cases', () => {
     await typeTitleAwaitingDuplicates(page, titleInput, 'Voice');
     const items = page.locator('[data-testid^="duplicate-item"]');
     const loadMore = page.locator('[data-testid="duplicate-load-more"]');
-    const count = await items.count();
-    if (count === 3) {
-      await expect(loadMore).not.toBeVisible();
-    }
+    // The cap IS the claim: at most three, and no "Load more" affordance.
+    // `if (count === 3)` made the assertion conditional on the very thing it
+    // was meant to prove. The count is asserted against what this fixture
+    // actually produces rather than a hard 3, which the fixture never reaches.
+    await expect.poll(async () => items.count()).toBeGreaterThan(0);
+    expect(await items.count()).toBeLessThanOrEqual(3);
+    await expect(loadMore).toBeHidden();
   });
 
   test('duplicate detection: 4+ matches stay capped at 3, with no "Load more"', async ({
@@ -1465,12 +1801,30 @@ test.describe('Suggestion Submission Edge Cases', () => {
   // `[data-testid="submit-error"]` element the product does not have (it shows
   // a toast), behind an `if (count > 0)` guard that made the mismatch invisible.
 
-  test.skip('double-click submit button: only one submission created', async ({ page }) => {
+  test('double-click submit button: only one submission created', async ({ page }) => {
+    // The form has to be OPEN and valid before there is a submit button to
+    // double-click — the previous version went straight for the button and
+    // timed out waiting on an element that was never on screen.
+    await openSuggestForm(page);
+    await page.locator('[data-testid="suggest-title-input"]').fill('Double click guard check');
+    await page.locator('[data-testid="suggest-desc-input"]').fill('Pressing twice must post once.');
+    await page.locator('[data-testid="suggest-tag-select"]').selectOption('social');
+
+    // Count the POSTs rather than trusting the button's own state — one press
+    // must produce exactly one submission, which is the claim in the title.
+    const posts: string[] = [];
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && /\/api\/suggestions(\?|$)/.test(r.url())) posts.push(r.url());
+    });
+
     const submitBtn = page.locator('[data-testid="suggest-modal-submit"]');
+    await expect(submitBtn).toBeEnabled();
     await submitBtn.dblclick();
-    // The double-submit guard disables the button (suggestions-board.js:972-973).
-    // This used to sleep and end on a comment describing that.
+
+    // The guard disables the button on the first click, so the second is a
+    // no-op (suggestions-board.js: `if (submitBtn.disabled) return`).
     await expect(submitBtn).toBeDisabled();
+    await expect.poll(() => posts.length, { timeout: 10_000 }).toBeLessThanOrEqual(1);
   });
 });
 
@@ -1491,11 +1845,16 @@ test.describe('Voting Edge Cases', () => {
     const up = page.locator('[data-testid="vote-up-test-sug-1"]');
     const down = page.locator('[data-testid="vote-down-test-sug-1"]');
 
-    // Deliberately NOT awaiting each response — the point is three clicks
-    // landing faster than the writes complete.
+    // Each NEW vote opens the reason modal, so the rapid sequence is
+    // arrow→skip three times. Still deliberately NOT awaiting the responses —
+    // the point is the clicks landing faster than the writes complete.
+    const skip = page.locator('[data-testid="reason-skip"]');
     await up.click();
+    await skip.click();
     await down.click();
+    await skip.click();
     await up.click();
+    await skip.click();
 
     // toHaveClass RETRIES until the expect timeout, so this waits for the UI
     // to settle without guessing how long that takes. The old version slept a
@@ -1536,13 +1895,14 @@ test.describe('Voting Edge Cases', () => {
     const upvoteBtn = card.locator('[data-testid^="vote-up"]');
     // Anchor on the vote landing server-side, not on a fixed delay: the
     // reload below must not race the POST that is meant to be persisted.
-    await Promise.all([
-      page.waitForResponse(
-        (r) => /\/api\/suggestions\/.*\/vote/.test(r.url()) && r.request().method() === 'POST',
-        { timeout: 15_000 },
-      ),
-      upvoteBtn.click(),
-    ]);
+    const votePosted = page.waitForResponse(
+      (r) => /\/api\/suggestions\/.*\/vote/.test(r.url()) && r.request().method() === 'POST',
+      { timeout: 15_000 },
+    );
+    await upvoteBtn.click();
+    // A new vote asks why first; "Just vote" casts it with no reason.
+    await page.locator('[data-testid="reason-skip"]').click();
+    await votePosted;
     await expect(upvoteBtn).toHaveClass(/sg-vote-btn--active/);
 
     // Navigate away, then come back.
@@ -1616,31 +1976,53 @@ test.describe('Voting Edge Cases', () => {
     expect(text).toMatch(/^-?\d+$/);
   });
 
-  test.skip('vote reason with 0 chars: accepted (no reason)', async ({ page }) => {
-    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
-    await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
-    await upvoteBtn.click();
-    const reasonModal = page.locator('[data-testid="vote-reason-modal"], .vote-reason-modal');
-    if ((await reasonModal.count()) > 0) {
-      const submitReason = reasonModal.locator('[data-testid="reason-submit"], .reason-submit');
-      // Submit with empty reason should be accepted
-      await submitReason.click();
-    }
+  test('vote reason with 0 chars: accepted (no reason)', async ({ page }) => {
+    await publishAuthIdentity(page, {
+      uid: 'voter-2',
+      displayName: 'Voter',
+      profile: { uniqueId: 2003 },
+    });
+    const card = page.locator('[data-testid="suggestion-card-test-sug-1"]');
+    await expect(card).toBeVisible({ timeout: 10_000 });
+
+    const voteRequest = page.waitForRequest(
+      (r) => r.method() === 'POST' && r.url().includes('/vote'),
+      { timeout: 15_000 },
+    );
+    await card.locator('[data-testid="vote-up-test-sug-1"]').click();
+    await page.locator('[data-testid="reason-submit"]').click();
+
+    // A reason is OPTIONAL: submitting an empty one must still cast the vote,
+    // and must not send an empty `reason` field the server would reject.
+    const body = (await voteRequest).postDataJSON();
+    expect(body.direction).toBe('up');
+    expect(body.reason).toBeUndefined();
   });
 
-  test.skip('vote reason with max chars: accepted', async ({ page }) => {
-    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
-    await card.waitFor({ timeout: 10_000 });
-    const upvoteBtn = card.locator('[data-testid^="vote-up"]');
-    await upvoteBtn.click();
-    const reasonModal = page.locator('[data-testid="vote-reason-modal"], .vote-reason-modal');
-    if ((await reasonModal.count()) > 0) {
-      const reasonInput = reasonModal.locator('[data-testid="reason-input"], .reason-input');
-      await reasonInput.fill('A'.repeat(500));
-      const value = await reasonInput.inputValue();
-      expect(value.length).toBeLessThanOrEqual(500);
-    }
+  test('vote reason with max chars: accepted', async ({ page }) => {
+    await publishAuthIdentity(page, {
+      uid: 'voter-3',
+      displayName: 'Voter',
+      profile: { uniqueId: 2004 },
+    });
+    const card = page.locator('[data-testid="suggestion-card-test-sug-1"]');
+    await expect(card).toBeVisible({ timeout: 10_000 });
+
+    const voteRequest = page.waitForRequest(
+      (r) => r.method() === 'POST' && r.url().includes('/vote'),
+      { timeout: 15_000 },
+    );
+    await card.locator('[data-testid="vote-up-test-sug-1"]').click();
+
+    // 500 is the server's MAX_VOTE_REASON_LENGTH; the field's maxlength mirrors
+    // it, so a longer paste is clipped rather than rejected after the round trip.
+    const reason = 'A'.repeat(500);
+    await page.locator('[data-testid="reason-input"]').fill(reason + 'OVERFLOW');
+    await page.locator('[data-testid="reason-submit"]').click();
+
+    const body = (await voteRequest).postDataJSON();
+    expect(body.reason).toHaveLength(500);
+    expect(body.visibility).toBe('public');
   });
 
   test('toggle vote reason visibility after submission: not possible (immutable)', async ({
@@ -1653,7 +2035,7 @@ test.describe('Voting Edge Cases', () => {
     const changeVisibility = card.locator(
       '[data-testid="change-reason-visibility"], .change-reason-visibility',
     );
-    expect(await changeVisibility.count()).toBe(0);
+    await expect(changeVisibility).toHaveCount(0);
   });
 });
 
@@ -1710,7 +2092,7 @@ test.describe('Mobile-Specific Interactions', () => {
     await page.mouse.up();
     // No context menu should be visible
     const contextMenu = page.locator('[data-testid="context-menu"]');
-    expect(await contextMenu.count()).toBe(0);
+    await expect(contextMenu).toHaveCount(0);
   });
 
   test('touch: swipe on suggestion list does not interfere with scroll', async ({ page }) => {
@@ -1844,9 +2226,26 @@ test.describe('Suggestion Card UI States', () => {
   // PARKED (SHY-0247): a "Your suggestion" badge does not exist — the testid appears nowhere in public/, so
   // there is nothing to assert against. Was an `if (count > 0)` guard, which
   // ran nothing and reported green.
-  test.skip('card: user is the submitter (shows "Your suggestion" badge)', async ({ page }) => {
-    const submitterBadge = page.locator('[data-testid="submitter-badge"]');
-    await expect(submitterBadge.first()).toContainText(/Your suggestion/i);
+  test('card: user is the submitter (shows "Your suggestion" badge)', async ({ page }) => {
+    // MOCK_SUGGESTIONS' first entry has submitterUid 1001, so signing in as
+    // that account is what makes the card "mine". The badge appears on that
+    // card and NOT on the others — a badge on every card would be as useless
+    // as none at all.
+    await publishAuthIdentity(page, {
+      uid: 'submitter-1',
+      displayName: 'Submitter',
+      profile: { uniqueId: 1001 },
+    });
+    // publishAuthIdentity pins the global but does not re-render on its own —
+    // the board rebuilds on `shytalk-auth-changed` (see its own doc comment).
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('shytalk-auth-changed')));
+
+    const mine = page.locator('[data-testid="suggestion-card-test-sug-1"]');
+    await expect(mine).toBeVisible({ timeout: 10_000 });
+    await expect(mine.locator('[data-testid="submitter-badge"]')).toContainText(/Your suggestion/i);
+
+    const notMine = page.locator('[data-testid="suggestion-card-test-sug-2"]');
+    await expect(notMine.locator('[data-testid="submitter-badge"]')).toHaveCount(0);
   });
 
   test('card: accepted status (default card style)', async ({ page }) => {
@@ -1858,7 +2257,7 @@ test.describe('Suggestion Card UI States', () => {
     await expect(badge).toContainText(/Accepted/i);
   });
 
-  test.skip('card: planned status (accent border, "Planned" badge, vote arrows hidden)', async ({
+  test('card: planned status (accent border, "Planned" badge, vote arrows hidden)', async ({
     page,
   }) => {
     const statusFilter = page.locator('[data-testid="filter-status"]');
@@ -1868,23 +2267,21 @@ test.describe('Suggestion Card UI States', () => {
     const card = cards.first();
     const badge = card.locator('[data-testid^="suggestion-status"], .sg-badge');
     await expect(badge).toContainText(/Planned/i);
-    // Accent border
-    const border = await card.evaluate(
-      (el) => getComputedStyle(el).borderColor || getComputedStyle(el).borderLeftColor,
-    );
-    expect(border).toBeDefined();
-    // Vote arrows should be hidden
-    const voteUp = card.locator('[data-testid^="vote-up"]');
-    const isHidden = await voteUp.evaluate((el) => {
-      const style = getComputedStyle(el);
-      return (
-        style.display === 'none' || style.visibility === 'hidden' || el.hasAttribute('disabled')
-      );
-    });
-    expect(isHidden).toBe(true);
+    // The product REMOVES the vote arrows for a non-votable status rather than
+    // hiding them (`if (!votingDisabled)` in suggestions-board.js), so
+    // `voteUp.evaluate(...)` waited on an element that never appears and timed
+    // out. Absence IS the contract, so absence is what is asserted.
+    //
+    // The old `expect(border).toBeDefined()` / `expect(opacity).toBeDefined()`
+    // checks were tautologies — getComputedStyle always returns a string. The
+    // status-specific badge class, which is what actually drives the colour, is
+    // asserted instead.
+    await expect(badge).toHaveClass(/sg-badge--planned/);
+    await expect(card.locator('[data-testid^="vote-up"]')).toHaveCount(0);
+    await expect(card.locator('[data-testid^="vote-down"]')).toHaveCount(0);
   });
 
-  test.skip('card: completed status ("Shipped!" badge, vote arrows hidden, green accent)', async ({
+  test('card: completed status ("Shipped!" badge, vote arrows hidden, green accent)', async ({
     page,
   }) => {
     const statusFilter = page.locator('[data-testid="filter-status"]');
@@ -1894,25 +2291,21 @@ test.describe('Suggestion Card UI States', () => {
     const card = cards.first();
     const badge = card.locator('[data-testid^="suggestion-status"], .sg-badge');
     await expect(badge).toContainText(/Shipped!/i);
-    // Green accent
-    const cardClasses = await card.getAttribute('class');
-    const hasGreenAccent = await card.evaluate((el) => {
-      const style = getComputedStyle(el);
-      return style.borderColor || style.borderLeftColor || el.className;
-    });
-    expect(hasGreenAccent).toBeDefined();
-    // Vote arrows hidden
-    const voteUp = card.locator('[data-testid^="vote-up"]');
-    const isHidden = await voteUp.evaluate((el) => {
-      const style18 = getComputedStyle(el);
-      return (
-        style18.display === 'none' || style18.visibility === 'hidden' || el.hasAttribute('disabled')
-      );
-    });
-    expect(isHidden).toBe(true);
+    // The product REMOVES the vote arrows for a non-votable status rather than
+    // hiding them (`if (!votingDisabled)` in suggestions-board.js), so
+    // `voteUp.evaluate(...)` waited on an element that never appears and timed
+    // out. Absence IS the contract, so absence is what is asserted.
+    //
+    // The old `expect(border).toBeDefined()` / `expect(opacity).toBeDefined()`
+    // checks were tautologies — getComputedStyle always returns a string. The
+    // status-specific badge class, which is what actually drives the colour, is
+    // asserted instead.
+    await expect(badge).toHaveClass(/sg-badge--completed/);
+    await expect(card.locator('[data-testid^="vote-up"]')).toHaveCount(0);
+    await expect(card.locator('[data-testid^="vote-down"]')).toHaveCount(0);
   });
 
-  test.skip('card: rejected status (dimmed, decline reason expanded, vote arrows hidden)', async ({
+  test('card: rejected status (dimmed, decline reason expanded, vote arrows hidden)', async ({
     page,
   }) => {
     const statusFilter = page.locator('[data-testid="filter-status"]');
@@ -1920,24 +2313,24 @@ test.describe('Suggestion Card UI States', () => {
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Rejected' }));
     const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
     const card = cards.first();
-    // Card should be dimmed
-    const opacity = await card.evaluate((el) => getComputedStyle(el).opacity);
-    // Dimmed could mean reduced opacity or muted colors
-    expect(opacity).toBeDefined();
-    // Decline reason should be expanded if present
-    const declineReason = card.locator('[data-testid="decline-reason"], .decline-reason');
-    if ((await declineReason.count()) > 0) {
-      await expect(declineReason).toBeVisible();
-    }
-    // Vote arrows hidden
-    const voteUp = card.locator('[data-testid^="vote-up"]');
-    const isHidden = await voteUp.evaluate((el) => {
-      const style = getComputedStyle(el);
-      return (
-        style.display === 'none' || style.visibility === 'hidden' || el.hasAttribute('disabled')
-      );
-    });
-    expect(isHidden).toBe(true);
+    const badge = card.locator('[data-testid^="suggestion-status"], .sg-badge');
+    await expect(badge).toContainText(/Declined/i);
+    // The product REMOVES the vote arrows for a non-votable status rather than
+    // hiding them (`if (!votingDisabled)` in suggestions-board.js), so
+    // `voteUp.evaluate(...)` waited on an element that never appears and timed
+    // out. Absence IS the contract, so absence is what is asserted.
+    //
+    // The old `expect(border).toBeDefined()` / `expect(opacity).toBeDefined()`
+    // checks were tautologies — getComputedStyle always returns a string. The
+    // status-specific badge class, which is what actually drives the colour, is
+    // asserted instead.
+    await expect(badge).toHaveClass(/sg-badge--rejected/);
+
+    // The decline reason must be shown — this is the one moment a person most
+    // wants to know why (SHY-0247).
+    await expect(card.locator('[data-testid="decline-reason"]')).toBeVisible();
+    await expect(card.locator('[data-testid^="vote-up"]')).toHaveCount(0);
+    await expect(card.locator('[data-testid^="vote-down"]')).toHaveCount(0);
   });
 
   test('card: merged/duplicate (hidden from public view)', async ({ page }) => {
@@ -1945,21 +2338,16 @@ test.describe('Suggestion Card UI States', () => {
     const mergedCards = page.locator(
       '.sg-card[data-status="merged"], [data-testid^="suggestion-card"][data-status="merged"]',
     );
-    expect(await mergedCards.count()).toBe(0);
+    await expect(mergedCards).toHaveCount(0);
   });
 
   // PARKED (SHY-0247): a "Your vote" indicator does not exist — the testid
   // appears nowhere in public/, so a card never tells you which way you voted.
   // Was an `if (count > 0)` guard, which ran nothing and reported green.
-  test.skip('card: creator\'s upvote shown in count but creator sees "Your vote" indicator', async ({
-    page,
-  }) => {
-    const yourVote = page.locator('[data-testid="your-vote-indicator"]');
-    await expect(yourVote.first()).toBeVisible();
-  });
-
-  test.skip('card: truncated description expands on click', async ({ page }) => {
-    const card = page.locator('[data-testid^="suggestion-card"], .sg-card').first();
+  test('card: truncated description expands on click', async ({ page }) => {
+    // Anchored on the card that actually HAS a truncated description rather
+    // than `.first()`, whose identity depends on the current sort order.
+    const card = page.locator('[data-testid="suggestion-card-test-sug-3"]');
     await card.waitFor({ timeout: 10_000 });
     const desc = card.locator('[data-testid^="suggestion-desc"], .sg-card-desc');
     const expandBtn = card.locator('[data-testid^="suggestion-expand"], .sg-expand-btn');
@@ -1993,9 +2381,8 @@ test.describe('Suggestion Card UI States', () => {
   test('card: language tag displayed with flag emoji', async ({ page }) => {
     const langTag = page.locator('[data-testid^="suggestion-lang"], .sg-lang-tag').first();
     await langTag.waitFor({ timeout: 10_000 });
-    const text = await langTag.textContent();
     // Language tag should contain a flag emoji or language code
-    expect(text!.trim().length).toBeGreaterThan(0);
+    await expect.poll(async () => (await langTag.textContent())!.trim().length).toBeGreaterThan(0);
   });
 });
 
@@ -2043,7 +2430,7 @@ test.describe('Filter & Search Combination Edge Cases', () => {
     }
   });
 
-  test.skip('clear all filters: resets to default view', async ({ page }) => {
+  test('clear all filters: resets to default view', async ({ page }) => {
     const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Accepted' }));
@@ -2052,12 +2439,11 @@ test.describe('Filter & Search Combination Edge Cases', () => {
     await clearBtn.click();
     // Poll the control the assertion reads.
     await expect.poll(() => statusFilter.inputValue()).toBe('');
-    const statusValue = await statusFilter.inputValue();
     // Default should show all statuses
-    expect(statusValue).toBeFalsy();
+    await expect.poll(async () => await statusFilter.inputValue()).toBeFalsy();
   });
 
-  test.skip('filter produces 0 results: "No suggestions match your filters" message with clear button', async ({
+  test('filter produces 0 results: "No suggestions match your filters" message with clear button', async ({
     page,
   }) => {
     const searchInput = page.locator('[data-testid="suggestions-search-input"]');
@@ -2069,8 +2455,9 @@ test.describe('Filter & Search Combination Edge Cases', () => {
       '[data-testid="filter-empty"], [data-testid="suggestions-empty"]',
     );
     await expect(emptyState).toBeVisible({ timeout: 5_000 });
-    const text = await emptyState.textContent();
-    expect(text!.toLowerCase()).toMatch(/no suggestions|no results/);
+    await expect
+      .poll(async () => (await emptyState.textContent())!.toLowerCase())
+      .toMatch(/no suggestions|no results/);
 
     const clearBtn = emptyState.locator('[data-testid="clear-filters"], .clear-filters, button');
     await expect(clearBtn).toBeVisible();
@@ -2086,9 +2473,10 @@ test.describe('Filter & Search Combination Edge Cases', () => {
     const searchInput = page.locator('[data-testid="suggestions-search-input"]');
     await withSuggestionsFetch(page, () => searchInput.fill('voice'));
 
-    const searchedCount = await page.locator('[data-testid^="suggestion-card"], .sg-card').count();
     // Search should narrow results (or keep same if all match)
-    expect(searchedCount).toBeLessThanOrEqual(filteredCount);
+    await expect
+      .poll(async () => await page.locator('[data-testid^="suggestion-card"], .sg-card').count())
+      .toBeLessThanOrEqual(filteredCount);
   });
 
   test('search with 1 character: no search triggered (minimum 2 chars)', async ({ page }) => {
@@ -2098,9 +2486,10 @@ test.describe('Filter & Search Combination Edge Cases', () => {
     // Below the 2-char minimum, so the claim is that NO search fires. Absence
     // has no state to wait for, so the window is bounded deliberately.
     await new Promise((r) => setTimeout(r, 500)); // sleep-ok: bounded window for a no-request assertion
-    const afterCards = await page.locator('[data-testid^="suggestion-card"], .sg-card').count();
     // With only 1 character, card count should remain the same (no filtering)
-    expect(afterCards).toBe(initialCards);
+    await expect
+      .poll(async () => await page.locator('[data-testid^="suggestion-card"], .sg-card').count())
+      .toBe(initialCards);
   });
 
   test('search with 2 characters: search triggered', async ({ page }) => {
@@ -2149,7 +2538,7 @@ test.describe('Filter & Search Combination Edge Cases', () => {
 
   // PARKED (SHY-0247): there is no active-filter count badge — the testid
   // appears nowhere in public/. Was an `if (count > 0)` guard.
-  test.skip('filter badge counts: show number of active filters', async ({ page }) => {
+  test('filter badge counts: show number of active filters', async ({ page }) => {
     const statusFilter = page.locator('[data-testid="filter-status"]');
     await statusFilter.waitFor({ timeout: 10_000 });
     await withSuggestionsFetch(page, () => statusFilter.selectOption({ label: 'Accepted' }));
@@ -2170,84 +2559,125 @@ test.describe('Suggestion Description Display', () => {
   });
 
   test('plain text with newlines: rendered with line breaks', async ({ page }) => {
+    // `expect(hasBreaks || true).toBe(true)` is TRUE FOR EVERY INPUT — `x || true`
+    // is always true — so this test could not fail whatever the layout did, and
+    // the newlines it is named after were in fact being collapsed.
     const desc = page.locator('[data-testid^="suggestion-desc"], .sg-card-desc').first();
-    await desc.waitFor({ timeout: 10_000 });
-    // Description should render newlines as line breaks
-    const html = await desc.innerHTML();
-    // Newlines should be rendered as <br> or within block-level elements
-    // Or white-space: pre-wrap/pre-line should be set
+    await expect(desc).toBeVisible({ timeout: 10_000 });
+
     const whiteSpace = await desc.evaluate((el) => getComputedStyle(el).whiteSpace);
-    const hasBreaks = html.includes('<br') || ['pre-wrap', 'pre-line', 'pre'].includes(whiteSpace);
-    expect(hasBreaks || true).toBe(true); // Layout preserves newlines
+    expect(
+      ['pre-wrap', 'pre-line', 'pre'].includes(whiteSpace),
+      `descriptions must preserve the line breaks people typed; white-space is "${whiteSpace}"`,
+    ).toBe(true);
   });
 
   // PARKED (SHY-0247): the board never emits <a href> — descriptions are
   // escaped text, so there is no linkification to assert against.
-  test.skip('plain text with URLs: displayed as clickable links', async ({ page }) => {
-    const descriptions = page.locator('[data-testid^="suggestion-desc"], .sg-card-desc');
-    const count = await descriptions.count();
-    for (let i = 0; i < Math.min(count, 10); i++) {
-      const links = descriptions.nth(i).locator('a[href]');
-      // URLs in description should be rendered as clickable links
-      const href = await links.first().getAttribute('href');
-      expect(href).toMatch(/^https?:\/\//);
-      break;
-    }
+  test('plain text with URLs: displayed as clickable links', async ({ page }) => {
+    // Anchored on the fixture that HAS a URL. Looping over every description and
+    // breaking after the first meant this only ever inspected whichever card
+    // happened to sort first — which has never contained a link.
+    const desc = page.locator('[data-testid="suggestion-desc-test-sug-url"]');
+    await expect(desc).toBeVisible();
+
+    const link = desc.locator('a[href]');
+    await expect(link).toHaveAttribute('href', 'https://example.com/shytalk-design');
+    // target=_blank without noopener hands the new page a handle back into ours.
+    await expect(link).toHaveAttribute('rel', /noopener/);
+    await expect(link).toHaveAttribute('rel', /noreferrer/);
   });
 
-  test('plain text with very long URL: truncated in display', async ({ page }) => {
-    const links = page.locator('[data-testid^="suggestion-desc"] a, .sg-card-desc a');
-    for (let i = 0; i < (await links.count()); i++) {
-      const linkText = await links.nth(i).textContent();
-      // Very long URLs should be truncated in display text
-      if (linkText && linkText.length > 100) {
-        // Should have text-overflow: ellipsis or similar truncation
-        const overflow = await links.nth(i).evaluate((el) => getComputedStyle(el).textOverflow);
-        // Link should be truncated visually
-      }
+  test('a hostile description cannot break out of the link attribute', async ({ page }) => {
+    // Judged by the BROWSER'S OWN PARSER, not a regex: what matters is whether
+    // an event-handler attribute exists on a real element, and only the parser
+    // can answer that. A quote sitting in TEXT content is harmless; a quote
+    // that ended `href` and started `onmouseover` is not.
+    const card = page.locator('[data-testid="suggestion-card-test-sug-xss"]');
+    await expect(card).toBeVisible();
+
+    const audit = await card.evaluate((el) => {
+      const handlers: string[] = [];
+      el.querySelectorAll('*').forEach((node) => {
+        for (const attr of Array.from(node.attributes)) {
+          if (/^on/i.test(attr.name)) handlers.push(`${node.tagName}.${attr.name}`);
+        }
+      });
+      return {
+        handlers,
+        hrefs: Array.from(el.querySelectorAll('a')).map((a) => a.getAttribute('href') || ''),
+        scripts: el.querySelectorAll('script').length,
+      };
+    });
+
+    expect(audit.handlers, 'no event-handler attribute may survive the render').toEqual([]);
+    expect(audit.scripts).toBe(0);
+    // Only http(s) may become an href — javascript:/data: must stay inert text.
+    for (const href of audit.hrefs) {
+      expect(href).toMatch(/^https?:\/\//);
     }
+    // And the payload is still READABLE — escaping must not eat the text.
+    await expect(card).toContainText('onmouseover');
+  });
+
+  test('plain text with very long URL: does not overflow its card', async ({ page }) => {
+    // The `if (linkText.length > 100)` body read a style into a variable and
+    // then ENDED — no assertion at all — and no fixture had a URL that long, so
+    // the loop never entered it either. Two independent reasons it could not
+    // fail.
+    //
+    // Truncating the visible text would hide where a link actually goes, which
+    // is worse for a reader than a wrapped one. The real contract is that a long
+    // URL WRAPS instead of pushing the card wide.
+    const link = page.locator('[data-testid="suggestion-desc-test-sug-url"] a').first();
+    await expect(link).toBeVisible();
+
+    const wrapping = await link.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return style.overflowWrap || style.wordBreak;
+    });
+    expect(
+      ['anywhere', 'break-word', 'break-all'].includes(wrapping),
+      `a long URL must wrap rather than widen the card; got "${wrapping}"`,
+    ).toBe(true);
+
+    // And prove it: the link must not be wider than the card that holds it.
+    const card = page.locator('[data-testid="suggestion-card-test-sug-url"]');
+    const [linkBox, cardBox] = await Promise.all([link.boundingBox(), card.boundingBox()]);
+    expect(linkBox!.x + linkBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width + 1);
   });
 
   test('description with 5000 chars: scrollable within card', async ({ page }) => {
-    const descriptions = page.locator('[data-testid^="suggestion-desc"], .sg-card-desc');
-    for (let i = 0; i < (await descriptions.count()); i++) {
-      const desc = descriptions.nth(i);
-      const text = await desc.textContent();
-      if (text && text.length > 1000) {
-        // Long descriptions should be scrollable or truncated with expand option
-        const overflow = await desc.evaluate(
-          (el) => getComputedStyle(el).overflow || getComputedStyle(el).overflowY,
-        );
-        const maxHeight = await desc.evaluate((el) => getComputedStyle(el).maxHeight);
-        // Should have some overflow handling
-        expect(
-          overflow === 'auto' ||
-            overflow === 'scroll' ||
-            overflow === 'hidden' ||
-            maxHeight !== 'none',
-        ).toBe(true);
-        break;
-      }
-    }
+    // The product does not SCROLL a long description — it truncates at 200
+    // characters and offers "Show more" (suggestions-board.js:1455). Asserting a
+    // CSS overflow contract tested a mechanism that was never built; assert the
+    // one that was. The previous version only inspected descriptions over 1000
+    // chars, of which no fixture had any, so it asserted nothing at all.
+    const longCard = page.locator('[data-testid="suggestion-card-test-sug-3"]');
+    await expect(longCard).toBeVisible();
+
+    const desc = longCard.locator('[data-testid^="suggestion-desc"]');
+    const shown = (await desc.textContent()) ?? '';
+    expect(
+      shown.length,
+      'a long description must be clipped, not rendered in full, or it breaks the card',
+    ).toBeLessThan(400);
+    await expect(longCard.locator('.sg-expand-btn')).toBeVisible();
   });
 
-  test.skip('description in RTL language: text aligned right', async ({ page }) => {
-    // Filter for Arabic language suggestions
-    const langFilter = page.locator('[data-testid="filter-lang"]');
-    const options = langFilter.locator('option');
-    for (let i = 0; i < (await options.count()); i++) {
-      const val = await options.nth(i).getAttribute('value');
-      if (val === 'ar' || (await options.nth(i).textContent())?.toLowerCase().includes('arabic')) {
-        await withSuggestionsFetch(page, () => langFilter.selectOption(val!));
-        const desc = page.locator('[data-testid^="suggestion-desc"], .sg-card-desc').first();
-        const direction = await desc.evaluate((el) => getComputedStyle(el).direction);
-        const textAlign = await desc.evaluate((el) => getComputedStyle(el).textAlign);
-        // RTL text should be right-aligned
-        expect(direction === 'rtl' || textAlign === 'right' || textAlign === 'start').toBe(true);
+  test('description in RTL language: text aligned right', async ({ page }) => {
+    // The Arabic fixture is asserted directly. Scanning the language dropdown
+    // and breaking on the first Arabic option meant that when no Arabic
+    // suggestion existed — which was always — the loop ended having asserted
+    // nothing at all.
+    const desc = page.locator('[data-testid="suggestion-desc-test-sug-rtl"]');
+    await expect(desc).toBeVisible();
 
-        break;
-      }
-    }
+    // `dir="auto"` asks the browser to derive direction from the text itself,
+    // so the COMPUTED direction is the observable that matters.
+    await expect(desc).toHaveAttribute('dir', 'auto');
+    const direction = await desc.evaluate((el) => getComputedStyle(el).direction);
+    expect(direction, 'an Arabic description must render right-to-left').toBe('rtl');
   });
 });
 
@@ -2320,7 +2750,7 @@ test.describe('Empty & Extreme States', () => {
     await page.goto('/roadmap.html');
     await boardSettled(page);
     const phases = page.locator('.phase-card, [data-testid="phase-card"]');
-    expect(await phases.count()).toBe(1);
+    await expect(phases).toHaveCount(1);
   });
 
   test('suggestions 0 items: "No suggestions yet" message', async ({ page }) => {
@@ -2336,8 +2766,9 @@ test.describe('Empty & Extreme States', () => {
     await boardSettled(page);
     const emptyState = page.locator('[data-testid="suggestions-empty"]');
     await expect(emptyState).toBeVisible();
-    const text = await emptyState.textContent();
-    expect(text!.toLowerCase()).toMatch(/no suggestions/);
+    await expect
+      .poll(async () => (await emptyState.textContent())!.toLowerCase())
+      .toMatch(/no suggestions/);
   });
 
   test('suggestions 1 item: single card correct', async ({ page }) => {
@@ -2365,7 +2796,7 @@ test.describe('Empty & Extreme States', () => {
     await page.goto('/roadmap.html');
     await boardSettled(page);
     const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
-    expect(await cards.count()).toBe(1);
+    await expect(cards).toHaveCount(1);
     const title = cards.first().locator('[data-testid^="suggestion-title"], .sg-card-title');
     await expect(title).toContainText('Single Suggestion');
   });
@@ -2391,16 +2822,23 @@ test.describe('Empty & Extreme States', () => {
   });
 
   test('suggestion 0 votes (besides auto): shows score 1', async ({ page }) => {
-    // A suggestion with only the creator's auto-upvote should show score 1
-    const cards = page.locator('[data-testid^="suggestion-card"], .sg-card');
-    const voteCounts = page.locator('[data-testid^="vote-score"], .sg-vote-score');
-    for (let i = 0; i < (await voteCounts.count()); i++) {
-      const text = await voteCounts.nth(i).textContent();
-      const score = parseInt(text || '0');
-      // Minimum score with auto-upvote is 1
-      // Just verify the format supports this
-      expect(text).toMatch(/-?\d+/);
-      break;
+    // The previous version looped over vote-score elements, `break`ing after
+    // the first, and asserted only that the text looked like a number — so it
+    // proved nothing about the title's claim, and did nothing at all when the
+    // board rendered zero cards.
+    //
+    // `test-sug-auto` is the fixture case the title describes: one upvote (the
+    // creator's automatic one), no downvotes, so the card must read exactly 1.
+    await expect(page.locator('[data-testid="vote-score-test-sug-auto"]')).toHaveText('1');
+  });
+
+  test('every card shows the net score its data implies', async ({ page }) => {
+    // The general rule behind the case above: rendered score == upvotes - downvotes.
+    for (const s of MOCK_SUGGESTIONS) {
+      await expect(
+        page.locator(`[data-testid="vote-score-${s.id}"]`),
+        `${s.id} must show ${s.upvotes} - ${s.downvotes}`,
+      ).toHaveText(String(s.upvotes - s.downvotes));
     }
   });
 
@@ -2408,9 +2846,8 @@ test.describe('Empty & Extreme States', () => {
     // Net score = 500 - 499 = 1
     // Verify the UI displays net score correctly
     const voteCounts = page.locator('[data-testid^="vote-score"], .sg-vote-score');
-    const text = await voteCounts.first().textContent();
     // Net score can be any integer value
-    expect(text).toMatch(/-?\d+/);
+    await expect.poll(async () => await voteCounts.first().textContent()).toMatch(/-?\d+/);
   });
 
   test('suggestion 0 up, 100 down: shows net -100', async ({ page }) => {
@@ -2418,8 +2855,7 @@ test.describe('Empty & Extreme States', () => {
     const voteCounts = page.locator('[data-testid^="vote-score"], .sg-vote-score');
     // The format should support negative numbers
     for (let i = 0; i < (await voteCounts.count()); i++) {
-      const text = await voteCounts.nth(i).textContent();
-      expect(text).toMatch(/^-?\d+$/);
+      await expect.poll(async () => await voteCounts.nth(i).textContent()).toMatch(/^-?\d+$/);
     }
   });
 
@@ -2443,16 +2879,54 @@ test.describe('Empty & Extreme States', () => {
   // renders every comment in one list with no pager, so there is nothing to
   // assert against. Previously `if (count > 0)` around the whole body, which
   // ran nothing and reported green.
-  test.skip('comments 500: paginated correctly', async ({ page }) => {
-    const commentPagination = page.locator('[data-testid="comment-pagination"]');
-    await expect(commentPagination).toBeVisible();
+  test('comments 500: paginated correctly', async ({ page }) => {
+    // 500 comments on one card used to render 500 comments, burying the card
+    // they belong to. The board now shows a page at a time (SHY-0247).
+    await setupSuggestionsMocks(page, { commentCount: 500 });
+    await page.goto('/roadmap.html');
+
+    const card = page.locator('[data-testid="suggestion-card-test-sug-1"]');
+    await expect(card).toBeVisible({ timeout: 10_000 });
+
+    const comments = card.locator('.sg-comment');
+    await expect(comments).toHaveCount(10);
+
+    const pager = card.locator('[data-testid="comment-pagination"]');
+    await expect(pager).toBeVisible();
+    // It says how many are still hidden, so the reader knows the size of what
+    // they are opening.
+    await expect(pager).toContainText('490');
+
+    await pager.click();
+    await expect(comments).toHaveCount(20);
   });
 
   // PARKED (SHY-0247): there is no notification inbox on the web board at all —
   // no dropdown, no empty state, no testids anywhere in public/. Same silent
   // guard as above.
-  test.skip('notification inbox 0: "All caught up!"', async ({ page }) => {
+  test('notification inbox 0: "All caught up!"', async ({ page }) => {
+    // `GET /api/notifications` has always existed; the board never offered a
+    // way to read it, so the testid this asserts on appeared nowhere and the
+    // `if (count > 0)` guard around it ran nothing (SHY-0247).
+    await page.route('**/api/notifications*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ notifications: [], unreadCount: 0, total: 0 }),
+      }),
+    );
+    await publishAuthIdentity(page, {
+      uid: 'reader-1',
+      displayName: 'Reader',
+      profile: { uniqueId: 1001 },
+    });
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('shytalk-auth-changed')));
+
+    await page.locator('[data-testid="notif-open"]').click();
+
+    // An empty inbox must SAY it is empty — a blank panel reads as broken.
     const emptyNotif = page.locator('[data-testid="notif-empty"]');
+    await expect(emptyNotif).toBeVisible();
     await expect(emptyNotif).toContainText(/caught up/i);
   });
 });

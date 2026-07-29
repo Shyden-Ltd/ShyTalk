@@ -42,8 +42,11 @@ test.describe('Portal — Page Load & Structure', () => {
 
   test('has noscript fallback', async ({ page }) => {
     const noscript = page.locator('noscript');
-    const text = await noscript.textContent();
-    expect(text).toContain('JavaScript');
+    // NOT `toContainText`: that matches RENDERED text, and <noscript> renders as
+    // nothing while JavaScript is enabled — so it reads "" no matter what the
+    // markup says. `textContent()` returns the raw text, and expect.poll gives
+    // it the retry that a bare `await ... .textContent()` lacks.
+    await expect.poll(async () => await noscript.textContent()).toContain('JavaScript');
   });
 });
 

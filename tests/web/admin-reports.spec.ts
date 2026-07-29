@@ -177,12 +177,27 @@ test.describe('Admin Reports', () => {
     // Verify the results show the user
     const reportsList = page.locator('#reports-list');
     const cards = page.locator('.report-card');
-    const cardCount = await cards.count();
+    // The fixture seeds a report against testData.user, so searching for that
+    // id must return something. Guarding on the count meant a search returning
+    // nothing — the exact failure worth catching — passed silently.
+    await expect.poll(async () => cards.count()).toBeGreaterThan(0);
 
-    if (cardCount > 0) {
-      // Verify the displayed user matches the search
-      await expect(reportsList).toContainText(String(testData.user.uniqueId));
-    }
+    // The list GROUPS by reported user, but a report also matches on its
+    // REPORTER's id (SHY-0251) — so the searched id need not be the one on the
+    // card header. What must hold is that the seeded user's report is among the
+    // results, which the API can confirm directly.
+    const results = await testData.api.get(
+      `/api/reports?status=pending&search=${testData.user.uniqueId}`,
+    );
+    const involved = (results.users || []).flatMap((u: any) => u.reports || []);
+    expect(
+      involved.some(
+        (r: any) =>
+          String(r.reportedUserUniqueId) === String(testData.user.uniqueId) ||
+          String(r.reporterUniqueId) === String(testData.user.uniqueId),
+      ),
+      'the searched id must appear as the reported user or the reporter on some result',
+    ).toBe(true);
 
     // Clear search — same pattern: wait for API response
     await searchInput.fill('');
@@ -424,8 +439,7 @@ test.describe('Admin Reports', () => {
     await expect(reviewersStat).toBeVisible();
 
     // Verify stats have content
-    const pendingText = await pendingStat.textContent();
-    expect(pendingText).toBeTruthy();
+    await expect(pendingStat).not.toBeEmpty();
 
     // API verify
     const stats = await getReportStatsViaApi(testData);
@@ -518,8 +532,7 @@ test.describe('Admin Reports', () => {
     const convViewer = page.locator('.conv-viewer');
     await expect(convViewer).toBeVisible();
 
-    const viewerText = await convViewer.textContent();
-    expect(viewerText!.length).toBeGreaterThan(0);
+    await expect.poll(async () => (await convViewer.textContent())!.length).toBeGreaterThan(0);
 
     // Click again to toggle close
     await viewConvLink.click();
@@ -553,13 +566,10 @@ test.describe('Admin Reports', () => {
   test('clicking user name in report navigates to Users tab', async ({ page, testData }) => {
     await filterReports(page, 'pending');
 
+    // The fixture seeds a pending report against testData.user, so its
+    // navigate link must exist — skipping left cross-tab navigation untested.
     const navigateLink = page.locator(`[data-navigate-uid="${testData.user.uniqueId}"]`).first();
-    const hasLink = (await navigateLink.count()) > 0;
-
-    if (!hasLink) {
-      test.skip(true, 'No navigable user link in current pending reports');
-      return;
-    }
+    await expect(navigateLink).toBeVisible({ timeout: 15_000 });
 
     await navigateLink.click();
 
@@ -577,24 +587,22 @@ test.describe('Admin Reports', () => {
     await filterReports(page, 'pending');
 
     const cards = page.locator('.report-card');
-    const cardCount = await cards.count();
-
-    if (cardCount === 0) {
-      test.skip(true, 'No pending reports to verify grouping');
-      return;
-    }
+    // The fixture seeds a pending report, so an empty pending list is a real
+    // failure — skipping here meant grouping was never verified.
+    await expect
+      .poll(async () => cards.count(), { message: 'the fixture seeds a pending report' })
+      .toBeGreaterThan(0);
 
     // Each card represents a user group (card has data-uid)
+    const cardCount = await cards.count();
     for (let i = 0; i < Math.min(cardCount, 5); i++) {
       const card = cards.nth(i);
-      const uid = await card.getAttribute('data-uid');
-      expect(uid).toBeTruthy();
+      await expect.poll(async () => await card.getAttribute('data-uid')).toBeTruthy();
 
       // Each card should show a report count badge
       const countBadge = card.locator('.report-count-badge');
       await expect(countBadge).toBeVisible();
-      const badgeText = await countBadge.textContent();
-      expect(badgeText).toMatch(/\d+ reports?/);
+      await expect.poll(async () => await countBadge.textContent()).toMatch(/\d+ reports?/);
     }
   });
 
@@ -602,12 +610,9 @@ test.describe('Admin Reports', () => {
   test('keyboard shortcut W selects warn action', async ({ page }) => {
     await filterReports(page, 'pending');
 
+    // The fixture seeds a pending report, so an empty list is a real failure.
     const firstCard = page.locator('.report-card').first();
-    const cardExists = (await firstCard.count()) > 0;
-    if (!cardExists) {
-      test.skip(true, 'No pending reports for keyboard shortcuts');
-      return;
-    }
+    await expect(firstCard).toBeVisible({ timeout: 15_000 });
 
     await selectFirstReportCard(page);
 
@@ -625,12 +630,9 @@ test.describe('Admin Reports', () => {
   test('keyboard shortcut D selects dismiss action', async ({ page }) => {
     await filterReports(page, 'pending');
 
+    // The fixture seeds a pending report, so an empty list is a real failure.
     const firstCard = page.locator('.report-card').first();
-    const cardExists = (await firstCard.count()) > 0;
-    if (!cardExists) {
-      test.skip(true, 'No pending reports for keyboard shortcuts');
-      return;
-    }
+    await expect(firstCard).toBeVisible({ timeout: 15_000 });
 
     // Use the same selection helper as the W test (real Playwright
     // keyboard.press) — synthetic `document.dispatchEvent(new
@@ -659,9 +661,12 @@ test.describe('Admin Reports', () => {
       const entries = Array.isArray(auditLog) ? auditLog : auditLog.entries || auditLog.logs || [];
       expect(Array.isArray(entries)).toBe(true);
     } catch (err: any) {
-      // If 404, endpoint may not exist yet
+      // The audit-log endpoint DOES exist and is exercised elsewhere in this
+      // suite, so a 404 here is a routing regression, not an unbuilt feature.
       if (err.message?.includes('404')) {
-        test.skip(true, 'Audit log endpoint not yet implemented');
+        throw new Error(
+          `admin audit-log endpoint returned 404 — it exists and is used by admin-audit-log.spec.ts, so this is a regression: ${err.message}`,
+        );
       } else {
         throw err;
       }

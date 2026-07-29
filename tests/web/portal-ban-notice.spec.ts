@@ -155,8 +155,8 @@ test.describe('Portal — a banned user is told they are banned', () => {
     await expect(reason).toBeVisible({ timeout: 20_000 });
 
     await expect(reason).toHaveText(XSS_REASON); // survives as literal text…
-    expect(await page.locator('#portal-xss-probe').count()).toBe(0); // …injects nothing
-    expect(await reason.locator('img').count()).toBe(0);
+    await expect(page.locator('#portal-xss-probe')).toHaveCount(0); // …injects nothing
+    await expect(reason.locator('img')).toHaveCount(0);
 
     await teardown(testRunId);
   });

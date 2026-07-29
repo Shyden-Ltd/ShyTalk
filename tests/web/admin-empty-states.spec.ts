@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures/admin';
 import { adminLogin, navigateToTab, searchUser, switchUserSubtab } from './helpers/admin-auth';
+import { expectListSettled } from './helpers/list-state';
 import type { Page } from '@playwright/test';
 
 /** Wait for appeals list to finish loading. */
@@ -65,27 +66,18 @@ test.describe('Admin Empty States', () => {
     await navigateToTab(page, 'Appeals');
     await waitForAppealsLoaded(page);
 
-    // Try all three filters — at least one should be empty
+    // EVERY filter is checked, and each one must settle into a valid state.
+    // The old version returned on the FIRST empty filter and, if all three had
+    // data, asserted only that the panel was visible — so the empty-state
+    // message it is named after went unverified on every seeded run.
+    const appealsList = page.locator('#appeals-list');
     for (const status of ['approved', 'denied', 'pending'] as const) {
       const btn = page.locator(`button[data-appeal-filter="${status}"]`);
       await btn.click();
       await expect(btn).toHaveClass(/active/);
       await waitForAppealsLoaded(page);
-
-      const cards = page.locator('.appeal-card');
-      const cardCount = await cards.count();
-
-      if (cardCount === 0) {
-        // Verify empty state message
-        const appealsList = page.locator('#appeals-list');
-        await expect(appealsList).toContainText('No appeals');
-        return; // Found empty state, test passes
-      }
+      await expectListSettled(appealsList, page.locator('.appeal-card'), 'No appeals');
     }
-
-    // All filters have data — verify the tab rendered correctly
-    const appealsList = page.locator('#appeals-list');
-    await expect(appealsList).toBeVisible();
   });
 
   // ── Test 2: Reports — no reports for archived filter ──
@@ -99,18 +91,13 @@ test.describe('Admin Empty States', () => {
     await expect(archivedBtn).toHaveClass(/active/);
     await waitForReportsLoaded(page);
 
-    const cards = page.locator('.report-card');
-    const cardCount = await cards.count();
-
-    if (cardCount === 0) {
-      // Verify empty state
-      const reportsList = page.locator('#reports-list');
-      const text = await reportsList.textContent();
-      expect(text).toContain('No reports');
-    }
-    // If archived has data, verify the reports list rendered
-    const reportsList = page.locator('#reports-list');
-    await expect(reportsList).toBeVisible();
+    // A visible panel proves nothing — a blank one is visible too. The archived
+    // list must either show cards or SAY it is empty.
+    await expectListSettled(
+      page.locator('#reports-list'),
+      page.locator('.report-card'),
+      'No reports',
+    );
   });
 
   // ── Test 3: Gifts — empty table message (verify table renders) ──
@@ -122,56 +109,44 @@ test.describe('Admin Empty States', () => {
     // here — the 3s sleep was redundant.
     const tbody = page.locator('#gifts-tbody');
 
-    const rows = tbody.locator('tr');
-    const rowCount = await rows.count();
-
-    // Gifts table should have rows (seeded data exists) or show empty
-    if (rowCount === 0) {
-      // Check for empty state (gift table typically always has data)
-      const giftsPanel = page.locator('#gifts-panel, #gifts-tab-content');
-      const panelText = await giftsPanel.textContent();
-      expect(panelText).toBeTruthy();
-    } else {
-      expect(rowCount).toBeGreaterThan(0);
-    }
+    // `expect(rowCount).toBeGreaterThan(0)` sat in the ELSE of `rowCount === 0`,
+    // so it was true by construction and asserted nothing.
+    await expectListSettled(
+      page.locator('#gifts-panel, #gifts-tab-content'),
+      tbody.locator('tr'),
+      /no gifts|empty/i,
+    );
   });
 
   // ── Test 4: Banners — empty state ──
-  test('banners tab shows content or appropriate empty state', async ({ page }) => {
+  test('banners tab shows content or appropriate empty state', async ({ page, testData }) => {
     await navigateToTab(page, 'Banners');
 
     // Loaded already — navigateToTab waits for data-module-ready.
 
     // Check for banner cards or empty state
-    const bannerCards = page.locator('.banner-card');
-    const cardCount = await bannerCards.count();
-
-    if (cardCount === 0) {
-      // Verify some form of empty state or the add button exists
-      const addBtn = page.locator('#add-banner-btn, button:has-text("Add Banner")');
-      await expect(addBtn).toBeVisible();
-    } else {
-      expect(cardCount).toBeGreaterThan(0);
-    }
+    // The admin fixture seeds `e2e-<prefix>-banner`, so this tab is NEVER
+    // legitimately empty — the old empty branch could only ever mask a seeding
+    // or rendering failure, and its else-branch was a tautology.
+    await expect(
+      page.locator('.banner-card').filter({ hasText: `e2e-${testData.prefix}-banner` }),
+    ).toHaveCount(1);
   });
 
   // ── Test 5: Fun Facts — empty state ──
-  test('fun facts tab shows content or appropriate empty state', async ({ page }) => {
+  test('fun facts tab shows content or appropriate empty state', async ({ page, testData }) => {
     await navigateToTab(page, 'Fun Facts');
 
     // Loaded already — navigateToTab waits for data-module-ready.
 
     // Check for fact cards or empty state
-    const factCards = page.locator('.fact-card');
-    const cardCount = await factCards.count();
-
-    if (cardCount === 0) {
-      // Verify add button exists even when empty
-      const addBtn = page.locator('#funfact-add-btn');
-      await expect(addBtn).toBeVisible();
-    } else {
-      expect(cardCount).toBeGreaterThan(0);
-    }
+    // The admin fixture seeds `e2e-<prefix>-fact`, so an empty list is a real
+    // failure rather than a branch to tolerate.
+    await expect(
+      page
+        .locator('[data-testid="funfact-card"]')
+        .filter({ hasText: `e2e-${testData.prefix}-fact` }),
+    ).toHaveCount(1);
   });
 
   // ── Test 6: Logs — impossible filter returns no results ──
@@ -219,8 +194,9 @@ test.describe('Admin Empty States', () => {
     const backupPanel = page.locator('#backups-panel, #backup-list');
     await expect(backupPanel).toBeVisible({ timeout: 10_000 });
 
-    const panelText = await backupPanel.textContent();
-    expect(panelText).toMatch(/backup|no backups|trigger/i);
+    await expect
+      .poll(async () => await backupPanel.textContent())
+      .toMatch(/backup|no backups|trigger/i);
   });
 
   // ── Test 9: Spin Monitor — no user shows input prompt ──
@@ -254,16 +230,22 @@ test.describe('Admin Empty States', () => {
     const warningList = page.locator('#warning-history-list');
     await expect(warningList).toBeVisible({ timeout: 15_000 });
 
-    // Check for warning items — may be empty for a fresh user
-    const warningItems = warningList.locator('.warning-item');
-    const warningCount = await warningItems.count();
+    // The test user is WORKER-SCOPED and earlier files in the same worker issue
+    // warnings to it, so "zero warnings" is not a safe constant — asserting it
+    // outright made this fail depending on file order. Read the truth from the
+    // API and hold the UI to it, which pins the empty state in the case the
+    // test is named for AND the populated case in every other.
+    const warnings = await testData.api.get(`/api/user/${testData.user.uniqueId}/warnings`);
+    const expected = (warnings.warnings || warnings || []).length ?? 0;
 
-    // If no warnings, verify appropriate empty display
-    if (warningCount === 0) {
-      // The list should be empty or show a "No warnings" message
-      const listText = await warningList.textContent();
-      // Either empty or contains "no warnings" text
-      expect(listText!.trim().length === 0 || listText!.toLowerCase().includes('no')).toBe(true);
+    await expect(warningList.locator('.warning-item')).toHaveCount(expected);
+    if (expected === 0) {
+      await expect
+        .poll(async () => {
+          const text = ((await warningList.textContent()) ?? '').trim();
+          return text === '' || /no warnings/i.test(text);
+        })
+        .toBe(true);
     }
   });
 
@@ -279,8 +261,7 @@ test.describe('Admin Empty States', () => {
     await expect(txList).toBeAttached({ timeout: 15_000 });
 
     // Verify the list has no transaction content yet
-    const content = await txList.textContent();
-    expect(content!.trim()).toBe('');
+    await expect.poll(async () => (await txList.textContent())!.trim()).toBe('');
   });
 
   // ── Test 12: Backpack — empty grid ──
@@ -314,9 +295,8 @@ test.describe('Admin Empty States', () => {
     await expect(backpackGrid).toBeVisible({ timeout: 15_000 });
 
     const backpackItems = backpackGrid.locator('.backpack-item');
-    const itemCount = await backpackItems.count();
 
     // Should be empty
-    expect(itemCount).toBe(0);
+    await expect(backpackItems).toHaveCount(0);
   });
 });

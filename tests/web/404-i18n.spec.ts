@@ -31,23 +31,39 @@ test.describe('404.html i18n', () => {
     });
 
     // Each translated element must NOT contain its English default.
-    const title = await page.locator('h1').textContent();
-    expect(title?.trim(), '404 title stayed in English after Arabic switch').not.toBe(
-      'Page not found',
-    );
-    expect(title, 'title should contain Arabic chars').toMatch(/[؀-ۿ]/);
+    await expect
+      .poll(async () => (await page.locator('h1').textContent())?.trim(), {
+        message: '404 title stayed in English after Arabic switch',
+      })
+      .not.toBe('Page not found');
+    await expect
+      .poll(async () => await page.locator('h1').textContent(), {
+        message: 'title should contain Arabic chars',
+      })
+      .toMatch(/[؀-ۿ]/);
 
-    const desc = await page.locator('main p').textContent();
-    expect(desc?.trim(), '404 description stayed in English after Arabic switch').not.toContain(
-      'The page you were looking for',
-    );
-    expect(desc, 'description should contain Arabic chars').toMatch(/[؀-ۿ]/);
+    await expect
+      .poll(async () => (await page.locator('main p').textContent())?.trim(), {
+        message: '404 description stayed in English after Arabic switch',
+      })
+      .not.toContain('The page you were looking for');
+    await expect
+      .poll(async () => await page.locator('main p').textContent(), {
+        message: 'description should contain Arabic chars',
+      })
+      .toMatch(/[؀-ۿ]/);
 
-    const home = await page.locator('[data-testid="404-home-link"]').textContent();
-    expect(home?.trim(), '404 home link stayed in English after Arabic switch').not.toBe(
-      'Back to ShyTalk',
-    );
-    expect(home, 'home link should contain Arabic chars').toMatch(/[؀-ۿ]/);
+    await expect
+      .poll(
+        async () => (await page.locator('[data-testid="404-home-link"]').textContent())?.trim(),
+        { message: '404 home link stayed in English after Arabic switch' },
+      )
+      .not.toBe('Back to ShyTalk');
+    await expect
+      .poll(async () => await page.locator('[data-testid="404-home-link"]').textContent(), {
+        message: 'home link should contain Arabic chars',
+      })
+      .toMatch(/[؀-ۿ]/);
   });
 
   test('English (default) renders the inline HTML defaults', async ({ page }) => {

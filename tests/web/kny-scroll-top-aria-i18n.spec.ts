@@ -85,9 +85,16 @@ test.describe('KNY scroll-to-top aria-label i18n', () => {
       { timeout: 10_000 },
     );
 
-    const aria = await page.locator('#scroll-top').getAttribute('aria-label');
-    expect(aria, 'scroll-top aria-label should not be English').not.toBe('Scroll to top');
-    expect(aria, 'scroll-top aria-label should contain Khmer script').toMatch(/[ក-៿]/);
+    await expect
+      .poll(async () => await page.locator('#scroll-top').getAttribute('aria-label'), {
+        message: 'scroll-top aria-label should not be English',
+      })
+      .not.toBe('Scroll to top');
+    await expect
+      .poll(async () => await page.locator('#scroll-top').getAttribute('aria-label'), {
+        message: 'scroll-top aria-label should contain Khmer script',
+      })
+      .toMatch(/[ក-៿]/);
   });
 
   test('English locale: scroll-top button keeps the HTML default (skip path)', async ({ page }) => {
@@ -112,7 +119,10 @@ test.describe('KNY scroll-to-top aria-label i18n', () => {
       undefined,
       { timeout: 5_000 },
     );
-    const aria = await page.locator('#scroll-top').getAttribute('aria-label');
-    expect(aria, 'scroll-top aria-label should be the English HTML default').toBe('Scroll to top');
+    await expect
+      .poll(async () => await page.locator('#scroll-top').getAttribute('aria-label'), {
+        message: 'scroll-top aria-label should be the English HTML default',
+      })
+      .toBe('Scroll to top');
   });
 });

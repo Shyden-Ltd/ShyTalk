@@ -1,6 +1,7 @@
 import { test, expect, TestData } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
 import type { Page } from '@playwright/test';
+import { seedAuditEntry } from './helpers/logs';
 
 /**
  * Admin Panel — Suggestions Moderation, Unified Ban Management,
@@ -1173,7 +1174,7 @@ test.describe('Admin Unified Ban Management (11.17)', () => {
     await navigateToIdentityGraph(page, String(testData.user.uniqueId));
     const accountNodes = page.locator('.graph-node[data-type="account"]');
     await expect(accountNodes.first()).toBeVisible({ timeout: 10_000 });
-    expect(await accountNodes.count()).toBeGreaterThanOrEqual(1);
+    await expect.poll(async () => accountNodes.count()).toBeGreaterThanOrEqual(1);
     await expect(accountNodes.first()).toContainText(String(testData.user.uniqueId));
   });
 
@@ -1222,9 +1223,8 @@ test.describe('Admin Unified Ban Management (11.17)', () => {
     await dialog.locator('#identity-suspend-duration').selectOption('7');
     const preview = dialog.locator('.cascade-preview');
     await expect(preview).toBeVisible({ timeout: 10_000 });
-    const text = await preview.textContent();
-    expect(text).toMatch(/will also affect/i);
-    expect(text).toMatch(/device|network|account/i);
+    await expect.poll(async () => await preview.textContent()).toMatch(/will also affect/i);
+    await expect.poll(async () => await preview.textContent()).toMatch(/device|network|account/i);
     await dialog.locator('.btn-cancel-suspend').click();
   });
 
@@ -1268,10 +1268,20 @@ test.describe('Admin Unified Ban Management (11.17)', () => {
   }) => {
     await navigateToIdentityGraph(page, String(testData.user.uniqueId));
     const alert = page.locator('.multi-account-alert');
-    const count = await alert.count();
-    if (count > 0) {
+    // The GRAPH decides whether the alert belongs on screen, so read it first
+    // and assert against that. `if (count > 0)` agreed with whatever the page
+    // did — a missing alert and a present one both passed.
+    const graphBefore = await testData.api.get(
+      `/api/admin/identity-graph/${testData.user.uniqueId}`,
+    );
+    const sharedDevice = (graphBefore.nodes || []).some(
+      (n: any) => n.type === 'device' && (n.linkedAccounts?.length ?? 0) > 1,
+    );
+    if (sharedDevice) {
       await expect(alert.first()).toBeVisible();
       await expect(alert.first()).toContainText(/multiple account/i);
+    } else {
+      await expect(alert).toHaveCount(0);
     }
     const graph = await testData.api.get(`/api/admin/identity-graph/${testData.user.uniqueId}`);
     for (const d of (graph.nodes || []).filter((n: any) => n.type === 'device')) {
@@ -1301,10 +1311,10 @@ test.describe('Admin Unified Ban Management (11.17)', () => {
     });
     await navigateToIdentityGraph(page, String(testData.user.uniqueId));
     const suspendedNode = page.locator('.graph-node.suspended').first();
-    if ((await suspendedNode.count()) === 0) {
-      test.skip(true, 'No suspended nodes');
-      return;
-    }
+    // This test CALLS suspend-all three lines above, so a suspended node must
+    // exist. Skipping on its absence could only ever hide the failure of the
+    // very call this test depends on.
+    await expect(suspendedNode).toBeVisible({ timeout: 10_000 });
     // Capture the data-id before clicking so we have a stable locator after class removal
     const nodeId = await suspendedNode.getAttribute('data-id');
     await suspendedNode.click();
@@ -1329,7 +1339,9 @@ test.describe('Admin Unified Ban Management (11.17)', () => {
     await page.locator('#audit-log-filter-action').selectOption('suspend');
     await page.locator('#audit-log-search-btn').click();
     await waitForAuditLogLoaded(page);
-    expect(await page.locator('#audit-log-tbody tr').count()).toBeGreaterThanOrEqual(1);
+    await expect
+      .poll(async () => page.locator('#audit-log-tbody tr').count())
+      .toBeGreaterThanOrEqual(1);
     await testData.api.post(
       `/api/admin/identity-graph/${testData.user.uniqueId}/unsuspend-all`,
       {},
@@ -1362,6 +1374,11 @@ test.describe('Admin Audit Log (11.18)', () => {
     await page.locator('#audit-log-filter-admin').fill('admin');
     await searchAuditLogAndWaitForResponse(page, 'admin=admin');
     const rows = page.locator('#audit-log-tbody tr');
+    await expect
+      .poll(async () => await rows.count(), {
+        message: 'admin filter must return matching audit rows',
+      })
+      .toBeGreaterThan(0);
     const count = await rows.count();
     // Non-empty required (no `count > 0` no-op guard — SHY-0174). Once the
     // real rows have rendered (waitForAuditLogLoaded now waits for an
@@ -1369,7 +1386,6 @@ test.describe('Admin Audit Log (11.18)', () => {
     // filter always yields matching rows — the real backend's admin-authored
     // entries, or the spec's real-first route falling back to the static
     // MOCK_AUDIT_ENTRIES (all `adminName: 'admin'`). Every row must match.
-    expect(count, 'admin filter must return matching audit rows').toBeGreaterThan(0);
     for (let i = 0; i < Math.min(count, 5); i++) {
       expect(
         (await rows.nth(i).locator('.audit-admin-name').textContent())!.toLowerCase(),
@@ -1381,11 +1397,15 @@ test.describe('Admin Audit Log (11.18)', () => {
     await page.locator('#audit-log-filter-action').selectOption('approve');
     await searchAuditLogAndWaitForResponse(page, 'action=approve');
     const rows = page.locator('#audit-log-tbody tr');
+    await expect
+      .poll(async () => await rows.count(), {
+        message: 'approve-action filter must return matching audit rows',
+      })
+      .toBeGreaterThan(0);
     const count = await rows.count();
     // Non-empty required (SHY-0174; MOCK_AUDIT_ENTRIES has an
     // `actionType: 'suggestion_approve'` that tail-matches the 'approve'
     // filter, so the fallback always yields a match).
-    expect(count, 'approve-action filter must return matching audit rows').toBeGreaterThan(0);
     for (let i = 0; i < Math.min(count, 5); i++) {
       expect((await rows.nth(i).locator('.audit-action').textContent())!.toLowerCase()).toContain(
         'approve',
@@ -1397,10 +1417,14 @@ test.describe('Admin Audit Log (11.18)', () => {
     await page.locator('#audit-log-filter-target').selectOption('suggestion');
     await searchAuditLogAndWaitForResponse(page, 'target=suggestion');
     const rows = page.locator('#audit-log-tbody tr');
+    await expect
+      .poll(async () => await rows.count(), {
+        message: 'suggestion-target filter must return matching audit rows',
+      })
+      .toBeGreaterThan(0);
     const count = await rows.count();
     // Non-empty required (SHY-0174; MOCK_AUDIT_ENTRIES has a
     // `targetType: 'suggestion'` entry, so the fallback always yields a match).
-    expect(count, 'suggestion-target filter must return matching audit rows').toBeGreaterThan(0);
     for (let i = 0; i < Math.min(count, 5); i++) {
       expect(
         (await rows.nth(i).locator('.audit-target-type').textContent())!.toLowerCase(),
@@ -1414,9 +1438,36 @@ test.describe('Admin Audit Log (11.18)', () => {
     const fmt = (d: Date) => d.toISOString().slice(0, 16);
     await page.locator('#audit-log-filter-start').fill(fmt(dayAgo));
     await page.locator('#audit-log-filter-end').fill(fmt(now));
+
+    // `count()` returns a number, so the old `.not.toBeNaN()` could never fail:
+    // this test claimed to verify date filtering and asserted nothing at all.
+    // Two real claims replace it — the range REACHED the API, and every row
+    // that came back actually falls inside it.
+    const request = page.waitForRequest((r) => r.url().includes('/api/admin/audit-log'));
     await page.locator('#audit-log-search-btn').click();
+    const url = new URL((await request).url());
     await waitForAuditLogLoaded(page);
-    expect(await page.locator('#audit-log-tbody tr').count()).not.toBeNaN();
+
+    expect(new Date(url.searchParams.get('start')!).getTime()).toBeCloseTo(
+      new Date(fmt(dayAgo)).getTime(),
+      -4,
+    );
+
+    const stamps = await page.locator('#audit-log-tbody tr .audit-timestamp').all();
+    let checkedStamps = 0;
+    for (const cell of stamps) {
+      // defect-detector:allow GUARD-IF — the product renders an empty timestamp for entries that genuinely have none, and the tally below proves the loop did not skip every row
+      const raw = await cell.getAttribute('data-timestamp');
+      if (!raw) continue;
+      checkedStamps++;
+      const t = new Date(Number.isNaN(Number(raw)) ? raw : Number(raw)).getTime();
+      expect(t).toBeGreaterThanOrEqual(dayAgo.getTime() - 60_000);
+      expect(t).toBeLessThanOrEqual(now.getTime() + 60_000);
+    }
+    expect(
+      checkedStamps,
+      'no row carried a timestamp — the date-range filter proved nothing',
+    ).toBeGreaterThan(0);
   });
 
   test('combined filters work', async ({ page }) => {
@@ -1427,29 +1478,60 @@ test.describe('Admin Audit Log (11.18)', () => {
     await page.locator('#audit-log-filter-action').selectOption('approve');
     await page.locator('#audit-log-filter-start').fill(fmt(weekAgo));
     await page.locator('#audit-log-filter-end').fill(fmt(now));
+
+    // Same dead assertion as the date-range test. Combining filters means ALL
+    // of them reach the API together and every returned row satisfies every
+    // one of them — that is what is asserted now.
+    const request = page.waitForRequest((r) => r.url().includes('/api/admin/audit-log'));
     await page.locator('#audit-log-search-btn').click();
+    const params = new URL((await request).url()).searchParams;
     await waitForAuditLogLoaded(page);
-    expect(await page.locator('#audit-log-tbody tr').count()).not.toBeNaN();
+
+    expect(params.get('admin')).toBe('admin');
+    expect(params.get('action')).toBe('approve');
+    expect(params.get('start')).toBeTruthy();
+    expect(params.get('end')).toBeTruthy();
+
+    for (const row of await page.locator('#audit-log-tbody tr').all()) {
+      await expect(row.locator('.audit-action')).toHaveText('approve');
+    }
   });
 
-  test('pagination works', async ({ page }) => {
+  test('pagination works', async ({ page, testData }) => {
+    // The pager only appears past a full page, so seed enough audit rows to
+    // cross it. Skipping meant "load more" was never once clicked.
+    const PAGE_SIZE = 50;
+    await Promise.all(
+      Array.from({ length: PAGE_SIZE + 1 }, () =>
+        seedAuditEntry({ testRunId: testData.testRunId }),
+      ),
+    );
+    await page.locator('#audit-log-search-btn').click();
+
     const loadMore = page.locator('#audit-log-load-more');
-    if (!(await loadMore.isVisible())) {
-      test.skip(true, 'No pagination');
-      return;
-    }
+    await expect(loadMore).toBeVisible({ timeout: 20_000 });
     const initial = await page.locator('#audit-log-tbody tr').count();
     await loadMore.click();
-    // Wait for new rows to appear instead of fixed timeout
-    await expect(page.locator('#audit-log-tbody tr')).not.toHaveCount(initial, { timeout: 10_000 });
-    expect(await page.locator('#audit-log-tbody tr').count()).toBeGreaterThan(initial);
+    // NOT `not.toHaveCount(initial)`: that is satisfied by ANY different count,
+    // including the momentary 0/1 while the table re-renders — which is exactly
+    // how this flaked (read 1 against an expected >50). Poll the real
+    // post-condition so intermediate states cannot satisfy it.
+    await expect
+      .poll(async () => page.locator('#audit-log-tbody tr').count(), { timeout: 10_000 })
+      .toBeGreaterThan(initial);
   });
 
-  test('export CSV downloads file with correct headers and data', async ({ page }) => {
-    if ((await page.locator('#audit-log-tbody tr').count()) === 0) {
-      test.skip(true, 'No entries');
-      return;
-    }
+  test('export CSV downloads file with correct headers and data', async ({ page, testData }) => {
+    // Audit rows exist only as a side effect of admin ACTIONS, so this test
+    // skipped itself whenever the table happened to be empty, leaving CSV
+    // export unverified. Seeding one makes a row guaranteed.
+    await seedAuditEntry({ testRunId: testData.testRunId });
+    // NOT page.reload(): the admin panel returns to its login screen on reload,
+    // so the seeded row would never appear. Re-run the tab's own search.
+    await page.locator('#audit-log-search-btn').click();
+    await expect
+      .poll(async () => page.locator('#audit-log-tbody tr').count(), { timeout: 15_000 })
+      .toBeGreaterThan(0);
     const dl = page.waitForEvent('download', { timeout: 10_000 });
     await page.locator('#audit-log-export-csv').click();
     const download = await dl;
@@ -1465,12 +1547,15 @@ test.describe('Admin Audit Log (11.18)', () => {
     }
   });
 
-  test('entries include admin name, action, target, timestamp, details', async ({ page }) => {
+  test('entries include admin name, action, target, timestamp, details', async ({
+    page,
+    testData,
+  }) => {
     const rows = page.locator('#audit-log-tbody tr');
-    if ((await rows.count()) === 0) {
-      test.skip(true, 'No entries');
-      return;
-    }
+    await seedAuditEntry({ testRunId: testData.testRunId });
+    // NOT page.reload(): the admin panel returns to its login screen on reload.
+    await page.locator('#audit-log-search-btn').click();
+    await expect.poll(async () => rows.count(), { timeout: 15_000 }).toBeGreaterThan(0);
     const r = rows.first();
     await expect(r.locator('.audit-admin-name')).toBeVisible();
     expect((await r.locator('.audit-admin-name').textContent())!.length).toBeGreaterThan(0);
@@ -1501,7 +1586,7 @@ test.describe('Admin Maintenance — Suggestions Operations (11.29)', () => {
     const result = page.locator('#clear-suggestions-result');
     await expect(result).toBeVisible({ timeout: 15_000 });
     await expect(result).toHaveClass(/success/);
-    expect(await result.textContent()).toMatch(/\d+/);
+    await expect(result).toContainText(/\d+/);
     await expect(page.locator('#clear-suggestions-btn')).toBeEnabled();
   });
 
@@ -1536,7 +1621,9 @@ test.describe('Admin Maintenance — Suggestions Operations (11.29)', () => {
     await page.locator('#audit-log-filter-action').selectOption('maintenance');
     await page.locator('#audit-log-search-btn').click();
     await waitForAuditLogLoaded(page);
-    expect(await page.locator('#audit-log-tbody tr').count()).toBeGreaterThanOrEqual(1);
+    await expect
+      .poll(async () => page.locator('#audit-log-tbody tr').count())
+      .toBeGreaterThanOrEqual(1);
   });
 
   test('non-admin: maintenance tab not visible', async ({ browser }) => {
@@ -1691,9 +1778,7 @@ test.describe('Admin Moderation Edge Cases (11.30)', () => {
     await waitForPendingQueueLoaded(page);
     const cards = page.locator('#suggestions-pending-queue .suggestion-card');
     for (let i = 0; i < Math.min(await cards.count(), 5); i++) {
-      expect(await cards.nth(i).locator('.sg-meta').textContent()).toContain(
-        String(testData.user.uniqueId),
-      );
+      await expect(cards.nth(i).locator('.sg-meta')).toContainText(String(testData.user.uniqueId));
     }
   });
 
@@ -1771,8 +1856,10 @@ test.describe('Admin Identity Graph Visualization (11.65)', () => {
 
   test('graph renders as connected node diagram', async ({ page }) => {
     await expect(page.locator('#identity-graph-container')).toBeVisible();
+    await expect
+      .poll(async () => await page.locator('.graph-node').count())
+      .toBeGreaterThanOrEqual(1);
     const n = await page.locator('.graph-node').count();
-    expect(n).toBeGreaterThanOrEqual(1);
     if (n > 1)
       expect(
         await page.locator('.graph-edge, .graph-link, line, path.edge').count(),
@@ -1780,25 +1867,32 @@ test.describe('Admin Identity Graph Visualization (11.65)', () => {
   });
 
   test('nodes: account (purple), device (blue), network/IP (green)', async ({ page }) => {
+    let checkedTypes = 0;
     for (const type of ['account', 'device', 'network']) {
       const nodes = page.locator(`.graph-node[data-type="${type}"]`);
-      if ((await nodes.count()) > 0)
-        expect(
-          await nodes
+      // defect-detector:allow GUARD-IF — a node type with no nodes cannot be colour-checked, and the checkedTypes tally after the loop fails if every type was skipped
+      if ((await nodes.count()) === 0) continue;
+      checkedTypes++;
+      await expect
+        .poll(async () =>
+          nodes
             .first()
             .evaluate((el) => getComputedStyle(el).backgroundColor || getComputedStyle(el).fill),
-        ).toBeTruthy();
+        )
+        .toBeTruthy();
     }
+    expect(checkedTypes, 'the identity graph rendered no nodes of any type').toBeGreaterThan(0);
   });
 
   test('edges show connection type (login, cascade)', async ({ page }) => {
     const edges = page.locator('.graph-edge, .graph-link');
-    if ((await edges.count()) > 0) {
-      const label =
-        (await edges.first().getAttribute('data-type')) ||
-        (await edges.first().locator('.edge-label').textContent());
-      expect(label).toBeTruthy();
-    }
+    // The seeded user owns a device, so the graph always has at least one
+    // edge — an empty graph is a real failure, not a branch to tolerate.
+    await expect.poll(async () => edges.count()).toBeGreaterThan(0);
+    const label =
+      (await edges.first().getAttribute('data-type')) ||
+      (await edges.first().locator('.edge-label').textContent());
+    expect(label, 'every graph edge must be labelled with its relationship').toBeTruthy();
   });
 
   test('suspended nodes: red border/highlight', async ({ page, testData }) => {
@@ -1810,7 +1904,9 @@ test.describe('Admin Identity Graph Visualization (11.65)', () => {
     await page.reload();
     await adminLogin(page);
     await navigateToIdentityGraph(page, String(testData.user.uniqueId));
-    expect(await page.locator('.graph-node.suspended').count()).toBeGreaterThanOrEqual(1);
+    await expect
+      .poll(async () => page.locator('.graph-node.suspended').count())
+      .toBeGreaterThanOrEqual(1);
     expect(
       await page
         .locator('.graph-node.suspended')
@@ -1834,24 +1930,76 @@ test.describe('Admin Identity Graph Visualization (11.65)', () => {
     page,
     testData,
   }) => {
+    // The graph is a STORED `identityGraphs/{id}` document, not something
+    // derived from deviceBindings, and the creation endpoint never writes the
+    // `nodes` array the reader returns — so a shared device cannot be arranged
+    // through the available API. Rather than skip (which is what this did, and
+    // which asserted nothing either way), the rule is pinned in BOTH
+    // directions: a warning icon appears exactly when a device links more than
+    // one account, and does not appear when none does.
     const graph = await testData.api.get(`/api/admin/identity-graph/${testData.user.uniqueId}`);
-    if (
-      !(graph.nodes || []).some((n: any) => n.type === 'device' && n.linkedAccounts?.length > 1)
-    ) {
-      test.skip(true, 'No multi-account devices');
-      return;
+    const sharedDevices = (graph.nodes || []).filter(
+      (n: any) => n.type === 'device' && (n.linkedAccounts?.length ?? 0) > 1,
+    );
+    const warningIcons = page.locator('.graph-node[data-type="device"] .warning-icon');
+
+    if (sharedDevices.length > 0) {
+      await expect(warningIcons.first()).toBeVisible();
+    } else {
+      // No device links two accounts, so no device may carry the warning.
+      await expect(warningIcons).toHaveCount(0);
     }
-    await expect(
-      page.locator('.graph-node[data-type="device"] .warning-icon').first(),
-    ).toBeVisible();
   });
 
   test('graph with 50+ nodes: performant rendering', async ({ page, testData }) => {
-    const graph = await testData.api.get(`/api/admin/identity-graph/${testData.user.uniqueId}`);
-    if ((graph.nodes || []).length < 50) {
-      test.skip(true, 'Need 50+ nodes');
-      return;
-    }
+    // Seed enough bindings that the graph genuinely crosses the 50-node mark.
+    // "Need 50+ nodes" meant this performance test never ran even once.
+    const graphBefore = await testData.api.get(
+      `/api/admin/identity-graph/${testData.user.uniqueId}`,
+    );
+    // The graph is a STORED document whose `nodes` array no endpoint writes, so
+    // it has to be seeded outright — neither deviceBindings nor the graph
+    // creation API can grow it. "Need 50+ nodes" meant this performance test
+    // never ran once.
+    const nodes = [
+      {
+        id: `acct-${testData.user.uniqueId}`,
+        type: 'account',
+        label: 'Account',
+        linkedAccounts: [],
+      },
+      ...Array.from({ length: 51 }, (_, i) => ({
+        id: `e2e-${testData.prefix}-node-${i}`,
+        type: i % 2 === 0 ? 'device' : 'network',
+        label: `Node ${i}`,
+        linkedAccounts: [testData.user.uniqueId],
+      })),
+    ];
+    await testData.api.testWrite('identityGraphs', {
+      id: String(testData.user.uniqueId),
+      nodes,
+      edges: nodes.slice(1).map((n) => ({
+        from: `acct-${testData.user.uniqueId}`,
+        to: n.id,
+        type: 'login',
+      })),
+      _testRun: testData.testRunId,
+    });
+
+    await expect
+      .poll(
+        async () =>
+          (
+            (await testData.api.get(`/api/admin/identity-graph/${testData.user.uniqueId}`)).nodes ||
+            []
+          ).length,
+        {
+          message: 'the graph must exceed 50 nodes for this to be a 50-node test',
+          timeout: 30_000,
+        },
+      )
+      .toBeGreaterThan(50);
+
     const t = Date.now();
     await page.reload();
     await adminLogin(page);
@@ -1862,7 +2010,7 @@ test.describe('Admin Identity Graph Visualization (11.65)', () => {
   });
 
   test('graph zoom/pan on desktop', async ({ page, browserName }) => {
-    // mouse.wheel is unreliable on mobile-safari viewport
+    // defect-detector:allow SKIP-COND — mouse.wheel is not implemented on the mobile Safari viewport, so there is no zoom gesture to drive there at all
     test.skip(
       browserName === 'webkit' && test.info().project.name.includes('mobile'),
       'mouse.wheel unsupported on mobile Safari',
@@ -1944,19 +2092,24 @@ test.describe('Admin Panel Responsive Design (11.86)', () => {
     await ctx.close();
   });
 
-  test('suggestions tab usable on 375px viewport', async ({ browser }) => {
+  test('suggestions tab usable on 375px viewport', async ({ browser, testData }) => {
     const ctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
     const page = await ctx.newPage();
     await setupApiMocks(page);
+    // `setupApiMocks` resets the seeded list, so without this the queue is
+    // empty and there is no card whose width could overflow — which is exactly
+    // the case a layout test must not silently accept.
+    await seedSuggestion(testData);
     await adminLogin(page);
     await navigateToSuggestions(page);
     await expect(page.locator('#suggestions-panel')).toBeVisible();
     const cards = page.locator('.suggestion-card');
-    if ((await cards.count()) > 0) {
-      const b = await cards.first().boundingBox();
-      expect(b).toBeTruthy();
-      expect(b!.x + b!.width).toBeLessThanOrEqual(375);
-    }
+    // A viewport-overflow test that runs only when cards happen to exist tests
+    // nothing on an empty queue — which is exactly when layout bugs hide.
+    await expect.poll(async () => cards.count()).toBeGreaterThan(0);
+    const b = await cards.first().boundingBox();
+    expect(b, 'a rendered card must have a layout box').toBeTruthy();
+    expect(b!.x + b!.width).toBeLessThanOrEqual(375);
     await ctx.close();
   });
 
@@ -2043,12 +2196,12 @@ test.describe('Admin Notifications (11.92)', () => {
   });
 
   test('badge count matches actual pending count', async ({ page, testData }) => {
+    // Seed one so the badge has something to count. "No pending" meant the
+    // badge-vs-reality check never ran on a clean database.
+    await seedSuggestion(testData, { status: 'pending' });
     const pending = await testData.api.get('/api/admin/suggestions?status=pending');
     const expected = pending.total || pending.suggestions?.length || 0;
-    if (expected === 0) {
-      test.skip(true, 'No pending');
-      return;
-    }
+    expect(expected, 'the seeded pending suggestion must be counted').toBeGreaterThan(0);
     await page.reload();
     await adminLogin(page);
     // Badge text is populated by an async polling fetch after the page
@@ -2136,10 +2289,9 @@ test.describe('Admin Bulk Operations (11.93)', () => {
     seededIds.push(r.id);
     await refreshSuggestionsList(page);
     const cards = page.locator('#suggestions-pending-queue .suggestion-card');
-    if ((await cards.count()) === 0) {
-      test.skip(true, 'No cards');
-      return;
-    }
+    await expect
+      .poll(async () => cards.count(), { message: 'the pending queue must have cards to select' })
+      .toBeGreaterThan(0);
     for (let i = 0; i < Math.min(await cards.count(), 5); i++)
       await expect(cards.nth(i).locator('input[type="checkbox"].sg-checkbox')).toBeAttached();
   });
@@ -2354,7 +2506,9 @@ test.describe('Admin Suggestion History Timeline (11.94)', () => {
     await expect.poll(() => entries.count(), { timeout: 10_000 }).toBeGreaterThanOrEqual(1);
     const total = await entries.count();
     for (let i = 0; i < total; i++) {
-      expect(await entries.nth(i).locator('.timeline-timestamp').count()).toBeGreaterThan(0);
+      await expect
+        .poll(async () => entries.nth(i).locator('.timeline-timestamp').count())
+        .toBeGreaterThan(0);
     }
   });
 
@@ -2371,16 +2525,21 @@ test.describe('Admin Suggestion History Timeline (11.94)', () => {
     const tl = page.locator(`#suggestion-timeline-${r.id}`);
     await expect(tl).toBeVisible();
     const ts = tl.locator('.timeline-timestamp');
-    if ((await ts.count()) >= 2) {
-      const times: number[] = [];
-      for (let i = 0; i < (await ts.count()); i++) {
-        const t = new Date(
-          (await ts.nth(i).getAttribute('data-timestamp')) || (await ts.nth(i).textContent())!,
-        ).getTime();
-        if (!isNaN(t)) times.push(t);
-      }
-      for (let i = 1; i < times.length; i++) expect(times[i]).toBeGreaterThanOrEqual(times[i - 1]);
+    // The suggestion was created and then moved to planned, so its history has
+    // at least two entries. Guarding on `>= 2` meant a timeline that collapsed
+    // to one entry — or none — skipped the ordering check entirely.
+    await expect.poll(async () => ts.count()).toBeGreaterThanOrEqual(2);
+
+    const times: number[] = [];
+    for (const stamp of await ts.all()) {
+      const raw = (await stamp.getAttribute('data-timestamp')) || (await stamp.textContent())!;
+      // `data-timestamp` is epoch millis rendered as a STRING, and
+      // `new Date('1785322054575')` is an Invalid Date — coerce numerics first.
+      const t = new Date(Number.isNaN(Number(raw)) ? raw : Number(raw)).getTime();
+      expect(Number.isNaN(t), `unparseable timeline timestamp: ${raw}`).toBe(false);
+      times.push(t);
     }
+    for (let i = 1; i < times.length; i++) expect(times[i]).toBeGreaterThanOrEqual(times[i - 1]);
   });
 });
 

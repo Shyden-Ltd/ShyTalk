@@ -92,15 +92,27 @@ test.describe('Roadmap aria-label i18n: suggestions + legal nav', () => {
       { timeout: 10_000 },
     );
 
-    const suggestionsAria = await page.locator('#suggestions').getAttribute('aria-label');
-    expect(suggestionsAria, 'suggestions aria-label should not be English').not.toBe(
-      'Feature suggestions',
-    );
-    expect(suggestionsAria, 'suggestions aria-label should contain Arabic script').toMatch(/[؀-ۿ]/);
+    await expect
+      .poll(async () => await page.locator('#suggestions').getAttribute('aria-label'), {
+        message: 'suggestions aria-label should not be English',
+      })
+      .not.toBe('Feature suggestions');
+    await expect
+      .poll(async () => await page.locator('#suggestions').getAttribute('aria-label'), {
+        message: 'suggestions aria-label should contain Arabic script',
+      })
+      .toMatch(/[؀-ۿ]/);
 
-    const legalNavAria = await page.locator('nav.footer-links').getAttribute('aria-label');
-    expect(legalNavAria, 'legal nav aria-label should not be English').not.toBe('Legal');
-    expect(legalNavAria, 'legal nav aria-label should contain Arabic script').toMatch(/[؀-ۿ]/);
+    await expect
+      .poll(async () => await page.locator('nav.footer-links').getAttribute('aria-label'), {
+        message: 'legal nav aria-label should not be English',
+      })
+      .not.toBe('Legal');
+    await expect
+      .poll(async () => await page.locator('nav.footer-links').getAttribute('aria-label'), {
+        message: 'legal nav aria-label should contain Arabic script',
+      })
+      .toMatch(/[؀-ۿ]/);
   });
 
   test('Korean locale: roadmap aria-labels render in Hangul', async ({ page }) => {
@@ -121,9 +133,15 @@ test.describe('Roadmap aria-label i18n: suggestions + legal nav', () => {
       { timeout: 10_000 },
     );
 
-    const suggestionsAria = await page.locator('#suggestions').getAttribute('aria-label');
-    expect(suggestionsAria, 'suggestions aria-label should contain Hangul').toMatch(/[가-힯]/);
-    const legalNavAria = await page.locator('nav.footer-links').getAttribute('aria-label');
-    expect(legalNavAria, 'legal nav aria-label should contain Hangul').toMatch(/[가-힯]/);
+    await expect
+      .poll(async () => await page.locator('#suggestions').getAttribute('aria-label'), {
+        message: 'suggestions aria-label should contain Hangul',
+      })
+      .toMatch(/[가-힯]/);
+    await expect
+      .poll(async () => await page.locator('nav.footer-links').getAttribute('aria-label'), {
+        message: 'legal nav aria-label should contain Hangul',
+      })
+      .toMatch(/[가-힯]/);
   });
 });

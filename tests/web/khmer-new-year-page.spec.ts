@@ -68,8 +68,7 @@ test.describe('Khmer New Year Page', () => {
   test('greetings section has multiple languages', async ({ page }) => {
     await page.goto(PAGE_URL);
     const greetings = page.locator('.greeting-item');
-    const count = await greetings.count();
-    expect(count).toBeGreaterThanOrEqual(4);
+    await expect.poll(async () => await greetings.count()).toBeGreaterThanOrEqual(4);
   });
 
   test('page is responsive — no horizontal overflow at 320px', async ({ page }) => {
@@ -108,8 +107,7 @@ test.describe('Khmer New Year Page', () => {
     await page.goto(PAGE_URL);
     const internalLinks = await page.locator('a[href^="/"]').all();
     // Only the favicon link in <head> should reference /, no body navigation links
-    const bodyLinks = await page.locator('main a[href^="/"], header a[href^="/"]').count();
-    expect(bodyLinks).toBe(0);
+    await expect(page.locator('main a[href^="/"], header a[href^="/"]')).toHaveCount(0);
   });
 });
 

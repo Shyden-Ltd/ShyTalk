@@ -40,8 +40,7 @@ test.describe('Shared Header — Presence on all pages', () => {
       await p.goto(page.path);
       const logo = p.locator('[data-testid="header-logo"]');
       await expect(logo).toBeVisible({ timeout: 10_000 });
-      const href = await logo.getAttribute('href');
-      expect(href).toBe('/');
+      await expect.poll(async () => await logo.getAttribute('href')).toBe('/');
     });
   }
 });
@@ -220,7 +219,7 @@ test.describe('Shared Header — Race window during profile fetch (W1 bundled bu
     await expect(userInfo).toContainText('RacingUser');
     // Sign In button must NOT appear.
     const signInBtn = page.locator('[data-testid="header-signin-btn"]');
-    expect(await signInBtn.count()).toBe(0);
+    await expect(signInBtn).toHaveCount(0);
   });
 
   test('shows Sign In when Firebase auth has no ShyTalk account (profile === false)', async ({
@@ -253,7 +252,7 @@ test.describe('Shared Header — Race window during profile fetch (W1 bundled bu
     const signInBtn = page.locator('[data-testid="header-signin-btn"]');
     await expect(signInBtn).toBeVisible({ timeout: 5_000 });
     const userInfo = page.locator('[data-testid="header-user-info"]');
-    expect(await userInfo.count()).toBe(0);
+    await expect(userInfo).toHaveCount(0);
   });
 });
 
@@ -284,15 +283,13 @@ test.describe('Shared Header — Accessibility', () => {
     await page.goto('/roadmap.html');
     const header = page.locator('[data-testid="shared-header"]');
     await expect(header).toBeVisible({ timeout: 10_000 });
-    const role = await header.getAttribute('role');
-    expect(role).toBe('banner');
+    await expect.poll(async () => await header.getAttribute('role')).toBe('banner');
   });
 
   test('logo has descriptive text', async ({ page }) => {
     await page.goto('/roadmap.html');
     const logo = page.locator('[data-testid="header-logo"]');
     await expect(logo).toBeVisible({ timeout: 10_000 });
-    const text = await logo.textContent();
-    expect(text?.toLowerCase()).toContain('shytalk');
+    await expect.poll(async () => (await logo.textContent())?.toLowerCase()).toContain('shytalk');
   });
 });

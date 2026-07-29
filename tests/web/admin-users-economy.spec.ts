@@ -289,8 +289,8 @@ test.describe('Admin Users - Economy Subtab', () => {
 
     // Verify all entries in the list are ADMIN_ADJUSTMENT
     const entries = txList.locator('div[style*="border-bottom"] span[style*="accent"]');
+    await expect.poll(async () => await entries.count()).toBeGreaterThan(0);
     const count = await entries.count();
-    expect(count).toBeGreaterThan(0);
     for (let i = 0; i < count; i++) {
       await expect(entries.nth(i)).toHaveText('ADMIN_ADJUSTMENT');
     }

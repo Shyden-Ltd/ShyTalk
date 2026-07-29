@@ -201,21 +201,71 @@
   }
 
   /**
-   * Turn bare URLs in ALREADY-ESCAPED text into links.
+   * Render text with bare URLs turned into links, safely.
    *
-   * Order matters and is the whole safety argument: the caller escapes first,
-   * so by the time this runs there is no live markup left to hijack — every
-   * `<` is already `&lt;`. Only the http(s) prefix is matched, so `javascript:`
-   * and `data:` URLs can never become an href.
+   * This takes the RAW text and does its own escaping, segment by segment. The
+   * earlier version linkified text that had already been escaped, which is not
+   * safe: `escapeHtml` builds a text node and reads `innerHTML`, so it escapes
+   * `&`, `<` and `>` but leaves QUOTES intact — and the URL pattern stops only
+   * at whitespace. A description containing
    *
-   * `rel="noopener noreferrer"` severs the opener handle; `target="_blank"`
-   * without it hands the new page a reference back into ours.
+   *     https://evil.example/x"onmouseover=alert(1)
+   *
+   * therefore produced `<a href="https://evil.example/x"onmouseover=alert(1)" …>`,
+   * where the quote closes `href` and the remainder parses as an event handler.
+   * Stored XSS on a public, user-submitted board.
+   *
+   * Two defences now, not one:
+   *   · the candidate must parse as a real URL whose protocol is http(s), so
+   *     `javascript:` and `data:` cannot become an href even if matched;
+   *   · the href is attribute-encoded (quotes included) before insertion, so
+   *     nothing in it can end the attribute early.
+   *
+   * `rel="noopener noreferrer"` severs the opener handle a `target="_blank"`
+   * would otherwise hand the new page.
    */
-  function linkifyEscaped(escaped) {
-    return escaped.replace(
-      /(https?:\/\/[^\s<]+[^\s<.,:;"')\]])/g,
-      '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>',
-    );
+  function escapeAttr(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  }
+
+  function isHttpUrl(candidate) {
+    try {
+      var parsed = new URL(candidate);
+      return parsed.protocol === "http:" || parsed.protocol === "https:";
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function renderTextWithLinks(text) {
+    if (!text) return "";
+    var pattern = /https?:\/\/[^\s<]+/g;
+    var out = "";
+    var lastIndex = 0;
+    var match;
+    while ((match = pattern.exec(text)) !== null) {
+      // Trailing punctuation belongs to the sentence, not the address.
+      var raw = match[0].replace(/[.,:;"')\]]+$/, "");
+      out += escapeHtml(text.slice(lastIndex, match.index));
+      if (isHttpUrl(raw)) {
+        out +=
+          '<a href="' +
+          escapeAttr(raw) +
+          '" target="_blank" rel="noopener noreferrer">' +
+          escapeHtml(raw) +
+          "</a>";
+      } else {
+        out += escapeHtml(raw);
+      }
+      lastIndex = match.index + raw.length;
+    }
+    out += escapeHtml(text.slice(lastIndex));
+    return out;
   }
 
   function $(sel) {
@@ -2022,9 +2072,9 @@
       '<div class="sg-card-desc" dir="auto" data-testid="suggestion-desc-' +
       s.id +
       '">';
-    // Escape FIRST, then linkify — see linkifyEscaped. A URL a person typed
-    // into a suggestion was previously rendered as inert text.
-    html += linkifyEscaped(escapeHtml(displayDesc));
+    // Escaping happens INSIDE renderTextWithLinks, per segment — escaping first
+    // and linkifying after leaves quotes intact inside the href (see its doc).
+    html += renderTextWithLinks(displayDesc);
     if (truncated) {
       html +=
         ' <button class="sg-expand-btn" data-testid="suggestion-expand-' +

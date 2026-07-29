@@ -1,6 +1,7 @@
 import { test, expect, TestData } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
 import { Page } from '@playwright/test';
+import { expectListSettled } from './helpers/list-state';
 
 /** Wait for the appeals list to finish loading. */
 async function waitForAppealsLoaded(page: Page): Promise<void> {
@@ -269,8 +270,7 @@ test.describe('Admin Appeals', () => {
     await expect(profile).toBeVisible();
 
     // Verify the card contains the user's unique ID
-    const cardText = await firstCard.textContent();
-    expect(cardText).toContain(String(testData.user.uniqueId));
+    await expect(firstCard).toContainText(String(testData.user.uniqueId));
 
     // Verify either an avatar image or placeholder exists
     const avatar = firstCard.locator('.appeal-profile img, .appeal-profile .placeholder-avatar');
@@ -389,17 +389,16 @@ test.describe('Admin Appeals', () => {
     // But some could still be empty. Test the logic regardless.
 
     // Try all three filters and verify the empty message appears when no data
+    // EVERY filter is checked, and each must settle into a valid state: cards,
+    // or a message saying there are none. The old version returned on the first
+    // empty filter, so a run where all three had data verified nothing.
     for (const status of ['approved', 'denied', 'pending'] as const) {
       await filterAppeals(page, status);
-      const cards = page.locator('.appeal-card');
-      const cardCount = await cards.count();
-
-      if (cardCount === 0) {
-        // Verify the empty state message is shown
-        const emptyMsg = page.locator('#appeals-list');
-        await expect(emptyMsg).toContainText('No appeals found');
-        return; // Found an empty state, test passes
-      }
+      await expectListSettled(
+        page.locator('#appeals-list'),
+        page.locator('.appeal-card'),
+        'No appeals found',
+      );
     }
 
     // If all filters have data, we can create a specific condition:
@@ -415,8 +414,12 @@ test.describe('Admin Appeals', () => {
       await filterAppeals(page, 'pending');
       const pendingText = await page.locator('#appeals-list').textContent();
       await filterAppeals(page, 'approved');
-      const approvedText = await page.locator('#appeals-list').textContent();
-      expect(pendingText).not.toBe(approvedText);
+      // `pendingText` is a deliberate point-in-time snapshot, so it is the
+      // CURRENT text that must be polled until it differs from it — polling the
+      // snapshot itself would just re-read a frozen string forever.
+      await expect
+        .poll(async () => await page.locator('#appeals-list').textContent())
+        .not.toBe(pendingText);
     }
   });
 });

@@ -3,6 +3,20 @@ import { test, expect } from '@playwright/test';
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
+/**
+ * Required, not optional. `helpers/admin-auth.ts` already THROWS when these are
+ * missing, and `helpers/api.ts` does the same for API_BASE_URL — but this file
+ * used a per-test conditional skip instead, so a missing credential quietly
+ * turned the whole admin suite into skips that nobody reads. Fail once, here,
+ * at load time (SHY-0245).
+ */
+if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+  throw new Error(
+    'ADMIN_EMAIL and ADMIN_PASSWORD must be set for the admin specs. ' +
+      'Use claude-test@shytalk.dev / localdev123 locally, or set them in the CI workflow.',
+  );
+}
+
 async function loginWith(page: any, email: string, password: string) {
   await page.getByRole('textbox', { name: 'Email' }).fill(email);
   await page.getByRole('textbox', { name: 'Password' }).fill(password);
@@ -16,7 +30,6 @@ test.describe('Admin Login Flow', () => {
   });
 
   test('successful login shows dashboard', async ({ page }) => {
-    test.skip(!ADMIN_EMAIL, 'ADMIN_EMAIL env var not set');
     await loginWith(page, ADMIN_EMAIL, ADMIN_PASSWORD);
     await expect(page.locator('#dashboard-screen')).toBeVisible({ timeout: 30_000 });
   });
@@ -59,7 +72,6 @@ test.describe('Admin Login Flow', () => {
   });
 
   test('sign out returns to login screen', async ({ page }) => {
-    test.skip(!ADMIN_EMAIL, 'ADMIN_EMAIL env var not set');
     await loginWith(page, ADMIN_EMAIL, ADMIN_PASSWORD);
     await expect(page.locator('#dashboard-screen')).toBeVisible({ timeout: 30_000 });
 
@@ -74,7 +86,6 @@ test.describe('Admin Login Flow', () => {
   });
 
   test('session persists across page reload', async ({ page }) => {
-    test.skip(!ADMIN_EMAIL, 'ADMIN_EMAIL env var not set');
     await loginWith(page, ADMIN_EMAIL, ADMIN_PASSWORD);
     await expect(page.locator('#dashboard-screen')).toBeVisible({ timeout: 30_000 });
 
@@ -83,7 +94,6 @@ test.describe('Admin Login Flow', () => {
   });
 
   test('all 13 tab buttons visible after login', async ({ page }) => {
-    test.skip(!ADMIN_EMAIL, 'ADMIN_EMAIL env var not set');
     await loginWith(page, ADMIN_EMAIL, ADMIN_PASSWORD);
     await expect(page.locator('#dashboard-screen')).toBeVisible({ timeout: 30_000 });
 
@@ -108,7 +118,6 @@ test.describe('Admin Login Flow', () => {
   });
 
   test('alert bell visible after login', async ({ page }) => {
-    test.skip(!ADMIN_EMAIL, 'ADMIN_EMAIL env var not set');
     await loginWith(page, ADMIN_EMAIL, ADMIN_PASSWORD);
     await expect(page.locator('#dashboard-screen')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('#alert-bell')).toBeVisible();

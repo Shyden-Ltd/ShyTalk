@@ -32,9 +32,8 @@ test.describe('Roadmap footer — GitHub Project link', () => {
     await page.goto(`${BASE}/roadmap.html`);
     const link = page.locator(SELECTOR);
     await expect(link).toHaveAttribute('target', '_blank');
-    const rel = await link.getAttribute('rel');
-    expect(rel).toContain('noopener');
-    expect(rel).toContain('noreferrer');
+    await expect.poll(async () => await link.getAttribute('rel')).toContain('noopener');
+    await expect.poll(async () => await link.getAttribute('rel')).toContain('noreferrer');
   });
 
   test('Link is keyboard-focusable and reachable via Tab navigation', async ({ page }) => {
@@ -91,11 +90,16 @@ test.describe('Roadmap footer — GitHub Project link', () => {
     expect(text, 'es text should not be English default').not.toBe('View on GitHub Project');
     expect(text, 'es text should contain GitHub keyword').toContain('GitHub');
 
-    const title = await link.getAttribute('title');
-    expect(title, 'es title should not be English default').not.toBe(
-      'Opens the public GitHub Project board for ShyTalk Stories',
-    );
-    expect(title, 'es title should contain GitHub keyword').toContain('GitHub');
+    await expect
+      .poll(async () => await link.getAttribute('title'), {
+        message: 'es title should not be English default',
+      })
+      .not.toBe('Opens the public GitHub Project board for ShyTalk Stories');
+    await expect
+      .poll(async () => await link.getAttribute('title'), {
+        message: 'es title should contain GitHub keyword',
+      })
+      .toContain('GitHub');
   });
 
   test('Arabic locale: link is present + RTL document direction set', async ({ page }) => {

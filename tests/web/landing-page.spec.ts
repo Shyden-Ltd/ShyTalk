@@ -83,8 +83,9 @@ test.describe('Landing Page', () => {
   });
 
   test('has correct viewport meta tag', async ({ page }) => {
-    const viewport = await page.locator('meta[name="viewport"]').getAttribute('content');
-    expect(viewport).toContain('width=device-width');
+    await expect
+      .poll(async () => await page.locator('meta[name="viewport"]').getAttribute('content'))
+      .toContain('width=device-width');
   });
 
   test('has Shyden Ltd copyright footer', async ({ page }) => {

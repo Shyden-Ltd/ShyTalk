@@ -57,8 +57,9 @@ test.describe('Language selector aria-label i18n', () => {
 
     for (const [key, expected] of cases) {
       const sel = `[data-i18n-aria-label="${key}"]`;
-      const aria = await page.locator(sel).getAttribute('aria-label');
-      expect(aria, `${key}`).toBe(expected);
+      await expect
+        .poll(async () => await page.locator(sel).getAttribute('aria-label'), { message: `${key}` })
+        .toBe(expected);
     }
   });
 
@@ -73,8 +74,9 @@ test.describe('Language selector aria-label i18n', () => {
     await page.goto(`${BASE}/privacy.html`);
 
     const sel = '[data-i18n-aria-label="aria_change_language"]';
-    const aria = await page.locator(sel).getAttribute('aria-label');
-    expect(aria).toBe('Change language');
+    await expect
+      .poll(async () => await page.locator(sel).getAttribute('aria-label'))
+      .toBe('Change language');
   });
 
   test('LEGAL_T.footer defines all 5 language-selector aria_* keys for all 20 locales', async ({

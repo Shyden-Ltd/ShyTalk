@@ -66,8 +66,9 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Reload and verify persistence
     await reloadAndSearch(page, uid);
-    const value = await page.locator('[data-field="dateOfBirth"]').inputValue();
-    expect(value).toContain('2000-06-15');
+    await expect
+      .poll(async () => await page.locator('[data-field="dateOfBirth"]').inputValue())
+      .toContain('2000-06-15');
 
     // Verify via API
     const apiData = await testData.api.get(userPath);
@@ -259,8 +260,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Verify result message appears (available or taken)
     await expect(resultDiv).not.toBeEmpty();
-    const resultText = await resultDiv.textContent();
-    expect(resultText).toBeTruthy();
+    await expect(resultDiv).not.toBeEmpty();
   });
 
   // ── Test 10: Temp ID — set + display ──
@@ -480,9 +480,8 @@ test.describe('Admin Users - Extra Profile Fields', () => {
 
     // Stalkers list should be read-only (no add input)
     const addInputs = stalkersList.locator('input');
-    const inputCount = await addInputs.count();
     // Stalkers list is display-only — may have zero or some entries, but no edit controls
-    expect(inputCount).toBe(0);
+    await expect(addInputs).toHaveCount(0);
   });
 
   // ── Test 16: Pre-suspension profile display ──
@@ -507,8 +506,7 @@ test.describe('Admin Users - Extra Profile Fields', () => {
     // Verify pre-suspension name is shown
     const preSuspensionName = page.locator('#pre-suspension-name');
     await expect(preSuspensionName).toBeVisible();
-    const nameText = await preSuspensionName.textContent();
-    expect(nameText).toBeTruthy();
+    await expect(preSuspensionName).not.toBeEmpty();
 
     // Unsuspend and reset GCS
     await testData.api.post(`/api/user/${uid}/unsuspend`, {});

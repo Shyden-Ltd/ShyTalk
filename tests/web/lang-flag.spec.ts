@@ -52,7 +52,7 @@ test.describe('SHY-0181 — ?lang= URL flag drives language site-wide', () => {
   test('?lang=ar sets dir=rtl (forced RTL lays out correctly)', async ({ page }) => {
     await page.goto(`${BASE}/?lang=ar`);
     await page.waitForFunction(() => typeof (window as any).ShyTalkLanguage !== 'undefined');
-    expect(await page.evaluate(() => document.documentElement.getAttribute('dir'))).toBe('rtl');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   });
 
   test('an unsupported ?lang= is ignored (falls back, never applied)', async ({ page }) => {

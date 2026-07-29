@@ -9,15 +9,13 @@ test.describe('Portal — Accessibility: Labels & ARIA', () => {
   test('email input has associated label (sr-only)', async ({ page }) => {
     const label = page.locator('label[for="login-email"]');
     await expect(label).toHaveCount(1);
-    const classes = await label.getAttribute('class');
-    expect(classes).toContain('sr-only');
+    await expect.poll(async () => await label.getAttribute('class')).toContain('sr-only');
   });
 
   test('password input has associated label (sr-only)', async ({ page }) => {
     const label = page.locator('label[for="login-password"]');
     await expect(label).toHaveCount(1);
-    const classes = await label.getAttribute('class');
-    expect(classes).toContain('sr-only');
+    await expect.poll(async () => await label.getAttribute('class')).toContain('sr-only');
   });
 
   test('TOTP code input has associated label', async ({ page }) => {
@@ -69,8 +67,8 @@ test.describe('Portal — Accessibility: Labels & ARIA', () => {
 
   test('ShyTalk logo has aria-label', async ({ page }) => {
     const logos = page.locator('.portal-logo');
+    await expect.poll(async () => await logos.count()).toBeGreaterThan(0);
     const count = await logos.count();
-    expect(count).toBeGreaterThan(0);
     for (let i = 0; i < count; i++) {
       await expect(logos.nth(i)).toHaveAttribute('aria-label', 'ShyTalk');
     }
@@ -431,8 +429,9 @@ test.describe('Portal — i18n: Data Attributes', () => {
 
   test('back_to_dashboard appears on all subpages', async ({ page }) => {
     // back_to_dashboard should appear on profile, security, and data-privacy
-    const count = await page.locator('[data-i18n="back_to_dashboard"]').count();
-    expect(count).toBe(3);
+    await expect
+      .poll(async () => await page.locator('[data-i18n="back_to_dashboard"]').count())
+      .toBe(3);
   });
 
   test('loading text has data-i18n', async ({ page }) => {
@@ -525,9 +524,8 @@ test.describe('Portal — Semantic HTML Structure', () => {
 
   test('sections use semantic section elements', async ({ page }) => {
     const sections = page.locator('main section.portal-section');
-    const count = await sections.count();
+    await expect.poll(async () => await sections.count()).toBeGreaterThanOrEqual(8);
     // Should have all portal sections
-    expect(count).toBeGreaterThanOrEqual(8);
   });
 
   test('dashboard has header element', async ({ page }) => {
@@ -552,7 +550,6 @@ test.describe('Portal — Semantic HTML Structure', () => {
 
   test('page has description meta tag', async ({ page }) => {
     const desc = page.locator('meta[name="description"]');
-    const content = await desc.getAttribute('content');
-    expect(content).toContain('ShyTalk');
+    await expect.poll(async () => await desc.getAttribute('content')).toContain('ShyTalk');
   });
 });

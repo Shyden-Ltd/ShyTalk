@@ -206,9 +206,8 @@ test.describe('Portal — Authentication Section Security', () => {
   test('noindex prevents search engine indexing', async ({ page }) => {
     await page.goto('/portal/');
     const robots = page.locator('meta[name="robots"]');
-    const content = await robots.getAttribute('content');
-    expect(content).toContain('noindex');
-    expect(content).toContain('nofollow');
+    await expect.poll(async () => await robots.getAttribute('content')).toContain('noindex');
+    await expect.poll(async () => await robots.getAttribute('content')).toContain('nofollow');
   });
 });
 
@@ -217,43 +216,37 @@ test.describe('Portal — Form Action Security', () => {
     await page.goto('/portal/');
     await expect(page.locator('#login-section')).toBeVisible({ timeout: 15_000 });
     const form = page.locator('#login-form');
-    const action = await form.getAttribute('action');
-    expect(action).toBeNull();
+    await expect.poll(async () => await form.getAttribute('action')).toBeNull();
   });
 
   test('TOTP form has no action attribute', async ({ page }) => {
     await page.goto('/portal/');
     const form = page.locator('#totp-form');
-    const action = await form.getAttribute('action');
-    expect(action).toBeNull();
+    await expect.poll(async () => await form.getAttribute('action')).toBeNull();
   });
 
   test('enroll form has no action attribute', async ({ page }) => {
     await page.goto('/portal/');
     const form = page.locator('#enroll-form');
-    const action = await form.getAttribute('action');
-    expect(action).toBeNull();
+    await expect.poll(async () => await form.getAttribute('action')).toBeNull();
   });
 
   test('re-auth form has no action attribute', async ({ page }) => {
     await page.goto('/portal/');
     const form = page.locator('#reauth-form');
-    const action = await form.getAttribute('action');
-    expect(action).toBeNull();
+    await expect.poll(async () => await form.getAttribute('action')).toBeNull();
   });
 
   test('recovery send form has no action attribute', async ({ page }) => {
     await page.goto('/portal/');
     const form = page.locator('#recovery-send-form');
-    const action = await form.getAttribute('action');
-    expect(action).toBeNull();
+    await expect.poll(async () => await form.getAttribute('action')).toBeNull();
   });
 
   test('recovery verify form has no action attribute', async ({ page }) => {
     await page.goto('/portal/');
     const form = page.locator('#recovery-verify-form');
-    const action = await form.getAttribute('action');
-    expect(action).toBeNull();
+    await expect.poll(async () => await form.getAttribute('action')).toBeNull();
   });
 });
 
@@ -262,9 +255,8 @@ test.describe('Portal — Link Security', () => {
     await page.goto('/portal/#no-account');
     await expect(page.locator('#no-account-section')).toBeVisible({ timeout: 15_000 });
     const link = page.locator('#no-account-section a[href*="play.google.com"]');
-    const rel = await link.getAttribute('rel');
-    expect(rel).toContain('noopener');
-    expect(rel).toContain('noreferrer');
+    await expect.poll(async () => await link.getAttribute('rel')).toContain('noopener');
+    await expect.poll(async () => await link.getAttribute('rel')).toContain('noreferrer');
   });
 
   test('Google Play link opens in new tab', async ({ page }) => {

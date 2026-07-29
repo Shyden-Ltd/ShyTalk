@@ -90,8 +90,7 @@ test.describe('Roadmap Page — Theme & Layout', () => {
       .first()
       .waitFor({ timeout: 10_000 });
     const features = page.locator('.feature-item, [data-testid="feature-item"]');
-    const count = await features.count();
-    expect(count).toBeGreaterThan(0);
+    await expect.poll(async () => await features.count()).toBeGreaterThan(0);
   });
 
   test('bell icon visible on each feature', async ({ page }) => {
@@ -100,8 +99,7 @@ test.describe('Roadmap Page — Theme & Layout', () => {
       .first()
       .waitFor({ timeout: 10_000 });
     const bells = page.locator('.feature-bell, [data-testid="feature-bell"]');
-    const count = await bells.count();
-    expect(count).toBeGreaterThan(0);
+    await expect.poll(async () => await bells.count()).toBeGreaterThan(0);
   });
 
   test('clicking bell without login shows login modal with sign-in buttons', async ({ page }) => {
@@ -154,8 +152,7 @@ test.describe('Roadmap Page — Theme & Layout', () => {
   test('last updated date displays correctly', async ({ page }) => {
     const dateEl = page.locator('.last-updated, [data-testid="last-updated"]');
     await expect(dateEl).toBeVisible({ timeout: 10_000 });
-    const text = await dateEl.textContent();
-    expect(text).toMatch(/\d{4}/); // Should contain a year
+    await expect.poll(async () => await dateEl.textContent()).toMatch(/\d{4}/); // Should contain a year;
   });
 
   test('footer text present', async ({ page }) => {
@@ -222,8 +219,7 @@ test.describe('Per-Phase Progress', () => {
   test('each phase shows correct X/Y count', async ({ page }) => {
     const phases = page.locator('.phase-card, [data-testid="phase-card"]');
     await phases.first().waitFor({ timeout: 10_000 });
-    const count = await phases.count();
-    expect(count).toBeGreaterThan(0);
+    await expect.poll(async () => await phases.count()).toBeGreaterThan(0);
   });
 
   test('collapsed phase: click expands feature list', async ({ page }) => {
@@ -356,18 +352,39 @@ test.describe('Accessibility', () => {
   });
 
   test('screen reader: form fields have labels', async ({ page }) => {
+    // This test asserted NOTHING: the `if (!ariaLabel)` branch built a label
+    // locator and then ended, leaving a comment where the assertion should
+    // have been. Every unlabelled input passed.
     const inputs = page.locator('input:not([type="hidden"])');
-    const count = await inputs.count();
-    for (let i = 0; i < count; i++) {
-      const input = inputs.nth(i);
-      const ariaLabel = await input.getAttribute('aria-label');
-      const id = await input.getAttribute('id');
-      if (!ariaLabel) {
-        // Should have an associated label
-        const label = page.locator(`label[for="${id}"]`);
-        // Either aria-label or label should exist
-      }
+    const unlabelled: string[] = [];
+
+    for (const input of await inputs.all()) {
+      const [ariaLabel, ariaLabelledBy, id] = await Promise.all([
+        input.getAttribute('aria-label'),
+        input.getAttribute('aria-labelledby'),
+        input.getAttribute('id'),
+      ]);
+      if (ariaLabel?.trim() || ariaLabelledBy?.trim()) continue;
+      // A WRAPPING <label> names its control just as well as `label[for]`, and
+      // both are valid — checking only the `for=` form would report correctly
+      // labelled radios as violations.
+      // defect-detector:allow GUARD-IF — a correctly labelled input is skipped on purpose; the unlabelled list is asserted empty after the loop, so nothing passes silently
+      const named = await input.evaluate((el) => {
+        const byFor = el.id ? document.querySelector(`label[for="${el.id}"]`) : null;
+        return Boolean(byFor || el.closest('label') || (el as HTMLInputElement).title);
+      });
+      if (named) continue;
+      unlabelled.push(
+        id ||
+          (await input.getAttribute('name')) ||
+          (await input.evaluate((el) => el.outerHTML.slice(0, 120))),
+      );
     }
+
+    expect(
+      unlabelled,
+      'every visible input needs aria-label, aria-labelledby, or a <label for>',
+    ).toEqual([]);
   });
 
   test('screen reader: vote buttons have descriptive aria-labels', async ({ page }) => {
@@ -383,9 +400,14 @@ test.describe('Accessibility', () => {
       await page.reload();
       const upvote = page.locator(`[data-testid="vote-up-${seeded.id}"]`);
       await expect(upvote).toBeVisible({ timeout: 15_000 });
-      const ariaLabel = await upvote.getAttribute('aria-label');
-      expect(ariaLabel, 'vote button must carry an aria-label').toBeTruthy();
-      expect(ariaLabel!.trim().length).toBeGreaterThan(0);
+      await expect
+        .poll(async () => await upvote.getAttribute('aria-label'), {
+          message: 'vote button must carry an aria-label',
+        })
+        .toBeTruthy();
+      await expect
+        .poll(async () => (await upvote.getAttribute('aria-label'))!.trim().length)
+        .toBeGreaterThan(0);
     } finally {
       await teardownTestRun(runId);
     }
@@ -489,22 +511,33 @@ test.describe('SEO & Meta Tags', () => {
   });
 
   test('meta description present', async ({ page }) => {
-    const desc = await page.locator('meta[name="description"]').getAttribute('content');
-    expect(desc).toBeTruthy();
-    expect(desc!.length).toBeGreaterThan(10);
+    await expect
+      .poll(async () => await page.locator('meta[name="description"]').getAttribute('content'))
+      .toBeTruthy();
+    await expect
+      .poll(
+        async () =>
+          (await page.locator('meta[name="description"]').getAttribute('content'))!.length,
+      )
+      .toBeGreaterThan(10);
   });
 
   test('Open Graph tags present', async ({ page }) => {
-    const ogTitle = await page.locator('meta[property="og:title"]').getAttribute('content');
-    const ogDesc = await page.locator('meta[property="og:description"]').getAttribute('content');
-    const ogUrl = await page.locator('meta[property="og:url"]').getAttribute('content');
-    expect(ogTitle).toBeTruthy();
-    expect(ogDesc).toBeTruthy();
+    // og:url was read here and never asserted, so a missing or empty og:url
+    // passed silently. All three are asserted now, and `toHaveAttribute` with
+    // `/.+/` demands actual content rather than merely a present attribute.
+    for (const property of ['og:title', 'og:description', 'og:url']) {
+      await expect(
+        page.locator(`meta[property="${property}"]`),
+        `${property} must carry content`,
+      ).toHaveAttribute('content', /.+/);
+    }
   });
 
   test('canonical URL set', async ({ page }) => {
-    const canonical = await page.locator('link[rel="canonical"]').getAttribute('href');
-    expect(canonical).toBeTruthy();
+    await expect
+      .poll(async () => await page.locator('link[rel="canonical"]').getAttribute('href'))
+      .toBeTruthy();
   });
 
   test('robots: index, follow', async ({ page }) => {

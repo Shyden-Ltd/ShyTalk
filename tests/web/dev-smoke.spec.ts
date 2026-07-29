@@ -56,6 +56,7 @@ const FIREBASE_SIGN_IN_URL = `https://identitytoolkit.googleapis.com/v1/accounts
 
 // Skip the whole file when prerequisites are missing — keeps `npx
 // playwright test` runnable locally without the full secret bundle.
+// defect-detector:allow SKIP-COND — the branch immediately above THROWS when process.env.CI is set, so this cannot hide a failure in the gate that matters; it only spares a local pre-push run that has no stack up
 test.skip(
   !API_BASE || !FIREBASE_API_KEY || !SMOKE_EMAIL || !SMOKE_PASSWORD || !SMOKE_TARGET_UNIQUE_ID,
   'dev-smoke requires API_BASE_URL, SMOKE_FIREBASE_API_KEY, SMOKE_TEST_EMAIL, SMOKE_TEST_PASSWORD, SMOKE_TARGET_UNIQUE_ID',

@@ -65,9 +65,11 @@ async function setSlider(
 
 test.describe('Admin Economy Config', () => {
   test.describe.configure({ mode: 'serial' });
+  // defect-detector:allow SKIP-COND — the economy config is one shared document, so running these mutations in several browser projects at once would have them clobber each other
   test.skip(({ browserName }) => browserName !== 'chromium', 'Economy config is a singleton');
 
   test.beforeEach(async ({ page }, testInfo) => {
+    // defect-detector:allow SKIP-COND — same singleton document as the describe-level gate above; this narrows it to the desktop project specifically
     test.skip(testInfo.project.name !== 'chromium', 'Desktop chromium only');
 
     // Only navigate to admin if not already there (serial tests share the page)
@@ -93,19 +95,22 @@ test.describe('Admin Economy Config', () => {
     const pullCosts = apiConfig.pullCosts || {};
     for (const k of ['1', '10', '100']) {
       if (pullCosts[k] !== undefined) {
-        const val = await page.locator(`#eco-pullCost-${k}`).inputValue();
-        expect(Number(val)).toBe(pullCosts[k]);
+        await expect
+          .poll(async () => Number(await page.locator(`#eco-pullCost-${k}`).inputValue()))
+          .toBe(pullCosts[k]);
       }
     }
 
     // Pity params
     if (apiConfig.pitySoftStart !== undefined) {
-      const ps = await page.locator('#eco-pitySoftStart').inputValue();
-      expect(Number(ps)).toBe(apiConfig.pitySoftStart);
+      await expect
+        .poll(async () => Number(await page.locator('#eco-pitySoftStart').inputValue()))
+        .toBe(apiConfig.pitySoftStart);
     }
     if (apiConfig.pityHardLimit !== undefined) {
-      const ph = await page.locator('#eco-pityHardLimit').inputValue();
-      expect(Number(ph)).toBe(apiConfig.pityHardLimit);
+      await expect
+        .poll(async () => Number(await page.locator('#eco-pityHardLimit').inputValue()))
+        .toBe(apiConfig.pityHardLimit);
     }
   });
 

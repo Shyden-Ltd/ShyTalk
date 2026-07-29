@@ -621,8 +621,7 @@ test.describe('Starting Screens Admin Section', () => {
 
       const card = page.locator(`[data-screen-id="${screenId}"]`);
       // At least some labels should be present in the form
-      const labelCount = await card.locator('label').count();
-      expect(labelCount).toBeGreaterThan(0);
+      await expect.poll(async () => await card.locator('label').count()).toBeGreaterThan(0);
     } finally {
       await deleteScreenViaApi(page, screenId);
     }
@@ -806,9 +805,8 @@ test.describe('Starting Screens Admin Section', () => {
 
       // Default template should render an SVG icon or police duck image
       const svgOrImg = preview.locator('svg, img');
-      const count = await svgOrImg.count();
+      await expect.poll(async () => await svgOrImg.count()).toBeGreaterThanOrEqual(1);
       // At least the app icon image + template icon
-      expect(count).toBeGreaterThanOrEqual(1);
     } finally {
       await deleteScreenViaApi(page, screenId);
     }

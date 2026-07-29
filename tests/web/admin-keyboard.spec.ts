@@ -89,6 +89,7 @@ test.describe('Admin Keyboard Shortcuts', () => {
   test.beforeEach(async ({ page, browserName }) => {
     // Keyboard shortcuts are desktop-only — skip on mobile viewports
     const projectName = test.info().project.name;
+    // defect-detector:allow SKIP-COND — a mobile viewport has no physical keyboard, so these shortcuts do not exist there at all
     test.skip(
       projectName.includes('mobile'),
       'Keyboard shortcuts not applicable on mobile viewports',
@@ -115,10 +116,10 @@ test.describe('Admin Keyboard Shortcuts', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    if ((await firstCard.count()) === 0) {
-      test.skip(true, 'No pending reports for keyboard shortcuts');
-      return;
-    }
+    // The admin fixture seeds a pending report, so an empty list is a REAL
+    // failure, not a reason to skip. While this skipped, the keyboard
+    // shortcut below went unverified on every run that seeded nothing.
+    await expect(firstCard, 'No pending reports for keyboard shortcuts').toBeVisible();
 
     await selectFirstReportCard(page);
 
@@ -139,10 +140,10 @@ test.describe('Admin Keyboard Shortcuts', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    if ((await firstCard.count()) === 0) {
-      test.skip(true, 'No pending reports for keyboard shortcuts');
-      return;
-    }
+    // The admin fixture seeds a pending report, so an empty list is a REAL
+    // failure, not a reason to skip. While this skipped, the keyboard
+    // shortcut below went unverified on every run that seeded nothing.
+    await expect(firstCard, 'No pending reports for keyboard shortcuts').toBeVisible();
 
     await selectFirstReportCard(page);
 
@@ -162,10 +163,10 @@ test.describe('Admin Keyboard Shortcuts', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    if ((await firstCard.count()) === 0) {
-      test.skip(true, 'No pending reports for keyboard shortcuts');
-      return;
-    }
+    // The admin fixture seeds a pending report, so an empty list is a REAL
+    // failure, not a reason to skip. While this skipped, the keyboard
+    // shortcut below went unverified on every run that seeded nothing.
+    await expect(firstCard, 'No pending reports for keyboard shortcuts').toBeVisible();
 
     await selectFirstReportCard(page);
 
@@ -194,10 +195,10 @@ test.describe('Admin Keyboard Shortcuts', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    if ((await firstCard.count()) === 0) {
-      test.skip(true, 'No pending reports for keyboard shortcuts');
-      return;
-    }
+    // The admin fixture seeds a pending report, so an empty list is a REAL
+    // failure, not a reason to skip. While this skipped, the keyboard
+    // shortcut below went unverified on every run that seeded nothing.
+    await expect(firstCard, 'No pending reports for keyboard shortcuts').toBeVisible();
 
     // Establish a stale selectedCardIndex by selecting card 0 first
     await selectFirstReportCard(page);
@@ -211,10 +212,10 @@ test.describe('Admin Keyboard Shortcuts', () => {
 
     // Re-locate the first card after the rebuild
     const firstCardAfter = page.locator('.report-card').first();
-    if ((await firstCardAfter.count()) === 0) {
-      test.skip(true, 'No pending reports after round-trip');
-      return;
-    }
+    // The admin fixture seeds a pending report, so an empty list is a REAL
+    // failure, not a reason to skip. While this skipped, the keyboard
+    // shortcut below went unverified on every run that seeded nothing.
+    await expect(firstCardAfter, 'No pending reports after round-trip').toBeVisible();
 
     // ArrowDown should land on card 0 — proving selectedCardIndex was
     // reset on tab re-entry, not preserved from the prior selection.
@@ -235,10 +236,10 @@ test.describe('Admin Keyboard Shortcuts', () => {
     await filterReports(page, 'pending');
 
     const firstCard = page.locator('.report-card').first();
-    if ((await firstCard.count()) === 0) {
-      test.skip(true, 'No pending reports for keyboard shortcuts');
-      return;
-    }
+    // The admin fixture seeds a pending report, so an empty list is a REAL
+    // failure, not a reason to skip. While this skipped, the keyboard
+    // shortcut below went unverified on every run that seeded nothing.
+    await expect(firstCard, 'No pending reports for keyboard shortcuts').toBeVisible();
 
     await selectFirstReportCard(page);
 

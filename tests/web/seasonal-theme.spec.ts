@@ -78,8 +78,9 @@ test.describe('Seasonal Theme System', () => {
     await page.goto(BASE);
     const ribbon = page.locator('#seasonal-ribbon');
     await expect(ribbon).toBeVisible({ timeout: 5_000 });
-    const href = await ribbon.getAttribute('href');
-    expect(href).toBe('/events/khmer-new-year.html');
+    await expect
+      .poll(async () => await ribbon.getAttribute('href'))
+      .toBe('/events/khmer-new-year.html');
   });
 
   test('CSS variables are overridden during active event', async ({ page }) => {

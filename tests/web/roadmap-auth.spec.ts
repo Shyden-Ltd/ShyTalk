@@ -40,16 +40,16 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     const playLink = page.locator('[data-testid="download-android"]');
     await expect(playLink).toBeVisible({ timeout: 10_000 });
     await expect(playLink).toContainText(/google play/i);
-    const href = await playLink.getAttribute('href');
-    expect(href).toContain('play.google.com');
+    await expect.poll(async () => await playLink.getAttribute('href')).toContain('play.google.com');
   });
 
   test('welcome prompt has App Store download link', async ({ page }) => {
     const appStoreLink = page.locator('[data-testid="download-ios"]');
     await expect(appStoreLink).toBeVisible({ timeout: 10_000 });
     await expect(appStoreLink).toContainText(/app store/i);
-    const href = await appStoreLink.getAttribute('href');
-    expect(href).toContain('apps.apple.com');
+    await expect
+      .poll(async () => await appStoreLink.getAttribute('href'))
+      .toContain('apps.apple.com');
   });
 
   test('welcome prompt visible in suggestions section specifically (not header)', async ({
@@ -116,7 +116,7 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     await expect(closeBtn).toBeVisible();
     // Cancel/dismiss button should NOT exist
     const cancelBtn = loginModal.locator('[data-testid="login-modal-dismiss"]');
-    expect(await cancelBtn.count()).toBe(0);
+    await expect(cancelBtn).toHaveCount(0);
   });
 
   test('clicking X closes the login modal', async ({ page }) => {
@@ -133,11 +133,11 @@ test.describe('Roadmap Auth — Login Prompt', () => {
     const playLink = page.locator('[data-testid="download-android"]');
     await expect(playLink).toBeVisible({ timeout: 10_000 });
     const playSvg = playLink.locator('svg');
-    expect(await playSvg.count()).toBeGreaterThan(0);
+    await expect.poll(async () => playSvg.count()).toBeGreaterThan(0);
     const appStoreLink = page.locator('[data-testid="download-ios"]');
     await expect(appStoreLink).toBeVisible({ timeout: 10_000 });
     const appleSvg = appStoreLink.locator('svg');
-    expect(await appleSvg.count()).toBeGreaterThan(0);
+    await expect.poll(async () => appleSvg.count()).toBeGreaterThan(0);
   });
 
   test('accessibility: keyboard navigable (tab to login buttons, enter to activate)', async ({
@@ -187,7 +187,7 @@ test.describe('Roadmap Auth — Subscribe uses shared login modal', () => {
 
     // The subscribe-specific modal should NOT appear when unauthenticated
     const subscribeModal = page.locator('[data-testid="subscribe-modal"]');
-    expect(await subscribeModal.count()).toBe(0);
+    await expect(subscribeModal).toHaveCount(0);
   });
 
   test('subscribe login modal matches bell login modal (same testid, same structure)', async ({
@@ -440,9 +440,12 @@ test.describe('Roadmap Auth — No Account Found', () => {
     // `target="_blank"` without it hands the new page a `window.opener`
     // handle back into ours.
     for (const id of ['download-android', 'download-ios']) {
-      const rel = await page.locator(`[data-testid="${id}"]`).getAttribute('rel');
-      expect(rel, `${id} rel`).toMatch(/noopener/);
-      expect(rel, `${id} rel`).toMatch(/noreferrer/);
+      // `getAttribute` is a ONE-SHOT read: before the link is in the DOM it
+      // returns null and `expect(null).toMatch()` fails. `toHaveAttribute`
+      // retries, so it waits for the link instead of racing it.
+      const link = page.locator(`[data-testid="${id}"]`);
+      await expect(link).toHaveAttribute('rel', /noopener/);
+      await expect(link).toHaveAttribute('rel', /noreferrer/);
     }
   });
 
@@ -673,8 +676,11 @@ test.describe('Roadmap Auth — No Account Download Prompt Details', () => {
   });
 
   test('download prompt has clear call-to-action text', async ({ page }) => {
-    const text = await page.locator('[data-testid="auth-no-account"]').textContent();
-    expect(text?.toLowerCase()).toMatch(/download|create|account/);
+    // `textContent()` is a ONE-SHOT read that races the prompt's render;
+    // `toContainText` retries until it appears.
+    await expect(page.locator('[data-testid="auth-no-account"]')).toContainText(
+      /download|create|account/i,
+    );
   });
 
   test('download prompt allows dismissal to browse as guest', async ({ page }) => {
@@ -928,7 +934,7 @@ test.describe('Roadmap Auth — Bell icon auth behaviour', () => {
     const subscribeModal = page.locator('[data-testid="subscribe-modal"]');
     await expect(subscribeModal).toBeVisible({ timeout: 5_000 });
     const loginModal = page.locator('[data-testid="login-modal-overlay"]');
-    expect(await loginModal.count()).toBe(0);
+    await expect(loginModal).toHaveCount(0);
   });
 
   test('bell icon when authenticated opens subscribe modal', async ({ page }) => {

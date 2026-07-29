@@ -65,17 +65,20 @@ test.describe('Khmer New Year — zodiac table i18n', () => {
       { timeout: 10_000 },
     );
 
-    const animal = await page.locator('[data-i18n="kny_zodiac_col_animal"]').textContent();
-    const khmer = await page.locator('[data-i18n="kny_zodiac_col_khmer"]').textContent();
-    const years = await page.locator('[data-i18n="kny_zodiac_col_years"]').textContent();
-
-    expect(animal?.trim(), 'Animal column header in es').toBe('Animal');
-    expect(khmer?.trim(), 'Khmer column header in es should be "Jemer", not English "Khmer"').toBe(
-      'Jemer',
-    );
-    expect(years?.trim(), 'Years column header in es should be "Años", not English "Years"').toBe(
-      'Años',
-    );
+    // `toHaveText` retries and normalises surrounding whitespace, so it needs
+    // neither the one-shot `textContent()` read nor the manual `?.trim()`.
+    await expect(
+      page.locator('[data-i18n="kny_zodiac_col_animal"]'),
+      'Animal column header in es',
+    ).toHaveText('Animal');
+    await expect(
+      page.locator('[data-i18n="kny_zodiac_col_khmer"]'),
+      'Khmer column header in es should be "Jemer", not English "Khmer"',
+    ).toHaveText('Jemer');
+    await expect(
+      page.locator('[data-i18n="kny_zodiac_col_years"]'),
+      'Years column header in es should be "Años", not English "Years"',
+    ).toHaveText('Años');
   });
 
   test('English (default) renders the inline HTML defaults', async ({ page }) => {

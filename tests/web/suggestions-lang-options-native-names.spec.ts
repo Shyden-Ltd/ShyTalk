@@ -51,7 +51,11 @@ test.describe('Suggestions-board LANG_OPTIONS native names', () => {
     const src = await res.text();
 
     // Extract just the LANG_OPTIONS array literal.
-    const langBlock = src.match(/var LANG_OPTIONS = \[([\s\S]*?)\];/);
+    // The option lists became FUNCTIONS under SHY-0252 — as module-level
+    // `var`s they froze the locale active at script load, so a language
+    // switch could never change them. The anchor moved with them; the
+    // claim (labels are sgT()-driven) is unchanged.
+    const langBlock = src.match(/function langOptions\(\) \{\s*return \[([\s\S]*?)\];/);
     expect(langBlock, 'LANG_OPTIONS array not found').not.toBeNull();
     const arrSrc = langBlock![1];
 
@@ -66,7 +70,11 @@ test.describe('Suggestions-board LANG_OPTIONS native names', () => {
   test('LANG_OPTIONS no longer hardcodes English language names', async ({ request }) => {
     const res = await request.get(`${BASE}/js/suggestions-board.js`);
     const src = await res.text();
-    const langBlock = src.match(/var LANG_OPTIONS = \[([\s\S]*?)\];/);
+    // The option lists became FUNCTIONS under SHY-0252 — as module-level
+    // `var`s they froze the locale active at script load, so a language
+    // switch could never change them. The anchor moved with them; the
+    // claim (labels are sgT()-driven) is unchanged.
+    const langBlock = src.match(/function langOptions\(\) \{\s*return \[([\s\S]*?)\];/);
     const arrSrc = langBlock![1];
     // English language NAMES that should NOT appear (en is intentional).
     const englishNames = [

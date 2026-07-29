@@ -30,11 +30,13 @@ test.describe('Static SEO + 404 surfaces', () => {
     const homeLink = page.locator('[data-testid="404-home-link"]');
     await expect(homeLink).toHaveAttribute('href', '/');
     // robots noindex header so search engines don't index the 404 itself
-    const robots = await page.locator('meta[name="robots"]').getAttribute('content');
-    expect(robots).toBe('noindex');
+    await expect
+      .poll(async () => await page.locator('meta[name="robots"]').getAttribute('content'))
+      .toBe('noindex');
     // theme-color set so Safari + Chrome status bar matches the dark UI
-    const theme = await page.locator('meta[name="theme-color"]').getAttribute('content');
-    expect(theme).toBe('#0f0d15');
+    await expect
+      .poll(async () => await page.locator('meta[name="theme-color"]').getAttribute('content'))
+      .toBe('#0f0d15');
   });
 
   test('404.html link returns user to homepage on click', async ({ page }) => {

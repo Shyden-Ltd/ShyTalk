@@ -77,13 +77,12 @@ test.describe('Admin Gifts Tab', () => {
   test('seeded gift appears in table with correct data', async ({ page, testData }) => {
     // Verify the gifts table has rows
     const rows = page.locator('#gifts-tbody tr[data-gift-id]');
-    const rowCount = await rows.count();
-    expect(rowCount).toBeGreaterThan(0);
+    await expect.poll(async () => await rows.count()).toBeGreaterThan(0);
 
     // Pick the first gift row and verify it has all expected fields
     const row = rows.first();
+    await expect.poll(async () => await row.getAttribute('data-gift-id')).toBeTruthy();
     const giftId = await row.getAttribute('data-gift-id');
-    expect(giftId).toBeTruthy();
 
     // Verify name, coinValue, and checkboxes are populated
     const fields = await readRowFields(row);
@@ -205,6 +204,7 @@ test.describe('Admin Gifts Tab', () => {
     let targetRow: ReturnType<Page['locator']> | null = null;
     let targetId = '';
     for (let i = 0; i < count; i++) {
+      // defect-detector:allow GUARD-IF — this scans rows to FIND one by its input value, which no locator filter can express, and the loop is followed by an unconditional expect(targetRow).not.toBeNull()
       const nameVal = await allRows.nth(i).locator('[data-field="name"]').inputValue();
       if (nameVal === tempName) {
         targetRow = allRows.nth(i);
@@ -299,9 +299,12 @@ test.describe('Admin Gifts Tab', () => {
 
     // Delete another gift (second row if it exists)
     const secondRow = page.locator('#gifts-tbody tr[data-gift-id]').nth(1);
-    if ((await secondRow.count()) > 0) {
-      await secondRow.locator('.gift-delete-btn').click();
-    }
+    // The confirm dialog's "Deleted Gifts" section is the thing under test, so
+    // a run with only one row silently tested nothing. Two rows are required.
+    await expect
+      .poll(async () => secondRow.count(), { message: 'need a second gift row to delete' })
+      .toBeGreaterThan(0);
+    await secondRow.locator('.gift-delete-btn').click();
 
     // Click Apply — opens the confirm dialog
     await page.locator('#gift-apply-btn').click();
@@ -312,9 +315,7 @@ test.describe('Admin Gifts Tab', () => {
     const body = page.locator('#gift-confirm-body');
     await expect(body.locator('h4:has-text("New Gifts")')).toBeVisible();
     await expect(body.locator('h4:has-text("Modified Gifts")')).toBeVisible();
-    if ((await secondRow.count()) > 0) {
-      await expect(body.locator('h4:has-text("Deleted Gifts")')).toBeVisible();
-    }
+    await expect(body.locator('h4:has-text("Deleted Gifts")')).toBeVisible();
 
     // Title should show total change count
     const title = page.locator('#gift-confirm-title');
@@ -346,6 +347,7 @@ test.describe('Admin Gifts Tab', () => {
     let compensateOriginal = false;
     for (let i = 0; i < rowCount; i++) {
       const r = allRows.nth(i);
+      // defect-detector:allow GUARD-IF — this scans for a row to compensate with and is followed by an unconditional expect(compensateRow).not.toBeNull()
       const rId = await r.getAttribute('data-gift-id');
       if (rId === giftId) continue;
       const rWheel = await r.locator('[data-field="showOnWheel"]').isChecked();
@@ -551,8 +553,9 @@ test.describe('Admin Gifts Tab', () => {
     await page.locator('#gift-add-btn').click();
 
     // New row should appear
-    const afterCount = await page.locator('#gifts-tbody tr').count();
-    expect(afterCount).toBe(beforeCount + 1);
+    await expect
+      .poll(async () => await page.locator('#gifts-tbody tr').count())
+      .toBe(beforeCount + 1);
 
     // The new row should have gift-new class
     const newRow = page.locator('#gifts-tbody tr.gift-new').last();
@@ -584,8 +587,8 @@ test.describe('Admin Gifts Tab', () => {
   // ── Test 13: Multiple gifts in table sorted by order ──
   test('multiple gifts in table are sorted by order', async ({ page }) => {
     const rows = page.locator('#gifts-tbody tr[data-gift-id]');
+    await expect.poll(async () => await rows.count()).toBeGreaterThanOrEqual(2);
     const rowCount = await rows.count();
-    expect(rowCount).toBeGreaterThanOrEqual(2);
 
     // Collect order values from all rows
     const orders: number[] = [];

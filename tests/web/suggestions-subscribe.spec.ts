@@ -447,8 +447,12 @@ test.describe('Notification Timing & Freshness', () => {
     // a UTC-anchored render that reads hours off for anyone outside UTC.
     const el = ageOf(page, 'twoMinutes');
     await expect(el).toBeVisible();
+    await expect
+      .poll(async () => await el.getAttribute('datetime'), {
+        message: 'card must expose its creation time alongside the relative one',
+      })
+      .not.toBeNull();
     const iso = await el.getAttribute('datetime');
-    expect(iso, 'card must expose its creation time alongside the relative one').not.toBeNull();
     const skew = Math.abs(Date.now() - new Date(iso!).getTime());
     // Seeded two minutes ago; a timezone-mangled value would be hours out.
     expect(skew).toBeLessThan(30 * MINUTE);
@@ -534,6 +538,9 @@ test.describe('Error Recovery & Retry', () => {
     // person on a flaky train hits, and no in-process double (EPIC-0003).
     await page.context().setOffline(true);
     await page.locator(`[data-testid="vote-up-${seeded.id}"]`).click();
+    // A new vote asks WHY before it is cast (SHY-0247); "Just vote" is the
+    // no-reason path, and only then does the request go out to fail.
+    await page.locator('[data-testid="reason-skip"]').click();
 
     await expect(page.locator('#login-toast')).toContainText(/fail/i);
     // The score must not have moved — an optimistic bump left standing after a

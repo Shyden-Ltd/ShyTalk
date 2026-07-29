@@ -72,8 +72,7 @@ test.describe('Admin Devices Tab', () => {
 
     // Verify at least one row matches
     const rows = deviceRows(page);
-    const count = await rows.count();
-    expect(count).toBeGreaterThanOrEqual(1);
+    await expect.poll(async () => await rows.count()).toBeGreaterThanOrEqual(1);
 
     // Verify the first row contains expected data
     const firstRow = rows.first();
@@ -122,19 +121,12 @@ test.describe('Admin Devices Tab', () => {
     await searchDevices(page, 'Pixel 6');
 
     const rows = deviceRows(page);
+    await expect.poll(async () => await rows.count()).toBeGreaterThanOrEqual(1);
     const count = await rows.count();
-    expect(count).toBeGreaterThanOrEqual(1);
 
-    // At least one row should show Pixel 6
-    let found = false;
-    for (let i = 0; i < count; i++) {
-      const text = await rows.nth(i).textContent();
-      if (text?.includes('Pixel 6')) {
-        found = true;
-        break;
-      }
-    }
-    expect(found).toBe(true);
+    // A locator filter says the same thing as the manual scan-and-flag loop,
+    // but retries and reports which rows it saw when it fails.
+    await expect(rows.filter({ hasText: 'Pixel 6' })).not.toHaveCount(0);
   });
 
   // ── Test 5: Search via Enter key ──
@@ -148,8 +140,7 @@ test.describe('Admin Devices Tab', () => {
     await waitForDevicesLoaded(page);
 
     const rows = deviceRows(page);
-    const count = await rows.count();
-    expect(count).toBeGreaterThanOrEqual(1);
+    await expect.poll(async () => await rows.count()).toBeGreaterThanOrEqual(1);
   });
 
   // ── Test 6: Expand device detail ──
@@ -169,12 +160,11 @@ test.describe('Admin Devices Tab', () => {
     await expect(detail).toBeVisible();
 
     // Verify detail contains expected fields
-    const detailText = await detail.textContent();
-    expect(detailText).toContain('Device ID');
-    expect(detailText).toContain('User ID');
-    expect(detailText).toContain('Manufacturer');
-    expect(detailText).toContain('Model');
-    expect(detailText).toContain('Last IP');
+    await expect.poll(async () => await detail.textContent()).toContain('Device ID');
+    await expect.poll(async () => await detail.textContent()).toContain('User ID');
+    await expect.poll(async () => await detail.textContent()).toContain('Manufacturer');
+    await expect.poll(async () => await detail.textContent()).toContain('Model');
+    await expect.poll(async () => await detail.textContent()).toContain('Last IP');
   });
 
   // ── Test 7: Unbind device — confirm, verify removed, re-seed ──
@@ -183,8 +173,7 @@ test.describe('Admin Devices Tab', () => {
     await searchDevices(page, deviceId);
 
     const rows = deviceRows(page);
-    const countBefore = await rows.count();
-    expect(countBefore).toBeGreaterThanOrEqual(1);
+    await expect.poll(async () => await rows.count()).toBeGreaterThanOrEqual(1);
 
     // Accept the confirm dialog
     page.on('dialog', (dialog) => dialog.accept());
@@ -239,8 +228,7 @@ test.describe('Admin Devices Tab', () => {
     await new Promise((r) => setTimeout(r, 1_000)); // sleep-ok: bounded window for a not-removed assertion
 
     const rows = deviceRows(page);
-    const count = await rows.count();
-    expect(count).toBeGreaterThanOrEqual(1);
+    await expect.poll(async () => await rows.count()).toBeGreaterThanOrEqual(1);
 
     // API verify: device still exists
     const data = await testData.api.get(
@@ -359,8 +347,7 @@ test.describe('Admin Devices Tab', () => {
 
     // Verify the userId filter is populated
     const userIdFilter = page.locator('#log-filter-userId');
-    const filterValue = await userIdFilter.inputValue();
-    expect(filterValue).toBe(testData.user.uniqueId.toString());
+    await expect(userIdFilter).toHaveValue(testData.user.uniqueId.toString());
   });
 
   // ── Test 13: Pagination ──
@@ -373,8 +360,7 @@ test.describe('Admin Devices Tab', () => {
     // Verify pagination elements exist
     const pageInfo = page.locator('#devices-page-info');
     await expect(pageInfo).toBeVisible();
-    const pageText = await pageInfo.textContent();
-    expect(pageText).toContain('Page');
+    await expect(pageInfo).toContainText('Page');
 
     const totalInfo = page.locator('#devices-total-info');
     await expect(totalInfo).toBeVisible();

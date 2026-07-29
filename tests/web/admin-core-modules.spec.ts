@@ -140,6 +140,7 @@ test.describe('Admin Core Modules Integration', () => {
             'ADMIN_EMAIL/ADMIN_PASSWORD not set — CI must provide both (see playwright-tests.yml)',
           );
         }
+        // defect-detector:allow SKIP-COND — the branch immediately above THROWS when process.env.CI is set, so this cannot hide a failure in the gate that matters; it only spares a local pre-push run that has no stack up
         test.skip(true, 'ADMIN_EMAIL/ADMIN_PASSWORD not set — skipping (local without stack)');
       }
       await page.getByRole('textbox', { name: 'Email' }).fill(ADMIN_EMAIL);

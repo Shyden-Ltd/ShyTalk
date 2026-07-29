@@ -63,19 +63,29 @@ test.describe('Legal footer i18n — every page, every locale-switch', () => {
       // Every footer link visible on this page must NOT contain its English
       // default text after the locale switch. (The page's self-link isn't
       // rendered in its own footer — skip it.)
+      let checkedLinks = 0;
       for (const [key, englishText] of Object.entries(ENGLISH_FOOTER_TEXTS)) {
         if (key === selfKey) continue;
         const link = page.locator(`footer a[data-i18n="footer_${key}"]`);
+        // defect-detector:allow GUARD-IF — not every legal page links every policy, and the checkedLinks tally after the loop fails if NO link was checked at all
         const count = await link.count();
-        if (count === 0) continue; // page doesn't link to this policy
-        const text = await link.first().textContent();
-        expect(
-          text?.trim(),
-          `${path} footer link footer_${key} stayed in English ("${text?.trim()}") after Arabic switch — likely missing translation key in legal-translations.js or missing data-i18n attribute`,
-        ).not.toBe(englishText);
-        // Sanity: should contain non-Latin Arabic characters (؀-ۿ block).
-        expect(text).toMatch(/[؀-ۿ]/);
+        if (count === 0) continue;
+        checkedLinks++;
+        // The message used to interpolate a `text` binding that no longer
+        // exists, so every one of these threw ReferenceError instead of
+        // asserting. It reads the CURRENT text instead.
+        await expect
+          .poll(async () => (await link.first().textContent())?.trim(), {
+            message: `${path} footer link footer_${key} stayed in English after the Arabic switch — likely a missing key in legal-translations.js, or a missing data-i18n attribute`,
+          })
+          .not.toBe(englishText);
+        // Sanity: it must contain characters from the Arabic block.
+        await expect.poll(async () => await link.first().textContent()).toMatch(/[؀-ۿ]/);
       }
+      expect(
+        checkedLinks,
+        `${path} rendered no translatable footer links at all — the loop above asserted nothing`,
+      ).toBeGreaterThan(0);
     });
   }
 

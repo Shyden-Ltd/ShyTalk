@@ -93,9 +93,16 @@ test.describe('Portal aria-label i18n', () => {
       { timeout: 10_000 },
     );
 
-    const loadingAria = await page.locator('#loading-section').getAttribute('aria-label');
-    expect(loadingAria, 'loading aria-label should not be English').not.toBe('Loading');
-    expect(loadingAria, 'loading aria-label should contain Hangul').toMatch(/[가-힯]/);
+    await expect
+      .poll(async () => await page.locator('#loading-section').getAttribute('aria-label'), {
+        message: 'loading aria-label should not be English',
+      })
+      .not.toBe('Loading');
+    await expect
+      .poll(async () => await page.locator('#loading-section').getAttribute('aria-label'), {
+        message: 'loading aria-label should contain Hangul',
+      })
+      .toMatch(/[가-힯]/);
   });
 
   test('Brand wordmarks intentionally remain "ShyTalk" (English) across all locales', async ({
@@ -122,8 +129,11 @@ test.describe('Portal aria-label i18n', () => {
     const logos = await page.locator('.portal-logo').all();
     expect(logos.length, 'expected at least one .portal-logo on portal page').toBeGreaterThan(0);
     for (const logo of logos) {
-      const aria = await logo.getAttribute('aria-label');
-      expect(aria, 'brand wordmark aria-label must remain "ShyTalk"').toBe('ShyTalk');
+      await expect
+        .poll(async () => await logo.getAttribute('aria-label'), {
+          message: 'brand wordmark aria-label must remain "ShyTalk"',
+        })
+        .toBe('ShyTalk');
     }
   });
 });

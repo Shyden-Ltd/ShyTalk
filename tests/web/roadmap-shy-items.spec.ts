@@ -209,11 +209,10 @@ test.describe('badge aria-label is translated', () => {
     await expect(badges).toHaveCount(3); // SHY-0099 + SHY-0101 bodies, SHY-0060 lift
     for (const badge of await badges.all()) {
       const id = (await badge.textContent())?.trim();
-      const label = await badge.getAttribute('aria-label');
-      expect(label).toBeTruthy();
-      expect(label).toContain(id as string);
+      await expect.poll(async () => await badge.getAttribute('aria-label')).toBeTruthy();
+      await expect.poll(async () => await badge.getAttribute('aria-label')).toContain(id as string);
       // Arabic template, not the English "Story SHY-NNNN"
-      expect(label).not.toContain('Story ');
+      await expect.poll(async () => await badge.getAttribute('aria-label')).not.toContain('Story ');
     }
   });
 });

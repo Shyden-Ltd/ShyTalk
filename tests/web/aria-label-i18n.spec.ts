@@ -52,8 +52,11 @@ test.describe('Roadmap aria-label i18n', () => {
 
     for (const [key, expected] of cases) {
       const sel = `[data-i18n-aria-label="${key}"]`;
-      const aria = await page.locator(sel).getAttribute('aria-label');
-      expect(aria, `${key} aria-label`).toBe(expected);
+      await expect
+        .poll(async () => await page.locator(sel).getAttribute('aria-label'), {
+          message: `${key} aria-label`,
+        })
+        .toBe(expected);
     }
   });
 
@@ -68,10 +71,11 @@ test.describe('Roadmap aria-label i18n', () => {
     await page.goto(`${BASE}/roadmap.html`);
 
     const sel = '[data-i18n-aria-label="aria_progress_overview"]';
-    const aria = await page.locator(sel).getAttribute('aria-label');
+    await expect
+      .poll(async () => await page.locator(sel).getAttribute('aria-label'))
+      .toBe('Progress overview');
     // No translation pass for `en` runs (LEGAL_T.footer.en is undefined),
     // so the inline `aria-label="Progress overview"` from the HTML stays.
-    expect(aria).toBe('Progress overview');
   });
 
   test('LEGAL_T.footer defines all 5 aria_* keys for all 20 locales', async ({ request }) => {

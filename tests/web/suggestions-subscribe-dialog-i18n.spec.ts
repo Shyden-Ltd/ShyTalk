@@ -89,7 +89,11 @@ test.describe('Suggestions-board subscribe-dialog i18n', () => {
     }
 
     // CHANNEL_LABELS object must use sgT() for all 4 entries
-    const channelsBlock = src.match(/var CHANNEL_LABELS = \{([\s\S]*?)\};/);
+    // The option lists became FUNCTIONS under SHY-0252 — as module-level
+    // `var`s they froze the locale active at script load, so a language
+    // switch could never change them. The anchor moved with them; the
+    // claim (labels are sgT()-driven) is unchanged.
+    const channelsBlock = src.match(/function channelLabels\(\) \{\s*return \{([\s\S]*?)\};/);
     expect(channelsBlock, 'CHANNEL_LABELS object not found').not.toBeNull();
     expect(channelsBlock![1]).toMatch(/email:\s*sgT\("subscribe_channel_email"\)/);
     expect(channelsBlock![1]).toMatch(/push:\s*sgT\("subscribe_channel_push"\)/);

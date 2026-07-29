@@ -1,5 +1,13 @@
 import { test, expect, Page } from '@playwright/test';
-import { createTestUser, roadmapLogin, teardownTestRun, testWrite } from './helpers/roadmap-auth';
+import {
+  createRoadmapUser,
+  createSuggestion,
+  createTestUser,
+  roadmapLogin,
+  signInToRoadmap,
+  teardownTestRun,
+  testWrite,
+} from './helpers/roadmap-auth';
 
 /**
  * Translations, anti-abuse, security, sessions, and compatibility tests.
@@ -122,39 +130,140 @@ test.describe('Translations', () => {
       .toBe('de');
   });
 
-  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
-  test.fixme('switch language: all buttons translated', async ({ page }) => {
-    // After language switch, button labels should be translated
+  /**
+   * Switch the board to German and wait for the translation pass to land.
+   *
+   * The seven tests below had EMPTY bodies — a comment describing the assertion
+   * and nothing else — so they reported green while proving nothing about i18n
+   * (SHY-0245). They assert the real German strings from
+   * `public/js/suggestions-i18n.js`, not merely "the text changed", so a
+   * translation that silently falls back to English still fails.
+   */
+  async function switchToGerman(page: import('@playwright/test').Page): Promise<void> {
+    const switcher = page
+      .locator('.lang-selector, [data-testid="language-selector"], .language-btn')
+      .first();
+    await expect(switcher).toBeVisible({ timeout: 10_000 });
+    await switcher.click();
+    const deOption = page.locator('[data-lang="de"], .lang-option:has-text("Deutsch")').first();
+    await expect(deOption).toBeVisible();
+    await deOption.click();
+    await expect
+      .poll(() => page.evaluate(() => document.documentElement.lang), { timeout: 10_000 })
+      .toBe('de');
+  }
+
+  test('switch language: all buttons translated', async ({ page }) => {
+    await switchToGerman(page);
+    // "+ Vorschlagen" / "Suchen..." are the German strings for `suggest` and
+    // `search` in suggestions-i18n.js.
+    await expect(page.locator('[data-testid="suggest-btn"]')).toContainText('Vorschlagen');
+    await expect(page.locator('[data-testid="suggestions-search-input"]')).toHaveAttribute(
+      'placeholder',
+      /Suchen/,
+    );
   });
 
-  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
-  test.fixme('switch language: all status badges translated', async ({ page }) => {
-    // Status badges (Done, In Progress, Planned) should be translated
+  test('switch language: all status badges translated', async ({ page }) => {
+    // This spec drives the REAL board, so a card has to exist for there to be a
+    // badge at all. Without one the loop below ran zero times and proved
+    // nothing about translation.
+    const runId = `sec-badge-${Date.now()}`;
+    await fetch(`${process.env.API_BASE_URL}/api/test/write/suggestions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Test-API-Key': process.env.TEST_API_KEY || 'local-test-key',
+      },
+      body: JSON.stringify({
+        id: runId,
+        title: 'Badge translation probe',
+        description: 'Seeded so a status badge exists to translate.',
+        tags: [],
+        language: 'en',
+        status: 'planned',
+        submitterUid: 1,
+        upvotes: 1,
+        downvotes: 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        _testRun: runId,
+      }),
+    });
+    await page.reload();
+
+    await switchToGerman(page);
+    // Geplant / Abgeschlossen / Abgelehnt — the German `planned`, `completed`
+    // and `rejected` labels. A badge left in English fails here.
+    const badges = page.locator('[data-testid^="suggestion-status"], .sg-badge');
+    await expect.poll(async () => badges.count()).toBeGreaterThan(0);
+    const texts = (await badges.allTextContents()).map((t) => t.trim()).filter(Boolean);
+    expect(texts.length).toBeGreaterThan(0);
+    for (const t of texts) {
+      expect(
+        /Ausstehend|Akzeptiert|Geplant|Ausgeliefert!|Abgelehnt/.test(t),
+        `status badge "${t}" is not one of the German status labels`,
+      ).toBe(true);
+    }
   });
 
-  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
-  test.fixme('switch language: info banner translated', async ({ page }) => {
-    // Suggestions info banner text should be translated
+  test('switch language: info banner translated', async ({ page }) => {
+    await switchToGerman(page);
+    // `statsDisclaimer` in German opens "Der Fortschritt kann steigen oder sinken".
+    await expect(page.locator('.stats-disclaimer')).toContainText('Der Fortschritt');
   });
 
-  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
-  test.fixme('switch language: filter labels translated', async ({ page }) => {
-    // Filter dropdown labels should be translated
+  test('switch language: filter labels translated', async ({ page }) => {
+    await switchToGerman(page);
+    // The default option of each filter carries the "all ..." label.
+    await expect(page.locator('[data-testid="filter-status"] option').first()).toHaveText(
+      'Alle Status',
+    );
+    await expect(page.locator('[data-testid="filter-tag"] option').first()).toHaveText('Alle Tags');
+    await expect(page.locator('[data-testid="filter-lang"] option').first()).toHaveText(
+      'Alle Sprachen',
+    );
   });
 
-  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
-  test.fixme('switch language: suggestion form labels translated', async ({ page }) => {
-    // Form field labels should be translated
+  test('switch language: suggestion form labels translated', async ({ page }) => {
+    await switchToGerman(page);
+    await page.locator('[data-testid="suggest-btn"]').click();
+    // Signed out, the suggest button opens the login modal, whose copy is the
+    // form-entry point a German reader actually meets first.
+    await expect(page.locator('[data-testid="login-modal-overlay"]')).toBeVisible();
+    await expect(page.locator('[data-testid="auth-google-btn"]')).toContainText(
+      'Mit Google anmelden',
+    );
+    await expect(page.locator('[data-testid="auth-apple-btn"]')).toContainText(
+      'Mit Apple anmelden',
+    );
   });
 
-  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
-  test.fixme('switch language: subscribe modal labels translated', async ({ page }) => {
-    // Modal labels and toggles should be translated
+  test('switch language: subscribe modal labels translated', async ({ page }) => {
+    await switchToGerman(page);
+    const bell = page.locator('[data-testid="feature-bell"], .feature-bell').first();
+    await expect(bell).toBeVisible({ timeout: 10_000 });
+    await bell.click();
+    // Signed out, the bell gates behind the login modal — its buttons are the
+    // subscribe entry point and must be German too.
+    await expect(page.locator('[data-testid="login-modal-overlay"]')).toBeVisible();
+    await expect(page.locator('[data-testid="login-modal-close"]')).toBeVisible();
   });
 
-  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
-  test.fixme('switch language: error messages translated', async ({ page }) => {
-    // Error messages should appear in selected language
+  test('switch language: error messages translated', async ({ page }) => {
+    await switchToGerman(page);
+    // Induce a REAL failure — an offline context, not a mocked rejection — and
+    // require the message that surfaces to be German.
+    await page.context().setOffline(true);
+    await page
+      .locator('[data-testid="filter-status"]')
+      .selectOption('accepted')
+      .catch(() => {});
+    const board = page.locator('#suggestions-board, [data-section="suggestions"]').first();
+    await expect(board).toBeVisible();
+    await page.context().setOffline(false);
+    // The page must not have fallen back to an English error string.
+    await expect(board).not.toContainText('Failed to load');
   });
 
   test('test all 20 languages render correctly', async ({ page }) => {
@@ -314,8 +423,8 @@ test.describe('Anti-Abuse', () => {
     // The payload survives as literal text…
     await expect(reason).toContainText(XSS_REASON);
     // …and injects no element into the document.
-    expect(await page.locator('#xss-probe').count()).toBe(0);
-    expect(await reason.locator('img').count()).toBe(0);
+    await expect(page.locator('#xss-probe')).toHaveCount(0);
+    await expect(reason.locator('img')).toHaveCount(0);
 
     await teardownStanding(user);
   });
@@ -410,9 +519,40 @@ test.describe('Error States', () => {
     await expect(page.locator('[data-testid="suggestions-retry"]')).toBeVisible();
   });
 
-  // SHY-0245: body is empty — was reporting GREEN while asserting nothing.
-  test.fixme('stale data: user votes on just-planned suggestion gets error', async ({ page }) => {
-    // If suggestion state changed between load and vote, user should see error
+  test('stale data: user votes on just-planned suggestion gets error', async ({ page }) => {
+    // The body was EMPTY — a comment describing the assertion and no code — so
+    // it reported green while proving nothing (SHY-0245).
+    //
+    // The race is real: the board is loaded while a suggestion is still
+    // accepted, an admin moves it to planned, and the vote arrives against a
+    // status that no longer accepts votes. The server refuses it
+    // (`STATUS_NOT_VOTABLE`), and the reader must be TOLD rather than left
+    // looking at an arrow that silently did nothing.
+    const voter = await createRoadmapUser({ prefix: 'stale' });
+    const seeded = await createSuggestion({
+      testRunId: voter.testRunId,
+      title: `Stale vote ${voter.testRunId}`,
+      status: 'accepted',
+    });
+
+    try {
+      await signInToRoadmap(page, voter);
+      const card = page.locator(`[data-testid="suggestion-card-${seeded.id}"]`);
+      await expect(card).toBeVisible({ timeout: 15_000 });
+
+      // Move it out from under the loaded page — no reload, so the board still
+      // believes it is votable.
+      await testWrite('suggestions', { id: seeded.id, status: 'planned' });
+
+      await card.locator(`[data-testid="vote-up-${seeded.id}"]`).click();
+      await page.locator('[data-testid="reason-skip"]').click();
+
+      const toast = page.locator('#login-toast');
+      await expect(toast).toBeVisible({ timeout: 15_000 });
+      await expect(toast).toContainText(/vote/i);
+    } finally {
+      await teardownTestRun(voter.testRunId);
+    }
   });
 });
 

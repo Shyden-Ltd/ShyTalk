@@ -106,8 +106,11 @@ test.describe('Admin age-verification i18n contract', () => {
       const w = window as Window & { applyAdminTranslations?: (l: string) => void };
       if (typeof w.applyAdminTranslations === 'function') w.applyAdminTranslations('en');
     });
-    const suggestionsBadge = await page.locator('#tab-suggestions #suggestions-badge').count();
-    expect(suggestionsBadge, 'tab_suggestions badge must survive applyAdminTranslations').toBe(1);
+    await expect
+      .poll(async () => await page.locator('#tab-suggestions #suggestions-badge').count(), {
+        message: 'tab_suggestions badge must survive applyAdminTranslations',
+      })
+      .toBe(1);
     const ageBadge = await page
       .locator('button[data-subtab="age-verif"] #age-verif-pending-badge')
       .count();

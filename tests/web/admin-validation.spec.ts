@@ -84,8 +84,11 @@ test.describe('Admin Validation', () => {
     await expect.poll(() => balanceCalls.length, { timeout: 5_000 }).toBe(0);
 
     // …and the displayed balance is untouched.
-    const coinsText = await page.locator('#eco-coins-display').textContent();
-    expect(Number(coinsText!.replace(/,/g, ''))).toBe(1000);
+    await expect
+      .poll(async () =>
+        Number((await page.locator('#eco-coins-display').textContent())!.replace(/,/g, '')),
+      )
+      .toBe(1000);
     // Balance is unchanged, so nothing to restore — the API was never called.
     expect(testData.user.uniqueId).toBeTruthy();
   });
@@ -142,8 +145,9 @@ test.describe('Admin Validation', () => {
     const charCount = parseInt(counterText || '0');
 
     // Either the input is truncated to 20, or the counter shows the limit exceeded
-    const inputValue = await displayNameInput.inputValue();
-    expect(inputValue.length).toBeLessThanOrEqual(20);
+    await expect
+      .poll(async () => (await displayNameInput.inputValue()).length)
+      .toBeLessThanOrEqual(20);
 
     // If counter shows over-limit, it should have error styling
     if (charCount > 20) {

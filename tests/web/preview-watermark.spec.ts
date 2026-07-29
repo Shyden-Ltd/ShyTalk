@@ -59,8 +59,9 @@ test.describe('Preview watermark — content', () => {
     const watermark = page.locator('#preview-watermark');
     // Browser engine should appear in the badge — Chromium / Firefox /
     // WebKit. The watermark module derives this from the User-Agent.
-    const text = await watermark.textContent();
-    expect(text).toMatch(/Chromium|Chrome|Firefox|WebKit|Safari/i);
+    await expect
+      .poll(async () => await watermark.textContent())
+      .toMatch(/Chromium|Chrome|Firefox|WebKit|Safari/i);
   });
 
   test('displays UID with - placeholder when not signed in', async ({ page }) => {
@@ -264,8 +265,9 @@ test.describe('Preview watermark — overlay does not break the page', () => {
     // unmodified landing page renders. Specifically check that the
     // <main> or <body> still has text — i.e. the watermark isn't
     // covering or replacing the page.
-    const bodyText = await page.locator('body').textContent();
-    expect(bodyText?.length || 0).toBeGreaterThan(50);
+    await expect
+      .poll(async () => (await page.locator('body').textContent())?.length || 0)
+      .toBeGreaterThan(50);
   });
 
   test('watermark background alpha is transparent enough to see through', async ({ page }) => {
@@ -323,7 +325,8 @@ test.describe('Preview watermark — overlay does not break the page', () => {
     expect(box).not.toBeNull();
     if (!box) return;
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-    const clicked = await page.locator('#pw-test-button').getAttribute('data-clicked');
-    expect(clicked).toBe('1');
+    await expect
+      .poll(async () => await page.locator('#pw-test-button').getAttribute('data-clicked'))
+      .toBe('1');
   });
 });

@@ -47,8 +47,7 @@ test.describe('Translation Verification', () => {
       await expect(title).toBeVisible({ timeout: 5_000 });
       const englishText = await title.textContent();
       await changeLanguage(page, 'de');
-      const germanText = await title.textContent();
-      expect(germanText).not.toBe(englishText);
+      await expect.poll(async () => await title.textContent()).not.toBe(englishText);
     });
   });
 
@@ -69,8 +68,7 @@ test.describe('Translation Verification', () => {
       await expect(title).toBeVisible({ timeout: 5_000 });
       const englishText = await title.textContent();
       await changeLanguage(page, 'ko');
-      const koreanText = await title.textContent();
-      expect(koreanText).not.toBe(englishText);
+      await expect.poll(async () => await title.textContent()).not.toBe(englishText);
     });
   });
 
@@ -81,8 +79,7 @@ test.describe('Translation Verification', () => {
       await expect(title).toBeVisible({ timeout: 5_000 });
       const englishText = await title.textContent();
       await changeLanguage(page, 'ar');
-      const arabicText = await title.textContent();
-      expect(arabicText).not.toBe(englishText);
+      await expect.poll(async () => await title.textContent()).not.toBe(englishText);
     });
   });
 
@@ -93,8 +90,7 @@ test.describe('Translation Verification', () => {
       await expect(heading).toBeVisible({ timeout: 5_000 });
       const englishText = await heading.textContent();
       await changeLanguage(page, 'es');
-      const spanishText = await heading.textContent();
-      expect(spanishText).not.toBe(englishText);
+      await expect.poll(async () => await heading.textContent()).not.toBe(englishText);
     });
 
     test('tradition descriptions change when language is set to Chinese', async ({ page }) => {
@@ -103,8 +99,7 @@ test.describe('Translation Verification', () => {
       await expect(desc).toBeVisible({ timeout: 5_000 });
       const englishText = await desc.textContent();
       await changeLanguage(page, 'zh');
-      const chineseText = await desc.textContent();
-      expect(chineseText).not.toBe(englishText);
+      await expect.poll(async () => await desc.textContent()).not.toBe(englishText);
     });
 
     test('hero title stays in Khmer script regardless of language', async ({ page }) => {
@@ -133,15 +128,36 @@ test.describe('Translation Verification', () => {
       await expect(page.locator('#roadmap-container, #suggestions-board').first()).toBeAttached({
         timeout: 15_000,
       });
+      // Whether the section SHOULD exist is decided by the roadmap data, not by
+      // whether it happens to be on the page — `if (count > 0)` made the test
+      // agree with the page either way, so a section that stopped rendering
+      // could never fail it.
+      // Derived the way the RENDERER derives it (roadmap-app.js): any phase item
+      // or legacy feature whose status is "in-progress" or "next" lifts into the
+      // top section. `currentlyWorkingOn` is a different list and does not drive
+      // this — asserting against it made the test disagree with the product.
+      const expectsSection = await page.evaluate(async () => {
+        const res = await fetch('/roadmap-data.json');
+        const data = await res.json();
+        const lifted = (data.phases || []).flatMap((phase: any) =>
+          [...(phase.features || []), ...(phase.items || [])].filter(
+            (f: any) => f.status === 'in-progress' || f.status === 'next',
+          ),
+        );
+        return lifted.length > 0;
+      });
+
       const inProgressSection = page.locator('#in-progress-section');
-      const count = await inProgressSection.count();
-      if (count > 0) {
-        await expect(inProgressSection).toBeVisible();
-        // Should be the first .phase-card in the container (index 0)
-        const firstCard = page.locator('#roadmap-container > .phase-card').first();
-        const firstId = await firstCard.getAttribute('id');
-        expect(firstId).toBe('in-progress-section');
+      if (!expectsSection) {
+        await expect(inProgressSection).toHaveCount(0);
+        return;
       }
+      await expect(inProgressSection).toBeVisible();
+      // It must be the FIRST phase card in the container.
+      await expect(page.locator('#roadmap-container > .phase-card').first()).toHaveAttribute(
+        'id',
+        'in-progress-section',
+      );
     });
 
     test('progress disclaimer is visible', async ({ page }) => {
@@ -173,9 +189,10 @@ test.describe('Translation Verification', () => {
       // assertion below reads, not for a fixed 2s.
       const title = page.locator('[data-i18n="pp_title"]');
       await expect(title).toBeVisible({ timeout: 15_000 });
-      const text = await title.textContent({ timeout: 5_000 }).catch(() => '');
       // Should not be the English "Privacy Policy"
-      expect(text).not.toBe('Privacy Policy');
+      await expect
+        .poll(async () => await title.textContent({ timeout: 5_000 }).catch(() => ''))
+        .not.toBe('Privacy Policy');
     });
   });
 });

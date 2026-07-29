@@ -374,12 +374,25 @@ test.describe('Admin Cross-Tab Interactions', () => {
 
     // Verify the userId filter is populated
     const userIdFilter = page.locator('#log-filter-userId');
-    const filterValue = await userIdFilter.inputValue();
-    expect(filterValue).toBe(testData.user.uniqueId.toString());
+    await expect(userIdFilter).toHaveValue(testData.user.uniqueId.toString());
   });
 
   // ── Test 5: Alert trace → Logs tab filtered ──
   test('alert trace link navigates to Logs with traceId filter', async ({ page, testData }) => {
+    // An alert only renders its "View Logs" affordance when it carries a
+    // `sampleTraceId` (logs.js), so seed one that does. Nothing else in the
+    // suite guarantees such an alert exists.
+    const traceId = `e2e-xtab-trace-${Date.now()}`;
+    await testData.api.testWrite('alerts', {
+      type: 'error_rate',
+      severity: 'high',
+      message: `e2e-${testData.prefix}-trace-alert`,
+      status: 'new',
+      sampleTraceId: traceId,
+      createdAt: Date.now(),
+      _testRun: testData.testRunId,
+    });
+
     await navigateToTab(page, 'Logs');
 
     // Expand alerts section
@@ -392,12 +405,17 @@ test.describe('Admin Cross-Tab Interactions', () => {
     }
     await waitForAlertsLoaded(page);
 
-    // Look for trace links
-    const traceLinks = page.locator('#alerts-tbody .log-trace-link, #alerts-tbody [data-trace-id]');
-    if ((await traceLinks.count()) === 0) {
-      test.skip(true, 'No trace links in current alerts');
-      return;
-    }
+    // `.log-trace-link` is the LOG row affordance and appears nowhere in an
+    // alert row — so the old locator matched nothing and the test skipped
+    // itself every run. Alert rows use `.alert-link` ("View Logs"), rendered
+    // only when the alert has a sampleTraceId.
+    const traceLinks = page.locator('#alerts-tbody .alert-link');
+    await expect
+      .poll(async () => traceLinks.count(), {
+        message: 'the seeded alert carries a sampleTraceId, so its View Logs link must render',
+        timeout: 20_000,
+      })
+      .toBeGreaterThan(0);
 
     await traceLinks.first().click();
 
@@ -406,8 +424,9 @@ test.describe('Admin Cross-Tab Interactions', () => {
     const traceIdFilter = page.locator('#log-filter-traceId');
 
     const traceViewVisible = await traceView.isVisible();
-    const filterValue = await traceIdFilter.inputValue();
-    expect(traceViewVisible || filterValue.length > 0).toBe(true);
+    await expect
+      .poll(async () => traceViewVisible || (await traceIdFilter.inputValue()).length > 0)
+      .toBe(true);
   });
 
   // ── Test 6: Report View User → Users tab ──
@@ -417,10 +436,14 @@ test.describe('Admin Cross-Tab Interactions', () => {
     await filterReports(page, 'pending');
 
     const navigateLink = page.locator(`[data-navigate-uid="${testData.user.uniqueId}"]`).first();
-    if ((await navigateLink.count()) === 0) {
-      test.skip(true, 'No navigable user link in current pending reports');
-      return;
-    }
+    // The fixture seeds a pending report against testData.user, so a navigable
+    // user link must exist. Skipping here left the whole cross-tab navigation
+    // path unverified on every run.
+    await expect
+      .poll(async () => navigateLink.count(), {
+        message: 'seeded pending report must link to its user',
+      })
+      .toBeGreaterThan(0);
 
     await navigateLink.click();
 
