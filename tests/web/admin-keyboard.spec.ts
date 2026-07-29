@@ -1,4 +1,4 @@
-import { test, expect } from './fixtures/admin';
+import { test, expect, EVIDENCE_IMAGE } from './fixtures/admin';
 import { adminLogin, navigateToTab } from './helpers/admin-auth';
 import type { Page, Locator } from '@playwright/test';
 
@@ -294,37 +294,34 @@ test.describe('Admin Keyboard Shortcuts', () => {
   });
 
   // ── Test 6: Lightbox — Esc key closes evidence lightbox ──
-  test('Esc key closes evidence lightbox', async ({ page }) => {
+  test('Esc key closes evidence lightbox', async ({ page, testData }) => {
+    // Seed the evidence this test needs instead of hunting for someone else's.
+    // The old version read `thumbs.count()` ONCE right after the filter click,
+    // fell back to the Appeals tab if it was zero, and skipped if that was zero
+    // too. Two problems: the single count is a race against the list still
+    // rendering, and the Appeals evidence sits inside a collapsed <details>
+    // this test never opened, so the fallback could not have worked anyway.
+    await testData.api.testWrite('reports', {
+      reportedUserId: testData.user.uid,
+      reportedUserUniqueId: testData.user.uniqueId,
+      reporterId: testData.secondUser.uid,
+      reporterUniqueId: testData.secondUser.uniqueId,
+      reason: 'Spam',
+      description: 'E2E lightbox evidence',
+      status: 'pending',
+      evidenceUrls: [EVIDENCE_IMAGE],
+      createdAt: Date.now(),
+      _testRun: testData.testRunId,
+    });
+
     await navigateToTab(page, 'Reports');
     await waitForReportsLoaded(page);
     await filterReports(page, 'pending');
 
-    // Look for evidence thumbnails
     const thumbs = page.locator('#reports-list .evidence-thumb');
-    if ((await thumbs.count()) === 0) {
-      // Try appeals tab
-      await navigateToTab(page, 'Appeals');
-      await page.waitForFunction(
-        () => {
-          const list = document.getElementById('appeals-list');
-          return (
-            list &&
-            (list.querySelector('.appeal-card') !== null ||
-              list.textContent!.includes('No appeals'))
-          );
-        },
-        { timeout: 15_000 },
-      );
-
-      const appealThumbs = page.locator('#appeals-list .evidence-thumb');
-      if ((await appealThumbs.count()) === 0) {
-        test.skip(true, 'No evidence thumbnails available');
-        return;
-      }
-      await appealThumbs.first().click();
-    } else {
-      await thumbs.first().click();
-    }
+    // A retrying assertion, not a one-shot count — the list renders async.
+    await expect(thumbs.first()).toBeVisible();
+    await thumbs.first().click();
 
     // Verify lightbox opened
     const lightbox = page.locator('.evidence-lightbox');
