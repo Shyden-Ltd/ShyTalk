@@ -398,7 +398,14 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
       .send({ text: 'Hello', senderName: 'Alice', type: 'TEXT' });
 
     expect(res.status).toBe(200);
-    await waitFor(() => expect(mockSendFcmToTokens).not.toHaveBeenCalled());
+    // NOT `waitFor(() => expect(...).not.toHaveBeenCalled())`: a negative holds
+    // at t=0, so that poll succeeds on its first tick and returns immediately.
+    // It looks like a wait and is not one — the test finished while the
+    // fire-and-forget push was still in flight, `beforeEach` cleared the mock,
+    // and the late push landed attributed to the NEXT test (which asserts no
+    // push, and duly failed under full-suite load). `expectNoPush` gives the
+    // push its window and so also drains it before this test ends.
+    await expectNoPush(mockSendFcmToTokens);
   });
 
   test('skips notification when user has no FCM tokens (line 113)', async () => {
@@ -494,7 +501,14 @@ describe('POST /api/conversations/:id/messages — notification edge cases', () 
       .send({ text: 'Hello', senderName: 'Alice', type: 'TEXT' });
 
     expect(res.status).toBe(200);
-    await waitFor(() => expect(mockSendFcmToTokens).not.toHaveBeenCalled());
+    // NOT `waitFor(() => expect(...).not.toHaveBeenCalled())`: a negative holds
+    // at t=0, so that poll succeeds on its first tick and returns immediately.
+    // It looks like a wait and is not one — the test finished while the
+    // fire-and-forget push was still in flight, `beforeEach` cleared the mock,
+    // and the late push landed attributed to the NEXT test (which asserts no
+    // push, and duly failed under full-suite load). `expectNoPush` gives the
+    // push its window and so also drains it before this test ends.
+    await expectNoPush(mockSendFcmToTokens);
   });
 
   test('handles DND with start <= end (same-day window, line 100-101)', async () => {

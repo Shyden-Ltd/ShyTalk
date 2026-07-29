@@ -27,13 +27,38 @@ const { spawnSync, spawn } = require('node:child_process');
 const MATRIX = path.resolve(__dirname, '../../scripts/gauntlet/50-matrix.sh');
 const NO_ADB_PATH = '/usr/bin:/bin'; // excludes /opt/homebrew/bin/adb — see header
 
-// A definitely-dead PID: a subshell that prints its own pid and exits. Safe even
-// if the number is later reused — cmd_stop's I1 guard only walks a cached pid's
-// tree when that pid independently still matches the run_id, which a reused,
-// unrelated process never will.
-function deadPid() {
-  const r = spawnSync('/bin/bash', ['-c', 'echo $$'], { encoding: 'utf8' });
-  return parseInt(r.stdout.trim(), 10);
+/**
+ * A PID the OS can never allocate.
+ *
+ * This used to spawn a subshell, take its pid and let it exit — a pid that is
+ * dead *at that instant*. A pid is a reusable integer, not a durable identity:
+ * macOS wraps at 99999 and this machine sits near 97000 during a full run, so a
+ * just-freed number gets handed back out within seconds. cmd_stop's run_id
+ * scoping means a recycled pid does not actually break these tests (verified by
+ * mutation — forcing a live pid here still passes), so this is hygiene rather
+ * than a fix: the helper's name promises "dead" and should not depend on the
+ * kernel's allocation pointer to keep that promise.
+ *
+ * A value above the platform ceiling is never issued: `pid_max` on Linux is
+ * exclusive, and macOS never goes above 99999.
+ */
+function unallocatablePid() {
+  let pid = 100_000; // macOS PID_MAX is 99999
+  try {
+    const max = parseInt(fs.readFileSync('/proc/sys/kernel/pid_max', 'utf8').trim(), 10);
+    if (Number.isFinite(max)) pid = max;
+  } catch {
+    /* not Linux — the macOS ceiling above applies */
+  }
+  // Fail loudly rather than silently reverting to a racy pid: a helper that
+  // quietly stops guaranteeing its one property is worse than no helper.
+  const probe = spawnSync('/bin/bash', ['-c', `kill -0 ${pid} 2>/dev/null`], { encoding: 'utf8' });
+  if (probe.status === 0) {
+    throw new Error(
+      `unallocatablePid picked ${pid}, which is live — the ceiling assumption is wrong`,
+    );
+  }
+  return pid;
 }
 
 describe('50-matrix.sh _pid_tree — real recursive descendant walk (SHY-0236)', () => {
@@ -159,8 +184,55 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
     });
   }
 
+  /**
+   * `manual-qa-runner` processes on this machine that are not ours.
+   *
+   * cmd_stop verifies its own honesty with a MACHINE-WIDE
+   * `pgrep -fl manual-qa-runner` — correct for the real gauntlet, where any
+   * surviving runner means the stop lied. Under `npm test` it is also a shared
+   * resource: four sibling files (manual-qa-runner-dry-run, -help-version,
+   * -list-flag, and manual-qa-runner.test.js) spawn real runner processes in
+   * parallel Jest workers. This file then asks a global question and gets a
+   * truthful answer about somebody else's process, so "0 runners remain" fails
+   * — only ever inside the full run, never in isolation, because in isolation
+   * there are no siblings.
+   */
+  function foreignRunners() {
+    const r = spawnSync('/bin/bash', ['-c', 'pgrep -fl manual-qa-runner 2>/dev/null || true'], {
+      encoding: 'utf8',
+    });
+    return (r.stdout || '')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !l.includes(' grep') && !l.includes(String(process.pid)));
+  }
+
+  /**
+   * Wait for the machine to be quiet enough for a global assertion to mean
+   * something. Bounded, and it FAILS with the offending pids named rather than
+   * skipping — "Expected 0, Received 1" told us nothing about why for two full
+   * suite runs.
+   */
+  function awaitQuiescence(budgetMs = 20_000) {
+    const deadline = Date.now() + budgetMs;
+    let seen = foreignRunners();
+    while (seen.length > 0 && Date.now() < deadline) {
+      spawnSync('/bin/bash', ['-c', 'sleep 0.25']);
+      seen = foreignRunners();
+    }
+    if (seen.length > 0) {
+      throw new Error(
+        'Another test file still has manual-qa-runner processes alive, so the ' +
+          'machine-wide "0 runners remain" check cannot be trusted:\n  ' +
+          seen.join('\n  '),
+      );
+    }
+  }
+
   test('clean run (dead pid, no live runners) → exit 0 and reports "0 runners remain"', () => {
-    makeRun('clean-xyz', deadPid());
+    // The only assertion here that reaches outside this test's own fixtures.
+    awaitQuiescence();
+    makeRun('clean-xyz', unallocatablePid());
     const r = runStop('clean-xyz');
     expect(r.status).toBe(0);
     expect(r.stdout).toMatch(/0 runners remain/);
@@ -190,7 +262,7 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
     while (!seen() && Date.now() - start < 3000) spawnSync('/bin/sleep', ['0.05']);
     expect(seen()).not.toBe(''); // fixture live + run-id-visible
 
-    makeRun(id, deadPid());
+    makeRun(id, unallocatablePid());
     const r = runStop(id);
 
     expect(r.status).toBe(0);
@@ -216,7 +288,7 @@ describe('50-matrix.sh cmd_stop — honest stop + verification (SHY-0236)', () =
     while (!seen() && Date.now() - start < 3000) spawnSync('/bin/sleep', ['0.05']);
     expect(seen()).not.toBe(''); // fixture is live + pgrep-visible
 
-    makeRun('leftover-xyz', deadPid());
+    makeRun('leftover-xyz', unallocatablePid());
     const r = runStop('leftover-xyz');
 
     expect(r.status).not.toBe(0); // honest failure, not a false success
