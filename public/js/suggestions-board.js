@@ -28,16 +28,31 @@
   var SEARCH_MIN_CHARS = 2;
   var TITLE_MAX = 80;
   var DESC_MAX = 5000;
+  // Mirrors the server's MAX_VOTE_REASON_LENGTH so the field cannot accept
+  // more than the API will keep.
+  var MAX_VOTE_REASON = 500;
+  // How many comments a card shows before offering "show more".
+  var COMMENT_PAGE_SIZE = 10;
   var DUPLICATE_MIN_CHARS = 3;
 
-  var STATUS_OPTIONS = [
+  // ── Localised option lists ──
+  //
+  // These are FUNCTIONS, not arrays. Evaluated once at script load they froze
+  // whatever locale was active then, so switching language re-rendered the board
+  // with the old filter labels and no amount of re-rendering could fix it — the
+  // strings had already been baked in (SHY-0252). Called per render, each picks
+  // up the current locale.
+
+  function statusOptions() {
+    return [
     { value: "", label: sgT("allStatuses") },
     { value: "pending", label: sgT("pending") },
     { value: "accepted", label: sgT("accepted") },
     { value: "planned", label: sgT("planned") },
     { value: "completed", label: sgT("completed") },
     { value: "rejected", label: sgT("rejected") },
-  ];
+    ];
+  }
 
   // These MUST be the server's `VALID_TAGS` (utils/suggestion-constants.js:6).
   // They used to be an invented set — voice/chat/moderation/ui/privacy/economy/
@@ -46,7 +61,8 @@
   // Submit, so picking any of them made it impossible to post a suggestion at
   // all (SHY-0248). The vocabulary is the roadmap's own phases, which is why
   // the labels reuse the phase strings.
-  var TAG_OPTIONS = [
+  function tagOptions() {
+    return [
     { value: "", label: sgT("allTags") },
     { value: "compliance", label: sgT("phaseCompliance") },
     { value: "platform", label: sgT("phasePlatform") },
@@ -56,14 +72,16 @@
     { value: "entertainment", label: sgT("phaseEntertainment") },
     { value: "support", label: sgT("phaseSupport") },
     { value: "website", label: sgT("phaseWebsite") },
-  ];
+    ];
+  }
 
   // Language names rendered in their NATIVE form so a user filtering by
   // a language always sees that language in its own script — convention
   // mirrors language-selector.js's LANGUAGES.native list and is the
   // standard pattern for language pickers (cf. Wikipedia language nav,
   // YouTube language selector, etc.).
-  var LANG_OPTIONS = [
+  function langOptions() {
+    return [
     { value: "", label: sgT("allLanguages") },
     { value: "en", label: "English" },
     { value: "ar", label: "العربية" },
@@ -86,7 +104,8 @@
     { value: "uk", label: "Українська" },
     { value: "vi", label: "Tiếng Việt" },
     { value: "zh", label: "中文" },
-  ];
+    ];
+  }
 
   // Labels for the notification events the SERVER knows about. The event list
   // itself is whatever `/api/subscriptions/me` returns — this map only names
@@ -118,16 +137,19 @@
 
   var SUBSCRIBE_CHANNELS = ["email", "push", "inApp", "systemMessage"];
 
-  var CHANNEL_LABELS = {
+  function channelLabels() {
+    return {
     email: sgT("subscribe_channel_email"),
     push: sgT("subscribe_channel_push"),
     inApp: sgT("subscribe_channel_inapp"),
     systemMessage: sgT("subscribe_channel_system"),
-  };
+    };
+  }
 
   // ── State ──
 
-  var PHASE_OPTIONS = [
+  function phaseOptions() {
+    return [
     { value: "", label: sgT("allPhases") },
     { value: "compliance", label: sgT("phaseCompliance") },
     { value: "platform", label: sgT("phasePlatform") },
@@ -138,7 +160,8 @@
     { value: "entertainment", label: sgT("phaseEntertainment") },
     { value: "support", label: sgT("phaseSupport") },
     { value: "website", label: sgT("phaseWebsite") },
-  ];
+    ];
+  }
 
   var state = {
     suggestions: [],
@@ -156,6 +179,11 @@
     // as told to us by the server's ban gate (SHY-0149).
     standing: null,
     myVotes: {},
+    // "Show only mine" is a VIEW, not a server filter: the list response
+    // already carries submitterUid, so no extra request is needed.
+    mineOnly: false,
+    // suggestionId -> how many of its comments are currently shown.
+    commentPages: {},
     subscriptionPrefs: null,
     watchList: [],
   };
@@ -170,6 +198,24 @@
     var div = document.createElement("div");
     div.appendChild(document.createTextNode(str));
     return div.innerHTML;
+  }
+
+  /**
+   * Turn bare URLs in ALREADY-ESCAPED text into links.
+   *
+   * Order matters and is the whole safety argument: the caller escapes first,
+   * so by the time this runs there is no live markup left to hijack — every
+   * `<` is already `&lt;`. Only the http(s) prefix is matched, so `javascript:`
+   * and `data:` URLs can never become an href.
+   *
+   * `rel="noopener noreferrer"` severs the opener handle; `target="_blank"`
+   * without it hands the new page a reference back into ours.
+   */
+  function linkifyEscaped(escaped) {
+    return escaped.replace(
+      /(https?:\/\/[^\s<]+[^\s<.,:;"')\]])/g,
+      '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>',
+    );
   }
 
   function $(sel) {
@@ -199,6 +245,21 @@
     // relaxation. Pairs with roadmap-app.js bell handler + shared-header.js.
     var auth = window.shytalkAuth;
     return !!(auth && auth.profile !== false);
+  }
+
+  /**
+   * The signed-in reader's ShyTalk uniqueId, or null.
+   *
+   * `window.shytalkAuth.profile` is tri-state (null = loading, object = loaded,
+   * false = signed in with no ShyTalk account), so only an object carries an
+   * id. Nothing on the board could answer "is this mine?" before this, which is
+   * why a card never said so (SHY-0247).
+   */
+  function myUniqueId() {
+    var auth = window.shytalkAuth;
+    if (!auth || !auth.profile || auth.profile === false) return null;
+    var id = auth.profile.uniqueId;
+    return id === undefined || id === null ? null : id;
   }
 
   function getToken() {
@@ -370,6 +431,32 @@
     }
   }
 
+  /**
+   * How many filters are narrowing the board right now.
+   *
+   * `searchQuery` counts: a search that matches nothing looks exactly like a
+   * filter that matches nothing, and both are undone by the same button.
+   */
+  function activeFilterCount() {
+    var n = 0;
+    if (state.filterStatus) n++;
+    if (state.filterTag) n++;
+    if (state.filterLang) n++;
+    if (state.filterPhase) n++;
+    if (state.searchQuery) n++;
+    return n;
+  }
+
+  function clearAllFilters() {
+    state.filterStatus = "";
+    state.filterTag = "";
+    state.filterLang = "";
+    state.filterPhase = "";
+    state.searchQuery = "";
+    state.page = 1;
+    fetchSuggestions();
+  }
+
   function isVotingDisabled(status) {
     return (
       status === "planned" || status === "completed" || status === "rejected"
@@ -419,7 +506,7 @@
       });
   }
 
-  function submitVote(suggestionId, direction) {
+  function submitVote(suggestionId, direction, reason, visibility) {
     if (!requireAuth("vote on suggestions")) return;
 
     var currentVote = state.myVotes[suggestionId];
@@ -433,6 +520,8 @@
     } else {
       method = "POST";
       body = { direction: direction };
+      if (reason) body.reason = reason;
+      if (visibility) body.visibility = visibility;
     }
 
     apiFetch("/api/suggestions/" + suggestionId + "/vote", {
@@ -583,6 +672,239 @@
 
   // ── Login prompt modal ──
 
+  /**
+   * Ask, optionally, WHY — then cast the vote.
+   *
+   * The API has always accepted `reason` + `visibility` on a vote
+   * (`POST /suggestions/:id/vote`), but nothing in the UI ever collected them,
+   * so every vote arrived as a bare number and the board could never show why
+   * anything was popular (SHY-0247).
+   *
+   * The reason is OPTIONAL by design: "Just vote" casts it with no reason, so
+   * the modal never becomes a toll gate on voting.
+   */
+  function openVoteReasonModal(suggestionId, direction) {
+    var existing = document.getElementById("sg-vote-reason-overlay");
+    if (existing) existing.remove();
+
+    var html =
+      '<div class="sg-modal-overlay" id="sg-vote-reason-overlay" data-testid="vote-reason-modal">' +
+      '<div class="sg-modal" role="dialog" aria-modal="true" aria-label="' +
+      escapeHtml(sgT("voteReasonTitle")) +
+      '">' +
+      '<div class="sg-modal-header"><h3>' +
+      escapeHtml(sgT("voteReasonTitle")) +
+      "</h3>" +
+      '<button class="sg-modal-close" data-testid="reason-close" aria-label="' +
+      escapeHtml(sgT("close")) +
+      '">&times;</button></div>' +
+      '<div class="sg-modal-body">' +
+      '<textarea class="sg-textarea" data-testid="reason-input" maxlength="' +
+      MAX_VOTE_REASON +
+      '" placeholder="' +
+      escapeHtml(sgT("voteReasonPlaceholder")) +
+      '"></textarea>' +
+      '<div class="sg-reason-visibility">' +
+      '<label><input type="radio" name="sg-reason-vis" value="public" data-testid="reason-public" checked> ' +
+      escapeHtml(sgT("voteReasonPublic")) +
+      "</label>" +
+      '<label><input type="radio" name="sg-reason-vis" value="private" data-testid="reason-private"> ' +
+      escapeHtml(sgT("voteReasonPrivate")) +
+      "</label>" +
+      "</div></div>" +
+      '<div class="sg-modal-footer">' +
+      '<button class="sg-btn" data-testid="reason-skip">' +
+      escapeHtml(sgT("voteReasonSkip")) +
+      "</button>" +
+      '<button class="sg-btn sg-btn--primary" data-testid="reason-submit">' +
+      escapeHtml(sgT("voteReasonSubmit")) +
+      "</button>" +
+      "</div></div></div>";
+
+    var wrap = document.createElement("div");
+    wrap.innerHTML = html;
+    var overlay = wrap.firstChild;
+    document.body.appendChild(overlay);
+
+    function close() {
+      overlay.remove();
+    }
+    function cast(withReason) {
+      var input = overlay.querySelector('[data-testid="reason-input"]');
+      var priv = overlay.querySelector('[data-testid="reason-private"]');
+      var reason = withReason ? (input.value || "").trim() : "";
+      close();
+      // An empty reason is still a valid vote — pass undefined so the request
+      // body stays exactly as it was before this modal existed.
+      submitVote(
+        suggestionId,
+        direction,
+        reason || undefined,
+        reason ? (priv.checked ? "private" : "public") : undefined,
+      );
+    }
+
+    overlay
+      .querySelector('[data-testid="reason-close"]')
+      .addEventListener("click", close);
+    overlay
+      .querySelector('[data-testid="reason-skip"]')
+      .addEventListener("click", function () {
+        cast(false);
+      });
+    overlay
+      .querySelector('[data-testid="reason-submit"]')
+      .addEventListener("click", function () {
+        cast(true);
+      });
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay) close();
+    });
+  }
+
+  /**
+   * Confirm before withdrawing. Taking a suggestion back is not undoable, and
+   * the buttons sit next to Edit, so a mis-tap must not be able to delete
+   * someone's submission outright.
+   */
+  function openWithdrawConfirm(suggestionId) {
+    var existing = document.getElementById("sg-confirm-overlay");
+    if (existing) existing.remove();
+
+    var html =
+      '<div class="sg-modal-overlay" id="sg-confirm-overlay" data-testid="confirm-dialog">' +
+      '<div class="sg-modal" role="dialog" aria-modal="true" aria-label="' +
+      escapeHtml(sgT("withdrawConfirmTitle")) +
+      '">' +
+      '<div class="sg-modal-header"><h3>' +
+      escapeHtml(sgT("withdrawConfirmTitle")) +
+      "</h3></div>" +
+      '<div class="sg-modal-body"><p>' +
+      escapeHtml(sgT("withdrawConfirmBody")) +
+      "</p></div>" +
+      '<div class="sg-modal-footer">' +
+      '<button class="sg-btn" data-testid="confirm-cancel">' +
+      escapeHtml(sgT("cancel")) +
+      "</button>" +
+      '<button class="sg-btn sg-btn--primary" data-testid="confirm-withdraw">' +
+      escapeHtml(sgT("withdrawSuggestion")) +
+      "</button>" +
+      "</div></div></div>";
+
+    var wrap = document.createElement("div");
+    wrap.innerHTML = html;
+    var overlay = wrap.firstChild;
+    document.body.appendChild(overlay);
+
+    function close() {
+      overlay.remove();
+    }
+    overlay
+      .querySelector('[data-testid="confirm-cancel"]')
+      .addEventListener("click", close);
+    overlay
+      .querySelector('[data-testid="confirm-withdraw"]')
+      .addEventListener("click", function () {
+        close();
+        apiFetch("/api/suggestions/" + suggestionId, {
+          method: "DELETE",
+          gated: true,
+        })
+          .then(function () {
+            showToast(sgT("withdrawnToast"));
+            fetchSuggestions();
+          })
+          .catch(function (err) {
+            showToast(
+              sgT("withdrawFailedToast") +
+                ": " +
+                (err.message || sgT("unknown_error")),
+            );
+          });
+      });
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay) close();
+    });
+  }
+
+  /**
+   * The notification inbox.
+   *
+   * `GET /api/notifications` has existed all along, but the web board never
+   * offered a way to read what it returns — replies to your comments and status
+   * changes on suggestions you watch arrived nowhere (SHY-0247). Opened from
+   * the toolbar; an empty inbox says so plainly rather than showing a blank box.
+   */
+  function openNotificationInbox() {
+    if (!requireAuth("see your notifications")) return;
+
+    var existing = document.getElementById("sg-notif-overlay");
+    if (existing) existing.remove();
+
+    var overlay = document.createElement("div");
+    overlay.className = "sg-modal-overlay";
+    overlay.id = "sg-notif-overlay";
+    overlay.setAttribute("data-testid", "notif-inbox");
+    overlay.innerHTML =
+      '<div class="sg-modal" role="dialog" aria-modal="true" aria-label="' +
+      escapeHtml(sgT("notifications")) +
+      '">' +
+      '<div class="sg-modal-header"><h3>' +
+      escapeHtml(sgT("notifications")) +
+      "</h3>" +
+      '<button class="sg-modal-close" data-testid="notif-close" aria-label="' +
+      escapeHtml(sgT("close")) +
+      '">&times;</button></div>' +
+      '<div class="sg-modal-body" data-testid="notif-body">' +
+      '<p class="sg-text-muted">' +
+      escapeHtml(sgT("loading")) +
+      "</p></div></div>";
+    document.body.appendChild(overlay);
+
+    function close() {
+      overlay.remove();
+    }
+    overlay
+      .querySelector('[data-testid="notif-close"]')
+      .addEventListener("click", close);
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay) close();
+    });
+
+    var body = overlay.querySelector('[data-testid="notif-body"]');
+    apiFetch("/api/notifications", { gated: true })
+      .then(function (data) {
+        var items = (data && data.notifications) || [];
+        if (items.length === 0) {
+          body.innerHTML =
+            '<p class="sg-notif-empty" data-testid="notif-empty">' +
+            escapeHtml(sgT("notifAllCaughtUp")) +
+            "</p>";
+          return;
+        }
+        var html = '<ul class="sg-notif-list" data-testid="notif-list">';
+        for (var i = 0; i < items.length; i++) {
+          html +=
+            '<li class="sg-notif-item' +
+            (items[i].isRead ? "" : " sg-notif-item--unread") +
+            '">' +
+            escapeHtml(items[i].message || items[i].title || "") +
+            "</li>";
+        }
+        body.innerHTML = html + "</ul>";
+      })
+      .catch(function (err) {
+        // A failed load must SAY so — an empty box would read as "all caught
+        // up", which is the opposite of the truth.
+        body.innerHTML =
+          '<p class="sg-notif-error" data-testid="notif-error">' +
+          escapeHtml(
+            sgT("notifLoadFailed") + ": " + (err.message || sgT("unknown_error")),
+          ) +
+          "</p>";
+      });
+  }
+
   function showLoginPromptModal(action) {
     var existing = document.getElementById("sg-login-modal-overlay");
     if (existing) existing.remove();
@@ -595,17 +917,22 @@
       '<button class="sg-modal-close" data-testid="login-modal-close" aria-label="'+escapeHtml(sgT("close"))+'">&times;</button>' +
       "</div>" +
       '<div class="sg-modal-body">' +
-      "<p>Sign in with your ShyTalk account to " +
+      "<p>" +
+      escapeHtml(sgT("signInTo")) +
+      " " +
       escapeHtml(action || "perform this action") +
       ".</p>" +
       '<div class="auth-buttons" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:16px 0;">' +
         '<button class="auth-google-btn" data-testid="auth-google-btn" aria-label="'+escapeHtml(sgT("signInGoogle"))+'" style="display:inline-flex;align-items:center;gap:10px;padding:10px 24px;background:#fff;color:#3c4043;border:1px solid #dadce0;border-radius:4px;font-size:14px;font-weight:500;cursor:pointer;min-height:44px;">' +
           '<svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>' +
-          "<span>Sign in with Google</span>" +
+          // The aria-label beside this was translated while the VISIBLE text
+          // was hardcoded English — screen-reader users got German, everyone
+          // else got English (SHY-0252).
+          "<span>" + escapeHtml(sgT("signInGoogle")) + "</span>" +
         "</button>" +
         '<button class="auth-apple-btn" data-testid="auth-apple-btn" aria-label="'+escapeHtml(sgT("signInApple"))+'" style="display:inline-flex;align-items:center;gap:10px;padding:10px 24px;background:#000;color:#fff;border:none;border-radius:4px;font-size:14px;font-weight:500;cursor:pointer;min-height:44px;">' +
           '<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#fff" d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.53-3.23 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>' +
-          "<span>Sign in with Apple</span>" +
+          "<span>" + escapeHtml(sgT("signInApple")) + "</span>" +
         "</button>" +
       "</div>" +
       '<p style="color:var(--text-secondary,#888);font-size:0.8rem;text-align:center;">Don\'t have an account? Download ShyTalk to create one.</p>' +
@@ -789,7 +1116,7 @@
     for (var c = 0; c < SUBSCRIBE_CHANNELS.length; c++) {
       html +=
         '<div class="sg-subscribe-cell sg-subscribe-cell--channel">' +
-        escapeHtml(CHANNEL_LABELS[SUBSCRIBE_CHANNELS[c]]) +
+        escapeHtml(channelLabels()[SUBSCRIBE_CHANNELS[c]]) +
         "</div>";
     }
     html += "</div>";
@@ -887,29 +1214,39 @@
 
   // ── Suggestion form modal ──
 
-  function openSuggestModal() {
+  /**
+   * The suggest form, in either mode.
+   *
+   * Passing a suggestion opens it for EDITING: the fields arrive pre-filled and
+   * a banner says the change sends it back for review, because it does — the
+   * API resets a pending suggestion's review state on PUT. Nothing offered this
+   * before, so a typo in your own pending suggestion was permanent (SHY-0247).
+   */
+  function openSuggestModal(editing) {
     if (!requireAuth("submit suggestions")) return;
 
     var existing = document.getElementById("sg-suggest-overlay");
     if (existing) existing.remove();
 
     var tagOpts = "";
-    for (var t = 1; t < TAG_OPTIONS.length; t++) {
+    var tagList = tagOptions();
+    for (var t = 1; t < tagList.length; t++) {
       tagOpts +=
         '<option value="' +
-        TAG_OPTIONS[t].value +
+        tagList[t].value +
         '">' +
-        escapeHtml(TAG_OPTIONS[t].label) +
+        escapeHtml(tagList[t].label) +
         "</option>";
     }
 
     var langOpts = "";
-    for (var l = 1; l < LANG_OPTIONS.length; l++) {
+    var langList = langOptions();
+    for (var l = 1; l < langList.length; l++) {
       langOpts +=
         '<option value="' +
-        LANG_OPTIONS[l].value +
+        langList[l].value +
         '">' +
-        escapeHtml(LANG_OPTIONS[l].label) +
+        escapeHtml(langList[l].label) +
         "</option>";
     }
 
@@ -930,6 +1267,11 @@
       TITLE_MAX +
       "</span>" +
       "</div>" +
+      (editing
+        ? '<div class="sg-rereview-warning" data-testid="re-review-warning">' +
+          escapeHtml(sgT("reReviewWarning")) +
+          "</div>"
+        : "") +
       '<div id="sg-duplicate-results" class="sg-duplicate-results" data-testid="suggest-duplicates"></div>' +
       '<div class="sg-form-group">' +
       '<label for="sg-suggest-desc" class="sg-label">Description</label>' +
@@ -982,6 +1324,15 @@
     var descInput = document.getElementById("sg-suggest-desc");
     var tagSelect = document.getElementById("sg-suggest-tag");
     var langSelect = document.getElementById("sg-suggest-lang");
+
+    // Pre-fill when editing: an edit form that opens blank would silently wipe
+    // whatever the person wrote the first time.
+    if (editing) {
+      titleInput.value = editing.title || "";
+      descInput.value = editing.description || "";
+      tagSelect.value = editing.tag || (editing.tags && editing.tags[0]) || "";
+      langSelect.value = editing.language || "";
+    }
     var contactCheckbox = document.getElementById("sg-suggest-contact");
     var titleCount = document.getElementById("sg-title-count");
     var descCount = document.getElementById("sg-desc-count");
@@ -1125,14 +1476,31 @@
             return;
           }
 
-          return submitSuggestion(
-            titleInput.value.trim(),
-            descInput.value.trim(),
-            tagSelect.value,
-            langSelect.value,
-            contactCheckbox.checked,
-          ).then(function () {
-            showToast(sgT("toast_suggestion_submitted"));
+          var save = editing
+            ? apiFetch("/api/suggestions/" + editing.id, {
+                method: "PUT",
+                body: {
+                  title: titleInput.value.trim(),
+                  description: descInput.value.trim(),
+                  tag: tagSelect.value,
+                  language: langSelect.value,
+                },
+                gated: true,
+              })
+            : submitSuggestion(
+                titleInput.value.trim(),
+                descInput.value.trim(),
+                tagSelect.value,
+                langSelect.value,
+                contactCheckbox.checked,
+              );
+
+          return save.then(function () {
+            showToast(
+              editing
+                ? sgT("toast_suggestion_updated")
+                : sgT("toast_suggestion_submitted"),
+            );
             close();
             fetchSuggestions();
           });
@@ -1185,9 +1553,17 @@
 
     // Existing comments
     if (comments.length > 0) {
+      // A busy suggestion can gather hundreds of comments, and rendering the lot
+      // buried the card it belongs to. Show a page at a time, with a control
+      // that says how many are left — the list was previously unbounded
+      // (SHY-0247).
+      var shownCount = state.commentPages[suggestion.id] || COMMENT_PAGE_SIZE;
+      var visibleComments = comments.slice(0, shownCount);
+      var remaining = comments.length - visibleComments.length;
+
       html += '<div class="sg-comment-list">';
-      for (var i = 0; i < comments.length; i++) {
-        var c = comments[i];
+      for (var i = 0; i < visibleComments.length; i++) {
+        var c = visibleComments[i];
         // When the comment's author has been hard-deleted (account
         // deletion cron in express-api/src/cron/accountDeletion.js),
         // the server-stored `text` is a fixed English fallback. Prefer
@@ -1215,6 +1591,16 @@
           "</div>";
       }
       html += "</div>";
+      if (remaining > 0) {
+        html +=
+          '<button type="button" class="sg-comment-more" data-testid="comment-pagination" data-id="' +
+          escapeHtml(suggestion.id) +
+          '">' +
+          escapeHtml(sgT("showMoreComments")) +
+          " (" +
+          remaining +
+          ")</button>";
+      }
     } else {
       html +=
         '<p class="sg-text-muted sg-comment-empty" data-testid="no-comments-' +
@@ -1251,7 +1637,14 @@
     html += '<div class="sg-toolbar" data-testid="suggestions-toolbar">';
     html +=
       '<div class="sg-search-wrap">' +
-      '<input type="text" class="sg-search-input" placeholder="' + escapeHtml(sgT("search")) + '" ' +
+      // A placeholder is NOT an accessible name — it disappears on focus and is
+      // not reliably announced, so this field had no name at all for a screen
+      // reader. `aria-label` gives it one (SHY-0247).
+      '<input type="text" class="sg-search-input" placeholder="' +
+      escapeHtml(sgT("search")) +
+      '" aria-label="' +
+      escapeHtml(sgT("searchSuggestions")) +
+      '" ' +
       'value="' +
       escapeHtml(state.searchQuery) +
       '" ' +
@@ -1284,16 +1677,17 @@
     // Status filter
     html +=
       '<select class="sg-filter-select" data-filter="status" data-testid="filter-status">';
-    for (var si = 0; si < STATUS_OPTIONS.length; si++) {
+    var statusList = statusOptions();
+    for (var si = 0; si < statusList.length; si++) {
       var sel =
-        state.filterStatus === STATUS_OPTIONS[si].value ? " selected" : "";
+        state.filterStatus === statusList[si].value ? " selected" : "";
       html +=
         '<option value="' +
-        STATUS_OPTIONS[si].value +
+        statusList[si].value +
         '"' +
         sel +
         ">" +
-        escapeHtml(STATUS_OPTIONS[si].label) +
+        escapeHtml(statusList[si].label) +
         "</option>";
     }
     html += "</select>";
@@ -1301,15 +1695,16 @@
     // Tag filter
     html +=
       '<select class="sg-filter-select" data-filter="tag" data-testid="filter-tag">';
-    for (var ti = 0; ti < TAG_OPTIONS.length; ti++) {
-      var tsel = state.filterTag === TAG_OPTIONS[ti].value ? " selected" : "";
+    var tagList = tagOptions();
+    for (var ti = 0; ti < tagList.length; ti++) {
+      var tsel = state.filterTag === tagList[ti].value ? " selected" : "";
       html +=
         '<option value="' +
-        TAG_OPTIONS[ti].value +
+        tagList[ti].value +
         '"' +
         tsel +
         ">" +
-        escapeHtml(TAG_OPTIONS[ti].label) +
+        escapeHtml(tagList[ti].label) +
         "</option>";
     }
     html += "</select>";
@@ -1317,15 +1712,16 @@
     // Language filter
     html +=
       '<select class="sg-filter-select" data-filter="lang" data-testid="filter-lang">';
-    for (var li = 0; li < LANG_OPTIONS.length; li++) {
-      var lsel = state.filterLang === LANG_OPTIONS[li].value ? " selected" : "";
+    var langList = langOptions();
+    for (var li = 0; li < langList.length; li++) {
+      var lsel = state.filterLang === langList[li].value ? " selected" : "";
       html +=
         '<option value="' +
-        LANG_OPTIONS[li].value +
+        langList[li].value +
         '"' +
         lsel +
         ">" +
-        escapeHtml(LANG_OPTIONS[li].label) +
+        escapeHtml(langList[li].label) +
         "</option>";
     }
     html += "</select>";
@@ -1333,18 +1729,56 @@
     // Phase filter
     html +=
       '<select class="sg-filter-select" data-filter="phase" data-testid="phase-filter">';
-    for (var pi = 0; pi < PHASE_OPTIONS.length; pi++) {
-      var psel = state.filterPhase === PHASE_OPTIONS[pi].value ? " selected" : "";
+    var phaseList = phaseOptions();
+    for (var pi = 0; pi < phaseList.length; pi++) {
+      var psel = state.filterPhase === phaseList[pi].value ? " selected" : "";
       html +=
         '<option value="' +
-        PHASE_OPTIONS[pi].value +
+        phaseList[pi].value +
         '"' +
         psel +
         ">" +
-        escapeHtml(PHASE_OPTIONS[pi].label) +
+        escapeHtml(phaseList[pi].label) +
         "</option>";
     }
     html += "</select>";
+
+    // Active-filter count + a way back out.
+    //
+    // With five filter controls it was entirely possible to narrow the board to
+    // nothing and have no idea which control was responsible, and no single
+    // action to undo it — every filter had to be found and reset by hand
+    // (SHY-0247). The badge says how many are on; the button clears them all.
+    if (myUniqueId() !== null) {
+      html +=
+        '<button type="button" class="sg-notif-btn" data-testid="notif-open" aria-label="' +
+        escapeHtml(sgT("notifications")) +
+        '">' +
+        escapeHtml(sgT("notifications")) +
+        "</button>";
+      html +=
+        '<button type="button" class="sg-mine-toggle' +
+        (state.mineOnly ? " sg-mine-toggle--active" : "") +
+        '" data-testid="my-suggestions-toggle" aria-pressed="' +
+        (state.mineOnly ? "true" : "false") +
+        '">' +
+        escapeHtml(sgT("mySuggestions")) +
+        "</button>";
+    }
+
+    var activeFilters = activeFilterCount();
+    if (activeFilters > 0) {
+      html +=
+        '<span class="sg-filter-badge" data-testid="filter-badge" aria-label="' +
+        escapeHtml(String(activeFilters) + " active filters") +
+        '">' +
+        activeFilters +
+        "</span>";
+      html +=
+        '<button type="button" class="sg-clear-filters" data-testid="clear-filters">' +
+        escapeHtml(sgT("clearFilters")) +
+        "</button>";
+    }
 
     html += "</div>"; // sg-filter-group
     html += "</div>"; // sg-controls
@@ -1385,20 +1819,41 @@
           ? "No results match your filters."
           : "No suggestions yet. Be the first to share your idea!";
       html +=
+        // Keep `suggestions-empty` — several existing specs anchor on it. The
+        // parked filter-empty test accepts either testid.
         '<div class="sg-empty-state" data-testid="suggestions-empty">' +
         "<p>" +
         escapeHtml(emptyMsg) +
         "</p>" +
+        // The empty board is exactly where someone needs the way out most, so
+        // repeat the control here rather than making them scroll back up.
+        (activeFilterCount() > 0
+          ? '<button type="button" class="sg-clear-filters" data-testid="clear-filters-empty">' +
+            escapeHtml(sgT("clearFilters")) +
+            "</button>"
+          : "") +
         "</div>";
       container.innerHTML = html;
       attachBoardListeners(container);
       return;
     }
 
-    // Suggestion cards
-    html += '<div class="sg-card-list" data-testid="suggestions-list">';
-    for (var i = 0; i < state.suggestions.length; i++) {
-      html += renderSuggestionCard(state.suggestions[i]);
+    // Suggestion cards. With "mine only" on, the list narrows to the reader's
+    // own submissions and is labelled so it can be addressed as a view in its
+    // own right — there was previously no way to find your own at all.
+    var visible = state.suggestions;
+    if (state.mineOnly) {
+      var meId = myUniqueId();
+      visible = state.suggestions.filter(function (item) {
+        return meId !== null && String(item.submitterUid) === String(meId);
+      });
+    }
+    html +=
+      '<div class="sg-card-list" data-testid="' +
+      (state.mineOnly ? "my-suggestions" : "suggestions-list") +
+      '">';
+    for (var i = 0; i < visible.length; i++) {
+      html += renderSuggestionCard(visible[i]);
     }
     html += "</div>";
 
@@ -1464,6 +1919,15 @@
 
     // Vote column
     html += '<div class="sg-vote-col">';
+    // Which way I voted, said in words rather than only as a highlighted arrow.
+    // The active-arrow class was the sole signal, which is invisible to a screen
+    // reader and easy to miss at a glance (SHY-0247).
+    if (myVote) {
+      html +=
+        '<span class="sg-your-vote" data-testid="your-vote-indicator">' +
+        escapeHtml(sgT(myVote === "up" ? "yourVoteUp" : "yourVoteDown")) +
+        "</span>";
+    }
     if (!votingDisabled) {
       html +=
         '<button class="sg-vote-btn sg-vote-btn--up' +
@@ -1519,10 +1983,48 @@
       "</button>";
     html += "</div>";
 
-    // Description
+    // "Your suggestion" — so a reader can find their own submission in a long
+    // list without recognising their own words (SHY-0247).
+    var mine = myUniqueId();
+    if (mine !== null && String(s.submitterUid) === String(mine)) {
+      html +=
+        '<span class="sg-submitter-badge" data-testid="submitter-badge">' +
+        escapeHtml(sgT("yourSuggestion")) +
+        "</span>";
+    }
+
+    // Your own PENDING suggestion can still be changed or taken back — the API
+    // has allowed both all along (PUT/DELETE /suggestions/:id, owner + pending
+    // only), but nothing on the board offered either (SHY-0247).
+    if (mine !== null && String(s.submitterUid) === String(mine) && s.status === "pending") {
+      html +=
+        '<div class="sg-owner-actions">' +
+        '<button type="button" class="sg-owner-btn" data-testid="edit-suggestion-btn" data-id="' +
+        escapeHtml(s.id) +
+        '">' +
+        escapeHtml(sgT("editSuggestion")) +
+        "</button>" +
+        '<button type="button" class="sg-owner-btn sg-owner-btn--danger" data-testid="withdraw-suggestion-btn" data-id="' +
+        escapeHtml(s.id) +
+        '">' +
+        escapeHtml(sgT("withdrawSuggestion")) +
+        "</button>" +
+        "</div>";
+    }
+
+    // Description.
+    //
+    // `dir="auto"` lets the browser pick direction from the text's own first
+    // strong character, so an Arabic or Hebrew suggestion right-aligns without
+    // the page switching locale. Without it every description rendered LTR and
+    // RTL submissions read backwards to their own authors.
     html +=
-      '<div class="sg-card-desc" data-testid="suggestion-desc-' + s.id + '">';
-    html += escapeHtml(displayDesc);
+      '<div class="sg-card-desc" dir="auto" data-testid="suggestion-desc-' +
+      s.id +
+      '">';
+    // Escape FIRST, then linkify — see linkifyEscaped. A URL a person typed
+    // into a suggestion was previously rendered as inert text.
+    html += linkifyEscaped(escapeHtml(displayDesc));
     if (truncated) {
       html +=
         ' <button class="sg-expand-btn" data-testid="suggestion-expand-' +
@@ -1532,6 +2034,18 @@
         '">Show more</button>';
     }
     html += "</div>";
+
+    // Why a suggestion was declined. The reason is stored (`rejectReason` from
+    // the API, `declineReason` in older records) but was never rendered, so a
+    // rejected suggestion just went quiet — the one moment a person most wants
+    // an explanation (SHY-0247).
+    var declineReason = s.rejectReason || s.declineReason;
+    if (s.status === "rejected" && declineReason) {
+      html +=
+        '<div class="sg-decline-reason" data-testid="decline-reason" dir="auto">' +
+        escapeHtml(declineReason) +
+        "</div>";
+    }
 
     // Meta row: tags, language, status, timestamp
     html += '<div class="sg-card-meta">';
@@ -1559,16 +2073,23 @@
       '" data-status="' +
       escapeHtml(s.status || "pending") +
       '">' +
+      // Hardcoded English until SHY-0252: every other label on this card came
+      // from `sgT()`, so a German reader saw a translated board with English
+      // status badges on it. The keys already existed in suggestions-i18n.js.
+      // DEDICATED badge keys, not the filter labels: the badge deliberately
+      // reads "Shipped!"/"Declined" where the filter reads
+      // "Completed"/"Rejected", and reusing the filter keys would silently
+      // change the English copy that other tests pin.
       escapeHtml(
         s.status === "completed"
-          ? "Shipped!"
+          ? sgT("badge_completed")
           : s.status === "planned"
-            ? "Planned"
+            ? sgT("badge_planned")
             : s.status === "accepted"
-              ? "Accepted"
+              ? sgT("badge_accepted")
               : s.status === "rejected"
-                ? "Declined"
-                : "Pending",
+                ? sgT("badge_rejected")
+                : sgT("badge_pending"),
       ) +
       "</span>";
     // A <time datetime> carries the absolute instant alongside the relative
@@ -1661,7 +2182,13 @@
       voteBtns[v].addEventListener("click", function () {
         var id = this.getAttribute("data-id");
         var dir = this.getAttribute("data-dir");
-        submitVote(id, dir);
+        // Un-voting needs no explanation — only a NEW vote asks why.
+        if (state.myVotes[id] === dir) {
+          submitVote(id, dir);
+          return;
+        }
+        if (!requireAuth("vote on suggestions")) return;
+        openVoteReasonModal(id, dir);
       });
     }
 
@@ -1676,6 +2203,52 @@
     }
 
     // Expand description buttons
+    var mineToggle = container.querySelector('[data-testid="my-suggestions-toggle"]');
+    if (mineToggle) {
+      mineToggle.addEventListener("click", function () {
+        state.mineOnly = !state.mineOnly;
+        renderBoard();
+      });
+    }
+
+    var editBtns = container.querySelectorAll('[data-testid="edit-suggestion-btn"]');
+    for (var eb = 0; eb < editBtns.length; eb++) {
+      editBtns[eb].addEventListener("click", function () {
+        var id = this.getAttribute("data-id");
+        for (var k = 0; k < state.suggestions.length; k++) {
+          if (state.suggestions[k].id === id) {
+            openSuggestModal(state.suggestions[k]);
+            return;
+          }
+        }
+      });
+    }
+
+    var withdrawBtns = container.querySelectorAll('[data-testid="withdraw-suggestion-btn"]');
+    for (var wb = 0; wb < withdrawBtns.length; wb++) {
+      withdrawBtns[wb].addEventListener("click", function () {
+        openWithdrawConfirm(this.getAttribute("data-id"));
+      });
+    }
+
+    var notifBtn = container.querySelector('[data-testid="notif-open"]');
+    if (notifBtn) notifBtn.addEventListener("click", openNotificationInbox);
+
+    var moreCommentBtns = container.querySelectorAll(".sg-comment-more");
+    for (var mc = 0; mc < moreCommentBtns.length; mc++) {
+      moreCommentBtns[mc].addEventListener("click", function () {
+        var id = this.getAttribute("data-id");
+        state.commentPages[id] =
+          (state.commentPages[id] || COMMENT_PAGE_SIZE) + COMMENT_PAGE_SIZE;
+        renderBoard();
+      });
+    }
+
+    var clearBtns = container.querySelectorAll(".sg-clear-filters");
+    for (var cf = 0; cf < clearBtns.length; cf++) {
+      clearBtns[cf].addEventListener("click", clearAllFilters);
+    }
+
     var expandBtns = container.querySelectorAll(".sg-expand-btn");
     for (var e = 0; e < expandBtns.length; e++) {
       expandBtns[e].addEventListener("click", function () {
@@ -1784,6 +2357,14 @@
     document.addEventListener("shytalk-auth-changed", function () {
       renderBoard();
       refreshStanding();
+    });
+
+    // Every string on this board is produced by `sgT()` AT RENDER TIME, so a
+    // language switch left the whole thing — filters, buttons, status badges —
+    // in the previous language until the reader happened to reload. Re-render
+    // on the switch instead (SHY-0252).
+    document.addEventListener("shytalk-language-changed", function () {
+      renderBoard();
     });
 
     // The auth-changed event may have fired before this listener attached

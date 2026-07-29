@@ -99,6 +99,14 @@
     if (typeof window.applyLanguage === 'function') {
       window.applyLanguage(lang);
     }
+    // `applyLanguage` only re-translates elements carrying `data-i18n`. Anything
+    // a script BUILT with the locale baked in — the suggestions board's filters,
+    // buttons and status badges are all produced that way — keeps the previous
+    // language until a reload. Announce the change so those views can rebuild
+    // themselves; the board listens for exactly this (SHY-0252).
+    document.dispatchEvent(
+      new CustomEvent('shytalk-language-changed', { detail: { lang: lang } }),
+    );
   }
 
   // Expose globally

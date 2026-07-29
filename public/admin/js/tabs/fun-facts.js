@@ -123,6 +123,11 @@ function renderList() {
 
   funFactsData.forEach((f) => {
     const card = document.createElement('div');
+    // The card carried no class or testid at all, so the admin-empty-states
+    // spec's `.fact-card` locator matched nothing and its "list has content"
+    // branch could never run — it only ever checked that the Add button was
+    // visible (SHY-0245).
+    card.setAttribute('data-testid', 'funfact-card');
     card.style.cssText =
       'display:flex;gap:14px;align-items:flex-start;padding:14px 16px;background:var(--card);border:1px solid var(--border);border-radius:8px;';
 

@@ -1157,6 +1157,155 @@
         line-height: 1.5;
         margin-bottom: 10px;
         word-break: break-word;
+        /* Descriptions are escaped text, so a typed newline is a literal \n.
+           Without this the browser collapses it and a carefully paragraphed
+           suggestion arrives as one run-on block (SHY-0247). */
+        white-space: pre-wrap;
+      }
+      .sg-notif-btn {
+        background: none;
+        border: 1px solid var(--border, #333);
+        color: var(--text-secondary);
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 0.78rem;
+        cursor: pointer;
+        min-height: 32px;
+      }
+      .sg-notif-empty {
+        text-align: center;
+        padding: 24px 12px;
+        color: var(--text-secondary);
+      }
+      .sg-notif-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .sg-notif-item {
+        padding: 10px 4px;
+        border-bottom: 1px solid var(--border, #333);
+        font-size: 0.85rem;
+      }
+      .sg-notif-item--unread {
+        font-weight: 600;
+        color: var(--text-primary, #fff);
+      }
+      .sg-owner-actions {
+        display: flex;
+        gap: 8px;
+        margin: 4px 0 10px;
+      }
+      .sg-owner-btn {
+        background: none;
+        border: 1px solid var(--border, #333);
+        color: var(--text-secondary);
+        border-radius: 6px;
+        padding: 3px 10px;
+        font-size: 0.75rem;
+        cursor: pointer;
+        min-height: 30px;
+      }
+      .sg-owner-btn--danger:hover {
+        color: var(--danger, #e74c3c);
+        border-color: var(--danger, #e74c3c);
+      }
+      .sg-mine-toggle {
+        background: none;
+        border: 1px solid var(--border, #333);
+        color: var(--text-secondary);
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 0.78rem;
+        cursor: pointer;
+        min-height: 32px;
+      }
+      .sg-mine-toggle--active {
+        border-color: var(--primary, #6c5ce7);
+        color: var(--primary, #6c5ce7);
+      }
+      .sg-rereview-warning {
+        margin: 0 0 12px;
+        padding: 8px 12px;
+        border-radius: 6px;
+        background: rgba(243, 156, 18, 0.12);
+        border-left: 3px solid #f39c12;
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+      }
+      .sg-submitter-badge {
+        display: inline-block;
+        margin-bottom: 8px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        background: rgba(108, 92, 231, 0.15);
+        color: var(--primary, #6c5ce7);
+        font-size: 0.7rem;
+        font-weight: 600;
+      }
+      .sg-reason-visibility {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-top: 10px;
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+      }
+      .sg-reason-visibility label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+      }
+      .sg-your-vote {
+        font-size: 0.68rem;
+        color: var(--primary, #6c5ce7);
+        text-align: center;
+        line-height: 1.2;
+        max-width: 64px;
+      }
+      .sg-filter-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 6px;
+        border-radius: 10px;
+        background: var(--primary, #6c5ce7);
+        color: #fff;
+        font-size: 0.72rem;
+        font-weight: 600;
+      }
+      .sg-clear-filters {
+        background: none;
+        border: 1px solid var(--border, #333);
+        color: var(--text-secondary);
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 0.78rem;
+        cursor: pointer;
+        min-height: 32px;
+      }
+      .sg-clear-filters:hover {
+        color: var(--text-primary, #fff);
+      }
+      .sg-card-desc a {
+        color: var(--primary, #6c5ce7);
+        /* A pasted URL can be longer than the card is wide. Wrapping keeps the
+           whole address readable; truncating it would hide where the link
+           actually goes, which matters more (SHY-0247). */
+        overflow-wrap: anywhere;
+      }
+      .sg-decline-reason {
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        border-left: 3px solid var(--danger, #e74c3c);
+        padding: 6px 10px;
+        margin: 0 0 10px;
+        background: rgba(231, 76, 60, 0.08);
+        border-radius: 4px;
+        word-break: break-word;
       }
       .sg-expand-btn {
         background: none;
