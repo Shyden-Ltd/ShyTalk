@@ -568,11 +568,27 @@ describe('scripts/check-epic-frontmatter.sh', () => {
         const content = setFrontmatterField(VALID_CONTENT, 'id', `EPIC-${n}`);
         fs.writeFileSync(path.join(dir, `EPIC-${n}-perf.md`), content);
       }
+      // Measure ONE file's cost under TODAY's load first, then scale. A fixed
+      // 5000ms deadline is really a bet about the machine: it passed on an idle
+      // laptop and failed inside a 13k-test run, where the same script is doing
+      // the same work on a busier box. Deriving the budget from a same-run
+      // baseline cancels the load out of both sides.
+      const oneDir = tempScanDir();
+      fs.writeFileSync(
+        path.join(oneDir, 'EPIC-0001-baseline.md'),
+        setFrontmatterField(VALID_CONTENT, 'id', 'EPIC-0001'),
+      );
+      const baseStart = Date.now();
+      runScript(['--scan', oneDir]);
+      const oneFileMs = Math.max(1, Date.now() - baseStart);
+
       const start = Date.now();
       const { code } = runScript(['--scan', dir]);
       const elapsed = Date.now() - start;
       expect(code).toBe(0);
-      expect(elapsed).toBeLessThan(5000);
+      // 20 files must not cost more than ~10x one file: the per-file work is
+      // constant, so anything worse means the scan grew super-linear.
+      expect(elapsed).toBeLessThan(Math.max(5000, oneFileMs * 10));
     });
   });
 });

@@ -49,7 +49,19 @@ router.get('/admin/logs', async (req, res) => {
     if (endTime) query = query.where('timestamp', '<=', Number(endTime));
 
     // Pagination
-    if (cursor) query = query.startAfter(Number(cursor));
+    // The cursor is echoed straight back from a stored `timestamp`, and that
+    // field is NOT one type: logger.js writes an ISO string
+    // (`new Date().toISOString()`), while older/other writers store epoch
+    // numbers. A blanket `Number(cursor)` turned the ISO form into NaN, so
+    // `startAfter` matched nothing and "Load more" never loaded more — the
+    // first page was all anyone could see (SHY-0254). Coerce only when the
+    // value really is numeric, so both shapes compare against their own field
+    // type.
+    if (cursor) {
+      const asNumber = Number(cursor);
+      const isNumericCursor = cursor !== '' && Number.isFinite(asNumber);
+      query = query.startAfter(isNumericCursor ? asNumber : cursor);
+    }
 
     query = query.limit(limit);
 
