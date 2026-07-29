@@ -261,14 +261,23 @@ router.get('/reports', async (req, res) => {
       ? reports.filter((r) => r.reportedUserId === userIdFilter)
       : reports;
 
-    // Client-side search filter (Firestore doesn't support full-text search)
+    // Client-side search filter (Firestore doesn't support full-text search).
+    //
+    // The unique-ID fields are matched too (SHY-0251). The admin search box is
+    // `type="number"` and reads "Search by unique ID...", so digits are the ONLY
+    // thing a moderator can type into it — yet the predicate previously covered
+    // names and free text alone, making every search they could perform return
+    // nothing. Stringified so a numeric field and a string field behave alike,
+    // and matched by substring for consistency with the fields beside them.
     const filtered = search
       ? userFiltered.filter(
           (r) =>
             (r.reportedUserName || '').toLowerCase().includes(search) ||
             (r.reporterName || '').toLowerCase().includes(search) ||
             (r.reason || '').toLowerCase().includes(search) ||
-            (r.description || '').toLowerCase().includes(search),
+            (r.description || '').toLowerCase().includes(search) ||
+            String(r.reportedUserUniqueId ?? '').includes(search) ||
+            String(r.reporterUniqueId ?? '').includes(search),
         )
       : userFiltered;
 
