@@ -310,6 +310,52 @@ router.get('/suggestions/:id', async (req, res) => {
   }
 });
 
+/**
+ * Attach each suggestion's comments to a PAGE of list results.
+ *
+ * The board renders cards solely from this endpoint and reads
+ * `suggestion.comments || []` (renderCommentSection, public/js/suggestions-board.js).
+ * Comments live in the `suggestions/{id}/comments` SUBCOLLECTION, so without
+ * this the key was simply absent and every comment ever posted was invisible —
+ * including to its own author, whose post-comment refresh calls this very
+ * endpoint (SHY-0250).
+ *
+ * Only ACCEPTED suggestions are read: `renderCommentSection` returns '' for
+ * every other status, so loading theirs would spend Firestore quota on markup
+ * that is never emitted. Reads are issued concurrently and the page is already
+ * clamped to MAX_PAGE_SIZE by `validatePageParams`, so the fan-out is bounded.
+ */
+async function attachComments(items, isAdmin) {
+  return Promise.all(
+    items.map(async (item) => {
+      if (item.status !== 'accepted') return { ...item, comments: [], commentCount: 0 };
+      try {
+        const snap = await db
+          .collection(`suggestions/${item.id}/comments`)
+          .orderBy('createdAt', 'asc')
+          .get();
+        // Spread the stored data BEFORE the doc-ref id so a same-named `id`
+        // field inside a comment cannot override its true identity — the same
+        // defence-in-depth ordering used by GET /suggestions/:id above.
+        let comments = snap.docs.map((c) => ({ ...c.data(), id: c.id }));
+        if (!isAdmin) comments = comments.filter((c) => c.isPublic !== false);
+        // Counts the VISIBLE comments, deliberately unlike GET /suggestions/:id
+        // which reports the raw snapshot size: a total that exceeds what the
+        // caller can read would disclose how many hidden comments exist.
+        return { ...item, comments, commentCount: comments.length };
+      } catch (err) {
+        // One unreadable subcollection must degrade that single card, never
+        // 500 the whole board.
+        log.warn('suggestions', 'Could not load comments for suggestion', {
+          suggestionId: item.id,
+          error: err.message,
+        });
+        return { ...item, comments: [], commentCount: 0 };
+      }
+    }),
+  );
+}
+
 // ─── GET /suggestions ───────────────────────────────────────────
 
 router.get('/suggestions', async (req, res) => {
@@ -377,7 +423,7 @@ router.get('/suggestions', async (req, res) => {
     const paged = suggestions.slice(offset, offset + pageSize);
 
     res.json({
-      suggestions: paged,
+      suggestions: await attachComments(paged, isAdmin),
       total,
       page,
       pageSize,
@@ -676,10 +722,21 @@ router.post('/suggestions/:id/vote', async (req, res) => {
       }
     }
 
+    // The client updates the card in place from THIS response
+    // (`state.suggestions[i].score = data.score` in suggestions-board.js), so
+    // the endpoint has to say what the counts became. It used to answer
+    // `{ success: true }` alone, which set score/upvotes/downvotes to undefined
+    // and made the card show 0 until the next fetch (SHY-0253).
+    let tally = null;
+
     // Use transaction for atomicity — all reads and writes inside
     await db.runTransaction(async (t) => {
       const sugRef = db.doc(`suggestions/${id}`);
-      const sugDoc = await t.get(`suggestions/${id}`);
+      // `t.get` takes a DocumentReference, not a path string. Passing the path
+      // throws inside the transaction and surfaces as a bare 500, so EVERY vote
+      // on the public roadmap failed (SHY-0253). `sugRef` was already built on
+      // the line above and simply went unused.
+      const sugDoc = await t.get(sugRef);
       if (!sugDoc.exists) throw new Error('NOT_FOUND');
 
       const sugData = sugDoc.data();
@@ -695,13 +752,19 @@ router.post('/suggestions/:id/vote', async (req, res) => {
       }
 
       const voteRef = db.doc(`suggestions/${id}/votes/${req.auth.uniqueId}`);
-      const existingVote = await t.get(`suggestions/${id}/votes/${req.auth.uniqueId}`);
+      // Same defect, same fix — use the reference, not its path.
+      const existingVote = await t.get(voteRef);
 
       let cleanReason = null;
       if (reason !== undefined && reason !== null) {
         cleanReason = sanitise(String(reason));
         if (!cleanReason || cleanReason.trim() === '') cleanReason = null;
       }
+
+      // Counts are written with FieldValue.increment, so the post-commit values
+      // are the read snapshot plus the deltas applied below.
+      let upDelta = 0;
+      let downDelta = 0;
 
       if (existingVote.exists) {
         const prev = existingVote.data();
@@ -725,13 +788,17 @@ router.post('/suggestions/:id/vote', async (req, res) => {
         // Adjust counts
         if (oldDir === 'up') {
           t.update(sugRef, { upvotes: FieldValue.increment(-1) });
+          upDelta -= 1;
         } else {
           t.update(sugRef, { downvotes: FieldValue.increment(-1) });
+          downDelta -= 1;
         }
         if (direction === 'up') {
           t.update(sugRef, { upvotes: FieldValue.increment(1) });
+          upDelta += 1;
         } else {
           t.update(sugRef, { downvotes: FieldValue.increment(1) });
+          downDelta += 1;
         }
       } else {
         // New vote
@@ -746,13 +813,19 @@ router.post('/suggestions/:id/vote', async (req, res) => {
         });
         if (direction === 'up') {
           t.update(sugRef, { upvotes: FieldValue.increment(1) });
+          upDelta += 1;
         } else {
           t.update(sugRef, { downvotes: FieldValue.increment(1) });
+          downDelta += 1;
         }
       }
+
+      const upvotes = (sugData.upvotes || 0) + upDelta;
+      const downvotes = (sugData.downvotes || 0) + downDelta;
+      tally = { upvotes, downvotes, score: upvotes - downvotes };
     });
 
-    res.json({ success: true });
+    res.json({ success: true, ...tally });
   } catch (err) {
     if (err.message === 'NOT_FOUND') {
       return res.status(404).json({ error: 'Suggestion not found' });
