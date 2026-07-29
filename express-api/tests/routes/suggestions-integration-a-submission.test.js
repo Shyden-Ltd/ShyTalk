@@ -348,7 +348,13 @@ function makeBlockedTopicDoc(id, overrides = {}) {
 }
 
 function setupDocMocks(pathMap) {
-  mockDocGet.mockImplementation((path) => {
+  mockDocGet.mockImplementation((pathOrRef) => {
+    // A transaction reads through `t.get(ref)` — a DocumentReference, which is
+    // what Firestore requires and what the routes now pass (SHY-0253). Matching
+    // only a string meant this helper agreed with the defect: the route handed
+    // `t.get` a PATH STRING, every real vote 500'd, and these tests stayed
+    // green because a string was all the mock understood.
+    const path = typeof pathOrRef === 'string' ? pathOrRef : pathOrRef && pathOrRef._path;
     for (const [pattern, snap] of Object.entries(pathMap)) {
       if (typeof path === 'string' && path.includes(pattern)) {
         return Promise.resolve(snap);

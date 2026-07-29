@@ -47,6 +47,22 @@ const WRITEABLE_COLLECTIONS = [
   // linkedUniqueId (see deleteTestData).
   'deviceBans',
   'networkBans',
+  // SHY-0245: the admin log-filter specs guarded every assertion on
+  // `if (rowCount > 0)`, so whenever the logs table happened to be empty —
+  // a fresh emulator, a throttled logger, a tripped circuit breaker — the
+  // filter under test went unverified and the spec still reported green.
+  // Seeding a real `logs` document removes the "happened to be".
+  'logs',
+  // SHY-0245: the admin audit-log specs skipped themselves whenever the table
+  // was empty ("No entries"), so CSV export and row structure went unverified.
+  // Audit rows are written as a side effect of admin ACTIONS, which makes them
+  // impossible to arrange deterministically without seeding.
+  'adminAuditLog',
+  // SHY-0245: the identity-graph specs need a graph of a KNOWN shape. The graph
+  // is a stored document whose `nodes` array the creation endpoint never
+  // writes, so neither seeding deviceBindings nor calling the API can produce
+  // one — the 50-node and multi-account tests skipped themselves instead.
+  'identityGraphs',
 ];
 
 /**
@@ -78,6 +94,14 @@ const SWEPT_BY_TEST_RUN = [
   'suggestions',
   // Same gap, same fix — the admin age-verification specs seed these.
   'ageVerificationSubmissions',
+  // Seeded by the admin log-filter specs (see WRITEABLE_COLLECTIONS above).
+  // Unswept, every seeded row would accumulate in the shared logs table and
+  // skew the very row-count assertions the seeding exists to make reliable.
+  'logs',
+  // Same reasoning for seeded audit rows.
+  'adminAuditLog',
+  // And for seeded identity graphs.
+  'identityGraphs',
 ];
 
 /**

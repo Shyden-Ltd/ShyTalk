@@ -69,7 +69,14 @@ const mockQueryChain = {
 
 const mockRunTransaction = jest.fn(async (fn) => {
   const t = {
-    get: mockDocGet,
+    // Firestore's `Transaction.get` takes a DocumentReference, NOT a path
+    // string — passing a string throws. This mock previously accepted only the
+    // string, which meant it agreed with the very defect SHY-0253 fixed: the
+    // route read `t.get(\`suggestions/${id}\`)` and every real vote 500'd while
+    // this test stayed green. Resolving the ref's `_path` keeps the mock
+    // honest about what the SDK actually accepts, and still lets the existing
+    // per-path stubs answer.
+    get: (ref) => (typeof ref === 'string' ? mockDocGet(ref) : ref.get()),
     set: mockDocSet,
     update: mockDocUpdate,
     delete: mockDocDelete,
@@ -348,7 +355,13 @@ function makeBlockedTopicDoc(id, overrides = {}) {
 }
 
 function setupDocMocks(pathMap) {
-  mockDocGet.mockImplementation((path) => {
+  mockDocGet.mockImplementation((pathOrRef) => {
+    // A transaction reads through `t.get(ref)` — a DocumentReference, which is
+    // what Firestore's SDK requires and what the routes now pass (SHY-0253).
+    // Matching only on a string meant this helper agreed with the defect: the
+    // route used to hand `t.get` a PATH STRING, every real vote 500'd, and
+    // these tests stayed green because the string was all the mock understood.
+    const path = typeof pathOrRef === 'string' ? pathOrRef : pathOrRef && pathOrRef._path;
     for (const [pattern, snap] of Object.entries(pathMap)) {
       if (typeof path === 'string' && path.includes(pattern)) {
         return Promise.resolve(snap);
