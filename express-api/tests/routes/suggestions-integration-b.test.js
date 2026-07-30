@@ -1039,9 +1039,10 @@ describe('11.116 — Cross-Feature Interactions', () => {
       'roadmapFeatures/feat-deleted': { exists: false },
     });
     const res = await request(createApp()).get('/api/suggestions/sug-1');
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    // 'does not orphan' — the suggestion must still come back after the
+    // roadmap side is gone.
+    expect(res.body.id).toBeTruthy();
   });
   test('suggestion with roadmap link: status reflects roadmap feature state', async () => {
     setupDocMocks({
@@ -1051,9 +1052,8 @@ describe('11.116 — Cross-Feature Interactions', () => {
       }),
     });
     const res = await request(createApp()).get('/api/suggestions/sug-1');
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    expect(res.body.linkedRoadmapFeature).toBeTruthy();
   });
   test('economy interaction: suggestion milestones do not affect coin balance', async () => {
     await request(createApp()).post('/api/suggestions').send(VALID_SUGGESTION);
@@ -1076,18 +1076,23 @@ describe('11.116 — Cross-Feature Interactions', () => {
       }),
     });
     const res = await request(createApp()).get('/api/suggestions/sug-reported');
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    // 'still accessible' — a report alone must not hide it.
+    expect(res.body.id).toBeTruthy();
   });
   test('conversation interaction: system PMs use correct conversation format', async () => {
     setupDocMocks({ 'suggestions/sug-1': makeSuggestionDoc('sug-1', { status: 'pending' }) });
     await request(createApp({ uniqueId: 9999, isAdmin: true }))
       .put('/api/admin/suggestions/sug-1/status')
       .send({ status: 'accepted' });
-    if (sendSystemPm.mock.calls.length > 0) {
-      expect(sendSystemPm.mock.calls[0]).toBeDefined();
-    }
+    // `expect(calls[0]).toBeDefined()` guarded on `calls.length > 0` is true
+    // by construction. sendSystemPm(recipientUid, text) takes a STRING body —
+    // passing an object stored a Firestore map where a message belonged, so
+    // the shape is the thing worth pinning.
+    expect(sendSystemPm).toHaveBeenCalled();
+    const [recipient, text] = sendSystemPm.mock.calls[0];
+    expect(recipient).toBeTruthy();
+    expect(typeof text).toBe('string');
   });
   test('identity interaction: suggestion submitter uniqueId matches auth identity', async () => {
     await request(createApp({ uniqueId: 1001 }))
@@ -1099,31 +1104,45 @@ describe('11.116 — Cross-Feature Interactions', () => {
       ),
       ...mockCollectionAdd.mock.calls.filter((c) => c[0] === 'suggestions'),
     ];
-    if (createCalls.length > 0) {
-      const d = createCalls[0][1] || createCalls[0][0];
-      if (d?.submitterUid) {
-        expect(d.submitterUid).toBe(1001);
-      }
-    }
+    // Two nested guards: nothing written, or written without a submitterUid,
+    // both passed — and an unattributed suggestion is exactly the bug.
+    expect(createCalls.length).toBeGreaterThan(0);
+    expect(createCalls[0][1].submitterUid).toBe(1001);
   });
-  test('subscription interaction: watching a suggestion adds to subscription doc', async () => {
+  test('voting does not silently subscribe you to a suggestion', async () => {
+    // Renamed and re-pointed. The old title said "watching a suggestion adds
+    // to subscription doc", but the body VOTED — and watching is a separate,
+    // explicit action on a router this app does not even mount
+    // (POST /subscriptions/me/watch, covered in subscriptions.test.js). Its
+    // assertion sat behind `if (subscriptionCall)`, so it passed either way.
+    //
+    // The claim worth pinning here is the one this app can actually make:
+    // casting a vote must not enrol you into every future notification about
+    // that suggestion. Subscribing has to stay a deliberate act.
     setupDocMocks({ 'suggestions/sug-1': makeSuggestionDoc('sug-1', { status: 'accepted' }) });
-    await request(createApp()).post('/api/suggestions/sug-1/vote').send({ direction: 'up' });
-    const subscriptionCall = [...mockDocSet.mock.calls, ...mockDocUpdate.mock.calls].find(
+    // A DIFFERENT user: the fixture's submitter is 1001, which createApp()
+    // also defaults to, and the route refuses a submitter re-voting on their
+    // own suggestion (they already hold the automatic creator vote) — so the
+    // original request was a 403 that the old guard quietly absorbed.
+    const res = await request(createApp({ uniqueId: 2002 }))
+      .post('/api/suggestions/sug-1/vote')
+      .send({ direction: 'up' });
+    expect(res.status).toBe(200);
+    const subscriptionWrite = [...mockDocSet.mock.calls, ...mockDocUpdate.mock.calls].find(
       (c) => typeof c[0] === 'string' && c[0].includes('subscriptions'),
     );
-    if (subscriptionCall) {
-      expect(subscriptionCall).toBeDefined();
-    }
+    expect(subscriptionWrite).toBeUndefined();
   });
   test('ban interaction: banning user does not delete their existing suggestions', async () => {
     setupDocMocks({
       'suggestions/sug-1': makeSuggestionDoc('sug-1', { submitterUid: 5555, status: 'accepted' }),
     });
     const res = await request(createApp()).get('/api/suggestions/sug-1');
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    // A ban suspends the person; it does not erase their contributions. This
+    // reads a SINGLE suggestion, so the body is the suggestion itself.
+    expect(res.body.id).toBe('sug-1');
+    expect(res.body.submitterUid).toBe(5555);
   });
   test('translation interaction: suggestion stored in original language', async () => {
     await request(createApp())
@@ -1135,26 +1154,25 @@ describe('11.116 — Cross-Feature Interactions', () => {
       ),
       ...mockCollectionAdd.mock.calls.filter((c) => c[0] === 'suggestions'),
     ];
-    if (createCalls.length > 0) {
-      const d = createCalls[0][1] || createCalls[0][0];
-      if (d?.language) {
-        expect(d.language).toBe('ja');
-      }
-    }
+    // Stored in the language it was written in — losing that silently
+    // re-labels a user's words as English.
+    expect(createCalls.length).toBeGreaterThan(0);
+    expect(createCalls[0][1].language).toBe('ja');
   });
   test('admin log interaction: admin actions create audit trail', async () => {
     setupDocMocks({ 'suggestions/sug-1': makeSuggestionDoc('sug-1', { status: 'pending' }) });
     await request(createApp({ uniqueId: 9999, isAdmin: true }))
       .put('/api/admin/suggestions/sug-1/status')
       .send({ status: 'accepted' });
+    // The collection is `moderationLog` — createAuditEntry writes
+    // `moderationLog/<id>`. Filtering for 'audit' matched nothing, which is
+    // why the old fallback ("...or any info-level log") was needed to keep
+    // this green: the filter never found the entry it was looking for.
     const auditCalls = [...mockDocSet.mock.calls, ...mockCollectionAdd.mock.calls].filter(
-      (c) =>
-        typeof c[0] === 'string' && (c[0].includes('audit') || c[0].includes('suggestionAudit')),
+      (c) => typeof c[0] === 'string' && c[0].includes('moderationLog'),
     );
-    if (auditCalls.length > 0) {
-      expect(auditCalls.length).toBeGreaterThan(0);
-    } else {
-      expect(log.info).toHaveBeenCalled();
-    }
+    // The old form accepted an audit trail OR any info-level log at all, so a
+    // route that wrote no audit entry passed. An admin action must leave one.
+    expect(auditCalls.length).toBeGreaterThan(0);
   });
 });
