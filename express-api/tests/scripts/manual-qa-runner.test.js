@@ -22176,6 +22176,84 @@ describe('Wake 94 — `the doc has at most N entries in "<X>" matching {action: 
     );
     expect(r.ok).toBe(true);
   });
+
+  // SHY-0259. The pattern hard-coded the literal key `sourceId`, so the ONE
+  // place the corpus actually uses this step — j19:76, which filters on
+  // `sourceUniqueId` — never matched and failed as STEP_NOT_IMPLEMENTED.
+  // The matcher had been shaped around a caller that did not exist.
+  test('the corpus step j19 actually writes resolves (sourceUniqueId, not sourceId)', async () => {
+    const ctx = makeCtx();
+    ctx.lastQueryResult = {
+      exists: true,
+      data: {
+        segregationEvents: [
+          { action: 'delivered', sourceUniqueId: 1 },
+          { action: 'blocked', sourceUniqueId: 42 },
+        ],
+      },
+    };
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the doc has at most 0 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 1}',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  test('it FAILS when a cross-cohort event is actually present', async () => {
+    // The assertion has to be able to fail, or it proves nothing. This is
+    // the OSA invariant j19 exists to defend.
+    const ctx = makeCtx();
+    ctx.lastQueryResult = {
+      exists: true,
+      data: { segregationEvents: [{ action: 'blocked', sourceUniqueId: 1 }] },
+    };
+    const r = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the doc has at most 0 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 1}',
+      },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/segregationEvents/);
+  });
+
+  test('an arbitrary predicate key works — the field name is not part of the grammar', async () => {
+    const ctx = makeCtx();
+    ctx.lastQueryResult = {
+      exists: true,
+      data: { events: [{ kind: 'x', actorUid: 'u1', region: 'eu' }] },
+    };
+    const ok = await executeStep(
+      { kind: 'Then', text: 'the doc has at most 0 entries in "events" matching {kind: "y"}' },
+      ctx,
+    );
+    expect(ok.ok).toBe(true);
+    const bad = await executeStep(
+      {
+        kind: 'Then',
+        text: 'the doc has at most 0 entries in "events" matching {kind: "x", region: "eu"}',
+      },
+      ctx,
+    );
+    expect(bad.ok).toBe(false);
+  });
+
+  test('a malformed predicate is reported, not silently treated as no-match', async () => {
+    // A predicate that fails to parse must never read as "nothing matched",
+    // which would turn a broken assertion into a green one.
+    const ctx = makeCtx();
+    ctx.lastQueryResult = { exists: true, data: { events: [] } };
+    const r = await executeStep(
+      { kind: 'Then', text: 'the doc has at most 0 entries in "events" matching {nocolon}' },
+      ctx,
+    );
+    expect(r.ok).toBe(false);
+    expect(r.error).toMatch(/predicate parse error/);
+  });
 });
 
 // ── Wake 95 — Background-step coverage gap (post-100% audit) ─────────

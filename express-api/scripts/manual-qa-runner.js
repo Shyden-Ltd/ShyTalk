@@ -880,6 +880,208 @@ async function seedSystemPmFromOfficia(ctx, recipientPersonaName, key) {
   return { convId, msgId };
 }
 
+// ── Real-route seeding (SHY-0259) ───────────────────────────────────
+//
+// Setup Givens that restate a PRIOR scenario's outcome ("Greta has issued
+// a warning to Raul") establish state the product itself would have
+// written. There are two ways to establish it, and only one of them stays
+// correct:
+//
+//   1. Mirror the route's writes in the harness. This creates a SECOND
+//      implementation of the same behaviour, and the two drift silently.
+//      j11 is the proof: it asserts `users/<id>.suspendedUntil`, a field
+//      the product has never written — production uses `isSuspended` +
+//      `suspensionEndDate`. The corpus was written against a mirror.
+//
+//   2. Call the REAL production route as the REAL persona. The state is
+//      then correct by construction and cannot drift, because there is
+//      only one implementation. A route that changes shape breaks the
+//      Given loudly instead of leaving it quietly wrong.
+//
+// So these Givens drive the real API. They deliberately do NOT replay the
+// UI: a Given describes established state, and driving it through the
+// screen is what lets one broken UI step cascade into thirty unrelated
+// red scenarios (SHY-0259 AC, "setup does not cascade").
+
+/**
+ * Call the real API as a signed-in persona.
+ *
+ * Throws — rather than returning a status — because every caller is a
+ * setup Given, and a Given that half-succeeded must abort its scenario
+ * immediately. Reporting "seeded ok" after a 403 would hand the scenario a
+ * world it does not have, and the resulting failure would be attributed to
+ * whichever assertion happened to touch the missing state first.
+ */
+async function callApiAs(ctx, personaName, method, apiPath, body = undefined) {
+  let sess = ctx.sessions?.get(personaName);
+  if (!sess?.idToken) {
+    // Sign in on demand. Several Backgrounds establish a persona's SURFACE
+    // without credentials — `Greta [P-12] is on Web Admin at "/admin#reports"`
+    // is deliberately pure bookkeeping, because most scenarios only need the
+    // recorded path. Signing in there would charge every one of them for a
+    // REST round-trip they do not use; signing in here charges only the
+    // scenarios that actually act as that persona.
+    const persona = loadPersonas().get(personaName);
+    if (!persona?.email) {
+      throw new Error(
+        `no signed-in session for "${personaName}" and no registry entry to sign in with — check the persona name in the step`,
+      );
+    }
+    sess = await signInPersonaRest(ctx, personaName, persona);
+  }
+  const init = {
+    method,
+    headers: { Authorization: `Bearer ${sess.idToken}` },
+  };
+  if (body !== undefined) {
+    init.headers['Content-Type'] = 'application/json';
+    init.body = JSON.stringify(body);
+  }
+  const r = await ctx.fetch(ctx.apiBase + apiPath, init);
+  let parsed = null;
+  const text = await r.text();
+  try {
+    parsed = text ? JSON.parse(text) : null;
+  } catch {
+    // Non-JSON body (an HTML error page from a proxy, say). Keep the raw
+    // text in the thrown message below rather than discarding the only
+    // evidence of what went wrong.
+  }
+  if (r.status < 200 || r.status >= 300) {
+    const detail = parsed ? JSON.stringify(parsed) : text.slice(0, 200);
+    throw new Error(
+      `${method} ${apiPath} as ${personaName} → ${r.status}: ${detail || '(empty body)'}`,
+    );
+  }
+  return { status: r.status, body: parsed };
+}
+
+/**
+ * Sign a persona in over the Firebase REST API and record the session.
+ *
+ * The auth-emulator base differs from production only in host, so target
+ * selection lives here rather than at each call site.
+ */
+async function signInPersonaRest(ctx, name, persona) {
+  if (!ctx.personasPassword) throw new Error('PERSONAS_PASSWORD env not set');
+  const authBase =
+    ctx.target === 'local' && process.env.FIREBASE_AUTH_EMULATOR_HOST
+      ? `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST}/identitytoolkit.googleapis.com`
+      : 'https://identitytoolkit.googleapis.com';
+  const r = await ctx.fetch(
+    `${authBase}/v1/accounts:signInWithPassword?key=${ctx.firebaseApiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: persona.email,
+        password: ctx.personasPassword,
+        returnSecureToken: true,
+      }),
+    },
+  );
+  if (r.status !== 200) {
+    throw new Error(`Firebase sign-in failed for ${persona.email}: ${r.status}`);
+  }
+  const body = await r.json();
+  ctx.sessions.set(name, {
+    persona,
+    idToken: body.idToken,
+    refreshToken: body.refreshToken,
+    localId: body.localId,
+    customClaims: decodeJwtPayload(body.idToken),
+  });
+  return ctx.sessions.get(name);
+}
+
+/** uniqueId for a persona, with a registry-shaped error when absent. */
+function personaUniqueId(personaName) {
+  const persona = loadPersonas().get(personaName);
+  if (!persona?.uniqueId) throw new Error(`persona "${personaName}" not in registry`);
+  return persona.uniqueId;
+}
+
+/**
+ * File a report through the real reports route, as the real reporter.
+ * Returns the created report id so a follow-on Given can resolve it.
+ */
+async function firebaseUidFor(ctx, personaName) {
+  // POST /api/reports takes `reportedUserId`, which resolveUniqueId() looks
+  // up as users.firebaseUid — the Firebase uid, NOT the uniqueId. Passing
+  // the uniqueId yields a report the resolve route later 404s on ("reported
+  // user no longer exists"), which reads as a product bug.
+  // Sessions store the Firebase uid as `localId` (the field name the
+  // Firebase REST sign-in response uses), not `uid`.
+  const sess = ctx.sessions?.get(personaName);
+  if (sess?.localId) return sess.localId;
+  const uniqueId = personaUniqueId(personaName);
+  const snap = await ctx.db.doc(`users/${uniqueId}`).get();
+  const uid = snap.exists ? snap.data()?.firebaseUid : null;
+  if (!uid) {
+    throw new Error(
+      `no firebaseUid for "${personaName}" (users/${uniqueId}) — the persona is not provisioned on this target`,
+    );
+  }
+  return uid;
+}
+
+/**
+ * Conversation id for a direct pair, creating the doc only if it is absent.
+ *
+ * seedDirectConversation() uses .set() WITHOUT merge, so calling it on an
+ * existing thread would wipe lastMessage/unread state that an earlier step
+ * established. "Ensure" is what a Given wants: make it exist, disturb
+ * nothing that already does.
+ */
+async function ensureDirectConversation(ctx, p1Name, p2Name) {
+  const ids = [String(personaUniqueId(p1Name)), String(personaUniqueId(p2Name))].sort();
+  const convId = `direct-${ids[0]}-${ids[1]}`;
+  const snap = await ctx.db.doc(`conversations/${convId}`).get();
+  if (!snap.exists) await seedDirectConversation(ctx, p1Name, p2Name);
+  return convId;
+}
+
+async function seedReport(ctx, reporterName, reportedName, reason, messageBody) {
+  const res = await callApiAs(ctx, reporterName, 'POST', '/api/reports', {
+    reportedUserId: await firebaseUidFor(ctx, reportedName),
+    reportedUserName: reportedName,
+    reason,
+    ...(messageBody ? { messageText: messageBody } : {}),
+  });
+  const reportId = res.body?.id || res.body?.reportId || res.body?.report?.id;
+  if (!reportId) {
+    throw new Error(
+      `POST /api/reports returned no report id — body was ${JSON.stringify(res.body)}`,
+    );
+  }
+  if (ctx.scenarioVars?.set) ctx.scenarioVars.set('reportId', reportId);
+  return reportId;
+}
+
+/**
+ * Find the most recent open report against a persona, so a Given phrased
+ * as "<admin> has issued a warning on <reporter>'s report" can act on the
+ * report an earlier Given (or an earlier scenario) filed.
+ */
+async function latestReportAgainst(ctx, reportedName) {
+  const reportedUniqueId = String(personaUniqueId(reportedName));
+  const snap = await ctx.db.collection('reports').get();
+  const rows = (snap.docs || [])
+    .map((d) => ({ id: d.id, ...d.data() }))
+    .filter(
+      (r) =>
+        String(r.reportedUserUniqueId ?? r.reportedId ?? r.reportedUserId ?? '') ===
+        reportedUniqueId,
+    )
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  if (rows.length === 0) {
+    throw new Error(
+      `no report found against "${reportedName}" (uniqueId ${reportedUniqueId}) — a Given that files one must run first`,
+    );
+  }
+  return rows[0];
+}
+
 // ── Step matchers ───────────────────────────────────────────────────
 
 /**
@@ -2510,11 +2712,15 @@ const matchers = [
       const platform = m[3];
       const urlPath = m[4];
       const clearSession = m[0].endsWith('with no Firebase session');
-      if (clearSession) ctx.sessions.delete(name);
       if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
       if (!ctx.personaPaths) ctx.personaPaths = new Map();
       ctx.personaPlatforms.set(name, platform);
       ctx.personaPaths.set(name, urlPath);
+      // Deliberately pure bookkeeping: no sign-in, no network. Pinned by
+      // "records platform/path without requiring Firebase session". A
+      // persona who later ACTS through the API is signed in lazily by
+      // callApiAs, so scenarios that only read a path pay nothing.
+      if (clearSession) ctx.sessions.delete(name);
       return { ok: true };
     },
   },
@@ -12691,18 +12897,29 @@ const matchers = [
     },
   },
   {
-    // Wake 94 — `the doc has at most N entries in "<X>" matching
-    // {action: "<Y>", sourceId: N}`. j19:76. Audit-log count cap on
-    // a single-doc query result. The 2nd `N` (sourceId filter) is a
-    // numeric literal — currently the corpus only uses sourceId=1
-    // (Officia's uniqueId).
-    pattern:
-      /^the doc has at most (\d+) entries in "([^"]+)" matching \{action: "([^"]+)", sourceId: (\d+)\}$/,
+    // `the doc has at most N entries in "<X>" matching {<predicate>}`.
+    // Upper-bound count over an array field of a single-doc query result.
+    //
+    // SHY-0259: this originally hard-coded the literal keys
+    // `{action: "...", sourceId: N}`. The only place the corpus uses the
+    // step — j19:76 — filters on `sourceUniqueId`, so the matcher never
+    // fired and the OSA cross-cohort invariant it guards was never
+    // actually asserted; it failed as STEP_NOT_IMPLEMENTED instead. The
+    // grammar now takes an arbitrary predicate via parseJsonishPredicate,
+    // the same parser the collection-level "matching {…}" step uses, so a
+    // new field name never needs a new matcher.
+    pattern: /^the doc has at most (\d+) entries in "([^"]+)" matching \{(.*)\}$/,
     async handler(m, ctx) {
       const max = Number(m[1]);
       const field = m[2];
-      const action = m[3];
-      const sourceId = Number(m[4]);
+      let predicate;
+      try {
+        predicate = parseJsonishPredicate(m[3].trim());
+      } catch (e) {
+        // Never fall through to "0 matched" — an unparseable predicate
+        // would then report a broken assertion as a passing one.
+        return { ok: false, error: `predicate parse error: ${e.message}` };
+      }
       if (!ctx.lastQueryResult?.data) {
         return {
           ok: false,
@@ -12710,11 +12927,13 @@ const matchers = [
         };
       }
       const entries = ctx.lastQueryResult.data[field] || [];
-      const matches = entries.filter((e) => e?.action === action && e?.sourceId === sourceId);
+      const matches = entries.filter((e) =>
+        Object.entries(predicate).every(([k, v]) => e?.[k] === v),
+      );
       if (matches.length > max) {
         return {
           ok: false,
-          error: `${matches.length} entries in ${field} match {action: "${action}", sourceId: ${sourceId}}, expected at most ${max} (exceeded)`,
+          error: `${matches.length} entries in "${field}" match ${JSON.stringify(predicate)}, expected at most ${max} (exceeded)`,
         };
       }
       return { ok: true };
@@ -14722,6 +14941,233 @@ const matchers = [
         };
       }
       return { ok: true };
+    },
+  },
+
+  // ── SHY-0259: j11 moderation-cycle setup Givens ──────────────────
+  //
+  // Each of these restates the outcome of an EARLIER scenario in the same
+  // feature so a later scenario can be run standalone. They drive the real
+  // moderation routes as the real personas — see callApiAs above for why
+  // mirroring the writes instead would drift.
+  {
+    // "Raul has sent Nora "offensive content #1"" — j11:39.
+    pattern: /^([A-Z][a-z]+) has sent ([A-Z][a-z]+) "([^"]+)"$/,
+    async handler(m, ctx) {
+      const [, senderName, recipientName, bodyText] = m;
+      try {
+        const convId = await ensureDirectConversation(ctx, senderName, recipientName);
+        await callApiAs(ctx, senderName, 'POST', `/api/conversations/${convId}/messages`, {
+          text: bodyText,
+        });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Nora has just submitted a Harassment report against Raul" — j11:47.
+    pattern: /^([A-Z][a-z]+) has just submitted an? (\w+) report against ([A-Z][a-z]+)$/,
+    async handler(m, ctx) {
+      const [, reporterName, reason, reportedName] = m;
+      try {
+        await seedReport(ctx, reporterName, reportedName, reason);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Nora's Harassment report against Raul is visible in the admin queue"
+    // — j11:54. Same establishment as the Given above, phrased from the
+    // admin's side; asserts it is actually queryable rather than assuming.
+    pattern: /^([A-Z][a-z]+)'s (\w+) report against ([A-Z][a-z]+) is visible in the admin queue$/,
+    async handler(m, ctx) {
+      const [, reporterName, reason, reportedName] = m;
+      try {
+        await seedReport(ctx, reporterName, reportedName, reason);
+        const report = await latestReportAgainst(ctx, reportedName);
+        if (!report?.id) {
+          return { ok: false, error: `report against ${reportedName} did not become queryable` };
+        }
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "there are 2 Harassment reports against Raul" — j11:97.
+    pattern: /^there are (\d+) (\w+) reports? against ([A-Z][a-z]+)$/,
+    async handler(m, ctx) {
+      const wanted = Number(m[1]);
+      const reason = m[2];
+      const reportedName = m[3];
+      try {
+        const reportedUniqueId = String(personaUniqueId(reportedName));
+        const snap = await ctx.db.collection('reports').get();
+        const existing = (snap.docs || [])
+          .map((d) => d.data())
+          .filter(
+            (r) => String(r.reportedUserUniqueId ?? r.reportedId ?? '') === reportedUniqueId,
+          ).length;
+        // Top up rather than blindly filing `wanted` more: the Background
+        // may already have filed some, and over-filing would make an
+        // "exactly N" assertion downstream fail for a harness reason.
+        for (let i = existing; i < wanted; i += 1) {
+          await seedReport(ctx, 'Nora', reportedName, reason);
+        }
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Greta has issued a warning to Raul on Nora's report" — j11:62.
+    pattern: /^([A-Z][a-z]+) has issued a warning to ([A-Z][a-z]+) on ([A-Z][a-z]+)'s report$/,
+    async handler(m, ctx) {
+      const [, adminName, targetName, reporterName] = m;
+      try {
+        let report;
+        try {
+          report = await latestReportAgainst(ctx, targetName);
+        } catch {
+          await seedReport(ctx, reporterName, targetName, 'Harassment');
+          report = await latestReportAgainst(ctx, targetName);
+        }
+        await callApiAs(ctx, adminName, 'POST', `/api/reports/${report.id}/resolve`, {
+          action: 'warned',
+          reason: 'First-strike harassment',
+        });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Greta has just submitted a warning for Theo" — j10:  the direct
+    // admin warn route, with no report behind it.
+    pattern: /^([A-Z][a-z]+) has just submitted a warning for ([A-Z][a-z]+)$/,
+    async handler(m, ctx) {
+      const [, adminName, targetName] = m;
+      try {
+        await callApiAs(ctx, adminName, 'POST', `/api/user/${personaUniqueId(targetName)}/warn`, {
+          reason: 'Room conduct',
+          severity: 2,
+        });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Greta has issued a 3-day suspension to Raul" — j11:104.
+    // "Raul has been suspended for 3 days for "Repeat harassment"" — j11:118.
+    // "Raul has just been suspended for 3 days while seated in "r-test"" — j11:111.
+    // "Raul is in a suspendedUntil state 3 days from now" — j11:126.
+    //
+    // One matcher, four phrasings: they all mean the same established
+    // state, and four near-identical handlers is four places to drift.
+    pattern:
+      /^(?:([A-Z][a-z]+) has issued an? (\d+)-day suspension to ([A-Z][a-z]+)|([A-Z][a-z]+) has (?:just )?been suspended for (\d+) days?(?: for "([^"]+)")?(?: while seated in "([^"]+)")?|([A-Z][a-z]+) is in a suspendedUntil state (\d+) days? from now)$/,
+    async handler(m, ctx) {
+      const adminName = m[1] || 'Greta';
+      const targetName = m[3] || m[4] || m[8];
+      const days = Number(m[2] || m[5] || m[9]);
+      const reason = m[6] || 'Repeat harassment';
+      try {
+        await callApiAs(
+          ctx,
+          adminName,
+          'POST',
+          `/api/user/${personaUniqueId(targetName)}/suspend`,
+          {
+            reason,
+            canAppeal: true,
+            endDate: new Date(Date.now() + days * 86400000).toISOString(),
+          },
+        );
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Raul is on the suspension screen with the appeal button visible"
+    // — j11. The screen is a consequence of the suspension state, so the
+    // Given establishes the state and asserts the screen followed rather
+    // than tapping its way there through the UI.
+    pattern: /^([A-Z][a-z]+) is on the suspension screen with the appeal button visible$/,
+    async handler(m, ctx) {
+      const targetName = m[1];
+      try {
+        const uniqueId = personaUniqueId(targetName);
+        const snap = await ctx.db.doc(`users/${uniqueId}`).get();
+        const user = snap.exists ? snap.data() : null;
+        if (!user?.isSuspended) {
+          await callApiAs(ctx, 'Greta', 'POST', `/api/user/${uniqueId}/suspend`, {
+            reason: 'Repeat harassment',
+            canAppeal: true,
+            endDate: new Date(Date.now() + 3 * 86400000).toISOString(),
+          });
+          return { ok: true };
+        }
+        if (user.suspensionCanAppeal !== true) {
+          return {
+            ok: false,
+            error: `${targetName} is suspended but suspensionCanAppeal is ${user.suspensionCanAppeal} — the appeal button cannot be visible`,
+          };
+        }
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Raul has submitted a suspension appeal" — j11.
+    pattern: /^([A-Z][a-z]+) has submitted a suspension appeal$/,
+    async handler(m, ctx) {
+      const targetName = m[1];
+      try {
+        await callApiAs(ctx, targetName, 'POST', '/api/appeals', {
+          appealText: 'I believe this suspension was issued in error.',
+        });
+        return { ok: true };
+      } catch (e) {
+        // A Given asserts established STATE, not the act of establishing
+        // it. "An appeal is already pending" means the state this Given
+        // describes already holds, so the scenario can proceed. Narrowly
+        // matched on purpose: every other failure (not suspended, appeals
+        // disallowed, 500) still fails the step.
+        if (/already pending/i.test(e.message)) return { ok: true };
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Greta has lifted Raul's suspension" — j11.
+    pattern: /^([A-Z][a-z]+) has lifted ([A-Z][a-z]+)'s suspension$/,
+    async handler(m, ctx) {
+      const [, adminName, targetName] = m;
+      try {
+        await callApiAs(
+          ctx,
+          adminName,
+          'POST',
+          `/api/user/${personaUniqueId(targetName)}/unsuspend`,
+          {},
+        );
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
     },
   },
 ];
