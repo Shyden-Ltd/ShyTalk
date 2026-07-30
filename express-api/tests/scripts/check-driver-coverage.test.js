@@ -76,6 +76,48 @@ describe('finding the runner’s dispatch sites', () => {
   });
 });
 
+describe('the dispatch scan sees driver-to-driver delegation', () => {
+  const reached = reachedMethods();
+
+  test('a method a DRIVER calls counts as reachable, not just one the runner calls', () => {
+    // The gap that let this slip: `driver.iosOpenScreen = () =>
+    // driver.iosTapByTag(...)` makes iosTapByTag reachable, but scanning
+    // only the runner reported it unreached — so a delegation to an
+    // unimplemented tap looked implemented while silently returning false.
+    expect(reached).toContain('iosTapByTag');
+  });
+
+  test("a driver's own listMethods() array is NOT a call site", () => {
+    // Every driver lists its whole surface as string literals. Counting
+    // those made each method trivially self-reaching and reported two
+    // genuinely-implemented methods as stubs. Literal dispatch is a runner
+    // signal only.
+    const report = scanDrivers();
+    const web = report.drivers.find((d) => d.driver === 'web-playwright-driver.js');
+    expect(web.reachedStubs).not.toContain('webShowsCardBadge');
+    const dev = report.drivers.find((d) => d.driver === 'ios-devicectl-driver.js');
+    expect(dev.stubs).not.toContain('iosTapByTag');
+  });
+});
+
+describe('unloadable drivers are derived, never hard-coded', () => {
+  test('a driver no code path requires is excluded, and the exclusion is computed', () => {
+    // ios-simctl-driver is dead: the loader maps even `--driver simctl` to
+    // devicectl, so nothing constructs it. Its stubs cannot mis-colour a
+    // cell, so they do not count — but the exclusion is DERIVED by scanning
+    // requires, so wiring it back in brings its stubs straight back.
+    const loadable = checker.loadableDrivers();
+    expect(loadable.has('ios-simctl-driver.js')).toBe(false);
+    expect(loadable.has('ios-devicectl-driver.js')).toBe(true);
+    expect(loadable.has('android-adb-driver.js')).toBe(true);
+
+    const report = scanDrivers();
+    const simctl = report.drivers.find((d) => d.driver === 'ios-simctl-driver.js');
+    expect(simctl.stubs.length).toBeGreaterThan(0);
+    expect(simctl.reachedStubs).toEqual([]);
+  });
+});
+
 describe('scanning the real drivers', () => {
   const report = scanDrivers();
 

@@ -355,6 +355,45 @@ async function createIosDriver({
   };
 
   // iosUiDump — XCUITest XML source of the current screen.
+  // ── Screen-presence assertions (SHY-0259) ────────────────────────
+  //
+  // These six were stubs: declared in listMethods(), wired to the stub loop,
+  // never implemented — so a step reaching one recorded the product as
+  // failing rather than the harness as unable. They assert against the same
+  // identifier prefixes the Android and devicectl drivers use, because the
+  // same runner matcher dispatches to all three.
+  //
+  // Appium's /source returns the XCUI hierarchy as XML, where a testTag
+  // surfaces as `name="…"` (and, on some element types, `identifier="…"`).
+  // Both are accepted; requiring only one would make the assertion depend on
+  // which XCUIElementType happened to render.
+
+  async function xcuiIdentifierPresent(prefix) {
+    if (!prefix) return false;
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    const esc = String(prefix).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b(?:name|identifier)="${esc}[^"]*"`).test(dump);
+  }
+
+  driver.iosShowsRoomClosedSummary = async () => xcuiIdentifierPresent('roomClosedSummary_');
+  driver.iosShowsMicIcon = async () => xcuiIdentifierPresent('room_micToggleButton');
+  driver.iosShowsParticipantsList = async () => xcuiIdentifierPresent('participantsList_');
+  driver.iosShowsRoomScreen = async () => xcuiIdentifierPresent('room_');
+  driver.iosShowsSeatGrid = async () => xcuiIdentifierPresent('room_seatGrid');
+  driver.iosShowsToast = async (_name, text) => {
+    // A toast carries its message, so text is checked when the caller gives
+    // one — asserting only that SOME toast exists would pass on the wrong
+    // toast entirely.
+    if (typeof text === 'string' && text.trim()) {
+      const dump = await driver.iosUiDump();
+      if (!dump) return false;
+      const esc = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`\\b(?:label|name|value)="[^"]*${esc}[^"]*"`).test(dump);
+    }
+    return xcuiIdentifierPresent('toast_');
+  };
+
   driver.iosUiDump = async () => {
     try {
       const sid = await ensureSession();

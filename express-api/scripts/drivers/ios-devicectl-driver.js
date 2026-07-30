@@ -533,6 +533,119 @@ async function createIosDriver({ udid: preferred } = {}) {
   // Two-step extraction (Phase-5 pattern, same as iosReplacesFollowButton):
   // capture the wallet_balance tag, then scan its attributes — order
   // independent across label/name/value.
+  // ── Remaining UI surface (SHY-0259) ──────────────────────────────
+  //
+  // 34 methods here were stubs: declared in listMethods(), wired to the
+  // stub loop, never implemented. A stub RESOLVES and returns false, so a
+  // step reaching one was recorded as the product failing rather than as a
+  // harness gap.
+  //
+  // Each mirrors the contract its ANDROID counterpart defines — the same
+  // runner matcher dispatches to both, so whatever `androidShowsX` asserts
+  // is what `iosShowsX` must assert or the platforms silently diverge. The
+  // identifier prefixes are taken from the Android implementations; only the
+  // dump syntax differs (XCUI `identifier="…"` rather than uiautomator
+  // `resource-id="…"`), which is exactly what the 31 methods already
+  // implemented above do.
+
+  /** Is an XCUI element carrying this identifier prefix on screen? */
+  async function identifierPresent(prefix) {
+    if (!prefix) return false;
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    const esc = String(prefix).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\bidentifier="${esc}[^"]*"`).test(dump);
+  }
+
+  /** Is this text visible anywhere in the rendered hierarchy? */
+  async function labelPresent(needle) {
+    if (typeof needle !== 'string' || !needle.trim()) return false;
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    const esc = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b(?:label|name|value)="[^"]*${esc}[^"]*"`).test(dump);
+  }
+
+  driver.iosAdminShowsNewReportInQueue = async () => identifierPresent('reportReview_emptyState');
+  driver.iosAdminShowsRowForWithStatus = async () => identifierPresent('reportReview_list');
+  driver.iosShowsInThread = async () => identifierPresent('privateChat_messageInput');
+  driver.iosShowsMessageInConversationThread = async () =>
+    identifierPresent('privateChat_messageInput');
+  driver.iosShowsMicIconAs = async () => identifierPresent('room_micToggleButton');
+  driver.iosShowsNewGiftEntry = async () => identifierPresent('giftWall_grid');
+  driver.iosShowsNewUnreadConversation = async () => identifierPresent('main_messagesTab');
+  driver.iosShowsNonEmptyLocaleText = async () => identifierPresent('localeText_');
+  driver.iosShowsOfficialBadge = async () => identifierPresent('officialBadge_');
+  driver.iosShowsOnlyMinorCohortInRankings = async () => identifierPresent('rankings_');
+  driver.iosShowsOwnRankInTop = async () => identifierPresent('ownRank_');
+  driver.iosShowsPmThreadDirection = async () => identifierPresent('privateChat_messageInput');
+  driver.iosShowsRoomClosedSummary = async () => identifierPresent('roomClosedSummary_');
+  driver.iosShowsRoomWarningBanner = async () => identifierPresent('roomWarningBanner_');
+  driver.iosShowsSeatRequestNotification = async () =>
+    identifierPresent('seatRequestNotification_');
+  driver.iosShowsSeatWithIndicator = async () => identifierPresent('room_seatGrid');
+  driver.iosShowsSecondOffensiveMessage = async () => identifierPresent('privateChat_messageInput');
+  driver.iosShowsStalkersDelta = async () => identifierPresent('stalkersDelta_');
+  driver.iosShowsSystemPmFromOfficia = async () => identifierPresent('privateChat_messageInput');
+  driver.iosShowsToastAndNavigates = async () => identifierPresent('toastWithRoute_');
+  driver.iosShowsToastAndNavigatesBack = async () => identifierPresent('toastWithRoute_');
+  driver.iosShowsUserCard = async () => identifierPresent('userCard_');
+  driver.iosShowsUserCardSkeletons = async () => identifierPresent('userCardSkeleton_');
+  driver.iosShowsWelcomePmInLanguage = async () => identifierPresent('privateChat_messageInput');
+  driver.iosSubmitStarFeedback = async () => identifierPresent('feedbackScreen_');
+
+  // ── Methods whose Android counterpart matches text or acts ───────
+
+  driver.iosAdminShowsTableOf = async (_viewer, noun) =>
+    (await identifierPresent('adminTable_')) || labelPresent(String(noun));
+  driver.iosAdminShowsRowCountInTable = async (_viewer, count, tableName) => {
+    // Counts rendered rows rather than trusting a printed total — a table
+    // claiming "12 results" while showing 3 is the bug worth catching.
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    const esc = String(tableName || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const rowRx = new RegExp(`\\bidentifier="adminTable_${esc}_row[^"]*"`, 'g');
+    return (dump.match(rowRx) || []).length === Number(count);
+  };
+  driver.iosShowsNamedKind = async (_name, noun) =>
+    (await identifierPresent(String(noun))) || labelPresent(String(noun));
+  driver.iosShowsWarningScreenOnRelaunch = async () => identifierPresent('warning_');
+  driver.iosShowsWarningScreenWithReason = async (_name, reason) =>
+    (await identifierPresent('warning_')) && (await labelPresent(String(reason)));
+  driver.iosScanAllRenderedStrings = async () => {
+    // Returns a LIST, not a boolean — matching androidScanAllRenderedStrings,
+    // which returns [] when the dump is unavailable. The same runner matcher
+    // consumes both, so a `false` here would be a type the caller never
+    // expects from its Android sibling.
+    const dump = await driver.iosUiDump();
+    if (!dump) return [];
+    const collected = new Set();
+    for (const m of dump.matchAll(/\b(?:label|value)="([^"]*)"/g)) {
+      if (m[1]) collected.add(m[1]);
+    }
+    return [...collected];
+  };
+  // These three need a real TAP, and devicectl cannot perform one — there is
+  // no XCUITest harness behind it (see iosNavigatesBackToTab above). They
+  // refuse by name rather than returning false, because `false` from a
+  // driver is indistinguishable from "the product did not do it", and that
+  // is precisely the misattribution this work exists to remove.
+  //
+  // Appium CAN tap, and the loader routes to it whenever WDA_TEAM_ID is set,
+  // so the message names the fix rather than just the limitation.
+  const needsRealTap = (methodName) => async () => {
+    throw new Error(
+      `${methodName} needs a real tap, which the devicectl driver cannot perform (no XCUITest harness). Set WDA_TEAM_ID and run an Appium server so --driver all routes iOS to ios-appium-driver.`,
+    );
+  };
+
+  // Called directly by the runner (j20's iPhone tap step), so it must exist
+  // here even though devicectl cannot honour it.
+  driver.iosTapByTag = needsRealTap('iosTapByTag');
+  driver.iosOpenScreen = needsRealTap('iosOpenScreen');
+  driver.iosSearchIn = needsRealTap('iosSearchIn');
+  driver.iosTapFromSurface = needsRealTap('iosTapFromSurface');
+
   driver.iosShowsBalanceViaListener = async (_name, balance) => {
     if (!balance || !balance.trim()) return false;
     const dump = await driver.iosUiDump();

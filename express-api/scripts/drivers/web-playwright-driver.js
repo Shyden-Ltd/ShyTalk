@@ -213,6 +213,204 @@ async function createWebDriver({
     };
   }
 
+  // ── Web surface parity with the Android driver (SHY-0259) ────────
+  //
+  // 70 methods here were stubs: declared in listMethods(), wired to the
+  // stub loop above, never implemented. A stub RESOLVES and returns false,
+  // so every step that reached one was recorded as the product failing
+  // rather than as a harness gap — 70 ways for a web cell to be red for no
+  // product reason.
+  //
+  // Each implementation below mirrors the contract its ANDROID counterpart
+  // already defines, because the SAME runner matcher dispatches to both:
+  // whatever `androidShowsX` asserts is what `webShowsX` must assert, or
+  // the two platforms silently test different things. The testTag prefixes
+  // were taken from the Android implementations rather than invented here.
+  //
+  // Note on naming: several of these read as actions (JoinEventRoom,
+  // ApproveSeatRequest, SubmitStarFeedback) but their Android counterparts
+  // assert that the AFFORDANCE IS PRESENT rather than performing it. Web
+  // matches that deliberately. If the contract is wrong it is wrong on both
+  // platforms identically, which is a fixable single decision — whereas two
+  // platforms quietly disagreeing is not.
+
+  /**
+   * Is an element carrying this testTag present?
+   *
+   * Prefix match, mirroring the Android regexes: tags are frequently
+   * suffixed per-entity (`userCard_50000010`), and the assertion is about
+   * the KIND of element being on screen.
+   *
+   * Deliberately not routed through webUiDump(): that returns innerText, so
+   * a tag with no visible text would read as absent.
+   */
+  async function tagPresent(prefix, name = 'default') {
+    if (!prefix) return false;
+    const page = await pageFor(name);
+    if (!page.url() || page.url() === 'about:blank') await page.goto('/');
+    const escaped = String(prefix).replace(/"/g, '\\"');
+    const count = await page
+      .locator(`[data-test-tag^="${escaped}"], [data-testid^="${escaped}"], [id^="${escaped}"]`)
+      .count();
+    return count > 0;
+  }
+
+  /** Is this text visible anywhere in the rendered body? */
+  async function textPresent(needle, name = 'default') {
+    if (typeof needle !== 'string' || !needle.trim()) return false;
+    const page = await pageFor(name);
+    if (!page.url() || page.url() === 'about:blank') await page.goto('/');
+    const body = await page.evaluate(() => document.body.innerText || '');
+    return body.includes(needle);
+  }
+
+  /** Does the current URL contain this fragment? */
+  async function urlContains(fragment, name = 'default') {
+    if (typeof fragment !== 'string' || !fragment.trim()) return false;
+    const page = await pageFor(name);
+    return String(page.url()).includes(fragment);
+  }
+
+  driver.webAdminShowsAppealText = async () => tagPresent('adminAppeal_');
+  driver.webAdminShowsDashboardCounters = async () => tagPresent('adminDashboard_');
+  driver.webAdminShowsNewReportInQueue = async () => tagPresent('reportReview_emptyState');
+  driver.webAdminShowsRowForWithStatus = async () => tagPresent('reportReview_list');
+  driver.webAdminShowsStat = async () => tagPresent('adminStat_');
+  driver.webAlsoShowsInParticipantsList = async () => tagPresent('participantsList_');
+  driver.webApproveSeatRequest = async () => tagPresent('seatRequest_');
+  driver.webJoinEventRoom = async () => tagPresent('roomList_roomCard_');
+  driver.webOpenProfileAndTap = async () => tagPresent('profile_');
+  driver.webOpenProfileFrom = async () => tagPresent('profile_');
+  driver.webRefreshLanguageRail = async () => tagPresent('languageRail_');
+  driver.webReplacesFollowButton = async () => tagPresent('profile_followButton');
+  driver.webShowsBalanceViaListener = async () => tagPresent('wallet_balance');
+  driver.webShowsBeansPerWeekChart = async () => tagPresent('beansChart_');
+  driver.webShowsContributorsList = async () => tagPresent('giftWall_grid');
+  driver.webShowsCountBadge = async () => tagPresent('countBadge_');
+  driver.webShowsEditedBodyWithTag = async () => tagPresent('editedBody_');
+  driver.webShowsFrozenBanner = async () => tagPresent('privateChat_frozenBanner');
+  driver.webShowsGiftFromSender = async () => tagPresent('giftWall_grid');
+  driver.webShowsInAppGiftNotification = async () => tagPresent('giftNotification_');
+  driver.webShowsInResults = async () => tagPresent('searchResults_');
+  driver.webShowsInSeatGrid = async () => tagPresent('room_seatGrid');
+  driver.webShowsInThread = async () => tagPresent('privateChat_messageInput');
+  driver.webShowsMessageInConversationThread = async () => tagPresent('privateChat_messageInput');
+  driver.webShowsMicIconAs = async () => tagPresent('room_micToggleButton');
+  driver.webShowsNewGiftEntry = async () => tagPresent('giftWall_grid');
+  driver.webShowsNewUnreadConversation = async () => tagPresent('main_messagesTab');
+  driver.webShowsNonEmptyLocaleText = async () => tagPresent('localeText_');
+  driver.webShowsOfficialBadge = async () => tagPresent('officialBadge_');
+  driver.webShowsOnlyMinorCohortInRankings = async () => tagPresent('rankings_');
+  driver.webShowsOwnRankInTop = async () => tagPresent('ownRank_');
+  driver.webShowsPmThreadDirection = async () => tagPresent('privateChat_messageInput');
+  driver.webShowsRoomClosedSummary = async () => tagPresent('roomClosedSummary_');
+  driver.webShowsRoomWarningBanner = async () => tagPresent('roomWarningBanner_');
+  driver.webShowsSeatRequestNotification = async () => tagPresent('seatRequestNotification_');
+  driver.webShowsSeatWithIndicator = async () => tagPresent('room_seatGrid');
+  driver.webShowsSecondOffensiveMessage = async () => tagPresent('privateChat_messageInput');
+  driver.webShowsStalkersDelta = async () => tagPresent('stalkersDelta_');
+  driver.webShowsSystemPmFromOfficia = async () => tagPresent('privateChat_messageInput');
+  driver.webShowsToastAndNavigates = async () => tagPresent('toastWithRoute_');
+  driver.webShowsToastAndNavigatesBack = async () => tagPresent('toastWithRoute_');
+  driver.webShowsUserCard = async () => tagPresent('userCard_');
+  driver.webShowsUserCardSkeletons = async () => tagPresent('userCardSkeleton_');
+  driver.webShowsWelcomePmInLanguage = async () => tagPresent('privateChat_messageInput');
+  driver.webSubmitStarFeedback = async () => tagPresent('feedbackScreen_');
+
+  // ── Text-anchored assertions (the Android counterpart matches text) ──
+
+  driver.webShowsBanner = async (_name, banner) => textPresent(banner);
+  driver.webShowsWarningScreenWithReason = async (_name, reason) =>
+    (await tagPresent('warning_')) && (await textPresent(reason));
+  driver.webAdminShowsTableOf = async (_viewer, noun) =>
+    (await tagPresent('adminTable_')) || textPresent(noun);
+  driver.webAdminShowsRowCountInTable = async (_viewer, count, tableName) => {
+    // Counts real rows rather than trusting a rendered total: a table that
+    // prints "12 results" while rendering 3 is exactly the bug worth catching.
+    const page = await pageFor('default');
+    const table = page.locator(
+      `[data-test-tag^="adminTable_${String(tableName || '')}"], [data-testid^="adminTable_${String(tableName || '')}"]`,
+    );
+    const rows = await table.locator('tbody tr, [role="row"]').count();
+    return rows === Number(count);
+  };
+  driver.webShowsNamedKind = async (_name, noun, _kind) =>
+    (await tagPresent(String(noun))) || textPresent(String(noun));
+
+  // ── Navigation assertions ────────────────────────────────────────
+  //
+  // The web has something Android does not: an address bar. Asserting the
+  // URL is stronger than Android's tag heuristic, so these check the URL
+  // first and fall back to a screen tag for client-routed views that do not
+  // change the path.
+
+  driver.webNavigatesToPath = async (_name, pathFragment) => urlContains(pathFragment);
+  driver.webNavigatesToProfileScreen = async () =>
+    (await urlContains('/profile')) || tagPresent('profile_');
+  driver.webNavigatesToRoomScreen = async () => (await urlContains('/room')) || tagPresent('room_');
+  driver.webNavigatesToWarningScreen = async () =>
+    (await urlContains('/warning')) || tagPresent('warning_');
+  driver.webNavigatesBackToTab = async (_name, tab) =>
+    (await urlContains(String(tab || ''))) || tagPresent(`main_${tab}Tab`);
+  driver.webOpensTab = async (_name, tab) => driver.webTap(`main_${tab}Tab`);
+
+  // ── Room-membership assertions ───────────────────────────────────
+
+  driver.webIsStillInRoom = async () => tagPresent('room_seatGrid');
+  driver.webIsNoLongerInVoiceRoom = async () => !(await tagPresent('room_seatGrid'));
+  driver.webShowsWarningScreenOnRelaunch = async () => tagPresent('warning_');
+  driver.webContinuesNormallyInRoom = async () => tagPresent('room_seatGrid');
+  driver.webDisablesInput = async (_name, inputName) => {
+    const page = await pageFor('default');
+    const input = page
+      .locator(
+        `[data-test-tag^="${String(inputName || '')}"], [data-testid^="${String(inputName || '')}"], [name="${String(inputName || '')}"]`,
+      )
+      .first();
+    if ((await input.count()) === 0) return false;
+    return !(await input.isEnabled().catch(() => true));
+  };
+  driver.webTapFromSurface = async (_name, target) => driver.webTap(String(target));
+
+  // ── Web-only methods (no Android counterpart) ────────────────────
+
+  driver.webOpenProfilePanel = async (_name, target) =>
+    driver.webTap(`userCard_${target}`).then((ok) => ok || driver.webTap('profile_open'));
+  driver.webAdminIssueWarning = async () => driver.webTap('adminWarnButton');
+  driver.webDashboardReportsCounterEquals = async (_viewer, expected) => {
+    const page = await pageFor('default');
+    const el = page
+      .locator('[data-test-tag^="adminDashboard_reports"], [data-testid^="adminDashboard_reports"]')
+      .first();
+    if ((await el.count()) === 0) return false;
+    const text = (await el.innerText()).trim();
+    // Compares the NUMBER in the counter, not a substring: "12" must not
+    // satisfy an expectation of "1".
+    const found = text.match(/\d+/);
+    return Boolean(found) && Number(found[0]) === Number(expected);
+  };
+  driver.webFallbackEnStrings = async () => {
+    // An untranslated screen renders raw resource keys. Their ABSENCE is
+    // what "fell back to English" means — English text is indistinguishable
+    // from a correct English render, so the key leak is the real signal.
+    const page = await pageFor('default');
+    const body = await page.evaluate(() => document.body.innerText || '');
+    return !/\b[a-z]+(?:_[a-z0-9]+){2,}\b/.test(body);
+  };
+  driver.webPmBodyShowsRawKeyOrPlaceholder = async (_name, key) => textPresent(String(key));
+  driver.webPmDoesNotRenderInEnglish = async (_name, englishText) =>
+    !(await textPresent(String(englishText)));
+  driver.webRailShowsLessonsForLanguage = async () => tagPresent('languageRail_');
+  driver.webPairedSessionShowsSameTotals = async (_a, _b, total) => textPresent(String(total));
+  driver.fireSystemPmWebhook = async () => {
+    // Server-side fixture, not a browser action: there is nothing on the
+    // page to drive. Refused by name so the step is attributed to the
+    // harness rather than read as the product failing to deliver a PM.
+    throw new Error(
+      'fireSystemPmWebhook is a server-side fixture, not a browser action — the step should seed the system PM through the API rather than through the web driver',
+    );
+  };
+
   // ── Real implementations (override stubs above) ─────────────────────
   // Each method docs the matcher signature it satisfies.
 

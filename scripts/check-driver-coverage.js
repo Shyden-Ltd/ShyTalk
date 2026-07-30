@@ -122,40 +122,121 @@ function declaredMethods(file) {
  *                                            then applied as driver[methodName]
  */
 function reachedMethods() {
-  const runnerPath = path.join(REPO, 'express-api', 'scripts', 'manual-qa-runner.js');
-  const src = fs.readFileSync(runnerPath, 'utf8');
-  const ast = acorn.parse(src, { ecmaVersion: 2023, sourceType: 'script' });
+  // The runner AND the drivers themselves. A driver method that delegates to
+  // a sibling — `driver.iosOpenScreen = () => driver.iosTapByTag(...)` —
+  // makes that sibling reachable just as surely as a matcher does. Scanning
+  // only the runner missed exactly that, so a delegation to an unimplemented
+  // tap looked implemented while silently returning false.
+  const sources = [
+    path.join(REPO, 'express-api', 'scripts', 'manual-qa-runner.js'),
+    ...driverFiles(),
+  ];
   const names = new Set();
   const DRIVER_HOLDERS = new Set(['uiDriver', 'webDriver', 'driver']);
   const looksLikeDriverMethod = (v) =>
     typeof v === 'string' && /^(android|ios|web|inject)[A-Z]/.test(v);
 
-  const visit = (node) => {
+  // Literal method names are only a dispatch signal in the RUNNER, where a
+  // platform branch picks one and applies it as driver[methodName]. Inside a
+  // driver, the same literals are its own listMethods() declaration array —
+  // counting those made every declared method look self-reaching, which
+  // reported two implemented methods as stubs.
+  let literalsAreDispatch = true;
+
+  const visit = (node, isAssignTarget = false) => {
     if (!node || typeof node.type !== 'string') return;
+    const isHolderMember =
+      node.object &&
+      node.object.type === 'MemberExpression' &&
+      node.object.property &&
+      node.object.property.type === 'Identifier' &&
+      DRIVER_HOLDERS.has(node.object.property.name);
+    // Inside a driver module the object is a bare local named `driver`.
+    // Only READS count — `driver.foo = …` is the implementation, not a call
+    // site, and counting it would make every method trivially self-reaching.
+    const isBareDriverRead =
+      node.object &&
+      node.object.type === 'Identifier' &&
+      node.object.name === 'driver' &&
+      !isAssignTarget;
     if (
       node.type === 'MemberExpression' &&
       node.computed === false &&
       node.property.type === 'Identifier' &&
-      node.object.type === 'MemberExpression' &&
-      node.object.property.type === 'Identifier' &&
-      DRIVER_HOLDERS.has(node.object.property.name)
+      (isHolderMember || isBareDriverRead)
     ) {
       names.add(node.property.name);
     }
     // Literal method names selected per platform and applied dynamically.
-    if (node.type === 'Literal' && looksLikeDriverMethod(node.value)) names.add(node.value);
+    if (literalsAreDispatch && node.type === 'Literal' && looksLikeDriverMethod(node.value)) {
+      names.add(node.value);
+    }
     for (const key of Object.keys(node)) {
       const child = node[key];
-      if (Array.isArray(child)) child.forEach(visit);
-      else if (child && typeof child.type === 'string') visit(child);
+      // The left side of an assignment is a definition, not a use.
+      const asTarget = node.type === 'AssignmentExpression' && key === 'left';
+      if (Array.isArray(child)) child.forEach((c) => visit(c, asTarget));
+      else if (child && typeof child.type === 'string') visit(child, asTarget);
     }
   };
-  visit(ast);
+  for (const file of sources) {
+    literalsAreDispatch = path.dirname(file) !== DRIVERS_DIR;
+    visit(acorn.parse(fs.readFileSync(file, 'utf8'), { ecmaVersion: 2023, sourceType: 'script' }));
+  }
   return names;
+}
+/**
+ * Driver modules that some non-test code path can actually load.
+ *
+ * A stub in a driver nothing loads cannot produce a misattributed red cell,
+ * which is this gate's entire criterion — so counting it would inflate the
+ * number with debt that costs nothing. `ios-simctl-driver.js` is in that
+ * state: the loader's routing maps even `--driver simctl` to devicectl, so
+ * no path constructs it and only its own tests require it.
+ *
+ * DERIVED, never hard-coded: the set is computed by scanning non-test
+ * sources for requires. Wire simctl back into the loader and its 64 stubs
+ * reappear in the count automatically — the exclusion cannot go stale into
+ * a lie.
+ */
+function loadableDrivers() {
+  const roots = [
+    path.join(REPO, 'express-api', 'scripts'),
+    path.join(REPO, 'express-api', 'src'),
+    path.join(REPO, 'scripts'),
+  ];
+  const referenced = new Set();
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (e.name === 'node_modules' || e.name === 'tests') continue;
+        walk(full);
+        continue;
+      }
+      if (!e.name.endsWith('.js') || e.name.includes('.test.')) continue;
+      const isDriver = path.dirname(full) === DRIVERS_DIR && e.name.endsWith('-driver.js');
+      const src = fs.readFileSync(full, 'utf8');
+      for (const m of src.matchAll(/drivers\/([a-z0-9-]+-driver)/g)) {
+        // A driver never counts as loading ITSELF.
+        if (isDriver && `${m[1]}.js` === e.name) continue;
+        referenced.add(`${m[1]}.js`);
+      }
+    }
+  };
+  roots.forEach(walk);
+  return referenced;
 }
 
 function scanDrivers() {
   const reached = reachedMethods();
+  const loadable = loadableDrivers();
   const rows = [];
   for (const file of driverFiles()) {
     const declared = declaredMethods(file);
@@ -167,7 +248,12 @@ function scanDrivers() {
       declared: declared.length,
       implemented: declared.length - stubs.length,
       stubs,
-      reachedStubs: stubs.filter((m) => reached.has(m)),
+      loadable: loadable.has(path.basename(file)),
+      // Dispatchable AND in a driver something can actually construct.
+      reachedStubs: loadable.has(path.basename(file)) ? stubs.filter((m) => reached.has(m)) : [],
+      unloadableStubs: loadable.has(path.basename(file))
+        ? 0
+        : stubs.filter((m) => reached.has(m)).length,
     });
   }
   return {
@@ -176,6 +262,7 @@ function scanDrivers() {
     totalStubs: rows.reduce((n, r) => n + r.stubs.length, 0),
     // The blocking number: a stub with no call site costs nothing.
     reachedStubs: rows.reduce((n, r) => n + r.reachedStubs.length, 0),
+    unloadableStubs: rows.reduce((n, r) => n + (r.unloadableStubs || 0), 0),
     noDriversFound: rows.length === 0,
   };
 }
@@ -251,7 +338,8 @@ function main(argv = process.argv.slice(2)) {
     `\nDriver methods declared but not implemented: ${report.totalStubs} ` +
       `across ${report.driversScanned} drivers.\n` +
       `Of those, ${report.reachedStubs} have a call site in the runner, so a ` +
-      'step can land on them; the rest are unused surface.' +
+      `step can land on them. A further ${report.unloadableStubs} sit in ` +
+      'drivers no code path loads, so they cannot mis-colour a cell.' +
       (Number.isFinite(baseline.reachedStubs)
         ? `\nBaseline ${baseline.reachedStubs} dispatchable, target 0.`
         : ''),
@@ -265,7 +353,7 @@ function main(argv = process.argv.slice(2)) {
   const code = verdict(report, baseline);
   if (code !== 0) {
     console.error(
-      `\nFAIL: regressed by ${report.totalStubs - baseline.totalStubs}. ` +
+      `\nFAIL: regressed by ${report.reachedStubs - baseline.reachedStubs}. ` +
         'A stubbed method RESOLVES and returns false, so the step reads as a ' +
         'product failure rather than a harness gap.',
     );
@@ -276,6 +364,13 @@ function main(argv = process.argv.slice(2)) {
   return code;
 }
 
-module.exports = { scanDrivers, implementedMethods, reachedMethods, verdict, DRIVERS_DIR };
+module.exports = {
+  scanDrivers,
+  implementedMethods,
+  reachedMethods,
+  loadableDrivers,
+  verdict,
+  DRIVERS_DIR,
+};
 
 if (require.main === module) process.exit(main());

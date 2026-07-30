@@ -169,11 +169,41 @@ describe('ios-devicectl-driver — every IOS_METHOD_NAMES entry resolves to a fu
   // and every foundation method's early-return is `if (!dump) return
   // false`. So both stubs and foundations satisfy this contract
   // until WDA / XCTest integration ships a real `iosUiDump()`.
-  test.each(listMethods())('driver.%s is a function returning false', async (methodName) => {
+  //
+  // SHY-0259: `returns false` was only ever true because most of these were
+  // stubs. A method that returns a LIST cannot honour it — and its Android
+  // sibling returns [] — so list-returning methods are named here and
+  // asserted on their real contract instead of being exempted silently.
+  const LIST_RETURNING = new Set(['iosScanAllRenderedStrings']);
+
+  // Methods that need a real TAP. devicectl has no XCUITest harness, so they
+  // refuse BY NAME instead of returning false — `false` from a driver is
+  // indistinguishable from "the product did not do it", which is the
+  // misattribution SHY-0259 exists to remove. Asserting the throw (and that
+  // it names the fix) is a stronger contract than asserting a falsy return.
+  const NEEDS_REAL_TAP = new Set([
+    'iosOpenScreen',
+    'iosSearchIn',
+    'iosTapByTag',
+    'iosTapFromSurface',
+  ]);
+
+  test.each(listMethods())('driver.%s resolves to a function', async (methodName) => {
     const driver = await createIosDriver({ udid: 'X' });
     expect(typeof driver[methodName]).toBe('function');
+    if (NEEDS_REAL_TAP.has(methodName)) {
+      await expect(driver[methodName]('a', 'b', 'c')).rejects.toThrow(/real tap|WDA_TEAM_ID/);
+      return;
+    }
     const result = await driver[methodName]('arg1', 'arg2', 'arg3');
-    expect(result).toBe(false);
+    if (LIST_RETURNING.has(methodName)) {
+      // Empty because the scaffold's iosUiDump() returns '' — the same
+      // "nothing to see" answer androidScanAllRenderedStrings gives.
+      expect(Array.isArray(result)).toBe(true);
+      expect(result).toEqual([]);
+    } else {
+      expect(result).toBe(false);
+    }
   });
 });
 
