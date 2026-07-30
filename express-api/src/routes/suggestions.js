@@ -58,9 +58,43 @@ router.use(requireJson);
 const { generateId, now } = require('../utils/helpers');
 // SHY-0246: reuse the localised email subjects for in-app notifications and
 // system PMs so there is ONE set of translated strings, not two.
-const { getSubject } = require('../utils/suggestion-email-templates');
+const {
+  getSubject,
+  buildAcceptedEmail,
+  buildRejectedEmail,
+  buildPlannedEmail,
+  buildCompletedEmail,
+  buildMergedEmail,
+} = require('../utils/suggestion-email-templates');
 // SHY-0256: the email channel notifySubscribers never delivered on.
 const { sendEmail } = require('../utils/email');
+
+/**
+ * Status change → the email builder for it.
+ *
+ * These builders were written with the feature and never called. Each returns
+ * `{ subject, html }` already escaped (buildEmailHtml runs both the title and
+ * the body through escapeHtml) and already localised.
+ *
+ * Going through them rather than assembling `<p>${text}</p>` by hand is a
+ * security requirement, not a tidiness one: the interpolated value is the
+ * SUGGESTION TITLE, which is user-submitted. A title like
+ * `<img src=x onerror=…>` would otherwise be delivered as live markup into
+ * every subscriber's mail client. Titles are stripped at write time, but an
+ * HTML sink must not depend on a sanitiser three layers away — that is exactly
+ * how the linkifier XSS got in earlier in this same branch.
+ *
+ * An unrecognised event sends nothing at all. Failing closed here costs one
+ * notification; a hand-rolled fallback would cost the escaping.
+ */
+const SUGGESTION_EMAIL_BUILDERS = {
+  accepted: (sid, title, lang) => buildAcceptedEmail(sid, title, lang),
+  rejected: (sid, title, lang, extra) => buildRejectedEmail(sid, title, extra.reason, lang),
+  planned: (sid, title, lang) => buildPlannedEmail(sid, title, lang),
+  completed: (sid, title, lang) => buildCompletedEmail(sid, title, lang),
+  merged: (sid, title, lang, extra) =>
+    buildMergedEmail(sid, extra.originalId || extra.mergedInto || sid, title, lang),
+};
 const log = require('../utils/log');
 const { sanitise, sanitiseTitle } = require('../utils/text-sanitiser');
 const { similarity } = require('../utils/similarity');
@@ -1187,12 +1221,24 @@ async function notifySubscribers(suggestionData, eventType, extraData = {}, opti
         // caught per-channel so an SMTP outage cannot cost the in-app record
         // or the push that already succeeded above.
         try {
+          const buildMail = SUGGESTION_EMAIL_BUILDERS[eventType];
           const prefKey = `suggestion${eventType.charAt(0).toUpperCase()}${eventType.slice(1)}`;
           const subDoc = await db.doc(`subscriptions/${uid}`).get();
           const sub = subDoc.exists ? subDoc.data() : null;
           const address = sub?.email || null;
-          if (sub?.channelPreferences?.[prefKey]?.email === true && address && sub.emailConsentAt) {
-            await sendEmail(address, headline, `<p>${messageText}</p>`);
+          if (
+            buildMail &&
+            sub?.channelPreferences?.[prefKey]?.email === true &&
+            address &&
+            sub.emailConsentAt
+          ) {
+            const mail = buildMail(
+              extraData.suggestionId || null,
+              suggestionData.title || '',
+              language,
+              extraData,
+            );
+            await sendEmail(address, mail.subject, mail.html);
           }
         } catch (err) {
           log.error('suggestions', 'Suggestion email notification failed', {

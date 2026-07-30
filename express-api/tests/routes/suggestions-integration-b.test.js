@@ -738,6 +738,43 @@ describe('11.100 — Notification Pipeline End-to-End', () => {
     );
     expect(recipients).toContain('user@example.com');
   });
+
+  test('a suggestion title containing markup is escaped in the notification email', async () => {
+    // The first cut of the email dispatch built `<p>${messageText}</p>` by
+    // hand, and messageText embeds the user-submitted suggestion title — so a
+    // crafted title would have been delivered as live markup to every
+    // subscriber's mail client. Titles are stripped at write time, but an HTML
+    // sink must not depend on a sanitiser three layers away; that assumption is
+    // exactly how the linkifier XSS got in earlier on this branch.
+    const evil = '<img src=x onerror="alert(1)">';
+    setupDocMocks({
+      'suggestions/sug-1': makeSuggestionDoc('sug-1', {
+        status: 'planned',
+        submitterUid: 1001,
+        subscribers: [1001],
+        linkedRoadmapFeature: 'G001',
+        title: evil,
+      }),
+      'users/1001': makeUserDoc(1001, { email: 'user@example.com' }),
+      'subscriptions/1001': makeSubscriptionDoc(1001, {
+        channelPreferences: {
+          suggestionCompleted: { email: true, push: true, inApp: true, systemMessage: true },
+        },
+        email: 'user@example.com',
+        emailConsentAt: 1709913600000,
+      }),
+    });
+    const res = await request(createApp({ uniqueId: 9999, isAdmin: true }))
+      .put('/api/admin/suggestions/sug-1/status')
+      .send({ status: 'completed' });
+    expect(res.status).toBe(200);
+    expect(sendEmail).toHaveBeenCalled();
+    const html = sendEmail.mock.calls[0][2];
+    // The payload must survive only as inert text.
+    expect(html).toContain('&lt;img');
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('onerror="alert(1)"');
+  });
   test('comment notification: only suggestion watchers notified', async () => {
     setupDocMocks({
       'suggestions/sug-1': makeSuggestionDoc('sug-1', {
