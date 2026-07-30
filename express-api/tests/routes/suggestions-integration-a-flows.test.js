@@ -406,18 +406,19 @@ describe('11.50 — Additional Full Flows', () => {
     const res = await request(createApp())
       .get('/api/suggestions/blocked')
       .query({ q: 'voice messages' });
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    // "is warned" is the claim: `blocked` must actually be true and the
+    // matching topic must come back, not merely "a body exists".
+    expect(res.body.blocked).toBe(true);
+    expect(res.body.topics).toEqual([expect.objectContaining({ title: 'Voice messages' })]);
   });
   test('admin unblock: removing blocked topic allows re-submission', async () => {
     setupDocMocks({ 'blockedTopics/bt-1': makeBlockedTopicDoc('bt-1') });
     const res = await request(createApp({ uniqueId: 9999, isAdmin: true })).delete(
       '/api/admin/suggestions/blocked/bt-1',
     );
-    if (res.status === 200) {
-      expect(mockDocDelete).toHaveBeenCalled();
-    }
+    expect(res.status).toBe(200);
+    expect(mockDocDelete).toHaveBeenCalled();
   });
   test('admin unblock: non-admin cannot unblock topic', async () => {
     const res = await request(createApp()).delete('/api/admin/suggestions/blocked/bt-1');
@@ -465,14 +466,26 @@ describe('11.50 — Additional Full Flows', () => {
     );
     expect(res.status).toBe(200);
   });
-  test('identity graph merge: merged account votes consolidated', async () => {
+  test('merge consolidates the duplicate votes onto the target', async () => {
+    // Renamed from "identity graph merge: merged account votes consolidated",
+    // which did nothing but GET a suggestion and assert its body was
+    // `defined` — it never merged anything and never looked at a vote count.
+    // The consolidation it named is a real, checkable claim, so check it.
     setupDocMocks({
-      'suggestions/sug-1': makeSuggestionDoc('sug-1', { status: 'accepted', upvotes: 5 }),
+      'suggestions/sug-dup': makeSuggestionDoc('sug-dup', { status: 'accepted', voteCount: 5 }),
+      'suggestions/sug-orig': makeSuggestionDoc('sug-orig', { status: 'accepted', voteCount: 10 }),
     });
-    const res = await request(createApp()).get('/api/suggestions/sug-1');
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    const res = await request(createApp({ uniqueId: 9999, isAdmin: true }))
+      .post('/api/admin/suggestions/sug-dup/merge')
+      .send({ targetId: 'sug-orig' });
+    expect(res.status).toBe(200);
+    // The duplicate's 5 votes move to the target as an atomic increment.
+    const { FieldValue } = require('../../src/utils/firebase');
+    expect(FieldValue.increment).toHaveBeenCalledWith(5);
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'merged', mergedInto: 'sug-orig' }),
+    );
   });
   test('suggestion lifecycle with notifications: each status change triggers notification', async () => {
     const adminApp = createApp({ uniqueId: 9999, isAdmin: true });
@@ -509,12 +522,128 @@ describe('11.50 — Additional Full Flows', () => {
         submitterUid: 1001,
       }),
     });
-    const res = await request(createApp())
+    const res = await request(createApp({ uniqueId: 1001 }))
       .post('/api/suggestions/sug-1/dispute')
       .send({ reason: 'My suggestion is not a duplicate' });
-    if (res.status === 200) {
-      expect(mockDocUpdate.mock.calls.length + mockDocSet.mock.calls.length).toBeGreaterThan(0);
-    }
+    // This endpoint did not exist: the request 404'd and the guard swallowed
+    // it, so a documented user right was missing for as long as the test was
+    // green. Added in SHY-0256, and the caller is now the SUBMITTER (1001)
+    // because only the submitter may dispute their own merge.
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, disputeStatus: 'pending' });
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        disputeStatus: 'pending',
+        disputeReason: 'My suggestion is not a duplicate',
+        disputedByUid: 1001,
+      }),
+    );
+  });
+
+  // Error paths for the dispute endpoint added in SHY-0256. A new endpoint
+  // with only a happy-path test is how the next silent gap gets in.
+  describe('POST /suggestions/:id/dispute — error paths', () => {
+    const merged = (extra = {}) =>
+      makeSuggestionDoc('sug-1', {
+        status: 'merged',
+        mergedIntoSuggestionId: 'sug-2',
+        mergedInto: 'sug-2',
+        submitterUid: 1001,
+        ...extra,
+      });
+
+    test('a different user cannot dispute someone else’s suggestion', async () => {
+      setupDocMocks({ 'suggestions/sug-1': merged() });
+      const res = await request(createApp({ uniqueId: 2002 }))
+        .post('/api/suggestions/sug-1/dispute')
+        .send({ reason: 'not mine to dispute' });
+      expect(res.status).toBe(403);
+      expect(mockDocUpdate).not.toHaveBeenCalled();
+    });
+
+    test('an admin has no special right to dispute on a user’s behalf', async () => {
+      // Ownership, not privilege, is the gate here — the old admin-namespaced
+      // twin inverted that.
+      setupDocMocks({ 'suggestions/sug-1': merged() });
+      const res = await request(createApp({ uniqueId: 9999, isAdmin: true }))
+        .post('/api/suggestions/sug-1/dispute')
+        .send({ reason: 'admin meddling' });
+      expect(res.status).toBe(403);
+      expect(mockDocUpdate).not.toHaveBeenCalled();
+    });
+
+    test('a suggestion that was never merged cannot be disputed', async () => {
+      setupDocMocks({
+        'suggestions/sug-1': makeSuggestionDoc('sug-1', {
+          status: 'accepted',
+          submitterUid: 1001,
+        }),
+      });
+      const res = await request(createApp({ uniqueId: 1001 }))
+        .post('/api/suggestions/sug-1/dispute')
+        .send({ reason: 'nothing to dispute' });
+      expect(res.status).toBe(409);
+      expect(mockDocUpdate).not.toHaveBeenCalled();
+    });
+
+    test('a dispute already resolved cannot be reopened', async () => {
+      setupDocMocks({ 'suggestions/sug-1': merged({ disputeStatus: 'resolved' }) });
+      const res = await request(createApp({ uniqueId: 1001 }))
+        .post('/api/suggestions/sug-1/dispute')
+        .send({ reason: 'trying again' });
+      expect(res.status).toBe(409);
+      expect(mockDocUpdate).not.toHaveBeenCalled();
+    });
+
+    test('a dispute already open is not duplicated', async () => {
+      setupDocMocks({ 'suggestions/sug-1': merged({ disputeStatus: 'pending' }) });
+      const res = await request(createApp({ uniqueId: 1001 }))
+        .post('/api/suggestions/sug-1/dispute')
+        .send({ reason: 'again' });
+      expect(res.status).toBe(409);
+      expect(mockDocUpdate).not.toHaveBeenCalled();
+    });
+
+    test.each([
+      ['missing', undefined],
+      ['empty', ''],
+      ['whitespace only', '   '],
+    ])('a %s reason is rejected', async (_label, reason) => {
+      setupDocMocks({ 'suggestions/sug-1': merged() });
+      const res = await request(createApp({ uniqueId: 1001 }))
+        .post('/api/suggestions/sug-1/dispute')
+        .send(reason === undefined ? {} : { reason });
+      expect(res.status).toBe(400);
+      expect(mockDocUpdate).not.toHaveBeenCalled();
+    });
+
+    test('a reason longer than the description limit is rejected', async () => {
+      setupDocMocks({ 'suggestions/sug-1': merged() });
+      const res = await request(createApp({ uniqueId: 1001 }))
+        .post('/api/suggestions/sug-1/dispute')
+        .send({ reason: 'x'.repeat(10_000) });
+      expect(res.status).toBe(400);
+      expect(mockDocUpdate).not.toHaveBeenCalled();
+    });
+
+    test('a missing suggestion is a 404, not a silent success', async () => {
+      setupDocMocks({});
+      const res = await request(createApp({ uniqueId: 1001 }))
+        .post('/api/suggestions/nope/dispute')
+        .send({ reason: 'where is it' });
+      expect(res.status).toBe(404);
+    });
+
+    test('a suspended submitter keeps the right to dispute', async () => {
+      // Contesting a decision about your own content is an appeal, so the
+      // route deliberately does NOT call requireNotSuspended.
+      setupDocMocks({ 'suggestions/sug-1': merged() });
+      const res = await request(createApp({ uniqueId: 1001, isSuspended: true }))
+        .post('/api/suggestions/sug-1/dispute')
+        .send({ reason: 'suspended but still mine' });
+      expect(res.status).toBe(200);
+    });
   });
 });
 
@@ -627,9 +756,10 @@ describe('11.72 — GDPR Data Export & Account Deletion', () => {
       size: 2,
     });
     const res = await request(createApp()).get('/api/suggestions/mine');
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    // "includes user suggestions" — so check they are actually in there.
+    expect(res.body.suggestions).toHaveLength(2);
+    expect(res.body.suggestions.map((s) => s.id).sort()).toEqual(['sug-1', 'sug-2']);
   });
   // Data-export votes & comments coverage lives in
   // `tests/utils/data-export-builder.test.js` (the unit boundary where
@@ -644,11 +774,13 @@ describe('11.72 — GDPR Data Export & Account Deletion', () => {
     const res = await request(createApp({ uniqueId: 1001, isSuspended: true })).get(
       '/api/suggestions/mine',
     );
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    } else if (res.status === 403) {
-      expect(res.status).toBe(403);
-    }
+    // The old form accepted 200 OR 403 — i.e. it accepted both the feature
+    // working and the feature being denied, which is no assertion at all.
+    // A suspended account keeps its data-export rights, so this must be 200:
+    // /suggestions/mine guards with requireAuth only, never
+    // requireNotSuspended.
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.suggestions)).toBe(true);
   });
 });
 
@@ -657,6 +789,12 @@ describe('11.72 — GDPR Data Export & Account Deletion', () => {
 // =============================================================================
 
 describe('11.83 — Caching & ETags', () => {
+  // Every test below used to guard its only assertion on the very thing it
+  // was named after — `if (res.headers.etag) { expect(...) }` — so "returns
+  // ETag header" passed on a response with no ETag header (SHY-0256). The
+  // behaviour was verified against the running API before these were
+  // un-guarded: ETag and 304 come from Express's weak-ETag default,
+  // Cache-Control did not exist and was added in this change.
   test('GET /api/suggestions returns ETag header', async () => {
     mockCollectionGet.mockResolvedValueOnce({
       empty: false,
@@ -664,9 +802,9 @@ describe('11.83 — Caching & ETags', () => {
       size: 1,
     });
     const res = await request(createApp()).get('/api/suggestions');
-    if (res.status === 200 && res.headers.etag) {
-      expect(typeof res.headers.etag).toBe('string');
-    }
+    expect(res.status).toBe(200);
+    expect(res.headers.etag).toEqual(expect.any(String));
+    expect(res.headers.etag.length).toBeGreaterThan(0);
   });
   test('conditional GET with matching ETag returns 304', async () => {
     mockCollectionGet.mockResolvedValueOnce({
@@ -676,24 +814,24 @@ describe('11.83 — Caching & ETags', () => {
     });
     const app = createApp();
     const first = await request(app).get('/api/suggestions');
-    if (first.headers.etag) {
-      mockCollectionGet.mockResolvedValueOnce({
-        empty: false,
-        docs: [makeSuggestionDoc('sug-1')],
-        size: 1,
-      });
-      const second = await request(app)
-        .get('/api/suggestions')
-        .set('If-None-Match', first.headers.etag);
-      expect(second.status).toBe(304);
-    }
+    expect(first.headers.etag).toBeTruthy();
+    mockCollectionGet.mockResolvedValueOnce({
+      empty: false,
+      docs: [makeSuggestionDoc('sug-1')],
+      size: 1,
+    });
+    const second = await request(app)
+      .get('/api/suggestions')
+      .set('If-None-Match', first.headers.etag);
+    expect(second.status).toBe(304);
+    // A 304 carries no body — that is the whole point of the round trip.
+    expect(second.text).toBeFalsy();
   });
   test('GET /api/suggestions/:id returns ETag header', async () => {
     setupDocMocks({ 'suggestions/sug-1': makeSuggestionDoc('sug-1') });
     const res = await request(createApp()).get('/api/suggestions/sug-1');
-    if (res.status === 200 && res.headers.etag) {
-      expect(typeof res.headers.etag).toBe('string');
-    }
+    expect(res.status).toBe(200);
+    expect(res.headers.etag).toEqual(expect.any(String));
   });
   test('stale ETag returns 200 with fresh data', async () => {
     mockCollectionGet.mockResolvedValueOnce({
@@ -704,26 +842,33 @@ describe('11.83 — Caching & ETags', () => {
     const res = await request(createApp())
       .get('/api/suggestions')
       .set('If-None-Match', '"stale-etag"');
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    // "fresh data" is the claim in the name, so check the body actually
+    // arrived rather than that it is merely `defined`.
+    expect(Array.isArray(res.body.suggestions)).toBe(true);
+    expect(res.body.suggestions).toHaveLength(1);
   });
-  test('Cache-Control header set on listing endpoint', async () => {
+  test('Cache-Control on the listing is private and short-lived', async () => {
     mockCollectionGet.mockResolvedValueOnce({
       empty: false,
       docs: [makeSuggestionDoc('sug-1')],
       size: 1,
     });
     const res = await request(createApp()).get('/api/suggestions');
-    if (res.status === 200 && res.headers['cache-control']) {
-      expect(res.headers['cache-control']).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    // `private` is the security-relevant half: the listing embeds the caller's
+    // own vote, and an admin additionally sees non-public comments, so a shared
+    // cache would serve one user's view to another.
+    expect(res.headers['cache-control']).toMatch(/\bprivate\b/);
+    expect(res.headers['cache-control']).toMatch(/max-age=\d+/);
   });
-  test('mutation endpoints do not set Cache-Control', async () => {
+  test('mutation endpoints are never cacheable', async () => {
     const res = await request(createApp()).post('/api/suggestions').send(VALID_SUGGESTION);
-    if (res.status < 500 && res.headers['cache-control']) {
-      expect(res.headers['cache-control']).toMatch(/no-cache|no-store|private/);
-    }
+    const cc = res.headers['cache-control'];
+    // Absent is acceptable (no cache directive at all); anything present must
+    // forbid reuse. The old test only checked the second case and so passed
+    // vacuously whenever the header was missing.
+    expect(cc === undefined || /no-cache|no-store|private/.test(cc)).toBe(true);
   });
 });
 
@@ -747,11 +892,11 @@ describe('11.84 — Firestore Transaction Guarantees', () => {
     await request(createApp({ uniqueId: 2002 }))
       .post('/api/suggestions/sug-1/vote')
       .send({ direction: 'up' });
-    if (FieldValue.increment.mock.calls.length > 0) {
-      expect(FieldValue.increment).toHaveBeenCalledWith(1);
-    } else {
-      expect(mockDocUpdate).toHaveBeenCalled();
-    }
+    // The old form accepted `FieldValue.increment(1)` OR any bare update, so a
+    // route that abandoned atomic counters entirely still passed. The route
+    // does use a transaction with atomic increments; assert exactly that.
+    expect(mockRunTransaction).toHaveBeenCalled();
+    expect(FieldValue.increment).toHaveBeenCalledWith(1);
   });
   test('status transition uses transaction to prevent race conditions', async () => {
     setupDocMocks({ 'suggestions/sug-1': makeSuggestionDoc('sug-1', { status: 'pending' }) });
@@ -766,16 +911,30 @@ describe('11.84 — Firestore Transaction Guarantees', () => {
       'suggestions/sug-dup': makeSuggestionDoc('sug-dup', { status: 'accepted', upvotes: 3 }),
       'suggestions/sug-orig': makeSuggestionDoc('sug-orig', { status: 'accepted', upvotes: 10 }),
     });
-    await request(createApp({ uniqueId: 9999, isAdmin: true }))
+    const res = await request(createApp({ uniqueId: 9999, isAdmin: true }))
       .post('/api/admin/suggestions/sug-dup/merge')
       .send({ targetId: 'sug-orig' });
-    if (mockRunTransaction.mock.calls.length > 0) {
-      expect(mockRunTransaction).toHaveBeenCalled();
-    } else if (mockBatchCommit.mock.calls.length > 0) {
-      expect(mockBatchCommit).toHaveBeenCalled();
-    } else {
-      expect(mockDocUpdate.mock.calls.length).toBeGreaterThanOrEqual(1);
-    }
+    // Status first. Without it this test passed against a route that threw
+    // AFTER committing the transaction and returned 500 — every mock
+    // expectation below was already satisfied by then, so the request could
+    // fail outright and the test still agreed with it.
+    expect(res.status).toBe(200);
+    // "in the same transaction" is the CLAIM in the name, so accepting a
+    // transaction OR a batch OR two loose updates asserted nothing. It was
+    // two loose updates: a failure between them marked the duplicate merged
+    // and lost its votes with no way to retry. Now one transaction, and both
+    // writes must happen inside it.
+    expect(mockRunTransaction).toHaveBeenCalled();
+    const updatedPaths = mockDocUpdate.mock.calls.map((c) => c[0]);
+    expect(updatedPaths.length).toBeGreaterThanOrEqual(2);
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ status: 'merged', mergedInto: 'sug-orig' }),
+    );
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ voteCount: expect.anything(), upvotes: expect.anything() }),
+    );
   });
   test('transaction retry: aborted transaction retried by Firestore SDK', async () => {
     let callCount = 0;
@@ -805,12 +964,13 @@ describe('11.84 — Firestore Transaction Guarantees', () => {
     await request(createApp({ uniqueId: 2002 }))
       .post('/api/suggestions/sug-1/vote')
       .send({ direction: 'down' });
-    if (FieldValue.increment.mock.calls.length >= 2) {
-      expect(
-        FieldValue.increment.mock.calls.find((c) => c[0] === -1) ||
-          FieldValue.increment.mock.calls.find((c) => c[0] === 1),
-      ).toBeDefined();
-    }
+    // Toggling up→down must do BOTH halves: take one off upvotes and add one
+    // to downvotes. The old form ran only when there were already 2+ calls and
+    // then accepted EITHER, so a route that decremented and forgot to
+    // increment passed.
+    const deltas = FieldValue.increment.mock.calls.map((c) => c[0]);
+    expect(deltas).toContain(-1);
+    expect(deltas).toContain(1);
   });
 });
 

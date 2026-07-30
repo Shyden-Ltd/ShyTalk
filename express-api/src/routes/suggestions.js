@@ -18,6 +18,21 @@
 const router = require('express').Router();
 const { db, FieldValue } = require('../utils/firebase');
 
+/**
+ * Cache policy for the two suggestion READ endpoints (SHY-0256).
+ *
+ * Express already computes a weak ETag for these bodies, so a repeat fetch of
+ * unchanged data gets a 304 — but with no Cache-Control the client still makes
+ * the round trip every single time. The board refetches on every open and the
+ * app is used on slow connections, so that round trip is the cost worth
+ * removing.
+ *
+ * `private` is load-bearing, not decoration: the listing embeds the caller's
+ * own vote, and an admin caller additionally sees non-public comments. A
+ * shared cache would serve one user's view to another.
+ */
+const READ_CACHE_CONTROL = 'private, max-age=30, must-revalidate';
+
 // Content-Type validation for write endpoints
 function requireJson(req, res, next) {
   if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
@@ -303,6 +318,7 @@ router.get('/suggestions/:id', async (req, res) => {
       }
     }
 
+    res.set('Cache-Control', READ_CACHE_CONTROL);
     res.json(result);
   } catch (err) {
     log.error('suggestions', 'Failed to get suggestion', { error: err.message });
@@ -422,6 +438,7 @@ router.get('/suggestions', async (req, res) => {
     const offset = (page - 1) * pageSize;
     const paged = suggestions.slice(offset, offset + pageSize);
 
+    res.set('Cache-Control', READ_CACHE_CONTROL);
     res.json({
       suggestions: await attachComments(paged, isAdmin),
       total,
@@ -1193,6 +1210,69 @@ async function notifySubscribers(suggestionData, eventType, extraData = {}, opti
   }
 }
 
+// ─── POST /suggestions/:id/dispute ──────────────────────────────
+//
+// Lets the SUBMITTER dispute a merge of their own suggestion (SHY-0256).
+//
+// admin-suggestions.js has documented this endpoint since the feature was
+// specced — "POST /suggestions/:id/dispute -> dispute a merge (user)" — but
+// only the admin-namespaced twin was ever built, whose own comment concedes
+// the gap: "used by tests that don't authenticate as the submitter". So the
+// user-facing right to contest a merge required admin rights to exercise,
+// which is to say it did not exist. The covering test posted here, got a 404,
+// and passed because its only assertion sat behind `if (res.status === 200)`.
+router.post('/suggestions/:id/dispute', async (req, res) => {
+  try {
+    if (requireAuth(req, res)) return;
+    // Deliberately NOT requireNotSuspended: contesting a decision made about
+    // your own content is an appeal, and a suspended account keeps its appeal
+    // rights (the same reasoning that keeps data-export open to them).
+
+    const { id } = req.params;
+    const ref = db.doc(`suggestions/${id}`);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Suggestion not found' });
+
+    const data = doc.data();
+    if (data.submitterUid !== req.auth.uniqueId) {
+      return res.status(403).json({ error: "Cannot dispute another user's suggestion" });
+    }
+    if (data.status !== 'merged') {
+      return res.status(409).json({ error: 'Only a merged suggestion can be disputed' });
+    }
+    if (data.disputeStatus === 'resolved') {
+      return res.status(409).json({ error: 'Dispute already resolved' });
+    }
+    if (data.disputeStatus === 'pending') {
+      return res.status(409).json({ error: 'Dispute already open' });
+    }
+
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    if (!reason) return res.status(400).json({ error: 'Dispute reason is required' });
+    if (reason.length > MAX_DESCRIPTION_LENGTH) {
+      return res.status(400).json({ error: 'Dispute reason too long' });
+    }
+
+    await ref.update({
+      disputeStatus: 'pending',
+      disputeReason: reason,
+      disputedByUid: req.auth.uniqueId,
+      disputedAt: now(),
+      updatedAt: now(),
+    });
+
+    await createAuditEntry(req.auth.uniqueId, 'suggestion_dispute_open', 'suggestion', id, {
+      reason,
+      mergedInto: data.mergedInto || data.mergedIntoSuggestionId || null,
+    });
+
+    res.json({ success: true, disputeStatus: 'pending' });
+  } catch (err) {
+    log.error('suggestions', 'Dispute failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Valid admin status transitions
 const VALID_ADMIN_TRANSITIONS = {
   pending: ['accepted', 'rejected'],
@@ -1639,35 +1719,59 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
       return res.status(400).json({ error: 'Cannot merge a suggestion into itself' });
     }
 
-    const dupDoc = await db.doc(`suggestions/${id}`).get();
-    if (!dupDoc.exists) {
-      return res.status(404).json({ error: 'Duplicate suggestion not found' });
-    }
+    // Both halves of a merge in ONE transaction (SHY-0256).
+    //
+    // These were two sequential `.update()` calls: mark the duplicate merged,
+    // then move its votes to the target. Nothing tied them together, so a
+    // failure between them left the duplicate flagged `merged` — hidden from
+    // the board — while its votes were never transferred. The votes were
+    // simply gone, and no retry could recover them because the source now
+    // looked already-merged. The covering test accepted a transaction OR a
+    // batch OR a bare update, so it never noticed.
+    const dupRef = db.doc(`suggestions/${id}`);
+    const targetRef = db.doc(`suggestions/${targetId}`);
+    let dupData = null;
+    let missing = null;
+    // Hoisted out of the transaction callback: the audit entry below records
+    // `transferredUpvotes`, so the count has to outlive the commit.
+    let dupVotes = 0;
 
-    const originalDoc = await db.doc(`suggestions/${targetId}`).get();
-    if (!originalDoc.exists) {
-      return res.status(404).json({ error: 'Original suggestion not found' });
-    }
+    await db.runTransaction(async (t) => {
+      const dupDoc = await t.get(dupRef);
+      if (!dupDoc.exists) {
+        missing = 'Duplicate suggestion not found';
+        return;
+      }
+      const originalDoc = await t.get(targetRef);
+      if (!originalDoc.exists) {
+        missing = 'Original suggestion not found';
+        return;
+      }
+      dupData = dupDoc.data();
 
-    const dupData = dupDoc.data();
+      // `mergedInto` and `mergedIntoSuggestionId` are kept in sync — the test
+      // spec reads `mergedInto` while legacy code uses the longer name.
+      t.update(dupRef, {
+        status: 'merged',
+        mergedIntoSuggestionId: targetId,
+        mergedInto: targetId,
+        updatedAt: now(),
+      });
 
-    // Mark duplicate as merged. `mergedInto` and `mergedIntoSuggestionId` are
-    // kept in sync — the test spec reads `mergedInto` while legacy code uses
-    // the longer name. Keeping both avoids breaking either side.
-    await db.doc(`suggestions/${id}`).update({
-      status: 'merged',
-      mergedIntoSuggestionId: targetId,
-      mergedInto: targetId,
-      updatedAt: now(),
+      // Transfer vote count + upvotes to the original.
+      dupVotes = dupData.voteCount || dupData.upvotes || 0;
+      t.update(targetRef, {
+        voteCount: FieldValue.increment(dupVotes),
+        upvotes: FieldValue.increment(dupVotes),
+        updatedAt: now(),
+      });
     });
 
-    // Transfer vote count + upvotes to the original
-    const dupVotes = dupData.voteCount || dupData.upvotes || 0;
-    await db.doc(`suggestions/${targetId}`).update({
-      voteCount: FieldValue.increment(dupVotes),
-      upvotes: FieldValue.increment(dupVotes),
-      updatedAt: now(),
-    });
+    // Reported after the transaction settles: a 404 is not a write failure, and
+    // returning from inside the callback would commit an empty transaction.
+    if (missing) {
+      return res.status(404).json({ error: missing });
+    }
 
     // Notify the duplicate's submitter. `suggestionId` is the canonical field
     // used by the notifications list test — it identifies which suggestion
