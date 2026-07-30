@@ -25,7 +25,12 @@ const { PassThrough } = require('stream');
 
 const { createCellDispatcher } = require('../../scripts/matrix-cell-dispatch');
 const cellLogs = require('../../scripts/matrix-cell-logs');
-const { runMatrix, EXIT_DRIVER_INIT_FAILED } = require('../../scripts/matrix-dispatch');
+const {
+  runMatrix,
+  EXIT_DRIVER_INIT_FAILED,
+  EXIT_RUNNER_INCOMPLETE,
+  EXIT_RUNNER_NO_FEATURES,
+} = require('../../scripts/matrix-dispatch');
 
 const FIXTURE = path.join(__dirname, 'fixtures', 'fake-matrix-cell.js');
 
@@ -501,5 +506,51 @@ describe('createCellDispatcher — R4: composition through runMatrix', () => {
     // Cross-group cell was already in flight at t0 and finishes normally.
     expect(byBrowser['chromium'].outcome).toBe('pass');
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('SHY-0255: a cell that ended without finishing classifies fail, never pass or skip', () => {
+  // Run 20260730-005554-local reported `webkit: pass` for a cell that had
+  // printed 12 FAIL scenarios and then died when the host slept. The cell
+  // exited 0 because Node exits 0 when the event loop drains, and this
+  // dispatcher classifies on `code === 0`. The runner now exits
+  // EXIT_RUNNER_INCOMPLETE instead; these pin what the matrix must do with
+  // that code.
+  async function dispatchWithExit(exitCode) {
+    const dispatchOne = createCellDispatcher({
+      runnerPath: FIXTURE,
+      baseArgv: [],
+      captureStdio: true,
+      out: new PassThrough(),
+      err: new PassThrough(),
+      env: { ...process.env, FAKE_CELL_EXIT: String(exitCode) },
+    });
+    const result = await runMatrix({ browsers: ['webkit'], dispatchOne });
+    return result;
+  }
+
+  test('the incomplete code makes the cell fail', async () => {
+    const result = await dispatchWithExit(EXIT_RUNNER_INCOMPLETE);
+    expect(result.cells[0].outcome).toBe('fail');
+  });
+
+  test('the incomplete code is not silently tolerated as a skip', async () => {
+    // 'skip' means "no device, nothing to judge" and does NOT count against
+    // result.ok. A cell that died mid-run must not borrow that amnesty.
+    const result = await dispatchWithExit(EXIT_RUNNER_INCOMPLETE);
+    expect(result.cells[0].outcome).not.toBe('skip');
+    expect(result.ok).toBe(false);
+  });
+
+  test('the no-features code also makes the cell fail', async () => {
+    const result = await dispatchWithExit(EXIT_RUNNER_NO_FEATURES);
+    expect(result.cells[0].outcome).toBe('fail');
+    expect(result.ok).toBe(false);
+  });
+
+  test('exit 0 still passes — the classifier is not simply always-fail', async () => {
+    const result = await dispatchWithExit(0);
+    expect(result.cells[0].outcome).toBe('pass');
+    expect(result.ok).toBe(true);
   });
 });

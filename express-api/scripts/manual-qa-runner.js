@@ -16379,7 +16379,7 @@ async function main() {
     _driverCleanup: driverCleanup,
   };
 
-  const files = opts.journey
+  const resolvedFiles = opts.journey
     ? [path.join(opts.planDir, opts.journey)]
     : fs
         .readdirSync(opts.planDir)
@@ -16387,14 +16387,32 @@ async function main() {
         .filter((f) => /^j\d+[^.]*\.feature$/.test(f))
         .map((f) => path.join(opts.planDir, f));
 
+  // Existence is settled once, here, so `files` means "will actually run"
+  // and the loop below has nothing to second-guess.
+  const files = resolvedFiles.filter((f) => {
+    if (fs.existsSync(f)) return true;
+    console.error(`File not found: ${f}`);
+    return false;
+  });
+
+  // A cell with no journeys used to print "Running 0 feature file(s)",
+  // "Findings: 0" and exit 0 — a green report describing nothing, which a
+  // mistyped --plan-dir, a corpus glob regression or a renamed --journey
+  // would turn into a clean sweep of the entire matrix (SHY-0255).
+  if (files.length === 0) {
+    const { EXIT_RUNNER_NO_FEATURES } = require('./matrix-dispatch');
+    console.error(
+      `RUNNER_NO_FEATURES no journey feature files to run — searched ${opts.planDir}` +
+        (opts.journey ? ` for --journey ${opts.journey}` : '') +
+        `. Nothing ran, so there is nothing to call green; exiting ${EXIT_RUNNER_NO_FEATURES}.`,
+    );
+    process.exit(EXIT_RUNNER_NO_FEATURES);
+  }
+
   console.log(`Running ${files.length} feature file(s) against ${opts.target} (${ctx.apiBase})`);
   const allFindings = [];
   const allScenarioReports = [];
   for (const f of files) {
-    if (!fs.existsSync(f)) {
-      console.error(`File not found: ${f}`);
-      continue;
-    }
     const { findings, scenarioReports } = await runFeatureFile(f, ctx);
     allFindings.push(...findings);
     allScenarioReports.push(...scenarioReports);
@@ -16449,6 +16467,13 @@ module.exports = {
 };
 
 if (require.main === module) {
+  // Arm the "a run that did not finish is not a pass" floor BEFORE any
+  // work starts. Node exits 0 when the event loop drains, so a driver
+  // call that never settles (device gone mid-run) used to fall off the
+  // end of main() and be recorded by the matrix as a passing cell
+  // (SHY-0255). Every genuine completion path calls process.exit()
+  // explicitly and overrides the seed.
+  require('./matrix-dispatch').installIncompleteRunGuard(process);
   main().catch((e) => {
     // Driver-init failures (no device / browser app / env var) exit with
     // the reserved code so a --matrix parent classifies the cell 'skip';

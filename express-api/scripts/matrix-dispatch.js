@@ -62,6 +62,54 @@ function isInitError(err) {
 // cell 'skip' instead of collapsing it into 'fail' (SHY-0095 inc-2).
 const EXIT_DRIVER_INIT_FAILED = 3;
 
+// SHY-0255. Success used to be the runner's DEFAULT exit state: main()
+// ends in an explicit `process.exit(findings ? 1 : 0)`, but nothing
+// guaranteed that line was reached. When an awaited driver call never
+// settled — a device that went away mid-run — the event loop drained and
+// Node exited 0, because that is what Node does. The cell dispatcher
+// classifies on `code === 0`, so "the process stopped existing" and
+// "every journey passed" produced the same record. Run
+// 20260730-005554-local reported `firefox/webkit/edge: pass` for three
+// cells that had each printed 12 FAIL scenarios and then nothing for two
+// hours while the host slept.
+//
+// These two codes make the absence of a result impossible to mistake for
+// a result. Both are outside the 0/1/2/3 contract, so the matrix
+// classifies them 'fail' — deliberately NOT EXIT_DRIVER_INIT_FAILED,
+// which would grant the 'skip' amnesty to a cell that genuinely died.
+const EXIT_RUNNER_INCOMPLETE = 4;
+const EXIT_RUNNER_NO_FEATURES = 5;
+
+/**
+ * Arms the "a run that did not finish is not a pass" guard on a process.
+ *
+ * Seeds the exit code with EXIT_RUNNER_INCOMPLETE so falling off the end
+ * of main() can never be 0, and reports the cause on drain. Every genuine
+ * completion path already calls process.exit() explicitly, which
+ * overrides the seed — so this is a FLOOR under abnormal termination, not
+ * a ceiling on success.
+ *
+ * `beforeExit` fires only when the loop drains with nothing left to do —
+ * never after an explicit process.exit() — so it is exactly the "we
+ * stopped without deciding anything" signal.
+ */
+function installIncompleteRunGuard(proc = process) {
+  proc.exitCode = EXIT_RUNNER_INCOMPLETE;
+  proc.once('beforeExit', () => {
+    if (proc.exitCode !== EXIT_RUNNER_INCOMPLETE) return;
+    // process.stderr.write, not console.error — the repo convention for
+    // diagnostics emitted from a loaded module rather than a CLI main.
+    proc.stderr.write(
+      'RUNNER_INCOMPLETE the run ended without finishing — the event loop drained ' +
+        'while work was still pending. The usual cause is a driver call that never ' +
+        'settled because its device went away mid-run (USB suspended, host slept, ' +
+        'Appium or adb died). Exiting ' +
+        EXIT_RUNNER_INCOMPLETE +
+        ' so this cell is recorded as a failure rather than a pass.\n',
+    );
+  });
+}
+
 /**
  * Classifies a main() crash into the exit code + stderr label the
  * single-cell process should die with. Init failures get the reserved
@@ -420,6 +468,9 @@ module.exports = {
   INIT_ERROR_SIGNATURES,
   isInitError,
   EXIT_DRIVER_INIT_FAILED,
+  EXIT_RUNNER_INCOMPLETE,
+  EXIT_RUNNER_NO_FEATURES,
+  installIncompleteRunGuard,
   classifyCrashExit,
   defaultResourceKey,
   runMatrix,
