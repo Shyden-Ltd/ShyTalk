@@ -1,17 +1,18 @@
 {
-  "total": 67,
+  "total": 60,
   "byCategory": {
-    "NO-ASSERT": 18,
-    "PARKED": 22,
-    "GUARD-IF": 27
+    "NO-ASSERT": 10,
+    "PARKED": 21,
+    "GUARD-IF": 27,
+    "SKIP-COND": 2
   },
   "byFile": {
-    "express-api/tests/routes/admin-audit-log-suggestions.test.js": 8,
     "express-api/tests/routes/identity-graph-write-admin.test.js": 6,
     "express-api/tests/routes/identity-graph-write-lifecycle.test.js": 10,
     "express-api/tests/routes/starting-screens-read-extras-a.test.js": 1,
     "express-api/tests/routes/subscriptions.test.js": 1,
     "express-api/tests/routes/suggestions-contracts-a-edge.test.js": 1,
+    "express-api/tests/routes/suggestions-integration-a-flows.test.js": 1,
     "express-api/tests/routes/suggestions-integration-a-submission.test.js": 13,
     "express-api/tests/routes/suggestions-integration-b.test.js": 9,
     "express-api/tests/routes/suggestions-notifications.test.js": 12,

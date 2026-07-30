@@ -1,3 +1,13 @@
+/**
+ * SHY-0258: twelve specs below are `test.todo`.
+ *
+ * They were `test.skip(...)` with bodies containing no assertion — parked AND
+ * empty, so un-skipping all twelve turns this suite green without a line of
+ * product code. Deduplication, retention limits and admin alerting do not
+ * exist; routes/suggestions-notifications.js is list / mark-read / mark-all-read
+ * and nothing more. `todo` reports honestly and is counted by
+ * scripts/check-test-defects.js, so the gap cannot be relabelled away.
+ */
 /* eslint-disable no-unused-vars */
 /**
  * Tests for suggestion notification routes and dispatch logic.
@@ -330,22 +340,17 @@ describe('GET /api/notifications — Inbox', () => {
 // Tracked in .project/stories/SHY-0246-implement-missing-notification-types.md.
 
 describe('Notification Deduplication', () => {
-  test.skip('same event fired twice: only one notification created', async () => {
-    // If the same event is dispatched twice (e.g. double webhook),
-    // deduplication should prevent a second notification
-  });
+  test.todo('same event fired twice: only one notification created');
 
-  test.skip('roadmap feature updated twice in 1 minute: one notification (debounced)', async () => {
-    // Rapid status changes should be debounced
-  });
+  test.todo('roadmap feature updated twice in 1 minute: one notification (debounced)');
 
-  test.skip('user subscribed to both "all updates" and specific feature: receives one notification', async () => {
-    // Dedup by user+event+relatedId
-  });
+  test.todo(
+    'user subscribed to both "all updates" and specific feature: receives one notification',
+  );
 
-  test.skip('admin approves then immediately overturns: two separate notifications (different events)', async () => {
-    // These are different events so both should be sent
-  });
+  test.todo(
+    'admin approves then immediately overturns: two separate notifications (different events)',
+  );
 });
 
 // ═══════════════════════════════════════════════════════════════
@@ -353,32 +358,13 @@ describe('Notification Deduplication', () => {
 // ═══════════════════════════════════════════════════════════════
 
 describe('Notification Inbox Management', () => {
-  test.skip('max 200 notifications stored per user', async () => {
-    // When a 201st notification is created, the oldest should be deleted
-  });
+  test.todo('max 200 notifications stored per user');
 
-  test.skip('201st notification: oldest auto-deleted', async () => {
-    const docs = Array.from({ length: 200 }, (_, i) =>
-      makeNotifDoc(`n${i}`, { createdAt: i * 1000 }),
-    );
-    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 200 });
-    // On next notification creation, oldest (n0) should be deleted
-  });
+  test.todo('201st notification: oldest auto-deleted');
 
-  test.skip('notification TTL: older than 90 days auto-cleaned by cron', async () => {
-    // This is a cron job test, verified in cron tests
-    // Here we verify the data model supports it
-    const ninetyOneDaysAgo = Date.now() - 91 * 24 * 60 * 60 * 1000;
-    const doc = makeNotifDoc('old', { createdAt: ninetyOneDaysAgo });
-    // Cron should delete this
-  });
+  test.todo('notification TTL: older than 90 days auto-cleaned by cron');
 
-  test.skip('notification deletion does not affect subscription preferences', async () => {
-    // Deleting notifications should not touch the subscriptions collection
-    mockDocGet.mockResolvedValue(makeNotifDoc('n1', { uid: 1001 }));
-    const app = createApp();
-    // Even after clearing notifications, subscriptions should remain
-  });
+  test.todo('notification deletion does not affect subscription preferences');
 
   test('unread count: only counts notifications < 90 days old', async () => {
     const recentDoc = makeNotifDoc('n1', { isRead: false, createdAt: Date.now() - 1000 });
@@ -398,27 +384,13 @@ describe('Notification Inbox Management', () => {
 // ═══════════════════════════════════════════════════════════════
 
 describe('Admin Notification of New Suggestions', () => {
-  test.skip('new suggestion submitted: admin notification created', async () => {
-    // When a suggestion is created, admins should be notified
-  });
+  test.todo('new suggestion submitted: admin notification created');
 
-  test.skip('admin panel: suggestion count badge updates', async () => {
-    // This is an admin panel UI test, verified in Playwright
-    // Here we verify the API returns pending count
-  });
+  test.todo('admin panel: suggestion count badge updates');
 
-  test.skip('admin panel: pending count shown in response', async () => {
-    const docs = Array.from({ length: 3 }, (_, i) =>
-      makeNotifDoc(`n${i}`, { type: 'new_suggestion' }),
-    );
-    mockCollectionGet.mockResolvedValueOnce({ empty: false, docs, size: 3 });
-    const app = createApp({ isAdmin: true });
-    // Admin should be able to get pending suggestion count
-  });
+  test.todo('admin panel: pending count shown in response');
 
-  test.skip('admin notification includes submitter identity summary', async () => {
-    // Admin notification should include who submitted + basic identity info
-  });
+  test.todo('admin notification includes submitter identity summary');
 });
 
 // ═══════════════════════════════════════════════════════════════
