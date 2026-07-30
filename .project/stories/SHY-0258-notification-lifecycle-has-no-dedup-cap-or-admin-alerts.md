@@ -62,6 +62,7 @@ read, mark all read. Nothing else exists:
 - [ ] At the per-user cap (200), storing the 201st evicts the oldest, leaving exactly 200.
 - [ ] Notifications older than 90 days are cleaned up.
 - [ ] Deleting notifications never alters the user's subscription preferences.
+- [ ] Watching a suggestion that is later MERGED transfers the watch to the target — today the merge routes move votes and mark the duplicate, but nothing moves watchers, so the watcher silently stops hearing about it.
 
 ### Performance
 
@@ -110,6 +111,11 @@ read, mark all read. Nothing else exists:
 - **When** the submission succeeds
 - **Then** a notification is created for admins
 
+**Scenario: a watch survives a merge**
+- **Given** a user watching a suggestion that an admin then merges into another
+- **When** the target suggestion is updated
+- **Then** the user is still notified, because their watch moved with it
+
 **Scenario: clearing the inbox is not unsubscribing**
 - **Given** a user with notification preferences set
 - **When** their notifications are deleted
@@ -124,6 +130,7 @@ becomes a real test against the real emulator:
 - dedup: `same event fired twice`, `roadmap feature updated twice in 1 minute`,
   `subscribed to both all-updates and a specific feature`,
   `approve then overturn produces two`
+- watch transfer: `user watches suggestion that gets merged: watch transferred to original` (tests/routes/subscriptions.test.js)
 - retention: `max 200 per user`, `201st evicts the oldest`,
   `older than 90 days cleaned up`, `deletion does not affect preferences`
 - admin: `new suggestion creates an admin notification`,
