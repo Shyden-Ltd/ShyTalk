@@ -39,6 +39,7 @@ const { authMiddleware } = require('../../src/middleware/auth');
 const reportsRouter = require('../../src/routes/reports');
 const adminUsersRouter = require('../../src/routes/admin-users');
 const conversationsRouter = require('../../src/routes/conversations');
+const usersRouter = require('../../src/routes/users');
 
 const runner = require(path.resolve(__dirname, '../../scripts/manual-qa-runner.js'));
 const { executeStep } = runner;
@@ -131,6 +132,9 @@ beforeAll(async () => {
     ['Nora', { uniqueId: REPORTER, email: 'nora@example.test', displayName: 'Nora' }],
     ['Raul', { uniqueId: OFFENDER, email: 'raul@example.test', displayName: 'Raul' }],
     ['Greta', { uniqueId: ADMIN, email: 'greta@example.test', displayName: 'Greta' }],
+    // Theo shares the offender's user doc: the warning Givens are about the
+    // flag transition, not about which persona owns it.
+    ['Theo', { uniqueId: OFFENDER, email: 'theo@example.test', displayName: 'Theo' }],
   ]);
   const provisioner = require('../../scripts/provision-test-personas');
   const original = provisioner.personas;
@@ -146,6 +150,8 @@ beforeAll(async () => {
   app.use('/api', reportsRouter);
   app.use('/api', adminUsersRouter);
   app.use('/api', conversationsRouter);
+  // acknowledge-warning lives here, and the warning Givens transition it.
+  app.use('/api', usersRouter);
 });
 
 afterAll(async () => {
@@ -228,6 +234,62 @@ describe('the moderation Givens drive the real routes', () => {
     expectStepOk(lifted);
     const after = await db.doc(`users/${OFFENDER}`).get();
     expect(after.data().isSuspended).toBe(false);
+  });
+});
+
+describe('the admin-dashboard and warning-state Givens', () => {
+  test('a queue Given seeds the real collection to the stated depth', async () => {
+    const ctx = makeRunnerCtx();
+    expectStepOk(await run('Greta is on the admin dashboard with 3 pending reports', ctx));
+    // Reads the real collection, not ctx bookkeeping: a matcher that only
+    // recorded the number would pass a ctx assertion and fail the journey.
+    const snap = await db.collection('reports').count().get();
+    expect(snap.data().count).toBeGreaterThanOrEqual(3);
+  });
+
+  test('an unregistered queue noun is refused, not silently skipped', async () => {
+    const ctx = makeRunnerCtx();
+    const r = await run('Greta is on the admin dashboard with 3 pending unicorns', ctx);
+    // No matcher accepts this shape at all, so it must surface as an
+    // unimplemented step rather than as a quiet success.
+    expect(r.ok).toBe(false);
+  });
+
+  test('the audit-log floor tops UP and never inflates an existing count', async () => {
+    const ctx = makeRunnerCtx();
+    const before = (await db.collection('auditLog').count().get()).data().count;
+    expectStepOk(
+      await run('Greta is on the admin dashboard with at least 5 audit-log entries', ctx),
+    );
+    const after = (await db.collection('auditLog').count().get()).data().count;
+    expect(after).toBeGreaterThanOrEqual(Math.max(before, 5));
+    // Re-running must not add more — a Given asserts a floor, not a delta.
+    expectStepOk(
+      await run('Greta is on the admin dashboard with at least 5 audit-log entries', ctx),
+    );
+    const third = (await db.collection('auditLog').count().get()).data().count;
+    expect(third).toBe(after);
+  });
+
+  test('the warning Given sets the real flag, and acknowledging clears it', async () => {
+    const ctx = makeRunnerCtx();
+    ctx.sessions.set('Theo', ctx.sessions.get('Raul'));
+    expectStepOk(await run('Theo is on the warning screen with hasActiveWarning=true', ctx));
+    const warned = await db.doc(`users/${OFFENDER}`).get();
+    expect(warned.data().hasActiveWarning).toBe(true);
+
+    expectStepOk(await run('Theo has acknowledged the warning', ctx));
+    const cleared = await db.doc(`users/${OFFENDER}`).get();
+    expect(cleared.data().hasActiveWarning).toBe(false);
+  });
+
+  test('"mid-room with no active warning" clears a warning left by an earlier scenario', async () => {
+    const ctx = makeRunnerCtx();
+    ctx.sessions.set('Theo', ctx.sessions.get('Raul'));
+    expectStepOk(await run('Theo is on the warning screen with hasActiveWarning=true', ctx));
+    expectStepOk(await run('Theo is mid-room with no active warning', ctx));
+    const after = await db.doc(`users/${OFFENDER}`).get();
+    expect(after.data().hasActiveWarning).toBe(false);
   });
 });
 

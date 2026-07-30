@@ -10821,12 +10821,20 @@ const matchers = [
         return { ok: false, error: `invalid audit-log entry count: ${m[1]}` };
       }
       const ts = Date.now();
-      // Sequential IDs keep ordering deterministic when the cycle
-      // queries by createdAt — preferable to random IDs which would
-      // make order non-reproducible across runs.
+      // Doc ids are sequential and RUN-INDEPENDENT so a re-run overwrites
+      // the same N docs. They used to carry Date.now(), which made every
+      // run write N NEW rows: the step promises the audit log HAS N
+      // entries, but the second run left 2N, the third 3N, and any
+      // assertion on exactly N was wrong from the second run onward. The
+      // local emulator had accumulated 62,112 rows this way — enough that
+      // an unbounded read of the collection fails outright, and even a
+      // count() aggregation costs ~2.4s.
+      //
+      // Ordering stays deterministic through the `timestamp` FIELD (ts+i),
+      // which is what the queries sort on — the id never carried that job.
       const writes = [];
       for (let i = 0; i < count; i++) {
-        const id = `test-seed-${ts}-${i.toString().padStart(6, '0')}`;
+        const id = `test-seed-${i.toString().padStart(6, '0')}`;
         writes.push(
           ctx.db.doc(`auditLog/${id}`).set({
             id,
@@ -14952,7 +14960,9 @@ const matchers = [
   // mirroring the writes instead would drift.
   {
     // "Raul has sent Nora "offensive content #1"" — j11:39.
-    pattern: /^([A-Z][a-z]+) has sent ([A-Z][a-z]+) "([^"]+)"$/,
+    // "Adam has just sent Alice "hello, alice …"" — j07. Same established
+    // state; "just" is narrative emphasis, not a different precondition.
+    pattern: /^([A-Z][a-z]+) has (?:just )?sent ([A-Z][a-z]+) "([^"]+)"$/,
     async handler(m, ctx) {
       const [, senderName, recipientName, bodyText] = m;
       try {
@@ -15147,6 +15157,165 @@ const matchers = [
         // matched on purpose: every other failure (not suspended, appeals
         // disallowed, 500) still fails the step.
         if (/already pending/i.test(e.message)) return { ok: true };
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Greta is on the admin dashboard with N pending <noun>" — j12.
+    //
+    // Establishes real queue depth AND the admin's recorded surface. The
+    // noun is mapped to a queue rather than being one matcher per queue:
+    // a new queue then needs a registry row, not a new matcher.
+    pattern:
+      /^([A-Z][a-z]+) is on the admin dashboard with (\d+) pending (reports?|age-verification submissions?|suspension appeals?)$/,
+    async handler(m, ctx) {
+      const [, adminName, countText, noun] = m;
+      const QUEUE_FOR_NOUN = {
+        report: 'reports',
+        'age-verification submission': 'age-verification',
+        'suspension appeal': 'suspension-appeals',
+      };
+      const singular = noun.replace(/s$/, '');
+      const queue = QUEUE_FOR_NOUN[singular];
+      if (!queue) {
+        return { ok: false, error: `no admin queue registered for "${noun}"` };
+      }
+      try {
+        await seedAdminQueueEntries(ctx, queue, Number(countText));
+        if (!ctx.adminQueues) ctx.adminQueues = {};
+        ctx.adminQueues[queue] = { count: Number(countText), noun };
+        if (!ctx.personaPaths) ctx.personaPaths = new Map();
+        ctx.personaPaths.set(adminName, '/admin');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Greta is on the admin dashboard with at least 50 audit-log entries"
+    // — j12. Tops up to the floor rather than writing N more, so re-running
+    // a scenario cannot inflate a count another assertion checks.
+    pattern: /^([A-Z][a-z]+) is on the admin dashboard with at least (\d+) audit-log entries$/,
+    async handler(m, ctx) {
+      const [, adminName, floorText] = m;
+      const floor = Number(floorText);
+      try {
+        // count(), not get(): auditLog is append-only and unbounded — the
+        // local emulator already holds 62k rows, and an unlimited .get()
+        // fails outright there (grpc 2 UNKNOWN) rather than merely being
+        // slow. An aggregation query returns the number without streaming
+        // a single document.
+        const countSnap = await ctx.db.collection('auditLog').count().get();
+        const existing = countSnap.data().count || 0;
+        const now = Date.now();
+        for (let i = existing; i < floor; i += 1) {
+          await ctx.db.doc(`auditLog/test-seed-${i}`).set({
+            action: 'admin.view',
+            targetId: String(personaUniqueId(adminName)),
+            adminId: String(personaUniqueId(adminName)),
+            // Descending order is what the admin route sorts by, so seeded
+            // rows must not all share one timestamp or paging is undefined.
+            timestamp: now - i * 1000,
+          });
+        }
+        ctx.auditLogMinEntries = floor;
+        if (!ctx.personaPaths) ctx.personaPaths = new Map();
+        ctx.personaPaths.set(adminName, '/admin');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Theo is on the warning screen with hasActiveWarning=true" — j10.
+    // The screen is a consequence of the flag, so the Given establishes the
+    // flag through the real warn route and lets the app route itself there.
+    pattern: /^([A-Z][a-z]+) is on the warning screen with hasActiveWarning=true$/,
+    async handler(m, ctx) {
+      const targetName = m[1];
+      try {
+        const uniqueId = personaUniqueId(targetName);
+        const snap = await ctx.db.doc(`users/${uniqueId}`).get();
+        if (snap.exists && snap.data()?.hasActiveWarning === true) return { ok: true };
+        await callApiAs(ctx, 'Greta', 'POST', `/api/user/${uniqueId}/warn`, {
+          reason: 'Room conduct',
+          severity: 2,
+        });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Theo has acknowledged the warning" — j10.
+    pattern: /^([A-Z][a-z]+) has acknowledged (?:the|his|her|their) warning$/,
+    async handler(m, ctx) {
+      const targetName = m[1];
+      try {
+        await callApiAs(
+          ctx,
+          targetName,
+          'POST',
+          `/api/users/${personaUniqueId(targetName)}/acknowledge-warning`,
+          {},
+        );
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Theo is mid-room with no active warning" — j10. The NEGATIVE
+    // precondition: assert the flag is clear, and clear it if a previous
+    // scenario left one, so the scenario starts where it says it does.
+    pattern: /^([A-Z][a-z]+) is mid-room with no active warning$/,
+    async handler(m, ctx) {
+      const targetName = m[1];
+      try {
+        const uniqueId = personaUniqueId(targetName);
+        const snap = await ctx.db.doc(`users/${uniqueId}`).get();
+        if (snap.exists && snap.data()?.hasActiveWarning === true) {
+          await callApiAs(
+            ctx,
+            targetName,
+            'POST',
+            `/api/users/${uniqueId}/acknowledge-warning`,
+            {},
+          );
+        }
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Adam has a PENDING age-verification submission" — j01.
+    pattern: /^([A-Z][a-z]+) has a PENDING age-verification submission$/,
+    async handler(m, ctx) {
+      try {
+        await seedPendingAgeVerificationSubmission(ctx, m[1]);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Adam has just sent Alice his first gift" — j01. "First" is narrative:
+    // the established state is one gift sent, and the rose is the corpus's
+    // entry-level gift (j05 grounds rose=10 coins / 5 beans).
+    pattern: /^([A-Z][a-z]+) has just sent ([A-Z][a-z]+) (?:his|her|their) first gift$/,
+    async handler(m, ctx) {
+      try {
+        await applyGiftSend(ctx, m[1], m[2], 'rose');
+        return { ok: true };
+      } catch (e) {
         return { ok: false, error: e.message };
       }
     },
