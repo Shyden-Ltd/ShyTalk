@@ -474,17 +474,20 @@ describe('Suggestion Text Handling', () => {
       .expect(201);
   });
 
-  test('title with only numbers accepted', async () => {
+  test('a title of only digits is REJECTED — it must contain a letter', async () => {
+    // Renamed. The old title asserted "accepted" while the body asserted
+    // nothing at all, and its comments talked themselves out of deciding
+    // ("might be accepted", "documents expected behavior"). A test that
+    // documents nothing documents nothing.
+    //
+    // The product decided this: sanitiseTitle() requires at least one Unicode
+    // letter in any script, so '12345' has no title left after sanitising.
     mockCollectionGet.mockResolvedValueOnce({ empty: true, docs: [], size: 0 });
-    const app = createApp();
-    // This might be rejected per spec: "must contain at least one letter"
-    // Depends on implementation — test documents the expected behavior
-    await request(app)
+    const res = await request(createApp())
       .post('/api/suggestions')
       .send({ ...VALID_SUGGESTION, title: '12345' });
-    // The spec says "Title with only numbers: accepted" but also says
-    // "Title with only special characters: rejected (must contain at least one letter)"
-    // So numbers-only might be accepted. The test documents expected behavior.
+    expect(res.status).toBe(400);
+    expect(mockDocSet).not.toHaveBeenCalled();
   });
 
   test('title with only special characters rejected', async () => {
@@ -541,8 +544,10 @@ describe('Suggestion Limits & Abuse Prevention', () => {
     });
     // The query should only count pending, so this should succeed
     mockCollectionGet.mockResolvedValueOnce({ empty: true, docs: [], size: 0 }); // pending count = 0
-    const app = createApp();
-    // Depending on implementation, may need to adjust mock order
+    // The old body stopped here — it built an app and never sent a request, so
+    // "don't count toward limit" was never exercised in any direction.
+    const res = await request(createApp()).post('/api/suggestions').send(VALID_SUGGESTION);
+    expect(res.status).toBe(201);
   });
 
   test('withdrawn suggestions dont count toward limit', async () => {

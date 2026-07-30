@@ -829,19 +829,38 @@ describe('11.22 — Edge Cases & Boundaries', () => {
         .expect(201);
     });
 
-    test('RTL text (Hebrew) in description stored correctly', async () => {
+    test('RTL text is stored byte-for-byte', async () => {
+      // Renamed and split. The old test sent Hebrew text WITH `language: 'he'`
+      // and asserted nothing, its comment shrugging that it "may succeed or
+      // fail". It fails — correctly: the product ships four locales
+      // (en/zh/id/vi), so 'he' is not accepted, and the old body would have
+      // been asserting a locale policy it did not mean to test.
+      //
+      // What the name actually cares about is that right-to-left text survives
+      // the round trip unmangled, which is orthogonal to the locale list.
       mockCollectionGet.mockResolvedValueOnce({ empty: true, docs: [], size: 0 });
-      const app = createApp();
-      await request(app)
+      const HEBREW =
+        '\u05D1\u05D1\u05E7\u05E9\u05D4 \u05DC\u05D4\u05D5\u05E1\u05D9\u05E3 \u05DE\u05E6\u05D1 \u05D7\u05E9\u05D5\u05DA';
+      const res = await request(createApp())
         .post('/api/suggestions')
-        .send({
-          ...VALID_SUGGESTION,
-          description:
-            '\u05D1\u05D1\u05E7\u05E9\u05D4 \u05DC\u05D4\u05D5\u05E1\u05D9\u05E3 \u05DE\u05E6\u05D1 \u05D7\u05E9\u05D5\u05DA',
-          language: 'he',
-        });
-      // May succeed or fail based on language code validation
-      // Hebrew "he" should be a valid ISO 639-1 code
+        .send({ ...VALID_SUGGESTION, description: HEBREW, language: 'en' });
+      expect(res.status).toBe(201);
+      const write = mockDocSet.mock.calls.find(
+        (c) => typeof c[0] === 'string' && c[0].startsWith('suggestions/'),
+      );
+      expect(write).toBeDefined();
+      expect(write[1].description).toBe(HEBREW);
+    });
+
+    test('an unsupported language code is rejected', async () => {
+      // The other half of what the old test conflated. Four locales ship
+      // (en/zh/id/vi); anything else must not be accepted silently.
+      mockCollectionGet.mockResolvedValueOnce({ empty: true, docs: [], size: 0 });
+      const res = await request(createApp())
+        .post('/api/suggestions')
+        .send({ ...VALID_SUGGESTION, language: 'he' });
+      expect(res.status).toBe(400);
+      expect(mockDocSet).not.toHaveBeenCalled();
     });
 
     test('mixed RTL/LTR text in description handled', async () => {

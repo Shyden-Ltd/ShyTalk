@@ -227,6 +227,11 @@ describe('manual-qa-matrix.yml — structural pin', () => {
     const lines = yamlText.split('\n');
     let inRunBlock = false;
     let runBlockIndent = 0;
+    // Count what was actually inspected. Every assertion below lives inside
+    // `if (inRunBlock)`, so a workflow with no `run: |` blocks at all — a
+    // rename, a restructure, a bad read — would sail through having checked
+    // nothing. The count is asserted after the loop.
+    let runLinesInspected = 0;
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmed = line.trimEnd();
@@ -245,9 +250,12 @@ describe('manual-qa-matrix.yml — structural pin', () => {
           }
         }
         // Critical assertion: no ${{ inputs.X }} inside run block.
+        runLinesInspected += 1;
         expect(line).not.toMatch(/\$\{\{\s{0,20}inputs\./);
       }
     }
+    // Proof the scan had something to scan.
+    expect(runLinesInspected).toBeGreaterThan(0);
   });
 
   test('injection detector catches a known-bad fixture (inverse test)', () => {

@@ -525,10 +525,12 @@ describe('Subscription Edge Cases', () => {
     expect(res.body.watchedSuggestions).toBeDefined();
   });
 
-  test('user watches suggestion that gets merged: watch transferred to original', async () => {
-    // Verified via merge handling in suggestions-duplicates tests
-    // The subscription endpoint needs to handle the transfer
-  });
+  // Watch-transfer on merge does not exist: the merge routes move votes and
+  // mark the duplicate, but nothing moves watchers, so a user who watched the
+  // duplicate silently stops hearing about it. Its own comment admitted the
+  // gap — "the subscription endpoint needs to handle the transfer" — while the
+  // empty body reported green. Specified as part of SHY-0258.
+  test.todo('user watches suggestion that gets merged: watch transferred to original');
 
   test('user unsubscribes from all channels for all events: doc preserved with all false', async () => {
     const app = createApp();

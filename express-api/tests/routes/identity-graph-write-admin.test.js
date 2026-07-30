@@ -1,3 +1,11 @@
+/**
+ * SHY-0257: six specs below are `test.todo`.
+ *
+ * Each describes the AUTOMATIC identity-graph write path — collision handling,
+ * ISP-lookup fallback, private-IP filtering, graph merging — and nothing writes
+ * the graph automatically today. routes/identity-graph.js is admin CRUD only;
+ * no binding hook exists. They were empty bodies reporting green.
+ */
 /* eslint-disable no-unused-vars */
 /**
  * Tests for identity graph and unified cascading ban system.
@@ -264,18 +272,11 @@ describe('Identity Graph Query Performance', () => {
 // ═══════════════════════════════════════════════════════════════
 
 describe('Identity Graph Edge Cases', () => {
-  test('fingerprint collision: two devices same fingerprint → both in same graph', async () => {
-    // Two different physical devices with same fingerprint hash
-    // Should be treated as same device (linked in same graph)
-  });
+  test.todo('fingerprint collision: two devices same fingerprint → both in same graph');
 
-  test('ISP lookup timeout: graph created with IP, ISP/country null', async () => {
-    // If IP geolocation fails, still create graph with IP only
-  });
+  test.todo('ISP lookup timeout: graph created with IP, ISP/country null');
 
-  test('ISP lookup error: fallback to IP-only', async () => {
-    // Graceful degradation on geo lookup failure
-  });
+  test.todo('ISP lookup error: fallback to IP-only');
 
   test('IPv6 address: stored and matched correctly', async () => {
     const app = createApp();
@@ -294,9 +295,7 @@ describe('Identity Graph Edge Cases', () => {
     // Should be stored as 1.2.3.4
   });
 
-  test('private IP (10.x, 192.168.x, 127.x): not stored in graph', async () => {
-    // Private IPs should be filtered out — not useful for ban enforcement
-  });
+  test.todo('private IP (10.x, 192.168.x, 127.x): not stored in graph');
 
   test('graph with 0 identifiers: suspend returns 400', async () => {
     const emptyGraph = makeGraphDoc('graph-empty', { identifiers: [] });
@@ -313,15 +312,9 @@ describe('Identity Graph Edge Cases', () => {
       .expect(400);
   });
 
-  test('graph merge: two graphs share new identifier → merged into one', async () => {
-    // When a new login reveals that two separate graphs share an identifier,
-    // they should be merged into a single graph
-  });
+  test.todo('graph merge: two graphs share new identifier → merged into one');
 
-  test('graph merge: inherits stricter suspension level', async () => {
-    // If merging a 7-day ban graph with a permanent ban graph,
-    // the merged graph should have permanent ban
-  });
+  test.todo('graph merge: inherits stricter suspension level');
 
   test('graph split: not supported → endpoint doesnt exist (returns 404)', async () => {
     const app = createApp();

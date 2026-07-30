@@ -292,17 +292,22 @@ describe('admin click-handler re-entrancy', () => {
     // Match the function header + the next ~200 chars; assert the guard
     // lands before the first `confirm(`.
     const fnIdx = usersJs.search(/export\s+async\s+function\s+revokeWarning\s*\(/);
-    if (fnIdx < 0) {
-      throw new Error('revokeWarning function not found in users.js — refactor may have moved it');
-    }
+    // Stated as assertions rather than conditional throws. The behaviour is
+    // the same, but every check is now unconditional, so the test cannot end
+    // up in a shape where nothing is verified — and the failure output names
+    // the value rather than only a sentence.
+    // Jest's expect takes no message argument, so the explanation goes in the
+    // compared value: a bare "expected -1 to be >= 0" would not say what moved.
+    expect(fnIdx >= 0 ? 'found' : 'revokeWarning not found in users.js — a refactor moved it').toBe(
+      'found',
+    );
     const window = usersJs.slice(fnIdx, fnIdx + 400);
     const guardIdx = window.search(/if\s*\(\s*btn\.disabled\s*\)\s*return/);
     const confirmIdx = window.search(/\bconfirm\s*\(/);
-    if (guardIdx < 0) {
-      throw new Error('revokeWarning is missing the `if (btn.disabled) return;` guard at the top');
-    }
-    if (confirmIdx >= 0 && guardIdx > confirmIdx) {
-      throw new Error('revokeWarning guard must come BEFORE the confirm() — same race as PR #968');
-    }
+    // `if (btn.disabled) return;` must be present...
+    expect(guardIdx).toBeGreaterThanOrEqual(0);
+    // ...and must come BEFORE the confirm(), or the double-click race from
+    // PR #968 is back: the dialog opens twice before the guard ever runs.
+    expect(confirmIdx < 0 || guardIdx < confirmIdx).toBe(true);
   });
 });
