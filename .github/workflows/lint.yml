@@ -145,6 +145,15 @@ jobs:
       - name: Prettier — tests/ (formatting gate)
         run: npx --prefix express-api prettier --check "tests/**/*.ts"
 
+      # SHY-0256: ratchet guard — tests that report GREEN without testing
+      # anything (empty bodies, assertions reachable only behind a conditional,
+      # parked and self-skipping tests) may only SHRINK. Until 2026-07-30 this
+      # detector existed but nothing ran it in CI: it was invoked only by the
+      # gauntlet launcher, so the ratchet it defines was never actually
+      # enforced on a pull request. Exits 0 at or below the baseline.
+      - name: No NEW silently-passing tests (SHY-0256 ratchet)
+        run: node scripts/check-test-defects.js
+
       # SHY-0168 (EPIC-0006): ratchet guard — direct client→backend-service
       # access (Firestore / RTDB / Storage) may only SHRINK. Clients must go
       # through the Express API (the authz layer). Fails on any NEW direct

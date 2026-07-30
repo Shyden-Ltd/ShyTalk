@@ -1,7 +1,27 @@
 {
-  "total": 0,
-  "byCategory": {},
-  "byFile": {},
+  "total": 94,
+  "byCategory": {
+    "NO-ASSERT": 32,
+    "GUARD-IF": 50,
+    "PARKED": 12
+  },
+  "byFile": {
+    "express-api/tests/routes/admin-audit-log-suggestions.test.js": 8,
+    "express-api/tests/routes/identity-graph-write-admin.test.js": 6,
+    "express-api/tests/routes/identity-graph-write-lifecycle.test.js": 14,
+    "express-api/tests/routes/starting-screens-read-extras-a.test.js": 1,
+    "express-api/tests/routes/subscriptions.test.js": 1,
+    "express-api/tests/routes/suggestions-contracts-a-edge.test.js": 1,
+    "express-api/tests/routes/suggestions-integration-a-flows.test.js": 15,
+    "express-api/tests/routes/suggestions-integration-a-submission.test.js": 13,
+    "express-api/tests/routes/suggestions-integration-b.test.js": 17,
+    "express-api/tests/routes/suggestions-notifications.test.js": 12,
+    "express-api/tests/routes/suggestions-validation.test.js": 2,
+    "express-api/tests/scripts/admin-click-handler-reentrancy.test.js": 1,
+    "express-api/tests/scripts/manual-qa-matrix-workflow-pin.test.js": 1,
+    "express-api/tests/utils/seed-minio.test.js": 2
+  },
   "note": "Ratchets DOWN only. Target is 0. See scripts/check-test-defects.js.",
-  "updated": "2026-07-29"
+  "detectorWidened": "recursive scan + the 419-file Jest corpus, via an acorn AST: NO-ASSERT (empty/assertion-free test bodies) and GUARD-IF (every assertion behind a conditional). Previously only tests/web/*.ts top level was scanned.",
+  "updated": "2026-07-30"
 }

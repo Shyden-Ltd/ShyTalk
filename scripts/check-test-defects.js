@@ -50,12 +50,56 @@
 
 const fs = require('fs');
 const path = require('path');
+const { createRequire } = require('module');
 
 const REPO = path.resolve(__dirname, '..');
-const TESTS_DIR = path.join(REPO, 'tests', 'web');
+
+// acorn lives in express-api's node_modules (declared there as a devDependency
+// for exactly this). Resolved explicitly rather than assumed on the root path,
+// so a missing install fails with a sentence instead of a stack trace.
+let acorn;
+try {
+  acorn = createRequire(path.join(REPO, 'express-api', 'package.json'))('acorn');
+} catch {
+  console.error('FATAL: acorn is not installed. Run `npm ci` in express-api/.');
+  console.error('       Without a parser this detector cannot inspect the Jest suites,');
+  console.error('       and a gate that silently stops checking is the defect it hunts.');
+  process.exit(2);
+}
 const BASELINE_FILE = path.join(__dirname, 'test-defects-baseline.json');
 
-const ACTIONABLE = ['GUARD-IF', 'BARE-EXPECT', 'SKIP-COND', 'PARKED'];
+const ACTIONABLE = ['GUARD-IF', 'BARE-EXPECT', 'SKIP-COND', 'PARKED', 'NO-ASSERT', 'PARSE-FAIL'];
+
+/**
+ * The corpora this detector is responsible for, and what each one can
+ * meaningfully be accused of.
+ *
+ * Until 2026-07-30 this scanned `tests/web/*.ts` NON-recursively, which meant
+ * 419 Jest suites and 11 files in `tests/web` subdirectories were invisible to
+ * a gate whose whole job is finding tests that pass without testing.
+ *
+ * `oneShotReads` is per-corpus on purpose. In Playwright a locator read
+ * resolves ONCE, so feeding one straight to `expect` races the render — that
+ * is the BARE-EXPECT defect. Jest has no retrying matcher at all, so
+ * `expect(await x)` is simply how Jest is written; applying BARE-EXPECT there
+ * would bury the real findings under hundreds of false positives.
+ */
+const CORPORA = [
+  {
+    label: 'playwright',
+    dir: path.join(REPO, 'tests', 'web'),
+    ext: '.ts',
+    oneShotReads: true,
+    astAnalysis: false,
+  },
+  {
+    label: 'jest',
+    dir: path.join(REPO, 'express-api', 'tests'),
+    ext: '.test.js',
+    oneShotReads: false,
+    astAnalysis: true,
+  },
+];
 
 /**
  * Locator reads that resolve ONCE. Each returns a falsy placeholder rather than
@@ -83,8 +127,10 @@ function insideRetryingCallback(lines, i) {
 function classifyCountLine(lines, i) {
   const line = lines[i];
   if (insideRetryingCallback(lines, i)) return 'POLL-OK';
-  if (/^\s*(\}\s*else\s*)?if\s*\(/.test(line) || /\bif\s*\(\s*\(?await/.test(line)) return 'GUARD-IF';
-  if (new RegExp(`expect\\s*\\(\\s*await[^;]*${ONE_SHOT_RE.source}`).test(line)) return 'BARE-EXPECT';
+  if (/^\s*(\}\s*else\s*)?if\s*\(/.test(line) || /\bif\s*\(\s*\(?await/.test(line))
+    return 'GUARD-IF';
+  if (new RegExp(`expect\\s*\\(\\s*await[^;]*${ONE_SHOT_RE.source}`).test(line))
+    return 'BARE-EXPECT';
 
   const decl = line.match(/(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*await/);
   if (!decl) return 'OTHER';
@@ -137,24 +183,277 @@ function allowedAt(lines, i, category) {
   return false;
 }
 
+/** Every file under `dir` whose name ends in `ext`, recursively. */
+function walk(dir, ext, out = []) {
+  if (!fs.existsSync(dir)) return out;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+      walk(full, ext, out);
+    } else if (entry.name.endsWith(ext)) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+/** Strip strings and line comments so their braces and keywords do not count. */
+function stripNoise(line) {
+  return line
+    .replace(/\\./g, '')
+    .replace(/'[^']*'|"[^"]*"|`[^`]*`/g, "''")
+    .replace(/\/\/.*$/, '');
+}
+
+/**
+ * Blank out /* … *\/ comment bodies while preserving every newline, so line
+ * numbers stay truthful. Without this the prose in a file header ("A. Workflow
+ * env exposes…") was parsed as code and reported as a defective test.
+ */
+function stripBlockComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
+}
+
+// The lookbehind is load-bearing: `\b(?:test|it)\s*\(` also matches the `test(`
+// inside `/^[a-z]/.test(name)`, so without it every regex predicate in the
+// suite was reported as a test that asserts nothing. A test call is never a
+// member access, so anything preceded by `.` or a word character is not one.
+/**
+ * This suite's real assertion vocabulary. `expect` dominates (23,609 calls),
+ * but the Firestore-rules suites assert exclusively through
+ * assertSucceeds/assertFails (126 calls) — counting only `expect` reported
+ * every one of those tests as asserting nothing.
+ */
+const ASSERT_IDENTS = new Set(['expect', 'assertSucceeds', 'assertFails']);
+const TEST_IDENTS = new Set(['test', 'it']);
+/** Runs the body conditionally, so an assertion inside may never execute. */
+const PARKED_MEMBERS = new Set(['skip', 'todo', 'fixme', 'failing']);
+
+function isAssertCall(node, assertingHelpers = new Set()) {
+  if (node.type !== 'CallExpression') return false;
+  const c = node.callee;
+  if (c.type === 'Identifier') return ASSERT_IDENTS.has(c.name) || assertingHelpers.has(c.name);
+  if (c.type !== 'MemberExpression') return false;
+  // expect.assertions(n) / expect.hasAssertions()
+  if (c.object.type === 'Identifier' && c.object.name === 'expect') return true;
+  // supertest: `await probeAs(caller).expect(200)` — the `.expect(...)` at the
+  // end of a request chain IS the assertion, and hundreds of route tests
+  // assert only that way.
+  return c.property.type === 'Identifier' && c.property.name === 'expect';
+}
+
+/**
+ * Names of same-file functions that assert, computed to a fixpoint so a helper
+ * calling a helper still counts. Tests here routinely delegate — `expectDenied
+ * (req)`, `assertBanned(user)` — and counting only literal `expect` inside the
+ * test body reported every one of those as asserting nothing.
+ */
+function collectAssertingHelpers(ast) {
+  const bodies = new Map();
+  walkAst(ast, false, (node) => {
+    if (node.type === 'FunctionDeclaration' && node.id) bodies.set(node.id.name, node);
+    if (
+      node.type === 'VariableDeclarator' &&
+      node.id.type === 'Identifier' &&
+      node.init &&
+      /Function/.test(node.init.type)
+    ) {
+      bodies.set(node.id.name, node.init);
+    }
+  });
+
+  const asserting = new Set();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const [name, fn] of bodies) {
+      if (asserting.has(name)) continue;
+      let found = false;
+      walkAst(fn.body, false, (n) => {
+        if (found) return;
+        if (isAssertCall(n, asserting)) found = true;
+      });
+      if (found) {
+        asserting.add(name);
+        grew = true;
+      }
+    }
+  }
+  return asserting;
+}
+
+/** `test(...)`, `it(...)`, `test.only(...)` — but not `test.skip(...)`. */
+function testCallName(node) {
+  if (node.type !== 'CallExpression') return null;
+  const c = node.callee;
+  if (c.type === 'Identifier' && TEST_IDENTS.has(c.name)) return c.name;
+  if (
+    c.type === 'MemberExpression' &&
+    c.object.type === 'Identifier' &&
+    TEST_IDENTS.has(c.object.name) &&
+    c.property.type === 'Identifier' &&
+    !PARKED_MEMBERS.has(c.property.name)
+  ) {
+    return c.object.name;
+  }
+  return null;
+}
+
+/**
+ * Edges that make everything below them conditional.
+ *
+ * Loops are deliberately absent: iterating a fixture array is the idiomatic
+ * shape throughout this suite, so treating every loop body as a silent skip
+ * would drown the real findings. An assertion that only runs when a runtime
+ * collection is non-empty is a narrower defect deserving its own pass.
+ */
+function isConditionalEdge(node, key) {
+  switch (node.type) {
+    case 'IfStatement':
+    case 'ConditionalExpression':
+      return key === 'consequent' || key === 'alternate';
+    case 'TryStatement': {
+      if (key !== 'handler') return false;
+      // `try { await mustThrow(); throw new Error('expected it to throw') }
+      //  catch (e) { expect(e.status).toBe(400) }`
+      // is the deliberate must-throw idiom. The catch is guaranteed to run or
+      // the test fails on the throw, so its assertions are not optional.
+      const stmts = node.block.body;
+      const last = stmts[stmts.length - 1];
+      return !(last && last.type === 'ThrowStatement');
+    }
+    case 'LogicalExpression':
+      return key === 'right';
+    case 'SwitchCase':
+      return key === 'consequent';
+    default:
+      return false;
+  }
+}
+
+const SKIP_KEYS = new Set(['type', 'start', 'end', 'loc', 'range', 'raw']);
+
+function walkAst(node, cond, visit) {
+  if (!node || typeof node.type !== 'string') return;
+  visit(node, cond);
+  for (const key of Object.keys(node)) {
+    if (SKIP_KEYS.has(key)) continue;
+    const val = node[key];
+    const childCond = cond || isConditionalEdge(node, key);
+    if (Array.isArray(val)) {
+      for (const c of val) walkAst(c, childCond, visit);
+    } else if (val && typeof val.type === 'string') {
+      walkAst(val, childCond, visit);
+    }
+  }
+}
+
+/**
+ * A Jest test that cannot fail, judged from the parsed body rather than from
+ * line shapes:
+ *
+ *   NO-ASSERT — no assertion anywhere in the body, so it passes as long as
+ *               nothing throws.
+ *   GUARD-IF  — every assertion sits under an if/ternary/catch/&&, so a falsy
+ *               condition means the test asserts nothing and still passes.
+ *
+ * One unconditional assertion is enough to clear a body: the conditional ones
+ * are then extra coverage rather than the only coverage.
+ *
+ * Parsing, not pattern-matching, because the regex version counted the braces
+ * inside `/\$\{[^}]*\}/` as real braces and lost the end of the test body —
+ * reporting tests that assert plainly as asserting nothing.
+ */
+function scanJestAst(src, rel, findings) {
+  let ast = null;
+  let parseError = null;
+  for (const sourceType of ['script', 'module']) {
+    try {
+      ast = acorn.parse(src, { ecmaVersion: 'latest', sourceType, locations: true });
+      parseError = null;
+      break;
+    } catch (e) {
+      parseError = e;
+    }
+  }
+  if (!ast) {
+    // Never silent: a file the detector cannot parse is a file it cannot
+    // vouch for, which is exactly the blind spot this tool exists to remove.
+    findings.push({
+      file: rel,
+      line: parseError?.loc?.line ?? 1,
+      category: 'PARSE-FAIL',
+      text: `detector could not parse this file: ${parseError?.message ?? 'unknown error'}`,
+    });
+    return;
+  }
+
+  const assertingHelpers = collectAssertingHelpers(ast);
+
+  walkAst(ast, false, (node) => {
+    if (!testCallName(node)) return;
+    const body = [...node.arguments].reverse().find((a) => /Function/.test(a.type));
+    if (!body) return;
+    let asserts = 0;
+    let guarded = 0;
+    walkAst(body.body, false, (inner, cond) => {
+      // A `throw` is an assertion too — it is how you fail a test without a
+      // matcher. `if (idx === -1) { expect(idx).toBe(-1); return; } throw
+      // new Error(...)` guards its only expect, but the fall-through path
+      // throws, so the test cannot pass while proving nothing.
+      const asserted = isAssertCall(inner, assertingHelpers) || inner.type === 'ThrowStatement';
+      if (!asserted) return;
+      asserts++;
+      if (cond) guarded++;
+    });
+    let category = null;
+    if (asserts === 0) category = 'NO-ASSERT';
+    else if (guarded === asserts) category = 'GUARD-IF';
+    if (category) {
+      findings.push({
+        file: rel,
+        line: node.loc.start.line,
+        category,
+        text: (src.split('\n')[node.loc.start.line - 1] || '').trim(),
+      });
+    }
+  });
+}
+
 function scan() {
-  if (!fs.existsSync(TESTS_DIR)) return [];
   const findings = [];
-  for (const file of fs.readdirSync(TESTS_DIR).filter((f) => f.endsWith('.ts'))) {
-    const rel = path.join('tests', 'web', file);
-    const lines = fs.readFileSync(path.join(TESTS_DIR, file), 'utf8').split('\n');
-    lines.forEach((line, i) => {
-      if (ONE_SHOT_RE.test(line) && /\bawait\b/.test(line)) {
-        const cat = classifyCountLine(lines, i);
-        if (ACTIONABLE.includes(cat) && !allowedAt(lines, i, cat)) {
-          findings.push({ file: rel, line: i + 1, category: cat, text: line.trim() });
+  for (const corpus of CORPORA) {
+    for (const full of walk(corpus.dir, corpus.ext)) {
+      const rel = path.relative(REPO, full);
+      const src = fs.readFileSync(full, 'utf8');
+      const lines = stripBlockComments(src).split('\n');
+      lines.forEach((line, i) => {
+        if (corpus.oneShotReads && ONE_SHOT_RE.test(line) && /\bawait\b/.test(line)) {
+          const cat = classifyCountLine(lines, i);
+          if (ACTIONABLE.includes(cat) && !allowedAt(lines, i, cat)) {
+            findings.push({ file: rel, line: i + 1, category: cat, text: line.trim() });
+          }
+        }
+        // stripNoise first: a `test.skip('x')` written INSIDE a string literal
+        // is a fixture, not a parked test — the detector's own test file is
+        // full of them. Stripping preserves real detection, because a real
+        // `test.skip('title', …)` still reads as `test.skip('', …)` and the
+        // leading-quote check that distinguishes PARKED from SKIP-COND holds.
+        const skipCat = classifySkipLine(stripNoise(line));
+        if (skipCat && !allowedAt(lines, i, skipCat)) {
+          findings.push({ file: rel, line: i + 1, category: skipCat, text: line.trim() });
+        }
+      });
+      if (corpus.astAnalysis) {
+        const before = findings.length;
+        scanJestAst(src, rel, findings);
+        // Honour the same reasoned escape hatch the line scanners use.
+        for (let k = findings.length - 1; k >= before; k--) {
+          if (allowedAt(lines, findings[k].line - 1, findings[k].category)) findings.splice(k, 1);
         }
       }
-      const skipCat = classifySkipLine(line);
-      if (skipCat && !allowedAt(lines, i, skipCat)) {
-        findings.push({ file: rel, line: i + 1, category: skipCat, text: line.trim() });
-      }
-    });
+    }
   }
   return findings;
 }
@@ -185,18 +484,31 @@ function main() {
     // real regressions through.
     const reasonArg = args.find((a) => a.startsWith('--detector-widened='));
     if (Number.isFinite(prev.total) && total > prev.total && !reasonArg) {
-      console.error(`REFUSED: baseline ratchets DOWN only (have ${prev.total}, asked for ${total}).`);
-      console.error('If the DETECTOR widened, re-run with --detector-widened="<what it now catches>".');
+      console.error(
+        `REFUSED: baseline ratchets DOWN only (have ${prev.total}, asked for ${total}).`,
+      );
+      console.error(
+        'If the DETECTOR widened, re-run with --detector-widened="<what it now catches>".',
+      );
       return 1;
     }
     const byFile = {};
     for (const f of findings) byFile[f.file] = (byFile[f.file] || 0) + 1;
-    fs.writeFileSync(BASELINE_FILE, JSON.stringify({
-      total, byCategory: byCat, byFile,
-      note: 'Ratchets DOWN only. Target is 0. See scripts/check-test-defects.js.',
-      ...(reasonArg ? { detectorWidened: reasonArg.split('=').slice(1).join('=') } : {}),
-      updated: new Date().toISOString().slice(0, 10),
-    }, null, 2) + '\n');
+    fs.writeFileSync(
+      BASELINE_FILE,
+      JSON.stringify(
+        {
+          total,
+          byCategory: byCat,
+          byFile,
+          note: 'Ratchets DOWN only. Target is 0. See scripts/check-test-defects.js.',
+          ...(reasonArg ? { detectorWidened: reasonArg.split('=').slice(1).join('=') } : {}),
+          updated: new Date().toISOString().slice(0, 10),
+        },
+        null,
+        2,
+      ) + '\n',
+    );
     console.log(`Baseline updated: ${total}`);
     return 0;
   }
@@ -211,12 +523,17 @@ function main() {
   }
 
   const baseline = readBaseline();
-  console.log(`\nSilently-passing test defects: ${total}` +
-    (Number.isFinite(baseline.total) ? ` (baseline ${baseline.total}, target 0)` : ''));
-  for (const cat of ACTIONABLE) if (byCat[cat]) console.log(`  ${String(byCat[cat]).padStart(4)}  ${cat}`);
+  console.log(
+    `\nSilently-passing test defects: ${total}` +
+      (Number.isFinite(baseline.total) ? ` (baseline ${baseline.total}, target 0)` : ''),
+  );
+  for (const cat of ACTIONABLE)
+    if (byCat[cat]) console.log(`  ${String(byCat[cat]).padStart(4)}  ${cat}`);
 
   if (Number.isFinite(baseline.total) && total > baseline.total) {
-    console.error(`\nFAIL: regressed by ${total - baseline.total}. These tests report green without testing anything.`);
+    console.error(
+      `\nFAIL: regressed by ${total - baseline.total}. These tests report green without testing anything.`,
+    );
     console.error('Fix them, or run --list to see each site.');
     return 1;
   }
@@ -224,4 +541,18 @@ function main() {
   return 0;
 }
 
-process.exit(main());
+/**
+ * Analyse one Jest source string. Exported so the detector's own tests can
+ * drive it directly — a gate whose correctness nothing verifies is the same
+ * failure mode it exists to catch, and this one shipped four distinct classes
+ * of false positive before anyone looked at what it was reporting.
+ */
+function scanJestSource(src, rel = 'fixture.test.js') {
+  const findings = [];
+  scanJestAst(src, rel, findings);
+  return findings;
+}
+
+module.exports = { scanJestSource, classifySkipLine, classifyCountLine, ACTIONABLE };
+
+if (require.main === module) process.exit(main());
