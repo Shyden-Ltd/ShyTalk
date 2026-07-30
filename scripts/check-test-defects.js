@@ -29,7 +29,16 @@
  *                which nobody reads, so it is indistinguishable from passing.
  *
  *   PARKED       `test.skip('title', ...)` / `test.fixme('title', ...)`
- *                Never runs at all.
+ *                A REAL test, switched off — so it hides whatever it used to
+ *                catch. Blocking.
+ *
+ *   NO-ASSERT    A test body with no assertion at all (Jest corpus, via AST).
+ *                Passes as long as nothing throws.
+ *
+ *   TODO         `test.todo('title')` — a spec with no body and no history.
+ *                Counted and ratcheted so it cannot be used to launder an
+ *                empty test, but NOT blocking: it reports as todo, never as
+ *                green, so it cannot make a result unattributable.
  *
  * Deliberately NOT flagged:
  *
@@ -68,7 +77,34 @@ try {
 }
 const BASELINE_FILE = path.join(__dirname, 'test-defects-baseline.json');
 
-const ACTIONABLE = ['GUARD-IF', 'BARE-EXPECT', 'SKIP-COND', 'PARKED', 'NO-ASSERT', 'PARSE-FAIL'];
+const ACTIONABLE = [
+  'GUARD-IF',
+  'BARE-EXPECT',
+  'SKIP-COND',
+  'PARKED',
+  'NO-ASSERT',
+  'PARSE-FAIL',
+  'TODO',
+];
+
+/**
+ * TODO is counted but does NOT block a gauntlet launch.
+ *
+ * Everything else here describes a test that reports GREEN while proving
+ * nothing, which is what makes a matrix result unattributable — you cannot
+ * tell a real regression from debt you already knew about. `test.todo` makes
+ * no such claim: it reports as todo, it has no body, and there was never a
+ * test there to switch off, so it cannot be hiding a regression.
+ *
+ * It stays in the total and in the ratcheting baseline, so the debt cannot be
+ * cleared by relabelling an empty test as a todo — it simply does not veto
+ * the run.
+ *
+ * `test.skip('title', body)` and `test.fixme` remain PARKED and BLOCKING:
+ * those ARE real tests, switched off, and a switched-off test hides whatever
+ * it used to catch.
+ */
+const NON_BLOCKING = new Set(['TODO']);
 
 /**
  * The corpora this detector is responsible for, and what each one can
@@ -156,7 +192,10 @@ function classifySkipLine(line) {
   // form of either. Deciding by the trailing text alone misread a
   // prettier-wrapped `test.todo(\n  'long title',\n)` as a bare skip, because
   // the line ends right after the paren.
-  if (m[1] === 'todo' || m[1] === 'fixme') return 'PARKED';
+  // `todo` is a spec with no body and no history — tracked, not blocking.
+  // `fixme` is a real test marked known-broken, which IS a switched-off test.
+  if (m[1] === 'todo') return 'TODO';
+  if (m[1] === 'fixme') return 'PARKED';
   const after = line.slice(line.indexOf(m[0]) + m[0].length).trim();
   // `test.skip('title', async () => {}` parks a test; `test.skip(cond, 'why')`
   // opts out at runtime; a bare `test.skip()` skips the rest of the body.
@@ -479,8 +518,12 @@ function main() {
   for (const f of findings) byCat[f.category] = (byCat[f.category] || 0) + 1;
   const total = findings.length;
 
+  const blockingTotal = findings.filter((f) => !NON_BLOCKING.has(f.category)).length;
+
   if (args.includes('--json')) {
-    process.stdout.write(JSON.stringify({ total, byCategory: byCat, findings }, null, 2) + '\n');
+    process.stdout.write(
+      JSON.stringify({ total, blockingTotal, byCategory: byCat, findings }, null, 2) + '\n',
+    );
     return 0;
   }
 

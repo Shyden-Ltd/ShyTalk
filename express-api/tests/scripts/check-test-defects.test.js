@@ -273,6 +273,17 @@ describe('the parser is a parser, not a pattern match', () => {
 });
 
 describe('parked and skipped tests', () => {
+  test('test.todo is TODO — tracked, but not a switched-off test', () => {
+    // Counted (so an empty test cannot be laundered into a todo) but not
+    // blocking: it reports as todo, never as green.
+    expect(detector.classifySkipLine("  test.todo('unimplemented spec');")).toBe('TODO');
+    expect(detector.classifySkipLine('  test.todo(')).toBe('TODO');
+  });
+
+  test('test.fixme stays PARKED — a real test marked known-broken', () => {
+    expect(detector.classifySkipLine("  test.fixme('broken', () => {})")).toBe('PARKED');
+  });
+
   test('test.skip with a title is PARKED', () => {
     expect(detector.classifySkipLine("  test.skip('does a thing', () => {})")).toBe('PARKED');
   });
