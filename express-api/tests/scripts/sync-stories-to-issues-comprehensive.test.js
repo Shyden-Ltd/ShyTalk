@@ -502,12 +502,36 @@ describe('SHY-0067: extended summary format (mock-gh, reviewer-I4)', () => {
   test('--all --dry-run summary line contains the extended SHY-0067 counters', () => {
     const repoRoot = REPO_ROOT;
     const SYNC_SCRIPT = path.join(repoRoot, 'scripts', 'sync-stories-to-issues.sh');
+    // This is a FORMAT test, not a perf test, so its budget only has to be
+    // large enough never to false-fire. A fixed 90s was a time bomb: the
+    // script walks every story in the corpus (~0.55s each measured
+    // 2026-07-30), so it crossed 90s the moment the corpus reached ~200
+    // stories and then failed on every new story added. Derive the budget
+    // from the thing that actually drives the cost so it scales with the
+    // corpus instead of needing a bump each time one grows.
+    const storyCount = fs
+      .readdirSync(path.join(repoRoot, '.project', 'stories'))
+      .filter((f) => /^(SHY|EPIC)-\d{4}.*\.md$/.test(f)).length;
+    const budgetMs = Math.max(120_000, storyCount * 1_800);
     const res = require('node:child_process').spawnSync(
       'bash',
       [SYNC_SCRIPT, '--all', '--dry-run'],
-      { encoding: 'utf-8', cwd: repoRoot, timeout: 90_000 },
+      { encoding: 'utf-8', cwd: repoRoot, timeout: budgetMs },
     );
-    expect(res.status ?? 1).toBe(0);
+    // Tell a timeout apart from a genuine failure. `res.status ?? 1` mapped
+    // a kill (status null) onto exit 1, so a test that ran out of time
+    // reported "the sync script failed" — the one diagnosis guaranteed to
+    // send the reader to the wrong file.
+    // Jest's expect takes no message argument, so the explanation is encoded
+    // in the compared value — otherwise the failure reads as a bare
+    // "expected null, received SIGTERM".
+    expect(
+      res.signal === null
+        ? 'completed'
+        : `killed by ${res.signal} after ${budgetMs}ms over ${storyCount} stories — ` +
+            'it ran out of time, it did not fail',
+    ).toBe('completed');
+    expect(res.status).toBe(0);
     const stderr = res.stderr ?? '';
     expect(stderr).toMatch(/Sync result: \d+ created, \d+ updated, \d+ skipped, \d+ failed/);
     // Retained + v4 counters.
