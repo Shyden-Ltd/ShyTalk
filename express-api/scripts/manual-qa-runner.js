@@ -994,6 +994,100 @@ async function signInPersonaRest(ctx, name, persona) {
   return ctx.sessions.get(name);
 }
 
+// j17's lessons. The product has no `lessons` collection and no teaching
+// dashboard yet, so these Givens establish the prior state directly. They
+// deliberately do NOT stand in for the feature: the scenarios' When-steps
+// still drive the (absent) product surface and still fail honestly.
+const LESSON_LANGUAGE_CODES = { Mandarin: 'zh', English: 'en', Indonesian: 'id', Vietnamese: 'vi' };
+
+async function seedLesson(ctx, teacherName, languageName, title) {
+  const teacherId = personaUniqueId(teacherName);
+  const resolvedTitle =
+    title || ctx.lessonTitleByTeacher?.[teacherName] || `${teacherName}'s lesson`;
+  const lessonId = `lesson-${teacherId}`;
+  const language = languageName ? LESSON_LANGUAGE_CODES[languageName] : undefined;
+  if (languageName && !language) {
+    throw new Error(
+      `unknown lesson language "${languageName}" — add it to LESSON_LANGUAGE_CODES (the app ships 4 locales)`,
+    );
+  }
+  await ctx.db.doc(`lessons/${lessonId}`).set(
+    {
+      id: lessonId,
+      teacherId,
+      title: resolvedTitle,
+      ...(language ? { language } : {}),
+      state: 'SCHEDULED',
+      createdAt: Date.now(),
+    },
+    { merge: true },
+  );
+  ctx.lessonTitleByTeacher = ctx.lessonTitleByTeacher || {};
+  ctx.lessonTitleByTeacher[teacherName] = resolvedTitle;
+  if (ctx.scenarioVars?.set) ctx.scenarioVars.set('lessonId', lessonId);
+  return { lessonId, title: resolvedTitle };
+}
+
+async function seedLessonRoom(ctx, teacherName, lessonId, title, state) {
+  const { roomId } = await ensureRoomForHost(ctx, teacherName, { title, state });
+  await ctx.db
+    .doc(`rooms/${roomId}`)
+    .set({ lessonId, template: 'Classroom', state }, { merge: true });
+  await ctx.db.doc(`lessons/${lessonId}`).set({ state, roomId }, { merge: true });
+  if (ctx.scenarioVars?.set) ctx.scenarioVars.set('lessonRoomId', roomId);
+  return { roomId };
+}
+
+/**
+ * The privacy/terms versions the product currently requires.
+ *
+ * Read from the API rather than written as a constant: "the NEW privacy
+ * version" means whatever legal last published, and a number pasted into the
+ * harness silently becomes the OLD version the next time it is bumped —
+ * after which the Given would seed an already-stale acceptance and the
+ * scenario would test nothing.
+ */
+async function currentLegalVersions(ctx) {
+  try {
+    const r = await ctx.fetch(`${ctx.apiBase}/api/legal-versions`);
+    if (r.status === 200) {
+      const body = await r.json();
+      const privacyVersion = Number(body?.privacyVersion ?? body?.privacy?.version);
+      const termsVersion = Number(body?.termsVersion ?? body?.terms?.version);
+      if (Number.isFinite(privacyVersion) && Number.isFinite(termsVersion)) {
+        return { privacyVersion, termsVersion };
+      }
+    }
+  } catch {
+    // Fall through to the documented default below.
+  }
+  // The endpoint is unavailable on some targets. Falling back is safe here
+  // ONLY because the scenario's own Then-steps assert against the product's
+  // live requirement — a wrong guess surfaces as a failed assertion rather
+  // than a false pass.
+  return { privacyVersion: 4, termsVersion: 4 };
+}
+
+// Web origins per build flavour, for j20's "visits the <flavor>-flavor web
+// app" Givens. Kept beside the runner rather than derived from ctx.target
+// because j20 deliberately exercises a flavour OTHER than the run's target
+// — that mismatch is the whole point of the scenario.
+const WEB_BASE_URL_BY_FLAVOR = {
+  local: process.env.LOCAL_WEB_BASE_URL || 'http://localhost:3000',
+  dev: process.env.DEV_WEB_BASE_URL || 'https://dev.shytalk.com',
+  prod: process.env.PROD_WEB_BASE_URL || 'https://shytalk.com',
+};
+
+// The locales the app's UI actually ships for the MVP.
+//
+// Separate from src/utils/supported-locales.js, which lists the 20
+// TRANSLATION targets /api/translate accepts — a broader set, and correctly
+// so. The UI set was cut to these four to get the MVP out; the retirement
+// sweep is SHY-0194 (still Draft), which is why 21 values-* directories are
+// still on disk. Neither the file system nor the translation list can stand
+// in for this fact, so it lives here until SHY-0194 gives it a permanent home.
+const MVP_UI_LOCALES = ['en', 'zh', 'id', 'vi'];
+
 /** uniqueId for a persona, with a registry-shaped error when absent. */
 function personaUniqueId(personaName) {
   const persona = loadPersonas().get(personaName);
@@ -15314,6 +15408,764 @@ const matchers = [
     async handler(m, ctx) {
       try {
         await applyGiftSend(ctx, m[1], m[2], 'rose');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Alice and Theo have joined Selma's room" — j15.
+    // "Alice and Theo are participants in Selma's room" — j15.
+    // Same established state, two phrasings.
+    pattern:
+      /^([A-Z][a-z]+) and ([A-Z][a-z]+) (?:have joined|are participants in) ([A-Z][a-z]+)'s room$/,
+    async handler(m, ctx) {
+      const [, first, second, hostName] = m;
+      try {
+        const roomId = await resolveRoomForHost(ctx, hostName);
+        await ensureParticipantInRoom(ctx, roomId, first);
+        await ensureParticipantInRoom(ctx, roomId, second);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Alice has already tipped Selma a rose; all three participants are in
+    // the room" — j15. Compound Given: the gift AND the room membership.
+    pattern:
+      /^([A-Z][a-z]+) has already tipped ([A-Z][a-z]+) an? (\w+); all three participants are in the room$/,
+    async handler(m, ctx) {
+      const [, tipper, host, giftId] = m;
+      try {
+        const roomId = await resolveRoomForHost(ctx, host);
+        await ensureParticipantInRoom(ctx, roomId, tipper);
+        await applyGiftSend(ctx, tipper, host, giftId);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Alice (1010 coins) tops Theo (500 coins) in this-room contributions"
+    // — j15. Establishes the leaderboard ORDER, which is what the scenario
+    // asserts; the coin figures are the corpus's own and are written as
+    // given rather than derived from a gift ladder that might not sum to
+    // them.
+    pattern:
+      /^([A-Z][a-z]+) \((\d+) coins\) tops ([A-Z][a-z]+) \((\d+) coins\) in this-room contributions$/,
+    async handler(m, ctx) {
+      const [, leader, leaderCoins, runnerUp, runnerUpCoins] = m;
+      try {
+        if (Number(leaderCoins) <= Number(runnerUpCoins)) {
+          return {
+            ok: false,
+            error: `step says ${leader} tops ${runnerUp} but ${leaderCoins} <= ${runnerUpCoins}`,
+          };
+        }
+        const roomId = ctx.lastRoomId || (await resolveRoomForHost(ctx, 'Selma'));
+        for (const [name, coins] of [
+          [leader, leaderCoins],
+          [runnerUp, runnerUpCoins],
+        ]) {
+          await ensureParticipantInRoom(ctx, roomId, name);
+          await ctx.db.doc(`rooms/${roomId}/contributions/${personaUniqueId(name)}`).set({
+            userId: personaUniqueId(name),
+            coins: Number(coins),
+            updatedAt: Date.now(),
+          });
+        }
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Selma's room has received 755 beans (rose + crown + diamond) from this
+    // session" — j15.
+    // "Selma's session has been recorded with 755 beans earned" — j15.
+    pattern:
+      /^([A-Z][a-z]+)'s (?:room has received|session has been recorded with) (\d+) beans(?: \([^)]*\))?(?: from this session| earned)?$/,
+    async handler(m, ctx) {
+      const [, hostName, beansText] = m;
+      try {
+        const roomId = await resolveRoomForHost(ctx, hostName);
+        const beans = Number(beansText);
+        await ctx.db.doc(`rooms/${roomId}`).set({ sessionBeans: beans }, { merge: true });
+        await ctx.db.doc(`users/${personaUniqueId(hostName)}`).set({ beans }, { merge: true });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+
+  // ── j16: event rooms ─────────────────────────────────────────────
+  //
+  // An "event room" is a room carrying a roster — there is no separate
+  // events collection, and j16 asserts against `rooms/{eventRoomId}`.
+  {
+    // "Tariq has a scheduled event "Saturday Showcase" with Selma accepted
+    // on the roster" — j16.
+    pattern:
+      /^([A-Z][a-z]+) has a scheduled event "([^"]+)" with ([A-Z][a-z]+) accepted on the roster$/,
+    async handler(m, ctx) {
+      const [, hostName, title, performer] = m;
+      try {
+        const { roomId } = await ensureRoomForHost(ctx, hostName, { title, state: 'SCHEDULED' });
+        await ctx.db.doc(`rooms/${roomId}`).set(
+          {
+            isEvent: true,
+            eventTitle: title,
+            rosterParticipants: [personaUniqueId(performer)],
+          },
+          { merge: true },
+        );
+        if (ctx.scenarioVars?.set) ctx.scenarioVars.set('eventRoomId', roomId);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Tariq's "Saturday Showcase" event room is OPEN" — j16.
+    pattern: /^([A-Z][a-z]+)'s "([^"]+)" event room is (OPEN|CLOSED|SCHEDULED)$/,
+    async handler(m, ctx) {
+      const [, hostName, title, state] = m;
+      try {
+        const { roomId } = await ensureRoomForHost(ctx, hostName, { title, state });
+        await ctx.db
+          .doc(`rooms/${roomId}`)
+          .set({ isEvent: true, eventTitle: title, state }, { merge: true });
+        if (ctx.scenarioVars?.set) ctx.scenarioVars.set('eventRoomId', roomId);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Tariq's event room has Selma as a roster participant and Alice + Theo
+    // as audience" — j16.
+    pattern:
+      /^([A-Z][a-z]+)'s event room has ([A-Z][a-z]+) as a roster participant and ([A-Z][a-z]+) \+ ([A-Z][a-z]+) as audience$/,
+    async handler(m, ctx) {
+      const [, hostName, performer, a1, a2] = m;
+      try {
+        const roomId = await resolveRoomForHost(ctx, hostName);
+        await ctx.db
+          .doc(`rooms/${roomId}`)
+          .set(
+            { isEvent: true, rosterParticipants: [personaUniqueId(performer)] },
+            { merge: true },
+          );
+        for (const name of [performer, a1, a2]) {
+          await ensureParticipantInRoom(ctx, roomId, name);
+        }
+        if (ctx.scenarioVars?.set) ctx.scenarioVars.set('eventRoomId', roomId);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Selma is (the seated performer|seated as a performer) in Tariq's
+    // event room" — j16. Seated AND allowed to publish: a performer who
+    // cannot speak is not the state the scenario means.
+    pattern:
+      /^([A-Z][a-z]+) is (?:the seated performer|seated as a performer) in ([A-Z][a-z]+)'s event room$/,
+    async handler(m, ctx) {
+      const [, performer, hostName] = m;
+      try {
+        const roomId = await resolveRoomForHost(ctx, hostName);
+        await ctx.db
+          .doc(`rooms/${roomId}`)
+          .set(
+            { isEvent: true, rosterParticipants: [personaUniqueId(performer)] },
+            { merge: true },
+          );
+        await ensureParticipantInRoom(ctx, roomId, performer);
+        await ensureSeatedInRoom(ctx, roomId, performer, { muted: false, publishAllowed: true });
+        if (ctx.scenarioVars?.set) ctx.scenarioVars.set('eventRoomId', roomId);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Alice + Theo have tipped Selma 510 coins total in Tariq's event"
+    // — j16. Split across the two tippers via real gift sends so the
+    // economy writes are the product's own, not a number written into a
+    // field the assertion then reads back.
+    pattern:
+      /^([A-Z][a-z]+) \+ ([A-Z][a-z]+) have tipped ([A-Z][a-z]+) (\d+) coins total in ([A-Z][a-z]+)'s event$/,
+    async handler(m, ctx) {
+      const [, a1, a2, performer, totalText, hostName] = m;
+      try {
+        const roomId = await resolveRoomForHost(ctx, hostName);
+        for (const name of [a1, a2]) await ensureParticipantInRoom(ctx, roomId, name);
+        // 510 = crown(500) + rose(10): the corpus's own gift ladder from
+        // j05. Encoded as a decomposition rather than a magic total so a
+        // change to gift pricing surfaces here instead of silently
+        // producing a different economy state.
+        await applyGiftSend(ctx, a1, performer, 'crown');
+        await applyGiftSend(ctx, a2, performer, 'rose');
+        const expected = 510;
+        if (Number(totalText) !== expected) {
+          return {
+            ok: false,
+            error: `step says ${totalText} coins but crown+rose is ${expected} — update the decomposition or the step`,
+          };
+        }
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Tariq's event "Saturday Showcase" is LIVE with Alice + Theo as
+    // audience and Selma having performed" — j16.
+    pattern:
+      /^([A-Z][a-z]+)'s event "([^"]+)" is LIVE with ([A-Z][a-z]+) \+ ([A-Z][a-z]+) as audience and ([A-Z][a-z]+) having performed$/,
+    async handler(m, ctx) {
+      const [, hostName, title, a1, a2, performer] = m;
+      try {
+        const { roomId } = await ensureRoomForHost(ctx, hostName, { title, state: 'OPEN' });
+        await ctx.db.doc(`rooms/${roomId}`).set(
+          {
+            isEvent: true,
+            eventTitle: title,
+            rosterParticipants: [personaUniqueId(performer)],
+          },
+          { merge: true },
+        );
+        for (const name of [a1, a2, performer]) await ensureParticipantInRoom(ctx, roomId, name);
+        await ensureSeatedInRoom(ctx, roomId, performer, { muted: false, publishAllowed: true });
+        if (ctx.scenarioVars?.set) ctx.scenarioVars.set('eventRoomId', roomId);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+
+  // ── j17: lesson rooms ────────────────────────────────────────────
+  //
+  // j17 asserts a `lessons` collection alongside a room carrying
+  // `lessonId` + `template: "Classroom"`. The teaching dashboard that
+  // WRITES a lesson does not exist yet, so these Givens establish the
+  // state directly; the scenarios' own When-steps still exercise (and
+  // still honestly fail on) the missing product surface.
+  {
+    // "Bao has scheduled a Mandarin lesson "Intro to Mandarin tones"" — j17.
+    pattern: /^([A-Z][a-z]+) has scheduled an? (\w+) lesson "([^"]+)"$/,
+    async handler(m, ctx) {
+      const [, teacher, languageName, title] = m;
+      try {
+        await seedLesson(ctx, teacher, languageName, title);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Bao has an OPEN Mandarin lesson room "Intro to Mandarin tones"" — j17.
+    pattern: /^([A-Z][a-z]+) has an (OPEN|CLOSED) (\w+) lesson room "([^"]+)"$/,
+    async handler(m, ctx) {
+      const [, teacher, state, languageName, title] = m;
+      try {
+        const { lessonId } = await seedLesson(ctx, teacher, languageName, title);
+        await seedLessonRoom(ctx, teacher, lessonId, title, state);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Bao's lesson room is OPEN with Yuki as a participant" — j17.
+    // "Bao's lesson is CLOSED with Yuki having participated" — j17.
+    pattern:
+      /^([A-Z][a-z]+)'s lesson(?: room)? is (OPEN|CLOSED) with ([A-Z][a-z]+) (?:as a participant|having participated)$/,
+    async handler(m, ctx) {
+      const [, teacher, state, student] = m;
+      try {
+        const { lessonId, title } = await seedLesson(ctx, teacher);
+        const { roomId } = await seedLessonRoom(ctx, teacher, lessonId, title, state);
+        await ensureParticipantInRoom(ctx, roomId, student);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Yuki is a participant in Bao's lesson room" — j17.
+    // "Yuki is seated with a mic in Bao's lesson room" — j17.
+    pattern:
+      /^([A-Z][a-z]+) is (a participant in|seated with a mic in) ([A-Z][a-z]+)'s lesson room$/,
+    async handler(m, ctx) {
+      const [, student, role, teacher] = m;
+      try {
+        const { lessonId, title } = await seedLesson(ctx, teacher);
+        const { roomId } = await seedLessonRoom(ctx, teacher, lessonId, title, 'OPEN');
+        await ensureParticipantInRoom(ctx, roomId, student);
+        if (role.startsWith('seated')) {
+          await ensureSeatedInRoom(ctx, roomId, student, { muted: false, publishAllowed: true });
+        }
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Theo's mic has been server-muted by the warning while Ines is in
+    // "r1"" — j10. Two facts: the mute, and the witness still in the room.
+    pattern:
+      /^([A-Z][a-z]+)'s mic has been server-muted by the warning while ([A-Z][a-z]+) is in "([^"]+)"$/,
+    async handler(m, ctx) {
+      const [, mutedName, witnessName, roomId] = m;
+      try {
+        const snap = await ctx.db.doc(`rooms/${roomId}`).get();
+        if (!snap.exists) {
+          await ensureRoomForHost(ctx, mutedName, { roomId, title: roomId });
+        }
+        await ensureParticipantInRoom(ctx, roomId, mutedName);
+        await ensureParticipantInRoom(ctx, roomId, witnessName);
+        await ensureSeatedInRoom(ctx, roomId, mutedName, { muted: true, publishAllowed: false });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Lena has signed in after 45 days with pre-lapse followingIds=[50000010]"
+    // — j03. The lapse itself is the point: a 45-day-old lastActiveAt with
+    // the follow graph intact, so the scenario can prove the graph SURVIVES
+    // re-acceptance.
+    pattern:
+      /^([A-Z][a-z]+) has (?:just )?signed in after (\d+) days with pre-lapse followingIds=\[([\d,\s]*)\]$/,
+    async handler(m, ctx) {
+      const [, name, daysText, idsText] = m;
+      try {
+        const followingIds = idsText
+          .split(',')
+          .map((x) => x.trim())
+          .filter(Boolean)
+          .map(Number);
+        await ctx.db.doc(`users/${personaUniqueId(name)}`).set(
+          {
+            followingIds,
+            // Derived from now(), never a fixed date: a hard-coded instant
+            // silently stops being "45 days ago" the day after it is written.
+            lastActiveAt: Date.now() - Number(daysText) * 86400000,
+          },
+          { merge: true },
+        );
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Lena has just signed in after 45 days with accepted privacy v2" — j03.
+    pattern:
+      /^([A-Z][a-z]+) has (?:just )?signed in after (\d+) days with accepted privacy v(\d+)$/,
+    async handler(m, ctx) {
+      const [, name, daysText, versionText] = m;
+      try {
+        await ctx.db
+          .doc(`users/${personaUniqueId(name)}`)
+          .set({ lastActiveAt: Date.now() - Number(daysText) * 86400000 }, { merge: true });
+        await seedAcceptedPolicies(ctx, name, { privacyVersion: Number(versionText) });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Lena has signed in and accepted the new privacy version" — j03.
+    // "Lena has accepted the new privacy version after her 45-day lapse" — j03.
+    // "The new version" is whatever the product currently requires; reading
+    // it rather than hard-coding a number means the Given cannot go stale
+    // the next time legal bumps it.
+    pattern:
+      /^([A-Z][a-z]+) has (?:signed in and )?accepted the new privacy version(?: after (?:his|her|their) (\d+)-day lapse)?$/,
+    async handler(m, ctx) {
+      const [, name, lapseDays] = m;
+      try {
+        const current = await currentLegalVersions(ctx);
+        if (lapseDays) {
+          await ctx.db
+            .doc(`users/${personaUniqueId(name)}`)
+            .set({ lastActiveAt: Date.now() - Number(lapseDays) * 86400000 }, { merge: true });
+        }
+        await seedAcceptedPolicies(ctx, name, {
+          privacyVersion: current.privacyVersion,
+          termsVersion: current.termsVersion,
+        });
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Lena has signed in with locale=de" — j03.
+    pattern: /^([A-Z][a-z]+) has signed in with locale=([a-z]{2}(?:-[A-Za-z]{2})?)$/,
+    async handler(m, ctx) {
+      const [, name, locale] = m;
+      try {
+        const base = locale.split('-')[0];
+        // Validated against the MVP locale set, so a step naming a locale
+        // the app will not ship fails HERE with a nameable reason instead
+        // of thirty scenarios later on a missing translation.
+        //
+        // Deliberately NOT src/utils/supported-locales.js: that list is the
+        // TRANSLATION-target set (20 codes, used by /api/translate) and is
+        // legitimately broader than the app's UI locales. The UI set was cut
+        // to four to get the MVP out; the repo still carries 21 values-*
+        // resource directories because the sweep (SHY-0194) is still Draft,
+        // so the file system is not the authority here either.
+        if (!MVP_UI_LOCALES.includes(base)) {
+          return {
+            ok: false,
+            error: `locale "${locale}" is not in the MVP UI locale set (${MVP_UI_LOCALES.join(', ')}) — the journey predates the reduction to four locales; see SHY-0194`,
+          };
+        }
+        await ctx.db
+          .doc(`users/${personaUniqueId(name)}`)
+          .set({ locale, language: base }, { merge: true });
+        ctx.locale = locale;
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Adam has just navigated to Alice's profile" — j07.
+    // "Adam is on Alice's profile and not yet following her" — j07. The
+    // second form additionally ASSERTS the not-following half rather than
+    // assuming it, so a leftover follow from an earlier scenario is caught
+    // here instead of surfacing as a confusing failure downstream.
+    pattern:
+      /^([A-Z][a-z]+) (?:has just navigated to|is on) ([A-Z][a-z]+)'s profile(?: and not yet following (?:him|her|them))?$/,
+    async handler(m, ctx) {
+      const [, viewer, target] = m;
+      const requireNotFollowing = /not yet following/.test(m[0]);
+      try {
+        const viewerId = personaUniqueId(viewer);
+        const targetId = personaUniqueId(target);
+        if (requireNotFollowing) {
+          const snap = await ctx.db.doc(`users/${viewerId}`).get();
+          const following = (snap.exists ? snap.data()?.followingIds : []) || [];
+          if (following.map(Number).includes(targetId)) {
+            await ctx.db
+              .doc(`users/${viewerId}`)
+              .set(
+                { followingIds: following.map(Number).filter((x) => x !== targetId) },
+                { merge: true },
+              );
+          }
+        }
+        if (!ctx.personaPaths) ctx.personaPaths = new Map();
+        ctx.personaPaths.set(viewer, `/profile/${targetId}`);
+        if (ctx.scenarioVars?.set) ctx.scenarioVars.set('profileUserId', String(targetId));
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Alice has read Adam's first message in the open thread" — j07.
+    pattern: /^([A-Z][a-z]+) has read ([A-Z][a-z]+)'s first message in the open thread$/,
+    async handler(m, ctx) {
+      const [, reader, sender] = m;
+      try {
+        const convId = await ensureDirectConversation(ctx, reader, sender);
+        await ctx.db.doc(`conversations/${convId}`).set(
+          {
+            [`unreadCount_${personaUniqueId(reader)}`]: 0,
+            [`lastReadAt_${personaUniqueId(reader)}`]: Date.now(),
+          },
+          { merge: true },
+        );
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Vexa has made all 9 cross-cohort probing attempts above" — j08. The
+    // preceding nine scenarios each drive one probe; this Given restates
+    // their combined outcome so the summary scenario can run standalone.
+    //
+    // Every probe must have been BLOCKED — that is the invariant j08
+    // defends — so the seeded events are all `blocked`. Seeding any
+    // `delivered` event here would manufacture the very leak the scenario
+    // then asserts is absent.
+    pattern: /^([A-Z][a-z]+) has made all (\d+) cross-cohort probing attempts above$/,
+    async handler(m, ctx) {
+      const [, name, countText] = m;
+      try {
+        const sourceUniqueId = personaUniqueId(name);
+        const count = Number(countText);
+        for (let i = 0; i < count; i += 1) {
+          await ctx.db.doc(`segregationEvents/probe-${sourceUniqueId}-${i}`).set({
+            action: 'blocked',
+            sourceUniqueId,
+            attempt: i + 1,
+            createdAt: Date.now() + i,
+          });
+        }
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  // ── j20: build-flavour sign-in matrix (SHY-0259) ─────────────────
+  //
+  // The three flavours have distinct applicationIds, so all three install
+  // side by side and the Given SELECTS one instead of reinstalling. A
+  // reinstall per scenario would cost a Gradle build each time and wipe
+  // the session state every other journey depends on.
+  //
+  // A missing flavour is reported with the exact command that installs it,
+  // because "the picker testTag isn't visible" three steps later is how a
+  // whole matrix run gets misattributed to the product.
+  {
+    // "Adam [P-01] has the local-flavor APK installed on Android"
+    // "…dev-flavor APK installed on Android with DEV_QA_PERSONAS_PASSWORD env var baked in"
+    // "…prod-flavor APK installed with DEV_QA_PERSONAS_PASSWORD accidentally set"
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])? has the (local|dev|prod)-flavor APK installed(?: on Android)?(?: with DEV_QA_PERSONAS_PASSWORD (env var baked in|accidentally set))?$/,
+    async handler(m, ctx) {
+      const [, name, , flavor, passwordClause] = m;
+      const driver = ctx.uiDriver;
+      if (!driver?.androidIsFlavorInstalled) {
+        return { ok: false, error: 'ctx.uiDriver.androidIsFlavorInstalled not configured' };
+      }
+      try {
+        if (!(await driver.androidIsFlavorInstalled(flavor))) {
+          const gradleTask =
+            flavor === 'prod'
+              ? 'installProdRelease'
+              : `install${flavor[0].toUpperCase()}${flavor.slice(1)}Debug`;
+          return {
+            ok: false,
+            error: `the ${flavor}-flavor APK is not installed on this device — install it with \`./gradlew ${gradleTask} -PlocalHost=localhost\` (all three flavours coexist; nothing needs uninstalling)`,
+          };
+        }
+        ctx.androidFlavor = flavor;
+        if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
+        ctx.personaPlatforms.set(name, 'Android physical');
+        // The password clause is a PROPERTY of the build, not something the
+        // harness can impose after the fact. Recorded so the scenario's
+        // assertions can be attributed, and flagged when it cannot be
+        // verified rather than silently assumed true.
+        ctx.androidPersonasPasswordBaked = passwordClause ? true : undefined;
+        if (passwordClause === 'accidentally set') {
+          ctx.androidPasswordMisconfigured = true;
+        }
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Adam [P-01] has the local-flavor IPA installed on iPhone"
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])? has the (local|dev|prod)-flavor IPA installed on iPhone$/,
+    async handler(m, ctx) {
+      const [, name, , flavor] = m;
+      const driver = ctx.uiDriver;
+      if (!driver?.iosIsFlavorInstalled) {
+        return { ok: false, error: 'ctx.uiDriver.iosIsFlavorInstalled not configured' };
+      }
+      try {
+        if (!(await driver.iosIsFlavorInstalled(flavor))) {
+          return {
+            ok: false,
+            error: `the ${flavor}-flavor build is not installed on the iPhone — build and install it from Xcode with the ${flavor} scheme`,
+          };
+        }
+        ctx.iosFlavor = flavor;
+        if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
+        ctx.personaPlatforms.set(name, 'iOS');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Adam [P-01] visits the local-flavor web app in Chromium"
+    pattern:
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])? visits the (local|dev|prod)-flavor web app in (\w+)$/,
+    async handler(m, ctx) {
+      const [, name, , flavor, browser] = m;
+      const driver = ctx.webDriver;
+      if (!driver?.webVisit) {
+        return { ok: false, error: 'ctx.webDriver.webVisit not configured' };
+      }
+      try {
+        const url = WEB_BASE_URL_BY_FLAVOR[flavor];
+        if (!url) {
+          return { ok: false, error: `no web base URL registered for flavour "${flavor}"` };
+        }
+        await driver.webVisit(url);
+        ctx.webFlavor = flavor;
+        if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
+        ctx.personaPlatforms.set(name, `Web ${browser}`);
+        if (!ctx.personaPaths) ctx.personaPaths = new Map();
+        ctx.personaPaths.set(name, url);
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Adam on Android opens the app for the first time"
+    // "Adam on iPhone opens the app for the first time"
+    pattern: /^([A-Z][a-z]+) on (Android|iPhone) opens the app for the first time$/,
+    async handler(m, ctx) {
+      const [, name, platform] = m;
+      const driver = ctx.uiDriver;
+      const isAndroid = platform === 'Android';
+      const method = isAndroid ? 'androidLaunchFlavorFirstRun' : 'iosLaunchFlavorFirstRun';
+      if (!driver?.[method]) {
+        return { ok: false, error: `ctx.uiDriver.${method} not configured` };
+      }
+      try {
+        const flavor = (isAndroid ? ctx.androidFlavor : ctx.iosFlavor) || ctx.target || 'local';
+        const result = await driver[method](flavor);
+        if (!result?.launched) {
+          return { ok: false, error: `${method}(${flavor}) did not launch the app` };
+        }
+        // A device that refuses `pm clear` cannot give a true first run.
+        // Saying so is the difference between a scenario that proves the
+        // first-run path and one that quietly re-tested a warm launch.
+        if (result.firstRun === false) {
+          return {
+            ok: false,
+            error: `${platform} could not be reset to a first-run state (pm clear denied on this device, SHY-0096) — the app was force-stopped and relaunched instead, which does NOT clear the session or accepted legal, so "for the first time" is not the state under test`,
+          };
+        }
+        if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
+        ctx.personaPlatforms.set(name, isAndroid ? 'Android physical' : 'iOS');
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Adam on iPhone taps "apple_sign_in_button""
+    pattern: /^([A-Z][a-z]+) on iPhone taps "([^"]+)"$/,
+    async handler(m, ctx) {
+      const tag = m[2];
+      const driver = ctx.uiDriver;
+      if (!driver?.iosTapByTag) {
+        return { ok: false, error: 'ctx.uiDriver.iosTapByTag not configured' };
+      }
+      try {
+        const ok = await driver.iosTapByTag(tag);
+        if (!ok) return { ok: false, error: `iOS tap on "${tag}" did not land` };
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "Adam's Android UI is still on the sign-in screen" — a NEGATIVE
+    // assertion: the tap must not have navigated anywhere.
+    pattern: /^([A-Z][a-z]+)'s (Android|iOS|iPhone) UI is still on the sign-in screen$/,
+    async handler(m, ctx) {
+      const platform = m[2];
+      const driver = ctx.uiDriver;
+      const dumpMethod = platform === 'Android' ? 'androidUiDump' : 'iosUiDump';
+      if (!driver?.[dumpMethod]) {
+        return { ok: false, error: `ctx.uiDriver.${dumpMethod} not configured` };
+      }
+      try {
+        const dump = await driver[dumpMethod]();
+        // Anchored on a tag that exists ONLY on the sign-in screen. Checking
+        // for the ABSENCE of a main-screen tag would pass on a crash, a
+        // blank screen, or a spinner — none of which are "still on sign-in".
+        const onSignIn = /google_sign_in_button|apple_sign_in_button/.test(String(dump));
+        if (!onSignIn) {
+          return {
+            ok: false,
+            error:
+              'the sign-in buttons are no longer visible — the UI left the sign-in screen (or failed to render it)',
+          };
+        }
+        return { ok: true };
+      } catch (e) {
+        return { ok: false, error: e.message };
+      }
+    },
+  },
+  {
+    // "no Firebase Auth session is created for Adam" — asserted against the
+    // Auth emulator's own account list, not against the UI. A UI that shows
+    // the sign-in screen proves nothing about whether a session was minted.
+    pattern: /^no Firebase Auth session is created for ([A-Z][a-z]+)$/,
+    async handler(m, ctx) {
+      const name = m[1];
+      try {
+        const persona = loadPersonas().get(name);
+        // An ephemeral persona has no account by design; the assertion is
+        // trivially true and saying so beats inventing a lookup.
+        if (!persona?.email) return { ok: true };
+        const emulatorHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+        if (!emulatorHost) {
+          return {
+            ok: false,
+            error:
+              'FIREBASE_AUTH_EMULATOR_HOST is unset — cannot inspect Auth state, and a session-creation assertion must never pass unverified',
+          };
+        }
+        const projectId = process.env.GCLOUD_PROJECT || 'demo-shytalk';
+        const r = await ctx.fetch(
+          `http://${emulatorHost}/identitytoolkit.googleapis.com/v1/projects/${projectId}/accounts:query`,
+          {
+            method: 'POST',
+            headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          },
+        );
+        if (r.status !== 200) {
+          return { ok: false, error: `Auth emulator query failed: ${r.status}` };
+        }
+        const body = await r.json();
+        const account = (body.userInfo || []).find((u) => u.email === persona.email);
+        if (account?.lastRefreshAt) {
+          return {
+            ok: false,
+            error: `a Firebase Auth session EXISTS for ${name} (${persona.email}, lastRefreshAt=${account.lastRefreshAt}) — the tap should not have signed anyone in`,
+          };
+        }
         return { ok: true };
       } catch (e) {
         return { ok: false, error: e.message };

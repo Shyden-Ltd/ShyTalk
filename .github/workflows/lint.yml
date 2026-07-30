@@ -161,6 +161,13 @@ jobs:
       - name: No NEW unmatched journey steps (SHY-0259 ratchet)
         run: node scripts/check-journey-step-coverage.js
 
+      # A driver method declared but never implemented still RESOLVES: the
+      # matcher finds it, the step is reached, and the stub returns false —
+      # which reads as "the product did not do the thing" rather than as a
+      # harness gap. Static (no device, browser or Appium session needed).
+      - name: No NEW unimplemented driver methods (SHY-0259 ratchet)
+        run: node scripts/check-driver-coverage.js
+
       # A single NUL byte makes git classify a source file as BINARY, which
       # hides its diff from review and removes it from `git grep` / `grep -I`
       # — the basis of several guards above, which then keep reporting green

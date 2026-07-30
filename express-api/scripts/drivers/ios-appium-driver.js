@@ -265,6 +265,68 @@ async function createIosDriver({
 
   // iosLaunchApp — terminate-then-launch to guarantee a cold start.
   // Critical for scenario isolation (parity with Android force-stop).
+  // ── j20 build-flavour support (SHY-0259) ─────────────────────────
+  //
+  // iOS is NOT Android here. Every build config ships the SAME
+  // PRODUCT_BUNDLE_IDENTIFIER (com.shyden.shytalk — see bundleIdMap above),
+  // so the flavours cannot coexist on one device and the installed flavour
+  // is not observable from outside the app. Android's applicationIdSuffix
+  // makes it observable; iOS gives us nothing to read.
+  //
+  // Rather than guess, the flavour is DECLARED via IOS_FLAVOR and the
+  // mismatch is reported by name. A harness that silently assumed the right
+  // build was installed would attribute a wrong-backend failure to the
+  // product, which is exactly how a matrix run gets misread.
+
+  /** Is an app installed for our bundle id, and does the DECLARED flavour match? */
+  driver.iosIsFlavorInstalled = async (flavor) => {
+    const sid = await ensureSession();
+    const r = await fetchImpl(`${appiumBaseUrl}/session/${sid}/appium/device/app_installed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bundleId }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (body?.value !== true) return false;
+    const declared = (process.env.IOS_FLAVOR || target || 'dev').trim();
+    if (declared !== flavor) {
+      throw new Error(
+        `the iPhone ships ONE bundle id (${bundleId}) for every build config, so the installed flavour cannot be detected. IOS_FLAVOR declares "${declared}" but this scenario needs "${flavor}" — install the ${flavor} scheme and set IOS_FLAVOR=${flavor}.`,
+      );
+    }
+    return true;
+  };
+
+  /**
+   * Launch from a first-run state.
+   *
+   * A true first run needs the app GONE and reinstalled; Appium has no
+   * equivalent of `pm clear` on a real device. When IOS_APP_PATH points at
+   * a built .app the reset is genuine; otherwise this terminates and
+   * reactivates and reports `firstRun: false`, so the caller can refuse
+   * rather than test a warm launch believing it is a cold one.
+   */
+  driver.iosLaunchFlavorFirstRun = async (flavor) => {
+    const sid = await ensureSession();
+    const appPath = (process.env.IOS_APP_PATH || '').trim();
+    let firstRun = false;
+    if (appPath) {
+      await fetchImpl(`${appiumBaseUrl}/session/${sid}/appium/device/remove_app`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bundleId }),
+      }).catch(() => {});
+      const install = await fetchImpl(`${appiumBaseUrl}/session/${sid}/appium/device/install_app`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appPath }),
+      });
+      firstRun = install.ok === true || install.status === 200;
+    }
+    await driver.iosLaunchApp();
+    return { launched: true, firstRun, bundleId, flavor };
+  };
+
   driver.iosLaunchApp = async () => {
     const sid = await ensureSession();
     // POST /session/<sid>/appium/device/terminate_app — ignore errors

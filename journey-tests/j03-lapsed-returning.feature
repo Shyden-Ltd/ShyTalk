@@ -1,10 +1,16 @@
-# j03 — Lena, lapsed adult, German locale — forced re-acceptance + streak reset.
+# j03 — Lena, lapsed adult, Chinese locale — forced re-acceptance + streak reset.
 #
-# Personas: P-05 Lena (Web Chromium — primary, locale=de)
+# Personas: P-05 Lena (Web Chromium — primary, locale=zh)
+#
+# Was locale=de until 2026-07-30. The MVP ships four UI locales only —
+# en, zh, id, vi (SHY-0194) — so a German journey could never pass. The
+# language is incidental to what j03 proves (a lapsed adult returns,
+# re-accepts, streak resets, NON-ENGLISH strings render); only the chosen
+# locale changed.
 # Platforms: Web only (web is the lapsed-user re-engagement channel)
 #
 # This journey proves: lapsed sign-in still works, the new privacy version forces re-acceptance,
-# decayed streak resets to 1 on claim, German strings render, FCM token re-registers, and
+# decayed streak resets to 1 on claim, Chinese strings render, FCM token re-registers, and
 # all of the user's followers from before remain intact.
 
 Feature: j03 — Lena's lapsed return
@@ -20,14 +26,14 @@ Feature: j03 — Lena's lapsed return
     Given Lena [P-05] is on Web Chromium at "/" with no Firebase session
 
   # The original "Lena signs in after 45 days — re-acceptance + streak reset +
-  # German UI" scenario was 26 steps. Split into 6 phase-focused scenarios sharing
+  # Chinese UI" scenario was 26 steps. Split into 6 phase-focused scenarios sharing
   # the Background lapsed-state setup. Each runs in isolation against the seeded
   # privacy/streak/fcm state.
   @blocker @browser-chromium @locale
-  Scenario: Lena signs in via login.html with German UI labels
+  Scenario: Lena signs in via login.html with Chinese UI labels
     When Lena on Web navigates to "/login.html"
     Then Lena's Web UI document direction is "ltr"
-    Then Lena's Web UI shows German translation of "Sign in" in the page heading
+    Then Lena's Web UI shows Chinese translation of "Sign in" in the page heading
     When Lena on Web types "lapsed-adult@shytalk.dev" + "{PERSONAS_PASSWORD}" and submits
     Then within 5000ms Lena's Web UI navigates to "/"
 
@@ -36,16 +42,16 @@ Feature: j03 — Lena's lapsed return
     Given Lena has just signed in after 45 days with accepted privacy v2 (current is v4)
     Then within 3000ms Lena's Web UI shows the legal acceptance screen
     Then Lena's Web UI shows a "What's changed" highlight pointing at section 11 (UK OSA cohorts)
-    Then Lena's Web UI shows the heading in German
+    Then Lena's Web UI shows the heading in Chinese
     When Lena on Web checks both legal checkboxes and continues
     Then within 5000ms the database has document "usersAcceptedPolicies/50000020" with field "privacyVersion" equal to 4
     Then the database has document "usersAcceptedPolicies/50000020" with field "termsVersion" equal to 4
 
   @blocker @browser-chromium @locale
-  Scenario: Lena's daily-reward streak resets to 1 with the German "Streak reset" toast
+  Scenario: Lena's daily-reward streak resets to 1 with the Chinese "Streak reset" toast
     Given Lena has accepted the new privacy version after her 45-day lapse
     When Lena on Web opens the "/daily-reward" screen
-    Then Lena's Web UI shows "Streak reset" toast in German
+    Then Lena's Web UI shows "Streak reset" toast in Chinese
     When Lena on Web taps the claim button
     Then within 3000ms the database has document "users/50000020" with field "loginStreak" equal to 1
     Then the database has document "users/50000020" with field "shyCoins" greater than 800
@@ -66,11 +72,11 @@ Feature: j03 — Lena's lapsed return
     Then the database has document "users/50000020" with field "followingIds" containing 50000010
 
   @browser-chromium @locale
-  Scenario: Lena's wallet screen renders German labels with locale-appropriate currency name
-    Given Lena has signed in with locale=de
+  Scenario: Lena's wallet screen renders Chinese labels with locale-appropriate currency name
+    Given Lena has signed in with locale=zh
     When Lena on Web opens the "wallet" screen
-    Then Lena's Web UI shows German translation of "Wallet"
-    Then Lena's Web UI shows "Münzen" or "Coins" (locale-appropriate)
+    Then Lena's Web UI shows Chinese translation of "Wallet"
+    Then Lena's Web UI shows "硬币" or "Coins" (locale-appropriate)
 
   @browser-chromium
   Scenario: Lena dismisses the re-acceptance — cannot reach main app

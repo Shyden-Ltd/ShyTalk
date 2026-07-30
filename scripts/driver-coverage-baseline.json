@@ -1,0 +1,19 @@
+{
+  "reachedStubs": 169,
+  "totalStubs": 178,
+  "byDriver": {
+    "android-adb-driver.js": 0,
+    "ios-appium-driver.js": 6,
+    "ios-devicectl-driver.js": 35,
+    "ios-simctl-driver.js": 64,
+    "web-mobile-chrome-android-driver.js": 0,
+    "web-mobile-edge-android-driver.js": 0,
+    "web-mobile-firefox-android-driver.js": 0,
+    "web-mobile-safari-ios-driver.js": 0,
+    "web-mobile-samsung-android-driver.js": 0,
+    "web-mobile-webkit-ios-driver.js": 0,
+    "web-playwright-driver.js": 73
+  },
+  "note": "Driver methods declared but never implemented (they resolve, then do nothing). Ratchets DOWN only. Target is 0.",
+  "updated": "2026-07-30"
+}

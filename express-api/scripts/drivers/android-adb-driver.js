@@ -2266,6 +2266,54 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     }
   };
 
+  // ── j20 build-flavour support (SHY-0259) ─────────────────────────
+  //
+  // The three flavours carry distinct applicationIdSuffixes
+  // (com.shyden.shytalk.local / .dev / bare for prod), so all three can be
+  // installed SIDE BY SIDE on one device. j20's flavour Givens therefore
+  // select a package rather than reinstalling — which would otherwise cost
+  // a Gradle build per scenario and wipe the session state every other
+  // journey depends on.
+
+  /** Is the flavour's package present on the device? */
+  driver.androidIsFlavorInstalled = async (flavor) => {
+    const pkg = PACKAGE_BY_TARGET[flavor];
+    if (!pkg) throw new Error(`unknown flavour "${flavor}" — expected local, dev or prod`);
+    const out = adb(['shell', 'pm', 'list', 'packages', pkg]);
+    // `pm list packages <filter>` matches by SUBSTRING, so filtering for the
+    // bare prod id also matches .local and .dev. Compare the full line.
+    return String(out)
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .includes(`package:${pkg}`);
+  };
+
+  /**
+   * Launch a flavour from a genuinely cold, signed-out state.
+   *
+   * `pm clear` is attempted first because it is the only thing that gives a
+   * true first-run (no session, no accepted legal). It is denied on some
+   * physical devices (SecurityException on the OnePlus CPH2653, SHY-0096),
+   * so the fallback is force-stop + launch — reported honestly via the
+   * returned `firstRun` flag rather than pretending the state is pristine.
+   */
+  driver.androidLaunchFlavorFirstRun = async (flavor) => {
+    const pkg = PACKAGE_BY_TARGET[flavor];
+    if (!pkg) throw new Error(`unknown flavour "${flavor}" — expected local, dev or prod`);
+    let firstRun = true;
+    try {
+      const out = String(adb(['shell', 'pm', 'clear', pkg]));
+      if (!/Success/i.test(out)) firstRun = false;
+    } catch {
+      firstRun = false;
+    }
+    if (!firstRun) adb(['shell', 'am', 'force-stop', pkg]);
+    if (typeof driver._ensureReverseTunnels === 'function') driver._ensureReverseTunnels();
+    adb(['shell', 'am', 'start', '-n', `${pkg}/com.shyden.shytalk.MainActivity`]);
+    await new Promise((r) => setTimeout(r, 2500)); // sleep-ok: cold-start settle, same budget as androidKillAndRelaunch
+    return { launched: true, firstRun, pkg };
+  };
+
   // androidTapQuotedTarget — wrapper around tag-based or owner-card tap.
   // Runner step "<Name> on Android taps the "<X>"" passes (name, targetId,
   // isRoomCard=false) — targetId is a testTag, delegate to androidTapByTag.

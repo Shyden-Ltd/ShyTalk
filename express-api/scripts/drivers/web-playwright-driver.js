@@ -304,6 +304,23 @@ async function createWebDriver({
   // Web tap-by-tag — looks for an element with data-test-tag or
   // [data-testid] attribute matching `tag`, OR an element whose text
   // content equals tag. Falls back to clickable role match.
+  /**
+   * Navigate to an absolute URL (j20's build-flavour Givens, SHY-0259).
+   *
+   * Every other method here navigates relative to the configured baseURL.
+   * j20 deliberately visits a flavour OTHER than the run's target — that
+   * mismatch is the point of the scenario — so this one takes an absolute
+   * origin and bypasses baseURL entirely.
+   */
+  driver.webVisit = async (url, name = 'default') => {
+    if (!/^https?:\/\//.test(String(url))) {
+      throw new Error(`webVisit needs an absolute URL, got "${url}"`);
+    }
+    const page = await pageFor(name);
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
+    return true;
+  };
+
   driver.webTap = async (tag) => {
     const page = await pageFor('default');
     if (!page.url() || page.url() === 'about:blank') await page.goto('/');
