@@ -152,11 +152,15 @@ function classifySkipLine(line) {
   // things, and only the first is acceptable.
   const m = line.match(/\b(?:test|it|this)\.(skip|fixme|todo)\s*\(/);
   if (!m) return null;
+  // `todo` and `fixme` are unconditionally parked — there is no runtime-skip
+  // form of either. Deciding by the trailing text alone misread a
+  // prettier-wrapped `test.todo(\n  'long title',\n)` as a bare skip, because
+  // the line ends right after the paren.
+  if (m[1] === 'todo' || m[1] === 'fixme') return 'PARKED';
   const after = line.slice(line.indexOf(m[0]) + m[0].length).trim();
   // `test.skip('title', async () => {}` parks a test; `test.skip(cond, 'why')`
   // opts out at runtime; a bare `test.skip()` skips the rest of the body.
   if (/^['"`]/.test(after)) return 'PARKED';
-  if (after === '' || after.startsWith(')')) return 'SKIP-COND';
   return 'SKIP-COND';
 }
 

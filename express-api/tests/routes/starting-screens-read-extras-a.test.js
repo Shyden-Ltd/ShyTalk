@@ -738,10 +738,21 @@ describe('GET /api/config/startingScreens — HTTP correctness', () => {
     // Express exposes X-Powered-By by default unless disabled
     // We check it's not present or at least not leaking framework info
     // If present, it shouldn't reveal internal details
-    if (res.headers['x-powered-by']) {
-      // If the header exists, it's an acceptable Express default — document it
-      expect(typeof res.headers['x-powered-by']).toBe('string');
-    }
+    // The old body accepted the header being present so long as it was a
+    // string — i.e. it accepted the exact leak it was named to prevent.
+    //
+    // This suite builds its own bare express app, which DOES send
+    // X-Powered-By, so the header cannot be asserted here. What actually
+    // removes it is helmet on the real entrypoint, so that is what gets
+    // pinned: a structural check anchored on the whole file, which fails if
+    // helmet is ever dropped or moved after the routes.
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const entry = fs.readFileSync(path.resolve(__dirname, '../../src/index.js'), 'utf8');
+    expect(entry).toMatch(/require\(['"]helmet['"]\)/);
+    expect(entry).toMatch(/app\.use\(helmet\(\)\)/);
+    expect(entry.indexOf('app.use(helmet())')).toBeLessThan(entry.indexOf("app.use('/api'"));
+    void res;
   });
 });
 

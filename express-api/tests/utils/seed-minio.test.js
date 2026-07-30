@@ -52,12 +52,18 @@ describe('seed.js MinIO bucket creation', () => {
     mockSend.mockRejectedValueOnce(err);
 
     const client = new S3Client({});
-    try {
-      await client.send(new CreateBucketCommand({ Bucket: 'shytalk-media' }));
-    } catch (e) {
-      // The seed script catches this specific error name and continues
-      expect(e.name).toBe('BucketAlreadyOwnedByYou');
-    }
+    // A bare try/catch asserts nothing when the call does NOT reject — the
+    // catch simply never runs and the test passes. `rejects` requires it.
+    await expect(
+      client.send(new CreateBucketCommand({ Bucket: 'shytalk-media' })),
+    ).rejects.toMatchObject({ name: 'BucketAlreadyOwnedByYou' });
+    // ...and the claim is that the SEED SCRIPT tolerates it. The assertion
+    // above only exercises the AWS SDK mock, so check the real tolerance list.
+    const seedSrc = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../../local/seed.js'),
+      'utf8',
+    );
+    expect(seedSrc).toContain('BucketAlreadyOwnedByYou');
   });
 
   test('BucketAlreadyExists error is handled gracefully', async () => {
@@ -66,11 +72,18 @@ describe('seed.js MinIO bucket creation', () => {
     mockSend.mockRejectedValueOnce(err);
 
     const client = new S3Client({});
-    try {
-      await client.send(new CreateBucketCommand({ Bucket: 'shytalk-media' }));
-    } catch (e) {
-      expect(e.name).toBe('BucketAlreadyExists');
-    }
+    // A bare try/catch asserts nothing when the call does NOT reject — the
+    // catch simply never runs and the test passes. `rejects` requires it.
+    await expect(
+      client.send(new CreateBucketCommand({ Bucket: 'shytalk-media' })),
+    ).rejects.toMatchObject({ name: 'BucketAlreadyExists' });
+    // ...and the claim is that the SEED SCRIPT tolerates it. The assertion
+    // above only exercises the AWS SDK mock, so check the real tolerance list.
+    const seedSrc = require('node:fs').readFileSync(
+      require('node:path').resolve(__dirname, '../../../local/seed.js'),
+      'utf8',
+    );
+    expect(seedSrc).toContain('BucketAlreadyExists');
   });
 
   test('S3Client created with correct MinIO defaults', () => {
