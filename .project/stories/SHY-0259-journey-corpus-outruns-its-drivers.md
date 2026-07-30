@@ -1,6 +1,6 @@
 ---
 id: SHY-0259
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-07-30
 priority: P1
@@ -180,6 +180,51 @@ fail.
 - [ ] `code-reviewer` 100% clean.
 
 ## Notes
+
+- 2026-07-30 — **Step coverage reached 0.** `scripts/check-journey-step-coverage.js`
+  (new, CI-gated) resolves every step in `journey-tests/*.feature` against the
+  runner's own exported matcher table and annotation-stripper. It started at 68
+  distinct unmatched steps / 94 occurrences and now reports 0 of 1,244 steps
+  across 20 feature files. The baseline ratchets down only.
+
+  The earlier estimate of "~42 unmatched" was a floor, not a total: 109
+  scenarios died on their first step in run `20260730-130954-local`, so
+  anything behind them was never reached. Measured statically, the real figure
+  was 68.
+
+- 2026-07-30 — Setup Givens drive the **real production routes** rather than
+  mirroring their writes. Mirroring creates a second implementation that
+  drifts, and j11 was the proof: it asserts `users/<id>.suspendedUntil`, a
+  field the product has never written (production uses `isSuspended` +
+  `suspensionEndDate`). Driving the route makes the state correct by
+  construction and self-verifying — `POST /api/appeals` returns 400 unless the
+  caller is genuinely suspended, so the appeal Given passing is independent
+  evidence that the suspension Given did real work.
+
+- 2026-07-30 — **Driver coverage is the remaining half, and it is larger than
+  this story estimated.** `scripts/check-driver-coverage.js` (new, CI-gated)
+  parses each driver with acorn and finds **178** methods declared in
+  `listMethods()` but never implemented, of which **169** have a call site in
+  the runner. The story guessed ~24 because it counted only what the last run
+  reached before dying. Split: web-playwright 70, ios-simctl 64,
+  ios-devicectl 34, ios-appium 1. Ratchets down only; target 0.
+
+  A stubbed method is worse than a missing one: missing fails loudly as "not
+  configured", whereas a stub RESOLVES and returns `false`, which reads as
+  "the product did not do the thing".
+
+- 2026-07-30 — j03 re-pointed from German to Chinese. The MVP ships four UI
+  locales (en, zh, id, vi — SHY-0194, still Draft), so a German journey could
+  never pass. The language was incidental to what j03 proves. The corpus still
+  contains `ja` (5) and `ar` (4) references, notably j13 (`locales-rtl-cjk`),
+  where dropping RTL is a **coverage** decision rather than a locale swap —
+  flagged for the operator, not changed unilaterally.
+
+- 2026-07-30 — Two platform asymmetries are now encoded rather than assumed:
+  Android flavours carry distinct `applicationIdSuffix`es and coexist on one
+  device (so the Given selects a package, no reinstall); iOS ships ONE bundle
+  id for every build config, so the installed flavour is undetectable and is
+  DECLARED via `IOS_FLAVOR`, with a mismatch refused by name.
 
 - 2026-07-30 — Counts above come from the chromium cell of run
   `20260730-130954-local`. They are a floor, not a total: 109 scenarios died on
