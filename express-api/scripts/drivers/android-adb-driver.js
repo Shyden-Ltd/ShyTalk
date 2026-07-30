@@ -252,13 +252,34 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // a Technical-Difficulties screen because localhost on the DEVICE
   // is the device itself, not the laptop. Mirrors CLAUDE.md guidance
   // for "Android on physical device".
-  for (const port of [3000, 7880, 9000, 8080, 9099, 9002]) {
-    try {
-      adb(['reverse', `tcp:${port}`, `tcp:${port}`]);
-    } catch (e) {
-      console.error(`[android-driver] adb reverse tcp:${port} failed: ${e.message}`);
+  const REVERSE_PORTS = [3000, 7880, 9000, 8080, 9099, 9002];
+
+  /**
+   * (Re)establish the reverse tunnels.
+   *
+   * Setting these ONCE at driver construction is not enough: `adb reverse`
+   * does not survive a USB re-enumeration, and a phone on a desk re-enumerates
+   * (transport_id on this device climbed past 80 in a single session). When the
+   * tunnels vanish mid-run the app can no longer reach the API, falls back to
+   * its "Technical Difficulties" screen, and every persona sign-in then fails
+   * with "the picker testTag isn't visible" — which reads exactly like a
+   * product bug and is not one. It cost two full matrix runs to see it.
+   *
+   * Re-running the commands is idempotent and costs ~50ms, so it is cheap
+   * enough to do before any action that depends on the backend being reachable.
+   */
+  function ensureReverseTunnels() {
+    for (const port of REVERSE_PORTS) {
+      try {
+        adb(['reverse', `tcp:${port}`, `tcp:${port}`]);
+      } catch (e) {
+        console.error(`[android-driver] adb reverse tcp:${port} failed: ${e.message}`);
+      }
     }
   }
+  driver._ensureReverseTunnels = ensureReverseTunnels;
+
+  ensureReverseTunnels();
 
   for (const methodName of listMethods()) {
     driver[methodName] = async (...args) => {
@@ -2636,6 +2657,10 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   };
 
   driver.androidPersonaSignIn = async (personaId, tab, target = 'dev') => {
+    // The tunnels may have died since driver construction (see
+    // ensureReverseTunnels). Re-assert them here rather than discovering the
+    // loss as a missing picker twenty minutes into a cell.
+    ensureReverseTunnels();
     if (!/^P-\d{2}$/.test(personaId)) {
       throw new Error(
         `androidPersonaSignIn requires a P-NN persona id (got "${personaId}") — ephemeral personas P-01/P-03 sign up via the prod flow, not the picker`,
