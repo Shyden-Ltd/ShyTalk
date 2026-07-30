@@ -878,6 +878,17 @@ router.post('/suggestions/:id/vote', async (req, res) => {
       tally = { upvotes, downvotes, score: upvotes - downvotes };
     });
 
+    // Voting was the one suggestion mutation that logged nothing at all
+    // (SHY-0256). Creation logs, admin actions write a moderation entry, but a
+    // vote left no trace — and vote manipulation is precisely what the identity
+    // graph and the cascading-ban system exist to catch. Without this, an
+    // investigation into brigading has no server-side record to work from.
+    log.info('suggestions', 'Suggestion vote', {
+      id,
+      voter: req.auth.uniqueId,
+      direction,
+      ...tally,
+    });
     res.json({ success: true, ...tally });
   } catch (err) {
     if (err.message === 'NOT_FOUND') {

@@ -993,3 +993,84 @@ describe('11.84 — Firestore Transaction Guarantees', () => {
 // =============================================================================
 // 11.116 — Cross-Feature Interactions
 // =============================================================================
+
+// =============================================================================
+// Observability — moved here from admin-audit-log-suggestions.test.js (SHY-0256)
+//
+// These lived there as empty bodies that reported green. They describe
+// suggestion-route behaviour, and that file mounts only the audit-log,
+// maintenance and health routers — it could never have exercised them. Here the
+// suggestions router IS the app under test.
+// =============================================================================
+
+describe('Observability of suggestion actions', () => {
+  const log = require('../../src/utils/log');
+
+  test('creating a suggestion is logged with the submitter and the new id', async () => {
+    const res = await request(createApp({ uniqueId: 1001 }))
+      .post('/api/suggestions')
+      .send(VALID_SUGGESTION);
+    expect(res.status).toBe(201);
+    expect(log.info).toHaveBeenCalledWith(
+      'suggestions',
+      'Suggestion created',
+      expect.objectContaining({ id: res.body.id, submitter: 1001 }),
+    );
+  });
+
+  test('voting is logged with the voter, the suggestion and the direction', async () => {
+    // Voting logged NOTHING before SHY-0256 — the one suggestion mutation with
+    // no server-side trace, on the exact action the ban system exists to police.
+    setupDocMocks({ 'suggestions/sug-1': makeSuggestionDoc('sug-1', { status: 'accepted' }) });
+    const res = await request(createApp({ uniqueId: 2002 }))
+      .post('/api/suggestions/sug-1/vote')
+      .send({ direction: 'up' });
+    expect(res.status).toBe(200);
+    expect(log.info).toHaveBeenCalledWith(
+      'suggestions',
+      'Suggestion vote',
+      expect.objectContaining({ id: 'sug-1', voter: 2002, direction: 'up' }),
+    );
+  });
+
+  test('an admin action writes a moderation entry naming the admin, action and target', async () => {
+    setupDocMocks({
+      'suggestions/sug-1': makeSuggestionDoc('sug-1', { status: 'pending' }),
+    });
+    const res = await request(createApp({ uniqueId: 9999, isAdmin: true }))
+      .put('/api/admin/suggestions/sug-1/status')
+      .send({ status: 'accepted' });
+    expect(res.status).toBe(200);
+    const auditWrites = mockDocSet.mock.calls.filter(
+      (c) => typeof c[0] === 'string' && c[0].startsWith('moderationLog/'),
+    );
+    expect(auditWrites.length).toBeGreaterThan(0);
+    expect(auditWrites[0][1]).toEqual(
+      expect.objectContaining({ adminUid: 9999, targetType: 'suggestion', targetId: 'sug-1' }),
+    );
+  });
+
+  test('the audit timestamp is the server clock, not anything the caller sent', async () => {
+    // `now()` is mocked to 1709913600000 for this suite, so a server-stamped
+    // entry is exactly that value — and a caller-supplied `timestamp` must not
+    // reach the record.
+    const CLIENT_CLAIMED = 1;
+    setupDocMocks({
+      'suggestions/sug-1': makeSuggestionDoc('sug-1', { status: 'pending' }),
+    });
+    const res = await request(createApp({ uniqueId: 9999, isAdmin: true }))
+      .put('/api/admin/suggestions/sug-1/status')
+      .send({ status: 'accepted', timestamp: CLIENT_CLAIMED });
+    expect(res.status).toBe(200);
+    const auditWrites = mockDocSet.mock.calls.filter(
+      (c) => typeof c[0] === 'string' && c[0].startsWith('moderationLog/'),
+    );
+    expect(auditWrites.length).toBeGreaterThan(0);
+    expect(auditWrites[0][1].timestamp).toBe(1709913600000);
+    expect(auditWrites[0][1].timestamp).not.toBe(CLIENT_CLAIMED);
+  });
+
+  // Ban-cascade logging cannot be tested until the cascade exists: nothing
+  // writes the identity graph automatically today. Specified as SHY-0257.
+  test.todo('ban cascade: logged with trigger event and all affected identifiers');
+});

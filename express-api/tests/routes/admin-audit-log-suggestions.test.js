@@ -423,9 +423,12 @@ describe('Audit Log Integrity', () => {
     const res = await request(app).get('/api/admin/audit-log').expect(200);
   });
 
-  test('timestamp is server-side (not client-provided)', async () => {
-    // Audit entries should use server timestamp, not accept client timestamps
-  });
+  // 'timestamp is server-side (not client-provided)' lived here as an empty
+  // body that reported green. It describes the audit WRITE path
+  // (createAuditEntry in routes/suggestions.js), and this file mounts only the
+  // read-only audit router — it could never have reached it. The real test now
+  // lives in suggestions-integration-a-flows.test.js, where the suggestions
+  // router is mounted (SHY-0256).
 
   test('supports 100,000+ entries without query degradation (paginated)', async () => {
     mockCollectionGet.mockResolvedValueOnce({
@@ -551,38 +554,19 @@ describe('Maintenance Endpoints', () => {
 // 11.81 — API Structured Logging
 // ═══════════════════════════════════════════════════════════════
 
-describe('API Structured Logging', () => {
-  const log = require('../../src/utils/log');
-
-  test('all new routes log request/response with trace ID', async () => {
-    // Logging is handled by middleware, not individual routes
-    // Verify the middleware is applied
-  });
-
-  test('suggestion creation: logged with submitter UID and suggestion ID', async () => {
-    // After creating a suggestion, log.info should have been called
-  });
-
-  test('vote: logged with voter UID, suggestion ID, vote direction', async () => {
-    // After voting, log.info should record the action
-  });
-
-  test('admin action: logged with admin UID, action type, target', async () => {
-    // Admin actions should log who did what
-  });
-
-  test('ban cascade: logged with trigger event, all affected identifiers', async () => {
-    // Cascade events should log all affected identifiers
-  });
-
-  test('error responses: logged with full error details (not exposed to client)', async () => {
-    // Server errors should log full details but return generic message
-  });
-
-  test('log level: info for success, warn for client errors, error for server errors', async () => {
-    // Verify correct log levels are used
-  });
-});
+// The 'API Structured Logging' block held seven empty test bodies, all of them
+// reporting green over behaviour this file cannot exercise: createApp() here
+// mounts the audit-log, maintenance and health routers only — neither the
+// request-logging middleware nor the suggestions routes are in the app under
+// test (SHY-0256).
+//
+// Where that behaviour is actually covered, for real:
+//   trace ids + per-status log levels + body sanitising
+//     → tests/middleware/requestLogger.test.js (27 tests)
+//   suggestion creation / vote logging, admin audit entries, 500s not leaking
+//     → tests/routes/suggestions-integration-a-flows.test.js
+//   ban-cascade logging
+//     → not built yet; specified as SHY-0257 under EPIC-0005
 
 // ═══════════════════════════════════════════════════════════════
 // 11.82 — Health Check Integration
