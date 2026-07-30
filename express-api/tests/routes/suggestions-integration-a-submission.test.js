@@ -67,15 +67,23 @@ const mockQueryChain = {
   get: () => mockCollectionGet(),
 };
 
-const mockRunTransaction = jest.fn(async (fn) => {
+const runTransactionImpl = async (fn) => {
+  // Firestore's Transaction takes a DocumentReference, not a path
+  // string — `t.get(dupRef)`, not `t.get('suggestions/x')`. Wiring
+  // mockDocGet straight in made every transactional route 500 here
+  // while working in production, because the ref object was used
+  // as a lookup key. Resolving the ref keeps the recorded call
+  // shape (path first) that the assertions below read.
+  const refPath = (ref) => (typeof ref === 'string' ? ref : ref && ref._path);
   const t = {
-    get: mockDocGet,
-    set: mockDocSet,
-    update: mockDocUpdate,
-    delete: mockDocDelete,
+    get: (ref) => mockDocGet(refPath(ref)),
+    set: (ref, ...rest) => mockDocSet(refPath(ref), ...rest),
+    update: (ref, ...rest) => mockDocUpdate(refPath(ref), ...rest),
+    delete: (ref, ...rest) => mockDocDelete(refPath(ref), ...rest),
   };
   return fn(t);
-});
+};
+const mockRunTransaction = jest.fn(runTransactionImpl);
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
@@ -204,6 +212,12 @@ beforeEach(() => {
   mockDocDelete.mockResolvedValue();
   mockCollectionAdd.mockResolvedValue({ id: 'new-id' });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
+  // mockReset() above wipes IMPLEMENTATIONS, not just calls. The block
+  // that re-applies defaults covered every simple mock but not this
+  // one, so runTransaction became a jest.fn() that returns undefined
+  // and NEVER invoked its callback — every transactional route then
+  // did nothing and tripped over the un-populated result.
+  mockRunTransaction.mockImplementation(runTransactionImpl);
   mockBatchCommit.mockResolvedValue();
 });
 

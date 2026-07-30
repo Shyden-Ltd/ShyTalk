@@ -1395,6 +1395,7 @@ router.post('/users/:uniqueId/delete', async (req, res) => {
       triggeredBy: 'self',
       reason: 'self',
       createdAt: timestamp,
+      timestamp: timestamp,
     });
 
     log.info('users', 'Account deletion scheduled', { uniqueId, executeAt });
@@ -1449,6 +1450,7 @@ router.post('/users/:uniqueId/cancel-delete', async (req, res) => {
       targetUserId: uniqueId,
       triggeredBy: 'self',
       createdAt: now(),
+      timestamp: now(),
     });
 
     log.info('users', 'Account deletion cancelled', { uniqueId });

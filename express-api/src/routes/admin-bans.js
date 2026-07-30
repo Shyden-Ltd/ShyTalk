@@ -136,6 +136,7 @@ router.post('/admin/bans/device', async (req, res) => {
       targetDeviceId: deviceId,
       details: `Reason: ${reason}, Duration: ${duration || 'permanent'}`,
       createdAt: now(),
+      timestamp: now(),
     });
 
     // Send system PM if linked to a user (non-blocking). Track failure so
@@ -219,6 +220,7 @@ router.post('/admin/bans/network', async (req, res) => {
       targetValue: value,
       details: `Type: ${type}, Reason: ${reason}, Duration: ${duration || 'permanent'}`,
       createdAt: now(),
+      timestamp: now(),
     });
 
     // Send system PM if linked to a user (non-blocking). Track failure so
@@ -265,6 +267,7 @@ router.delete('/admin/bans/device/:deviceId', async (req, res) => {
       action: 'UNBAN_DEVICE',
       targetDeviceId: req.params.deviceId,
       createdAt: now(),
+      timestamp: now(),
     });
 
     res.json({ success: true });
@@ -300,6 +303,7 @@ router.delete('/admin/bans/network/:banId', async (req, res) => {
       action: 'UNBAN_NETWORK',
       targetBanId: req.params.banId,
       createdAt: now(),
+      timestamp: now(),
     });
 
     res.json({ success: true });
@@ -354,6 +358,7 @@ router.post('/admin/bans/unban-all/:uniqueId', async (req, res) => {
       targetUserId: uniqueId,
       details: `Removed ${allDocs.length} ban(s)`,
       createdAt: now(),
+      timestamp: now(),
     });
 
     // Send system PM about restriction lifted. Track failure for admin UI.

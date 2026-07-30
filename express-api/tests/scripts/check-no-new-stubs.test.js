@@ -216,6 +216,50 @@ describe('SHY-0108 diffBaseline — new vs stale', () => {
   });
 });
 
+describe('a double MENTIONED is not a double INTRODUCED', () => {
+  // The gate regexes look for identifiers like `mockResolvedValue`. A file
+  // that FEEDS such source to a detector as fixture data — this repo has
+  // one, check-test-defects.test.js — was reported as introducing a double
+  // it never used. Blanking literal bodies and comments fixes that WITHOUT
+  // hiding real doubles, because the identifier in a genuine call sits
+  // outside the quotes.
+  const { stripLiteralBodies } = guard;
+
+  test('a mock name inside a template literal is not code', () => {
+    const src = 'const fixture = `mockDocGet.mockImplementation(() => 1)`;';
+    expect(stripLiteralBodies(src)).not.toMatch(/mockImplementation/);
+  });
+
+  test('a mock name inside a line comment is not code', () => {
+    expect(stripLiteralBodies('// we used to call jest.mock() here\nconst a = 1;')).not.toMatch(
+      /jest\.mock/,
+    );
+  });
+
+  test('a mock name inside a block comment is not code', () => {
+    expect(stripLiteralBodies('/* jest.mock("x") */ const a = 1;')).not.toMatch(/jest\.mock/);
+  });
+
+  test('a REAL call still survives stripping — the identifier is outside the quotes', () => {
+    // The load-bearing case: if stripping ate this, the gate would go blind.
+    const src = "jest.mock('../../src/utils/firebase');";
+    expect(stripLiteralBodies(src)).toMatch(/jest\.mock\(/);
+  });
+
+  test('an escaped quote does not desynchronise the scan', () => {
+    // A regex cannot tell an escaped quote from a closing one; getting this
+    // wrong would blank the rest of the file and blind the gate silently.
+    const src = "const s = 'it\\'s fine'; jest.fn();";
+    expect(stripLiteralBodies(src)).toMatch(/jest\.fn\(/);
+  });
+
+  test('an unterminated literal does not swallow the remaining file', () => {
+    const src = "const s = 'oops;\njest.fn();";
+    // Whatever it does with the broken literal, it must not crash.
+    expect(() => stripLiteralBodies(src)).not.toThrow();
+  });
+});
+
 describe('SHY-0108 committed baseline is in sync with the real repo', () => {
   test('real repo scan equals committed baseline (guard green on this branch)', () => {
     const off = guard.scanRepo({ cwd: REPO_ROOT });

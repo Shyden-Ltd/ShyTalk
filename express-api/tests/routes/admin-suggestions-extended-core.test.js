@@ -55,15 +55,23 @@ const mockQueryChain = {
   get: () => mockCollectionGet(),
 };
 
-const mockRunTransaction = jest.fn(async (fn) => {
+const runTransactionImpl = async (fn) => {
+  // Firestore's Transaction takes a DocumentReference, not a path
+  // string — `t.get(dupRef)`, not `t.get('suggestions/x')`. Wiring
+  // mockDocGet straight in made every transactional route 500 here
+  // while working in production, because the ref object was used
+  // as a lookup key. Resolving the ref keeps the recorded call
+  // shape (path first) that the assertions below read.
+  const refPath = (ref) => (typeof ref === 'string' ? ref : ref && ref._path);
   const t = {
-    get: mockDocGet,
-    set: mockDocSet,
-    update: mockDocUpdate,
-    delete: mockDocDelete,
+    get: (ref) => mockDocGet(refPath(ref)),
+    set: (ref, ...rest) => mockDocSet(refPath(ref), ...rest),
+    update: (ref, ...rest) => mockDocUpdate(refPath(ref), ...rest),
+    delete: (ref, ...rest) => mockDocDelete(refPath(ref), ...rest),
   };
   return fn(t);
-});
+};
+const mockRunTransaction = jest.fn(runTransactionImpl);
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
@@ -177,6 +185,12 @@ beforeEach(() => {
   });
   mockDocGet.mockResolvedValue({ exists: false });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
+  // mockReset() above wipes IMPLEMENTATIONS, not just calls. The block
+  // that re-applies defaults covered every simple mock but not this
+  // one, so runTransaction became a jest.fn() that returns undefined
+  // and NEVER invoked its callback — every transactional route then
+  // did nothing and tripped over the un-populated result.
+  mockRunTransaction.mockImplementation(runTransactionImpl);
 });
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -940,7 +954,16 @@ describe('POST /suggestions/:id/dispute', () => {
     expect(res.body.error).toMatch(/already pending/i);
   });
 
-  test('non-merged suggestion returns 400', async () => {
+  // Reconciled 2026-07-30 (SHY-0259 follow-up): this file and
+  // suggestions-integration-a-flows.test.js contradicted each other on the
+  // SAME condition — 400 here, 409 there — so both could not pass. 409 is
+  // correct: the request is well-formed, the resource is simply in a state
+  // that disallows the action. 400 is for a malformed request.
+  //
+  // The 400 expectations here were written against a SECOND registration of
+  // POST /suggestions/:id/dispute that Express never matched (the earlier
+  // registration always won), so they had never described running code.
+  test('non-merged suggestion returns 409', async () => {
     setupDocMocks({
       'suggestions/sug-dispute-3': makeSuggestionSnap('sug-dispute-3', {
         status: 'accepted', // not merged
@@ -951,9 +974,9 @@ describe('POST /suggestions/:id/dispute', () => {
     const res = await request(app)
       .post('/api/suggestions/sug-dispute-3/dispute')
       .send({ reason: 'Wrong' })
-      .expect(400);
+      .expect(409);
 
-    expect(res.body.error).toMatch(/only dispute merged/i);
+    expect(res.body.error).toMatch(/only a merged suggestion can be disputed/i);
   });
 
   test('non-existent suggestion returns 404', async () => {
@@ -1005,7 +1028,11 @@ describe('POST /suggestions/:id/dispute', () => {
     );
   });
 
-  test('dispute with empty reason defaults to empty string', async () => {
+  // Also reconciled: suggestions-integration-a-flows.test.js sweeps the whole
+  // class (missing / empty / whitespace-only) and requires 400. A dispute with
+  // no stated reason gives a moderator nothing to act on, so rejecting it is
+  // the better behaviour and the swept test is the better specification.
+  test('a dispute with an empty reason is rejected', async () => {
     setupDocMocks({
       'suggestions/sug-dispute-5': makeSuggestionSnap('sug-dispute-5', {
         status: 'merged',
@@ -1015,13 +1042,11 @@ describe('POST /suggestions/:id/dispute', () => {
       }),
     });
     const app = createApp({ uniqueId: 1001, isAdmin: false });
-    await request(app).post('/api/suggestions/sug-dispute-5/dispute').send({}).expect(200);
+    await request(app).post('/api/suggestions/sug-dispute-5/dispute').send({}).expect(400);
 
-    expect(mockCollectionAdd).toHaveBeenCalledWith(
+    expect(mockCollectionAdd).not.toHaveBeenCalledWith(
       'suggestion_disputes',
-      expect.objectContaining({
-        reason: '',
-      }),
+      expect.objectContaining({ reason: '' }),
     );
   });
 });

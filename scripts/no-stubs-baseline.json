@@ -1,6 +1,5 @@
 {
   "jestMock": [
-    "express-api/scripts/drivers/web-playwright-driver.js",
     "express-api/tests/client-core/tabs.test.js",
     "express-api/tests/contracts/api-contracts.test.js",
     "express-api/tests/contracts/starting-screens-contract.test.js",
@@ -431,7 +430,6 @@
     "express-api/tests/utils/translation-provider.test.js"
   ],
   "handRolledFake": [
-    "express-api/scripts/manual-qa-runner.js",
     "express-api/tests/client-core/tabs.test.js",
     "express-api/tests/client-core/ui-dom.test.js",
     "express-api/tests/scripts/driver-health-check.test.js",

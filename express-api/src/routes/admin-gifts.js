@@ -56,6 +56,7 @@ router.post('/gifts', async (req, res) => {
         targetUserId: null,
         details: `Created gift: ${body.name} (${id})`,
         createdAt: now(),
+        timestamp: now(),
       }),
     ]);
 
@@ -125,6 +126,7 @@ router.delete('/gifts/:id', async (req, res) => {
         targetUserId: null,
         details: `Deleted gift: ${req.params.id}`,
         createdAt: now(),
+        timestamp: now(),
       }),
     ]);
 

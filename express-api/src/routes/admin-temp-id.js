@@ -94,6 +94,7 @@ router.post('/admin/users/:uniqueId/temp-id', async (req, res) => {
       targetUserId: targetUniqueId,
       details: `Set temp ID to ${tempUniqueId}, expires ${new Date(expiryDate).toISOString()}`,
       createdAt: timestamp,
+      timestamp: timestamp,
     });
 
     // System PM (fire-and-forget)
@@ -145,6 +146,7 @@ router.delete('/admin/users/:uniqueId/temp-id', async (req, res) => {
       targetUserId: targetUniqueId,
       details: 'Cleared temporary unique ID',
       createdAt: timestamp,
+      timestamp: timestamp,
     });
 
     // System PM (fire-and-forget)

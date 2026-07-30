@@ -110,6 +110,7 @@ router.post('/users/:uniqueId/adjust-balance', async (req, res) => {
         targetUserId: req.params.uniqueId,
         details: `${amount > 0 ? '+' : ''}${amount} ${currency} (${reason || 'no reason'})`,
         createdAt: timestamp,
+        timestamp: timestamp,
       }),
     ]);
 
@@ -173,6 +174,7 @@ router.post('/users/:uniqueId/backpack', async (req, res) => {
       targetUserId: req.params.uniqueId,
       details: `Set ${body.giftId} quantity to ${body.quantity}`,
       createdAt: timestamp,
+      timestamp: timestamp,
     });
 
     // Notify user about backpack change (unless silent). Track failure
@@ -261,6 +263,7 @@ router.post('/users/:uniqueId/luck', async (req, res) => {
         targetUserId: req.params.uniqueId,
         details: JSON.stringify(body),
         createdAt: now(),
+        timestamp: now(),
       }),
     ]);
 
@@ -366,6 +369,7 @@ router.post('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
         targetUserId: req.params.uniqueId,
         details: `Guaranteed: ${body.giftId}`,
         createdAt: now(),
+        timestamp: now(),
       }),
     ]);
 
@@ -396,6 +400,7 @@ router.delete('/users/:uniqueId/guarantee-next-pull', async (req, res) => {
         targetUserId: req.params.uniqueId,
         details: null,
         createdAt: now(),
+        timestamp: now(),
       }),
     ]);
 

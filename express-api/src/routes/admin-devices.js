@@ -238,6 +238,7 @@ router.delete('/admin/devices/:deviceId', async (req, res) => {
       targetDeviceId: deviceId,
       details: `Unbound device ${deviceId}`,
       createdAt: now(),
+      timestamp: now(),
     });
 
     // Send system PM to the bound user. Track failure for admin UI's

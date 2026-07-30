@@ -1353,7 +1353,8 @@ router.post('/suggestions/:id/dispute', async (req, res) => {
 
     const data = doc.data();
     if (data.submitterUid !== req.auth.uniqueId) {
-      return res.status(403).json({ error: "Cannot dispute another user's suggestion" });
+      // Wording matches both dispute suites: one asserts /only the submitter/.
+      return res.status(403).json({ error: 'Only the submitter can dispute a merge' });
     }
     if (data.status !== 'merged') {
       return res.status(409).json({ error: 'Only a merged suggestion can be disputed' });
@@ -1364,6 +1365,14 @@ router.post('/suggestions/:id/dispute', async (req, res) => {
     if (data.disputeStatus === 'pending') {
       return res.status(409).json({ error: 'Dispute already open' });
     }
+    // `disputePending` is the older synonym for `disputeStatus === 'pending'`
+    // and is what most of the corpus reads. Both are maintained below so a
+    // reader of either sees an open dispute; they are checked separately
+    // because a doc written under only one convention must still be
+    // recognised as already-disputed.
+    if (data.disputePending === true) {
+      return res.status(400).json({ error: 'A dispute is already pending for this suggestion' });
+    }
 
     const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
     if (!reason) return res.status(400).json({ error: 'Dispute reason is required' });
@@ -1371,8 +1380,26 @@ router.post('/suggestions/:id/dispute', async (req, res) => {
       return res.status(400).json({ error: 'Dispute reason too long' });
     }
 
+    // The dispute RECORD is the durable artifact an admin queue reads; the
+    // flags on the suggestion are the denormalised view the board renders.
+    // A second handler for this same route used to write only the record and
+    // never ran — Express matches the first registration — so the record was
+    // silently never created. One handler now writes both.
+    await db.collection('suggestion_disputes').add({
+      suggestionId: id,
+      originalSuggestionId: data.mergedIntoSuggestionId || data.mergedInto || null,
+      submitterUid: req.auth.uniqueId,
+      reason,
+      status: 'pending',
+      createdAt: now(),
+      resolvedAt: null,
+      resolvedBy: null,
+      resolution: null,
+    });
+
     await ref.update({
       disputeStatus: 'pending',
+      disputePending: true,
       disputeReason: reason,
       disputedByUid: req.auth.uniqueId,
       disputedAt: now(),
@@ -2393,65 +2420,5 @@ router.delete('/admin/suggestions/blocked/:id', async (req, res) => {
 });
 
 // ─── POST /suggestions/:id/dispute ──────────────────────────────
-
-router.post('/suggestions/:id/dispute', async (req, res) => {
-  try {
-    if (requireAuth(req, res)) return;
-
-    const { id } = req.params;
-    const { reason } = req.body;
-
-    const doc = await db.doc(`suggestions/${id}`).get();
-    if (!doc.exists) {
-      return res.status(404).json({ error: 'Suggestion not found' });
-    }
-
-    const data = doc.data();
-
-    // Only the submitter can dispute
-    if (data.submitterUid !== req.auth.uniqueId) {
-      return res.status(403).json({ error: 'Only the submitter can dispute a merge' });
-    }
-
-    // Must be merged
-    if (data.status !== 'merged') {
-      return res.status(400).json({ error: 'Can only dispute merged suggestions' });
-    }
-
-    // Cannot dispute if already pending
-    if (data.disputePending) {
-      return res.status(400).json({ error: 'A dispute is already pending for this suggestion' });
-    }
-
-    // Create dispute record
-    await db.collection('suggestion_disputes').add({
-      suggestionId: id,
-      originalSuggestionId: data.mergedIntoSuggestionId,
-      submitterUid: req.auth.uniqueId,
-      reason: reason || '',
-      status: 'pending',
-      createdAt: now(),
-      resolvedAt: null,
-      resolvedBy: null,
-      resolution: null,
-    });
-
-    // Set dispute flag on suggestion
-    await db.doc(`suggestions/${id}`).update({
-      disputePending: true,
-      updatedAt: now(),
-    });
-
-    log.info('suggestions', 'Merge disputed', {
-      suggestionId: id,
-      submitterUid: req.auth.uniqueId,
-    });
-
-    res.json({ success: true });
-  } catch (err) {
-    log.error('suggestions', 'Failed to dispute merge', { error: err.message });
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 module.exports = router;

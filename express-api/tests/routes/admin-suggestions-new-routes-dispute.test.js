@@ -48,10 +48,11 @@ const mockQueryChain = {
   get: () => mockCollectionGet(),
 };
 
-const mockRunTransaction = jest.fn(async (fn) => {
+const runTransactionImpl = async (fn) => {
   const t = { get: mockDocGet, set: mockDocSet, update: mockDocUpdate, delete: mockDocDelete };
   return fn(t);
-});
+};
+const mockRunTransaction = jest.fn(runTransactionImpl);
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
@@ -154,6 +155,12 @@ beforeEach(() => {
   });
   mockDocGet.mockResolvedValue({ exists: false });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
+  // mockReset() above wipes IMPLEMENTATIONS, not just calls. The block
+  // that re-applies defaults covered every simple mock but not this
+  // one, so runTransaction became a jest.fn() that returns undefined
+  // and NEVER invoked its callback — every transactional route then
+  // did nothing and tripped over the un-populated result.
+  mockRunTransaction.mockImplementation(runTransactionImpl);
 });
 
 // ─── Helpers ────────────────────────────────────────────────────

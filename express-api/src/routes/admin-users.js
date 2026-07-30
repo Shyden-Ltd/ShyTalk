@@ -268,6 +268,7 @@ router.patch('/user/:uniqueId', async (req, res) => {
       targetUserId: req.params.uniqueId,
       details: `Updated fields: ${Object.keys(updates).join(', ')}`,
       createdAt: now(),
+      timestamp: now(),
     });
 
     // Send system messages for user-visible changes (non-blocking)
@@ -665,6 +666,7 @@ router.post('/user/:uniqueId/reset-gcs', async (req, res) => {
         targetUserId: req.params.uniqueId,
         details: 'GCS reset to 100',
         createdAt: timestamp,
+        timestamp: timestamp,
       }),
     ]);
 
@@ -1134,6 +1136,7 @@ router.post('/user/:uniqueId/suspend', async (req, res) => {
         targetUserId: req.params.uniqueId,
         details: body.reason,
         createdAt: timestamp,
+        timestamp: timestamp,
       }),
     ]);
 
@@ -1306,6 +1309,7 @@ router.post('/user/:uniqueId/unsuspend', async (req, res) => {
         targetUserId: req.params.uniqueId,
         details: null,
         createdAt: now(),
+        timestamp: now(),
       }),
     ]);
 
@@ -1557,6 +1561,7 @@ async function liftAutoAppliedBans(uniqueId, adminUid) {
     targetUserId: uniqueId,
     details: `Removed ${allDocs.length} auto-applied ban(s) on unsuspension`,
     createdAt: now(),
+    timestamp: now(),
   });
 
   log.info('admin-users', 'Auto-applied bans lifted', { uniqueId, removed: allDocs.length });
@@ -1758,6 +1763,7 @@ router.post('/user/:uniqueId/delete', async (req, res) => {
       targetUserId: uniqueId,
       details: sanitizedReason ? `Admin deletion: ${sanitizedReason}` : 'Admin deletion',
       createdAt: timestamp,
+      timestamp: timestamp,
     });
 
     log.info('admin-users', 'Admin scheduled account deletion', {
@@ -1803,6 +1809,7 @@ router.post('/user/:uniqueId/cancel-delete', async (req, res) => {
       adminId: req.auth.uid,
       targetUserId: uniqueId,
       createdAt: now(),
+      timestamp: now(),
     });
 
     log.info('admin-users', 'Admin cancelled account deletion', {

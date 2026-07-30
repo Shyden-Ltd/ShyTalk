@@ -67,7 +67,7 @@ const mockQueryChain = {
   get: () => mockCollectionGet(),
 };
 
-const mockRunTransaction = jest.fn(async (fn) => {
+const runTransactionImpl = async (fn) => {
   const t = {
     // Firestore's `Transaction.get` takes a DocumentReference, NOT a path
     // string — passing a string throws. This mock previously accepted only the
@@ -82,7 +82,8 @@ const mockRunTransaction = jest.fn(async (fn) => {
     delete: mockDocDelete,
   };
   return fn(t);
-});
+};
+const mockRunTransaction = jest.fn(runTransactionImpl);
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
@@ -211,6 +212,12 @@ beforeEach(() => {
   mockDocDelete.mockResolvedValue();
   mockCollectionAdd.mockResolvedValue({ id: 'new-id' });
   mockCollectionGet.mockResolvedValue({ empty: true, docs: [], size: 0 });
+  // mockReset() above wipes IMPLEMENTATIONS, not just calls. The block
+  // that re-applies defaults covered every simple mock but not this
+  // one, so runTransaction became a jest.fn() that returns undefined
+  // and NEVER invoked its callback — every transactional route then
+  // did nothing and tripped over the un-populated result.
+  mockRunTransaction.mockImplementation(runTransactionImpl);
   mockBatchCommit.mockResolvedValue();
 });
 

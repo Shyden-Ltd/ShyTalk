@@ -163,9 +163,66 @@ function isUnitTestLocation(rel) {
  * Pure content detection — which banned patterns the text contains.
  * Extension gating is the scanner's job, not this function's.
  */
+/**
+ * Blank out string/template-literal bodies and comments before matching.
+ *
+ * The category regexes look for identifiers like `mockResolvedValue`. A test
+ * that FEEDS such source to a detector — express-api/tests/scripts/
+ * check-test-defects.test.js holds `mockDocGet.mockImplementation(...)`
+ * inside a template literal as fixture data — is not itself introducing a
+ * double, but was reported as one.
+ *
+ * Only the CONTENTS of literals are blanked, never the surrounding code, so
+ * a genuine `jest.mock('../../src/utils/firebase')` still matches: the
+ * identifier sits outside the quotes.
+ *
+ * Character-scanned rather than regex-replaced because a regex cannot track
+ * whether a quote is opening, closing, or escaped — and getting that wrong
+ * in a gate turns it into a source of confident false verdicts.
+ */
+function stripLiteralBodies(src) {
+  let out = '';
+  let i = 0;
+  const n = src.length;
+  while (i < n) {
+    const c = src[i];
+    const next = src[i + 1];
+    if (c === '/' && next === '/') {
+      while (i < n && src[i] !== '\n') i += 1;
+      continue;
+    }
+    if (c === '/' && next === '*') {
+      i += 2;
+      while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i += 1;
+      i += 2;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') {
+      const quote = c;
+      out += quote;
+      i += 1;
+      while (i < n) {
+        if (src[i] === '\\') {
+          i += 2;
+          continue;
+        }
+        if (src[i] === quote) break;
+        i += 1;
+      }
+      out += quote;
+      i += 1;
+      continue;
+    }
+    out += c;
+    i += 1;
+  }
+  return out;
+}
+
 function classifyContent(content) {
   const out = {};
-  for (const cat of CATEGORIES) out[cat.key] = cat.regex.test(content);
+  const code = stripLiteralBodies(content);
+  for (const cat of CATEGORIES) out[cat.key] = cat.regex.test(code);
   return out;
 }
 
@@ -342,6 +399,7 @@ function main(argv) {
 }
 
 module.exports = {
+  stripLiteralBodies,
   classifyContent,
   scanFiles,
   scanRepo,
