@@ -161,6 +161,14 @@ jobs:
       - name: No NEW unmatched journey steps (SHY-0259 ratchet)
         run: node scripts/check-journey-step-coverage.js
 
+      # A single NUL byte makes git classify a source file as BINARY, which
+      # hides its diff from review and removes it from `git grep` / `grep -I`
+      # — the basis of several guards above, which then keep reporting green
+      # while no longer inspecting it. There is no legitimate NUL in source,
+      # so unlike the ratchets above the bar here is absolute: 0.
+      - name: Source files are text, not binary
+        run: node scripts/check-source-is-text.js
+
       # SHY-0168 (EPIC-0006): ratchet guard — direct client→backend-service
       # access (Firestore / RTDB / Storage) may only SHRINK. Clients must go
       # through the Express API (the authz layer). Fails on any NEW direct

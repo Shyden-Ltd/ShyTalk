@@ -734,7 +734,7 @@ describe('sanitiseDisplayName', () => {
   });
 
   test('strips C0/DEL control chars', () => {
-    expect(sanitiseDisplayName('Alice Bob')).toBe('AliceBob');
+    expect(sanitiseDisplayName('Alice\x00Bob')).toBe('AliceBob');
     expect(sanitiseDisplayName('AliceBob')).toBe('AliceBob');
   });
 
@@ -769,7 +769,7 @@ describe('sanitiseDisplayName', () => {
     expect(sanitiseDisplayName(42)).toBeNull();
     expect(sanitiseDisplayName({})).toBeNull();
     expect(sanitiseDisplayName('   ')).toBeNull();
-    expect(sanitiseDisplayName('  ')).toBeNull();
+    expect(sanitiseDisplayName('\x00\x00')).toBeNull();
   });
 
   test('strips C1 control range including U+0085 NEL (line terminator)', () => {

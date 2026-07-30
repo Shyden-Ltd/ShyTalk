@@ -424,7 +424,7 @@ describe('handleOwnerLeftSignal', () => {
     });
 
     test('returns NOOP when ownerId contains RTDB-illegal chars (., #, $, [, ])', async () => {
-      const illegalIds = ['a.b', 'a#b', 'a$b', 'a[b]', 'a b', 'a\nb', ' '];
+      const illegalIds = ['a.b', 'a#b', 'a$b', 'a[b]', 'a b', 'a\nb', '\x00'];
       for (const ownerId of illegalIds) {
         const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId } });
         const result = await handleOwnerLeftSignal({
