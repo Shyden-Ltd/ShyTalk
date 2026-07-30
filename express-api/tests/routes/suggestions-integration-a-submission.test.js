@@ -398,16 +398,18 @@ describe('11.21 — Submission Confirmation', () => {
     const createCall = setCalls.find(
       (c) => typeof c[0] === 'string' && c[0].includes('suggestions'),
     );
-    if (createCall) {
-      expect((createCall[1] || createCall[0]).upvotes).toBe(1);
-    } else {
-      const sugCall = mockCollectionAdd.mock.calls.find((c) => c[0] === 'suggestions');
-      if (sugCall) {
-        expect(sugCall[1].upvotes).toBe(1);
-      } else {
-        expect(mockDocSet).toHaveBeenCalled();
-      }
-    }
+    // Three nested fallbacks ending in "some write happened" accepted a route
+    // that never auto-upvoted at all. The route writes the suggestion doc with
+    // upvotes: 1 and a matching vote record; assert both.
+    expect(createCall).toBeDefined();
+    expect(createCall[1].upvotes).toBe(1);
+    const voteWrite = setCalls.find((c) => typeof c[0] === 'string' && c[0].includes('/votes/'));
+    expect(voteWrite).toBeDefined();
+    // The stored record spells it `vote`, while the vote ENDPOINT takes
+    // `direction` — asserted against the real shape, not the request's.
+    expect(voteWrite[1]).toEqual(
+      expect.objectContaining({ vote: 'up', voterId: 1001, isCreatorVote: true }),
+    );
   });
 
   test('auto-upvote: vote document created for submitter', async () => {
@@ -445,9 +447,14 @@ describe('11.21 — Submission Confirmation', () => {
   test('confirmation system message from SHYTALK_SYSTEM sender', async () => {
     const app = createApp();
     await request(app).post('/api/suggestions').send(VALID_SUGGESTION);
-    if (sendSystemPm.mock.calls.length > 0) {
-      expect(sendSystemPm.mock.calls[0]).toBeDefined();
-    }
+    // `expect(calls[0]).toBeDefined()` inside `if (calls.length > 0)` is true
+    // by construction. The claim is that a confirmation PM is sent to the
+    // submitter, so assert that.
+    expect(sendSystemPm).toHaveBeenCalled();
+    const [recipient, text] = sendSystemPm.mock.calls[0];
+    expect(String(recipient)).toBe('1001');
+    expect(typeof text).toBe('string');
+    expect(text.length).toBeGreaterThan(0);
   });
 });
 
@@ -893,11 +900,12 @@ describe('11.31 — Integration Tests Full Flows', () => {
       const res = await request(createApp())
         .put('/api/suggestions/sug-1')
         .send({ title: 'Updated title', description: 'Updated description' });
-      if (res.status === 200) {
-        expect(
-          mockDocUpdate.mock.calls.find((c) => c[0]?.status && c[0].status !== 'pending'),
-        ).toBeUndefined();
-      }
+      expect(res.status).toBe(200);
+      // The edit must not move the suggestion out of pending.
+      const statusChanges = mockDocUpdate.mock.calls.filter(
+        (c) => c[1] && c[1].status && c[1].status !== 'pending',
+      );
+      expect(statusChanges).toEqual([]);
     });
     test('edit history appended on edit', async () => {
       setupDocMocks({
@@ -910,23 +918,22 @@ describe('11.31 — Integration Tests Full Flows', () => {
       await request(createApp()).put('/api/suggestions/sug-1').send({ title: 'Revised title' });
       expect(mockDocUpdate).toHaveBeenCalled();
     });
-    test('editing accepted suggestion resets to pending for re-review', async () => {
+    test('editing an ACCEPTED suggestion is refused, not silently re-reviewed', async () => {
+      // Renamed to match what the product actually does. The old title claimed
+      // an edit "resets to pending for re-review"; the route deliberately
+      // refuses — "Can only edit pending suggestions" — and the old body
+      // accepted BOTH outcomes (200-with-a-reset, or 400/403), so it could not
+      // have told the two apart. Editing an already-approved suggestion would
+      // let approved content be swapped after review, so refusing is correct;
+      // this now pins that.
       setupDocMocks({
         'suggestions/sug-1': makeSuggestionDoc('sug-1', { status: 'accepted', submitterUid: 1001 }),
       });
       const res = await request(createApp())
         .put('/api/suggestions/sug-1')
         .send({ title: 'Major revision' });
-      if (res.status === 200) {
-        const sr = mockDocUpdate.mock.calls.find(
-          (c) => c[0]?.status === 'pending' || c[1]?.status === 'pending',
-        );
-        if (sr) {
-          expect(sr).toBeDefined();
-        }
-      } else {
-        expect([400, 403]).toContain(res.status);
-      }
+      expect(res.status).toBe(403);
+      expect(mockDocUpdate).not.toHaveBeenCalled();
     });
   });
 });
@@ -944,9 +951,10 @@ describe('11.37 — Data Migration & Defaults', () => {
       }),
     });
     const res = await request(createApp()).get('/api/suggestions/legacy-1');
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    // `expect(res.body).toBeDefined()` is true for every response ever sent.
+    // The default named in the title is the thing to check.
+    expect(res.body.subscribers).toEqual([]);
   });
   test('old suggestion without editHistory field: defaults to empty array', async () => {
     setupDocMocks({
@@ -956,9 +964,10 @@ describe('11.37 — Data Migration & Defaults', () => {
       }),
     });
     const res = await request(createApp()).get('/api/suggestions/legacy-2');
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    // `expect(res.body).toBeDefined()` is true for every response ever sent.
+    // The default named in the title is the thing to check.
+    expect(res.body.editHistory).toEqual([]);
   });
   test('old suggestion without votingLocked field: defaults to false', async () => {
     setupDocMocks({
@@ -992,9 +1001,10 @@ describe('11.37 — Data Migration & Defaults', () => {
       }),
     });
     const res = await request(createApp()).get('/api/suggestions/legacy-5');
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    // `expect(res.body).toBeDefined()` is true for every response ever sent.
+    // The default named in the title is the thing to check.
+    expect(res.body.disputePending).toBe(false);
   });
   test('old suggestion without language field: defaults to en', async () => {
     setupDocMocks({
@@ -1004,9 +1014,10 @@ describe('11.37 — Data Migration & Defaults', () => {
       }),
     });
     const res = await request(createApp()).get('/api/suggestions/legacy-6');
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    // `expect(res.body).toBeDefined()` is true for every response ever sent.
+    // The default named in the title is the thing to check.
+    expect(res.body.language).toBe('en');
   });
   test('migration: suggestion with numeric submitterUid handled correctly', async () => {
     setupDocMocks({
@@ -1016,9 +1027,10 @@ describe('11.37 — Data Migration & Defaults', () => {
       }),
     });
     const res = await request(createApp()).get('/api/suggestions/migrated-1');
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    // `expect(res.body).toBeDefined()` is true for every response ever sent.
+    // The default named in the title is the thing to check.
+    expect(res.body.id).toBeTruthy();
   });
   test('migration: suggestion with string submitterUid still accessible', async () => {
     setupDocMocks({
@@ -1028,9 +1040,10 @@ describe('11.37 — Data Migration & Defaults', () => {
       }),
     });
     const res = await request(createApp()).get('/api/suggestions/migrated-2');
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    // `expect(res.body).toBeDefined()` is true for every response ever sent.
+    // The default named in the title is the thing to check.
+    expect(res.body.id).toBeTruthy();
   });
 });
 
@@ -1070,12 +1083,14 @@ describe('11.38 — Network Failure Resilience', () => {
     const res = await request(createApp({ uniqueId: 9999, isAdmin: true }))
       .put('/api/admin/suggestions/sug-1/status')
       .send({ status: 'accepted' });
-    if (res.status === 200) {
-      expect(mockDocUpdate).toHaveBeenCalledWith(
-        expect.stringContaining('suggestions/'),
-        expect.objectContaining({ status: 'accepted' }),
-      );
-    }
+    // "fails gracefully" is the claim: the status change must survive a
+    // notification transport blowing up. Guarding on 200 meant a route that
+    // 500'd on a failed PM passed this test.
+    expect(res.status).toBe(200);
+    expect(mockDocUpdate).toHaveBeenCalledWith(
+      expect.stringContaining('suggestions/'),
+      expect.objectContaining({ status: 'accepted' }),
+    );
   });
   test('Firestore transaction failure on vote: returns 500', async () => {
     mockRunTransaction.mockRejectedValueOnce(new Error('Transaction aborted'));
@@ -1083,11 +1098,11 @@ describe('11.38 — Network Failure Resilience', () => {
     const res = await request(createApp({ uniqueId: 2002 }))
       .post('/api/suggestions/sug-1/vote')
       .send({ direction: 'up' });
-    if (res.status === 500) {
-      expect(res.status).toBe(500);
-    } else {
-      expect(res.status).toBeLessThan(500);
-    }
+    // The old form accepted 500 OR anything below it — every possible status.
+    // The name says 500, so assert 500, and assert the internal cause stays
+    // server-side.
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(res.body)).not.toContain('Transaction aborted');
   });
   test('email failure logged but does not surface to user', async () => {
     sendEmail.mockRejectedValueOnce(new Error('SMTP timeout'));
@@ -1098,9 +1113,11 @@ describe('11.38 — Network Failure Resilience', () => {
     const res = await request(createApp({ uniqueId: 9999, isAdmin: true }))
       .put('/api/admin/suggestions/sug-1/status')
       .send({ status: 'accepted' });
-    if (res.status === 200) {
-      expect(res.body.success).toBe(true);
-    }
+    // "does not surface to user" — so the request must succeed, and the SMTP
+    // failure must not appear in the response.
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(JSON.stringify(res.body)).not.toContain('SMTP timeout');
   });
 });
 

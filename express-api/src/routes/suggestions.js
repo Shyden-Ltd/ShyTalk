@@ -33,6 +33,31 @@ const { db, FieldValue } = require('../utils/firebase');
  */
 const READ_CACHE_CONTROL = 'private, max-age=30, must-revalidate';
 
+/**
+ * The read shape a client can actually rely on (SHY-0256).
+ *
+ * Suggestions written before these fields existed come back without them, and
+ * the read routes spread the stored document straight through — so a client
+ * doing `suggestion.subscribers.length` or `suggestion.editHistory.map(...)`
+ * throws on a legacy row, and `language` being absent silently changes which
+ * locale a notification is composed in.
+ *
+ * Normalising on READ rather than backfilling the collection: the contract is
+ * what the API promises, not what happens to be stored, and a backfill would
+ * have to be repeated for every row written by an older deploy. `null` is
+ * treated as absent — a stored null is exactly the case a spread-with-defaults
+ * would let through.
+ */
+function normaliseSuggestion(data) {
+  return {
+    ...data,
+    subscribers: Array.isArray(data.subscribers) ? data.subscribers : [],
+    editHistory: Array.isArray(data.editHistory) ? data.editHistory : [],
+    disputePending: data.disputePending === true,
+    language: data.language || 'en',
+  };
+}
+
 // Content-Type validation for write endpoints
 function requireJson(req, res, next) {
   if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
@@ -329,7 +354,7 @@ router.get('/suggestions/:id', async (req, res) => {
     // data-export-builder mappers (PR #977), firestore-helpers
     // queryDocs (PR #976), and roadmap-auth (PR #975).
     const result = {
-      ...data,
+      ...normaliseSuggestion(data),
       id: doc.id,
       netScore: (data.upvotes || 0) - (data.downvotes || 0),
       comments,
@@ -438,7 +463,7 @@ router.get('/suggestions', async (req, res) => {
     }
 
     const snap = await query.get();
-    let suggestions = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+    let suggestions = snap.docs.map((d) => ({ ...normaliseSuggestion(d.data()), id: d.id }));
 
     // Enforce status filter client-side (Firestore where may not filter in all environments)
     if (!status) {
