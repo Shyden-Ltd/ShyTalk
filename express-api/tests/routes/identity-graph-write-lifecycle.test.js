@@ -191,35 +191,13 @@ function makeSuspendedIdentifier(type, value, duration = '7d') {
 // ═══════════════════════════════════════════════════════════════
 
 describe('Identity binding at login', () => {
-  test('login from web: IP + network info + browser fingerprint bound to account', async () => {
-    // When user logs in from web, identity graph is created/updated
-    const app = createApp();
-    // Simulate login binding via internal route or utility
-  });
+  test.todo('login from web: IP + network info + browser fingerprint bound to account');
 
-  test('login from app: IP + network info + device ID bound to account', async () => {
-    // App login binds device ID instead of browser fingerprint
-  });
+  test.todo('login from app: IP + network info + device ID bound to account');
 
-  test('second login from new IP: new IP added to graph', async () => {
-    mockDocGet.mockImplementation((path) => {
-      if (path && path.includes('identityGraphs/')) {
-        return Promise.resolve(makeGraphDoc('graph-1'));
-      }
-      return Promise.resolve({ exists: false });
-    });
-    // After second login, graph should have 2 IPs
-  });
+  test.todo('second login from new IP: new IP added to graph');
 
-  test('second login from new device: new device added to graph', async () => {
-    mockDocGet.mockImplementation((path) => {
-      if (path && path.includes('identityGraphs/')) {
-        return Promise.resolve(makeGraphDoc('graph-1'));
-      }
-      return Promise.resolve({ exists: false });
-    });
-    // After second login, graph should have 2 fingerprints
-  });
+  test.todo('second login from new device: new device added to graph');
 
   test('all identifiers share same graphId', async () => {
     mockDocGet.mockImplementation((path) => {
@@ -304,108 +282,36 @@ describe('Suspension cascade', () => {
       .expect(200);
   });
 
-  test('suspended device used with new IP: new IP auto-suspended, added to graph', async () => {
-    const suspendedGraph = makeGraphDoc('graph-1', {
-      identifiers: [
-        makeSuspendedIdentifier('uid', '1001'),
-        makeSuspendedIdentifier('fingerprint', 'fp-abc'),
-        makeSuspendedIdentifier('ip', '1.2.3.4'),
-      ],
-    });
-    mockDocGet.mockImplementation((path) => {
-      if (path && path.includes('identityGraphs/')) {
-        return Promise.resolve(suspendedGraph);
-      }
-      return Promise.resolve({ exists: false });
-    });
-    // When new IP appears with known suspended device, it should be auto-suspended
-  });
+  test.todo('suspended device used with new IP: new IP auto-suspended, added to graph');
 
-  test('suspended network used with new device: new device auto-suspended, audit logged', async () => {
-    // Similar to above but triggered by network match
-  });
+  test.todo('suspended network used with new device: new device auto-suspended, audit logged');
 });
 
 describe('Multi-account detection', () => {
-  test('device linked to 2 accounts: both auto-suspended', async () => {
-    const multiAccountGraph = makeGraphDoc('graph-1', {
-      linkedAccountUids: ['1001', '2002'],
-      multiAccountDetected: true,
-      identifiers: [
-        {
-          type: 'uid',
-          value: '1001',
-          metadata: {},
-          addedAt: 1000,
-          source: 'login',
-          suspension: null,
-        },
-        {
-          type: 'uid',
-          value: '2002',
-          metadata: {},
-          addedAt: 2000,
-          source: 'login',
-          suspension: null,
-        },
-        {
-          type: 'fingerprint',
-          value: 'shared-device',
-          metadata: {},
-          addedAt: 1000,
-          source: 'login',
-          suspension: null,
-        },
-      ],
-    });
-    mockDocGet.mockImplementation((path) => {
-      if (path && path.includes('identityGraphs/')) {
-        return Promise.resolve(multiAccountGraph);
-      }
-      return Promise.resolve({ exists: false });
-    });
-    // Both accounts should be auto-suspended
-  });
+  test.todo('device linked to 2 accounts: both auto-suspended');
 
-  test('device linked to 3 accounts: all 3 auto-suspended', async () => {
-    const multiGraph = makeGraphDoc('graph-1', {
-      linkedAccountUids: ['1001', '2002', '3003'],
-      multiAccountDetected: true,
-    });
-    mockDocGet.mockImplementation((path) => {
-      if (path && path.includes('identityGraphs/')) {
-        return Promise.resolve(multiGraph);
-      }
-      return Promise.resolve({ exists: false });
-    });
-  });
+  test.todo('device linked to 3 accounts: all 3 auto-suspended');
 
-  test('multi-account flag set on graph', async () => {
-    const app = createApp();
-    const res = await request(app).get('/api/admin/bans/graph/graph-1');
-    // multiAccountDetected should be in the response
-  });
+  test.todo('multi-account flag set on graph');
 
-  test('audit log records detection event', async () => {
-    // When multi-account is detected, audit log entry should be created
-  });
+  test.todo('audit log records detection event');
 });
 
-describe('Full suspension enforcement', () => {
-  test('fully suspended: API requests return 403 with suspension info', async () => {
-    // Middleware check returns 403 for banned identifier
-  });
-
-  test('fully suspended: cannot access suggestions', async () => {
-    // Vote, comment, submit — all return 403
-  });
-
-  test('suggestions-only: can still access app, cannot use suggestions', async () => {
-    // Suggestions routes return 403, other routes work
-  });
-
-  test('suspension expiry: auto-cleared after duration', async () => {
-    // Expired suspensions should be treated as inactive
+// Suspension ENFORCEMENT is middleware behaviour, and this file mounts only
+// the identity-graph router behind a stub auth shim — it cannot reach the gate
+// it was describing. Three empty placeholders here duplicated coverage that
+// already exists for real, against the real middleware, in
+// tests/middleware/auth-ban-gate.test.js, auth-strict.test.js and
+// auth-suspension-cache-clear.test.js (including expired bans and the
+// fail-closed path). They were deleted rather than reimplemented (SHY-0256).
+describe('Suspension expiry', () => {
+  test('an expired suspension is reported as not banned', async () => {
+    // `now()` is mocked to 1709913600000, so the expiry must be derived from
+    // THAT clock. The fixture used `Date.now() - 1000`, which is far in the
+    // future relative to the mocked now — the route would have read the
+    // suspension as still active. A test whose verdict depends on the real
+    // wall clock is a test about the machine.
+    const MOCK_NOW = 1709913600000;
     const expiredGraph = makeGraphDoc('graph-1', {
       identifiers: [
         {
@@ -420,18 +326,17 @@ describe('Full suspension enforcement', () => {
             duration: '7d',
             reason: 'Old',
             suspendedAt: 1000,
-            expiresAt: Date.now() - 1000, // expired
+            expiresAt: MOCK_NOW - 1000,
           },
         },
       ],
     });
-    mockDocGet.mockImplementation((path) => {
-      if (path && path.includes('identityGraphs/')) {
-        return Promise.resolve(expiredGraph);
-      }
-      return Promise.resolve({ exists: false });
-    });
-    // Ban check should return not-banned for expired suspension
+    mockCollectionGet.mockResolvedValue({ empty: false, docs: [expiredGraph], size: 1 });
+    const res = await request(createApp())
+      .get('/api/admin/bans/check')
+      .query({ uid: '1001' })
+      .expect(200);
+    expect(res.body.isBanned).toBe(false);
   });
 });
 

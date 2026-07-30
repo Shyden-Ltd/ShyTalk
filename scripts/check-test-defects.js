@@ -145,7 +145,12 @@ function classifyCountLine(lines, i) {
 }
 
 function classifySkipLine(line) {
-  const m = line.match(/\b(?:test|it|this)\.(skip|fixme)\s*\(/);
+  // `todo` is included deliberately. It is the HONEST marker for "spec exists,
+  // implementation does not" — far better than an empty body that reports as a
+  // pass — but it must still be counted, or the debt could be cleared simply by
+  // rewriting every empty test as a todo. Honest and invisible are different
+  // things, and only the first is acceptable.
+  const m = line.match(/\b(?:test|it|this)\.(skip|fixme|todo)\s*\(/);
   if (!m) return null;
   const after = line.slice(line.indexOf(m[0]) + m[0].length).trim();
   // `test.skip('title', async () => {}` parks a test; `test.skip(cond, 'why')`

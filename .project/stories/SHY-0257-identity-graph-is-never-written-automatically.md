@@ -1,0 +1,193 @@
+---
+id: SHY-0257
+status: Draft
+owner: claude
+created: 2026-07-30
+priority: P1
+effort: L
+type: feature
+roadmap_ids: []
+epic: EPIC-0005
+---
+
+# SHY-0257: The identity graph is never written automatically
+
+## User Story
+
+**As a** moderator relying on cascading bans to stop a returning abuser
+**I want** the identity graph to record IPs, devices and fingerprints as accounts actually use the service
+**So that** a ban follows the person rather than the one identifier a moderator happened to type in.
+
+## Why
+
+Surfaced 2026-07-30 while driving the SHY-0256 defect list down.
+
+`routes/identity-graph.js` is entirely **admin-facing**: create a graph, view
+it, update it, delete it, suspend-all, unsuspend-all, unsuspend one node, and
+check an identifier. Every one of those requires an admin to already know the
+identifiers and enter them.
+
+Nothing populates the graph on its own. There is no binding hook in
+`middleware/auth.js`, and nothing outside the admin routes and the test helpers
+ever writes `identityGraphs/*`:
+
+```
+$ grep -rn "identityGraphs" express-api/src/ | grep -v test-collections
+  routes/suggestions-maintenance.js   deleteCollection('identityGraphs')
+  routes/test-helpers.js              db.doc(`identityGraphs/${uid}`).set(...)
+  routes/identity-graph.js            (admin CRUD only)
+```
+
+So the cascading-ban system can only cascade across identifiers a human already
+linked by hand. The automatic half — the half that makes it a *graph* — does
+not exist.
+
+Ten tests in `tests/routes/identity-graph-write-lifecycle.test.js` describe
+that half in detail. Every one of them had an **empty body** and reported as
+passing, which is how a whole subsystem stayed unbuilt while its suite was
+green (the same shape as SHY-0249). They are now `test.todo`, so they report
+honestly and are counted by the defect detector rather than hidden by it.
+
+## Acceptance Criteria
+
+### Happy path
+
+- [ ] A successful web sign-in records the caller's IP, network info and browser fingerprint against their account in the identity graph.
+- [ ] A successful app sign-in records IP, network info and device ID.
+- [ ] A later sign-in from a NEW IP adds that IP to the existing graph rather than creating a second one.
+- [ ] A later sign-in from a NEW device adds that device to the existing graph.
+
+### Error paths
+
+- [ ] A binding failure never blocks sign-in — authentication is not made contingent on graph bookkeeping.
+- [ ] A missing or unparseable identifier is skipped rather than written as null.
+- [ ] An ISP/geo lookup that times out leaves the IP recorded with null ISP/country, not an absent binding.
+
+### Edge cases
+
+- [ ] Using a SUSPENDED device from a new IP auto-suspends that new IP and adds it to the graph.
+- [ ] Using a SUSPENDED network from a new device auto-suspends that new device and writes an audit entry.
+- [ ] A device seen on 2 accounts auto-suspends both; on 3 accounts, all three.
+- [ ] The graph carries a multi-account flag once detection fires.
+- [ ] Private/loopback IPs are not treated as shared-network evidence (`isPrivateIp` already exists for this).
+- [ ] Two graphs that come to share an identifier are merged, not left as duplicates.
+
+### Performance
+
+- [ ] Binding adds no synchronous cost to the auth path — it must not turn every request into a graph write.
+- [ ] Detection does not scan the whole `identityGraphs` collection per request; the current `GET /admin/bans/check` full-collection scan is acceptable for an admin tool but not for the request path.
+
+### Security
+
+- [ ] Binding data is written server-side only; a client can never assert its own device ID or fingerprint into the graph unverified.
+- [ ] The auto-suspend cascade is fail-closed: if the graph cannot be read, the request is refused rather than allowed.
+- [ ] Suspension changes made by the cascade are audit-logged with the triggering event and every affected identifier.
+
+### UX
+
+- [ ] A user caught by a cascade sees the same suspension messaging as a directly-suspended user — no new dead end.
+
+### i18n
+
+- [ ] N/A — no new user-facing strings; the existing suspension messaging is reused.
+
+### Observability
+
+- [ ] Every automatic suspension writes an audit entry naming the trigger and the affected identifiers.
+- [ ] Binding writes are logged at debug with the correlation id, never with the raw fingerprint.
+
+## BDD Scenarios
+
+**Scenario: an account is bound to what it signs in from**
+- **Given** a user signing in from a browser
+- **When** authentication succeeds
+- **Then** their IP, network info and fingerprint are recorded against their account
+
+**Scenario: the graph grows rather than forking**
+- **Given** an account already in the graph
+- **When** they sign in from an IP never seen before
+- **Then** the new IP joins their existing graph instead of starting a second one
+
+**Scenario: a ban follows the person**
+- **Given** a device that is already suspended
+- **When** it is used from an IP not yet in the graph
+- **Then** that IP is added and auto-suspended, and the event is audit-logged
+
+**Scenario: one device, several accounts**
+- **Given** a device that has signed into three accounts
+- **When** detection runs
+- **Then** all three are suspended, the graph is flagged multi-account, and an audit entry records the detection
+
+**Scenario: bookkeeping never blocks the door**
+- **Given** the identity graph is unreadable
+- **When** a legitimate user signs in
+- **Then** they still sign in, and the failure is logged rather than surfaced
+
+## Test Plan
+
+**RED first** — the ten `test.todo` entries already in
+`tests/routes/identity-graph-write-lifecycle.test.js` are the specification;
+each becomes a real test against the real emulator:
+
+- `login from web` / `login from app` — binding shape per surface
+- `second login from new IP` / `new device` — growth, not forking
+- `suspended device used with new IP` / `suspended network used with new device` — cascade + audit
+- `device linked to 2 accounts` / `3 accounts` / `multi-account flag` / `audit log records detection event`
+
+Plus new tests for the error paths and the fail-closed read, and a middleware
+test proving a binding failure does not break sign-in.
+
+**GREEN:** a binding utility called from the auth path (asynchronously, so it
+cannot block), graph merge-on-overlap, and the cascade/detection pass.
+
+**Mutation checks:** removing the merge step must fail the "new IP joins the
+existing graph" test; making the graph read fail-open must fail the
+fail-closed test; dropping the audit write must fail the detection test.
+
+## Out of Scope
+
+- Changing the admin CRUD surface in `routes/identity-graph.js`.
+- Device attestation (DeviceCheck / Play Integrity) — tracked separately under
+  EPIC-0005; this story records what the client already presents.
+- Retroactively building graphs for historical sign-ins.
+
+## Dependencies
+
+- EPIC-0005 (ban enforcement). SHY-0151 is held pending iPhone proof and
+  DeviceCheck needs its `.p8`, so the app-side device ID may land behind the
+  web-side fingerprint. The story is written so the web half can ship first.
+
+## Risks & Mitigations
+
+- **Risk:** writing to the graph on every sign-in becomes a hot path.
+  **Mitigation:** binding is asynchronous and idempotent; the AC forbids
+  synchronous cost on the auth path.
+- **Risk:** an over-eager cascade suspends innocent users who share a public IP
+  (a café, a campus, CGNAT).
+  **Mitigation:** `isPrivateIp` already exists; shared-network evidence must be
+  corroborated by a device or fingerprint match, never by IP alone.
+- **Risk:** fail-closed reads turn a graph outage into a full outage.
+  **Mitigation:** fail-closed applies to the SUSPENSION decision only; binding
+  failures are swallowed and logged.
+
+## Definition of Done
+
+- [ ] All ten `test.todo` entries are real, passing tests against the emulator.
+- [ ] Binding never blocks sign-in, proven by a middleware test.
+- [ ] Cascade and multi-account detection audit-logged.
+- [ ] Mutations killed.
+- [ ] `cd express-api && npm test` green.
+- [ ] LOCAL gauntlet green on real Android + real iPhone + all browsers.
+- [ ] `code-reviewer` 100% clean.
+
+## Notes
+
+- 2026-07-30 — Filed from SHY-0256. The ten specs existed as empty test bodies
+  that reported green; converting them to `test.todo` makes the gap visible and
+  keeps them counted by `scripts/check-test-defects.js` (which counts `todo`
+  precisely so the debt cannot be cleared by relabelling it).
+- 2026-07-30 — Three sibling placeholders in the same file claimed to test
+  suspension ENFORCEMENT. That is middleware behaviour the file cannot reach,
+  and real coverage already exists in `tests/middleware/auth-ban-gate.test.js`,
+  `auth-strict.test.js` and `auth-suspension-cache-clear.test.js`. They were
+  deleted as duplicates rather than reimplemented.
