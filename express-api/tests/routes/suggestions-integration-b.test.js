@@ -493,13 +493,10 @@ describe('11.99 — Account Lifecycle with Suggestions', () => {
   test('new account: no suggestions initially', async () => {
     mockCollectionGet.mockResolvedValueOnce({ empty: true, docs: [], size: 0 });
     const res = await request(createApp({ uniqueId: 7777 })).get('/api/suggestions/mine');
-    if (res.status === 200) {
-      if (res.body.suggestions) {
-        expect(res.body.suggestions).toHaveLength(0);
-      } else if (Array.isArray(res.body)) {
-        expect(res.body).toHaveLength(0);
-      }
-    }
+    expect(res.status).toBe(200);
+    // The route's shape is `{ suggestions: [...] }` — the old test accepted
+    // that OR a bare array OR neither, so it passed on any response at all.
+    expect(res.body.suggestions).toEqual([]);
   });
   test('active account: can create, vote, comment on suggestions', async () => {
     const app = createApp();
@@ -550,9 +547,12 @@ describe('11.99 — Account Lifecycle with Suggestions', () => {
       size: 1,
     });
     const res = await request(createApp()).get('/api/suggestions');
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    // "anonymized" is the claim: the deleted submitter must be unattributable
+    // in the listing, not merely present.
+    expect(res.body.suggestions).toHaveLength(1);
+    expect(res.body.suggestions[0].submitterUid).toBeNull();
+    expect(res.body.suggestions[0].submitterDisplayName).toBe('[Deleted User]');
   });
   test('re-activated account: can resume creating suggestions', async () => {
     expect(
@@ -571,9 +571,11 @@ describe('11.99 — Account Lifecycle with Suggestions', () => {
       size: 1,
     });
     const res = await request(createApp()).get('/api/suggestions');
-    if (res.status === 200) {
-      expect(res.body).toBeDefined();
-    }
+    expect(res.status).toBe(200);
+    // "still visible" is the claim — a scheduled deletion must not hide the
+    // suggestion before the deletion actually runs.
+    expect(res.body.suggestions).toHaveLength(1);
+    expect(res.body.suggestions[0].id).toBe('sug-1');
   });
   test('account with no subscription: default notification preferences applied', async () => {
     mockDocGet.mockImplementation((path) => {
@@ -643,9 +645,12 @@ describe('11.100 — Notification Pipeline End-to-End', () => {
     await request(createApp({ uniqueId: 9999, isAdmin: true }))
       .put('/api/admin/suggestions/sug-1/status')
       .send({ status: 'accepted' });
-    if (sendFcmToTokens.mock.calls.length > 0) {
-      expect(sendFcmToTokens).toHaveBeenCalled();
-    }
+    // `if (calls > 0) expect(toHaveBeenCalled())` can only run when it is
+    // already true, so it proved nothing. The route dispatches through
+    // notifySubscribers; assert the push actually went to the seeded token.
+    expect(sendFcmToTokens).toHaveBeenCalled();
+    const tokens = sendFcmToTokens.mock.calls.flatMap((c) => c[0] || []);
+    expect(tokens).toContain('token-abc');
   });
   test('suggestion accepted: system PM dispatched', async () => {
     setupDocMocks({
@@ -678,9 +683,23 @@ describe('11.100 — Notification Pipeline End-to-End', () => {
         (c) =>
           c[0] === 'notifications' || (typeof c[0] === 'string' && c[0].includes('notifications')),
       ).length;
-    if (total > 0) {
-      expect(total).toBeLessThanOrEqual(3);
-    }
+    // "only submitter notified, not all subscribers" is the claim. The old
+    // form ran only when something was dispatched and then allowed up to 3 —
+    // one per subscriber — so it also passed when ALL THREE were notified,
+    // the exact thing it was named to prevent.
+    expect(total).toBeGreaterThan(0);
+    const notifiedUids = [
+      ...sendSystemPm.mock.calls.map((c) => c[0]),
+      ...mockCollectionAdd.mock.calls
+        .filter((c) => c[0] === 'notifications')
+        .map((c) => c[1] && (c[1].recipientUid ?? c[1].uid)),
+    ].filter((u) => u !== undefined && u !== null);
+    expect(notifiedUids.length).toBeGreaterThan(0);
+    // Normalised to strings before comparing: the two delivery paths spell the
+    // same uid differently (sendSystemPm receives "1001", the notifications doc
+    // stores the raw 1001). That inconsistency is real but orthogonal — what
+    // this test guards is WHO was notified, and it must be the submitter alone.
+    expect([...new Set(notifiedUids.map(String))]).toEqual(['1001']);
   });
   test('suggestion completed: email dispatched if consent given', async () => {
     setupDocMocks({
@@ -688,6 +707,13 @@ describe('11.100 — Notification Pipeline End-to-End', () => {
         status: 'planned',
         submitterUid: 1001,
         subscribers: [1001],
+        // Required by the route: completing a suggestion that is not linked to
+        // a roadmap feature is a 400. The fixture omitted it, so this test
+        // never reached the completion path at all — it got
+        // "Cannot complete — suggestion is not linked to a roadmap feature"
+        // and passed anyway, because its only assertion sat behind
+        // `if (sendEmail.mock.calls.length > 0)`.
+        linkedRoadmapFeature: 'G001',
       }),
       'users/1001': makeUserDoc(1001, { email: 'user@example.com' }),
       'subscriptions/1001': makeSubscriptionDoc(1001, {
@@ -698,12 +724,19 @@ describe('11.100 — Notification Pipeline End-to-End', () => {
         emailConsentAt: 1709913600000,
       }),
     });
-    await request(createApp({ uniqueId: 9999, isAdmin: true }))
+    const res = await request(createApp({ uniqueId: 9999, isAdmin: true }))
       .put('/api/admin/suggestions/sug-1/status')
       .send({ status: 'completed' });
-    if (sendEmail.mock.calls.length > 0) {
-      expect(sendEmail).toHaveBeenCalled();
-    }
+    // Status first: without it, a request rejected before any notification
+    // logic ran still let the assertions below "pass" on an untouched mock.
+    expect(res.status).toBe(200);
+    // "if consent given" is a precondition the fixture satisfies
+    // (emailConsentAt is set), so the dispatch is required, not optional.
+    expect(sendEmail).toHaveBeenCalled();
+    const recipients = sendEmail.mock.calls.map((c) =>
+      typeof c[0] === 'string' ? c[0] : c[0] && c[0].to,
+    );
+    expect(recipients).toContain('user@example.com');
   });
   test('comment notification: only suggestion watchers notified', async () => {
     setupDocMocks({
@@ -733,12 +766,12 @@ describe('11.100 — Notification Pipeline End-to-End', () => {
         (c) => typeof c[0] === 'string' && c[0].includes('notifications'),
       ),
     ];
-    if (notifCalls.length > 0) {
-      const d = notifCalls[0][1] || notifCalls[0][0];
-      if (d?.relatedId) {
-        expect(d.relatedId).toContain('sug-1');
-      }
-    }
+    // Two nested guards meant this passed when no notification was written
+    // AND when one was written without a relatedId — i.e. in every case it
+    // was meant to catch.
+    expect(notifCalls.length).toBeGreaterThan(0);
+    const payload = notifCalls[0][1] || notifCalls[0][0];
+    expect(payload.relatedId).toBe('sug-1');
   });
 });
 
@@ -784,12 +817,19 @@ describe('11.115 — Error Recovery Flows', () => {
     expect(res.status).not.toBe(500);
     expect(mockDocSet.mock.calls.length + mockCollectionAdd.mock.calls.length).toBeGreaterThan(0);
   });
-  test('batch commit failure: returns 500 with descriptive error', async () => {
-    mockBatchCommit.mockRejectedValueOnce(new Error('Batch commit failed'));
+  test('a failed write on create returns 500 without leaking the cause', async () => {
+    // Renamed and re-pointed. The old test rejected `batch.commit()`, but
+    // POST /suggestions never uses a batch — it writes the suggestion doc and
+    // the auto-upvote with two `.set()` calls. So the induced failure never
+    // happened, the route returned 201, and the guard `if (res.status === 500)`
+    // skipped the only assertion. Induce the failure the route can actually
+    // suffer.
+    mockDocSet.mockRejectedValueOnce(new Error('Firestore unavailable'));
     const res = await request(createApp()).post('/api/suggestions').send(VALID_SUGGESTION);
-    if (res.status === 500) {
-      expect(res.body.error || res.body.message).toBeDefined();
-    }
+    expect(res.status).toBe(500);
+    expect(res.body.error || res.body.message).toEqual(expect.any(String));
+    // The internal failure text must NOT reach the client.
+    expect(JSON.stringify(res.body)).not.toContain('Firestore unavailable');
   });
   test('timeout recovery: long-running request returns within timeout', async () => {
     // sleep-ok: the delay IS the simulated slow request this test exercises

@@ -59,6 +59,8 @@ const { generateId, now } = require('../utils/helpers');
 // SHY-0246: reuse the localised email subjects for in-app notifications and
 // system PMs so there is ONE set of translated strings, not two.
 const { getSubject } = require('../utils/suggestion-email-templates');
+// SHY-0256: the email channel notifySubscribers never delivered on.
+const { sendEmail } = require('../utils/email');
 const log = require('../utils/log');
 const { sanitise, sanitiseTitle } = require('../utils/text-sanitiser');
 const { similarity } = require('../utils/similarity');
@@ -1171,6 +1173,34 @@ async function notifySubscribers(suggestionData, eventType, extraData = {}, opti
           createdAt: now(),
         });
 
+        // Email — the one channel this function never delivered (SHY-0256).
+        //
+        // Everything for it already existed: subscriptions store a per-type
+        // `channelPreferences.<type>.email` flag, `emailConsentAt` records the
+        // consent, utils/email.js can send, and the localised subjects are
+        // right here — they were being borrowed for the in-app title. Only the
+        // wiring was missing, so a user who ticked "email me about this" got
+        // nothing, for every status change, silently.
+        //
+        // Consent is checked as well as the preference: a preference left over
+        // from before consent was withdrawn must not send mail. Failure is
+        // caught per-channel so an SMTP outage cannot cost the in-app record
+        // or the push that already succeeded above.
+        try {
+          const prefKey = `suggestion${eventType.charAt(0).toUpperCase()}${eventType.slice(1)}`;
+          const subDoc = await db.doc(`subscriptions/${uid}`).get();
+          const sub = subDoc.exists ? subDoc.data() : null;
+          const address = sub?.email || null;
+          if (sub?.channelPreferences?.[prefKey]?.email === true && address && sub.emailConsentAt) {
+            await sendEmail(address, headline, `<p>${messageText}</p>`);
+          }
+        } catch (err) {
+          log.error('suggestions', 'Suggestion email notification failed', {
+            uid,
+            error: err.message,
+          });
+        }
+
         // sendSystemPm(recipientUid, text) writes `text` VERBATIM into
         // conversations/<id>/messages.text and lastMessage.text
         // (utils/system-pm.js:41,56,77). This call passed an OBJECT, so every
@@ -1460,16 +1490,26 @@ router.put('/admin/suggestions/:id/status', async (req, res) => {
         return res.status(404).json({ error: 'Target suggestion not found' });
       }
 
-      // Mark source as merged and transfer votes
-      await db.doc(`suggestions/${id}`).update({
-        status: 'merged',
-        mergedIntoSuggestionId: mergeInto,
-        updatedAt: now(),
-      });
-
-      await db.doc(`suggestions/${mergeInto}`).update({
-        upvotes: FieldValue.increment(data.upvotes || 0),
-        updatedAt: now(),
+      // Mark source as merged and transfer votes — in ONE transaction.
+      //
+      // This is the SECOND merge path (the status endpoint's `mergeInto`
+      // parameter); POST /admin/suggestions/:id/merge is the first. Both had
+      // the same defect: two independent updates, so a failure between them
+      // hid the duplicate from the board while its votes were never
+      // transferred and no retry could recover them. Fixing one door and
+      // leaving the other open would just move the bug (SHY-0256).
+      const srcRef = db.doc(`suggestions/${id}`);
+      const dstRef = db.doc(`suggestions/${mergeInto}`);
+      await db.runTransaction(async (t) => {
+        t.update(srcRef, {
+          status: 'merged',
+          mergedIntoSuggestionId: mergeInto,
+          updatedAt: now(),
+        });
+        t.update(dstRef, {
+          upvotes: FieldValue.increment(data.upvotes || 0),
+          updatedAt: now(),
+        });
       });
 
       // Create audit log entry
