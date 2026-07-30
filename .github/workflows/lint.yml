@@ -154,6 +154,13 @@ jobs:
       - name: No NEW silently-passing tests (SHY-0256 ratchet)
         run: node scripts/check-test-defects.js
 
+      # A journey step with no matcher fails as STEP_NOT_IMPLEMENTED, which is
+      # indistinguishable from a product failure in the matrix report. Finding
+      # that out cost a four-hour device gauntlet; this answers it in under a
+      # second with no device, no stack and no browser. Ratchets DOWN only.
+      - name: No NEW unmatched journey steps (SHY-0259 ratchet)
+        run: node scripts/check-journey-step-coverage.js
+
       # SHY-0168 (EPIC-0006): ratchet guard — direct client→backend-service
       # access (Firestore / RTDB / Storage) may only SHRINK. Clients must go
       # through the Express API (the authz layer). Fails on any NEW direct

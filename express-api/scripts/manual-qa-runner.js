@@ -16442,6 +16442,12 @@ module.exports = {
   parseGherkin,
   classifySeverity,
   matchers,
+  // Exported for scripts/check-journey-step-coverage.js, which must decide
+  // "would this step resolve?" using the SAME normalisation executeStep
+  // applies. A private copy in the gate would drift, and the gate would then
+  // report gaps the runner does not have (or miss ones it does).
+  stripStepAnnotation,
+  interpolateScenarioVars,
   executeStep,
   runScenario,
   runFeatureFile,
