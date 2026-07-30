@@ -1256,6 +1256,12 @@ async function notifySubscribers(suggestionData, eventType, extraData = {}, opti
         // from before consent was withdrawn must not send mail. Failure is
         // caught per-channel so an SMTP outage cannot cost the in-app record
         // or the push that already succeeded above.
+        //
+        // Cost: one extra Firestore read per notified user, alongside the
+        // `users/<uid>` read already in this loop. Proportionate for a
+        // suggestions board, but it is a per-recipient cost — if subscriber
+        // counts ever grow, the preference should be carried on the same read
+        // rather than fetched again.
         try {
           const buildMail = SUGGESTION_EMAIL_BUILDERS[eventType];
           const prefKey = `suggestion${eventType.charAt(0).toUpperCase()}${eventType.slice(1)}`;
@@ -1493,7 +1499,9 @@ router.get('/admin/suggestions', async (req, res) => {
 
     const { q, status } = req.query;
     const snap = await db.collection('suggestions').get();
-    let suggestions = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+    // Same normalised contract as the public listing — an admin reading the
+    // queue must not get a different shape for the same document.
+    let suggestions = snap.docs.map((d) => ({ ...normaliseSuggestion(d.data()), id: d.id }));
 
     // Apply status filter if provided (11.92 badge count test depends on this).
     if (status) {
