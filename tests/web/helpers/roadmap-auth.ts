@@ -200,11 +200,15 @@ export async function roadmapLogin(
   page: Page,
   email: string = 'roadmap-test@shytalk.dev',
   password: string = 'testpass123',
+  { expectShyTalkAccount = true }: { expectShyTalkAccount?: boolean } = {},
 ): Promise<void> {
   // Wait for Firebase to initialize and shytalkAuth to be available
+  // `polling: 100` rather than the default requestAnimationFrame: this page is
+  // static while it waits for auth, and rAF only fires when something paints.
+  // An interval poll is still condition-based — it is not a sleep.
   await page.waitForFunction(
     () => (window as any).shytalkAuth && (window as any).shytalkAuth.signInWithEmail,
-    { timeout: 15_000 },
+    { timeout: 15_000, polling: 100 },
   );
 
   // Sign in programmatically via the exposed signInWithEmail function
@@ -225,9 +229,23 @@ export async function roadmapLogin(
   }
 
   // Wait for auth state to propagate and UI to update
+  // `currentUser` is only a settled signal when the Firebase identity HAS a
+  // ShyTalk account. When it does not, roadmap-auth.js (:214-226) publishes
+  // currentUser and then deliberately clears it — "half-authenticated is not
+  // a state we keep" — and signs the user out. Waiting on it there races a
+  // value the product intends to destroy: the wait passes or hangs purely on
+  // whether a poll lands inside that window.
+  //
+  // That is what made five firefox specs fail in the full run and pass in
+  // isolation, which reads exactly like ordinary flake. The no-account
+  // callers wait on the rendered `auth-no-account` panel instead, which is
+  // the state that actually settles.
+  if (!expectShyTalkAccount) return;
+
+  // Interval-polled for the same reason as the wait above.
   await page.waitForFunction(
     () => (window as any).shytalkAuth && (window as any).shytalkAuth.currentUser,
-    { timeout: 10_000 },
+    { timeout: 10_000, polling: 100 },
   );
 }
 
@@ -257,7 +275,7 @@ export async function signInWithoutShyTalkAccount(page: Page): Promise<{ email: 
   const password = 'testpass123';
   await createTestUser(email, password, `No Account ${stamp}`);
   await page.goto('/roadmap.html');
-  await roadmapLogin(page, email, password);
+  await roadmapLogin(page, email, password, { expectShyTalkAccount: false });
   await expect(page.locator('[data-testid="auth-no-account"]')).toBeVisible({ timeout: 15_000 });
   return { email };
 }
