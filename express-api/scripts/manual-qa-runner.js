@@ -16406,6 +16406,12 @@ async function runFeatureFile(filePath, ctx) {
         scenario: scenario.name,
         status: 'fail',
         failedStep: failed.step.text,
+        // The REASON, carried on the record itself. Without it a finished run
+        // says which scenarios failed but never why, and the only way to find
+        // out was to re-run a feature file by hand (operator 2026-08-01: "fix
+        // the failure reasons not being saved").
+        error: failed.result.error || null,
+        code: failed.result.code || null,
       };
       if (screenshotPaths.length > 0) failReport.screenshots = screenshotPaths;
       scenarioReports.push(failReport);
@@ -17982,12 +17988,23 @@ async function main() {
         file: path.basename(f),
         scenario: s.scenario,
         status: s.status,
+        // Reason travels WITH the result. The per-cell log is written once at
+        // cell end and holds scenario names only, so this stream is the only
+        // place a reason survives — and the only one visible mid-run.
+        ...(s.error ? { error: String(s.error).slice(0, 400) } : {}),
+        ...(s.failedStep ? { failedStep: String(s.failedStep).slice(0, 200) } : {}),
+        ...(s.reason ? { reason: String(s.reason).slice(0, 200) } : {}),
       });
     }
   }
 
   const report = formatReport(allFindings, allScenarioReports, opts.target, opts.cycle);
-  const reportPath = `/tmp/manual-qa-cycle-${opts.cycle}.md`;
+  // Per-CELL path. Every cell used to write /tmp/manual-qa-cycle-<cycle>.md,
+  // so 12 concurrent cells raced on one filename and only the last writer's
+  // reasons survived — which is why a finished matrix had no diagnosis at all.
+  const reportPath = opts.reportDir
+    ? path.join(opts.reportDir, `findings-${opts.browser || 'default'}.md`)
+    : `/tmp/manual-qa-cycle-${opts.cycle}.md`;
   fs.writeFileSync(reportPath, report);
   console.log(`\nReport: ${reportPath}`);
   console.log(`Findings: ${allFindings.length}`);

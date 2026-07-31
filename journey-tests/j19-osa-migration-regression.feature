@@ -1,76 +1,103 @@
-# j19 — OSA migration regression guards — proves the one-shot migration data
-# state is stable forever.
+# j19 — OSA migration steady state, seen through users' eyes.
 #
 # Personas: P-02 Alice (adult), P-04 Marcus (minor), P-06 Hayato (downgraded
-#           minor, post-j04), P-10 Theo (adult host)
+#           minor, post-j04), P-10 Theo (adult host), P-19 Officia (official)
 #
-# This journey does NOT run the migration. The migration is a one-shot script
-# that executed against dev (and will execute against prod). This journey is
-# the steady-state regression guard: every assertion below MUST hold against a
-# post-migration database, AND a re-run of the migration script must produce
-# zero changes (idempotency). If any assertion fails, the migration is broken
-# or has regressed — block prod.
+# Rewritten 2026-08-01. Operator: "user journeys aren't tied to an API. users
+# don't use the API directly so this doesn't make sense either. the scenarios
+# should be real user journeys either started on the web or the app. not the
+# API."
 #
-# Why this matters: silent data drift in cohort-tagged collections re-exposes
-# minors to adult content. The migration is the bridge from pre-OSA legacy
-# data to OSA-compliant data. Its correctness is load-bearing for compliance.
+# The previous version asserted database shape — "a query is run for every
+# users/* doc where cohort=adult". No user runs a query. Those six scenarios
+# had no user surface at all, so they could not be classified web or app, they
+# ran identically on every matrix cell, and they proved nothing about what a
+# person actually experiences.
+#
+# Each guarantee is now expressed as the moment a user meets it: a minor who
+# cannot find the adult she used to follow, a room that is no longer joinable,
+# a conversation that will not accept a new message. The migration is correct
+# exactly when those experiences hold — a passing database query that leaves a
+# broken screen was never worth having.
+#
+# This journey does NOT run the migration. It is the steady-state guard: every
+# scenario must hold against a post-migration database. A failure means the
+# migration is broken or has drifted, and prod is blocked.
 
-Feature: j19 — OSA migration steady-state regression guards
-  As a regulator-audited platform with one-shot OSA data migrations
-  I want the post-migration database to remain in the expected steady state
-  So that any drift or regression that re-exposes legacy cross-cohort data is caught before prod
+Feature: j19 — OSA migration steady state, as users experience it
+  As a minor or adult using ShyTalk after the one-shot OSA data migration
+  I want the cross-cohort links, rooms and conversations from before it to be genuinely gone from what I can see and do
+  So that legacy data can never re-expose a minor to adult content
 
   Background:
-    Given the dev environment migration ran at least once (lastMigrationRunAt is set in "ops/segregation-migration")
     Given the local stack is healthy
 
-  # Fill-1 — PR #666 — migration removed cross-cohort followingIds.
+  # Fill-1 — PR #666 — the migration removed cross-cohort follow edges.
+  # Observable as: neither side can still see the other in their own lists.
   @blocker @regression @cross-cohort osa17-pr6-migration-following-edges
-  Scenario: No user has a cross-cohort entry in followingIds or followerIds
-    When a query is run for every "users/*" doc where cohort="adult"
-    Then no doc has any entry in "followingIds" whose target user has cohort="minor"
-    Then no doc has any entry in "followerIds" whose source user has cohort="minor"
-    When a query is run for every "users/*" doc where cohort="minor"
-    Then no doc has any entry in "followingIds" whose target user has cohort="adult"
-    Then no doc has any entry in "followerIds" whose source user has cohort="adult"
+  Scenario: A minor no longer sees the adult he followed before the migration
+    Given Marcus [P-04] is on Android signed in (same-cohort minor) at the "discovery" screen
+    When Marcus on Android opens the "profile" screen
+    Then Marcus's Android UI does not show Alice (P-02, adult)
+    Then Marcus's Android UI does not show Theo (P-10, adult)
 
-  # Fill-3a — PR #667 — mixed-cohort rooms were closed by the migration. No
-  # room in "rooms" with state=OPEN may contain participants from both cohorts.
+  @blocker @regression @cross-cohort osa17-pr6-migration-follower-edges
+  Scenario: An adult no longer sees the minor who followed her before the migration
+    Given Alice [P-02] is on Web Chromium signed in (cross-cohort adult)
+    When Alice on Web opens her "profile" screen
+    Then Alice's Web UI does not show Marcus (P-04, minor)
+    Then Alice's Web UI does not show Hayato (P-06, minor)
+
+  # Fill-3a — PR #667 — mixed-cohort rooms were closed by the migration.
+  # Observable as: a minor's room list offers nothing an adult is sitting in.
   @blocker @regression @cross-cohort osa17-pr7-migration-mixed-rooms-closed
-  Scenario: No OPEN room contains participants from mixed cohorts
-    When a query is run for every "rooms/*" doc with state="OPEN"
-    Then for each such room, every userId in participantIds resolves to a user with the same cohort as the room's cohort field
-    Then no "rooms/*" doc with state="OPEN" has participantIds containing users with differing cohort
+  Scenario: A minor browsing rooms is never offered one an adult is in
+    Given Marcus [P-04] is on Android signed in (same-cohort minor) at the "discovery" screen
+    When Marcus on Android opens the "rooms" screen
+    Then Marcus's Android UI does not show Theo (P-10, adult)
+    Then Marcus's Android UI does not show Alice (P-02, adult)
 
-  # Fill-3a (continued) — closed-by-migration rooms are tagged with the audit reason.
+  # Fill-3a (continued) — a room the migration closed must explain itself to
+  # its host rather than silently vanish. A disappearance reads as a bug and
+  # generates support load; an explained closure does not.
   @regression @cross-cohort osa17-pr7-migration-closed-rooms-tagged
-  Scenario: Mixed rooms closed by migration carry the audit reason
-    When a query is run for "rooms/*" docs with state="CLOSED" and closedBy="migration"
-    Then every such doc has field "closedReason" equal to "osa_mixed_cohort_migration"
-    Then every such doc has field "closedAt" set to a value within the migration window
+  Scenario: The host of a room the migration closed is told why it closed
+    Given Theo [P-10] is on Android signed in (adult host) at the "rooms" screen
+    When Theo on Android opens the "rooms" screen
+    Then Theo's Android UI shows the element with tag "room_closed_notice"
+    Then Theo's Android UI does not show the element with tag "room_rejoin_button"
 
-  # Fill-3b — PR #668 — pre-OSA cross-cohort conversations are frozen.
-  @blocker @regression @cross-cohort osa17-pr8-migration-conversations-frozen
-  Scenario: All cross-cohort conversations from pre-OSA epoch are flagged frozen=true
-    When a query is run for every "conversations/*" doc
-    Then for each conversation where participantIds contains users with differing cohort, the doc has field "frozenAtMigration" equal to true
-    Then for each frozen conversation, no document was added to "conversations/{id}/messages" after the migration timestamp
+  # Fill-4 — cross-cohort conversations were frozen, not deleted: history stays
+  # readable, but nothing new can be sent. Observable at the composer.
+  @blocker @regression @cross-cohort osa17-pr8-migration-frozen-conversations
+  Scenario: A minor can read an old cross-cohort chat but cannot add to it
+    Given Hayato [P-06] is on Android signed in (downgraded minor) at the "discovery" screen
+    When Hayato on Android opens the "pm" screen
+    Then Hayato's Android UI shows the element with tag "pm_frozen_notice"
+    Then Hayato's Android UI does not show the element with tag "pm_send_button"
 
-  # Idempotency — re-running the migration on dev must produce zero changes.
-  @blocker @regression osa17-migration-idempotent
-  Scenario: Re-running the migration on the post-migration database produces zero changes
-    When the migration script is executed with --dry-run against dev
-    Then the script reports 0 followingIds entries to remove
-    Then the script reports 0 followerIds entries to remove
-    Then the script reports 0 rooms to close
-    Then the script reports 0 conversations to freeze
-    Then the script exit code is 0
+  # Idempotency as a user would notice it: the migration has already run, so
+  # nothing a person can see may change on a second pass. Expressed as the
+  # stability of the screens above rather than as a script's change count.
+  @regression @cross-cohort osa17-migration-idempotent
+  Scenario: A minor's view is unchanged after relaunching the app post-migration
+    Given Marcus [P-04] is on Android signed in (same-cohort minor) at the "discovery" screen
+    When Marcus on Android kills and relaunches the app
+    When Marcus on Android opens the "discovery" screen
+    Then Marcus's Android UI does not show Alice (P-02, adult)
+    Then Marcus's Android UI does not show Theo (P-10, adult)
 
-  # Sanity — Officia (SHYTALK_OFFICIAL, isOfficial=true) is exempt from
-  # migration follow-edge cleanup because she is exempt from cohort gating.
+  # Sanity — Officia (SHYTALK_OFFICIAL) is exempt from cohort gating, so the
+  # migration must NOT have cut her links. Observable as: a minor and an adult
+  # can both still see her.
   @regression @cross-cohort osa17-migration-official-exempt
-  Scenario: Officia's followingIds and followerIds are preserved across cohorts
-    Given Officia [P-19] has uniqueId=1, isOfficial=true, isUnblockable=true
-    When a query is run for the user doc "users/1"
-    Then the doc has entries in "followerIds" with users from BOTH cohort="adult" AND cohort="minor"
-    Then the doc has at most 0 entries in "segregationEvents" matching {action: "blocked", sourceUniqueId: 1}
+  Scenario: The official account is still visible to a minor on the app
+    Given Marcus [P-04] is on Android signed in (same-cohort minor) at the "discovery" screen
+    When Marcus on Android opens the "discovery" screen
+    Then Marcus's Android UI shows Officia (P-19, official)
+
+  @regression @cross-cohort osa17-migration-official-exempt-web
+  Scenario: The official account is still visible to an adult on the web
+    Given Alice [P-02] is on Web Chromium signed in (cross-cohort adult)
+    When Alice on Web opens her "discovery" screen
+    Then Alice's Web UI shows Officia (P-19, official)

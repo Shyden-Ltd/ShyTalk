@@ -258,3 +258,70 @@ describe('mergeCellActivity', () => {
     expect(merged.chromium.scenarios).toBe(1);
   });
 });
+
+/**
+ * A failure must carry its REASON, or a finished run cannot be diagnosed.
+ *
+ * Operator 2026-08-01: "fix the failure reasons not being saved."
+ *
+ * Two defects made a completed matrix undiagnosable:
+ *   1. the JSONL carried status only, so `fail` meant "something went wrong"
+ *      and nothing more;
+ *   2. every cell wrote its findings report to the SAME path,
+ *      /tmp/manual-qa-cycle-<cycle>.md, so twelve concurrent cells raced on
+ *      one filename and only the last writer's reasons survived.
+ *
+ * After a run, chromium reported 106 failures and the record of WHY was gone.
+ * The only way to see a reason was to re-run a feature file by hand — which is
+ * how three separate wrong conclusions got drawn in one night.
+ */
+describe('progress records carry the failure reason', () => {
+  const { formatProgressLine, parseProgressStream } = require('../../scripts/scenario-progress');
+
+  it('round-trips an error message', () => {
+    const line = formatProgressLine({
+      browser: 'chromium',
+      file: 'j06.feature',
+      scenario: 'Receipt replay attack',
+      status: 'fail',
+      error: 'response status was 400, expected 409',
+      failedStep: 'Then the second call returns 409',
+    });
+    const [rec] = parseProgressStream(line);
+    expect(rec.error).toBe('response status was 400, expected 409');
+    expect(rec.failedStep).toBe('Then the second call returns 409');
+  });
+
+  it('keeps a multi-line error on ONE JSONL line', () => {
+    // A stack trace in an error would otherwise split the record and corrupt
+    // every reader downstream.
+    const line = formatProgressLine({
+      browser: 'chromium',
+      file: 'a.feature',
+      scenario: 's',
+      status: 'fail',
+      error: 'first line\nsecond line',
+    });
+    expect(line.trim().split('\n')).toHaveLength(1);
+    expect(parseProgressStream(line)[0].error).toBe('first line\nsecond line');
+  });
+
+  it('carries a skip REASON too, so a skip is never mysterious', () => {
+    const line = formatProgressLine({
+      browser: 'chromium',
+      file: 'a.feature',
+      scenario: 's',
+      status: 'skipped',
+      reason: 'surface not available on this cell — needs android',
+    });
+    expect(parseProgressStream(line)[0].reason).toMatch(/needs android/);
+  });
+
+  it('a passing record needs no reason and carries none', () => {
+    const rec = parseProgressStream(
+      formatProgressLine({ browser: 'chromium', file: 'a.feature', scenario: 's', status: 'pass' }),
+    )[0];
+    expect(rec.error).toBeUndefined();
+    expect(rec.reason).toBeUndefined();
+  });
+});

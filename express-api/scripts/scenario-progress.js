@@ -27,9 +27,40 @@ const path = require('path');
 
 const VALID_STATUS = new Set(['pass', 'fail', 'skipped', 'pending']);
 
-/** One JSON object per line. JSON.stringify escapes newlines, so a record can never be torn in two. */
-function formatProgressLine({ browser, file, scenario, status, durationMs, at = Date.now() }) {
-  return `${JSON.stringify({ browser, file, scenario, status, durationMs, at })}\n`;
+/**
+ * One JSON object per line. JSON.stringify escapes newlines, so a record can
+ * never be torn in two — which is what lets an error message containing a stack
+ * trace travel safely on a single line.
+ *
+ * `error` / `failedStep` / `reason` are the DIAGNOSIS. Without them a finished
+ * run says which scenarios failed and never why: chromium once reported 106
+ * failures with no surviving record of the cause, because the per-cell log
+ * holds names only (operator 2026-08-01: "fix the failure reasons not being
+ * saved"). Undefined fields are dropped by JSON.stringify, so a passing record
+ * stays exactly as small as it was.
+ */
+function formatProgressLine({
+  browser,
+  file,
+  scenario,
+  status,
+  durationMs,
+  error,
+  failedStep,
+  reason,
+  at = Date.now(),
+}) {
+  return `${JSON.stringify({
+    browser,
+    file,
+    scenario,
+    status,
+    durationMs,
+    error,
+    failedStep,
+    reason,
+    at,
+  })}\n`;
 }
 
 /**
