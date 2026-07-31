@@ -318,20 +318,52 @@ function snapshot(runDir) {
       CORPUS[row.index] ? CORPUS[row.index].steps || [] : [],
       capsByCell,
     );
+    // OBSERVATION BEATS PREDICTION.
+    //
+    // Operator 2026-08-01: "if the scenario is APP ios or APP android, why is
+    // there a dot indicator in chrome and safari columns? doesn't make sense."
+    //
+    // It did not make sense, and the prediction was the thing at fault. The
+    // corpus names a surface in steps that need no device: "Receipt replay
+    // attack" is a pure API scenario whose only Android mention is a
+    // `is signed in on Android` Given that mints a token. requiredPlatforms
+    // called it APP/android; every cell then ran it and reported a real result,
+    // so the badge contradicted its own row.
+    //
+    // A cell that actually PASSED or FAILED a scenario has proved it can run
+    // it — that is evidence, where the step text is only a guess. Skips are not
+    // evidence either way (a skip is what "cannot run" looks like), so only
+    // pass/fail promote a cell.
+    for (const cell of planned) {
+      if (row.results[cell] === 'pass' || row.results[cell] === 'fail') applicable[cell] = true;
+    }
     const results = { ...row.results };
     const summary = { ...row.summary, na: 0 };
     for (const cell of planned) {
-      if (!applicable[cell] && results[cell] === 'pending') {
+      // A skip on a cell that can never run this scenario IS n/a — showing it
+      // as a skip marker implies work was declined, when none was ever possible.
+      if (!applicable[cell] && (results[cell] === 'pending' || results[cell] === 'skipped')) {
+        summary[results[cell]] -= 1;
         results[cell] = 'na';
-        summary.pending -= 1;
         summary.na += 1;
       }
     }
     // kind/platforms drive the web-vs-app split in the UI. An app row renders
     // only the device columns it can ever run on; a web row spans every cell.
-    const { kind, platforms } = classifyScenario(
+    let { kind, platforms } = classifyScenario(
       CORPUS[row.index] ? CORPUS[row.index].steps || [] : [],
     );
+    // Same correction applied to the LABEL. If a web-only cell has actually run
+    // this scenario, it needs no device, whatever its step text implied — so it
+    // is a WEB scenario and the badge must say so rather than argue with the
+    // row beneath it.
+    const ranOnWebOnlyCell = planned.some(
+      (c) => capsByCell[c].length === 1 && (row.results[c] === 'pass' || row.results[c] === 'fail'),
+    );
+    if (ranOnWebOnlyCell) {
+      kind = 'web';
+      platforms = [];
+    }
     return { ...row, results, summary, applicable, kind, platforms };
   });
   // A scenario counts as done when a cell has reported a real result for it.

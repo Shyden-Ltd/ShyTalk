@@ -480,9 +480,9 @@
           <label class="autoscroll"
             ><input type="checkbox" id="sAuto" checked /> auto-scroll to progress</label
           >
-          <span class="ic pass">●</span> pass <span class="ic fail">●</span> fail
-          <span class="ic skipped">●</span> skipped <span class="ic pending">●</span> pending
-          <span class="ic na">–</span> n/a for this surface
+          <span class="ic pass">●</span> passed <span class="ic fail">✕</span> failed
+          <span class="ic pending">○</span> queued <span class="ic skipped">⊘</span> skipped
+          <span class="ic na">–</span> n/a — this cell cannot run it
         </div>
         <div class="scroll" id="sScroll">
           <table class="grid">
@@ -671,17 +671,25 @@
               cells
                 .map((c) => {
                   const st = r.results[c] || 'pending';
+                  // Distinct SHAPE per state, not just colour. Operator wants
+                  // pass / fail / queued unmistakable, and a grid read at a
+                  // glance must not depend on telling red from green.
                   const glyph =
                     st === 'pass'
                       ? '●'
                       : st === 'fail'
-                        ? '●'
+                        ? '✕'
                         : st === 'skipped'
-                          ? '○'
+                          ? '⊘'
                           : st === 'na'
                             ? '–'
-                            : '·';
-                  const label = st === 'na' ? 'not applicable to this surface' : st;
+                            : '○';
+                  const label =
+                    st === 'na'
+                      ? 'not applicable — this cell cannot run this scenario'
+                      : st === 'pending'
+                        ? 'queued'
+                        : st;
                   return (
                     '<td><span class="ic ' +
                     st +
