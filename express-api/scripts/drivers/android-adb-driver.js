@@ -35,6 +35,7 @@
  */
 const { execSync } = require('child_process');
 const { dumpWithRetry, resolveDumpBackoffMs } = require('./ui-dump-retry');
+const { withDeviceLock } = require('./device-lock');
 
 function selectSerial(preferredSerial) {
   let devices;
@@ -301,12 +302,23 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // short backoff until a dump succeeds or the budget is spent — returning
     // the first successful result (idle screens return on attempt 1). See
     // ./ui-dump-retry.js.
-    const result = await dumpWithRetry(
-      () => {
-        adb(['shell', 'uiautomator', 'dump', '--compressed', '/sdcard/dump.xml']);
-        return adb(['shell', 'cat', '/sdcard/dump.xml']);
-      },
-      { backoffMs: resolveDumpBackoffMs() },
+    // Held across the WHOLE retry budget, not per attempt: `uiautomator dump`
+    // takes an exclusive UiAutomation connection, so a sibling process that
+    // slipped in between two of our retries would fail us and wedge itself.
+    //
+    // Operator 2026-08-01 ("make sure this cannot happen again"): two of these
+    // ran concurrently on one phone and deadlocked, parking three matrix cells
+    // at 58 scenarios for eight minutes. Cell-aware driver attachment stops the
+    // usual way that happens; this lock is what holds when something else finds
+    // a new way. See device-lock.js.
+    const result = await withDeviceLock(serial, () =>
+      dumpWithRetry(
+        () => {
+          adb(['shell', 'uiautomator', 'dump', '--compressed', '/sdcard/dump.xml']);
+          return adb(['shell', 'cat', '/sdcard/dump.xml']);
+        },
+        { backoffMs: resolveDumpBackoffMs() },
+      ),
     );
     if (!result.ok) {
       console.error(
