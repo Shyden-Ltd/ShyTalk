@@ -233,3 +233,213 @@ fail.
 - 2026-07-30 — `stub:webAdminShowsDashboardCounters` alone accounts for 59 of
   the 64 stub occurrences; implementing that one method is the single largest
   lever in this story.
+
+
+## Measured inventory (2026-08-01)
+
+Counted mechanically: every `ctx.uiDriver.X` / `ctx.webDriver.X` the runner can
+demand, minus every identifier that appears anywhere in `scripts/drivers/`.
+
+**179 of the 217 referenced driver methods do not exist.** That is the corpus
+outrunning its drivers by 82%, and it is why a gauntlet cell reports scores of
+failures that are not product defects: `ctx.webDriver.webOpenScreen not
+configured`, `ctx.uiDriver.androidTapNamedButton not configured`, and so on.
+
+This is the whole reason a matrix run cannot currently be read as a quality
+signal. It is also why the operator's instruction — everything fixed BEFORE the
+gauntlet runs — was not met on 2026-08-01: the gauntlet was launched with this
+gap open, which was a mistake.
+
+Spot-checked as genuinely absent, not a detection artefact: `webOpenScreen`,
+`webSignIn`, `androidTapNamedButton`, `webAdminOpenTab`. One class of false
+positive exists — `androidOpenScreen` DOES appear in `scripts/drivers/` but is
+not wired onto the uiDriver the matrix builds, so it still fails at runtime with
+the same message. Wiring gaps and missing implementations both need closing.
+
+The full checklist follows. No stubs: each method drives the real device or the
+real browser, per the repo's real-only rule.
+
+## uiDriver — 92 of 113 referenced methods do not exist in scripts/drivers/
+
+- [ ] `androidAcceptLegalAndContinue`
+- [ ] `androidApiPost`
+- [ ] `androidAttemptAction`
+- [ ] `androidAttemptBlock`
+- [ ] `androidAttemptFollowViaProfile`
+- [ ] `androidAttemptProfileDeepLink`
+- [ ] `androidAttemptStartConversation`
+- [ ] `androidCreateRoomComposite`
+- [ ] `androidEditBodyAndConfirm`
+- [ ] `androidForceRefreshJwt`
+- [ ] `androidForceRefreshSecureToken`
+- [ ] `androidGetLayoutDirection`
+- [ ] `androidIsOnConversationWith`
+- [ ] `androidLongPressMessageAndTap`
+- [ ] `androidOpenConversation`
+- [ ] `androidOpenDeepLink`
+- [ ] `androidOpenListView`
+- [ ] `androidOpenTab`
+- [ ] `androidPerformAuthenticatedCall`
+- [ ] `androidPickDOB`
+- [ ] `androidPickIdType`
+- [ ] `androidPickTestImageBySize`
+- [ ] `androidReceiveLiveKitToken`
+- [ ] `androidRefreshRoomsList`
+- [ ] `androidRelaunchAndSignIn`
+- [ ] `androidRetrySamePurchase`
+- [ ] `androidSeatGridState`
+- [ ] `androidSelectFromFollowedPicker`
+- [ ] `androidSelectGalleryImage`
+- [ ] `androidSelectGiftRecipient`
+- [ ] `androidSendGift`
+- [ ] `androidSendMessageTo`
+- [ ] `androidShowsAdultCohortVisitor`
+- [ ] `androidShowsBannerFromUser`
+- [ ] `androidShowsCohortChangeBanner`
+- [ ] `androidShowsMessageInput`
+- [ ] `androidShowsNamedButton`
+- [ ] `androidShowsNewFollowerNotification`
+- [ ] `androidShowsPlaceholder`
+- [ ] `androidShowsPmWithBadge`
+- [ ] `androidShowsStatsForUser`
+- [ ] `androidShowsTabWithNoNavTo`
+- [ ] `androidShowsTranslationOf`
+- [ ] `androidSignupWithDOB`
+- [ ] `androidTapBareVerb`
+- [ ] `androidTapEventInviteAction`
+- [ ] `androidTapNamedButton`
+- [ ] `androidTapSameRoom`
+- [ ] `androidTapUserCard`
+- [ ] `androidTypeAndSubmit`
+- [ ] `androidTypeIntoConversationInput`
+- [ ] `androidTypeText`
+- [ ] `currentPlatformRendersScreen`
+- [ ] `iosAcceptLegalAndContinue`
+- [ ] `iosAttemptAction`
+- [ ] `iosAttemptProfileDeepLink`
+- [ ] `iosConfirm`
+- [ ] `iosConfirmDialog`
+- [ ] `iosEditBodyAndConfirm`
+- [ ] `iosIsOnConversationWith`
+- [ ] `iosNetworkDropFor`
+- [ ] `iosNetworkLinkConditioner`
+- [ ] `iosOpenConversation`
+- [ ] `iosOpenDeepLink`
+- [ ] `iosOpenListView`
+- [ ] `iosPickDOB`
+- [ ] `iosReceiveLiveKitToken`
+- [ ] `iosRefreshRoomsList`
+- [ ] `iosRelaunchAndSignIn`
+- [ ] `iosSeatGridState`
+- [ ] `iosSendGift`
+- [ ] `iosShowsAdultCohortVisitor`
+- [ ] `iosShowsBannerFromUser`
+- [ ] `iosShowsCohortChangeBanner`
+- [ ] `iosShowsMessageInput`
+- [ ] `iosShowsNamedButton`
+- [ ] `iosShowsNewFollowerNotification`
+- [ ] `iosShowsPlaceholder`
+- [ ] `iosShowsPmWithBadge`
+- [ ] `iosShowsStatsForUser`
+- [ ] `iosShowsTabWithNoNavTo`
+- [ ] `iosShowsTranslationOf`
+- [ ] `iosTapBareVerb`
+- [ ] `iosTapNamedButton`
+- [ ] `iosTapQuotedTarget`
+- [ ] `iosTapRoomCard`
+- [ ] `iosTapSameRoom`
+- [ ] `iosTapUserCard`
+- [ ] `iosTypeAndSubmit`
+- [ ] `iosTypeIntoConversationInput`
+- [ ] `measureRenderingTimeFromSubmit`
+- [ ] `showsCardBadge`
+
+## webDriver — 87 of 104 referenced methods do not exist in scripts/drivers/
+
+- [ ] `advanceClockToStartsAt`
+- [ ] `apiRequestStats`
+- [ ] `auditLogContains`
+- [ ] `countFcmPayloadsToUser`
+- [ ] `eachJoinerNavigatesBackWithToast`
+- [ ] `injectApiFailureThenSuccess`
+- [ ] `injectApiLatency`
+- [ ] `pmBodyIsTranslationOfTemplate`
+- [ ] `pmIsFromSender`
+- [ ] `receivedSystemPmWithReason`
+- [ ] `seesFcmPushOnPlatform`
+- [ ] `sequentialRequestStatus`
+- [ ] `simulateFcmDispatcherAttempt`
+- [ ] `simulateNetworkDropBeforeResponse`
+- [ ] `webAcceptLegalAndContinue`
+- [ ] `webAdminActOnSubmission`
+- [ ] `webAdminActOnSubmissionByName`
+- [ ] `webAdminAdjustShyCoins`
+- [ ] `webAdminApproveSubmissions`
+- [ ] `webAdminConfirmDialog`
+- [ ] `webAdminConfirmWithReason`
+- [ ] `webAdminDenyAppeal`
+- [ ] `webAdminDetectLabelLanguage`
+- [ ] `webAdminExecuteAgeDownFlow`
+- [ ] `webAdminFilterByAction`
+- [ ] `webAdminGetRowCount`
+- [ ] `webAdminLiftAppeal`
+- [ ] `webAdminOpenEconomyStats`
+- [ ] `webAdminOpenReportAndTap`
+- [ ] `webAdminOpenSubtab`
+- [ ] `webAdminOpenTab`
+- [ ] `webAdminProcessRefund`
+- [ ] `webAdminRefreshAgeVerification`
+- [ ] `webAdminRefreshTab`
+- [ ] `webAdminRejectSubmission`
+- [ ] `webAdminSearch`
+- [ ] `webAdminSearchForUser`
+- [ ] `webAdminShowsIdImage`
+- [ ] `webAdminShowsReportRow`
+- [ ] `webAdminTapAndTypeBanDevice`
+- [ ] `webAdminTapWithReason`
+- [ ] `webAdminTapWithReasonAndOverride`
+- [ ] `webAttemptAction`
+- [ ] `webCloseModalViaX`
+- [ ] `webConfirm`
+- [ ] `webConfirmDialog`
+- [ ] `webConsoleErrors`
+- [ ] `webDoubleTapWithSameReceipt`
+- [ ] `webEditBodyAndConfirm`
+- [ ] `webFontFallbackCapable`
+- [ ] `webGrantNotificationPermission`
+- [ ] `webHasReplacementGlyph`
+- [ ] `webHeadingInLocale`
+- [ ] `webIsOnConversationWith`
+- [ ] `webMissingTranslations`
+- [ ] `webNetworkLogCountAttempts`
+- [ ] `webNetworkLogHasStatus`
+- [ ] `webOpenConversation`
+- [ ] `webOpenListView`
+- [ ] `webOpenScreen`
+- [ ] `webOpenUserProfile`
+- [ ] `webPurchaseWithSandboxReceipt`
+- [ ] `webReceiveLiveKitToken`
+- [ ] `webSeatGridState`
+- [ ] `webSelectPackage`
+- [ ] `webSelectRecipientAndGift`
+- [ ] `webSendGift`
+- [ ] `webSetNetwork`
+- [ ] `webShowsAdultCohortVisitor`
+- [ ] `webShowsBannerFromUser`
+- [ ] `webShowsHighlightAtSection`
+- [ ] `webShowsMessageInput`
+- [ ] `webShowsNamedButton`
+- [ ] `webShowsNewFollowerNotification`
+- [ ] `webShowsStatsForUser`
+- [ ] `webShowsTabWithNoNavTo`
+- [ ] `webSignIn`
+- [ ] `webSubmitSandboxReceipt`
+- [ ] `webSystemPmRendersInLanguage`
+- [ ] `webTapBareVerb`
+- [ ] `webTapNamedButton`
+- [ ] `webTapQuotedTarget`
+- [ ] `webTapRoomCard`
+- [ ] `webTapSameRoom`
+- [ ] `webTapUserCard`
+- [ ] `webTypeAndSubmit`
+- [ ] `webTypeIntoConversationInput`
