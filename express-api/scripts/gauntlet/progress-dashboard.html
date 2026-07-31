@@ -286,8 +286,79 @@
         margin-right: 4px;
       }
       .scroll {
-        max-height: 340px;
+        max-height: 420px;
         overflow: auto;
+      }
+      table.grid {
+        min-width: 900px;
+      }
+      table.grid {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      table.grid th {
+        position: sticky;
+        top: 0;
+        background: var(--panel);
+        z-index: 1;
+        text-align: left;
+        color: var(--dim);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        padding: 6px 4px;
+        border-bottom: 1px solid var(--line);
+        white-space: nowrap;
+      }
+      table.grid td {
+        padding: 5px 4px;
+        border-bottom: 1px solid var(--line);
+      }
+      table.grid td.name {
+        max-width: 460px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      table.grid td.file {
+        color: var(--dim);
+        font-size: 10.5px;
+        white-space: nowrap;
+      }
+      table.grid tr.active td {
+        background: rgba(210, 153, 34, 0.1);
+      }
+      .ic {
+        display: inline-block;
+        width: 13px;
+        text-align: center;
+        font-size: 12px;
+        line-height: 1;
+      }
+      .ic.pass {
+        color: var(--pass);
+      }
+      .ic.fail {
+        color: var(--fail);
+      }
+      .ic.skipped {
+        color: var(--run);
+      }
+      .ic.pending {
+        color: var(--pend);
+      }
+      .legend {
+        color: var(--dim);
+        font-size: 11px;
+        margin: 8px 0 2px;
+      }
+      .autoscroll {
+        float: right;
+        font-size: 11px;
+        color: var(--dim);
+        user-select: none;
+        cursor: pointer;
       }
       h2 {
         font-size: 12px;
@@ -365,19 +436,21 @@
         <div class="stat"><b id="sPct">0%</b><span>complete</span></div>
         <div class="stat"><b id="sEta">—</b><span>eta</span></div>
       </div>
-      <details class="scen">
+      <details class="scen" id="sDetails" open>
         <summary id="sSummary">Scenario detail</summary>
-        <div class="scroll">
-          <table class="scen">
+        <div class="legend">
+          <label class="autoscroll"
+            ><input type="checkbox" id="sAuto" checked /> auto-scroll to progress</label
+          >
+          <span class="ic pass">●</span> pass <span class="ic fail">●</span> fail
+          <span class="ic skipped">●</span> skipped <span class="ic pending">●</span> pending
+        </div>
+        <div class="scroll" id="sScroll">
+          <table class="grid">
             <thead>
-              <tr>
-                <th>#</th>
-                <th>Cell</th>
-                <th>Personas covered</th>
-                <th>When</th>
-              </tr>
+              <tr id="gHead"></tr>
             </thead>
-            <tbody id="sRows"></tbody>
+            <tbody id="gRows"></tbody>
           </table>
         </div>
       </details>
@@ -429,30 +502,141 @@
         $('sEta').textContent = sp.etaMs == null ? 'n/a yet' : fmtDur(sp.etaMs);
         $('sBar').style.width = (sp.percent || 0) + '%';
 
-        const rows = s.scenarioRows || [];
-        $('sSummary').textContent =
-          'Scenario detail — ' +
-          rows.length +
-          ' recorded, ' +
-          (s.corpusScenarios || 0) +
-          ' per cell (click to expand)';
-        $('sRows').innerHTML = rows.length
-          ? rows
-              .map(
-                (r) =>
-                  '<tr><td>' +
-                  (r.index >= 0 ? r.index : '—') +
-                  '</td><td>' +
-                  esc(r.browser) +
-                  '</td><td>' +
-                  r.personas.map((p) => '<span class="pill">' + esc(p) + '</span>').join('') +
-                  '</td><td>' +
-                  ago(r.atMs) +
-                  '</td></tr>',
-              )
-              .join('')
-          : '<tr><td colspan="4">No scenarios recorded yet.</td></tr>';
+        renderGrid(s);
       }
+
+      // One glyph per cell. Short, stable labels so 12 columns fit on screen
+      // and each stays recognisable at a glance.
+      const CELL_ICON = {
+        chromium: '🌐',
+        firefox: '🦊',
+        webkit: '🧭',
+        edge: '🌊',
+        'mobile-chrome-android': '🤖',
+        'mobile-samsung-android': '🤖',
+        'mobile-edge-android': '🤖',
+        'mobile-firefox-android': '🤖',
+        'mobile-safari-ios': '🍎',
+        'mobile-chrome-ios': '🍎',
+        'mobile-firefox-ios': '🍎',
+        'mobile-edge-ios': '🍎',
+      };
+      const shortCell = (c) =>
+        c
+          .replace('mobile-', '')
+          .replace('-android', '·A')
+          .replace('-ios', '·i')
+          .replace('chromium', 'chrome');
+
+      let headBuilt = '';
+
+      function renderGrid(s) {
+        const cells = s.cellNames || [];
+        const rows = s.matrix || [];
+
+        const headKey = cells.join('|');
+        if (headKey !== headBuilt) {
+          $('gHead').innerHTML =
+            '<th>#</th><th>Scenario</th><th>Feature</th>' +
+            cells
+              .map(
+                (c) =>
+                  '<th title="' +
+                  esc(c) +
+                  '">' +
+                  (CELL_ICON[c] || '▫') +
+                  '<br>' +
+                  esc(shortCell(c)) +
+                  '</th>',
+              )
+              .join('');
+          headBuilt = headKey;
+        }
+
+        const resolved = rows.filter((r) => r.summary.pending < cells.length).length;
+        $('sSummary').textContent =
+          'Scenario detail — ' + resolved + ' of ' + rows.length + ' scenarios started';
+
+        $('gRows').innerHTML = rows
+          .map((r) => {
+            const started = r.summary.pending < cells.length;
+            const done = r.summary.pending === 0;
+            const cls = started && !done ? ' class="active"' : '';
+            return (
+              '<tr' +
+              cls +
+              ' data-started="' +
+              (started ? 1 : 0) +
+              '"><td>' +
+              (r.index + 1) +
+              '</td><td class="name" title="' +
+              esc(r.scenario) +
+              '">' +
+              esc(r.scenario) +
+              '</td><td class="file">' +
+              esc(r.file.replace(/\.feature$/, '')) +
+              '</td>' +
+              cells
+                .map((c) => {
+                  const st = r.results[c] || 'pending';
+                  const glyph =
+                    st === 'pass' ? '●' : st === 'fail' ? '●' : st === 'skipped' ? '○' : '·';
+                  return (
+                    '<td><span class="ic ' +
+                    st +
+                    '" title="' +
+                    esc(c) +
+                    ': ' +
+                    st +
+                    '">' +
+                    glyph +
+                    '</span></td>'
+                  );
+                })
+                .join('') +
+              '</tr>'
+            );
+          })
+          .join('');
+
+        autoScroll();
+      }
+
+      // Follow the frontier: scroll to the LAST row that has any non-pending
+      // result, so the operator watches progress without touching the mouse.
+      // Disabled the moment they scroll up themselves — hijacking a deliberate
+      // scroll is worse than not following at all.
+      let userScrolled = false;
+      function autoScroll() {
+        if (!$('sAuto').checked || userScrolled) return;
+        const box = $('sScroll');
+        const started = box.querySelectorAll('tr[data-started="1"]');
+        if (!started.length) return;
+        const last = started[started.length - 1];
+        const target = last.offsetTop - box.clientHeight / 2;
+        box.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const box = $('sScroll');
+        let ticking = false;
+        box.addEventListener('scroll', () => {
+          if (ticking) return;
+          ticking = true;
+          setTimeout(() => {
+            const atBottomish =
+              box.scrollTop + box.clientHeight >= box.scrollHeight - box.clientHeight;
+            userScrolled = !atBottomish;
+            ticking = false;
+          }, 150);
+        });
+        $('sAuto').addEventListener('change', () => {
+          if ($('sAuto').checked) {
+            userScrolled = false;
+            autoScroll();
+          }
+        });
+      });
 
       function fmtIdle(ms) {
         if (!ms && ms !== 0) return '?';

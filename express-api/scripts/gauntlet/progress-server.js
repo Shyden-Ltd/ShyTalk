@@ -33,27 +33,16 @@ const GAUNTLET_TMP = process.env.GAUNTLET_TMP || '/tmp/shytalk-gauntlet';
 const DEFAULT_PORT = Number(process.env.GAUNTLET_UI_PORT || 4310);
 const MAX_BIND_ATTEMPTS = 30;
 const JOURNEY_DIR = path.resolve(__dirname, '../../../journey-tests');
+const { readCorpus, parseProgressStream, buildScenarioMatrix } = require('../scenario-progress');
+
+// The corpus does not change mid-run, so read it once.
+const CORPUS = readCorpus(JOURNEY_DIR);
 
 /**
  * Scenarios in the journey corpus — the denominator every cell walks.
  * Counted once at startup; the corpus does not change mid-run.
  */
-function countCorpusScenarios() {
-  try {
-    return fs
-      .readdirSync(JOURNEY_DIR)
-      .filter((f) => f.endsWith('.feature'))
-      .reduce((n, f) => {
-        const text = fs.readFileSync(path.join(JOURNEY_DIR, f), 'utf8');
-        // Line-wise startsWith rather than /^\s*Scenario:/gm — leading-\s*
-        // before a literal backtracks on long indented lines.
-        return n + text.split('\n').filter((l) => l.trim().startsWith('Scenario:')).length;
-      }, 0);
-  } catch {
-    return 0;
-  }
-}
-const CORPUS_SCENARIOS = countCorpusScenarios();
+const CORPUS_SCENARIOS = CORPUS.length;
 
 const arg = (flag, fallback) => {
   const i = process.argv.indexOf(flag);
@@ -269,6 +258,22 @@ function snapshot(runDir) {
     /* keep null */
   }
 
+  // Authoritative per-scenario results. Artifacts are web-only; this stream is
+  // emitted by every cell type, so it is what the counters must be built from.
+  const progressRecords = parseProgressStream(
+    readFile(path.join(reportDir, 'scenario-progress.jsonl')),
+  );
+  const scenarioMatrix = buildScenarioMatrix({
+    corpus: CORPUS,
+    cells: planned,
+    records: progressRecords,
+  });
+  // A scenario counts as done when a cell has reported a real result for it.
+  const scenarioResultsDone = scenarioMatrix.reduce(
+    (n, row) => n + (row.summary.pass + row.summary.fail + row.summary.skipped),
+    0,
+  );
+
   const progress = buildProgress({
     planned,
     logText,
@@ -297,15 +302,20 @@ function snapshot(runDir) {
     log: logText.split('\n').slice(-60).join('\n'),
     devices: devices(),
     deviceActivity: deviceActivity(),
-    scenariosDone: Object.values(scenarioStats).reduce((n, v) => n + v.scenarios, 0),
+    scenariosDone: scenarioResultsDone,
     scenarioProgress: scenarioProgress({
-      done: Object.values(scenarioStats).reduce((n, v) => n + v.scenarios, 0),
+      done: scenarioResultsDone,
       perCellTotal: CORPUS_SCENARIOS,
       cellsTotal: planned.length,
       elapsedMs: startedAt ? Date.now() - startedAt : 0,
     }),
     corpusScenarios: CORPUS_SCENARIOS,
     scenarioRows: scenarioRows.slice(0, 300),
+    // The full scenario x cell grid: EVERY corpus scenario, with a per-cell
+    // result. Fed by the runner's JSONL stream, which is the only signal that
+    // exists for native device cells.
+    cellNames: planned,
+    matrix: scenarioMatrix,
     generatedAt: new Date().toISOString(),
   };
 }

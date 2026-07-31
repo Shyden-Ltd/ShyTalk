@@ -34,6 +34,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { appendProgress } = require('./scenario-progress');
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -17843,6 +17844,11 @@ async function main() {
     // (gap C3). runFeatureFile calls webDriver.takeScreenshot(reportDir)
     // when a scenario fails AND reportDir is set, BEFORE driver.close().
     reportDir: opts.reportDir || null,
+    // Live per-scenario progress stream (SHY-0263). Shared by every cell —
+    // appends are line-atomic for records this small, and each record carries
+    // its own browser so interleaving is fine.
+    progressStream: opts.reportDir ? path.join(opts.reportDir, 'scenario-progress.jsonl') : null,
+    progressBrowser: opts.browser || null,
     _driverCleanup: driverCleanup,
   };
 
@@ -17886,6 +17892,16 @@ async function main() {
     for (const s of scenarioReports) {
       const marker = s.status === 'pass' ? 'OK' : s.status === 'fail' ? 'FAIL' : 'SKIP';
       console.log(`  ${marker} ${path.basename(f)} :: ${s.scenario}`);
+      // Live per-scenario progress for the gauntlet dashboard (SHY-0263).
+      // Append-only and never throws — the per-cell log is written once at
+      // cell end, and native device cells emit no screenshot artifacts, so
+      // this is the ONLY signal that works for every cell type mid-run.
+      appendProgress(ctx.progressStream, {
+        browser: ctx.progressBrowser || opts.browser || 'unknown',
+        file: path.basename(f),
+        scenario: s.scenario,
+        status: s.status,
+      });
     }
   }
 

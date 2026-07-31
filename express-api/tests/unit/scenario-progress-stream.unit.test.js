@@ -1,0 +1,172 @@
+/**
+ * Per-scenario live progress stream.
+ *
+ * Operator 2026-07-31: "the scenarios should also include the name, so we can
+ * see exactly which scenario was tested. the expandable list should show ALL
+ * scenarios, with icons to represent all the different cells and devices,
+ * icons should be red for fail, green for pass or gray for pending."
+ *
+ * Why the runner had to change (it had been deliberately left alone):
+ *
+ *   1. `matrix-cell-logs.js` writes each cell's log with writeFileSync — ONCE,
+ *      at cell end. Nothing per-scenario is observable mid-cell.
+ *   2. Screenshot artifacts only exist when a webDriver does
+ *      (manual-qa-runner.js:16341), so NATIVE device cells produce no
+ *      artifacts at all. The artifact-based progress I built first was
+ *      therefore blind to exactly the cells the operator cares most about,
+ *      and reported them "stalled" whether or not they were.
+ *
+ * An append-only JSONL line per scenario is observable live, works for every
+ * cell type, and cannot alter cell behaviour.
+ */
+const { formatProgressLine, parseProgressStream } = require('../../scripts/scenario-progress');
+
+describe('formatProgressLine', () => {
+  const line = formatProgressLine({
+    browser: 'mobile-safari-ios',
+    file: 'j04-report-and-moderate.feature',
+    scenario: 'A user reports a message and a moderator actions it',
+    status: 'pass',
+    durationMs: 4210,
+    at: 1700000000000,
+  });
+
+  it('emits one self-contained JSON object per line', () => {
+    expect(line.endsWith('\n')).toBe(true);
+    expect(() => JSON.parse(line)).not.toThrow();
+  });
+
+  it('carries the scenario NAME, not just an index', () => {
+    // The whole point: "see exactly which scenario was tested".
+    expect(JSON.parse(line).scenario).toBe('A user reports a message and a moderator actions it');
+  });
+
+  it('carries the cell it ran against', () => {
+    expect(JSON.parse(line).browser).toBe('mobile-safari-ios');
+  });
+
+  it('never emits a raw newline inside the payload, which would split the record', () => {
+    const nasty = formatProgressLine({
+      browser: 'chromium',
+      file: 'x.feature',
+      scenario: 'a scenario\nwith a newline',
+      status: 'fail',
+    });
+    expect(nasty.trim().split('\n')).toHaveLength(1);
+    expect(JSON.parse(nasty).scenario).toBe('a scenario\nwith a newline');
+  });
+});
+
+describe('parseProgressStream', () => {
+  const stream = [
+    formatProgressLine({
+      browser: 'chromium',
+      file: 'a.feature',
+      scenario: 'S one',
+      status: 'pass',
+    }),
+    formatProgressLine({
+      browser: 'chromium',
+      file: 'a.feature',
+      scenario: 'S two',
+      status: 'fail',
+    }),
+    formatProgressLine({
+      browser: 'mobile-safari-ios',
+      file: 'a.feature',
+      scenario: 'S one',
+      status: 'pass',
+    }),
+  ].join('');
+
+  it('reads every record back', () => {
+    expect(parseProgressStream(stream)).toHaveLength(3);
+  });
+
+  it('survives a torn final line — the file is read while being appended to', () => {
+    // A reader polling every 3s WILL catch a half-written line eventually.
+    // Dropping the whole stream on one torn record would blank the dashboard.
+    const torn = stream + '{"browser":"chromium","scen';
+    expect(parseProgressStream(torn)).toHaveLength(3);
+  });
+
+  it('ignores blank lines and junk rather than throwing', () => {
+    expect(parseProgressStream(`\n\nnot json\n${stream}`)).toHaveLength(3);
+  });
+
+  it('returns an empty list for an empty or missing stream', () => {
+    expect(parseProgressStream('')).toEqual([]);
+    expect(parseProgressStream(null)).toEqual([]);
+  });
+});
+
+describe('buildScenarioMatrix', () => {
+  const { buildScenarioMatrix } = require('../../scripts/scenario-progress');
+
+  const corpus = [
+    { file: 'a.feature', scenario: 'S one' },
+    { file: 'a.feature', scenario: 'S two' },
+    { file: 'b.feature', scenario: 'S three' },
+  ];
+  const cells = ['chromium', 'mobile-safari-ios'];
+
+  it('lists ALL corpus scenarios, not only the ones that have run', () => {
+    // "the expandable list should show ALL scenarios".
+    const grid = buildScenarioMatrix({ corpus, cells, records: [] });
+    expect(grid).toHaveLength(3);
+    expect(grid.map((r) => r.scenario)).toEqual(['S one', 'S two', 'S three']);
+  });
+
+  it('marks every untouched cell pending, so nothing looks passed by omission', () => {
+    const grid = buildScenarioMatrix({ corpus, cells, records: [] });
+    expect(grid[0].results).toEqual({ chromium: 'pending', 'mobile-safari-ios': 'pending' });
+  });
+
+  it('records pass and fail per cell independently', () => {
+    const records = [
+      { browser: 'chromium', file: 'a.feature', scenario: 'S one', status: 'pass' },
+      { browser: 'mobile-safari-ios', file: 'a.feature', scenario: 'S one', status: 'fail' },
+    ];
+    const grid = buildScenarioMatrix({ corpus, cells, records });
+    expect(grid[0].results).toEqual({ chromium: 'pass', 'mobile-safari-ios': 'fail' });
+  });
+
+  it('keeps the LAST result for a scenario, so a retry supersedes its failure', () => {
+    const records = [
+      { browser: 'chromium', file: 'a.feature', scenario: 'S one', status: 'fail', at: 1 },
+      { browser: 'chromium', file: 'a.feature', scenario: 'S one', status: 'pass', at: 2 },
+    ];
+    expect(buildScenarioMatrix({ corpus, cells, records })[0].results.chromium).toBe('pass');
+  });
+
+  it('distinguishes scenarios that share a name across different feature files', () => {
+    // 'S one' exists in a.feature; a same-named scenario in b.feature must not
+    // inherit its result.
+    const corpus2 = [
+      { file: 'a.feature', scenario: 'S one' },
+      { file: 'b.feature', scenario: 'S one' },
+    ];
+    const records = [{ browser: 'chromium', file: 'a.feature', scenario: 'S one', status: 'pass' }];
+    const grid = buildScenarioMatrix({ corpus: corpus2, cells, records });
+    expect(grid[0].results.chromium).toBe('pass');
+    expect(grid[1].results.chromium).toBe('pending');
+  });
+
+  it('summarises each row so a fully-passed scenario is obvious at a glance', () => {
+    const records = cells.map((b) => ({
+      browser: b,
+      file: 'a.feature',
+      scenario: 'S one',
+      status: 'pass',
+    }));
+    const grid = buildScenarioMatrix({ corpus, cells, records });
+    expect(grid[0].summary).toEqual({ pass: 2, fail: 0, skipped: 0, pending: 0 });
+  });
+
+  it('treats an unknown status as skipped rather than inventing a colour', () => {
+    const records = [
+      { browser: 'chromium', file: 'a.feature', scenario: 'S one', status: 'weird' },
+    ];
+    expect(buildScenarioMatrix({ corpus, cells, records })[0].results.chromium).toBe('skipped');
+  });
+});
