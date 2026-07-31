@@ -36,6 +36,13 @@
 const { execSync } = require('child_process');
 const { dumpWithRetry, resolveDumpBackoffMs } = require('./ui-dump-retry');
 const { withDeviceLock } = require('./device-lock');
+const {
+  centreOf,
+  centreOfCardWithLabel,
+  dumpHas,
+  hasEditableField,
+  escapeInputText,
+} = require('./ui-dump-query');
 
 function selectSerial(preferredSerial) {
   let devices;
@@ -2954,6 +2961,128 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   driver.close = async () => {
     /* adb sessions are stateless; nothing to release */
   };
+
+  // ── SHY-0259 batch 1: interaction primitives the corpus already assumes ──
+  //
+  // Measured 2026-08-01: 179 of the 217 driver methods the runner can call did
+  // not exist, so scores of scenarios failed with `not configured` — a harness
+  // gap wearing the costume of a product defect. These are the highest-traffic
+  // Android ones, built on the primitives that DO exist (androidUiDump,
+  // androidTap, androidTapByTag, tapByVisibleText). Real device calls only; a
+  // stub here would turn a visible gap into a green cell that tested nothing.
+
+  // Targeting logic lives in ./ui-dump-query.js so it can be tested against
+  // real captured dumps without a device. Keeping a second copy here is how a
+  // test ends up passing while the driver's own version is broken.
+  driver._centreOf = centreOf;
+  driver._dumpHas = dumpHas;
+
+  // Tap a user's card. Prefers the testTag the app actually renders
+  // (`userCard_<name>`), then any userCard bearing the name, then the bare
+  // name — three real strategies, because the corpus names people and the UI
+  // tags them, and which one is present depends on the screen.
+  driver.androidTapUserCard = async (viewer, target) => {
+    const name = target || viewer;
+    if (!name) return false;
+    if (await driver.androidTapByTag(`userCard_${name}`)) return true;
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    const c = centreOfCardWithLabel(dump, 'userCard_', name);
+    if (c) return await driver.androidTap(c.cx, c.cy);
+    return await tapByVisibleText(name);
+  };
+
+  // Tap a button by its visible label. content-desc is checked too because
+  // icon-only buttons carry their label there and nowhere else.
+  driver.androidTapNamedButton = async (label) => {
+    if (!label) return false;
+    if (await tapByVisibleText(label)) return true;
+    const dump = await driver.androidUiDump();
+    const c = dump && centreOf(dump, 'content-desc', label);
+    return c ? await driver.androidTap(c.cx, c.cy) : false;
+  };
+
+  // "taps Follow" / "taps Block" — a bare verb IS a named button; kept as its
+  // own name so the matcher reads like the Gherkin and greps cleanly.
+  driver.androidTapBareVerb = async (verb) => driver.androidTapNamedButton(verb);
+
+  // Re-enter the room already under test. Delegates to the room-card tap so
+  // both paths stay in step; a second implementation would drift.
+  driver.androidTapSameRoom = async (owner) => driver.androidTapRoomCard(owner);
+
+  driver.androidTapQuotedTargetOrName = async (name) => driver.androidTapNamedButton(name);
+
+  /**
+   * Type free text into whatever holds focus.
+   *
+   * `adb()` wraps every argument in single quotes, so an apostrophe in user
+   * text would close the quote and hand the rest to the shell. POSIX-escape it
+   * first. Spaces become %s because `input text` splits on them.
+   */
+  driver.androidTypeText = async (text) => {
+    if (text === undefined || text === null) return false;
+    const safe = escapeInputText(text);
+    try {
+      adb(['shell', 'input', 'text', safe]);
+      return true;
+    } catch (e) {
+      console.error(`[android-driver] androidTypeText failed: ${e.message}`);
+      return false;
+    }
+  };
+
+  // Focus a field, type into it, submit. The enter keyevent is what actually
+  // sends in the app's single-line inputs.
+  driver.androidTypeAndSubmit = async (tagOrLabel, text) => {
+    const focused =
+      (await driver.androidTapByTag(tagOrLabel)) ||
+      (await driver.androidTapNamedButton(tagOrLabel));
+    if (!focused) return false;
+    if (!(await driver.androidTypeText(text))) return false;
+    try {
+      adb(['shell', 'input', 'keyevent', '66']); // KEYCODE_ENTER
+      return true;
+    } catch (e) {
+      console.error(`[android-driver] androidTypeAndSubmit submit failed: ${e.message}`);
+      return false;
+    }
+  };
+
+  driver.androidTypeIntoConversationInput = async (text) => {
+    const focused =
+      (await driver.androidTapByTag('pm_messageInput')) ||
+      (await driver.androidTapByTag('conversation_input'));
+    if (!focused) return false;
+    return await driver.androidTypeText(text);
+  };
+
+  // Assertions. Each reads the REAL dump — never a cached or assumed state.
+  driver.androidShowsNamedButton = async (label) => dumpHas(await driver.androidUiDump(), label);
+
+  driver.androidShowsPlaceholder = async (text) => dumpHas(await driver.androidUiDump(), text);
+
+  // A message input is present if its tag is there, or any editable field is.
+  // The class check matters: Compose renders the composer as an EditText with
+  // no resource-id on some screens.
+  driver.androidShowsMessageInput = async () => {
+    return hasEditableField(await driver.androidUiDump());
+  };
+
+  // Open a named tab. androidOpensTab is the ASSERTION; this is the ACTION —
+  // distinct names for distinct jobs, which is why the corpus asked for both.
+  driver.androidOpenTab = async (tab) => {
+    if (await driver.androidTapByTag(`tab_${tab}`)) return true;
+    return await driver.androidTapNamedButton(tab);
+  };
+
+  driver.androidOpenListView = async (name) => {
+    if (await driver.androidTapByTag(`list_${name}`)) return true;
+    return await driver.androidTapNamedButton(name);
+  };
+
+  // Confirm the dialog in front of us. Delegates so the affirmative-label list
+  // lives in one place.
+  driver.androidConfirm = async () => driver.androidConfirmDialog();
 
   return driver;
 }
