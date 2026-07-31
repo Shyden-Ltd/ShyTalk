@@ -39,6 +39,18 @@ const {
   buildScenarioMatrix,
   mergeCellActivity,
 } = require('../scenario-progress');
+const { applicableCells } = require('../scenario-surface');
+
+/**
+ * What each matrix cell can drive. Desktop browsers are web-only; a
+ * mobile-*-android cell adds the Android app driver, mobile-*-ios the iOS one.
+ * Measured runnable counts: web-only 39/226, web+android 147, web+ios 51.
+ */
+function capsFor(cell) {
+  if (cell.endsWith('-android')) return ['web', 'android'];
+  if (cell.endsWith('-ios')) return ['web', 'ios'];
+  return ['web'];
+}
 
 // The corpus does not change mid-run, so read it once.
 const CORPUS = readCorpus(JOURNEY_DIR);
@@ -268,14 +280,38 @@ function snapshot(runDir) {
   const progressRecords = parseProgressStream(
     readFile(path.join(reportDir, 'scenario-progress.jsonl')),
   );
+  const capsByCell = Object.fromEntries(planned.map((c) => [c, capsFor(c)]));
   const scenarioMatrix = buildScenarioMatrix({
     corpus: CORPUS,
     cells: planned,
     records: progressRecords,
+  }).map((row) => {
+    // 'n/a' is NOT 'pending'. Rendering an Android-only scenario as pending on
+    // chromium promises work that will never happen.
+    const applicable = applicableCells(
+      CORPUS[row.index] ? CORPUS[row.index].steps || [] : [],
+      capsByCell,
+    );
+    const results = { ...row.results };
+    const summary = { ...row.summary, na: 0 };
+    for (const cell of planned) {
+      if (!applicable[cell] && results[cell] === 'pending') {
+        results[cell] = 'na';
+        summary.pending -= 1;
+        summary.na += 1;
+      }
+    }
+    return { ...row, results, summary, applicable };
   });
   // A scenario counts as done when a cell has reported a real result for it.
   const scenarioResultsDone = scenarioMatrix.reduce(
     (n, row) => n + (row.summary.pass + row.summary.fail + row.summary.skipped),
+    0,
+  );
+  // The honest denominator: only combinations that CAN run. Counting all
+  // 226 x 12 claimed 2712 when just 948 are reachable.
+  const scenarioResultsTotal = scenarioMatrix.reduce(
+    (n, row) => n + (planned.length - row.summary.na),
     0,
   );
 
@@ -315,8 +351,8 @@ function snapshot(runDir) {
     scenariosDone: scenarioResultsDone,
     scenarioProgress: scenarioProgress({
       done: scenarioResultsDone,
-      perCellTotal: CORPUS_SCENARIOS,
-      cellsTotal: planned.length,
+      perCellTotal: scenarioResultsTotal,
+      cellsTotal: 1,
       elapsedMs: startedAt ? Date.now() - startedAt : 0,
     }),
     corpusScenarios: CORPUS_SCENARIOS,

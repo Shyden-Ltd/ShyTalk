@@ -35,6 +35,12 @@
 const fs = require('fs');
 const path = require('path');
 const { appendProgress } = require('./scenario-progress');
+const {
+  requiredPlatforms,
+  cellCapabilities,
+  canRunScenario,
+  skipReason,
+} = require('./scenario-surface');
 
 // ── Constants ───────────────────────────────────────────────────────
 
@@ -16286,6 +16292,23 @@ async function runScenario(scenario, parsed, ctx) {
   ctx.locale = 'en';
 
   const allSteps = [...(parsed.background?.steps || []), ...scenario.steps];
+
+  // Surface gate (SHY-0263). A cell that cannot drive a scenario's surface must
+  // SKIP it, not fail it. Before this, a web-only cell hit the first "on
+  // Android" step, got `UI step requires ctx.uiDriver`, and recorded a FAILURE —
+  // producing an identical 40-fail/2-pass split across three unrelated cells and
+  // burying real defects under ~90% noise. Decided up front, so no partial
+  // side-effects are applied before we know the scenario cannot complete.
+  const gate = canRunScenario(requiredPlatforms(allSteps), cellCapabilities(ctx));
+  if (!gate.ok) {
+    return [
+      {
+        step: { kind: 'Given', text: `(surface gate) ${skipReason(gate.missing)}` },
+        result: { ok: true, skipped: true, reason: skipReason(gate.missing) },
+      },
+    ];
+  }
+
   const stepResults = [];
   for (const step of allSteps) {
     const result = await executeStep(step, ctx);
@@ -16318,6 +16341,28 @@ async function runFeatureFile(filePath, ctx) {
       continue;
     }
     const stepResults = await runScenario(scenario, parsed, ctx);
+
+    // Surface-gated: this cell cannot drive the scenario's platform. Recorded
+    // as SKIPPED, never pass — converting a false failure into a false success
+    // would be strictly worse, because a green cell is a claim about the
+    // product and this cell tested nothing.
+    const gated = stepResults.find((r) => r.result.skipped);
+    if (gated) {
+      scenarioReports.push({
+        file: fileName,
+        scenario: scenario.name,
+        status: 'skipped',
+        reason: gated.result.reason,
+      });
+      appendProgress(ctx.progressStream, {
+        browser: ctx.progressBrowser || 'unknown',
+        file: fileName,
+        scenario: scenario.name,
+        status: 'skipped',
+      });
+      continue;
+    }
+
     const failed = stepResults.find((r) => !r.result.ok);
     if (failed) {
       const severity =

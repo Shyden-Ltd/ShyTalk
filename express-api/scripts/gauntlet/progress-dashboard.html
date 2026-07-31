@@ -348,6 +348,12 @@
       .ic.pending {
         color: var(--pend);
       }
+      /* Not applicable: this cell cannot drive the scenario's surface. Visually
+         recessive on purpose — it is not work anyone is waiting for. */
+      .ic.na {
+        color: var(--line);
+        opacity: 0.55;
+      }
       .legend {
         color: var(--dim);
         font-size: 11px;
@@ -444,6 +450,7 @@
           >
           <span class="ic pass">●</span> pass <span class="ic fail">●</span> fail
           <span class="ic skipped">●</span> skipped <span class="ic pending">●</span> pending
+          <span class="ic na">–</span> n/a for this surface
         </div>
         <div class="scroll" id="sScroll">
           <table class="grid">
@@ -553,14 +560,19 @@
           headBuilt = headKey;
         }
 
-        const resolved = rows.filter((r) => r.summary.pending < cells.length).length;
+        const resolved = rows.filter(
+          (r) =>
+            cells.length - (r.summary.na || 0) > 0 &&
+            r.summary.pending < cells.length - (r.summary.na || 0),
+        ).length;
         $('sSummary').textContent =
           'Scenario detail — ' + resolved + ' of ' + rows.length + ' scenarios started';
 
         $('gRows').innerHTML = rows
           .map((r) => {
-            const started = r.summary.pending < cells.length;
-            const done = r.summary.pending === 0;
+            const runnable = cells.length - (r.summary.na || 0);
+            const started = runnable > 0 && r.summary.pending < runnable;
+            const done = runnable > 0 && r.summary.pending === 0;
             const cls = started && !done ? ' class="active"' : '';
             return (
               '<tr' +
@@ -580,14 +592,23 @@
                 .map((c) => {
                   const st = r.results[c] || 'pending';
                   const glyph =
-                    st === 'pass' ? '●' : st === 'fail' ? '●' : st === 'skipped' ? '○' : '·';
+                    st === 'pass'
+                      ? '●'
+                      : st === 'fail'
+                        ? '●'
+                        : st === 'skipped'
+                          ? '○'
+                          : st === 'na'
+                            ? '–'
+                            : '·';
+                  const label = st === 'na' ? 'not applicable to this surface' : st;
                   return (
                     '<td><span class="ic ' +
                     st +
                     '" title="' +
                     esc(c) +
                     ': ' +
-                    st +
+                    label +
                     '">' +
                     glyph +
                     '</span></td>'
