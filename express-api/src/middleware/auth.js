@@ -8,6 +8,7 @@
 const { auth, db } = require('../utils/firebase');
 const { checkUserBans, clearBanCache } = require('../utils/bans');
 const { syncBannedClaim } = require('../utils/banned-claim');
+const { recordAdmin } = require('../utils/admin-directory');
 const log = require('../utils/log');
 
 // ─── In-memory caches ────────────────────────────────────────────
@@ -429,6 +430,15 @@ async function isLiveAdmin(uid) {
     const isAdmin = userRecord?.customClaims?.admin === true;
     adminClaimCache.set(uid, { isAdmin, expiresAt: Date.now() + ADMIN_CLAIM_TTL });
     evictOldest(adminClaimCache);
+    // SHY-0258: build the admin directory from traffic. This is the only place
+    // a LIVE admin claim is confirmed, and admin claims are granted outside the
+    // API, so there is no other moment at which we could learn who the admins
+    // are without scanning every user. Deliberately not awaited — a directory
+    // write must never delay or fail authentication — and cache-gated above, so
+    // it costs one write per admin per TTL, not one per request.
+    if (isAdmin) {
+      recordAdmin(uid, uniqueIdCache.get(uid)?.uniqueId ?? null).catch(() => {});
+    }
     return isAdmin;
   } catch (err) {
     log.error('auth', 'Admin-claim re-fetch failed', { uid, error: err.message });

@@ -126,6 +126,7 @@ const { similarity } = require('../utils/similarity');
 const { sendSystemPm } = require('../utils/system-pm');
 const { sendFcmToTokens } = require('../utils/fcm');
 const { notifyRoadmapSubscribers } = require('../utils/roadmap-notify');
+const { notifyAdminsOfNewSuggestion } = require('../utils/admin-suggestion-notify');
 const {
   VALID_TAGS,
   VALID_LANGUAGES,
@@ -500,12 +501,36 @@ router.get('/suggestions', async (req, res) => {
     const paged = suggestions.slice(offset, offset + pageSize);
 
     res.set('Cache-Control', READ_CACHE_CONTROL);
-    res.json({
+    const body = {
       suggestions: await attachComments(paged, isAdmin),
       total,
       page,
       pageSize,
-    });
+    };
+
+    // SHY-0258: the review-queue badge. Admins only — `pending` is a status
+    // non-admins are not even allowed to filter by (see the 403 above), so
+    // returning its size to everyone would leak the size of the unreviewed
+    // queue. Counted server-side with an aggregation query rather than by
+    // reading the documents, so the badge costs the same whether the queue
+    // holds ten items or ten thousand.
+    if (isAdmin) {
+      try {
+        const pendingSnap = await db
+          .collection('suggestions')
+          .where('status', '==', 'pending')
+          .count()
+          .get();
+        body.pendingCount = pendingSnap.data().count;
+      } catch (err) {
+        // A badge is not worth failing the page for. Omitted rather than
+        // reported as zero — zero would read as "nothing to review", which is
+        // the one wrong answer that looks like a right one.
+        log.error('suggestions', 'Pending count failed', { error: err.message });
+      }
+    }
+
+    res.json(body);
   } catch (err) {
     log.error('suggestions', 'Failed to list suggestions', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
@@ -671,6 +696,13 @@ router.post('/suggestions', async (req, res) => {
         log.error('suggestions', 'Confirmation notification failed', { error: err.message });
       }
     })();
+
+    // SHY-0258: tell the admins there is something to review. Fire-and-forget,
+    // like the submitter's own confirmation above — the person submitting
+    // should not wait on, or be failed by, somebody else's notification.
+    notifyAdminsOfNewSuggestion({ id, title, submitterUniqueId: req.auth.uniqueId }).catch((err) =>
+      log.error('suggestions', 'Admin notification failed', { id, error: err.message }),
+    );
 
     log.info('suggestions', 'Suggestion created', { id, submitter: req.auth.uniqueId });
     res.status(201).json({ id, ...suggestion });

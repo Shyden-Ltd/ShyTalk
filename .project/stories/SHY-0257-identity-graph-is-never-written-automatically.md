@@ -1,6 +1,6 @@
 ---
 id: SHY-0257
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-07-30
 priority: P1
@@ -191,3 +191,63 @@ fail-closed test; dropping the audit write must fail the detection test.
   and real coverage already exists in `tests/middleware/auth-ban-gate.test.js`,
   `auth-strict.test.js` and `auth-suspension-cache-clear.test.js`. They were
   deleted as duplicates rather than reimplemented.
+
+## Link-strength design (operator decision, 2026-07-31)
+
+The operator approved building this **including** automatic suspension of linked
+accounts, with an explicit condition: *"make sure you take extra steps to ensure
+a false link cannot occur or is extremely rare."* That condition governs the
+whole design, so it is recorded here before any code is written.
+
+**The danger is not theoretical.** The original specs include
+`fingerprint collision: two devices same fingerprint → both in same graph` —
+which, taken literally, is a specification FOR a false link. And IP addresses are
+shared by design: carrier-grade NAT, schools, offices, cafés and mobile networks
+routinely put thousands of unrelated people behind one address. An identity graph
+that links on IP would not occasionally mislink strangers; it would do so
+constantly, and then suspend them.
+
+**Identifiers are therefore graded, and only STRONG evidence can cost somebody
+their account:**
+
+- **STRONG** — a hardware-backed device identifier (Android ID, iOS
+  `identifierForVendor` / DeviceCheck). One of these is a claim about a physical
+  device.
+- **WEAK** — IP address, browser fingerprint. Corroborating context only. These
+  are recorded, and they are *never* sufficient on their own.
+
+**The rules that follow from that grading:**
+
+1. **Auto-suspension cascades follow STRONG edges only.** A shared IP or a
+   colliding fingerprint can never, by itself, suspend anyone.
+2. **An IP is never a linking identifier.** It is stored as evidence attached to
+   a sign-in, not as an edge between accounts.
+3. **Shared-infrastructure demotion.** Any identifier (IP or fingerprint) seen
+   with more than a threshold of distinct accounts is marked `shared` and
+   thereafter confers no link at all. This is what neutralises CGNAT, campus
+   networks and popular device/browser combinations — the more an identifier
+   looks like infrastructure, the less weight it carries.
+4. **Private and reserved ranges are never stored** (10.x, 192.168.x, 127.x,
+   169.254.x, and the IPv6 equivalents) — they identify nobody.
+5. **Weak signals require corroboration AND a human.** Two independent weak
+   signals agreeing may raise a *review candidate*; they never trigger an
+   automated action.
+6. **Every automated suspension records its evidence** — which identifier, its
+   strength, and the accounts involved — so an operator can see exactly why it
+   fired, and reverse it.
+7. **Automated suspensions are marked as automated** and are reversible, so an
+   appeal has something to act on and a bad rule can be undone in bulk.
+
+**Why this ordering matters:** the cost of a missed link is that an abuser needs
+a new device. The cost of a false link is that an innocent person — plausibly a
+minor, on a school or family network — is locked out of their account by an
+automated process with no human in the loop. Those costs are not symmetrical, so
+the thresholds are deliberately set to under-link.
+
+## Notes (2026-07-31)
+
+Story moved to In Progress. The 16 remaining `test.todo` markers in
+`tests/routes/identity-graph-write-{admin,lifecycle}.test.js` are this story's
+acceptance criteria; they stay `todo` until the behaviour above exists, rather
+than being deleted to make a count look better.
+

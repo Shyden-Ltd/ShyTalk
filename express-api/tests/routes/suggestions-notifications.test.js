@@ -418,37 +418,30 @@ describe('Notification Inbox Management', () => {
 // 11.80 — Admin Notification of New Suggestions
 // ═══════════════════════════════════════════════════════════════
 
-// SHY-0258 — these four remain `test.todo`, and the reason is a design
-// decision rather than unwritten code, so they are NOT being quietly deleted.
+// SHY-0258 — DELIVERED, both halves (operator decision 2026-07-31: "Both").
 //
-// BLOCKER: admin status exists ONLY as a Firebase Auth custom claim
-// (`req.auth.token.admin === true`; minted in routes/portal.js, read via the
-// cache in middleware/auth.js:429). There is no `admin` field on the users
-// documents and therefore no queryable set of admins. "Notify every admin when
-// a suggestion is submitted" would mean paginating `auth.listUsers()` across
-// the entire user base on every submission — unacceptable on a free-tier
-// budget, and slower the more the product succeeds.
+// The blocker was that admin status exists ONLY as a Firebase Auth custom
+// claim, granted outside the API, so there was no queryable set of admins and
+// "notify every admin" would have meant paginating `auth.listUsers()` on every
+// submission. Resolved by building the directory FROM TRAFFIC: the auth
+// middleware records an admin each time it verifies a live claim
+// (src/utils/admin-directory.js), so there is no backfill to run and nothing to
+// enumerate. The directory is a CANDIDATE list — the live claim is still the
+// authority — so a demoted admin stops receiving alerts.
 //
-// Two viable designs, and picking between them changes the data model, so it
-// belongs in the story rather than being improvised here:
-//   (a) denormalise an `admins` collection, written wherever admin claims are
-//       granted/revoked, plus a one-off backfill for existing admins; or
-//   (b) make it PULL rather than PUSH — surface a pending-suggestions count on
-//       the admin listing response and let the panel badge read it. Cheaper,
-//       needs no enumeration, and matches how the admin panel already works.
+// PULL half — `pendingCount` on the admin suggestions listing (admins only;
+// leaking the size of the unreviewed queue to everyone would be a disclosure),
+// counted with an aggregation query so the badge costs the same at any queue
+// size. Tested in tests/routes/suggestions-pending-count.test.js.
 //
-// (b) is the recommendation: it satisfies the two "admin panel" specs outright
-// and the notification specs become a thin layer on top if push is still
-// wanted. Tracked in .project/stories/SHY-0258-*.md.
-describe('Admin Notification of New Suggestions', () => {
-  test.todo('new suggestion submitted: admin notification created');
-
-  test.todo('admin panel: suggestion count badge updates');
-
-  test.todo('admin panel: pending count shown in response');
-
-  test.todo('admin notification includes submitter identity summary');
-});
+// PUSH half — admins are notified when a suggestion is submitted, with the
+// submitter identified. Tested in tests/utils/admin-suggestion-notify.test.js:
+//     - each admin gets an inbox notification
+//     - the notification names the submitter and the suggestion
+//     - an admin who submits does not get told about their own
+//     - a DEMOTED admin is not listed, and is dropped from the directory
+//     - a verification outage EXCLUDES the candidate rather than trusting it
+//     - the same suggestion announced twice does not double up an inbox
 
 // ═══════════════════════════════════════════════════════════════
 // Additional coverage — uncovered lines and branches

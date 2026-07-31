@@ -1,6 +1,6 @@
 ---
 id: SHY-0258
-status: Draft
+status: In Progress
 owner: claude
 created: 2026-07-30
 priority: P2
@@ -185,3 +185,48 @@ the eviction test; removing the admin write must fail the admin test.
   green without a line of product code. Converted to `test.todo`, which the
   defect detector counts, so the gap stays visible rather than being relabelled
   away.
+
+**2026-07-31 — DELIVERED (server side).**
+
+Dedup, retention cap and TTL implemented in `src/utils/notification-retention.js`
+and applied by the only writer of the in-app inbox
+(`dispatchNotificationInline`). Cap/TTL are enforced LAZILY on write rather than
+by a cron, matching the cron-elimination architecture — crons burn free-tier
+quota, and the write is the only moment the work is needed.
+
+Reads deliberately avoid `orderBy('createdAt')`: Firestore's orderBy silently
+EXCLUDES documents missing the ordered field, which made undated rows immortal
+(invisible to the reaper) AND invisible in the inbox. Same defect class as
+SHY-0260.
+
+**Admin alerts — operator decision 2026-07-31: "Both".** The blocker was that
+admin status exists only as a Firebase Auth custom claim, granted outside the
+API, so there was no queryable set of admins. Resolved by building the directory
+FROM TRAFFIC (`src/utils/admin-directory.js`): the auth middleware records an
+admin each time it verifies a live claim. No backfill script, nothing to run
+against production. The directory is a CANDIDATE list — the live claim stays
+authoritative — so a demoted admin stops receiving alerts, and a verification
+outage EXCLUDES a candidate rather than widening the audience.
+- PULL: `pendingCount` on the admin suggestions listing, admins only (a
+  non-admin cannot even filter by `pending`, so its size is withheld too),
+  counted with an aggregation query so the badge costs the same at any size.
+- PUSH: `notifyAdminsOfNewSuggestion` fans out on submission, in-app only, with
+  the submitter identified and the title capped.
+
+**Two real bugs surfaced while un-parking the specs:**
+1. `unread count: only counts notifications < 90 days old` ended on a COMMENT
+   with no assertion for its own claim. Asserting it FAILED — the inbox counted
+   expired notifications. Fixed in the route.
+2. The shared notification fixture hardcoded `createdAt: 1709913600000`
+   (8 March 2024). Recent when written, long past the 90-day TTL now, so every
+   fixture notification had silently become "expired". Derived from now — a
+   fixture that depends on the wall clock is a test with an expiry date.
+
+All 15 SHY-0258 `test.todo` markers retired with real coverage (44 new
+real-emulator tests). Mutation-verified: ignoring the recipient in the dedup
+key, trimming newest instead of oldest, and treating undated rows as brand new
+each fail tests.
+
+**Owed:** client-side surfacing of `pendingCount` in the admin panel badge, and
+the real-device gauntlet.
+
