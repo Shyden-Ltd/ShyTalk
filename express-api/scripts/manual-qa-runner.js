@@ -17836,7 +17836,25 @@ async function main() {
       await webDriver.close();
     };
   }
-  if (opts.driver === 'adb' || opts.driver === 'all') {
+  // Which physical device THIS cell owns. `--driver=all` used to attach an
+  // Android driver to every cell, so all 12 cells drove the one phone —
+  // while matrix-dispatch grouped them by browser slug (chromium->mac,
+  // mobile-safari-ios->iphone) and ran them in parallel believing they touched
+  // different hardware. Measured 2026-08-01: two `uiautomator dump` processes
+  // deadlocked on one phone, and because the iOS cell was among those blocked,
+  // it never sent a command to Appium and its session died on the 60s New
+  // Command Timeout. The operator's "I never see the iPhone doing anything"
+  // and "the Android device is thrashing" were the same bug.
+  //
+  // A cell with no --browser (a manual single-cell run) keeps the old
+  // attach-everything behaviour; only the matrix, which is where the
+  // contention exists, narrows.
+  const cellDevice = opts.browser
+    ? require('./matrix-dispatch').defaultResourceKey(opts.browser)
+    : null;
+  const mayDriveAndroid = cellDevice === null || cellDevice === 'android';
+  const mayDriveIos = cellDevice === null || cellDevice === 'iphone';
+  if ((opts.driver === 'adb' || opts.driver === 'all') && mayDriveAndroid) {
     try {
       const { createAndroidDriver } = require('./drivers/android-adb-driver');
       uiDriver = await createAndroidDriver({});
@@ -17853,7 +17871,7 @@ async function main() {
   // routing matrix. The loader picks between ios-appium-driver (real
   // UI, needs WDA_TEAM_ID) and ios-devicectl-driver (legacy stubs)
   // based on opts.driver + env.
-  {
+  if (mayDriveIos) {
     const { loadIosUiDriver } = require('./drivers/ios-driver-loader');
     try {
       const loaded = await loadIosUiDriver({
