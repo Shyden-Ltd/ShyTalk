@@ -315,3 +315,40 @@ describe('buildProgress — stalled cells', () => {
     expect(p.cells.find((c) => c.browser === 'chromium').state).toBe('passed');
   });
 });
+
+/**
+ * Self-repair.
+ *
+ * Operator 2026-07-31 22:2x, seeing the dashboard's own failure text:
+ * "'progress server unreachable — the gauntlet itself is unaffected'. During
+ * this situation, you must keep retrying, and the service must try to repair
+ * itself."
+ *
+ * Correct. "The gauntlet is unaffected" is true and useless — it reassures
+ * while showing nothing. A viewer that gives up the moment its server blips is
+ * not a viewer.
+ */
+describe('retryDelayMs', () => {
+  const { retryDelayMs } = require('../../scripts/gauntlet/progress-model');
+
+  it('retries almost immediately on the first failure', () => {
+    expect(retryDelayMs(1)).toBeLessThanOrEqual(1000);
+  });
+
+  it('backs off as failures accumulate, so a dead server is not hammered', () => {
+    expect(retryDelayMs(5)).toBeGreaterThan(retryDelayMs(1));
+  });
+
+  it('CAPS the backoff — it must never stop trying or wait minutes', () => {
+    // Unbounded exponential backoff is indistinguishable from giving up: after
+    // a few minutes down, the reconnect would land long after the operator
+    // needed it.
+    for (const n of [10, 50, 1000, 100000]) {
+      expect(retryDelayMs(n)).toBeLessThanOrEqual(10000);
+    }
+  });
+
+  it('never returns zero or a negative delay', () => {
+    for (const n of [0, 1, 7, 99]) expect(retryDelayMs(n)).toBeGreaterThan(0);
+  });
+});

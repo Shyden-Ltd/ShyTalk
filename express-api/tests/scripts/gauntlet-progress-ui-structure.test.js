@@ -38,8 +38,20 @@ describe('gauntlet progress dashboard — files exist', () => {
     expect(html).not.toMatch(/href="https?:\/\/[^"]*\.css/);
   });
 
-  it('the dashboard polls rather than assuming a single render', () => {
-    expect(read(path.join(GAUNTLET, 'progress-dashboard.html'))).toMatch(/setInterval\(/);
+  it('the dashboard re-polls rather than assuming a single render', () => {
+    // Behaviour, not mechanism: setInterval OR a self-rescheduling setTimeout.
+    // The original asserted setInterval literally and broke when the reconnect
+    // loop moved to recursive setTimeout — which is what allows a variable
+    // backoff at all. Pin that it keeps polling, not how.
+    const html = read(path.join(GAUNTLET, 'progress-dashboard.html'));
+    expect(html).toMatch(/setInterval\(|setTimeout\(\s*tick/);
+  });
+
+  it('the dashboard keeps retrying and recovers on its own', () => {
+    const html = read(path.join(GAUNTLET, 'progress-dashboard.html'));
+    // A viewer that gives up when its server blips is not a viewer.
+    expect(html).toMatch(/retryDelay/);
+    expect(html).toMatch(/lastGood/); // last-known data stays on screen
   });
 });
 
@@ -52,8 +64,20 @@ describe('50-matrix.sh — launches the dashboard', () => {
 
   it('points the server at THIS run’s directory, not just the latest', () => {
     // Two runs in a session would otherwise have the dashboard follow whichever
-    // directory happened to be newest.
-    expect(script).toMatch(/--run-dir\s+"\$tmpdir"/);
+    // directory happened to be newest. The supervisor passes $tmpdir into the
+    // loop, which forwards it as --run-dir, so assert the wiring rather than
+    // one literal spelling of it.
+    const block = script.slice(script.indexOf('progress-server.js'));
+    expect(script).toMatch(/--run-dir/);
+    expect(block).toMatch(/"\$tmpdir"/);
+  });
+
+  it('supervises the viewer so a crash self-heals', () => {
+    // Operator 2026-07-31: "the service must try to repair itself."
+    const block = script.slice(script.indexOf('progress-server.js') - 600);
+    expect(block).toMatch(/respawn/i);
+    // Bounded: a permanently-broken viewer must not spin forever.
+    expect(block).toMatch(/restarts\b/);
   });
 
   it('prints the dashboard URL where the operator will see it', () => {
@@ -99,9 +123,22 @@ describe('progress-server.js — read-only and loopback-only', () => {
     expect(server).not.toMatch(/adb\s+shell|force-stop|uiautomator/);
   });
 
-  it('exits 0 rather than non-zero when it cannot bind', () => {
-    // A non-zero exit here would propagate into the launcher's failure paths.
+  it('retries a busy port instead of dying immediately', () => {
+    // EADDRINUSE is usually a previous instance still shutting down. Exiting on
+    // it is what left the operator on "progress server unreachable" with
+    // nothing recovering.
+    const onError = server.slice(server.indexOf("server.on('error'"));
+    expect(onError).toMatch(/EADDRINUSE/);
+    expect(onError).toMatch(/server\.listen/);
+  });
+
+  it('still exits 0 when it finally gives up, never non-zero', () => {
+    // A non-zero exit would propagate into the launcher's failure paths.
     const onError = server.slice(server.indexOf("server.on('error'"));
     expect(onError).toMatch(/process\.exit\(0\)/);
+  });
+
+  it('survives an unexpected error rather than taking the viewer down', () => {
+    expect(server).toMatch(/uncaughtException/);
   });
 });

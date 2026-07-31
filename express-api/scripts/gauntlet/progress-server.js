@@ -20,11 +20,17 @@ const http = require('http');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
-const { buildProgress, attributeScenarios, formatElapsed } = require('./progress-model');
+const {
+  buildProgress,
+  attributeScenarios,
+  formatElapsed,
+  retryDelayMs,
+} = require('./progress-model');
 const { allowedBrowsersFor } = require('../browser-allowlist');
 
 const GAUNTLET_TMP = process.env.GAUNTLET_TMP || '/tmp/shytalk-gauntlet';
 const DEFAULT_PORT = Number(process.env.GAUNTLET_UI_PORT || 4310);
+const MAX_BIND_ATTEMPTS = 30;
 
 const arg = (flag, fallback) => {
   const i = process.argv.indexOf(flag);
@@ -252,7 +258,13 @@ function main() {
 
   const server = http.createServer((req, res) => {
     if (req.url.startsWith('/api/progress')) {
-      const body = JSON.stringify(snapshot(fixedRunDir || latestRunDir()));
+      let body;
+      try {
+        body = JSON.stringify(snapshot(fixedRunDir || latestRunDir()));
+      } catch (err) {
+        // Degrade, never 500 into a blank dashboard.
+        body = JSON.stringify({ state: 'no-run', counts: null, cells: [], error: err.message });
+      }
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       res.end(body);
       return;
@@ -276,10 +288,31 @@ function main() {
     }
   });
 
+  // Self-repair: a busy port is usually a previous instance still shutting
+  // down, so retry instead of exiting. Exiting here is what left the operator
+  // staring at "progress server unreachable" with nothing recovering.
+  let bindAttempts = 0;
   server.on('error', (err) => {
-    // Never take the gauntlet down over the viewer failing to bind.
-    console.error(`[gauntlet-ui] could not start: ${err.message}`);
-    process.exit(0);
+    if (err.code === 'EADDRINUSE') {
+      bindAttempts += 1;
+      if (bindAttempts > MAX_BIND_ATTEMPTS) {
+        console.error(
+          `[gauntlet-ui] port ${port} still busy after ${bindAttempts} tries — giving up`,
+        );
+        process.exit(0);
+      }
+      const wait = retryDelayMs(bindAttempts);
+      console.error(`[gauntlet-ui] port ${port} busy, retrying in ${wait}ms (${bindAttempts})`);
+      setTimeout(() => server.listen(port, '127.0.0.1'), wait);
+      return;
+    }
+    console.error(`[gauntlet-ui] server error: ${err.message}`);
+  });
+
+  // A snapshot can throw on a half-written artifact mid-scan. Log and keep
+  // serving — the viewer must outlive transient filesystem races.
+  process.on('uncaughtException', (err) => {
+    console.error(`[gauntlet-ui] recovered from: ${err.message}`);
   });
 }
 

@@ -217,8 +217,21 @@ function formatElapsed(ms) {
   return `${seconds}s`;
 }
 
+/**
+ * Backoff for the dashboard's reconnect loop.
+ *
+ * Capped deliberately: unbounded exponential backoff is indistinguishable from
+ * giving up, and a viewer that reconnects ten minutes late is no use to someone
+ * standing at a phone waiting to see whether it is being driven.
+ */
+function retryDelayMs(attempt) {
+  const n = Math.max(1, Number(attempt) || 1);
+  return Math.min(10000, 500 * 2 ** (n - 1));
+}
+
 module.exports = {
   DEFAULT_STALLED_AFTER_MS,
+  retryDelayMs,
   parseMatrixLog,
   attributeScenarios,
   buildProgress,

@@ -141,11 +141,27 @@ cmd_launch() {
   # it exists to watch.
   local ui_port="${GAUNTLET_UI_PORT:-4310}"
   if [ "${GAUNTLET_UI:-1}" = "1" ]; then
+    # SUPERVISED: the viewer respawns if it dies, so a crash self-heals instead
+    # of leaving the operator on "progress server unreachable" for the rest of a
+    # multi-hour run. Stops on its own once the run reaches a sentinel, and the
+    # loop is capped so a permanently-broken viewer cannot spin forever.
     (
       cd "$REPO/express-api" || exit 0
-      nohup node scripts/gauntlet/progress-server.js \
-        --run-dir "$tmpdir" --port "$ui_port" --open \
-        >"$tmpdir/ui.log" 2>&1 </dev/null &
+      nohup bash -c '
+        run_dir="$1"; port="$2"; first=1; restarts=0
+        while [ "$restarts" -lt 200 ]; do
+          [ -f "$run_dir/DONE" ] || [ -f "$run_dir/FAIL" ] && [ "$first" = "0" ] && break
+          if [ "$first" = "1" ]; then
+            node scripts/gauntlet/progress-server.js --run-dir "$run_dir" --port "$port" --open
+            first=0
+          else
+            node scripts/gauntlet/progress-server.js --run-dir "$run_dir" --port "$port"
+          fi
+          restarts=$((restarts + 1))
+          echo "[gauntlet-ui] exited; respawning (#$restarts)"
+          sleep 2
+        done
+      ' _ "$tmpdir" "$ui_port" >"$tmpdir/ui.log" 2>&1 </dev/null &
       echo $! >"$tmpdir/ui.pid"
       disown
     ) || true
