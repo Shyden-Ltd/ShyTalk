@@ -231,6 +231,64 @@
         background: rgba(248, 81, 73, 0.16);
         color: var(--fail);
       }
+      details.scen {
+        margin-top: 4px;
+      }
+      details.scen summary {
+        cursor: pointer;
+        color: var(--dim);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        list-style: none;
+        user-select: none;
+      }
+      details.scen summary::-webkit-details-marker {
+        display: none;
+      }
+      details.scen summary::before {
+        content: '▸ ';
+      }
+      details.scen[open] summary::before {
+        content: '▾ ';
+      }
+      table.scen {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+        font-size: 12px;
+      }
+      table.scen th {
+        text-align: left;
+        color: var(--dim);
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 10px;
+        letter-spacing: 0.05em;
+        padding: 5px 8px;
+        border-bottom: 1px solid var(--line);
+      }
+      table.scen td {
+        padding: 5px 8px;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      table.scen tr:last-child td {
+        border-bottom: none;
+      }
+      .pill {
+        display: inline-block;
+        padding: 1px 7px;
+        border-radius: 999px;
+        font-size: 10px;
+        background: var(--pend);
+        color: var(--text);
+        margin-right: 4px;
+      }
+      .scroll {
+        max-height: 340px;
+        overflow: auto;
+      }
       h2 {
         font-size: 12px;
         text-transform: uppercase;
@@ -298,6 +356,34 @@
     </div>
 
     <div class="panel">
+      <h2>Scenario progress</h2>
+      <div class="bar"><i class="p" id="sBar" style="width: 0%"></i></div>
+      <div class="stats">
+        <div class="stat"><b id="sDone">0</b><span>run</span></div>
+        <div class="stat"><b id="sRemain">—</b><span>remaining</span></div>
+        <div class="stat"><b id="sTotal">—</b><span>total</span></div>
+        <div class="stat"><b id="sPct">0%</b><span>complete</span></div>
+        <div class="stat"><b id="sEta">—</b><span>eta</span></div>
+      </div>
+      <details class="scen">
+        <summary id="sSummary">Scenario detail</summary>
+        <div class="scroll">
+          <table class="scen">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Cell</th>
+                <th>Personas covered</th>
+                <th>When</th>
+              </tr>
+            </thead>
+            <tbody id="sRows"></tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+
+    <div class="panel">
       <h2>Devices</h2>
       <div class="devs" id="devs"></div>
     </div>
@@ -316,6 +402,57 @@
       const $ = (id) => document.getElementById(id);
       const esc = (s) =>
         String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c]);
+
+      function fmtDur(ms) {
+        if (ms === null || ms === undefined) return '—';
+        const sec = Math.round(ms / 1000);
+        if (sec < 60) return sec + 's';
+        const min = Math.floor(sec / 60);
+        if (min < 60) return min + 'm';
+        const hr = Math.floor(min / 60);
+        return hr + 'h ' + (min % 60) + 'm';
+      }
+
+      function ago(ms) {
+        if (!ms) return '—';
+        return fmtDur(Date.now() - ms) + ' ago';
+      }
+
+      function renderScenarios(s) {
+        const sp = s.scenarioProgress || {};
+        $('sDone').textContent = sp.done ?? 0;
+        $('sRemain').textContent = sp.remaining ?? '—';
+        $('sTotal').textContent = sp.total ?? '—';
+        $('sPct').textContent = (sp.percent ?? 0) + '%';
+        // No ETA until there is real throughput — a confident number derived
+        // from nothing gets believed.
+        $('sEta').textContent = sp.etaMs == null ? 'n/a yet' : fmtDur(sp.etaMs);
+        $('sBar').style.width = (sp.percent || 0) + '%';
+
+        const rows = s.scenarioRows || [];
+        $('sSummary').textContent =
+          'Scenario detail — ' +
+          rows.length +
+          ' recorded, ' +
+          (s.corpusScenarios || 0) +
+          ' per cell (click to expand)';
+        $('sRows').innerHTML = rows.length
+          ? rows
+              .map(
+                (r) =>
+                  '<tr><td>' +
+                  (r.index >= 0 ? r.index : '—') +
+                  '</td><td>' +
+                  esc(r.browser) +
+                  '</td><td>' +
+                  r.personas.map((p) => '<span class="pill">' + esc(p) + '</span>').join('') +
+                  '</td><td>' +
+                  ago(r.atMs) +
+                  '</td></tr>',
+              )
+              .join('')
+          : '<tr><td colspan="4">No scenarios recorded yet.</td></tr>';
+      }
 
       function fmtIdle(ms) {
         if (!ms && ms !== 0) return '?';
@@ -410,6 +547,7 @@
           })
           .join('');
 
+        renderScenarios(s);
         renderDevices(s.devices || {}, s.deviceActivity);
         $('log').textContent = s.log || '(no output yet)';
       }

@@ -229,8 +229,31 @@ function retryDelayMs(attempt) {
   return Math.min(10000, 500 * 2 ** (n - 1));
 }
 
+/**
+ * Scenario-level completion and ETA.
+ *
+ * The denominator is the journey corpus (226 scenarios) times the number of
+ * matrix cells, because every cell walks the whole corpus.
+ *
+ * ETA is extrapolated from OBSERVED throughput only. With no completions, or
+ * no elapsed time, it returns null rather than a number — a confident ETA
+ * derived from zero evidence is worse than no ETA, because it gets believed.
+ */
+function scenarioProgress({ done = 0, perCellTotal = 0, cellsTotal = 0, elapsedMs = 0 }) {
+  const total = Math.max(0, perCellTotal * cellsTotal);
+  const remaining = total > 0 ? Math.max(0, total - done) : 0;
+  const percent = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+
+  let etaMs = null;
+  if (done > 0 && elapsedMs > 0 && remaining > 0) {
+    etaMs = Math.round((elapsedMs / done) * remaining);
+  }
+  return { done, total, remaining, percent, etaMs };
+}
+
 module.exports = {
   DEFAULT_STALLED_AFTER_MS,
+  scenarioProgress,
   retryDelayMs,
   parseMatrixLog,
   attributeScenarios,

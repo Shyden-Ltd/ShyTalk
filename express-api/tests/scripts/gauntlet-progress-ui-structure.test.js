@@ -142,3 +142,47 @@ describe('progress-server.js — read-only and loopback-only', () => {
     expect(server).toMatch(/uncaughtException/);
   });
 });
+
+/**
+ * The runner must sign in with the SAME password the seeder forced.
+ *
+ * 20-reseed.sh forces PERSONAS_PASSWORD=localdev123 on the local target,
+ * because the .local app flavour bakes that value in. But 50-matrix.sh does
+ * `set -a; source ~/.shytalk/dev-personas.env` which exports the 32-char DEV
+ * password into the runner's environment.
+ *
+ * Result: personas are seeded with one password and signed in with another.
+ * Every persona sign-in returns INVALID_PASSWORD, so every device cell reaches
+ * the persona picker and can never get past it. Observed 2026-07-31 as the
+ * phone "thrashing on the persona picker, closing the app, and repeating",
+ * with both device cells stalled at 0 scenarios while chromium progressed.
+ *
+ * This is auth wiring, not product debt — see
+ * [[reference-local-matrix-persona-password-mismatch]].
+ */
+describe('50-matrix.sh — persona password matches what was seeded', () => {
+  const script = read(MATRIX_SH);
+  const reseed = read(path.join(GAUNTLET, '20-reseed.sh'));
+
+  it('the seeder forces localdev123 on the local target', () => {
+    expect(reseed).toMatch(/PERSONAS_PASSWORD=localdev123/);
+  });
+
+  it('the launcher forces the SAME password into the local runner', () => {
+    // Without this the 32-char dev password sourced from dev-personas.env wins,
+    // because it is exported before the runner starts.
+    const localPrefix = script
+      .split('\n')
+      .filter((l) => l.includes('env_prefix=') && l.includes('local'))
+      .join(' ');
+    expect(localPrefix).toMatch(/PERSONAS_PASSWORD=localdev123/);
+  });
+
+  it('does NOT force it on the dev target, where the real password is correct', () => {
+    const devPrefix = script
+      .split('\n')
+      .filter((l) => l.includes('env_prefix=') && l.includes('"dev"'))
+      .join(' ');
+    expect(devPrefix).not.toMatch(/PERSONAS_PASSWORD=localdev123/);
+  });
+});

@@ -352,3 +352,59 @@ describe('retryDelayMs', () => {
     for (const n of [0, 1, 7, 99]) expect(retryDelayMs(n)).toBeGreaterThan(0);
   });
 });
+
+/**
+ * Scenario totals, completion and ETA.
+ *
+ * Operator 2026-07-31 22:4x: "you have a 'scenarios run' figure, which is
+ * great, but it should also show something like 'scenarios run out of xxx
+ * remaining' and a % complete, along with ETA to finish."
+ */
+describe('scenarioProgress', () => {
+  const { scenarioProgress } = require('../../scripts/gauntlet/progress-model');
+
+  it('reports done, total and remaining against the real corpus size', () => {
+    const p = scenarioProgress({ done: 40, perCellTotal: 226, cellsTotal: 12 });
+    expect(p.total).toBe(226 * 12);
+    expect(p.done).toBe(40);
+    expect(p.remaining).toBe(226 * 12 - 40);
+  });
+
+  it('computes percent complete', () => {
+    expect(scenarioProgress({ done: 226, perCellTotal: 226, cellsTotal: 2 }).percent).toBe(50);
+  });
+
+  it('estimates time remaining from the observed rate, not a guess', () => {
+    // 60 scenarios in 60s = 1/s; 40 remaining => ~40s.
+    const p = scenarioProgress({
+      done: 60,
+      perCellTotal: 50,
+      cellsTotal: 2,
+      elapsedMs: 60_000,
+    });
+    expect(p.etaMs).toBe(40_000);
+  });
+
+  it('gives no ETA until there is real throughput to extrapolate from', () => {
+    // A confident ETA computed from zero completions is a lie.
+    expect(
+      scenarioProgress({ done: 0, perCellTotal: 226, cellsTotal: 12, elapsedMs: 60_000 }).etaMs,
+    ).toBeNull();
+    expect(
+      scenarioProgress({ done: 5, perCellTotal: 226, cellsTotal: 12, elapsedMs: 0 }).etaMs,
+    ).toBeNull();
+  });
+
+  it('never reports a negative remaining when a run overshoots the estimate', () => {
+    // Retries can push actual scenarios past the static corpus count.
+    const p = scenarioProgress({ done: 500, perCellTotal: 10, cellsTotal: 2 });
+    expect(p.remaining).toBe(0);
+    expect(p.percent).toBe(100);
+  });
+
+  it('handles an unknown corpus size without dividing by zero', () => {
+    const p = scenarioProgress({ done: 5, perCellTotal: 0, cellsTotal: 0 });
+    expect(p.percent).toBe(0);
+    expect(p.etaMs).toBeNull();
+  });
+});

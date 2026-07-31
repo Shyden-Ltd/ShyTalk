@@ -23,6 +23,7 @@ const { execFileSync } = require('child_process');
 const {
   buildProgress,
   attributeScenarios,
+  scenarioProgress,
   formatElapsed,
   retryDelayMs,
 } = require('./progress-model');
@@ -31,6 +32,28 @@ const { allowedBrowsersFor } = require('../browser-allowlist');
 const GAUNTLET_TMP = process.env.GAUNTLET_TMP || '/tmp/shytalk-gauntlet';
 const DEFAULT_PORT = Number(process.env.GAUNTLET_UI_PORT || 4310);
 const MAX_BIND_ATTEMPTS = 30;
+const JOURNEY_DIR = path.resolve(__dirname, '../../../journey-tests');
+
+/**
+ * Scenarios in the journey corpus — the denominator every cell walks.
+ * Counted once at startup; the corpus does not change mid-run.
+ */
+function countCorpusScenarios() {
+  try {
+    return fs
+      .readdirSync(JOURNEY_DIR)
+      .filter((f) => f.endsWith('.feature'))
+      .reduce((n, f) => {
+        const text = fs.readFileSync(path.join(JOURNEY_DIR, f), 'utf8');
+        // Line-wise startsWith rather than /^\s*Scenario:/gm — leading-\s*
+        // before a literal backtracks on long indented lines.
+        return n + text.split('\n').filter((l) => l.trim().startsWith('Scenario:')).length;
+      }, 0);
+  } catch {
+    return 0;
+  }
+}
+const CORPUS_SCENARIOS = countCorpusScenarios();
 
 const arg = (flag, fallback) => {
   const i = process.argv.indexOf(flag);
@@ -210,6 +233,35 @@ function snapshot(runDir) {
   const artifacts = scanScenarioArtifacts(reportDir);
   const scenarioStats = attributeScenarios(artifacts, planned);
 
+  // Per-scenario detail, newest first: which cell ran it, when, and which
+  // personas it captured. This is the expandable view — "what each scenario
+  // was run against" — built from artifacts already on disk.
+  const scenarioRows = [];
+  const byDir = new Map();
+  for (const a of artifacts) {
+    const m = /^screenshot-(.+)-([^-]+)\.png$/.exec(a.file);
+    if (!m) continue;
+    let browser = m[1];
+    const known = planned.filter((b) => browser === b || browser.startsWith(`${b}-`));
+    if (known.length) browser = known.sort((x, y) => y.length - x.length)[0];
+    const persona = m[2];
+    if (!byDir.has(a.dir))
+      byDir.set(a.dir, { dir: a.dir, browser, personas: new Set(), mtimeMs: 0 });
+    const row = byDir.get(a.dir);
+    row.personas.add(persona);
+    if (a.mtimeMs > row.mtimeMs) row.mtimeMs = a.mtimeMs;
+  }
+  for (const row of byDir.values()) {
+    scenarioRows.push({
+      index: Number((/scenario-(\d+)/.exec(row.dir) || [])[1] ?? -1),
+      dir: row.dir,
+      browser: row.browser,
+      personas: [...row.personas].sort(),
+      atMs: row.mtimeMs,
+    });
+  }
+  scenarioRows.sort((a, b) => b.atMs - a.atMs);
+
   let dispatchedAtMs = null;
   try {
     dispatchedAtMs = fs.statSync(path.join(runDir, 'log')).birthtimeMs || null;
@@ -246,6 +298,14 @@ function snapshot(runDir) {
     devices: devices(),
     deviceActivity: deviceActivity(),
     scenariosDone: Object.values(scenarioStats).reduce((n, v) => n + v.scenarios, 0),
+    scenarioProgress: scenarioProgress({
+      done: Object.values(scenarioStats).reduce((n, v) => n + v.scenarios, 0),
+      perCellTotal: CORPUS_SCENARIOS,
+      cellsTotal: planned.length,
+      elapsedMs: startedAt ? Date.now() - startedAt : 0,
+    }),
+    corpusScenarios: CORPUS_SCENARIOS,
+    scenarioRows: scenarioRows.slice(0, 300),
     generatedAt: new Date().toISOString(),
   };
 }

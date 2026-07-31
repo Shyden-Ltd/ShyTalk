@@ -104,7 +104,14 @@ cmd_launch() {
   # bundle id (pbxproj never applies the .local suffix).
   # dev: explicit RTDB URL (region-specific) or every cell dies at init.
   local env_prefix=""
-  [ "$target" = "local" ] && env_prefix="NODE_ENV=local WDA_TEAM_ID=F3XX4PM3MF IOS_BUNDLE_ID=com.shyden.shytalk "
+  # PERSONAS_PASSWORD=localdev123 is FORCED for local, matching what
+  # 20-reseed.sh seeds with (the .local app flavour bakes that value in).
+  # Without it, the 32-char DEV password exported by `set -a; source
+  # dev-personas.env` above wins, personas are seeded with one password and
+  # signed in with another, and EVERY persona sign-in returns INVALID_PASSWORD.
+  # Seen 2026-07-31: both device cells stalled at 0 scenarios while the phone
+  # thrashed on the persona picker. Auth wiring, not product debt.
+  [ "$target" = "local" ] && env_prefix="NODE_ENV=local PERSONAS_PASSWORD=localdev123 WDA_TEAM_ID=F3XX4PM3MF IOS_BUNDLE_ID=com.shyden.shytalk "
   [ "$target" = "dev" ] && env_prefix="FIREBASE_DATABASE_URL=https://shytalk-dev-default-rtdb.europe-west1.firebasedatabase.app WDA_TEAM_ID=F3XX4PM3MF "
 
   # --- fork detached ---------------------------------------------------------------
