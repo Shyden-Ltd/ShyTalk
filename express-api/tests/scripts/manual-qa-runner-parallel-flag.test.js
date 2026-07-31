@@ -110,6 +110,7 @@ describe('buildRunMatrixOptions — opts → runMatrix option mapping', () => {
       bailAfter: 2,
       retry: 1,
       parallel: true,
+      bailScope: 'matrix',
     });
   });
 
@@ -121,6 +122,7 @@ describe('buildRunMatrixOptions — opts → runMatrix option mapping', () => {
       bailAfter: 0,
       retry: 0,
       parallel: false,
+      bailScope: 'matrix',
     });
   });
 
@@ -131,5 +133,27 @@ describe('buildRunMatrixOptions — opts → runMatrix option mapping', () => {
     });
     expect(result.bailAfter).toBe(0);
     expect(result.retry).toBe(0);
+  });
+
+  // --bail-scope: see the "bailScope" describe in matrix-dispatch.test.js for why
+  // a Mac-group bail must not skip the iPhone's cells.
+  test('--bail-scope resource is passed straight through', () => {
+    const result = buildRunMatrixOptions({
+      allowed: ['chromium'],
+      opts: { bailScope: 'resource' },
+    });
+    expect(result.bailScope).toBe('resource');
+  });
+
+  test('bailScope defaults to matrix, so an un-flagged run gates exactly as before', () => {
+    expect(buildRunMatrixOptions({ allowed: ['chromium'], opts: {} }).bailScope).toBe('matrix');
+  });
+
+  test('an unrecognised --bail-scope is passed through so runMatrix can reject it', () => {
+    // Validation lives in ONE place (runMatrix). Silently normalising a typo here
+    // would restore whole-matrix gating without telling anyone.
+    expect(
+      buildRunMatrixOptions({ allowed: ['chromium'], opts: { bailScope: 'nonsense' } }).bailScope,
+    ).toBe('nonsense');
   });
 });

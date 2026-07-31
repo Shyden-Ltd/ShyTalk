@@ -113,7 +113,16 @@ describe('50-matrix.sh cmd_stop — orphan/thrash prevention (SHY-0236)', () => 
   });
 
   test('loops until quiet (a runner can respawn a child between passes)', () => {
-    expect(body).toMatch(/for pass in 1 2 3/);
+    // Pins the LOOP, not the loop variable's name. The original assertion was
+    // /for pass in 1 2 3/; a shellcheck cleanup renamed the unused counter to
+    // `_` and reddened this test without changing a line of behaviour. A
+    // structural test that fails on a rename is testing the spelling.
+    expect(body).toMatch(/for\s+\S+\s+in\s+1\s+2\s+3\s*;\s*do/);
+    // …and that the loop is the one doing the killing, so the pattern above
+    // cannot be satisfied by some unrelated three-pass loop appearing later.
+    const loop = body.slice(body.search(/for\s+\S+\s+in\s+1\s+2\s+3/));
+    expect(loop).toMatch(/kill -TERM/);
+    expect(loop).toMatch(/kill -9/);
   });
 
   test('reaps the on-device uiautomator holder + force-stops the app', () => {

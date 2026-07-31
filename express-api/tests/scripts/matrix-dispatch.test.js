@@ -1087,6 +1087,180 @@ describe('runMatrix — parallel (per-device-serial, cross-device-parallel)', ()
   });
 });
 
+// ── bailScope: one dead surface must not silence the others ──────────
+//
+// Operator 2026-07-31: "i have not yet seen the iPhone being used."
+//
+// Dispatch order was never the problem — all three resource groups start at
+// t=0 and `mobile-safari-ios` is already the iPhone group's first cell. The
+// mechanism that CAN silence a device is the bail gate: `--bail=3` keeps ONE
+// counter for the whole matrix, so three failures anywhere stop everything.
+// Four fast Mac cells can therefore abort the iPhone group before the phone
+// has finished a single cell — and the operator watches an idle phone for
+// hours while the report blames "matrix aborted by --bail".
+//
+// A failure on the Mac says nothing about whether the iPhone works. Under
+// `bailScope: 'resource'` each physical resource carries its own gate, so a
+// broken surface stops itself and the others keep reporting.
+
+describe('runMatrix — bailScope (per-resource gating)', () => {
+  // Condition-based, wall-clock-free: yield to the microtask/macrotask queue
+  // until the predicate holds, bounded so a wrong predicate fails the test
+  // instead of hanging the suite.
+  const until = async (pred) => {
+    for (let i = 0; i < 500 && !pred(); i++) await new Promise((r) => setImmediate(r));
+    return pred();
+  };
+
+  // Three Mac cells that all fail, plus an iPhone group whose first cell is
+  // held open until the Mac group has fully bailed. Deterministic ordering
+  // without a single sleep.
+  const macBailsWhileIphoneWorks = async (extra) => {
+    const dispatched = [];
+    let releaseIphone;
+    const iphoneHeld = new Promise((r) => {
+      releaseIphone = r;
+    });
+    const dispatchOne = async ({ browser }) => {
+      dispatched.push(browser);
+      if (browser === 'mobile-safari-ios') {
+        await iphoneHeld;
+        return true;
+      }
+      if (browser === 'mobile-chrome-ios') return true;
+      return false; // every Mac cell fails
+    };
+    const p = runMatrix({
+      browsers: ['chromium', 'firefox', 'webkit', 'mobile-safari-ios', 'mobile-chrome-ios'],
+      dispatchOne,
+      parallel: true,
+      bailAfter: 3,
+      ...extra,
+    });
+    // Let the Mac group burn all three failures before the phone finishes.
+    const macDone = await until(() => dispatched.filter((b) => !b.endsWith('-ios')).length === 3);
+    expect(macDone).toBe(true);
+    releaseIphone();
+    return { result: await p, dispatched };
+  };
+
+  test('resource scope: a Mac group that bails does NOT stop the iPhone group', async () => {
+    const { result, dispatched } = await macBailsWhileIphoneWorks({ bailScope: 'resource' });
+    expect(dispatched).toContain('mobile-chrome-ios');
+    expect(result.cells.find((c) => c.browser === 'mobile-chrome-ios').outcome).toBe('pass');
+    expect(result.cells.find((c) => c.browser === 'mobile-safari-ios').outcome).toBe('pass');
+  });
+
+  test('default (matrix scope) still lets the Mac group silence the iPhone — the old behaviour', async () => {
+    // Pins the regression this option exists to fix. If this ever starts
+    // passing like the resource-scope case, the default changed silently.
+    const { result, dispatched } = await macBailsWhileIphoneWorks({});
+    expect(dispatched).not.toContain('mobile-chrome-ios');
+    const chromeIos = result.cells.find((c) => c.browser === 'mobile-chrome-ios');
+    expect(chromeIos.outcome).toBe('skip');
+    expect(chromeIos.error).toMatch(/--bail 3/);
+  });
+
+  test('resource scope keeps INDEPENDENT failure counters per device', async () => {
+    // bail=2. Mac fails twice (trips); Android fails once (below the gate)
+    // and must still dispatch its remaining cell.
+    const dispatched = [];
+    const failing = new Set(['chromium', 'firefox', 'mobile-chrome-android']);
+    const result = await runMatrix({
+      browsers: [
+        'chromium',
+        'firefox',
+        'webkit',
+        'mobile-chrome-android',
+        'mobile-samsung-android',
+      ],
+      dispatchOne: async ({ browser }) => {
+        dispatched.push(browser);
+        return !failing.has(browser);
+      },
+      parallel: true,
+      bailAfter: 2,
+      bailScope: 'resource',
+    });
+    expect(dispatched).not.toContain('webkit'); // mac hit 2 failures ⇒ stopped
+    expect(result.cells.find((c) => c.browser === 'webkit').outcome).toBe('skip');
+    expect(dispatched).toContain('mobile-samsung-android'); // android at 1 ⇒ continues
+    expect(result.cells.find((c) => c.browser === 'mobile-samsung-android').outcome).toBe('pass');
+  });
+
+  test('resource scope: failFast stops only the group that failed', async () => {
+    const dispatched = [];
+    const result = await runMatrix({
+      browsers: ['mobile-chrome-android', 'mobile-samsung-android', 'chromium', 'firefox'],
+      dispatchOne: async ({ browser }) => {
+        dispatched.push(browser);
+        return browser !== 'mobile-chrome-android';
+      },
+      parallel: true,
+      failFast: true,
+      bailScope: 'resource',
+    });
+    expect(dispatched).not.toContain('mobile-samsung-android');
+    expect(dispatched).toContain('firefox'); // the Mac group is untouched
+    expect(result.cells.find((c) => c.browser === 'firefox').outcome).toBe('pass');
+  });
+
+  test('resource scope: the abort reason lands ONLY on the group that tripped', async () => {
+    const result = await runMatrix({
+      browsers: ['chromium', 'firefox', 'mobile-chrome-android', 'mobile-samsung-android'],
+      dispatchOne: async ({ browser }) => browser !== 'chromium',
+      parallel: true,
+      failFast: true,
+      bailScope: 'resource',
+    });
+    expect(result.cells.find((c) => c.browser === 'firefox').error).toBe(
+      'matrix aborted by failFast',
+    );
+    // Android never failed, so neither of its cells may carry an abort reason.
+    for (const slug of ['mobile-chrome-android', 'mobile-samsung-android']) {
+      expect(result.cells.find((c) => c.browser === slug).error).toBeUndefined();
+    }
+  });
+
+  test('resource scope applies in sequential mode too, not just under --parallel', async () => {
+    // The gate is about which SURFACE failed, not about how cells are driven.
+    const dispatched = [];
+    const result = await runMatrix({
+      browsers: ['chromium', 'firefox', 'mobile-chrome-android'],
+      dispatchOne: async ({ browser }) => {
+        dispatched.push(browser);
+        return browser !== 'chromium';
+      },
+      failFast: true,
+      bailScope: 'resource',
+    });
+    expect(dispatched).not.toContain('firefox'); // same resource as chromium
+    expect(dispatched).toContain('mobile-chrome-android');
+    expect(result.cells.find((c) => c.browser === 'mobile-chrome-android').outcome).toBe('pass');
+  });
+
+  test('an unknown bailScope throws instead of silently falling back', async () => {
+    // Fail closed: a typo must not quietly restore whole-matrix gating, which
+    // is exactly the behaviour this option exists to avoid.
+    await expect(
+      runMatrix({
+        browsers: ['chromium'],
+        dispatchOne: async () => true,
+        bailScope: 'per-device',
+      }),
+    ).rejects.toThrow(/bailScope/);
+  });
+
+  test('bailScope defaults to matrix scope when omitted (backward compatible)', async () => {
+    const result = await runMatrix({
+      browsers: ['chromium', 'firefox', 'webkit'],
+      dispatchOne: async ({ browser }) => browser !== 'chromium',
+      failFast: true,
+    });
+    expect(result.cells.map((c) => c.outcome)).toEqual(['fail', 'skip', 'skip']);
+  });
+});
+
 // ── inc-2: reserved driver-init exit code + crash classification ─────
 
 describe('EXIT_DRIVER_INIT_FAILED — reserved cell exit code', () => {

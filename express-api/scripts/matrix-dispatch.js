@@ -199,6 +199,16 @@ async function runMatrix({
   parallel = false,
   // resourceKey — maps a browser slug to the physical resource its cell contends for.
   resourceKey = defaultResourceKey,
+  // bailScope — how far a tripped failFast/bailAfter gate reaches.
+  //   'matrix'   (default, backward-compatible): ONE counter for the whole run; the
+  //              first gate to trip stops every remaining cell in every group.
+  //   'resource': one counter per physical resource (Mac / Android / iPhone). A
+  //              broken surface stops itself and the others keep reporting.
+  // Operator 2026-07-31 ("i have not yet seen the iPhone being used"): under matrix
+  // scope, four fast Mac cells can exhaust `--bail 3` before the phone finishes its
+  // FIRST cell, so the device groups are skipped and the operator watches an idle
+  // phone for hours. A Mac failure is not evidence about the iPhone.
+  bailScope = 'matrix',
 } = {}) {
   if (!Array.isArray(browsers)) {
     throw new Error('runMatrix: `browsers` must be an array of browser slugs');
@@ -211,14 +221,28 @@ async function runMatrix({
       'runMatrix: `browsers` is empty — check the target allowlist or omit --matrix.',
     );
   }
+  // Fail closed on a typo: silently falling back to matrix scope would restore the
+  // exact whole-run gating this option exists to avoid, invisibly.
+  if (bailScope !== 'matrix' && bailScope !== 'resource') {
+    throw new Error(
+      `runMatrix: unknown bailScope '${bailScope}' (expected 'matrix' or 'resource')`,
+    );
+  }
 
-  let stopped = false;
-  let failureCount = 0;
-  // First-fire wins: preserves the original "matrix aborted by failFast"
-  // sentinel when failFast triggers, and surfaces the bail count
-  // explicitly when --bail triggers. Operators reading per-cell
-  // skip-error logs see which gate stopped the run.
-  let abortReason = '';
+  // Gate state. `stopped` / `failureCount` / `abortReason` used to be three
+  // run-wide variables; they are now one object per gate so the scope decides how
+  // many gates exist. First-fire wins within a gate: preserves the original "matrix
+  // aborted by failFast" sentinel, and surfaces the bail count explicitly when
+  // --bail trips, so per-cell skip-error logs say which gate stopped the cell.
+  const newGate = () => ({ stopped: false, failureCount: 0, abortReason: '' });
+  const matrixGate = newGate();
+  const gateByResource = new Map();
+  function gateFor(browser) {
+    if (bailScope !== 'resource') return matrixGate;
+    const key = resourceKey(browser);
+    if (!gateByResource.has(key)) gateByResource.set(key, newGate());
+    return gateByResource.get(key);
+  }
 
   // Runs ONE cell (onCellStart → retry loop → cell record → onCellEnd) and returns it.
   // Pure per-cell work; the shared failFast/bailAfter gates are applied by the caller via
@@ -272,34 +296,40 @@ async function runMatrix({
   // Applies the failFast/bailAfter gates after a cell completes. Single-threaded JS keeps
   // the shared-counter updates race-free even under the parallel driver (no await between
   // the read and the write here).
-  function applyGates(cell) {
-    if (cell.outcome === 'fail' || cell.outcome === 'timeout') failureCount++;
+  function applyGates(cell, gate) {
+    if (cell.outcome === 'fail' || cell.outcome === 'timeout') gate.failureCount++;
     if (failFast && (cell.outcome === 'fail' || cell.outcome === 'timeout')) {
-      stopped = true;
-      if (!abortReason) abortReason = 'matrix aborted by failFast';
+      gate.stopped = true;
+      if (!gate.abortReason) gate.abortReason = 'matrix aborted by failFast';
     }
-    if (bailAfter > 0 && failureCount >= bailAfter) {
-      stopped = true;
-      if (!abortReason) {
-        abortReason = `matrix aborted by --bail ${bailAfter} after ${failureCount} failure(s)`;
+    if (bailAfter > 0 && gate.failureCount >= bailAfter) {
+      gate.stopped = true;
+      if (!gate.abortReason) {
+        gate.abortReason = `matrix aborted by --bail ${bailAfter} after ${gate.failureCount} failure(s)`;
       }
     }
   }
 
-  const skipCell = (browser) => ({ browser, outcome: 'skip', error: abortReason, durationMs: 0 });
+  const skipCell = (browser, gate) => ({
+    browser,
+    outcome: 'skip',
+    error: gate.abortReason,
+    durationMs: 0,
+  });
 
   let cells;
   if (!parallel) {
     // Strict-sequential (original behaviour): one cell at a time, in order.
     cells = [];
     for (const browser of browsers) {
-      if (stopped) {
-        cells.push(skipCell(browser));
+      const gate = gateFor(browser);
+      if (gate.stopped) {
+        cells.push(skipCell(browser, gate));
         continue;
       }
       const cell = await runOneCell(browser);
       cells.push(cell);
-      applyGates(cell);
+      applyGates(cell, gate);
     }
   } else {
     // Per-device-serial, cross-device-parallel: one async worker per resource group runs
@@ -315,13 +345,14 @@ async function runMatrix({
     await Promise.all(
       [...groups.values()].map(async (groupBrowsers) => {
         for (const browser of groupBrowsers) {
-          if (stopped) {
-            cellByBrowser.set(browser, skipCell(browser));
+          const gate = gateFor(browser);
+          if (gate.stopped) {
+            cellByBrowser.set(browser, skipCell(browser, gate));
             continue;
           }
           const cell = await runOneCell(browser);
           cellByBrowser.set(browser, cell);
-          applyGates(cell);
+          applyGates(cell, gate);
         }
       }),
     );

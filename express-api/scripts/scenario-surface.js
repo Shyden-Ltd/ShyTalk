@@ -60,17 +60,57 @@ function cellCapabilities(ctx = {}) {
 }
 
 /**
+ * Platforms whose absence is FATAL to a step, and therefore the only ones that
+ * may gate a scenario.
+ *
+ * The runner has exactly one hard driver requirement — `UI step requires
+ * ctx.uiDriver`, raised from ten sites in manual-qa-runner.js. There is no
+ * equivalent `requires ctx.webDriver`: web steps fall back to API/state
+ * assertions, which is why `runFeatureFile` fixtures have always executed
+ * `Given Alice [P-02] on Web has shyCoins=42` against a fake db and no browser.
+ *
+ * Gating on `web` therefore converted passing scenarios into skips — the same
+ * false claim this module exists to remove, aimed the other way. It cost the
+ * matrix nothing to drop: every one of the 12 cells is a browser cell, so `web`
+ * is universal there and never told two cells apart.
+ */
+const GATING_PLATFORMS = new Set(['android', 'ios']);
+
+/**
  * @returns {{ok: boolean, missing: string[]}} `missing` is always empty when ok,
  * so a caller that reads it without checking ok cannot be misled.
  */
 function canRunScenario(required = new Set(), capabilities = new Set()) {
-  const missing = [...required].filter((p) => !capabilities.has(p)).sort();
+  const missing = [...required]
+    .filter((p) => GATING_PLATFORMS.has(p) && !capabilities.has(p))
+    .sort();
   return missing.length === 0 ? { ok: true, missing: [] } : { ok: false, missing };
 }
 
+/**
+ * The runner's ONE hard driver requirement, as raised by ten sites in
+ * manual-qa-runner.js. Matching this error is how a cell learns it cannot drive
+ * a surface — exactly, at the moment it matters.
+ *
+ * Why match the error instead of predicting from the step text: the corpus says
+ * "on Android" in steps that need no device at all. `Given Marcus [P-04] is
+ * signed in on Android` mints an auth token; `Given Alice [P-02] on Web has
+ * shyCoins=42` writes a document. Predicting from the phrase skipped 16
+ * scenarios that in fact run — trading the original false FAIL for a false SKIP,
+ * which hides coverage just as effectively.
+ */
+const UI_DRIVER_REQUIRED = /UI step requires ctx\.uiDriver/;
+
+/** True iff this step failed *only* because the cell has no device UI driver. */
+function isMissingUiDriver(error) {
+  return UI_DRIVER_REQUIRED.test(String(error || ''));
+}
+
 /** Human reason recorded on the skipped scenario, so the skip is never mysterious. */
-function skipReason(missing) {
-  return `surface not available on this cell — needs ${missing.join(' + ')}`;
+function skipReason(missing = []) {
+  return missing.length
+    ? `surface not available on this cell — needs ${missing.join(' + ')}`
+    : 'surface not available on this cell — the step needs a device UI driver';
 }
 
 /**
@@ -99,5 +139,7 @@ module.exports = {
   cellCapabilities,
   canRunScenario,
   applicableCells,
+  isMissingUiDriver,
   skipReason,
+  GATING_PLATFORMS,
 };

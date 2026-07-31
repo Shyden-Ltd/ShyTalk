@@ -98,6 +98,53 @@ describe('cellCapabilities', () => {
   });
 });
 
+/**
+ * Only DEVICE platforms gate. Regression, caught 2026-08-01 by the suite.
+ *
+ * The first cut of this gate treated `web` as a requirement, which broke five
+ * `runFeatureFile` tests and eleven journey-Given tests: a step like
+ * `Given Alice [P-02] on Web has shyCoins=42` names a surface but seeds STATE —
+ * it writes to the datastore and never opens a browser. Gating it turned
+ * passing scenarios into skips, which is the same class of lie the gate exists
+ * to remove, pointed the other way.
+ *
+ * The asymmetry is in the runner, not a judgement call: every hard driver
+ * requirement it can emit is `UI step requires ctx.uiDriver` (10 sites in
+ * manual-qa-runner.js). There is no `requires ctx.webDriver` anywhere — web
+ * steps degrade to API/state assertions. So a missing uiDriver is fatal and a
+ * missing webDriver is not, and only the fatal one may gate.
+ *
+ * This costs the matrix nothing: all 12 cells are browser cells, so `web` is a
+ * universal capability there and never discriminated between cells anyway.
+ */
+describe('web never gates — only android and iOS do', () => {
+  it('runs a web-only scenario on a harness with NO drivers at all', () => {
+    // The exact regression: unit/integration harnesses drive runFeatureFile
+    // with a fake db and no webDriver, and their fixtures say "on Web".
+    const required = requiredPlatforms(steps('Alice [P-02] on Web has shyCoins=42'));
+    expect(canRunScenario(required, cellCapabilities({}))).toEqual({ ok: true, missing: [] });
+  });
+
+  it('still skips an Android scenario on that same driverless harness', () => {
+    const required = requiredPlatforms(steps('Adam on Android taps "signin_signUpLink"'));
+    expect(canRunScenario(required, cellCapabilities({})).missing).toEqual(['android']);
+  });
+
+  it('reports web in requiredPlatforms even though it does not gate', () => {
+    // The description stays truthful; only the GATE narrows. A future consumer
+    // that wants "is this a web scenario?" must still get a straight answer.
+    expect([...requiredPlatforms(steps('Alice on Web sees the gift'))]).toEqual(['web']);
+  });
+
+  it('a cross-surface scenario gates on its DEVICE half only', () => {
+    const required = requiredPlatforms(
+      steps('Adam on Android sends a gift', "Alice on Web sees Adam's gift"),
+    );
+    expect(canRunScenario(required, new Set(['web'])).missing).toEqual(['android']);
+    expect(canRunScenario(required, new Set(['android'])).ok).toBe(true);
+  });
+});
+
 describe('canRunScenario', () => {
   const web = new Set(['web']);
   const android = new Set(['android', 'web']);

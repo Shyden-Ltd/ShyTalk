@@ -37,9 +37,9 @@ const path = require('path');
 const { appendProgress } = require('./scenario-progress');
 const {
   requiredPlatforms,
-  cellCapabilities,
-  canRunScenario,
+  isMissingUiDriver,
   skipReason,
+  GATING_PLATFORMS,
 } = require('./scenario-surface');
 
 // ── Constants ───────────────────────────────────────────────────────
@@ -16293,25 +16293,27 @@ async function runScenario(scenario, parsed, ctx) {
 
   const allSteps = [...(parsed.background?.steps || []), ...scenario.steps];
 
-  // Surface gate (SHY-0263). A cell that cannot drive a scenario's surface must
-  // SKIP it, not fail it. Before this, a web-only cell hit the first "on
-  // Android" step, got `UI step requires ctx.uiDriver`, and recorded a FAILURE —
-  // producing an identical 40-fail/2-pass split across three unrelated cells and
-  // burying real defects under ~90% noise. Decided up front, so no partial
-  // side-effects are applied before we know the scenario cannot complete.
-  const gate = canRunScenario(requiredPlatforms(allSteps), cellCapabilities(ctx));
-  if (!gate.ok) {
-    return [
-      {
-        step: { kind: 'Given', text: `(surface gate) ${skipReason(gate.missing)}` },
-        result: { ok: true, skipped: true, reason: skipReason(gate.missing) },
-      },
-    ];
-  }
-
   const stepResults = [];
   for (const step of allSteps) {
     const result = await executeStep(step, ctx);
+    // Surface gate (SHY-0263). A cell that cannot DRIVE a surface must SKIP the
+    // scenario, not fail it. Before this, a web-only cell hit the first Android
+    // UI step, got `UI step requires ctx.uiDriver`, and recorded a FAILURE —
+    // producing an identical 40-fail/2-pass split across three unrelated cells
+    // and burying real defects under ~90% noise.
+    //
+    // The gate keys on that error rather than on the step text. A text-based
+    // prediction ran first and was wrong in the other direction: the corpus
+    // says "on Android" in steps that need no device — `is signed in on
+    // Android` mints a token, `on Web has shyCoins=42` writes a document — so
+    // it skipped 16 scenarios that genuinely run. The runtime error is the only
+    // exact statement of "this cell lacks this surface".
+    if (!result.ok && isMissingUiDriver(result.error)) {
+      const missing = [...requiredPlatforms([step])].filter((p) => GATING_PLATFORMS.has(p));
+      const reason = skipReason(missing);
+      stepResults.push({ step, result: { ok: true, skipped: true, reason } });
+      break;
+    }
     stepResults.push({ step, result });
     if (!result.ok) break; // stop on first failure within a scenario
   }
@@ -17033,6 +17035,10 @@ function formatUsage() {
     '  --bail <n>                Stop the matrix after <n> failures (timeouts',
     '                              count as failures, skips do not). 0 = no bail.',
     '                              --bail 1 is equivalent in effect to --fail-fast.',
+    '  --bail-scope <s>          How far --bail/--fail-fast reach: "matrix"',
+    '                              (default) stops every remaining cell; "resource"',
+    '                              gates each device separately, so a broken Mac',
+    '                              browser cannot skip the iPhone and Android cells.',
     '  --retry <n>               In-run per-cell retry on fail/timeout (default 0).',
     '                              Up to n retries → n+1 total attempts. Pass or',
     '                              skip break out immediately. fail-fast / --bail',
@@ -17153,6 +17159,7 @@ const PER_CELL_STRIP_FLAGS = new Set([
   '--filter',
   '--retry',
   '--shard',
+  '--bail-scope',
 ]);
 // Subset of PER_CELL_STRIP_FLAGS that consume the NEXT token as a
 // value. Every flag in PER_CELL_STRIP_FLAGS that is NOT in this set
@@ -17165,6 +17172,7 @@ const PER_CELL_VALUE_FLAGS = new Set([
   '--filter',
   '--retry',
   '--shard',
+  '--bail-scope',
 ]);
 function stripPerCellFlags(sourceArgv) {
   const baseArgv = [];
@@ -17344,6 +17352,9 @@ function buildRunMatrixOptions({ allowed, opts = {} }) {
     bailAfter: opts.bailAfter > 0 ? opts.bailAfter : 0,
     retry: opts.retry > 0 ? opts.retry : 0,
     parallel: opts.parallel === true,
+    // Passed through verbatim — runMatrix owns validation, so a typo is rejected
+    // loudly there instead of being normalised back to whole-matrix gating here.
+    bailScope: opts.bailScope || 'matrix',
   };
 }
 
@@ -17377,6 +17388,7 @@ async function main() {
     else if (flat[i] === '--parallel') opts.parallel = true;
     else if (flat[i] === '--fail-fast') opts.failFast = true;
     else if (flat[i] === '--bail') opts.bailAfter = parseInt(flat[++i], 10);
+    else if (flat[i] === '--bail-scope') opts.bailScope = flat[++i];
     else if (flat[i] === '--retry') {
       opts._retryRaw = flat[++i];
       opts.retry = parseInt(opts._retryRaw, 10);

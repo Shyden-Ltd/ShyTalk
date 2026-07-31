@@ -129,6 +129,7 @@ cmd_launch() {
         --cell-timeout=7200 \
         --retry=1 \
         --bail=3 \
+        --bail-scope=resource \
         && touch '$tmpdir/DONE' \
         || touch '$tmpdir/FAIL'
     " >"$logf" 2>&1 </dev/null &
