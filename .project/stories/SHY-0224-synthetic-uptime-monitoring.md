@@ -65,7 +65,7 @@ The audit listed **synthetic / uptime** monitoring as a gap: nothing checks the 
 
 ### i18n
 
-- [ ] N/A for the probe mechanics; the **public-facing** "live now / last checked" labels it feeds are localized by SHY-0220 across the 4 active locales.
+- [ ] N/A for the probe mechanics; the **public-facing** "live now / last checked" labels it feeds are localized by SHY-0220 across the 5 active locales.
 
 ### Observability
 

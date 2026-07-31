@@ -214,7 +214,7 @@ fail.
   "the product did not do the thing".
 
 - 2026-07-30 — j03 re-pointed from German to Chinese. The MVP ships four UI
-  locales (en, zh, id, vi — SHY-0194, still Draft), so a German journey could
+  locales (en, zh, id, vi, th — SHY-0194, still Draft), so a German journey could
   never pass. The language was incidental to what j03 proves. The corpus still
   contains `ja` (5) and `ar` (4) references, notably j13 (`locales-rtl-cjk`),
   where dropping RTL is a **coverage** decision rather than a locale swap —

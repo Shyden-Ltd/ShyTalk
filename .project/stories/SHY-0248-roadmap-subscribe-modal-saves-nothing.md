@@ -101,7 +101,7 @@ drift apart again.
 
 ### i18n
 
-- [ ] Every event label ships in all four supported locales (en, zh, id, vi) per SHY-0194.
+- [ ] Every event label ships in all five supported locales (en, zh, id, vi, th) per SHY-0194.
 - [ ] Channel labels and the GDPR notice remain translated.
 
 ### Observability
@@ -141,7 +141,7 @@ drift apart again.
 ### Green
 
 - `public/js/suggestions-board.js` — read `channelPreferences` / `watchedSuggestions`, send `channelPreferences` + `emailConsent`, send `{ type, id }` on watch, add un-watch.
-- `public/js/suggestions-i18n.js` — labels for the server's event keys in en/zh/id/vi.
+- `public/js/suggestions-i18n.js` — labels for the server's event keys in en/zh/id/vi/th.
 
 ### Mutation proof
 

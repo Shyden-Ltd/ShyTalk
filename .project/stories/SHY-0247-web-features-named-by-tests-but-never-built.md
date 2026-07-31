@@ -93,7 +93,7 @@ own story rather than a quiet addition to the de-sleeping work.
 
 ### i18n
 
-- [ ] Every new user-facing string ships in all four supported locales (en, zh, id, vi) per SHY-0194, reusing the existing board translation mechanism rather than adding a parallel one.
+- [ ] Every new user-facing string ships in all five supported locales (en, zh, id, vi, th) per SHY-0194, reusing the existing board translation mechanism rather than adding a parallel one.
 
 ### Observability
 

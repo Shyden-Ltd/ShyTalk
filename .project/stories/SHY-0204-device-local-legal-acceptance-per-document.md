@@ -53,11 +53,11 @@ Operator directive (2026-07-18): acceptance is **saved on the device**; at launc
 - [ ] N/A — server-side authz unchanged; `/legal/versions` is already public. BUT see Open Question 1 (compliance audit record) — a minors-facing app under UK OSA may require a server-side consent record regardless of device-local UX.
 
 ### UX
-- [ ] The "document changed" message is non-technical, names the specific document(s), explains re-read + re-accept is required to continue, and is translated (4 locales: en/zh/id/vi per current locale policy).
+- [ ] The "document changed" message is non-technical, names the specific document(s), explains re-read + re-accept is required to continue, and is translated (5 locales: en/zh/id/vi/th per current locale policy).
 - [ ] Re-accept flow lets the user open/read the changed document before accepting.
 
 ### i18n
-- [ ] All new strings (change notice, per-document names) added to en + zh + id + vi only (current interim locale policy).
+- [ ] All new strings (change notice, per-document names) added to en + zh + id + vi + th only (current interim locale policy).
 
 ### Observability
 - [ ] Launch-time version check result (up-to-date / changed:<docs> / offline-fallback) is logged unredacted on local+dev.
@@ -118,7 +118,7 @@ Operator directive (2026-07-18): acceptance is **saved on the device**; at launc
 
 ## Definition of Done
 
-- All AC boxes checked; RED→GREEN across web + Android + iOS + Express; the full pre-merge device/browser gauntlet passes (app-runtime change — NOT exempt); `code-reviewer` 100% clean; strings in 4 locales; observability logs present; SHY-0203's legal-clear branch removed as part of this or a fast-follow.
+- All AC boxes checked; RED→GREEN across web + Android + iOS + Express; the full pre-merge device/browser gauntlet passes (app-runtime change — NOT exempt); `code-reviewer` 100% clean; strings in 5 locales; observability logs present; SHY-0203's legal-clear branch removed as part of this or a fast-follow.
 
 ## Notes (running log)
 

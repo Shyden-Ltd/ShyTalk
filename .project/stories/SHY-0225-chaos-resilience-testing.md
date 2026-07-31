@@ -64,7 +64,7 @@ The audit listed **chaos / resilience** as a candidate gap: nothing tests how th
 
 ### i18n
 
-- [ ] The degradation/error/reconnecting messages shown during chaos are localized across the 4 active locales (a user hits these exactly when stressed — they must be in their language); ties SHY-0222.
+- [ ] The degradation/error/reconnecting messages shown during chaos are localized across the 5 active locales (a user hits these exactly when stressed — they must be in their language); ties SHY-0222.
 
 ### Observability
 

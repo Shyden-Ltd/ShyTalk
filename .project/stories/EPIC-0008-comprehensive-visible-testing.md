@@ -38,7 +38,7 @@ Grounded in the evidence audit `.project/audit/2026-07-19-testing-frameworks-aud
 - **SHY-0219** — **Compliance** suite — GDPR (export/delete) + UK Online Safety Act + age-gating, as a cohesive labelled framework.
 - **SHY-0220** — **Public health-report page** + reporting-engine decision (Allure vs alternatives) — plain-language, simple-top/detail-below, $0.
 - **SHY-0221** — **Fuzz / property** testing — API inputs + parsers.
-- **SHY-0222** — **i18n / localization** testing — missing-key build gate, pseudo-localization, RTL, the 4 active locales.
+- **SHY-0222** — **i18n / localization** testing — missing-key build gate, pseudo-localization, RTL, the 5 active locales.
 - **SHY-0223** — **PII-leak / log-privacy** testing — no secrets/PII in logs or public reports.
 - **SHY-0224** — **Synthetic / uptime** monitoring — post-deploy plain-language health signal feeding the public page.
 - **SHY-0225** — **Chaos / resilience** testing — dependency-failure + degraded-network behaviour.

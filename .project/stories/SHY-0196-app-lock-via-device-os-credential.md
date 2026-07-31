@@ -63,7 +63,7 @@ This supersedes the app-managed PIN design: PIN setup screens, app PIN entry on 
 - [ ] The one-time first-run offer appears **after the first successful sign-in** (operator decision 2026-07-16), before the user settles into main content; exact composition point coordinated with the EPIC-0004 boot rework.
 
 ### i18n
-- [ ] All new strings in the kept locale set (en base + zh + id + vi per the 2026-07-16 four-locale decision; if SHY-0194 has not landed at implementation time, whatever set the completeness gates then enforce).
+- [ ] All new strings in the kept locale set (en base + zh + id + vi + th per the 2026-07-16 decision as amended 2026-07-31; if SHY-0194 has not landed at implementation time, whatever set the completeness gates then enforce).
 
 ### Observability
 - [ ] Local debug logs (no secrets — log outcomes, never credentials): offer shown/accepted/declined, enable/disable success, unlock success/failure reason category, availability verdicts.

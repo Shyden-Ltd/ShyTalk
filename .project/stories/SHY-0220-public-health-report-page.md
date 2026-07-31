@@ -67,7 +67,7 @@ The audit found our only published test reporting is **Allure on GitHub Pages** 
 
 ### i18n
 
-- [ ] All page copy is localized across the **4 active locales** (en + zh + id + vi per [[project-locales-reduced-to-four]]) — a public page must be readable in the user's language; strings live in the public-site localization system, not hardcoded.
+- [ ] All page copy is localized across the **5 active locales** (en + zh + id + vi + th per SHY-0194) — a public page must be readable in the user's language; strings live in the public-site localization system, not hardcoded.
 - [ ] The "last checked" relative time + trend labels are localized; RTL-safe layout if/when an RTL locale returns.
 
 ### Observability
@@ -110,7 +110,7 @@ The audit found our only published test reporting is **Allure on GitHub Pages** 
 - **Then** it shows "status temporarily unavailable", not a broken page or a false green
 
 **Scenario: The page is localized**
-- **Given** a visitor with a non-English active locale (zh/id/vi)
+- **Given** a visitor with a non-English active locale (zh/id/vi/th)
 - **When** they open the health page
 - **Then** all card labels, detail, and timestamps render in their language
 
@@ -122,7 +122,7 @@ The audit found our only published test reporting is **Allure on GitHub Pages** 
 
 - `tests/health-page.spec.ts` (Playwright, real browser matrix) — `test('renders five user-area cards with color+label+last-checked')`, `test('a failing critical check shows red')`, `test('stale results show amber')`, `test('detail expands with no jargon terms')`, `test('degrades gracefully with missing data')`, `test('degrades readable with JS off')`, `test('passes axe a11y')` (ties to SHY-0213).
 - `express-api/tests/scripts/health/sync-health-data.test.js` — `it('maps publicArea onto the five user areas')`, `it('marks a critical-fail area red')`, `it('marks a stale area amber')`, `it('rejects any field outside the allowed no-PII shape')`, `it('fails when an expected framework metadata is absent')`.
-- i18n: `it('every page string is localized across the 4 active locales')`.
+- i18n: `it('every page string is localized across the 5 active locales')`.
 - Reporting decision: a doc-presence + content check that `reporting-decision.md` records choice + rationale + rejected options.
 
 ### Green — implement
@@ -156,14 +156,14 @@ Touches the public website (`public/**`) → FULL Pre-Merge Testing Protocol on 
 - **Risk:** Leaking security/PII detail publicly. **Mitigation:** Status/counts only; sync-time no-PII shape assertion; SHY-0217 feeds counts only; SHY-0223 verifies the feed.
 - **Risk:** Repo/gh-pages bloat (the SHY-0128 problem) from published data/history. **Mitigation:** Compact rollup JSON, bounded history, no raw reports on the public surface ([[feedback-cache-and-reuse-principle]]).
 - **Risk:** Jargon creeps into public copy. **Mitigation:** Explicit jargon-review AC (operator's core requirement); plain-language pass by a non-engineer lens; the detail section is curated, not a raw dump.
-- **Risk:** i18n drift (English-only slips in). **Mitigation:** All strings in the localization system across the 4 active locales; a test asserts no hardcoded page string.
+- **Risk:** i18n drift (English-only slips in). **Mitigation:** All strings in the localization system across the 5 active locales; a test asserts no hardcoded page string.
 - **Risk:** The health page itself becomes an unmonitored surface. **Mitigation:** Its own Playwright e2e + a11y coverage; SHY-0224 can watch it live.
 
 ## Definition of Done
 
 - [ ] All AC boxes across the 8 dimensions checked.
 - [ ] `docs/testing/reporting-decision.md` records the Allure-vs-alternatives decision with rationale + rejected options.
-- [ ] The public health page is live on the public site: 5 user-area cards, green/amber/red + last-checked + trend, simple-top/detail-below, plain non-jargon language, localized across the 4 active locales, a11y-clean, $0 static.
+- [ ] The public health page is live on the public site: 5 user-area cards, green/amber/red + last-checked + trend, simple-top/detail-below, plain non-jargon language, localized across the 5 active locales, a11y-clean, $0 static.
 - [ ] `scripts/sync-health-data.mjs` builds `public/health-data.json` from the SHY-0212 feed with the documented mapping + no-PII assertion; wired into the publish workflow.
 - [ ] Playwright page tests + sync unit tests green; page passes SHY-0213's a11y bar.
 - [ ] `code-reviewer` 100% clean; `Reviewed-up-to:` recorded; status `In Review`; `pre-merge-check.sh` OK.

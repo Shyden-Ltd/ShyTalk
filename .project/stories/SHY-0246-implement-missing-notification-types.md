@@ -105,7 +105,7 @@ reading their own paths". No such client path exists — the only in-app inbox i
 
 ### i18n
 
-- [ ] User-facing notification strings follow the existing localisation approach used by `utils/suggestion-email-templates.js`; any new string ships in all four supported locales (en, zh, id, vi) per SHY-0194.
+- [ ] User-facing notification strings follow the existing localisation approach used by `utils/suggestion-email-templates.js`; any new string ships in all five supported locales (en, zh, id, vi, th) per SHY-0194.
 
 ### Observability
 
