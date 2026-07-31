@@ -170,3 +170,91 @@ describe('buildScenarioMatrix', () => {
     expect(buildScenarioMatrix({ corpus, cells, records })[0].results.chromium).toBe('skipped');
   });
 });
+
+/**
+ * Cell activity must come from EVERY signal a cell can emit.
+ *
+ * Operator 2026-07-31 23:1x: "also, it's showing as stalled on the dashboard."
+ * It was a false alarm, and the second time the same root cause bit:
+ * mobile-chrome-android had written 42 JSONL records (last 439s earlier) while
+ * the dashboard reported "0 scenarios, 1136s idle, STALLED" — because stall
+ * detection still read the SCREENSHOT signal, which mobile/native cells never
+ * write.
+ *
+ * Counts come from the JSONL (authoritative for all cell types); recency is the
+ * most recent of either signal, because screenshots are fine-grained for web
+ * cells while the JSONL lands in per-feature-file bursts.
+ */
+describe('mergeCellActivity', () => {
+  const { mergeCellActivity } = require('../../scripts/scenario-progress');
+
+  it('counts scenarios from the JSONL, which every cell writes', () => {
+    const merged = mergeCellActivity({
+      records: [
+        {
+          browser: 'mobile-safari-ios',
+          file: 'a.feature',
+          scenario: 'one',
+          status: 'pass',
+          at: 10,
+        },
+        {
+          browser: 'mobile-safari-ios',
+          file: 'a.feature',
+          scenario: 'two',
+          status: 'fail',
+          at: 20,
+        },
+      ],
+      artifactStats: {},
+    });
+    expect(merged['mobile-safari-ios'].scenarios).toBe(2);
+  });
+
+  it('takes the MOST RECENT activity across both signals', () => {
+    // Screenshots tick per scenario; JSONL arrives per feature file. Using
+    // either alone under-reports how recently the cell did something.
+    const merged = mergeCellActivity({
+      records: [
+        { browser: 'chromium', file: 'a.feature', scenario: 'one', status: 'pass', at: 100 },
+      ],
+      artifactStats: { chromium: { scenarios: 9, lastActivityMs: 900 } },
+    });
+    expect(merged.chromium.lastActivityMs).toBe(900);
+  });
+
+  it('still reports a native cell that has no artifacts at all', () => {
+    // The exact false alarm: 42 records, zero screenshots, reported as 0/idle.
+    const merged = mergeCellActivity({
+      records: Array.from({ length: 42 }, (_, i) => ({
+        browser: 'mobile-chrome-android',
+        file: 'a.feature',
+        scenario: `s${i}`,
+        status: 'pass',
+        at: 5000 + i,
+      })),
+      artifactStats: {},
+    });
+    expect(merged['mobile-chrome-android'].scenarios).toBe(42);
+    expect(merged['mobile-chrome-android'].lastActivityMs).toBe(5041);
+  });
+
+  it('keeps a web cell that has artifacts but no JSONL yet', () => {
+    const merged = mergeCellActivity({
+      records: [],
+      artifactStats: { chromium: { scenarios: 3, lastActivityMs: 700 } },
+    });
+    expect(merged.chromium.scenarios).toBe(3);
+    expect(merged.chromium.lastActivityMs).toBe(700);
+  });
+
+  it('prefers the JSONL count when both signals disagree', () => {
+    // Screenshots can be written per persona, so the artifact count is not a
+    // scenario count. The JSONL is one record per scenario, by construction.
+    const merged = mergeCellActivity({
+      records: [{ browser: 'chromium', file: 'a.feature', scenario: 'one', status: 'pass', at: 1 }],
+      artifactStats: { chromium: { scenarios: 99, lastActivityMs: 1 } },
+    });
+    expect(merged.chromium.scenarios).toBe(1);
+  });
+});

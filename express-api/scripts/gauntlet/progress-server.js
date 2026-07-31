@@ -33,7 +33,12 @@ const GAUNTLET_TMP = process.env.GAUNTLET_TMP || '/tmp/shytalk-gauntlet';
 const DEFAULT_PORT = Number(process.env.GAUNTLET_UI_PORT || 4310);
 const MAX_BIND_ATTEMPTS = 30;
 const JOURNEY_DIR = path.resolve(__dirname, '../../../journey-tests');
-const { readCorpus, parseProgressStream, buildScenarioMatrix } = require('../scenario-progress');
+const {
+  readCorpus,
+  parseProgressStream,
+  buildScenarioMatrix,
+  mergeCellActivity,
+} = require('../scenario-progress');
 
 // The corpus does not change mid-run, so read it once.
 const CORPUS = readCorpus(JOURNEY_DIR);
@@ -220,7 +225,7 @@ function snapshot(runDir) {
 
   const reportDir = path.join(runDir, 'report');
   const artifacts = scanScenarioArtifacts(reportDir);
-  const scenarioStats = attributeScenarios(artifacts, planned);
+  const artifactStats = attributeScenarios(artifacts, planned);
 
   // Per-scenario detail, newest first: which cell ran it, when, and which
   // personas it captured. This is the expandable view — "what each scenario
@@ -273,6 +278,11 @@ function snapshot(runDir) {
     (n, row) => n + (row.summary.pass + row.summary.fail + row.summary.skipped),
     0,
   );
+
+  // Counts from the JSONL (every cell writes it), recency from whichever signal
+  // is newer. Using artifacts alone reported working mobile/native cells as
+  // "0 scenarios, stalled" — twice.
+  const scenarioStats = mergeCellActivity({ records: progressRecords, artifactStats });
 
   const progress = buildProgress({
     planned,
