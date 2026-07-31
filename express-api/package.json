@@ -10,6 +10,8 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "local": "node --env-file=.env.local src/index.js",
+    "preflight": "node scripts/preflight/index.js",
+    "pretest": "node scripts/preflight/index.js",
     "test": "node --experimental-vm-modules node_modules/.bin/jest --forceExit",
     "test:watch": "node --experimental-vm-modules node_modules/.bin/jest --watch",
     "test:coverage": "node --experimental-vm-modules node_modules/.bin/jest --coverage --verbose",

@@ -1,0 +1,37 @@
+Processes: 522 total, 2 running, 520 sleeping, 2713 threads 
+2026/07/31 16:30:55
+Load Avg: 3.30, 4.52, 5.51 
+CPU usage: 15.29% user, 25.88% sys, 58.82% idle 
+SharedLibs: 251M resident, 62M data, 55M linkedit.
+MemRegions: 156207 total, 1450M resident, 105M private, 1258M shared.
+PhysMem: 7639M used (2353M wired, 2231M compressor), 99M unused.
+VM: 245T vsize, 57G framework vsize, 5760704(0) swapins, 6919136(0) swapouts.
+Networks: packets: 57489270/104G in, 56002362/99G out.
+Disks: 69229853/1887G read, 27273179/866G written.
+
+PID    MEM   CMPRS COMMAND         
+66810  2870M 3450M com.apple.Virtua
+94261  765M  759M  java            
+90242  620M  58M   Google Chrome He
+439    547M  258M  WindowServer    
+1127   477M  473M  watchman        
+94478  464M  425M  java            
+68959  383M  80M   2.1.220         
+1385   270M  269M  TGOnDeviceInfere
+70966  267M  240M  WhatsApp        
+62424  224M  98M   stable          
+4380   177M  80M   Google Chrome He
+41245  174M  43M   2.1.220         
+53177  169M  149M  node            
+75082  147M  143M  App Store       
+3819   147M  105M  Google Chrome He
+0      145M  0B    kernel_task     
+94280  142M  124M  java            
+90220  138M  97M   Google Chrome   
+93884  138M  122M  node            
+1413   138M  137M  TGOnDeviceInfere
+69241  135M  117M  node            
+442    126M  121M  loginwindow     
+5898   97M   68M   bun             
+706    87M   82M   Siri AI         
+66504  76M   25M   com.docker.backe

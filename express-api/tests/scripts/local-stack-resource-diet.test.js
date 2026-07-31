@@ -555,4 +555,54 @@ describe('Local-stack resource diet', () => {
       );
     });
   });
+
+  /**
+   * SHY-0263 — start.sh must not leave its own build daemons running.
+   *
+   * Step 7 runs `./gradlew assembleLocalDebug`, which deliberately uses the FULL
+   * daemon heap (Kotlin compile peaks at 2-4 GB — see the Step 2 comment). The
+   * daemon then detaches to ppid=1 and survives the script. Measured 2026-07-31:
+   * an orphaned Gradle daemon at 1298 MB plus its Kotlin compile daemon at
+   * 942 MB, both idle, on an 8 GB machine — starving the very emulator this
+   * script had just started. A full suite run against that state passed 432/432
+   * in 3382s instead of 366s.
+   *
+   * These daemons exist to make the NEXT build faster. Keeping them resident
+   * while the stack is meant to be serving tests trades a warm cache for a
+   * suite whose verdict is about memory rather than about the code.
+   */
+  describe('start.sh — build daemons are stopped after the APK is built', () => {
+    let scriptText;
+
+    beforeAll(() => {
+      scriptText = fs.readFileSync(START_SH_PATH, 'utf8');
+    });
+
+    const buildLineIndex = () =>
+      scriptText.split('\n').findIndex((l) => l.includes('./gradlew assembleLocalDebug'));
+
+    test('the Android build still happens (guard against deleting the step wholesale)', () => {
+      expect(buildLineIndex()).toBeGreaterThan(-1);
+    });
+
+    test('stops the Gradle daemon once the build is done', () => {
+      expect(scriptText).toMatch(/\.\/gradlew\s+--stop/);
+    });
+
+    test('stops the daemon AFTER the build, not before it', () => {
+      const lines = scriptText.split('\n');
+      const build = buildLineIndex();
+      const stop = lines.findIndex((l) => /\.\/gradlew\s+--stop/.test(l));
+      expect(stop).toBeGreaterThan(build);
+    });
+
+    test('the stop cannot abort the script if no daemon is running', () => {
+      // `gradlew --stop` exits non-zero when there is nothing to stop. Under
+      // `set -e` that would kill the script at its very last step, after the
+      // stack is already up — the worst possible place to fail.
+      const lines = scriptText.split('\n');
+      const stopLine = lines.find((l) => /\.\/gradlew\s+--stop/.test(l));
+      expect(stopLine).toMatch(/\|\|\s*true|\|\|\s*:/);
+    });
+  });
 });

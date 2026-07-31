@@ -1,0 +1,13 @@
+# Recorded verbatim in SHY-0263 from the 2026-07-30 occurrence: three rules
+# suites (banned-claim-rules, device-bindings-rules, migrate-participant-ids)
+# failed 109/109 while conversations-rules and backfill-cross-cohort-flag passed
+# against the same firestore.rules. Restarting the emulator fixed it with no
+# code change. Same underlying starvation as the timeout storm, different shape.
+
+FAIL tests/firestore-rules/banned-claim-rules.test.js
+  ● Test suite failed to run
+
+    FirebaseError: {"error":{"code":500,"status":"UNKNOWN"}}
+
+      at loadFirestoreRules (@firebase/rules-unit-testing/src/impl/rules.ts:63:11)
+      at initializeTestEnvironment (@firebase/rules-unit-testing/src/impl/test_environment.ts:41:5)

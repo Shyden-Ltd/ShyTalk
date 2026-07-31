@@ -130,9 +130,31 @@ cmd_launch() {
   )
   ln -sfn "$tmpdir" "$GAUNTLET_TMP/matrix-latest"
 
+  # --- progress dashboard ------------------------------------------------------
+  # Operator 2026-07-31: "i have no visibility of what it's done and still to do".
+  # A `tail -f` shows what HAS happened; over a multi-hour sequential matrix most
+  # of the answer is what has NOT happened yet.
+  #
+  # Strictly read-only and strictly optional: it parses this run dir and never
+  # writes to it, never signals the runner, never touches a device. Every failure
+  # path here is swallowed — the viewer must never be able to take down the run
+  # it exists to watch.
+  local ui_port="${GAUNTLET_UI_PORT:-4310}"
+  if [ "${GAUNTLET_UI:-1}" = "1" ]; then
+    (
+      cd "$REPO/express-api" || exit 0
+      nohup node scripts/gauntlet/progress-server.js \
+        --run-dir "$tmpdir" --port "$ui_port" --open \
+        >"$tmpdir/ui.log" 2>&1 </dev/null &
+      echo $! >"$tmpdir/ui.pid"
+      disown
+    ) || true
+  fi
+
   cat <<EOF
 Launched detached. run-id: $run_id
 PID:        $(cat "$pid_file")
+Dashboard:  http://127.0.0.1:$ui_port   ← live progress (opens automatically)
 Log:        $logf
 Report dir: $report_dir
 Status:     bash $HERE/50-matrix.sh status $run_id
@@ -167,14 +189,14 @@ cmd_stop() {
   [ -f "$dir/pid" ] || die "no pid file in $dir"
   local pid; pid="$(cat "$dir/pid" 2>/dev/null)"
   local run_id; run_id="$(basename "$dir")"
-  local self=$$ pass p targets serial leftover by_runid
+  local self=$$ p targets serial leftover by_runid
 
   # SHY-0236 permanent fix (matrix-orphans / hung-uiautomator thrash): the old
   # `kill $pid` killed ONLY the nohup wrapper, orphaning the manual-qa-runner +
   # its --parallel cell runners — which keep driving the phone forever. Kill the
   # WHOLE process tree AND every runner still tagged with THIS run dir, looping
   # until quiet (a runner can respawn a child between passes). Never our shell.
-  for pass in 1 2 3; do
+  for _ in 1 2 3; do
     # Re-derive the run-scoped match set fresh each pass (a runner can respawn a
     # child between passes). Only treat the file-cached $pid as a tree root if it
     # INDEPENDENTLY still belongs to THIS run — i.e. its argv still carries $run_id.

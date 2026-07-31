@@ -1,0 +1,24 @@
+watchman warning: Recrawled this watch 135 times, most recently because:
+MustScanSubDirs UserDroppedTo resolve, please review the information on
+https://facebook.github.io/watchman/docs/troubleshooting.html#recrawl
+To clear this warning, run:
+`watchman watch-del '/Users/shyden/Developer/Repos/ShyTalk' ; watchman watch-project '/Users/shyden/Developer/Repos/ShyTalk'`
+
+ LOGGING RETRY ERRORS  a genuine product assertion failure
+ RETRY 1 
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+    -   "banned": true,
+    +   "banned": false,
+        "role": "moderator",
+      }
+
+      1 | test('a genuine product assertion failure', () => {
+    > 2 |   expect({ role: 'moderator', banned: false }).toEqual({ role: 'moderator', banned: true });
+        |                                                ^
+      3 | });

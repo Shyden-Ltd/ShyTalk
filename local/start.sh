@@ -258,6 +258,22 @@ APK_PATH="app/build/outputs/apk/local/debug/app-local-debug.apk"
 echo "==> Step 7/8: Building Android APK..."
 cd "$PROJECT_ROOT" && ./gradlew assembleLocalDebug
 
+# Stop the build daemons this script just spawned (SHY-0263).
+#
+# The build above deliberately uses the FULL daemon heap (Kotlin compile peaks
+# at 2-4 GB), and Gradle then leaves the daemon plus its Kotlin compile daemon
+# running so the NEXT build is fast. They detach to ppid=1 and outlive this
+# script. Measured 2026-07-31 on the 8 GB machine: 1298 MB + 942 MB sitting idle,
+# starving the very emulator this script had just started — a full test suite
+# against that state passed 432/432 but took 3382s instead of 366s.
+#
+# A warm build cache is not worth a stack that cannot serve the tests it exists
+# to serve. `|| true` because --stop exits non-zero when no daemon is running,
+# and this is the last step — aborting here would leave the operator with a
+# started stack and a failed script.
+echo "  Stopping Gradle build daemons to free memory for the emulator..."
+./gradlew --stop >/dev/null 2>&1 || true
+
 # =============================================================================
 # Step 8: Install on device if connected
 # =============================================================================

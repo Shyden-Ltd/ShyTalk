@@ -1,0 +1,64 @@
+# Real excerpt from the 2026-07-31 run-3 collapse. The full run carried
+# 140 'Exceeded timeout' lines and NO 500 anywhere.
+# Excerpt below is the first 60 lines of real failure output, verbatim.
+
+FAIL tests/firestore-rules/banned-claim-rules.test.js (10.499 s)
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
+    thrown: "Exceeded timeout of 10000 ms for a hook.
