@@ -37,7 +37,7 @@ const path = require('path');
 const { appendProgress } = require('./scenario-progress');
 const {
   requiredPlatforms,
-  isMissingUiDriver,
+  isSurfaceUnavailable,
   skipReason,
   GATING_PLATFORMS,
 } = require('./scenario-surface');
@@ -16308,7 +16308,13 @@ async function runScenario(scenario, parsed, ctx) {
     // Android` mints a token, `on Web has shyCoins=42` writes a document — so
     // it skipped 16 scenarios that genuinely run. The runtime error is the only
     // exact statement of "this cell lacks this surface".
-    if (!result.ok && isMissingUiDriver(result.error)) {
+    //
+    // It asks ctx which drivers exist rather than reading the wording, because
+    // a missing driver METHOD (`ctx.webDriver.webVisit not configured`) looks
+    // almost identical to a missing driver OBJECT and means the opposite: on a
+    // cell that owns that driver it is framework debt (SHY-0259) and must stay
+    // red, or the backlog it tracks becomes invisible.
+    if (!result.ok && isSurfaceUnavailable(result.error, ctx)) {
       const missing = [...requiredPlatforms([step])].filter((p) => GATING_PLATFORMS.has(p));
       const reason = skipReason(missing);
       stepResults.push({ step, result: { ok: true, skipped: true, reason } });

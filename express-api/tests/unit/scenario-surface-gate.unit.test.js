@@ -145,6 +145,81 @@ describe('web never gates — only android and iOS do', () => {
   });
 });
 
+/**
+ * The runner says "I cannot drive this" in TWO ways, and only one of them means
+ * the surface is wrong.
+ *
+ * Measured on the 2026-08-01 run: 97 of 161 chromium findings were
+ * `ctx.<driver>.<method> not configured` — 51 on uiDriver, 45 on webDriver.
+ * Gating on the `UI step requires ctx.uiDriver` message alone caught none of
+ * them, which is why an identical 30-fail/2-pass split reappeared across
+ * chromium, mobile-chrome-android AND mobile-safari-ios.
+ *
+ * The discriminator is whether the DRIVER OBJECT exists on ctx, not which
+ * sentence was printed:
+ *
+ *   - chromium has no `uiDriver` at all, so `ctx.uiDriver.androidIsFlavorInstalled
+ *     not configured` means "wrong surface" → SKIP.
+ *   - chromium DOES have a `webDriver`, so `ctx.webDriver.webVisit not configured`
+ *     means that driver is genuinely missing a method → FAIL. That is real debt
+ *     (SHY-0259, "journey corpus outruns its drivers") and hiding it as a skip
+ *     would erase the very backlog the story exists to burn down.
+ */
+describe('missing-driver classification', () => {
+  const { isSurfaceUnavailable } = require('../../scripts/scenario-surface');
+
+  it('treats the hard uiDriver requirement as unavailable when there is no uiDriver', () => {
+    const err = 'UI step requires ctx.uiDriver (platform=android, tag=persona_picker_open)';
+    expect(isSurfaceUnavailable(err, { webDriver: {} })).toBe(true);
+  });
+
+  it('treats an unconfigured uiDriver METHOD as unavailable when there is no uiDriver', () => {
+    // The 51 findings the message-only gate missed.
+    const err = 'ctx.uiDriver.androidIsFlavorInstalled not configured';
+    expect(isSurfaceUnavailable(err, { webDriver: {} })).toBe(true);
+  });
+
+  it('does NOT hide an unconfigured method on a driver the cell HAS', () => {
+    // The 45 webDriver findings are real gaps on a cell that owns a webDriver.
+    const err = 'ctx.webDriver.webVisit not configured';
+    expect(isSurfaceUnavailable(err, { webDriver: {} })).toBe(false);
+  });
+
+  it('does NOT hide an unconfigured uiDriver method on a cell that HAS a uiDriver', () => {
+    // A device cell missing a driver method is framework debt, not a surface
+    // mismatch — turning it into a skip would make SHY-0259 invisible.
+    const err = 'ctx.uiDriver.iosTapSameRoom not configured';
+    expect(isSurfaceUnavailable(err, { webDriver: {}, uiDriver: { iosUiDump: () => {} } })).toBe(
+      false,
+    );
+  });
+
+  it('treats a missing webDriver as unavailable on a cell with no webDriver', () => {
+    const err = 'Web step requires ctx.webDriver (document direction)';
+    expect(isSurfaceUnavailable(err, { uiDriver: { androidUiDump: () => {} } })).toBe(true);
+  });
+
+  it('never hides an ordinary product failure', () => {
+    // The whole point is that real defects stay red. These two are genuine
+    // findings from the same run.
+    expect(isSurfaceUnavailable('OSA invariants violated: 1 cross-cohort followingIds', {})).toBe(
+      false,
+    );
+    expect(isSurfaceUnavailable("rooms/Selma's Saturday Sing-along does not exist", {})).toBe(
+      false,
+    );
+  });
+
+  it('is safe on an empty or absent error', () => {
+    expect(isSurfaceUnavailable('', {})).toBe(false);
+    expect(isSurfaceUnavailable(undefined, {})).toBe(false);
+  });
+
+  it('does not match a driver name merely mentioned in prose', () => {
+    expect(isSurfaceUnavailable('the page explained that ctx.uiDriver exists', {})).toBe(false);
+  });
+});
+
 describe('canRunScenario', () => {
   const web = new Set(['web']);
   const android = new Set(['android', 'web']);

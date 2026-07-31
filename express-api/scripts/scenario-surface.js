@@ -106,6 +106,40 @@ function isMissingUiDriver(error) {
   return UI_DRIVER_REQUIRED.test(String(error || ''));
 }
 
+/**
+ * Which ctx driver a failure blames, or null if it blames neither.
+ *
+ * The runner reports a missing driver in two shapes, and both must be read:
+ *   - `UI step requires ctx.uiDriver (…)` / `Web step requires ctx.webDriver (…)`
+ *     — the driver object is absent.
+ *   - `ctx.uiDriver.androidUiDump not configured` — a named METHOD is absent.
+ *
+ * Anchored on `ctx.<driver>` immediately followed by `.` or the word `requires`
+ * preceding it, so prose that merely mentions a driver name is not a match.
+ */
+const DRIVER_BLAME =
+  /(?:requires\s+ctx\.(uiDriver|webDriver)\b|\bctx\.(uiDriver|webDriver)\.[A-Za-z0-9_]+\s+not configured)/;
+
+function blamedDriver(error) {
+  const m = DRIVER_BLAME.exec(String(error || ''));
+  return m ? m[1] || m[2] : null;
+}
+
+/**
+ * True iff this failure means "this CELL cannot drive this surface" — as opposed
+ * to "this driver is missing a method", which is real framework debt.
+ *
+ * The discriminator is whether the blamed driver object exists on ctx, never the
+ * wording. Measured on the 2026-08-01 run: chromium produced 97 driver findings,
+ * 51 blaming `uiDriver` (which chromium does not have — wrong surface, skip) and
+ * 45 blaming `webDriver` (which chromium DOES have — genuine gaps, keep them
+ * red; they are SHY-0259's backlog and hiding them would erase it).
+ */
+function isSurfaceUnavailable(error, ctx = {}) {
+  const driver = blamedDriver(error);
+  return driver ? !ctx[driver] : false;
+}
+
 /** Human reason recorded on the skipped scenario, so the skip is never mysterious. */
 function skipReason(missing = []) {
   return missing.length
@@ -140,6 +174,8 @@ module.exports = {
   canRunScenario,
   applicableCells,
   isMissingUiDriver,
+  isSurfaceUnavailable,
+  blamedDriver,
   skipReason,
   GATING_PLATFORMS,
 };
