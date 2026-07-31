@@ -530,7 +530,15 @@ describe('Subscription Edge Cases', () => {
   // duplicate silently stops hearing about it. Its own comment admitted the
   // gap — "the subscription endpoint needs to handle the transfer" — while the
   // empty body reported green. Specified as part of SHY-0258.
-  test.todo('user watches suggestion that gets merged: watch transferred to original');
+  // SHY-0258 — DELIVERED. Watch transfer now happens on merge
+  // (src/utils/watch-transfer.js, called from POST /admin/suggestions/:id/merge).
+  // Real-emulator tests in tests/utils/watch-transfer.test.js:
+  //     - the watcher ends up watching the original instead
+  //     - every watcher is moved, not just the first
+  //     - other watches are left alone (the transfer is not a reset)
+  //     - someone already watching BOTH ends up watching the original once
+  //     - replaying the merge changes nothing
+  //     - merging a suggestion into itself is refused
 
   test('user unsubscribes from all channels for all events: doc preserved with all false', async () => {
     const app = createApp();

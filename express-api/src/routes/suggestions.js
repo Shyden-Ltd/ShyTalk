@@ -127,6 +127,7 @@ const { sendSystemPm } = require('../utils/system-pm');
 const { sendFcmToTokens } = require('../utils/fcm');
 const { notifyRoadmapSubscribers } = require('../utils/roadmap-notify');
 const { notifyAdminsOfNewSuggestion } = require('../utils/admin-suggestion-notify');
+const { transferWatchers } = require('../utils/watch-transfer');
 const {
   VALID_TAGS,
   VALID_LANGUAGES,
@@ -1962,6 +1963,12 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
       return res.status(404).json({ error: missing });
     }
 
+    // SHY-0258: move every watcher of the duplicate onto the original.
+    // Without this they keep watching a record that is terminal at `merged`
+    // and will never update again — they simply stop hearing about the thing
+    // they asked to follow, with nothing to indicate why.
+    const watchersMoved = await transferWatchers(id, targetId);
+
     // Notify the duplicate's submitter. `suggestionId` is the canonical field
     // used by the notifications list test — it identifies which suggestion
     // the notification is about (the duplicate that got merged).
@@ -1993,6 +2000,7 @@ router.post('/admin/suggestions/:id/merge', async (req, res) => {
         targetId,
         mergedInto: targetId,
         transferredUpvotes: dupVotes,
+        watchersMoved,
       },
       timestamp: now(),
     });
