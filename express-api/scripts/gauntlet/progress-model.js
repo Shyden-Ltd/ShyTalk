@@ -29,6 +29,57 @@ function stateForOutcome(outcome) {
   return 'failed';
 }
 
+/**
+ * How long a dispatched cell may show no artifact before it is called stalled.
+ * Driver init and app install legitimately take a while, so this is generous —
+ * but the 2026-07-31 hang sat silent for 35 minutes, well past any grace.
+ */
+const DEFAULT_STALLED_AFTER_MS = 5 * 60 * 1000;
+
+// The runner writes scenario-N/screenshot-<browser>-<persona>.png. Browser
+// slugs are hyphenated (`mobile-firefox-android`), and so are some personas,
+// so anchor on the known prefix and take the LONGEST browser match rather than
+// splitting on '-' — which would read `mobile-firefox-android` as `mobile`.
+const SCREENSHOT = /^screenshot-(.+)-[^-]+\.png$/;
+
+/**
+ * Count scenarios per browser from artifact filenames, and record when each
+ * browser last produced anything.
+ *
+ * Distinct scenario DIRECTORIES are the unit: one scenario commonly writes
+ * several screenshots (one per persona), so counting files would inflate it.
+ *
+ * @param {Array<{dir:string,file:string,mtimeMs:number}>} artifacts
+ * @param {string[]} [knownBrowsers] Slugs to disambiguate against.
+ */
+function attributeScenarios(artifacts, knownBrowsers = []) {
+  const byBrowser = {};
+  const seen = {};
+
+  for (const a of artifacts) {
+    const match = SCREENSHOT.exec(a.file);
+    if (!match) continue;
+
+    // `screenshot-mobile-firefox-android-Lena.png` -> capture is
+    // `mobile-firefox-android`; if a persona itself contains a hyphen the
+    // known-browser list resolves it, otherwise the capture stands.
+    let browser = match[1];
+    const known = knownBrowsers.filter((b) => browser === b || browser.startsWith(`${b}-`));
+    if (known.length) browser = known.sort((x, y) => y.length - x.length)[0];
+
+    byBrowser[browser] ||= { scenarios: 0, lastActivityMs: 0 };
+    seen[browser] ||= new Set();
+    if (!seen[browser].has(a.dir)) {
+      seen[browser].add(a.dir);
+      byBrowser[browser].scenarios += 1;
+    }
+    if (a.mtimeMs > byBrowser[browser].lastActivityMs) {
+      byBrowser[browser].lastActivityMs = a.mtimeMs;
+    }
+  }
+  return byBrowser;
+}
+
 /** Extract dispatched and completed cells from raw log text. */
 function parseMatrixLog(logText) {
   const started = [];
@@ -61,7 +112,17 @@ function parseMatrixLog(logText) {
  * @param {boolean} [input.pidAlive] Whether the run process still exists.
  * @param {boolean} [input.started]  Whether the run was ever launched.
  */
-function buildProgress({ planned = [], logText = '', sentinel, pidAlive = true, started = false }) {
+function buildProgress({
+  planned = [],
+  logText = '',
+  sentinel,
+  pidAlive = true,
+  started = false,
+  scenarioStats = {},
+  now = Date.now(),
+  dispatchedAtMs = null,
+  stalledAfterMs = DEFAULT_STALLED_AFTER_MS,
+}) {
   const { started: dispatched, finished } = parseMatrixLog(logText);
 
   const outcomeByBrowser = new Map();
@@ -78,8 +139,26 @@ function buildProgress({ planned = [], logText = '', sentinel, pidAlive = true, 
         ...(unplanned ? { unplanned: true } : {}),
       };
     }
-    const state = dispatched.includes(browser) ? 'running' : 'pending';
-    return { browser, state, ...(unplanned ? { unplanned: true } : {}) };
+    if (!dispatched.includes(browser)) {
+      return { browser, state: 'pending', ...(unplanned ? { unplanned: true } : {}) };
+    }
+
+    // Dispatched but unfinished. "Running" and "hung" look identical from the
+    // log alone — which is how three dead cells reported `running` for 35
+    // minutes on 2026-07-31 while the operator watched the phone do nothing.
+    // Artifact recency is the discriminator.
+    const stats = scenarioStats[browser];
+    const lastSignal = stats?.lastActivityMs || dispatchedAtMs || now;
+    const idleMs = now - lastSignal;
+    const state = idleMs > stalledAfterMs ? 'stalled' : 'running';
+
+    return {
+      browser,
+      state,
+      scenarios: stats?.scenarios || 0,
+      idleMs: Math.max(0, idleMs),
+      ...(unplanned ? { unplanned: true } : {}),
+    };
   };
 
   const cells = planned.map((b) => cellFor(b, false));
@@ -99,6 +178,7 @@ function buildProgress({ planned = [], logText = '', sentinel, pidAlive = true, 
     failed: cells.filter((c) => c.state === 'failed').length,
     skipped: cells.filter((c) => c.state === 'skipped').length,
     running: cells.filter((c) => c.state === 'running').length,
+    stalled: cells.filter((c) => c.state === 'stalled').length,
     pending: cells.filter((c) => c.state === 'pending').length,
   };
 
@@ -137,4 +217,10 @@ function formatElapsed(ms) {
   return `${seconds}s`;
 }
 
-module.exports = { parseMatrixLog, buildProgress, formatElapsed };
+module.exports = {
+  DEFAULT_STALLED_AFTER_MS,
+  parseMatrixLog,
+  attributeScenarios,
+  buildProgress,
+  formatElapsed,
+};

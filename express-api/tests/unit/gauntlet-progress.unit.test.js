@@ -197,3 +197,121 @@ describe('formatElapsed', () => {
     expect(formatElapsed(-5000)).toBe('0s');
   });
 });
+
+/**
+ * Scenario-level progress + staleness.
+ *
+ * Operator 2026-07-31 18:00, watching the first real run: "i can see both
+ * devices are connected but no evidence of what they're actually doing... the
+ * android device seems to be thrashing on the persona picker, closing the app,
+ * and repeating. and the iphone isn't doing anything at all."
+ *
+ * They were right and the dashboard was wrong: all three "running" cells sat at
+ * 0.0% CPU for 35 minutes, and chromium's last artifact was 10 minutes old. A
+ * dispatched-but-idle cell is STALLED, and calling it "running" is the exact
+ * false reassurance this dashboard exists to remove.
+ */
+describe('attributeScenarios', () => {
+  const { attributeScenarios } = require('../../scripts/gauntlet/progress-model');
+
+  it('counts scenarios per browser from the artifact filenames', () => {
+    // The runner writes scenario-N/screenshot-<browser>-<persona>.png as each
+    // scenario runs, so the browser is recoverable without touching the runner.
+    const artifacts = [
+      { dir: 'scenario-0', file: 'screenshot-chromium-default.png', mtimeMs: 10 },
+      { dir: 'scenario-0', file: 'screenshot-chromium-Lena.png', mtimeMs: 11 },
+      { dir: 'scenario-1', file: 'screenshot-chromium-default.png', mtimeMs: 20 },
+      { dir: 'scenario-2', file: 'screenshot-mobile-safari-ios-default.png', mtimeMs: 30 },
+    ];
+    const byBrowser = attributeScenarios(artifacts);
+    // scenario-0 has two shots but is ONE scenario — count distinct dirs.
+    expect(byBrowser.chromium.scenarios).toBe(2);
+    expect(byBrowser['mobile-safari-ios'].scenarios).toBe(1);
+  });
+
+  it('records the most recent activity per browser, for staleness', () => {
+    const artifacts = [
+      { dir: 'scenario-0', file: 'screenshot-chromium-a.png', mtimeMs: 100 },
+      { dir: 'scenario-1', file: 'screenshot-chromium-b.png', mtimeMs: 900 },
+    ];
+    expect(attributeScenarios(artifacts).chromium.lastActivityMs).toBe(900);
+  });
+
+  it('handles hyphenated browser slugs without truncating them', () => {
+    // `mobile-firefox-android` must not be read as `mobile`.
+    const artifacts = [
+      { dir: 'scenario-0', file: 'screenshot-mobile-firefox-android-Lena.png', mtimeMs: 1 },
+    ];
+    expect(Object.keys(attributeScenarios(artifacts))).toEqual(['mobile-firefox-android']);
+  });
+
+  it('ignores files that are not scenario screenshots', () => {
+    const artifacts = [
+      { dir: 'scenario-0', file: 'trace.zip', mtimeMs: 1 },
+      { dir: 'scenario-0', file: 'screenshot-chromium-a.png', mtimeMs: 2 },
+    ];
+    expect(attributeScenarios(artifacts).chromium.scenarios).toBe(1);
+  });
+});
+
+describe('buildProgress — stalled cells', () => {
+  const PLAN = ['chromium', 'mobile-safari-ios'];
+  const dispatched = PLAN.map((b) => `[matrix] → dispatching ${b}`).join('\n');
+
+  const at = (over) =>
+    buildProgress({
+      planned: PLAN,
+      logText: dispatched,
+      now: 1_000_000,
+      stalledAfterMs: 300_000,
+      ...over,
+    });
+
+  it('marks a dispatched cell with NO activity at all as stalled', () => {
+    // mobile-safari-ios, 2026-07-31: dispatched, no Appium session ever created,
+    // no artifact ever written, iPhone untouched for 35 minutes.
+    const p = at({ scenarioStats: {}, dispatchedAtMs: 1_000_000 - 600_000 });
+    expect(p.cells.find((c) => c.browser === 'mobile-safari-ios').state).toBe('stalled');
+  });
+
+  it('marks a cell whose last artifact is older than the threshold as stalled', () => {
+    // chromium, same run: 18 scenarios then nothing for 10 minutes.
+    const p = at({
+      scenarioStats: { chromium: { scenarios: 18, lastActivityMs: 1_000_000 - 600_000 } },
+      dispatchedAtMs: 1_000_000 - 2_000_000,
+    });
+    const cell = p.cells.find((c) => c.browser === 'chromium');
+    expect(cell.state).toBe('stalled');
+    expect(cell.scenarios).toBe(18);
+  });
+
+  it('leaves a genuinely active cell running', () => {
+    const p = at({
+      scenarioStats: { chromium: { scenarios: 4, lastActivityMs: 1_000_000 - 5_000 } },
+      dispatchedAtMs: 1_000_000 - 60_000,
+    });
+    expect(p.cells.find((c) => c.browser === 'chromium').state).toBe('running');
+  });
+
+  it('gives a freshly dispatched cell grace before calling it stalled', () => {
+    // Driver init legitimately takes time; flagging instantly would cry wolf.
+    const p = at({ scenarioStats: {}, dispatchedAtMs: 1_000_000 - 10_000 });
+    expect(p.cells.find((c) => c.browser === 'chromium').state).toBe('running');
+  });
+
+  it('counts stalled cells separately so they cannot hide inside "running"', () => {
+    const p = at({ scenarioStats: {}, dispatchedAtMs: 1_000_000 - 600_000 });
+    expect(p.counts.stalled).toBe(2);
+    expect(p.counts.running).toBe(0);
+  });
+
+  it('never marks a FINISHED cell stalled, however old its artifacts are', () => {
+    const finished = `${dispatched}\n[matrix] ← chromium: passed (100ms)`;
+    const p = at({
+      logText: finished,
+      scenarioStats: { chromium: { scenarios: 20, lastActivityMs: 0 } },
+      dispatchedAtMs: 1_000_000 - 9_000_000,
+    });
+    expect(p.cells.find((c) => c.browser === 'chromium').state).toBe('passed');
+  });
+});

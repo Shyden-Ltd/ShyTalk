@@ -20,7 +20,7 @@ const http = require('http');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
-const { buildProgress, formatElapsed } = require('./progress-model');
+const { buildProgress, attributeScenarios, formatElapsed } = require('./progress-model');
 const { allowedBrowsersFor } = require('../browser-allowlist');
 
 const GAUNTLET_TMP = process.env.GAUNTLET_TMP || '/tmp/shytalk-gauntlet';
@@ -112,6 +112,78 @@ function devices() {
   return out;
 }
 
+/**
+ * Scan the report dir for per-scenario artifacts.
+ *
+ * The runner writes scenario-N/screenshot-<browser>-<persona>.png as each
+ * scenario completes, so this gives live per-cell scenario counts AND the
+ * recency signal that distinguishes a working cell from a hung one.
+ */
+function scanScenarioArtifacts(reportDir) {
+  const artifacts = [];
+  let dirs;
+  try {
+    dirs = fs.readdirSync(reportDir, { withFileTypes: true }).filter((e) => e.isDirectory());
+  } catch {
+    return artifacts;
+  }
+  for (const d of dirs) {
+    let files;
+    try {
+      files = fs.readdirSync(path.join(reportDir, d.name));
+    } catch {
+      continue;
+    }
+    for (const file of files) {
+      let mtimeMs = 0;
+      try {
+        mtimeMs = fs.statSync(path.join(reportDir, d.name, file)).mtimeMs;
+      } catch {
+        /* file vanished mid-scan — skip it */
+      }
+      artifacts.push({ dir: d.name, file, mtimeMs });
+    }
+  }
+  return artifacts;
+}
+
+/**
+ * What each device is ACTUALLY doing right now.
+ *
+ * Operator 2026-07-31: "i can see both devices are connected but no evidence of
+ * what they're actually doing." Presence is not activity — the phone can sit on
+ * the launcher, or thrash one screen forever, and "connected" looks identical.
+ */
+function deviceActivity() {
+  const activity = { android: null, ios: null };
+  const adbBin = adbPath();
+  if (adbBin) {
+    try {
+      const out = execFileSync(adbBin, ['shell', 'dumpsys', 'activity', 'activities'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 5000,
+      });
+      const line = out.split('\n').find((l) => l.includes('topResumedActivity'));
+      // Tokenise rather than pattern-match: two adjacent greedy classes around
+      // a '/' backtrack super-linearly, and the line is arbitrarily long.
+      const token = (line || '').split(/\s+/).find((t) => t.includes('/') && t.includes('.'));
+      const [pkg, act] = token ? token.split('/') : [];
+      if (pkg && act) {
+        activity.android = {
+          package: pkg,
+          screen: act.replace(/^.*\./, ''),
+          isShyTalk: pkg.startsWith('com.shyden.shytalk'),
+          isLauncher: /launcher/i.test(pkg),
+        };
+      }
+    } catch {
+      /* device asleep or adb busy — reported as null, never guessed */
+    }
+  }
+  return activity;
+}
+
 function snapshot(runDir) {
   if (!runDir || !fs.existsSync(runDir)) {
     return { runId: null, state: 'no-run', counts: null, cells: [], log: '', devices: devices() };
@@ -128,12 +200,25 @@ function snapshot(runDir) {
   // The matrix plan. `local` is the full device+browser fan-out.
   const planned = allowedBrowsersFor(process.env.GAUNTLET_TARGET || 'local');
 
+  const reportDir = path.join(runDir, 'report');
+  const artifacts = scanScenarioArtifacts(reportDir);
+  const scenarioStats = attributeScenarios(artifacts, planned);
+
+  let dispatchedAtMs = null;
+  try {
+    dispatchedAtMs = fs.statSync(path.join(runDir, 'log')).birthtimeMs || null;
+  } catch {
+    /* keep null */
+  }
+
   const progress = buildProgress({
     planned,
     logText,
     sentinel,
     pidAlive: pidAlive(pid),
     started: Boolean(pid),
+    scenarioStats,
+    dispatchedAtMs,
   });
 
   let startedAt = null;
@@ -153,6 +238,8 @@ function snapshot(runDir) {
     // Last 60 lines only — the dashboard is a status view, not a log viewer.
     log: logText.split('\n').slice(-60).join('\n'),
     devices: devices(),
+    deviceActivity: deviceActivity(),
+    scenariosDone: Object.values(scenarioStats).reduce((n, v) => n + v.scenarios, 0),
     generatedAt: new Date().toISOString(),
   };
 }

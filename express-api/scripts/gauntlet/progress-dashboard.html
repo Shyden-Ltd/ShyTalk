@@ -153,6 +153,37 @@
       .cell.failed .dot {
         background: var(--fail);
       }
+      .cell.stalled {
+        border-color: var(--fail);
+        background: rgba(248, 81, 73, 0.06);
+      }
+      .cell.stalled .dot {
+        background: var(--fail);
+        animation: blink 1s steps(2, start) infinite;
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0.2;
+        }
+      }
+      .dev .what {
+        color: var(--dim);
+        font-size: 11px;
+        margin-left: 6px;
+      }
+      .dev.active {
+        border-color: rgba(63, 185, 80, 0.5);
+      }
+      .alert {
+        background: rgba(248, 81, 73, 0.12);
+        border: 1px solid rgba(248, 81, 73, 0.45);
+        color: var(--fail);
+        border-radius: 8px;
+        padding: 10px 13px;
+        margin-bottom: 14px;
+        font-size: 13px;
+        display: none;
+      }
       .cell.skipped .dot {
         background: var(--dim);
         box-shadow: inset 0 0 0 2px var(--bg);
@@ -235,6 +266,8 @@
       <div class="badge no-run" id="state">—</div>
     </header>
 
+    <div class="alert" id="alert"></div>
+
     <div class="panel">
       <div class="bar">
         <i class="p" id="barPass" style="width: 0%"></i
@@ -245,9 +278,11 @@
         <div class="stat"><b id="cFail">0</b><span>failed</span></div>
         <div class="stat"><b id="cSkip">0</b><span>skipped</span></div>
         <div class="stat"><b id="cRun">0</b><span>running</span></div>
+        <div class="stat"><b id="cStall">0</b><span>stalled</span></div>
         <div class="stat"><b id="cPend">0</b><span>to&nbsp;do</span></div>
         <div class="stat"><b id="cPct">0%</b><span>complete</span></div>
         <div class="stat"><b id="cElapsed">—</b><span>elapsed</span></div>
+        <div class="stat"><b id="cScen">0</b><span>scenarios&nbsp;run</span></div>
       </div>
     </div>
 
@@ -271,15 +306,36 @@
       const esc = (s) =>
         String(s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c]);
 
-      function renderDevices(d) {
+      function fmtIdle(ms) {
+        if (!ms && ms !== 0) return '?';
+        const sec = Math.round(ms / 1000);
+        if (sec < 90) return sec + 's';
+        const min = Math.round(sec / 60);
+        return min < 90 ? min + 'm' : Math.round(min / 60) + 'h';
+      }
+
+      // Presence is not activity. "Connected" looks identical whether the phone
+      // is driving a journey, sitting on the launcher, or thrashing one screen.
+      function renderDevices(d, act) {
         const parts = [];
+        const a = (act && act.android) || null;
         if (d.android && d.android.length) {
-          d.android.forEach((s) => parts.push(`<div class="dev">📱 Android ${esc(s)}</div>`));
+          const what = a
+            ? a.isShyTalk
+              ? '<span class="what">in app · ' + esc(a.screen) + '</span>'
+              : a.isLauncher
+                ? '<span class="what">idle on launcher</span>'
+                : '<span class="what">' + esc(a.package) + '</span>'
+            : '<span class="what">screen unknown</span>';
+          const cls = a && a.isShyTalk ? 'dev active' : 'dev';
+          d.android.forEach((sn) =>
+            parts.push(`<div class="${cls}">📱 Android ${esc(sn)}${what}</div>`),
+          );
         } else {
           parts.push('<div class="dev off">📱 no Android device</div>');
         }
         if (d.ios && d.ios.length) {
-          d.ios.forEach((s) => parts.push(`<div class="dev">🍎 ${esc(s)}</div>`));
+          d.ios.forEach((sn) => parts.push(`<div class="dev">🍎 ${esc(sn)}</div>`));
         } else {
           parts.push('<div class="dev off">🍎 no iOS device</div>');
         }
@@ -296,6 +352,31 @@
         $('cFail').textContent = c.failed;
         $('cSkip').textContent = c.skipped || 0;
         $('cRun').textContent = c.running;
+        $('cStall').textContent = c.stalled || 0;
+        $('cScen').textContent = s.scenariosDone || 0;
+
+        const stalledCells = (s.cells || []).filter((x) => x.state === 'stalled');
+        const alert = $('alert');
+        if (stalledCells.length) {
+          alert.style.display = 'block';
+          alert.innerHTML =
+            '<b>' +
+            stalledCells.length +
+            ' cell(s) stalled</b> — dispatched but producing nothing: ' +
+            stalledCells
+              .map(
+                (x) =>
+                  esc(x.browser) +
+                  ' (' +
+                  fmtIdle(x.idleMs) +
+                  ' idle, ' +
+                  (x.scenarios || 0) +
+                  ' scenarios)',
+              )
+              .join(', ');
+        } else {
+          alert.style.display = 'none';
+        }
         $('cPend').textContent = c.pending;
         $('cPct').textContent = (s.percent || 0) + '%';
         $('cElapsed').textContent = s.elapsed || '—';
@@ -307,18 +388,18 @@
         $('cells').innerHTML = (s.cells || [])
           .map((cell) => {
             const dur = cell.durationMs ? Math.round(cell.durationMs / 1000) + 's' : '';
-            const meta =
-              cell.state === 'pending'
-                ? 'queued'
-                : cell.outcome
-                  ? `${cell.outcome} ${dur}`
-                  : 'running…';
+            let meta;
+            if (cell.state === 'pending') meta = 'queued';
+            else if (cell.outcome) meta = `${cell.outcome} ${dur}`;
+            else if (cell.state === 'stalled')
+              meta = `STALLED ${fmtIdle(cell.idleMs)} · ${cell.scenarios || 0} scen`;
+            else meta = `${cell.scenarios || 0} scen · ${fmtIdle(cell.idleMs)} idle`;
             const tag = cell.unplanned ? '<span class="tag">unplanned</span>' : '';
             return `<div class="cell ${cell.state}"><i class="dot"></i><span class="name">${esc(cell.browser)}</span>${tag}<span class="meta">${esc(meta)}</span></div>`;
           })
           .join('');
 
-        renderDevices(s.devices || {});
+        renderDevices(s.devices || {}, s.deviceActivity);
         $('log').textContent = s.log || '(no output yet)';
       }
 
