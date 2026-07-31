@@ -39,7 +39,7 @@ const {
   buildScenarioMatrix,
   mergeCellActivity,
 } = require('../scenario-progress');
-const { applicableCells } = require('../scenario-surface');
+const { applicableCells, requiredPlatforms, GATING_PLATFORMS } = require('../scenario-surface');
 
 /**
  * What each matrix cell can drive. Desktop browsers are web-only; a
@@ -50,6 +50,32 @@ function capsFor(cell) {
   if (cell.endsWith('-android')) return ['web', 'android'];
   if (cell.endsWith('-ios')) return ['web', 'ios'];
   return ['web'];
+}
+
+/**
+ * WEB, APP, or CROSS-OVER?
+ *
+ * Operator 2026-08-01: "split up the scenarios into web scenarios and app
+ * scenarios. app scenarios only show the devices that they will run on. whereas
+ * the web scenarios will show all browsers on all devices including desktop."
+ * Then: "it needs to be very clear if a scenario is web scenario, app scenario
+ * or a scenario that crosses over between web and app."
+ *
+ * Three kinds, because collapsing cross-over into "app" hides the case that
+ * matters most: a journey that sends a gift on the phone and checks it on the
+ * web needs ONE cell holding both surfaces at once, and those are the first
+ * scenarios to break when device wiring slips.
+ *
+ * Derived from `requiredPlatforms` + `GATING_PLATFORMS` rather than restated, so
+ * the split cannot drift from the rule the runner actually gates on.
+ */
+function classifyScenario(steps) {
+  const required = requiredPlatforms(steps);
+  const deviceSurfaces = [...required].filter((p) => GATING_PLATFORMS.has(p)).sort();
+  // Browser-only, or no surface at all (pure API/state) — every cell has a
+  // browser, so either way it runs everywhere.
+  if (!deviceSurfaces.length) return { kind: 'web', platforms: [] };
+  return { kind: required.has('web') ? 'cross' : 'app', platforms: deviceSurfaces };
 }
 
 // The corpus does not change mid-run, so read it once.
@@ -301,7 +327,12 @@ function snapshot(runDir) {
         summary.na += 1;
       }
     }
-    return { ...row, results, summary, applicable };
+    // kind/platforms drive the web-vs-app split in the UI. An app row renders
+    // only the device columns it can ever run on; a web row spans every cell.
+    const { kind, platforms } = classifyScenario(
+      CORPUS[row.index] ? CORPUS[row.index].steps || [] : [],
+    );
+    return { ...row, results, summary, applicable, kind, platforms };
   });
   // A scenario counts as done when a cell has reported a real result for it.
   const scenarioResultsDone = scenarioMatrix.reduce(
@@ -356,6 +387,17 @@ function snapshot(runDir) {
       elapsedMs: startedAt ? Date.now() - startedAt : 0,
     }),
     corpusScenarios: CORPUS_SCENARIOS,
+    // Web-vs-app split, so the operator can see at a glance how much of the
+    // corpus needs a device at all. Counted from the same classification the
+    // rows carry, never separately.
+    scenarioKinds: scenarioMatrix.reduce(
+      (acc, r) => {
+        acc[r.kind] += 1;
+        for (const p of r.platforms) acc.byPlatform[p] = (acc.byPlatform[p] || 0) + 1;
+        return acc;
+      },
+      { web: 0, app: 0, cross: 0, byPlatform: {} },
+    ),
     scenarioRows: scenarioRows.slice(0, 300),
     // The full scenario x cell grid: EVERY corpus scenario, with a per-cell
     // result. Fed by the runner's JSONL stream, which is the only signal that

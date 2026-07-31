@@ -408,3 +408,72 @@ describe('scenarioProgress', () => {
     expect(p.etaMs).toBeNull();
   });
 });
+
+/**
+ * Web / app / cross-over must be unmistakable.
+ *
+ * Operator 2026-08-01: "split up the scenarios into web scenarios and app
+ * scenarios" and then "it needs to be very clear if a scenario is web scenario,
+ * app scenario or a scenario that crosses over between web and app."
+ *
+ * Measured on the real 226-scenario corpus at the time of writing: 39 web,
+ * 22 app, 165 cross-over. Cross-over is the biggest group by far, so folding it
+ * into "app" would have mislabelled 73% of the corpus.
+ */
+describe('scenario kind classification', () => {
+  const { requiredPlatforms, GATING_PLATFORMS } = require('../../scripts/scenario-surface');
+
+  // Mirrors classifyScenario in progress-server.js, which is a CLI module.
+  const classify = (texts) => {
+    const required = requiredPlatforms(texts.map((text) => ({ kind: 'When', text })));
+    const devices = [...required].filter((p) => GATING_PLATFORMS.has(p)).sort();
+    if (!devices.length) return { kind: 'web', platforms: [] };
+    return { kind: required.has('web') ? 'cross' : 'app', platforms: devices };
+  };
+
+  it('a browser-only scenario is WEB', () => {
+    expect(classify(['Alice on Web opens the gift wall'])).toEqual({ kind: 'web', platforms: [] });
+  });
+
+  it('a device-only scenario is APP, naming its device', () => {
+    expect(classify(['Adam on Android taps "signin_signUpLink"'])).toEqual({
+      kind: 'app',
+      platforms: ['android'],
+    });
+  });
+
+  it('a scenario touching BOTH surfaces is CROSS, not app', () => {
+    // The case that must not be collapsed: it needs one cell holding a browser
+    // AND a device at the same time.
+    expect(classify(['Adam on Android sends a gift', "Alice on Web sees Adam's gift"])).toEqual({
+      kind: 'cross',
+      platforms: ['android'],
+    });
+  });
+
+  it('a scenario spanning both DEVICES names both', () => {
+    expect(
+      classify(['Adam on Android sends a gift', 'Mia on iPhone sees it', 'Alice on Web sees it']),
+    ).toEqual({ kind: 'cross', platforms: ['android', 'ios'] });
+  });
+
+  it('a scenario with no platform-bound step at all is WEB — it runs everywhere', () => {
+    // Pure API/state. Every cell has a browser, so nothing gates it.
+    expect(classify(['the audit log has a row for the ban'])).toEqual({
+      kind: 'web',
+      platforms: [],
+    });
+  });
+
+  it('every kind is one of exactly three values', () => {
+    const kinds = new Set(
+      [
+        ['Alice on Web sees x'],
+        ['Adam on Android taps x'],
+        ['Adam on Android taps x', 'Alice on Web sees x'],
+        ['the audit log has a row'],
+      ].map((t) => classify(t).kind),
+    );
+    expect([...kinds].sort()).toEqual(['app', 'cross', 'web']);
+  });
+});

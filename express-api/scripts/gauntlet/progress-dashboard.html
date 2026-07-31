@@ -354,6 +354,37 @@
         color: var(--line);
         opacity: 0.55;
       }
+
+      /* Scenario kind badges — operator: "very clear if a scenario is web,
+         app, or crosses over". Word + glyph carry the meaning; the tint is
+         only a fast visual group, so the badges stay readable to anyone who
+         cannot separate the hues. */
+      .kinds {
+        display: flex;
+        gap: 8px;
+        margin: 6px 0 10px;
+        flex-wrap: wrap;
+      }
+      .kind {
+        display: inline-block;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        padding: 1px 6px;
+        border-radius: 9px;
+        border: 1px solid currentColor;
+        white-space: nowrap;
+        vertical-align: 1px;
+      }
+      .kind-web {
+        color: #4aa3ff;
+      }
+      .kind-app {
+        color: #f0a020;
+      }
+      .kind-cross {
+        color: #b78bff;
+      }
       .legend {
         color: var(--dim);
         font-size: 11px;
@@ -444,6 +475,7 @@
       </div>
       <details class="scen" id="sDetails" open>
         <summary id="sSummary">Scenario detail</summary>
+        <div id="sKinds" class="kinds"></div>
         <div class="legend">
           <label class="autoscroll"
             ><input type="checkbox" id="sAuto" checked /> auto-scroll to progress</label
@@ -537,9 +569,56 @@
 
       let headBuilt = '';
 
+      // Operator: "it needs to be very clear if a scenario is web scenario, app
+      // scenario or a scenario that crosses over between web and app."
+      // Colour AND word AND glyph — never colour alone, because a red/green
+      // grid already owns colour and a third meaning for it would be unreadable.
+      const KIND_BADGE = {
+        web: {
+          text: 'WEB',
+          glyph: '🖥',
+          title: 'Web scenario — runs on every browser, desktop and device',
+        },
+        app: { text: 'APP', glyph: '📱', title: 'App scenario — runs only on the device(s) shown' },
+        cross: {
+          text: 'WEB+APP',
+          glyph: '🔗',
+          title: 'Cross-over — needs a browser AND a device in the same journey',
+        },
+      };
+      function kindBadge(r) {
+        const k = KIND_BADGE[r.kind];
+        if (!k) return '';
+        const plats = (r.platforms || []).length ? ' ' + r.platforms.join('+') : '';
+        return (
+          '<span class="kind kind-' +
+          esc(r.kind) +
+          '" title="' +
+          esc(k.title + plats) +
+          '">' +
+          k.glyph +
+          ' ' +
+          esc(k.text + plats) +
+          '</span> '
+        );
+      }
+
       function renderGrid(s) {
         const cells = s.cellNames || [];
         const rows = s.matrix || [];
+        const k = s.scenarioKinds;
+        if (k) {
+          $('sKinds').innerHTML =
+            '<span class="kind kind-web">🖥 WEB ' +
+            k.web +
+            '</span>' +
+            '<span class="kind kind-app">📱 APP ' +
+            k.app +
+            '</span>' +
+            '<span class="kind kind-cross">🔗 WEB+APP ' +
+            k.cross +
+            '</span>';
+        }
 
         const headKey = cells.join('|');
         if (headKey !== headBuilt) {
@@ -584,6 +663,7 @@
               '</td><td class="name" title="' +
               esc(r.scenario) +
               '">' +
+              kindBadge(r) +
               esc(r.scenario) +
               '</td><td class="file">' +
               esc(r.file.replace(/\.feature$/, '')) +
