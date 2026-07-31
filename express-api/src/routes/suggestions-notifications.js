@@ -8,6 +8,11 @@
 
 const router = require('express').Router();
 const { db } = require('../utils/firebase');
+const {
+  NOTIFICATION_TTL_MS,
+  RETENTION_SCAN_CAP,
+  notificationTime,
+} = require('../utils/notification-retention');
 const log = require('../utils/log');
 
 function requireAuth(req, res) {
@@ -24,13 +29,26 @@ router.get('/notifications', async (req, res) => {
   try {
     if (requireAuth(req, res)) return;
 
+    // SHY-0258: no `orderBy('createdAt')`. Firestore's orderBy silently EXCLUDES
+    // documents that lack the ordered field, so an undated row was invisible
+    // here — present in the collection, absent from the inbox, and impossible
+    // to mark read. Sorted in memory instead, where a missing timestamp is
+    // handled explicitly (same reasoning as the audit-log fix in SHY-0260).
     const snap = await db
       .collection('notifications')
       .where('uid', '==', req.auth.uniqueId)
-      .orderBy('createdAt', 'desc')
+      .limit(RETENTION_SCAN_CAP)
       .get();
 
-    const notifications = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    // Rows past the retention TTL are not shown and not counted. Retention is
+    // enforced lazily on write, so a person who has received nothing recently
+    // can still be holding expired rows; without this filter the unread badge
+    // reports notifications the product considers gone.
+    const cutoff = Date.now() - NOTIFICATION_TTL_MS;
+    const notifications = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((n) => notificationTime(n) >= cutoff)
+      .sort((a, b) => notificationTime(b) - notificationTime(a));
     const unreadCount = notifications.filter((n) => !n.isRead).length;
 
     res.json({ notifications, unreadCount, total: notifications.length });

@@ -159,7 +159,13 @@ function makeNotifDoc(id, overrides = {}) {
       body: 'The community can now vote on your idea.',
       relatedId: 'sug-123',
       isRead: false,
-      createdAt: 1709913600000,
+      // Derived from now, never a frozen epoch. This was `1709913600000`
+      // (8 March 2024), which was recent when written and has since aged past
+      // the 90-day retention TTL — so every fixture notification silently
+      // became "expired" and the inbox tests would have started failing on a
+      // date nobody chose. A fixture that depends on the wall clock is a test
+      // with an expiry date.
+      createdAt: Date.now() - 1000,
       ...overrides,
     }),
   };
@@ -339,34 +345,57 @@ describe('GET /api/notifications — Inbox', () => {
 // Parked is honest: Jest skips these, so they can no longer report success.
 // Tracked in .project/stories/SHY-0246-implement-missing-notification-types.md.
 
-describe('Notification Deduplication', () => {
-  test.todo('same event fired twice: only one notification created');
-
-  test.todo('roadmap feature updated twice in 1 minute: one notification (debounced)');
-
-  test.todo(
-    'user subscribed to both "all updates" and specific feature: receives one notification',
-  );
-
-  test.todo(
-    'admin approves then immediately overturns: two separate notifications (different events)',
-  );
-});
+// SHY-0258 — DELIVERED. Deduplication now exists
+// (src/utils/notification-retention.js) and is applied by the only writer of
+// the in-app inbox (dispatchNotificationInline). These specs were `test.todo`
+// because the feature did not exist; they are now real tests, living where the
+// behaviour lives and running against the real Firestore emulator:
+//
+//   tests/utils/notification-retention.test.js
+//     - the same event fired twice produces one notification
+//     - the same event OUTSIDE the window is delivered again  (the debounce)
+//     - two DIFFERENT events in the same instant are both delivered
+//       (approve-then-overturn stays two notifications)
+//     - one person's notification never suppresses another's
+//   tests/utils/notification-channels-retention.test.js
+//     - the same behaviour asserted through the real dispatch path, because a
+//       correct policy module that nothing calls is precisely the SHY-0246
+//       defect this suite already suffered once.
+//
+// The "subscribed to both all-updates and a specific feature" case collapses
+// into the same-event rule: both subscriptions dispatch one event with one
+// dedupeKey, so the second is suppressed. Covered by "the same event fired
+// twice produces exactly one stored notification".
 
 // ═══════════════════════════════════════════════════════════════
 // 11.76 — Notification Inbox Management
 // ═══════════════════════════════════════════════════════════════
 
+// SHY-0258 — DELIVERED. The retention cap and TTL now exist
+// (src/utils/notification-retention.js), enforced lazily at write time. Real
+// tests in tests/utils/notification-retention.test.js:
+//     - an inbox at the cap is left alone
+//     - exceeding the cap removes the OLDEST, keeping the newest
+//     - the production cap is the documented 200
+//     - notifications older than the TTL are removed
+//     - a notification just INSIDE the TTL survives
+//     - the production TTL is 90 days
+//     - a row with NO timestamp is reaped rather than living forever
+//     - reaping notifications leaves subscription preferences intact
+// and, through the real dispatch path, in
+// tests/utils/notification-channels-retention.test.js:
+//     - an expired notification is reaped when the next one arrives
+//
+// NOTE: the original spec said "auto-cleaned by cron". It is deliberately NOT
+// a cron. This repo eliminated its scheduled jobs (see the cron-elimination
+// architecture in CLAUDE.md) because crons burn free-tier quota; the reap rides
+// along with the write that made it necessary, which is also the only moment
+// the work is needed.
 describe('Notification Inbox Management', () => {
-  test.todo('max 200 notifications stored per user');
-
-  test.todo('201st notification: oldest auto-deleted');
-
-  test.todo('notification TTL: older than 90 days auto-cleaned by cron');
-
-  test.todo('notification deletion does not affect subscription preferences');
-
   test('unread count: only counts notifications < 90 days old', async () => {
+    // This test previously ended on the comment "Unread count should only
+    // include recent notifications" with no assertion for it — it verified a
+    // 200 and nothing else, so the claim in its own name was unguarded.
     const recentDoc = makeNotifDoc('n1', { isRead: false, createdAt: Date.now() - 1000 });
     const oldDoc = makeNotifDoc('n2', {
       isRead: false,
@@ -375,7 +404,13 @@ describe('Notification Inbox Management', () => {
     mockCollectionGet.mockResolvedValueOnce({ empty: false, docs: [recentDoc, oldDoc], size: 2 });
     const app = createApp();
     const res = await request(app).get('/api/notifications').expect(200);
-    // Unread count should only include recent notifications
+
+    expect(res.body.unreadCount).toBe(1);
+    // And the stale row is not merely uncounted — it is absent from the inbox,
+    // so "1 unread" cannot be contradicted by two unread-looking rows on screen.
+    const ids = (res.body.notifications || []).map((n) => n.id);
+    expect(ids).toContain('n1');
+    expect(ids).not.toContain('n2');
   });
 });
 
@@ -383,6 +418,28 @@ describe('Notification Inbox Management', () => {
 // 11.80 — Admin Notification of New Suggestions
 // ═══════════════════════════════════════════════════════════════
 
+// SHY-0258 — these four remain `test.todo`, and the reason is a design
+// decision rather than unwritten code, so they are NOT being quietly deleted.
+//
+// BLOCKER: admin status exists ONLY as a Firebase Auth custom claim
+// (`req.auth.token.admin === true`; minted in routes/portal.js, read via the
+// cache in middleware/auth.js:429). There is no `admin` field on the users
+// documents and therefore no queryable set of admins. "Notify every admin when
+// a suggestion is submitted" would mean paginating `auth.listUsers()` across
+// the entire user base on every submission — unacceptable on a free-tier
+// budget, and slower the more the product succeeds.
+//
+// Two viable designs, and picking between them changes the data model, so it
+// belongs in the story rather than being improvised here:
+//   (a) denormalise an `admins` collection, written wherever admin claims are
+//       granted/revoked, plus a one-off backfill for existing admins; or
+//   (b) make it PULL rather than PUSH — surface a pending-suggestions count on
+//       the admin listing response and let the panel badge read it. Cheaper,
+//       needs no enumeration, and matches how the admin panel already works.
+//
+// (b) is the recommendation: it satisfies the two "admin panel" specs outright
+// and the notification specs become a thin layer on top if push is still
+// wanted. Tracked in .project/stories/SHY-0258-*.md.
 describe('Admin Notification of New Suggestions', () => {
   test.todo('new suggestion submitted: admin notification created');
 

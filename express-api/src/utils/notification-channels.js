@@ -17,6 +17,11 @@ const { db } = require('./firebase');
 const { sendEmail } = require('./email');
 const { sendFcmToTokens } = require('./fcm');
 const { sendSystemPm } = require('./system-pm');
+const {
+  dedupeKeyFor,
+  isDuplicateNotification,
+  enforceRetention,
+} = require('./notification-retention');
 const log = require('./log');
 
 /**
@@ -51,22 +56,44 @@ async function dispatchNotificationInline(notif) {
   // dispatched successfully and delivered nothing at all.
   if (channels?.inApp && uid) {
     try {
-      await db.collection('notifications').add({
-        // Three spellings of the recipient, matching the rows already written
-        // at routes/suggestions.js:1422 so the inbox and clients need no change.
-        // RAW uid, never String(uid) — the inbox query is type-sensitive
-        // (see routes/suggestions.js notifySubscribers for the full note).
-        uid,
-        userId: uid,
-        recipientUid: uid,
-        type: type || 'notification',
-        title: title || '',
-        body: body || '',
-        relatedId: relatedId || null,
-        isRead: false,
-        createdAt: Date.now(),
-      });
-      results.inApp = 'sent';
+      // SHY-0258: collapse a repeat of the SAME event for the same person
+      // inside the dedup window. Checked before the write so a duplicate costs
+      // one read rather than a permanent row.
+      const nowMs = Date.now();
+      const dedupeKey = dedupeKeyFor({ uid, type, relatedId });
+      if (await isDuplicateNotification(db, { uid, type, relatedId }, nowMs)) {
+        log.info('notification-channels', 'In-app notification deduplicated', {
+          correlationId,
+          uid,
+          dedupeKey,
+        });
+        results.inApp = 'deduplicated';
+      } else {
+        await db.collection('notifications').add({
+          // Three spellings of the recipient, matching the rows already written
+          // at routes/suggestions.js:1422 so the inbox and clients need no change.
+          // RAW uid, never String(uid) — the inbox query is type-sensitive
+          // (see routes/suggestions.js notifySubscribers for the full note).
+          uid,
+          userId: uid,
+          recipientUid: uid,
+          type: type || 'notification',
+          title: title || '',
+          body: body || '',
+          relatedId: relatedId || null,
+          // SHY-0258: persisted so the dedup check is an equality query on a
+          // stored field rather than a scan that recomputes identity per row.
+          dedupeKey,
+          isRead: false,
+          createdAt: nowMs,
+        });
+        results.inApp = 'sent';
+
+        // Lazy retention, attached to the write that made it necessary (the
+        // house pattern — no cron). Deliberately AFTER results.inApp is set:
+        // housekeeping must never downgrade a delivery that already succeeded.
+        await enforceRetention(db, uid, nowMs);
+      }
     } catch (err) {
       log.error('notification-channels', 'In-app notification write failed', {
         correlationId,
