@@ -1077,7 +1077,16 @@ describe('Observability of suggestion actions', () => {
     expect(auditWrites[0][1].timestamp).not.toBe(CLIENT_CLAIMED);
   });
 
-  // Ban-cascade logging cannot be tested until the cascade exists: nothing
-  // writes the identity graph automatically today. Specified as SHY-0257.
-  test.todo('ban cascade: logged with trigger event and all affected identifiers');
+  // SHY-0257 — DELIVERED. The cascade now exists (the identity graph is written
+  // automatically from real sign-ins), and its audit entry carries the trigger
+  // AND the evidence: `identity_cascade_suspension` records `triggeredBy`, the
+  // `level`, every `affectedAccounts` entry, and the `evidence` identifiers
+  // that justified it — so an operator can judge an automated suspension rather
+  // than take it on trust, and undo it.
+  //
+  // Asserted for real against the emulator in
+  // tests/utils/identity-graph-writer.test.js:
+  //     - "a cascade is audit-logged with everyone it affected"
+  //     - "an automated suspension records its evidence so it can be judged and
+  //        undone"
 });

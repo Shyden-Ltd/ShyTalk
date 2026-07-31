@@ -251,3 +251,42 @@ Story moved to In Progress. The 16 remaining `test.todo` markers in
 acceptance criteria; they stay `todo` until the behaviour above exists, rather
 than being deleted to make a count look better.
 
+**2026-07-31 — DELIVERED (server side).**
+
+`src/utils/identity-graph-writer.js` records the identifiers a sign-in presents
+and links accounts that genuinely share one, hooked into
+`POST /devices/lock-check`. The graph is now built from real traffic instead of
+only by hand, so the cascade finally has something to cascade over.
+
+The link-strength design above is implemented as specified. Two of the original
+specs were CORRECTED rather than implemented as written, because as written they
+described a false link:
+
+- *"fingerprint collision: two devices same fingerprint → both in same graph"* —
+  a specification FOR a false link. Fingerprints collide by construction, so they
+  are recorded and never link. Asserted by "a COLLIDING fingerprint does NOT link
+  two strangers".
+- *"suspended network used with new device: new device auto-suspended"* — an IP
+  can sit in front of thousands of unrelated people. A suspended network records
+  the fact and suspends nobody. Asserted by "a suspended NETWORK does NOT suspend
+  anybody".
+
+The private-IP spec was honoured and WIDENED: link-local, IPv6 loopback/ULA and
+**carrier-grade NAT (100.64/10)** are excluded too. CGNAT matters most — it puts
+an entire mobile network behind one address, which is the most efficient way to
+manufacture false links at scale.
+
+**Tests:** 46 real-emulator tests in `tests/utils/identity-graph-writer.test.js`,
+plus a wiring test in `tests/routes/devices-lock-check.test.js` — a correct
+module that nothing CALLS is the SHY-0246 defect, so the route is asserted to
+actually reach it.
+
+**Mutation-verified**, each mutant reintroducing a false-link path and each
+killed: letting weak identifiers link (5 tests fail), letting shared
+infrastructure link (3), storing carrier-NAT addresses (3), and unplugging the
+route hook (1).
+
+**Owed:** the web sign-in path still needs its fingerprint plumbed through
+(only the app's device path is wired today), ISP/country enrichment is accepted
+but not yet looked up, and the real-device gauntlet.
+

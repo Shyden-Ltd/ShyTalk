@@ -272,11 +272,25 @@ describe('Identity Graph Query Performance', () => {
 // ═══════════════════════════════════════════════════════════════
 
 describe('Identity Graph Edge Cases', () => {
-  test.todo('fingerprint collision: two devices same fingerprint → both in same graph');
-
-  test.todo('ISP lookup timeout: graph created with IP, ISP/country null');
-
-  test.todo('ISP lookup error: fallback to IP-only');
+  // SHY-0257 — DELIVERED. See tests/utils/identity-graph-writer.test.js.
+  //
+  // Two of the specs that stood here were corrected rather than implemented as
+  // written, because as written they specified a FALSE LINK:
+  //
+  //   - "fingerprint collision: two devices same fingerprint -> both in same
+  //     graph". Fingerprints collide by construction (same model, same browser,
+  //     same settings). Honouring this would merge strangers and then suspend
+  //     them. Fingerprints are recorded and never link; asserted by "a COLLIDING
+  //     fingerprint does NOT link two strangers".
+  //
+  //   - "private IP (10.x, 192.168.x, 127.x): not stored in graph" is honoured
+  //     and WIDENED: link-local, IPv6 loopback/ULA and carrier-grade NAT
+  //     (100.64/10) are excluded too. CGNAT matters most — it puts a whole
+  //     mobile network behind one address.
+  //
+  // Also covered: ISP lookup timeout and error (graph created, ISP/country null),
+  // graph merge on a shared new identifier, and merge inheriting the STRICTER
+  // suspension level so a merge can never launder a ban.
 
   test('IPv6 address: stored and matched correctly', async () => {
     const app = createApp();
@@ -295,8 +309,6 @@ describe('Identity Graph Edge Cases', () => {
     // Should be stored as 1.2.3.4
   });
 
-  test.todo('private IP (10.x, 192.168.x, 127.x): not stored in graph');
-
   test('graph with 0 identifiers: suspend returns 400', async () => {
     const emptyGraph = makeGraphDoc('graph-empty', { identifiers: [] });
     mockDocGet.mockImplementation((path) => {
@@ -311,10 +323,6 @@ describe('Identity Graph Edge Cases', () => {
       .send({ action: 'suspend', duration: '7d', level: 'full', reason: 'Test' })
       .expect(400);
   });
-
-  test.todo('graph merge: two graphs share new identifier → merged into one');
-
-  test.todo('graph merge: inherits stricter suspension level');
 
   test('graph split: not supported → endpoint doesnt exist (returns 404)', async () => {
     const app = createApp();

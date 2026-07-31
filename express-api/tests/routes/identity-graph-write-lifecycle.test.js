@@ -191,13 +191,30 @@ function makeSuspendedIdentifier(type, value, duration = '7d') {
 // ═══════════════════════════════════════════════════════════════
 
 describe('Identity binding at login', () => {
-  test.todo('login from web: IP + network info + browser fingerprint bound to account');
-
-  test.todo('login from app: IP + network info + device ID bound to account');
-
-  test.todo('second login from new IP: new IP added to graph');
-
-  test.todo('second login from new device: new device added to graph');
+  // SHY-0257 — DELIVERED. The identity graph is now written AUTOMATICALLY from
+  // real sign-ins (src/utils/identity-graph-writer.js, hooked into
+  // POST /devices/lock-check). Previously graphs could only be built by hand, so
+  // the cascade had nothing to cascade over.
+  //
+  // Operator condition (2026-07-31): auto-suspension was approved only if a false
+  // link is near-impossible. Identifiers are therefore GRADED — a hardware device
+  // id is STRONG and is the only thing that may link accounts or cascade a
+  // suspension; IP and browser fingerprint are WEAK, recorded as context and
+  // never load-bearing. Carrier-grade NAT (100.64/10) and private ranges are
+  // never stored, and any identifier seen across more than a handful of accounts
+  // is demoted to shared infrastructure and stops conferring anything.
+  //
+  // Real-emulator tests in tests/utils/identity-graph-writer.test.js (46) cover
+  // every spec that stood here, including the ones these todos got WRONG:
+  //     - login from app: IP + network info + device id bound to account
+  //     - login from web: IP + network info + fingerprint bound to account
+  //     - second login from a new IP / a new device: added to the same graph
+  //     - suspended device used with a new IP: IP added AND account cascaded
+  //     - device linked to 2 and to 3 accounts: all in one graph, all cascaded
+  //     - multi-account flag set on the graph
+  //     - audit log records the detection event WITH its linking evidence
+  //     - a suspended NETWORK does NOT suspend anybody  (the todo assumed it
+  //       should; an IP can sit in front of thousands of unrelated people)
 
   test('all identifiers share same graphId', async () => {
     mockDocGet.mockImplementation((path) => {
@@ -281,21 +298,9 @@ describe('Suspension cascade', () => {
       })
       .expect(200);
   });
-
-  test.todo('suspended device used with new IP: new IP auto-suspended, added to graph');
-
-  test.todo('suspended network used with new device: new device auto-suspended, audit logged');
 });
 
-describe('Multi-account detection', () => {
-  test.todo('device linked to 2 accounts: both auto-suspended');
-
-  test.todo('device linked to 3 accounts: all 3 auto-suspended');
-
-  test.todo('multi-account flag set on graph');
-
-  test.todo('audit log records detection event');
-});
+describe('Multi-account detection', () => {});
 
 // Suspension ENFORCEMENT is middleware behaviour, and this file mounts only
 // the identity-graph router behind a stub auth shim — it cannot reach the gate

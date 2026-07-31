@@ -2,6 +2,7 @@ const express = require('express');
 const { db } = require('../utils/firebase');
 const { now } = require('../utils/helpers');
 const { isValidDeviceId } = require('../utils/deviceId');
+const { recordSignIn } = require('../utils/identity-graph-writer');
 const {
   countBoundDevices,
   clearBanCache,
@@ -116,6 +117,17 @@ router.post('/devices/lock-check', async (req, res) => {
       // very next request rather than after the cache TTL (SHY-0149).
       clearBanCache(caller);
     }
+
+    // SHY-0257: record the identifiers this sign-in presented, so the identity
+    // graph is built from real traffic rather than only by hand. Deliberately
+    // NOT awaited and never able to reject — anti-abuse bookkeeping must not be
+    // able to fail or delay a sign-in. `req.ip` is the established convention
+    // here (Express resolves it via `trust proxy`).
+    recordSignIn({
+      uniqueId: caller,
+      ip: req.ip,
+      deviceId,
+    }).catch((err) => log.error('devices', 'identity-graph record failed', { error: err.message }));
 
     log.info('devices', 'device lock-check', {
       deviceId,

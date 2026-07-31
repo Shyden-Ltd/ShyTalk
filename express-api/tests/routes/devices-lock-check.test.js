@@ -121,6 +121,43 @@ describe('POST /api/devices/lock-check', () => {
     expect(binding.boundAt).toBeDefined();
   });
 
+  test('a sign-in is recorded in the identity graph (SHY-0257 wiring)', async () => {
+    // The wiring assertion. `identity-graph-writer` is exercised thoroughly in
+    // its own suite, but a correct module that nothing CALLS is precisely the
+    // SHY-0246 defect — a channel documented, believed to work, and never
+    // invoked. This asserts the route actually reaches it, against the real
+    // emulator, so the feature cannot be silently unplugged by a refactor.
+    const deviceId = 'lck-dev-graph-1';
+    const caller = await mintRealUser({ uniqueId: '7007' });
+
+    await request(createApp())
+      .post('/api/devices/lock-check')
+      .set(caller.headers)
+      .send({ deviceId })
+      .expect(200);
+
+    // recordSignIn is deliberately not awaited by the route (bookkeeping must
+    // not delay a sign-in), so poll for the write rather than assuming it has
+    // landed — a fixed wait would be a sleep, and a bare read would be a race.
+    let graph = null;
+    for (let attempt = 0; attempt < 50 && !graph; attempt++) {
+      const snap = await db.collection('identityGraphs').get();
+      graph = snap.docs
+        .map((d) => d.data())
+        .find((g) => (g.linkedAccountUids || []).map(String).includes('7007'));
+      if (!graph) await new Promise((r) => setImmediate(r));
+    }
+
+    expect(graph).toBeDefined();
+    expect(graph.identifiers.some((i) => i.type === 'device' && i.value === deviceId)).toBe(true);
+
+    await Promise.all(
+      (await db.collection('identityGraphs').get()).docs
+        .filter((d) => (d.data().linkedAccountUids || []).map(String).includes('7007'))
+        .map((d) => d.ref.delete()),
+    );
+  });
+
   test('device already bound to the SAME caller → allowed, boundAt unchanged (no churn)', async () => {
     const deviceId = 'lck-dev-same-1';
     await seedBinding(deviceId, { uniqueId: '4004', boundAt: 42 });
