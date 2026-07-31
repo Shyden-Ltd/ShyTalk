@@ -77,6 +77,48 @@ async function isUserPresent(roomId, userId) {
   }
 }
 
+/**
+ * Resolve a room member's Firebase Auth uid from their Firestore uniqueId.
+ *
+ * SHY-0261: presence nodes are keyed by the Firebase Auth uid, because the
+ * RTDB rule on `rooms/{roomId}/presence/{userId}` is `auth.uid == $userId` —
+ * a client cannot write any other key. Room documents speak uniqueId
+ * (`ownerId`, `participantIds`, seat `userId`s), so every presence question
+ * asked about a room member has to cross the namespace boundary first.
+ *
+ * The owner's uid is denormalised onto the room at create-time, so the common
+ * case costs no extra read. Returns null when the identity cannot be
+ * established — callers must treat that as "unknown", never as "absent".
+ */
+async function firebaseUidForRoomMember(room, uniqueId) {
+  if (
+    String(uniqueId) === String(room.ownerId) &&
+    typeof room.ownerFirebaseUid === 'string' &&
+    room.ownerFirebaseUid.length > 0
+  ) {
+    return room.ownerFirebaseUid;
+  }
+  const snap = await db.doc(`users/${uniqueId}`).get();
+  if (!snap.exists) return null;
+  const fuid = snap.data() && snap.data().firebaseUid;
+  return typeof fuid === 'string' && fuid.length > 0 ? fuid : null;
+}
+
+/**
+ * Is this room member (named by uniqueId) present in RTDB right now?
+ *
+ * Fail-safe to "present" when the identity cannot be resolved, matching
+ * `isUserPresent`'s fail-safe on read errors. Both gates guarded by this
+ * answer — forcing OWNER_AWAY, and evicting a "disconnected" user — are
+ * destructive and authorise a caller who is NOT the subject, so an unknown
+ * answer must never be the one that lets them through.
+ */
+async function isRoomMemberPresent(room, roomId, uniqueId) {
+  const firebaseUid = await firebaseUidForRoomMember(room, uniqueId);
+  if (firebaseUid === null) return true;
+  return isUserPresent(roomId, firebaseUid);
+}
+
 /** Parse + bounds-check a seat index from the path; null if invalid. */
 function parseSeatIndex(raw) {
   const idx = Number(raw);
@@ -426,7 +468,9 @@ router.post('/rooms/:roomId/owner-away', async (req, res) => {
     // owner-returned. This mirrors the client presence monitor and is strictly
     // safer than the prior client-only write. (Fully closing it needs a
     // Firestore-visible presence token — tracked for the rules-lockdown phase.)
-    const ownerPresent = callerIsOwner ? false : await isUserPresent(roomId, preRoom.ownerId);
+    const ownerPresent = callerIsOwner
+      ? false
+      : await isRoomMemberPresent(preRoom, roomId, preRoom.ownerId);
 
     const result = await db.runTransaction(async (t) => {
       const snap = await t.get(roomRef);
@@ -615,7 +659,7 @@ router.post('/rooms/:roomId/disconnect-user', async (req, res) => {
     // from a dead room is a state-extending write (clears the target's
     // `currentRoomId` on a room nobody can rejoin).
     if (preRoom.state === 'CLOSED') return res.status(409).json({ error: 'Room is closed' });
-    const targetPresent = await isUserPresent(roomId, targetId);
+    const targetPresent = await isRoomMemberPresent(preRoom, roomId, targetId);
 
     const result = await db.runTransaction(async (t) => {
       const snap = await t.get(roomRef);

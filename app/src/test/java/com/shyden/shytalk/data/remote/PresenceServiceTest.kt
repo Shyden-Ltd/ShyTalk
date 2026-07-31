@@ -4,8 +4,10 @@ import com.google.firebase.database.DataSnapshot
 import io.mockk.every
 import io.mockk.mockk
 import okhttp3.OkHttpClient
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -113,6 +115,91 @@ class PresenceServiceTest {
         every { snapshot.exists() } returns false
         every { snapshot.getValue(Boolean::class.java) } returns true
         assertFalse(snapshotIndicatesPresent(snapshot))
+    }
+
+    // endregion
+
+    // region SHY-0261 — presence identity namespace
+
+    @Test
+    fun `presenceUniqueId reads the uniqueId from the node value, not the key`() {
+        // The node is keyed by Firebase Auth uid (the only key the RTDB rule
+        // permits) and carries the writer's uniqueId as its value. Room
+        // documents list participants by uniqueId, so the VALUE is what lets a
+        // presence set be compared against room membership at all.
+        val child = mockk<DataSnapshot>(relaxed = true)
+        every { child.exists() } returns true
+        every { child.getValue(String::class.java) } returns "10000005"
+        assertEquals("10000005", presenceUniqueId(child))
+    }
+
+    @Test
+    fun `presenceUniqueId returns null for a legacy boolean node`() {
+        // Pre-SHY-0261 nodes were written as `true` with no uniqueId, so they
+        // identify nobody. Reporting them as present would be a guess; the
+        // safe direction is to under-report (costs a reconnect) rather than
+        // over-report (keeps a departed user seated indefinitely).
+        val child = mockk<DataSnapshot>(relaxed = true)
+        every { child.exists() } returns true
+        every { child.getValue(String::class.java) } returns null
+        assertNull(presenceUniqueId(child))
+    }
+
+    @Test
+    fun `presenceUniqueId returns null for a blank value`() {
+        val child = mockk<DataSnapshot>(relaxed = true)
+        every { child.exists() } returns true
+        every { child.getValue(String::class.java) } returns "   "
+        assertNull(presenceUniqueId(child))
+    }
+
+    @Test
+    fun `presenceUniqueId returns null when the node does not exist`() {
+        val child = mockk<DataSnapshot>(relaxed = true)
+        every { child.exists() } returns false
+        every { child.getValue(String::class.java) } returns "10000005"
+        assertNull(presenceUniqueId(child))
+    }
+
+    @Test
+    fun `roomPresenceContains matches a seated user by uniqueId across differing uid keys`() {
+        // The regression this guards: matching on the KEY made every lookup
+        // miss, because callers ask about uniqueIds while the keys are uids.
+        val root = mockk<DataSnapshot>(relaxed = true)
+        every { root.children } returns
+            listOf(
+                presenceChild("someOtherFirebaseUid", "10000006"),
+                presenceChild("aliceFirebaseUid", "10000005"),
+            )
+        assertTrue(roomPresenceContains(root, "10000005"))
+    }
+
+    @Test
+    fun `roomPresenceContains does not match a uniqueId that is only present as a KEY`() {
+        // A node keyed by uniqueId cannot exist — the rules reject it — so if
+        // one ever appears it is corrupt and must not be honoured. Matching it
+        // would resurrect the original bug from the other direction.
+        val root = mockk<DataSnapshot>(relaxed = true)
+        every { root.children } returns listOf(presenceChild("10000005", null))
+        assertFalse(roomPresenceContains(root, "10000005"))
+    }
+
+    @Test
+    fun `roomPresenceContains reports absent for an empty presence node`() {
+        val root = mockk<DataSnapshot>(relaxed = true)
+        every { root.children } returns emptyList()
+        assertFalse(roomPresenceContains(root, "10000005"))
+    }
+
+    private fun presenceChild(
+        key: String,
+        uniqueId: String?,
+    ): DataSnapshot {
+        val child = mockk<DataSnapshot>(relaxed = true)
+        every { child.exists() } returns true
+        every { child.key } returns key
+        every { child.getValue(String::class.java) } returns uniqueId
+        return child
     }
 
     // endregion

@@ -4,6 +4,8 @@ import com.shyden.shytalk.core.util.currentTimeMillis
 import com.shyden.shytalk.core.util.logD
 import com.shyden.shytalk.core.util.logW
 import com.shyden.shytalk.data.repository.TypingRepository
+import dev.gitlive.firebase.Firebase
+import dev.gitlive.firebase.auth.auth
 import dev.gitlive.firebase.database.FirebaseDatabase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -97,6 +99,11 @@ class IosPresenceServiceImpl(
     @kotlin.concurrent.Volatile
     private var currentUserId: String? = null
 
+    // RTDB key our presence node lives under (the Firebase Auth uid). Retained
+    // so removePresence() deletes the node it actually wrote — re-deriving it
+    // at removal time would fail once the session has ended.
+    private var currentPresenceKey: String? = null
+
     // Cron-elim A2 — owner-left signal state. Separate from currentRoomId
     // / currentUserId because non-owners also call setPresence but only
     // owners arm the signal; cancelOwnerLeftSignal guards internally on
@@ -128,12 +135,24 @@ class IosPresenceServiceImpl(
         // state and skip — matches the Android safety pattern.
         connectedJob?.cancel()
 
+        // SHY-0261 — the presence node is keyed by the Firebase Auth uid,
+        // because the RTDB rule is `auth.uid == $userId`. Keying by uniqueId
+        // (as this did) made every write fail permission_denied, so no iOS
+        // client has ever registered presence. The uniqueId travels as the
+        // VALUE so readers can correlate presence with room membership.
+        val firebaseUid = Firebase.auth.currentUser?.uid
+        if (firebaseUid == null) {
+            logW(TAG, "setPresence skipped: no Firebase session (room=$roomId)")
+            return
+        }
+
         currentRoomId = roomId
         currentUserId = userId
+        currentPresenceKey = firebaseUid
         scope.launch {
             try {
-                val ref = database.reference("rooms/$roomId/presence/$userId")
-                ref.setValue(currentTimeMillis())
+                val ref = database.reference("rooms/$roomId/presence/$firebaseUid")
+                ref.setValue(userId)
                 ref.onDisconnect().removeValue()
             } catch (e: CancellationException) {
                 throw e
@@ -172,8 +191,8 @@ class IosPresenceServiceImpl(
                         }
                         try {
                             val presenceRef =
-                                database.reference("rooms/$roomId/presence/$userId")
-                            presenceRef.setValue(currentTimeMillis())
+                                database.reference("rooms/$roomId/presence/$firebaseUid")
+                            presenceRef.setValue(userId)
                             presenceRef.onDisconnect().removeValue()
                             val ownerFuid = currentOwnerFirebaseUid
                             if (currentOwnerRoomId == roomId && ownerFuid != null) {
@@ -211,10 +230,10 @@ class IosPresenceServiceImpl(
         connectedJob = null
 
         val roomId = currentRoomId ?: return
-        val userId = currentUserId ?: return
+        val presenceKey = currentPresenceKey ?: return
         scope.launch {
             try {
-                database.reference("rooms/$roomId/presence/$userId").removeValue()
+                database.reference("rooms/$roomId/presence/$presenceKey").removeValue()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -223,6 +242,7 @@ class IosPresenceServiceImpl(
         }
         currentRoomId = null
         currentUserId = null
+        currentPresenceKey = null
     }
 
     override fun observeRoomPresence(roomId: String): Flow<Set<String>> =
@@ -231,9 +251,12 @@ class IosPresenceServiceImpl(
                 .reference("rooms/$roomId/presence")
                 .valueEvents
                 .map { snapshot ->
+                    // Values, not keys (SHY-0261): children are keyed by
+                    // Firebase uid, while every consumer compares against room
+                    // membership, which is expressed in uniqueIds.
                     snapshot.children
                         .mapNotNull { child ->
-                            child.key
+                            child.value<String?>()?.takeIf { it.isNotBlank() }
                         }.toSet()
                 }
         } catch (e: CancellationException) {
@@ -248,37 +271,22 @@ class IosPresenceServiceImpl(
         userId: String,
     ): Boolean =
         try {
-            // Cron-elim A2 — one-shot read via valueEvents.first(). The
-            // pre-A2 stub returned false unconditionally, which broke
-            // client-side TOCTOU re-check semantics for iOS users —
-            // ActiveRoomManager.kt:493 uses isUserPresent as a grace-
-            // period re-check before marking users disconnected, and
-            // the pre-A2 stub made that re-check a no-op (always
-            // reported absent). Uses snapshot.exists — the
-            // serialization-free property that returns true for any
-            // non-null value, correct for the iOS presence shape (this
-            // file writes a Long timestamp via .setValue(Long) at
-            // setPresence).
+            // Cron-elim A2 — one-shot read via valueEvents.first().
+            // ActiveRoomManager uses this as the grace-period re-check before
+            // marking a user disconnected, so a wrong answer here evicts a
+            // connected user.
             //
-            // Cross-platform presence-node data shape is inconsistent:
-            //   - Android (RtdbPresenceService:73): writes Boolean `true`
-            //   - iOS (IosPresenceServiceImpl:120):  writes Long timestamp
-            // Android's isUserPresent at RtdbPresenceService:217 uses
-            //   snapshot.exists() && snapshot.getValue(Boolean::class.java) == true
-            // which works for Android-written nodes (Boolean true coerces
-            // back to true) but FAILS for iOS-written nodes: getValue(
-            // Boolean::class.java) returns null on a Long, so the full
-            // expression evaluates to false even when the node exists.
-            // Net effect: an Android client checking the presence of an
-            // iOS user always sees them as absent, making the grace-
-            // period TOCTOU re-check in ActiveRoomManager a no-op for
-            // cross-platform rooms. Task #10 fixes this by simplifying
-            // Android to snapshot.exists() (matches the iOS impl shape
-            // here and handles either data type). Harmonising the
-            // write-side data shape across platforms is a deeper
-            // anti-pattern fix tracked separately.
-            val snapshot = database.reference("rooms/$roomId/presence/$userId").valueEvents.first()
-            snapshot.exists
+            // SHY-0261 harmonises the write shape that used to differ per
+            // platform (Android wrote Boolean `true`, iOS wrote a Long
+            // timestamp, and an Android client reading an iOS node therefore
+            // always saw "absent"). Both platforms now write the same thing:
+            // node keyed by Firebase Auth uid, VALUE the writer's uniqueId.
+            // [userId] is a uniqueId, so the answer lives in the values — a
+            // direct child read by uniqueId reads a path that cannot exist.
+            val snapshot = database.reference("rooms/$roomId/presence").valueEvents.first()
+            snapshot.children.any { child ->
+                child.value<String?>()?.takeIf { it.isNotBlank() } == userId
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

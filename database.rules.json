@@ -6,7 +6,7 @@
           ".read": "auth != null",
           "$userId": {
             ".write": "auth != null && auth.uid == $userId",
-            ".validate": "newData.isBoolean()"
+            ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 64"
           }
         },
         "events": {

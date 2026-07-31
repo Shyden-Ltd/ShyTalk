@@ -142,7 +142,11 @@ describe('handleOwnerLeftSignal', () => {
       });
 
       expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
-      expect(presenceChecker).toHaveBeenCalledWith('room-1', 'owner-1');
+      // SHY-0261: presence is keyed by the owner's Firebase Auth uid, not their
+      // Firestore uniqueId. This assertion read 'owner-1' (the uniqueId) and so
+      // pinned the defect that made every owner look absent.
+      expect(presenceChecker).toHaveBeenCalledWith('room-1', 'owner-fuid-1');
+      expect(presenceChecker).not.toHaveBeenCalledWith('room-1', 'owner-1');
       expect(txMock.update).not.toHaveBeenCalled();
     });
 
@@ -329,8 +333,19 @@ describe('handleOwnerLeftSignal', () => {
       // A malicious or buggy caller could pass a forged ownerId. The
       // orchestrator must ignore that and use the authoritative Firestore
       // value. We assert this by giving presenceChecker the chance to
-      // observe what ownerId was passed and checking it matches the doc.
-      const { db } = makeMockDb({ initialRoom: { ...baseActiveRoom, ownerId: 'real-owner' } });
+      // observe which identity was used and checking it came from the doc.
+      //
+      // SHY-0261: the identity that reaches presenceChecker is the owner's
+      // Firebase Auth uid (presence is keyed by uid), so the room carries a
+      // distinctive one here to prove the value was read from the document
+      // rather than derived from anything the caller supplied.
+      const { db } = makeMockDb({
+        initialRoom: {
+          ...baseActiveRoom,
+          ownerId: 'real-owner',
+          ownerFirebaseUid: 'real-owner-fuid',
+        },
+      });
       presenceChecker.mockResolvedValue(true); // pretend present so we can read invocation args
 
       await handleOwnerLeftSignal({
@@ -341,7 +356,8 @@ describe('handleOwnerLeftSignal', () => {
         ownerIdFromSignal: 'attacker-id', // ignored
       });
 
-      expect(presenceChecker).toHaveBeenCalledWith('room-1', 'real-owner');
+      expect(presenceChecker).toHaveBeenCalledWith('room-1', 'real-owner-fuid');
+      expect(presenceChecker).not.toHaveBeenCalledWith('room-1', 'attacker-id');
     });
   });
 
@@ -467,8 +483,48 @@ describe('handleOwnerLeftSignal', () => {
           nowMs,
         });
         expect(result.reason).not.toBe('owner-id-missing-or-invalid');
-        expect(presenceChecker).toHaveBeenCalledWith('room-1', ownerId);
+        // A well-formed ownerId proceeds to the presence check. The identity
+        // the check receives is the room's Firebase uid (SHY-0261), not the
+        // uniqueId being varied here.
+        expect(presenceChecker).toHaveBeenCalledWith('room-1', baseActiveRoom.ownerFirebaseUid);
       }
+    });
+
+    // SHY-0261 moved the RTDB path segment from `ownerId` to the resolved
+    // Firebase uid, so the C2 path-safety guard has to follow it there.
+    // Without this, a corrupt `ownerFirebaseUid` would be interpolated into
+    // `rooms/{roomId}/presence/{uid}` unchecked.
+    test('returns NOOP when the resolved ownerFirebaseUid is not path-safe', async () => {
+      const illegalUids = ['../../etc', 'a.b', 'a#b', 'a$b', 'a[b]', 'a b', ''];
+      for (const ownerFirebaseUid of illegalUids) {
+        presenceChecker.mockClear();
+        const { db } = makeMockDb({
+          initialRoom: { ...baseActiveRoom, ownerFirebaseUid },
+        });
+        const result = await handleOwnerLeftSignal({
+          db,
+          presenceChecker,
+          roomId: 'room-1',
+          nowMs,
+        });
+        expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+        expect(presenceChecker).not.toHaveBeenCalled();
+      }
+    });
+
+    test('an over-long ownerFirebaseUid is refused rather than used as a path', async () => {
+      const { db } = makeMockDb({
+        initialRoom: { ...baseActiveRoom, ownerFirebaseUid: 'a'.repeat(257) },
+      });
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        nowMs,
+      });
+      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+      expect(result.reason).toBe('owner-firebase-uid-invalid');
+      expect(presenceChecker).not.toHaveBeenCalled();
     });
 
     // R2 finding I1: boolean primitives silently passed the original guard
@@ -562,7 +618,10 @@ describe('handleOwnerLeftSignal', () => {
         nowMs,
       });
       expect(result.reason).not.toBe('owner-id-missing-or-invalid');
-      expect(presenceChecker).toHaveBeenCalledWith('room-1', 42);
+      // The identity reaching presenceChecker is the room's Firebase uid
+      // (SHY-0261); the numeric ownerId under test only has to survive the
+      // path-safety guard without bailing.
+      expect(presenceChecker).toHaveBeenCalledWith('room-1', baseActiveRoom.ownerFirebaseUid);
     });
 
     test('accepts numeric 0 (path-safe, single-char id)', async () => {
@@ -575,7 +634,10 @@ describe('handleOwnerLeftSignal', () => {
         nowMs,
       });
       expect(result.reason).not.toBe('owner-id-missing-or-invalid');
-      expect(presenceChecker).toHaveBeenCalledWith('room-1', 0);
+      // The identity reaching presenceChecker is the room's Firebase uid
+      // (SHY-0261); the numeric ownerId under test only has to survive the
+      // path-safety guard without bailing.
+      expect(presenceChecker).toHaveBeenCalledWith('room-1', baseActiveRoom.ownerFirebaseUid);
     });
 
     test('accepts ownerId at exactly the 256-char boundary (inclusive)', async () => {
@@ -1025,9 +1087,39 @@ describe('handleOwnerLeftSignal', () => {
 
       expect(result.action).toBe(OWNER_LEFT_ACTION.CLOSE_IMMEDIATE);
       expect(txMock.update).toHaveBeenCalledTimes(1);
-      // Fast bail before fallback: undefined writerUid means we never look
-      // up the user doc either.
-      expect(userGetMock).not.toHaveBeenCalled();
+      // SHY-0261: the owner's Firebase uid is no longer needed only to attest
+      // a writer — it IS the presence key, so a legacy room without the
+      // denormalised field must fall back to the users doc even when there is
+      // no writer to attest. This assertion previously read
+      // `not.toHaveBeenCalled()`, which was correct when attestation was the
+      // only consumer and became a guarantee that the presence lookup would be
+      // performed against an identity we had declined to resolve.
+      expect(userGetMock).toHaveBeenCalled();
+      expect(presenceChecker).toHaveBeenCalledWith('room-1', 'whatever');
+    });
+
+    test('a legacy room whose owner cannot be resolved is left ALONE, not closed', async () => {
+      // The fail-safe direction. Before SHY-0261 an unresolvable owner still
+      // reached the presence check (under the wrong namespace), so the room
+      // closed. Now an identity we cannot establish stops the decision: we
+      // cannot prove the owner left, so we must not destroy their room.
+      const { db, txMock } = makeMockDb({
+        initialRoom: legacyRoom,
+        ownerUserDoc: null,
+      });
+      presenceChecker.mockResolvedValue(false);
+
+      const result = await handleOwnerLeftSignal({
+        db,
+        presenceChecker,
+        roomId: 'room-1',
+        nowMs,
+      });
+
+      expect(result.action).toBe(OWNER_LEFT_ACTION.NOOP);
+      expect(result.reason).toBe('owner-identity-unresolved');
+      expect(txMock.update).not.toHaveBeenCalled();
+      expect(presenceChecker).not.toHaveBeenCalled();
     });
   });
 });

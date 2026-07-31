@@ -20,8 +20,18 @@ import okhttp3.RequestBody.Companion.toRequestBody
  * Presence service backed by Firebase Realtime Database.
  *
  * RTDB schema:
- *   rooms/{roomId}/presence/{userId} = true   (client-managed, onDisconnect removes)
+ *   rooms/{roomId}/presence/{firebaseUid} = "{uniqueId}"
+ *                                     (client-managed, onDisconnect removes)
  *   rooms/{roomId}/events/lastEvent = { type, ts, userId? }  (server-written)
+ *
+ * SHY-0261 — the presence node is keyed by the **Firebase Auth uid**, not the
+ * Firestore uniqueId. The RTDB rule is `auth.uid == $userId`, so the uid is the
+ * only key a client can write; keying by uniqueId made every presence write
+ * fail `permission_denied` and left the whole presence subsystem inert. Because
+ * the room documents speak uniqueId (`participantIds`, seat `userId`s), the
+ * uniqueId travels as the node's VALUE so callers can still correlate presence
+ * with room membership without a second lookup. Read paths therefore match on
+ * the value; only the write path cares about the key.
  *
  * Replaces WebSocketPresenceService — uses Firebase RTDB for real-time presence.
  */
@@ -38,6 +48,11 @@ class RtdbPresenceService(
 
     private var currentRoomId: String? = null
     private var currentUserId: String? = null
+
+    // The RTDB key our presence node lives under (the Firebase Auth uid).
+    // Retained so removePresence() can delete the node it actually wrote —
+    // deriving it again at removal time would break if the session ended.
+    private var currentPresenceKey: String? = null
 
     // Cron-elim A1 — owner-left signal state. Separate from currentRoomId/
     // currentUserId because non-owners also call setPresence but only owners
@@ -65,12 +80,27 @@ class RtdbPresenceService(
             removePresence()
         }
 
+        // The uid is the only key the RTDB rule will accept (SHY-0261). Without
+        // a signed-in Firebase session there is no writable key at all, so bail
+        // loudly rather than writing a node the rules will reject silently.
+        val firebaseUid =
+            com.google.firebase.auth.FirebaseAuth
+                .getInstance()
+                .currentUser
+                ?.uid
+        if (firebaseUid == null) {
+            Log.w(TAG, "setPresence skipped: no Firebase session (room=$roomId user=$userId)")
+            return
+        }
+
         currentRoomId = roomId
         currentUserId = userId
+        currentPresenceKey = firebaseUid
 
-        // Write presence + register onDisconnect cleanup
-        val presenceRef = db.getReference("rooms/$roomId/presence/$userId")
-        presenceRef.setValue(true)
+        // Write presence + register onDisconnect cleanup. The VALUE is the
+        // uniqueId so readers can map presence back onto room membership.
+        val presenceRef = db.getReference("rooms/$roomId/presence/$firebaseUid")
+        presenceRef.setValue(userId)
         presenceRef.onDisconnect().removeValue()
 
         // Re-establish presence on RTDB reconnect (onDisconnect may have fired during a blip).
@@ -84,7 +114,7 @@ class RtdbPresenceService(
                 override fun onDataChange(snapshot: DataSnapshot) {
                     val connected = snapshot.getValue(Boolean::class.java) ?: false
                     if (!connected || currentRoomId != roomId || currentUserId != userId) return
-                    presenceRef.setValue(true)
+                    presenceRef.setValue(userId)
                     presenceRef.onDisconnect().removeValue()
                     val ownerFuid = currentOwnerFirebaseUid
                     if (currentOwnerRoomId == roomId && ownerFuid != null) {
@@ -106,7 +136,10 @@ class RtdbPresenceService(
         presenceListener =
             object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
-                    val userIds = snapshot.children.mapNotNull { it.key }.toSet()
+                    // Values, not keys: the node is keyed by Firebase uid but
+                    // every consumer compares against room membership, which is
+                    // expressed in uniqueIds (SHY-0261).
+                    val userIds = snapshot.children.mapNotNull { presenceUniqueId(it) }.toSet()
                     presenceFlow.value = userIds
                 }
 
@@ -180,9 +213,10 @@ class RtdbPresenceService(
 
         val roomId = currentRoomId ?: return
         val userId = currentUserId ?: return
+        val presenceKey = currentPresenceKey ?: return
 
-        // Remove our presence
-        db.getReference("rooms/$roomId/presence/$userId").removeValue()
+        // Remove our presence (keyed by Firebase uid — see setPresence)
+        db.getReference("rooms/$roomId/presence/$presenceKey").removeValue()
 
         // Remove listeners
         presenceListener?.let {
@@ -200,6 +234,7 @@ class RtdbPresenceService(
         connectedListener = null
         currentRoomId = null
         currentUserId = null
+        currentPresenceKey = null
         presenceFlow.value = emptySet()
         lastEventTs = 0L
 
@@ -213,8 +248,11 @@ class RtdbPresenceService(
         userId: String,
     ): Boolean =
         try {
-            val snapshot = db.getReference("rooms/$roomId/presence/$userId").get().await()
-            snapshotIndicatesPresent(snapshot)
+            // [userId] is a uniqueId, but the node is keyed by Firebase uid, so
+            // the answer lives in the VALUES — a direct child read by uniqueId
+            // would always miss (SHY-0261).
+            val snapshot = db.getReference("rooms/$roomId/presence").get().await()
+            roomPresenceContains(snapshot, userId)
         } catch (e: Exception) {
             Log.w(TAG, "isUserPresent check failed: ${e.message}")
             false
@@ -323,3 +361,28 @@ class RtdbPresenceService(
  * snapshot.exists is true iff the path has any non-null value.
  */
 internal fun snapshotIndicatesPresent(snapshot: DataSnapshot): Boolean = snapshot.exists()
+
+/**
+ * The uniqueId a presence child stands for, or null if it identifies nobody.
+ *
+ * SHY-0261: presence children are keyed by Firebase Auth uid (the only key the
+ * RTDB rule permits) and carry the writer's Firestore uniqueId as their value,
+ * because every consumer correlates presence against room membership, which is
+ * expressed in uniqueIds.
+ *
+ * A legacy child written as the boolean `true` identifies nobody — its key is a
+ * uid that cannot be mapped back to a uniqueId client-side — so it is reported
+ * as absent rather than guessed at. Under-reporting presence is the safe
+ * direction here: it can cost a user an unnecessary reconnect, whereas
+ * over-reporting would keep a departed user seated indefinitely.
+ */
+internal fun presenceUniqueId(child: DataSnapshot): String? {
+    if (!snapshotIndicatesPresent(child)) return null
+    return child.getValue(String::class.java)?.takeIf { it.isNotBlank() }
+}
+
+/** Is [uniqueId] among the users currently present under a room's presence node? */
+internal fun roomPresenceContains(
+    presenceRoot: DataSnapshot,
+    uniqueId: String,
+): Boolean = presenceRoot.children.any { presenceUniqueId(it) == uniqueId }

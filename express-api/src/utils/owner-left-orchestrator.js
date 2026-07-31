@@ -144,12 +144,13 @@ async function handleOwnerLeftSignal({ db, presenceChecker, roomId, writerUid, n
   //
   // Omitted writerUid is accepted for direct (non-listener) callers that
   // don't have an attesting writer.
+  // Resolved ONCE and reused: the writer attestation and the presence lookup
+  // below are both questions about the SAME Firebase-Auth-uid identity, and
+  // resolving them separately is how they drifted apart in the first place.
+  const ownerFirebaseUid = await resolveOwnerFirebaseUid(preRoom, db);
+
   if (writerUid !== undefined && writerUid !== null) {
-    const attestedOwnerFirebaseUid = await resolveOwnerFirebaseUid(preRoom, db);
-    if (
-      attestedOwnerFirebaseUid === null ||
-      String(writerUid) !== String(attestedOwnerFirebaseUid)
-    ) {
+    if (ownerFirebaseUid === null || String(writerUid) !== String(ownerFirebaseUid)) {
       return { action: OWNER_LEFT_ACTION.NOOP, reason: 'writer-not-owner' };
     }
   }
@@ -166,7 +167,33 @@ async function handleOwnerLeftSignal({ db, presenceChecker, roomId, writerUid, n
   // the txn-retry window (typically sub-second on Firebase) will trigger a
   // spurious OWNER_AWAY which self-heals via /owner-returned. Matches the
   // /owner-away endpoint's documented residual TOCTOU window.
-  const ownerStillPresent = await presenceChecker(roomId, preRoom.ownerId);
+  //
+  // NAMESPACE (SHY-0261): presence lives at `rooms/{roomId}/presence/{uid}`
+  // where `uid` is the Firebase **Auth uid** — the RTDB rule on that path is
+  // `auth.uid == $userId`, so no other key is writable by any client. Looking
+  // it up under `preRoom.ownerId` (the Firestore **uniqueId**, e.g. "10000005")
+  // therefore read a path that can never exist: every owner appeared absent,
+  // and because the client arms this very signal on room ENTRY, a freshly
+  // opened room took the CLOSE_IMMEDIATE branch and destroyed itself seconds
+  // after opening. Resolve into the uid namespace before asking.
+  if (ownerFirebaseUid === null) {
+    // We could not establish WHO the owner is, so we cannot establish that
+    // they are gone. Closing here would repeat the original defect in a new
+    // costume — treating absence of information as information. Destructive
+    // actions fail closed.
+    return { action: OWNER_LEFT_ACTION.NOOP, reason: 'owner-identity-unresolved' };
+  }
+  // The C2 path-safety guard applied to `ownerId` because that was the value
+  // interpolated into the RTDB presence path. It is the FIREBASE UID that
+  // occupies that position now, so the guard follows it — otherwise a corrupt
+  // `ownerFirebaseUid` (or a poisoned users doc) could read an arbitrary RTDB
+  // path, and a path that happened to exist would keep a dead room alive while
+  // a path that did not would close a live one.
+  if (!isValidOwnerId(ownerFirebaseUid)) {
+    return { action: OWNER_LEFT_ACTION.NOOP, reason: 'owner-firebase-uid-invalid' };
+  }
+
+  const ownerStillPresent = await presenceChecker(roomId, ownerFirebaseUid);
 
   const effectiveNowMs = nowMs ?? Date.now();
 

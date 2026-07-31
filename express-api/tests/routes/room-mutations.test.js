@@ -13,12 +13,25 @@ const mockRoomRef = {
 };
 const mockRtdbSet = jest.fn().mockResolvedValue();
 const mockRtdbGet = jest.fn(); // RTDB presence read (owner-away / disconnect-user)
+// `users/{uniqueId}` reads — the uniqueId → firebaseUid resolution that every
+// presence gate performs (SHY-0261). Receives the uniqueId so a test can tell
+// WHICH member was resolved; the ref itself is built per-call in `db.doc`.
+const mockUserDocGet = jest.fn();
 const mockBatchSet = jest.fn();
 const mockBatchCommit = jest.fn().mockResolvedValue();
 
 jest.mock('../../src/utils/firebase', () => ({
   db: {
-    doc: jest.fn(() => mockRoomRef),
+    // SHY-0261: presence gates resolve a room member's uniqueId to their
+    // Firebase Auth uid via `users/{uniqueId}`, so `db.doc` can no longer
+    // answer every path with the room. Routing by path keeps the user
+    // lookup distinguishable from the room read it used to be conflated with.
+    doc: jest.fn((path) => {
+      const p = String(path);
+      if (!p.startsWith('users/')) return mockRoomRef;
+      const uniqueId = p.slice('users/'.length);
+      return { get: () => mockUserDocGet(uniqueId), set: (...a) => mockDocSet(...a) };
+    }),
     runTransaction: jest.fn(async (fn) => fn({ get: mockTxnGet, update: mockTxnUpdate })),
     batch: jest.fn(() => ({
       set: (...a) => mockBatchSet(...a),
@@ -73,6 +86,10 @@ function snap(room) {
 function mkRoom(overrides = {}) {
   return {
     ownerId: '1',
+    // Denormalised at room-create so the owner's presence node can be located
+    // without a users lookup. Presence is keyed by Firebase Auth uid, never by
+    // uniqueId — see SHY-0261.
+    ownerFirebaseUid: 'fuid-1',
     cohort: 'adult',
     state: 'ACTIVE',
     participantIds: ['1', '10', '99'],
@@ -96,6 +113,13 @@ beforeEach(() => {
   mockRtdbGet.mockResolvedValue({ exists: () => true }); // target present by default
   mockDocGet.mockResolvedValue({ exists: false }); // pre-read; set per test
   mockDocSet.mockResolvedValue();
+  // Every room member resolves to `fuid-<uniqueId>`. Modelling the users
+  // collection matters: an UNRESOLVABLE member fails safe to "present", so a
+  // test that silently failed to resolve would pass its 403 assertions for
+  // entirely the wrong reason.
+  mockUserDocGet.mockImplementation((uniqueId) =>
+    Promise.resolve({ exists: true, data: () => ({ firebaseUid: `fuid-${uniqueId}` }) }),
+  );
 });
 
 describe('POST /api/rooms/:roomId/seats/:seatIndex/claim', () => {
@@ -1401,14 +1425,57 @@ describe('Chunk C review-hardening coverage', () => {
     expect(mockTxnUpdate).not.toHaveBeenCalled();
   });
 
-  test('POST /owner-away: the non-owner path reads presence at the owner RTDB node', async () => {
+  test('POST /owner-away: the non-owner path reads presence in the FIREBASE-UID namespace', async () => {
+    // SHY-0261. This assertion previously read `presence/1` — the owner's
+    // Firestore uniqueId — and so pinned the defect as the contract. The RTDB
+    // rule on that path is `auth.uid == $userId`, meaning a client can ONLY
+    // ever write its Firebase Auth uid there; a lookup by uniqueId reads a
+    // node that cannot exist, every owner reads as absent, and any participant
+    // could force a live room to OWNER_AWAY. Asserting the negative too, so a
+    // regression to the old namespace fails here rather than silently
+    // reopening the hole.
     const { rtdb } = require('../../src/utils/firebase');
     const room = mkRoom({ state: 'ACTIVE' });
     mockDocGet.mockResolvedValue(snap(room));
     mockTxnGet.mockResolvedValue(snap(room));
     mockRtdbGet.mockResolvedValue({ exists: () => false });
     await request(createApp(10)).post('/api/rooms/room-1/owner-away').send({});
-    expect(rtdb.ref).toHaveBeenCalledWith('rooms/room-1/presence/1');
+    expect(rtdb.ref).toHaveBeenCalledWith('rooms/room-1/presence/fuid-1');
+    expect(rtdb.ref).not.toHaveBeenCalledWith('rooms/room-1/presence/1');
+  });
+
+  test('POST /owner-away: an owner whose identity cannot be resolved is treated as PRESENT', async () => {
+    // Fail-safe direction matters. `isRoomMemberPresent` returning "absent" on
+    // an unresolvable member would let any participant evict an owner simply
+    // because a users lookup missed — an outage becoming an authorisation
+    // bypass. A legacy room with no denormalised uid and no user document is
+    // the reachable version of that state.
+    const room = mkRoom({ state: 'ACTIVE' });
+    delete room.ownerFirebaseUid;
+    mockDocGet.mockResolvedValue(snap(room));
+    mockTxnGet.mockResolvedValue(snap(room));
+    mockUserDocGet.mockResolvedValue({ exists: false });
+    mockRtdbGet.mockResolvedValue({ exists: () => false });
+    const res = await request(createApp(10)).post('/api/rooms/room-1/owner-away').send({});
+    expect(res.status).toBe(403);
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
+  });
+
+  test('POST /disconnect-user: a present target cannot be evicted by another participant', async () => {
+    // The same namespace bug made this gate inert: `targetPresent` was read at
+    // `presence/<uniqueId>`, always missing, so ANY participant could evict
+    // ANY other participant by calling the "they disconnected" endpoint.
+    const { rtdb } = require('../../src/utils/firebase');
+    const room = mkRoom({ state: 'ACTIVE' });
+    mockDocGet.mockResolvedValue(snap(room));
+    mockTxnGet.mockResolvedValue(snap(room));
+    mockRtdbGet.mockResolvedValue({ exists: () => true }); // target IS connected
+    const res = await request(createApp(10))
+      .post('/api/rooms/room-1/disconnect-user')
+      .send({ userId: '99' });
+    expect(res.status).toBe(403);
+    expect(rtdb.ref).toHaveBeenCalledWith('rooms/room-1/presence/fuid-99');
+    expect(mockTxnUpdate).not.toHaveBeenCalled();
   });
 
   test('POST /seats/:i/move: 403 when a host targets the owner seat (toIndex 0)', async () => {
