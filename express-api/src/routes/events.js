@@ -37,6 +37,18 @@ const STATE = {
 const MAX_TITLE = 120;
 const MAX_ROSTER = 25;
 
+/** Mirrors Constants.MAX_SEATS — an event room is an ordinary room. */
+const MAX_SEATS = 8;
+
+/**
+ * The seat index performers occupy.
+ *
+ * Seat 0 is the host's, by the same convention the rest of the product uses; a
+ * rotating performer takes seat 1 so the host never has to leave their own
+ * stage to hand over.
+ */
+const PERFORMER_SEAT = '1';
+
 /**
  * Validate the scheduling payload.
  *
@@ -311,6 +323,15 @@ router.post('/events/:eventId/start', async (req, res) => {
       state: 'ACTIVE',
       eventId,
       participantIds: [],
+      // The real 8-seat default map (Constants.MAX_SEATS / ChatRoom.DEFAULT_SEATS).
+      // An event room that shipped without seats would render as a room with no
+      // stage, and every existing seat reader would have to special-case it.
+      seats: Object.fromEntries(
+        Array.from({ length: MAX_SEATS }, (_, i) => [
+          String(i),
+          { userId: null, state: 'EMPTY', isMuted: false },
+        ]),
+      ),
       rosterParticipants: accepted,
       cohort: event.cohort,
       createdAt: Date.now(),
@@ -326,6 +347,124 @@ router.post('/events/:eventId/start', async (req, res) => {
     res.json({ ok: true, roomId, eventId });
   } catch (err) {
     log.error('events', 'POST /events/:eventId/start failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Load an event for a seat change, or send the right refusal.
+ *
+ * Returns the event, or null once it has already answered. Shared because
+ * promote and demote reject on exactly the same four grounds, and two copies of
+ * that list is how they drift apart.
+ */
+async function loadLiveEventForHost(req, res) {
+  const snap = await db.doc(`events/${req.params.eventId}`).get();
+  if (!snap.exists) {
+    res.status(404).json({ error: 'Event not found' });
+    return null;
+  }
+  const event = snap.data();
+  if (event.hostId !== req.auth.uniqueId) {
+    // A performer seating themselves would make the roster decorative.
+    res.status(403).json({ error: 'Only the host can change seats in this event' });
+    return null;
+  }
+  if (event.state !== STATE.LIVE) {
+    res.status(409).json({
+      error:
+        event.state === STATE.CLOSED ? 'This event has closed' : 'This event has not started yet',
+    });
+    return null;
+  }
+  return event;
+}
+
+/**
+ * Promote a rostered member into the performer seat.
+ *
+ * ONE performer at a time, by construction: promoting a second person replaces
+ * the first rather than adding to them. Two "current performers" would make the
+ * gift attribution in phase 5 ambiguous, and the money has to go somewhere.
+ *
+ * `currentPerformerId` is stored on the EVENT as well as the seat map. Phase 5
+ * reads it on every gift, and re-deriving "who is performing" by scanning eight
+ * seats per gift is both slower and a second place for the answer to live.
+ */
+router.post('/events/:eventId/promote', async (req, res) => {
+  try {
+    const event = await loadLiveEventForHost(req, res);
+    if (!event) return undefined;
+
+    const { uniqueId } = req.body || {};
+    if (!uniqueId) return res.status(400).json({ error: 'uniqueId is required' });
+    if (!(event.roster || []).includes(String(uniqueId))) {
+      // Otherwise an event is a way to seat anyone in a room they were never
+      // invited to.
+      return res.status(400).json({ error: `${uniqueId} is not on this event's roster` });
+    }
+
+    const roomRef = db.doc(`rooms/${event.roomId}`);
+    const roomSnap = await roomRef.get();
+    if (!roomSnap.exists) return res.status(404).json({ error: 'Event room not found' });
+
+    const seats = { ...(roomSnap.data().seats || {}) };
+    // Clear any seat this member already holds, so a repeat promotion cannot
+    // leave them seated twice.
+    for (const [index, seat] of Object.entries(seats)) {
+      if (seat && seat.userId === String(uniqueId)) {
+        seats[index] = { userId: null, state: 'EMPTY', isMuted: false };
+      }
+    }
+    seats[PERFORMER_SEAT] = { userId: String(uniqueId), state: 'OCCUPIED', isMuted: false };
+
+    await roomRef.update({ seats });
+    await db.doc(`events/${event.eventId}`).update({ currentPerformerId: String(uniqueId) });
+
+    log.info('events', 'performer promoted', { eventId: event.eventId });
+    res.json({ ok: true, seatIndex: Number(PERFORMER_SEAT) });
+  } catch (err) {
+    log.error('events', 'promote failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Demote whoever is in the performer seat.
+ *
+ * Clearing `currentPerformerId` to NULL is the load-bearing part. Between acts
+ * nobody is performing, and phase 5 must not pay the person who just left the
+ * stage for a gift that arrived after they did.
+ *
+ * Demoting an empty seat is a NO-OP rather than an error: the host tapping
+ * demote twice, or after the performer has already left, is ordinary.
+ */
+router.post('/events/:eventId/demote', async (req, res) => {
+  try {
+    const event = await loadLiveEventForHost(req, res);
+    if (!event) return undefined;
+
+    const roomRef = db.doc(`rooms/${event.roomId}`);
+    const roomSnap = await roomRef.get();
+    if (!roomSnap.exists) return res.status(404).json({ error: 'Event room not found' });
+
+    const seats = { ...(roomSnap.data().seats || {}) };
+    const target = req.body?.uniqueId ? String(req.body.uniqueId) : null;
+    for (const [index, seat] of Object.entries(seats)) {
+      if (!seat || !seat.userId) continue;
+      if (target && seat.userId !== target) continue;
+      if (index === PERFORMER_SEAT || seat.userId === target) {
+        seats[index] = { userId: null, state: 'EMPTY', isMuted: false };
+      }
+    }
+
+    await roomRef.update({ seats });
+    await db.doc(`events/${event.eventId}`).update({ currentPerformerId: null });
+
+    log.info('events', 'performer demoted', { eventId: event.eventId });
+    res.json({ ok: true });
+  } catch (err) {
+    log.error('events', 'demote failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
