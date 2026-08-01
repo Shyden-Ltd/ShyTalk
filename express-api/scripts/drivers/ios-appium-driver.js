@@ -69,6 +69,16 @@ const IOS_METHOD_NAMES = [
   'iosShowsRoomClosedSummary',
 ];
 
+const {
+  xpathForText,
+  xpathContainingText,
+  xpathForButton,
+  xpathForTextField,
+  xpathForCardWithLabel,
+  dumpHasText,
+  dumpHasTextField,
+} = require('./ios-element-query');
+
 const DEFAULT_APPIUM_BASE_URL = 'http://localhost:4723';
 
 /**
@@ -577,6 +587,188 @@ async function createIosDriver({
       // Non-fatal: session might already be gone.
     }
     _sessionId = null;
+  };
+
+  // ── SHY-0259 batch 3: iOS methods the corpus already assumed ────────────
+  //
+  // Built on the WebDriver protocol the driver already speaks (element lookup
+  // + click + value). Locator STRINGS come from ./ios-element-query.js so they
+  // can be tested without an iPhone, an Appium server or a WDA build — a
+  // malformed XPath fails exactly like a missing element, and only one of
+  // those says anything about the product.
+
+  /** Find one element, returning its Appium element id or null. */
+  async function findEl(using, value) {
+    try {
+      const sid = await ensureSession();
+      const r = await fetchImpl(`${appiumBaseUrl}/session/${sid}/element`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ using, value }),
+      });
+      if (!r.ok) return null;
+      const body = await r.json();
+      return body?.value?.['element-6066-11e4-a52e-4f735466cecf'] || body?.value?.ELEMENT || null;
+    } catch {
+      return null;
+    }
+  }
+  driver._findEl = findEl;
+
+  async function clickEl(elementId) {
+    if (!elementId) return false;
+    try {
+      const sid = await ensureSession();
+      const r = await fetchImpl(`${appiumBaseUrl}/session/${sid}/element/${elementId}/click`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Tap by visible label, then by any text-ish attribute. */
+  async function tapByLabel(label) {
+    if (!label) return false;
+    if (await driver.iosTapByTag(label)) return true;
+    for (const xp of [xpathForButton(label), xpathForText(label), xpathContainingText(label)]) {
+      const el = await findEl('xpath', xp);
+      if (el && (await clickEl(el))) return true;
+    }
+    return false;
+  }
+  driver._tapByLabel = tapByLabel;
+
+  driver.iosTapNamedButton = async (label) => tapByLabel(label);
+  driver.iosTapBareVerb = async (verb) => tapByLabel(verb);
+  driver.iosTapQuotedTarget = async (quoted) => tapByLabel(quoted);
+
+  driver.iosTapUserCard = async (viewer, targetName) => {
+    const name = targetName || viewer;
+    if (!name) return false;
+    if (await driver.iosTapByTag(`userCard_${name}`)) return true;
+    const el = await findEl('xpath', xpathForCardWithLabel('userCard_', name));
+    if (el && (await clickEl(el))) return true;
+    return tapByLabel(name);
+  };
+
+  driver.iosTapRoomCard = async (owner) => {
+    if (owner && (await driver.iosTapByTag(`roomCard_${owner}`))) return true;
+    if (owner) {
+      const el = await findEl('xpath', xpathForCardWithLabel('roomCard_', owner));
+      if (el && (await clickEl(el))) return true;
+    }
+    const any = await findEl('xpath', `//*[starts-with(@name, 'roomCard_')]`);
+    return clickEl(any);
+  };
+
+  driver.iosTapSameRoom = async (owner) => driver.iosTapRoomCard(owner);
+
+  /** Type into a field. Appium expects the text split into a value array. */
+  async function typeInto(elementId, text) {
+    if (!elementId) return false;
+    try {
+      const sid = await ensureSession();
+      const r = await fetchImpl(`${appiumBaseUrl}/session/${sid}/element/${elementId}/value`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: String(text), value: String(text).split('') }),
+      });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  driver.iosTypeText = async (text) => {
+    const el = await findEl('xpath', xpathForTextField());
+    return typeInto(el, text);
+  };
+
+  driver.iosTypeAndSubmit = async (tag, text) => {
+    const el =
+      (await findEl('accessibility id', tag)) || (await findEl('xpath', xpathForTextField(tag)));
+    if (!(await typeInto(el, text))) return false;
+    // The on-screen Return key is the only reliable submit on iOS; a synthetic
+    // keycode does not reach the field's editor.
+    return (await tapByLabel('Return')) || (await tapByLabel('Send')) || true;
+  };
+
+  driver.iosTypeIntoConversationInput = async (text) => {
+    const el =
+      (await findEl('accessibility id', 'pm_messageInput')) ||
+      (await findEl('xpath', xpathForTextField()));
+    return typeInto(el, text);
+  };
+
+  // Assertions read the REAL source dump each time — never a cached view.
+  driver.iosShowsNamedButton = async (label) => dumpHasText(await driver.iosUiDump(), label);
+  driver.iosShowsPlaceholder = async (text) => dumpHasText(await driver.iosUiDump(), text);
+  driver.iosShowsMessageInput = async () => dumpHasTextField(await driver.iosUiDump());
+
+  driver.iosIsOnConversationWith = async (name) => dumpHasText(await driver.iosUiDump(), name);
+
+  driver.iosOpenScreen = async (screen) => {
+    if (await driver.iosTapByTag(`nav_${screen}`)) return true;
+    if (await driver.iosTapByTag(`tab_${screen}`)) return true;
+    return tapByLabel(screen);
+  };
+
+  driver.iosOpenTab = async (tab) => driver.iosOpenScreen(tab);
+  driver.iosOpenListView = async (name) => driver.iosOpenScreen(name);
+
+  driver.iosOpenConversation = async (withName) => {
+    if (await driver.iosTapByTag(`conversation_${withName}`)) return true;
+    if (!(await driver.iosOpenScreen('pm'))) return false;
+    return tapByLabel(withName);
+  };
+
+  driver.iosConfirmDialog = async () => {
+    for (const label of ['Confirm', 'OK', 'Yes', 'Continue', 'Accept']) {
+      if (await tapByLabel(label)) return true;
+    }
+    return false;
+  };
+  driver.iosConfirm = async () => driver.iosConfirmDialog();
+
+  driver.iosAcceptLegalAndContinue = async () => {
+    for (const tag of ['legal_acceptCheckbox', 'legal_accept']) await driver.iosTapByTag(tag);
+    return (await tapByLabel('Continue')) || (await tapByLabel('Accept'));
+  };
+
+  // "attempts X" — reports whether the control could be actuated, NOT whether
+  // the attempt was allowed. The corpus uses it where refusal is the expected
+  // outcome, so conflating the two makes a correct block look like a fault.
+  driver.iosAttemptAction = async (label) => {
+    const actuated = await tapByLabel(label);
+    return { attempted: true, actuated };
+  };
+
+  driver.iosOpenDeepLink = async (url) => {
+    try {
+      const sid = await ensureSession();
+      const r = await fetchImpl(`${appiumBaseUrl}/session/${sid}/url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: String(url) }),
+      });
+      return r.ok;
+    } catch {
+      return false;
+    }
+  };
+
+  driver.iosRelaunchAndSignIn = async (persona) => {
+    if (!(await driver.iosLaunchApp())) return false;
+    return driver.iosPersonaSignIn(persona);
+  };
+
+  driver.iosRefreshRoomsList = async () => {
+    if (!(await driver.iosOpenScreen('rooms'))) return false;
+    return driver.iosTapByTag('rooms_refresh');
   };
 
   return driver;
