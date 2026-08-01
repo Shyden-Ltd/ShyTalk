@@ -16,6 +16,7 @@ import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.BiometricRepository
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.EconomyRepository
+import com.shyden.shytalk.data.repository.EventsRepository
 import com.shyden.shytalk.data.repository.FunFactRepository
 import com.shyden.shytalk.data.repository.GiftRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
@@ -63,6 +64,7 @@ class ViewModelModuleTest {
                     NotificationRepository::class,
                     GiftRepository::class,
                     EconomyRepository::class,
+                    EventsRepository::class,
                     BannerRepository::class,
                     FunFactRepository::class,
                     TranslationRepository::class,

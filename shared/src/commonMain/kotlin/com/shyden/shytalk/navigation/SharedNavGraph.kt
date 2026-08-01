@@ -45,6 +45,7 @@ import com.shyden.shytalk.feature.auth.PinSetupScreen
 import com.shyden.shytalk.feature.daily.DailyRewardCelebrationDialog
 import com.shyden.shytalk.feature.daily.DailyRewardDialog
 import com.shyden.shytalk.feature.daily.DailyRewardViewModel
+import com.shyden.shytalk.feature.events.EventHostScreen
 import com.shyden.shytalk.feature.legal.CURRENT_LEGAL_VERSION
 import com.shyden.shytalk.feature.legal.CommunityStandardsScreen
 import com.shyden.shytalk.feature.legal.CyberBullyingPolicyScreen
@@ -401,6 +402,9 @@ fun SharedNavGraph(
                                 onNavigateToWallet = {
                                     navController.navigate(Screen.Wallet.route)
                                 },
+                                onNavigateToEventHost = {
+                                    navController.navigate(Screen.EventHost.route)
+                                },
                                 modifier = modifier,
                             ),
                         )
@@ -459,6 +463,9 @@ fun SharedNavGraph(
                         },
                         onNavigateToWallet = {
                             navController.navigate(Screen.Wallet.route)
+                        },
+                        onNavigateToEventHost = {
+                            navController.navigate(Screen.EventHost.route)
                         },
                     ),
                 )
@@ -650,6 +657,16 @@ fun SharedNavGraph(
             composable(Screen.ReportReview.route) {
                 ReportReviewScreen(
                     onNavigateBack = { navController.safePopBackStack() },
+                )
+            }
+
+            // ── Event host ──
+            composable(Screen.EventHost.route) {
+                EventHostScreen(
+                    // Starting an event drops the host straight into its room:
+                    // an event that goes live and leaves the host on a list is a
+                    // show with nobody on stage.
+                    onOpenRoom = { roomId -> navController.navigate(Screen.Room.createRoute(roomId)) },
                 )
             }
 

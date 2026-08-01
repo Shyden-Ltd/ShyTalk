@@ -44,6 +44,7 @@ fun createIosPlatformScreens(): PlatformScreens =
                 onNavigateToRoom = params.onNavigateToRoom,
                 onNavigateToChat = params.onNavigateToChat,
                 onNavigateToWallet = params.onNavigateToWallet,
+                onNavigateToEventHost = params.onNavigateToEventHost,
                 modifier = params.modifier,
             )
         },

@@ -16,6 +16,7 @@ import com.shyden.shytalk.data.remote.ConversationWebSocketService
 import com.shyden.shytalk.data.remote.IosApiClient
 import com.shyden.shytalk.data.remote.IosAppConfigServiceImpl
 import com.shyden.shytalk.data.remote.IosConversationWebSocketServiceImpl
+import com.shyden.shytalk.data.remote.IosEventsApi
 import com.shyden.shytalk.data.remote.IosLiveKitVoiceService
 import com.shyden.shytalk.data.remote.IosPresenceServiceImpl
 import com.shyden.shytalk.data.remote.IosTokenServiceImpl
@@ -31,6 +32,9 @@ import com.shyden.shytalk.data.repository.BannerRepository
 import com.shyden.shytalk.data.repository.BiometricRepository
 import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.EconomyRepository
+import com.shyden.shytalk.data.repository.EventsApi
+import com.shyden.shytalk.data.repository.EventsRepository
+import com.shyden.shytalk.data.repository.EventsRepositoryImpl
 import com.shyden.shytalk.data.repository.FunFactRepository
 import com.shyden.shytalk.data.repository.GiftRepository
 import com.shyden.shytalk.data.repository.IdentityRepository
@@ -151,6 +155,10 @@ val iosPlatformModule =
         single<NotificationRepository> { IosNotificationRepositoryImpl(get(), get()) }
         single<GiftRepository> { IosGiftRepositoryImpl(get()) }
         single<EconomyRepository> { IosEconomyRepositoryImpl(get(), get(), get()) }
+        // Mirror of the Android binding — same shared implementation, different
+        // transport. That symmetry is what stops the two phones drifting.
+        single<EventsApi> { IosEventsApi(get()) }
+        single<EventsRepository> { EventsRepositoryImpl(get()) }
         single<BannerRepository> { IosBannerRepositoryImpl(get()) }
         single<FunFactRepository> { IosFunFactRepositoryImpl(get()) }
         single<TranslationRepository> { IosTranslationRepositoryImpl(get()) }

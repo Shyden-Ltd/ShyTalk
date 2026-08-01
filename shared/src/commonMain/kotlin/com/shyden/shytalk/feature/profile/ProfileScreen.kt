@@ -93,6 +93,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.shyden.shytalk.core.model.BackpackItem
 import com.shyden.shytalk.core.model.Gift
+import com.shyden.shytalk.core.model.UserType
 import com.shyden.shytalk.core.platform.PlatformImagePicker
 import com.shyden.shytalk.core.platform.PlatformProfilePhotoPicker
 import com.shyden.shytalk.core.ui.StyledDisplayName
@@ -127,6 +128,7 @@ fun ProfileScreen(
     onNavigateToRoom: ((String) -> Unit)? = null,
     onNavigateToChat: ((String) -> Unit)? = null,
     onNavigateToWallet: (() -> Unit)? = null,
+    onNavigateToEventHost: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: ProfileViewModel = koinViewModel(),
 ) {
@@ -253,6 +255,7 @@ fun ProfileScreen(
                 onNavigateToRoom = onNavigateToRoom,
                 onNavigateToChat = onNavigateToChat,
                 onNavigateToWallet = onNavigateToWallet,
+                onNavigateToEventHost = onNavigateToEventHost,
                 onTestPurchaseSuperShy = onTestPurchaseSuperShy,
                 onClaimTrial = { viewModel.claimSuperShyTrial() },
                 isRefreshing = uiState.isRefreshing,
@@ -307,6 +310,7 @@ fun ProfileScreen(
                 onNavigateToRoom = onNavigateToRoom,
                 onNavigateToChat = onNavigateToChat,
                 onNavigateToWallet = onNavigateToWallet,
+                onNavigateToEventHost = onNavigateToEventHost,
                 onTestPurchaseSuperShy = onTestPurchaseSuperShy,
                 onClaimTrial = { viewModel.claimSuperShyTrial() },
                 isRefreshing = uiState.isRefreshing,
@@ -470,6 +474,7 @@ private fun ProfileContent(
     onNavigateToRoom: ((String) -> Unit)? = null,
     onNavigateToChat: ((String) -> Unit)? = null,
     onNavigateToWallet: (() -> Unit)? = null,
+    onNavigateToEventHost: (() -> Unit)? = null,
     onTestPurchaseSuperShy: ((String) -> Unit)? = null,
     onClaimTrial: (() -> Unit)? = null,
     isRefreshing: Boolean = false,
@@ -1174,6 +1179,22 @@ private fun ProfileContent(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
+                            }
+                        }
+
+                        // Event host panel — only for the userType that can run
+                        // events. Showing it to everyone would offer a screen
+                        // whose every action the server refuses.
+                        if (isOwn && user.userType == UserType.MC_EVENT_HOST) {
+                            Button(
+                                onClick = { onNavigateToEventHost?.invoke() },
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .testTag("profile_eventHostButton"),
+                                shape = RoundedCornerShape(12.dp),
+                            ) {
+                                Text("Event host")
                             }
                         }
                     }

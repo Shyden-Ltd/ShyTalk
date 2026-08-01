@@ -17,6 +17,7 @@ import com.shyden.shytalk.core.util.CryptoKeyPair
 import com.shyden.shytalk.core.util.SecureStorage
 import com.shyden.shytalk.data.local.StickerStorage
 import com.shyden.shytalk.data.remote.AndroidAppConfigService
+import com.shyden.shytalk.data.remote.AndroidEventsApi
 import com.shyden.shytalk.data.remote.AppConfigService
 import com.shyden.shytalk.data.remote.BillingService
 import com.shyden.shytalk.data.remote.ConversationWebSocketService
@@ -42,6 +43,9 @@ import com.shyden.shytalk.data.repository.DeviceRepository
 import com.shyden.shytalk.data.repository.DeviceRepositoryImpl
 import com.shyden.shytalk.data.repository.EconomyRepository
 import com.shyden.shytalk.data.repository.EconomyRepositoryImpl
+import com.shyden.shytalk.data.repository.EventsApi
+import com.shyden.shytalk.data.repository.EventsRepository
+import com.shyden.shytalk.data.repository.EventsRepositoryImpl
 import com.shyden.shytalk.data.repository.FunFactRepository
 import com.shyden.shytalk.data.repository.FunFactRepositoryImpl
 import com.shyden.shytalk.data.repository.GiftRepository
@@ -152,6 +156,11 @@ val appModule =
         singleOf(::NotificationRepositoryImpl) bind NotificationRepository::class
         singleOf(::GiftRepositoryImpl) bind GiftRepository::class
         singleOf(::EconomyRepositoryImpl) bind EconomyRepository::class
+        // Events reach the backend ONLY through the API, so the platform binds a
+        // transport and the shared implementation does the rest — one copy of the
+        // logic for both phones.
+        single<EventsApi> { AndroidEventsApi(get()) }
+        single<EventsRepository> { EventsRepositoryImpl(get()) }
         singleOf(::BannerRepositoryImpl) bind BannerRepository::class
         single<FunFactRepository> { FunFactRepositoryImpl(get(), androidContext()) }
         singleOf(::TranslationRepositoryImpl) bind TranslationRepository::class

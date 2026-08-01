@@ -23,6 +23,7 @@ const { db, FieldValue } = require('../utils/firebase');
 const { generateId } = require('../utils/helpers');
 const { cohortFromClaim, effectiveCohort } = require('../utils/firebase-claims');
 const { summariseEvent } = require('../utils/event-ledger');
+const { requireSameCohort } = require('../middleware/sameCohort');
 const log = require('../utils/log');
 
 /** Only an event host may schedule. The userType is the product's own gate. */
@@ -242,6 +243,148 @@ router.post('/events/:eventId/invite/decline', async (req, res) => {
  * `rosterStates` resolves each member to pending / accepted / declined, which is
  * what j16's roster panel shows. Without it the host is guessing who turned up.
  */
+/**
+ * The events THIS user has a stake in.
+ *
+ * Split into `hosting` and `performing` rather than merged, because the two are
+ * different jobs: a host sees "Start event", a performer sees "you are on at
+ * 8pm". One list would put a Start button in front of someone who cannot start
+ * it, and the refusal would arrive as a 403 after the tap.
+ *
+ * CLOSED events are omitted. A finished show is history, and leaving it in the
+ * list makes the next one harder to find.
+ */
+router.get('/events/mine', async (req, res) => {
+  try {
+    const uniqueId = req.auth.uniqueId;
+    const live = [STATE.SCHEDULED, STATE.LIVE];
+
+    const [hosted, rostered] = await Promise.all([
+      db.collection('events').where('hostId', '==', uniqueId).get(),
+      db.collection('events').where('roster', 'array-contains', uniqueId).get(),
+    ]);
+
+    const open = (snap) =>
+      snap.docs
+        .map((d) => d.data())
+        .filter((e) => live.includes(e.state))
+        // Soonest first: the next thing to happen is the thing the screen is
+        // about. Ties break on eventId so two events at the same minute do not
+        // swap places between reads.
+        .sort(
+          (a, b) =>
+            String(a.startsAt).localeCompare(String(b.startsAt)) ||
+            String(a.eventId).localeCompare(String(b.eventId)),
+        );
+
+    res.json({ hosting: open(hosted), performing: open(rostered) });
+  } catch (err) {
+    log.error('events', 'list mine failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Invites still waiting on an answer.
+ *
+ * Carries the event title and the host's display name so the banner can render
+ * "You are scheduled in Tariq's event" from ONE call. Making the client fetch
+ * the event separately to draw a single line is how a banner ends up flashing
+ * a half-rendered state.
+ *
+ * ANSWERED invites drop out. The banner is a call to action; one that has been
+ * answered is clutter, and offering Accept twice invites a confusing no-op.
+ */
+router.get('/events/invites', async (req, res) => {
+  try {
+    const uniqueId = req.auth.uniqueId;
+    const snap = await db.collection(`users/${uniqueId}/eventInvites`).get();
+    const pending = snap.docs.map((d) => d.data()).filter((i) => i.status === 'PENDING');
+
+    const invites = [];
+    for (const invite of pending) {
+      const eventSnap = await db.doc(`events/${invite.eventId}`).get();
+      if (!eventSnap.exists) continue;
+      const event = eventSnap.data();
+      // An invite to a closed event cannot be acted on, and showing the choice
+      // implies it still can be.
+      if (event.state === STATE.CLOSED) continue;
+      const hostSnap = await db.doc(`users/${event.hostId}`).get();
+      invites.push({
+        eventId: invite.eventId,
+        status: invite.status,
+        title: event.title,
+        startsAt: event.startsAt,
+        hostId: event.hostId,
+        hostName: hostSnap.exists ? hostSnap.data().displayName || event.hostId : event.hostId,
+        roomId: event.roomId || null,
+        state: event.state,
+      });
+    }
+
+    res.json({ invites });
+  } catch (err) {
+    log.error('events', 'list invites failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Add someone to this host's standing team roster.
+ *
+ * The cohort gate is the point. A roster is a standing working relationship
+ * between named people — the one place the product could create an adult/minor
+ * link that rooms, discovery and PMs all refuse. It answers 404, byte-identical
+ * to "no such user": a 403 would confirm the minor exists, which is the leak the
+ * segregation design exists to prevent.
+ */
+router.post('/events/roster/add', async (req, res) => {
+  try {
+    const uniqueId = req.auth.uniqueId;
+    const target = String((req.body || {}).uniqueId || '').trim();
+    if (!target) return res.status(400).json({ error: 'uniqueId is required' });
+    // A roster is other people. Adding yourself is not a working relationship,
+    // and it would make you your own performer in every seat calculation.
+    if (target === String(uniqueId)) {
+      return res.status(400).json({ error: 'You cannot add yourself to your own roster' });
+    }
+
+    // requireSameCohort answers the 404 itself (and audits it) when it blocks,
+    // AND when the target does not exist — the two are deliberately the same
+    // answer, which is why the fetch is handed to it rather than done first.
+    const blocked = await requireSameCohort(req, res, target, async () => {
+      const snap = await db.doc(`users/${target}`).get();
+      return snap.exists ? snap.data() : null;
+    });
+    if (blocked) return undefined;
+
+    await db
+      .doc(`users/${uniqueId}`)
+      .set({ teamRoster: FieldValue.arrayUnion(target) }, { merge: true });
+    log.info('events', 'roster add', { host: uniqueId, target });
+    return res.json({ ok: true });
+  } catch (err) {
+    log.error('events', 'roster add failed', { error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/** Remove someone from the roster. Idempotent — removing a non-member is fine. */
+router.post('/events/roster/remove', async (req, res) => {
+  try {
+    const uniqueId = req.auth.uniqueId;
+    const target = String((req.body || {}).uniqueId || '').trim();
+    if (!target) return res.status(400).json({ error: 'uniqueId is required' });
+    await db
+      .doc(`users/${uniqueId}`)
+      .set({ teamRoster: FieldValue.arrayRemove(target) }, { merge: true });
+    return res.json({ ok: true });
+  } catch (err) {
+    log.error('events', 'roster remove failed', { error: err.message });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.get('/events/:eventId', async (req, res) => {
   try {
     const uniqueId = req.auth.uniqueId;
@@ -320,6 +463,10 @@ router.post('/events/:eventId/start', async (req, res) => {
       roomId,
       name: event.title,
       ownerId: event.hostId,
+      // `hostIds` is what grants host powers in the room UI. Without it the
+      // event's own host could not moderate his own event — he owned the doc
+      // and had none of the controls.
+      hostIds: [event.hostId],
       // `state`, matching the ChatRoom model the rest of the product reads.
       state: 'ACTIVE',
       eventId,

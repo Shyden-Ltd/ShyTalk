@@ -1,0 +1,29 @@
+{
+  "event": {
+    "eventId": "evcap-tariq-qKAGKw8PiaK2iAHtEHWn",
+    "hostId": "evcap-tariq",
+    "hostName": "tariq",
+    "title": "Saturday Showcase",
+    "durationMin": 60,
+    "roster": [
+      "evcap-selma"
+    ],
+    "cohort": "adult",
+    "createdAt": "2026-08-01T23:10:41.154Z",
+    "declined": [],
+    "accepted": [
+      "evcap-selma"
+    ],
+    "startsAt": "2026-08-01T23:09:41.189Z",
+    "startedAt": "2026-08-01T23:10:41.195Z",
+    "state": "LIVE",
+    "roomId": "evcap-tariq-qKAGKw8PiaK2iAHtEHWn-room",
+    "currentPerformerId": "evcap-selma",
+    "rosterStates": [
+      {
+        "uniqueId": "evcap-selma",
+        "status": "ACCEPTED"
+      }
+    ]
+  }
+}

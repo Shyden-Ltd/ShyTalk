@@ -7,6 +7,7 @@ import com.shyden.shytalk.feature.auth.EmailOtpViewModel
 import com.shyden.shytalk.feature.auth.LockScreenViewModel
 import com.shyden.shytalk.feature.auth.PinSetupViewModel
 import com.shyden.shytalk.feature.daily.DailyRewardViewModel
+import com.shyden.shytalk.feature.events.EventHostViewModel
 import com.shyden.shytalk.feature.gacha.GachaViewModel
 import com.shyden.shytalk.feature.gifting.GiftingViewModel
 import com.shyden.shytalk.feature.home.HomeViewModel
@@ -47,6 +48,7 @@ val viewModelModule =
         viewModel { LockScreenViewModel(get(), get(), get(), get(), get(), get()) }
         viewModel { PinSetupViewModel(get(), get(), get(), get(named("deviceId"))) }
         viewModel { EmailOtpViewModel(get()) }
+        viewModel { EventHostViewModel(get(), get()) }
         viewModel { HomeViewModel(get(), get(), get(), get()) }
         viewModel { ProfileViewModel(get(), get(), get(), get(), get(), get(), get()) }
         viewModel { RequiredDOBViewModel(get(), get()) }

@@ -1,0 +1,14 @@
+{
+  "invites": [
+    {
+      "eventId": "evcap-tariq-qKAGKw8PiaK2iAHtEHWn",
+      "status": "PENDING",
+      "title": "Saturday Showcase",
+      "startsAt": "2026-08-01T23:15:40.801Z",
+      "hostId": "evcap-tariq",
+      "hostName": "tariq",
+      "roomId": null,
+      "state": "SCHEDULED"
+    }
+  ]
+}

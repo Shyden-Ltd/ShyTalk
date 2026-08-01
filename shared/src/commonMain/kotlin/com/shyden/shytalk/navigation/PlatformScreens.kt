@@ -51,6 +51,8 @@ data class ProfileScreenParams(
     val onNavigateToRoom: ((String) -> Unit)? = null,
     val onNavigateToChat: ((String) -> Unit)? = null,
     val onNavigateToWallet: (() -> Unit)? = null,
+    /** Opens the event-host home. Null for anyone who cannot run events. */
+    val onNavigateToEventHost: (() -> Unit)? = null,
     val modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier,
 )
 

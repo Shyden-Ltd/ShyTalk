@@ -44,6 +44,9 @@ sealed class Screen(
 
     data object ReportReview : Screen("report_review")
 
+    /** The event host's home — schedule, start, rotate performers, close. */
+    data object EventHost : Screen("event_host")
+
     data object GroupChat : Screen("group_chat/{conversationId}") {
         fun createRoute(conversationId: String) = "group_chat/$conversationId"
     }

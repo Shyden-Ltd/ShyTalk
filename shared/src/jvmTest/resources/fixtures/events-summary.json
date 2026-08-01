@@ -1,0 +1,18 @@
+{
+  "summary": {
+    "eventId": "evcap-tariq-qKAGKw8PiaK2iAHtEHWn",
+    "giftCount": 1,
+    "coinTotal": 500,
+    "beanTotal": 250,
+    "topContributorId": "evcap-alice",
+    "topContributorCoins": 500,
+    "perPerformer": [
+      {
+        "uniqueId": "evcap-selma",
+        "giftCount": 1,
+        "coinTotal": 500,
+        "beanTotal": 250
+      }
+    ]
+  }
+}
