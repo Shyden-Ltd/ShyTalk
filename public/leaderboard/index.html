@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <meta name="theme-color" content="#0f0d15" />
+    <!-- Ranks and display names of real users: never indexed. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="description" content="ShyTalk — gifting leaderboard for your cohort." />
+    <title>ShyTalk — Leaderboard</title>
+    <link rel="stylesheet" href="/portal/portal.css" />
+    <link rel="stylesheet" href="leaderboard.css" />
+    <noscript
+      >This page requires JavaScript to function. Please enable JavaScript in your browser
+      settings.</noscript
+    >
+  </head>
+  <body>
+    <main id="leaderboard-app">
+      <!-- Loading -->
+      <section id="lb-loading" class="portal-section portal-section--narrow" aria-label="Loading">
+        <div class="spinner" role="status">
+          <span class="sr-only">Loading...</span>
+        </div>
+      </section>
+
+      <!-- Signed out -->
+      <section id="lb-signin" class="portal-section portal-section--narrow" hidden>
+        <div class="portal-card">
+          <div class="portal-logo" aria-label="ShyTalk">Shy<span class="accent">Talk</span></div>
+          <p class="portal-subtitle">Sign in to see where you rank</p>
+          <a class="btn" href="/portal/">Sign in</a>
+        </div>
+      </section>
+
+      <!--
+    ERROR is a distinct state from EMPTY, deliberately. A failed request that
+    rendered an empty table would read as "nobody has spent anything", which is
+    a statement about other users rather than about the request — and the user
+    would have no reason to retry.
+  -->
+      <section id="lb-error" class="portal-section portal-section--narrow" hidden>
+        <div class="portal-card">
+          <h1>Leaderboard unavailable</h1>
+          <p id="lb-error-detail">We couldn't load the leaderboard just now.</p>
+          <button type="button" id="lb-retry" class="btn">Try again</button>
+        </div>
+      </section>
+
+      <!-- Board -->
+      <section id="lb-board" class="portal-section" hidden>
+        <div class="portal-card">
+          <h1>Leaderboard</h1>
+          <p class="portal-subtitle" id="lb-cohort-note"></p>
+
+          <table class="lb-table" id="lb-table">
+            <caption class="sr-only">
+              Top gifters in your cohort, highest first
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Rank</th>
+                <th scope="col">Member</th>
+                <th scope="col">Gifted</th>
+              </tr>
+            </thead>
+            <tbody id="lb-rows"></tbody>
+          </table>
+
+          <!-- Nobody in the cohort has gifted yet — a real, different state. -->
+          <p id="lb-empty" class="lb-empty" hidden>
+            No one in your cohort has sent a gift yet. Be the first.
+          </p>
+
+          <!--
+        The caller's own standing, always shown. A user outside the visible
+        window would otherwise have to scroll a hundred rows to learn they are
+        not on it at all.
+      -->
+          <div id="lb-me" class="lb-me" hidden>
+            <span class="lb-me-label">You</span>
+            <span id="lb-me-rank" class="lb-me-rank"></span>
+            <span id="lb-me-name" class="lb-me-name"></span>
+            <span id="lb-me-amount" class="lb-me-amount"></span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!--
+  Subresource Integrity on both CDN scripts. The CSP already restricts
+  script-src to gstatic's firebasejs path, but that only says WHERE a script may
+  come from; SRI says WHAT it must be. A compromised CDN satisfies the first and
+  fails the second, and this page is behind a real user's session.
+
+  Version pinned to 10.14.1 to match /portal — two Firebase versions in one
+  origin share a global namespace and the second to load wins.
+-->
+    <script
+      src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"
+      integrity="sha384-ZaR6mWzmJtrRibZ1Vm7SoHFr8OXjyAuGAXalGDKqbxFT18oi/z+oZLIRFkpeNor1"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"
+      integrity="sha384-I1LYojsZ5RM1cOda44Z2h42Qa6YfsQ1XkXxREnhp4ueYBR/4d1pG1K+NZM537Vsj"
+      crossorigin="anonymous"
+    ></script>
+    <script src="/portal/config.js"></script>
+    <script src="leaderboard.js"></script>
+  </body>
+</html>

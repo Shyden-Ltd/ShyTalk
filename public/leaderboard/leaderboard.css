@@ -1,0 +1,89 @@
+/* SHY-0265 — leaderboard. Builds on /portal/portal.css for the shell. */
+
+.lb-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.lb-table th,
+.lb-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.lb-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.65;
+}
+
+.lb-table td:first-child,
+.lb-table th:first-child {
+  width: 4.5rem;
+}
+
+.lb-table td:last-child,
+.lb-table th:last-child {
+  text-align: right;
+}
+
+/* The caller's own row, so they can find themselves without reading 100 names.
+   Marked with weight and a left rule as well as colour — a rank list read at a
+   glance must not depend on distinguishing one hue from another. */
+.lb-row--me {
+  font-weight: 700;
+  background: rgba(124, 92, 255, 0.14);
+  box-shadow: inset 3px 0 0 0 #7c5cff;
+}
+
+/* Always-visible own standing, for a caller outside the top 100. */
+.lb-me {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(124, 92, 255, 0.12);
+  border: 1px solid rgba(124, 92, 255, 0.35);
+}
+
+.lb-me-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+}
+
+.lb-me-rank {
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.lb-me-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lb-me-amount {
+  font-variant-numeric: tabular-nums;
+}
+
+.lb-empty {
+  margin-top: 18px;
+  opacity: 0.7;
+}
+
+@media (max-width: 520px) {
+  .lb-table th,
+  .lb-table td {
+    padding: 8px 6px;
+  }
+}
