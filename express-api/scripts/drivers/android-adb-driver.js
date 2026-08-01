@@ -2844,17 +2844,73 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // the Firebase session, so the app may relaunch signed-in (or on a
     // moderation warning gate) instead of the picker; if so, perform a real
     // in-app sign-out so the picker becomes reachable.
-    const launchState = await advancePastLaunchGates();
-    if (launchState === 'signed_in' || launchState === 'warning') {
-      await driver.androidSignOut();
+    // Step 0b: REACH THE PICKER, or say precisely why not.
+    //
+    // Measured 2026-08-01 on the app-android cell: 1 pass then 29 consecutive
+    // failures, every one "could not tap persona_picker_open ... the user is
+    // ALREADY signed in". The first scenario signed in, nothing signed out, and
+    // every scenario after it died on the same blind tap.
+    //
+    // The cause is the `unknown` branch. `classifyAndroidAuthState` recognises
+    // main by `main_roomsTab`/`main_profileTab`/`main_settingsButton`; any other
+    // in-app screen — a minor-cohort main, a system-PM notice, an error state —
+    // classifies as `unknown`, whose contract is "never acts". So no sign-out
+    // happened and Step 1 tapped a button that was not there.
+    //
+    // A signed-in session that cannot be classified is still a signed-in
+    // session. Try the real in-app sign-out; if that cannot get us to the
+    // picker, clear the app's stored session outright. `pm clear` is heavy —
+    // it drops legal acceptance too, which the launch-gate loop then has to
+    // re-clear — but it is DETERMINISTIC, and a harness that cannot guarantee a
+    // signed-out start can only ever run its first scenario.
+    let launchState = await advancePastLaunchGates();
+    if (launchState !== 'picker') {
+      try {
+        await driver.androidSignOut();
+      } catch {
+        // Non-fatal: sign-out navigates Profile → Settings, which is exactly
+        // what an unclassifiable screen may not offer. The reset below is the
+        // fallback that does not depend on the UI being where we expect.
+      }
+      launchState = await advancePastLaunchGates();
     }
+    if (launchState !== 'picker') {
+      try {
+        adb(['shell', 'pm', 'clear', pkg]);
+        adb(['shell', 'monkey', '-p', pkg, '-c', 'android.intent.category.LAUNCHER', '1']);
+        await new Promise((r) => setTimeout(r, 3000)); // sleep-ok: cold start after pm clear
+        launchState = await advancePastLaunchGates();
+      } catch {
+        // Fall through to the error below, which reports what was observed.
+      }
+    }
+
     // Step 1: tap `persona_picker_open` on the sign-in screen.
     // Available on local + dev (PR #882); on prod the button is
     // hidden so this will return false → actionable error.
     const opened = await driver.androidTapByTag('persona_picker_open');
     if (!opened) {
+      // Report the EVIDENCE, not a list of guesses. The previous message named
+      // three possible causes and no observation, so every one of the 29
+      // failures said the same thing and none of them said what was on screen.
+      let onScreen = '(no dump)';
+      try {
+        const dump = await driver.androidUiDump();
+        const tags = [...String(dump).matchAll(/resource-id="([^"]*)"/g)]
+          .map((m) => m[1].split('/').pop())
+          .filter(Boolean);
+        onScreen = tags.length ? [...new Set(tags)].slice(0, 25).join(', ') : '(no testTags found)';
+      } catch {
+        /* keep the placeholder — a failed dump is itself worth reporting */
+      }
       throw new Error(
-        `androidPersonaSignIn: could not tap "persona_picker_open" — ShyTalk ${target} launched but the picker testTag isn't visible. Possible causes: (a) the user is ALREADY signed in (sign out via Profile → Settings first), (b) the deployed dev APK predates PR #882 (deploy main to dev and re-install), or (c) the build flavor is "prod" where the picker is hidden by design.`,
+        `androidPersonaSignIn: could not reach the persona picker on ShyTalk ${target}. ` +
+          `Observed state after sign-out + reset attempts: "${launchState}". ` +
+          `testTags currently on screen: ${onScreen}. ` +
+          `If the state is "unknown", classifyAndroidAuthState does not recognise this screen — ` +
+          `add its anchor tag there rather than widening the blind tap. ` +
+          `If it is "signed_in", sign-out ran but did not take effect. ` +
+          `On prod the picker is hidden by design and this cell cannot run at all.`,
       );
     }
     // Step 2: wait for the dialog to render. Anchor on the persona-picker

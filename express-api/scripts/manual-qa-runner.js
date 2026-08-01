@@ -18369,6 +18369,15 @@ async function main() {
         ...(s.error ? { error: String(s.error).slice(0, 400) } : {}),
         ...(s.failedStep ? { failedStep: String(s.failedStep).slice(0, 200) } : {}),
         ...(s.reason ? { reason: String(s.reason).slice(0, 200) } : {}),
+        // The failure CODE and the screenshots taken at the moment of failure.
+        // Both were already recorded in the per-cell markdown report, which is
+        // written once at cell end and is not what the dashboard reads — so a
+        // live failure had no picture and no classification. Operator: the
+        // failures view "must include ... any screenshots".
+        ...(s.code ? { code: String(s.code).slice(0, 80) } : {}),
+        ...(Array.isArray(s.screenshots) && s.screenshots.length
+          ? { screenshots: s.screenshots.slice(0, 6).map(String) }
+          : {}),
       });
     }
   }

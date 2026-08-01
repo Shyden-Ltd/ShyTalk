@@ -118,6 +118,36 @@ describe('three lists, each with only its own columns', () => {
     }
   });
 
+  it('a phase status counts only ITS OWN cells', () => {
+    /**
+     * THE BUG THIS CAUGHT (2026-08-01, on the first dispatch of the new
+     * matrix): with only the APP phase running, the board read
+     *
+     *     app    pending
+     *     web    red        ← nothing in the web phase had been touched
+     *     cross  running    ← nor the cross phase
+     *
+     * The status was derived from `row.summary`, which is the whole-matrix
+     * tally for that scenario across all 16 cells. So a phase's verdict was
+     * being read off other cells' results — a tally over the wrong set.
+     *
+     * With nothing dispatched, every phase must be `pending`. Anything else is
+     * a verdict about work that has not happened.
+     */
+    for (const p of s.phases) {
+      expect(p.status).toBe('pending');
+      expect(p.totals).toEqual({ pass: 0, fail: 0, skipped: 0, pending: expect.any(Number) });
+    }
+  });
+
+  it("a phase's pending count never exceeds its own scenarios × its own cells", () => {
+    // The arithmetic ceiling. Summing `row.summary.pending` across 16 cells
+    // blew straight past this, which is what made the wrong-set bug visible.
+    for (const p of s.phases) {
+      expect(p.totals.pending).toBeLessThanOrEqual(p.scenarios * p.cells.length);
+    }
+  });
+
   it('a phase with no results yet is pending, not green', () => {
     // Reporting an un-run phase as green is the failure mode that makes the
     // whole board untrustworthy.

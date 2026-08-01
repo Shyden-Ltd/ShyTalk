@@ -48,6 +48,8 @@ function formatProgressLine({
   error,
   failedStep,
   reason,
+  code,
+  screenshots,
   at = Date.now(),
 }) {
   return `${JSON.stringify({
@@ -59,6 +61,8 @@ function formatProgressLine({
     error,
     failedStep,
     reason,
+    code,
+    screenshots,
     at,
   })}\n`;
 }

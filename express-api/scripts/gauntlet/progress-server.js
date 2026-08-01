@@ -48,6 +48,7 @@ const {
   mergeCellActivity,
 } = require('../scenario-progress');
 const { applicableCells, requiredPlatforms, GATING_PLATFORMS } = require('../scenario-surface');
+const { buildFailureDetail } = require('./failure-detail');
 
 /**
  * WEB, APP, or CROSS-OVER?
@@ -452,18 +453,47 @@ function snapshot(runDir) {
     phases: PHASES.map((phase) => {
       const cells = planned.filter((c) => phaseOf(c) === phase);
       const rows = scenarioMatrix.filter((r) => r.kind === phase);
-      const totals = rows.reduce(
-        (acc, r) => {
-          acc.pass += r.summary.pass;
-          acc.fail += r.summary.fail;
-          acc.skipped += r.summary.skipped;
-          acc.pending += r.summary.pending;
-          return acc;
-        },
-        { pass: 0, fail: 0, skipped: 0, pending: 0 },
-      );
+      // Counted from THIS PHASE'S CELLS, never from `row.summary`.
+      //
+      // `row.summary` is the whole-matrix tally for that scenario — all 16
+      // cells. Reusing it made the phase status answer a different question
+      // than the one asked: on the very first dispatch, with only the app
+      // phase running, the board showed `web: red` and `cross: running` for
+      // phases whose cells had not been touched. The failures it was reading
+      // belonged to other cells entirely.
+      //
+      // Same correction the dashboard's per-phase table already makes. A tally
+      // is only meaningful over the set the question is about.
+      const totals = { pass: 0, fail: 0, skipped: 0, pending: 0 };
+      for (const r of rows) {
+        for (const cell of cells) {
+          const state = r.results[cell] || 'pending';
+          // 'na' is neither work done nor work owed — this cell can never run
+          // this scenario, so counting it would make the phase permanently
+          // "pending" and never green.
+          if (state !== 'na' && totals[state] !== undefined) totals[state] += 1;
+        }
+      }
       return { phase, cells, scenarios: rows.length, totals, status: phaseStatus(totals) };
     }),
+    // EVERY FAILURE, WITH ITS DIAGNOSIS. Operator 2026-08-01: the failures view
+    // "must include all the information the scenarios currently show. but also
+    // more details, including all steps, the exact step that failed and any
+    // screenshots. it must also show expected vs actual".
+    //
+    // Built from the same progress stream the grid reads, so a red cross and
+    // its explanation can never disagree. Newest first: on a long run the
+    // failure you care about is the one that just happened.
+    failures: progressRecords
+      .filter((r) => r.status === 'fail')
+      .map((r) =>
+        buildFailureDetail({
+          record: r,
+          steps: (CORPUS.find((c) => c.file === r.file && c.scenario === r.scenario) || {}).steps,
+          reportDir,
+        }),
+      )
+      .sort((a, b) => (b.at || 0) - (a.at || 0)),
     generatedAt: new Date().toISOString(),
   };
 }
@@ -499,6 +529,28 @@ function main() {
       }
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       res.end(body);
+      return;
+    }
+    // Failure screenshots. Read-only, and confined to the CURRENT run's report
+    // directory — the path is resolved and then checked against that root, so a
+    // `..` traversal cannot turn a progress viewer into a file server. Only the
+    // image types the runner writes are served, because a viewer that will
+    // return any file type is a viewer that will eventually return a token.
+    if (req.url.startsWith('/api/artifact')) {
+      const runDir = fixedRunDir || latestRunDir();
+      const rel = new URL(req.url, 'http://127.0.0.1').searchParams.get('path') || '';
+      const root = runDir ? path.resolve(path.join(runDir, 'report')) : null;
+      const abs = root ? path.resolve(path.join(root, rel)) : null;
+      const inside = abs && !path.relative(root, abs).startsWith('..');
+      const ext = abs ? path.extname(abs).toLowerCase() : '';
+      const TYPES = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' };
+      if (!inside || !TYPES[ext] || !fs.existsSync(abs)) {
+        res.writeHead(404, { 'content-type': 'text/plain' });
+        res.end('not found');
+        return;
+      }
+      res.writeHead(200, { 'content-type': TYPES[ext], 'cache-control': 'no-store' });
+      fs.createReadStream(abs).pipe(res);
       return;
     }
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });

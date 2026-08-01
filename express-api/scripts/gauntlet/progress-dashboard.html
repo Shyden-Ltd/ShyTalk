@@ -452,6 +452,267 @@
         color: #ff7b72;
       }
 
+      /* ── Verdict: the whole page answers pass/fail at a glance ─────────── */
+      body {
+        transition: background 0.6s ease;
+      }
+      body.verdict-fail {
+        background:
+          radial-gradient(ellipse at top, rgba(248, 81, 73, 0.16), transparent 60%), var(--bg);
+        box-shadow: inset 0 0 0 3px rgba(248, 81, 73, 0.55);
+      }
+      body.verdict-pass {
+        background:
+          radial-gradient(ellipse at top, rgba(63, 185, 80, 0.18), transparent 60%), var(--bg);
+        box-shadow: inset 0 0 0 3px rgba(63, 185, 80, 0.55);
+      }
+
+      /* Confetti: pure CSS so the page stays one self-contained file. */
+      .confetti {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        overflow: hidden;
+        z-index: 9998;
+      }
+      .confetti i {
+        position: absolute;
+        top: -12vh;
+        width: 9px;
+        height: 14px;
+        border-radius: 2px;
+        animation: fall linear forwards;
+      }
+      @keyframes fall {
+        to {
+          transform: translateY(115vh) rotate(720deg);
+          opacity: 0.15;
+        }
+      }
+      .party {
+        position: fixed;
+        top: 38%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 40px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        color: var(--pass);
+        text-shadow: 0 4px 26px rgba(63, 185, 80, 0.55);
+        z-index: 9999;
+        pointer-events: none;
+        animation: pop 0.7s cubic-bezier(0.2, 1.4, 0.4, 1);
+      }
+      @keyframes pop {
+        from {
+          transform: translate(-50%, -50%) scale(0.4);
+          opacity: 0;
+        }
+      }
+      /* Anyone who asked for less motion gets the colour and the sound, not the
+         falling confetti — the verdict must not depend on the animation. */
+      @media (prefers-reduced-motion: reduce) {
+        .confetti {
+          display: none;
+        }
+        .party {
+          animation: none;
+        }
+      }
+
+      /* ── Failures panel ────────────────────────────────────────────────── */
+      .fail-item {
+        border: 1px solid rgba(248, 81, 73, 0.35);
+        border-radius: 8px;
+        margin-bottom: 8px;
+        background: rgba(248, 81, 73, 0.05);
+      }
+      .fail-item > summary {
+        cursor: pointer;
+        padding: 9px 12px;
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+        flex-wrap: wrap;
+        list-style: none;
+      }
+      .fail-item > summary::-webkit-details-marker {
+        display: none;
+      }
+      .fail-item > summary::before {
+        content: '▸';
+        color: var(--dim);
+      }
+      .fail-item[open] > summary::before {
+        content: '▾';
+      }
+      .fail-cell {
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .fail-scen {
+        flex: 1;
+        min-width: 220px;
+      }
+      .fail-file {
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .fail-body {
+        padding: 0 12px 12px;
+        border-top: 1px solid var(--line);
+      }
+      .fail-body h4 {
+        margin: 12px 0 5px;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--dim);
+      }
+      .ea {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 12px;
+      }
+      @media (max-width: 720px) {
+        .ea {
+          grid-template-columns: 1fr;
+        }
+      }
+      .ea-col pre {
+        margin: 0;
+        padding: 8px 10px;
+        border-radius: 6px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 12px;
+        border: 1px solid var(--line);
+      }
+      .ea-exp pre {
+        background: rgba(63, 185, 80, 0.08);
+        border-color: rgba(63, 185, 80, 0.3);
+      }
+      .ea-act pre {
+        background: rgba(248, 81, 73, 0.08);
+        border-color: rgba(248, 81, 73, 0.35);
+      }
+      .ea-src {
+        color: var(--dim);
+        font-size: 11px;
+        font-style: italic;
+        margin: 6px 0 0;
+      }
+      pre.err {
+        margin: 0;
+        padding: 8px 10px;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 12px;
+      }
+      ol.steps {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        font-size: 12.5px;
+      }
+      ol.steps .st {
+        display: flex;
+        gap: 8px;
+        padding: 3px 8px;
+        border-radius: 5px;
+        align-items: baseline;
+      }
+      .st-ic {
+        width: 12px;
+        text-align: center;
+      }
+      .st-n {
+        color: var(--dim);
+        width: 20px;
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      .st-pass .st-ic {
+        color: var(--pass);
+      }
+      .st-fail {
+        background: rgba(248, 81, 73, 0.16);
+        outline: 1px solid rgba(248, 81, 73, 0.5);
+        font-weight: 600;
+      }
+      .st-fail .st-ic {
+        color: var(--fail);
+      }
+      .st-notrun {
+        opacity: 0.42;
+      }
+      .st-unknown .st-ic {
+        color: var(--dim);
+      }
+      .shots {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .shot {
+        display: block;
+        width: 200px;
+        text-decoration: none;
+        color: var(--dim);
+        font-size: 10px;
+      }
+      .shot img {
+        width: 200px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        display: block;
+        background: #000;
+      }
+
+      /* ── Collapsible phase sections ────────────────────────────────────── */
+      details.phase > summary {
+        cursor: pointer;
+        list-style: none;
+      }
+      details.phase > summary::-webkit-details-marker {
+        display: none;
+      }
+      details.phase > summary h3::before {
+        content: '▸ ';
+        color: var(--dim);
+      }
+      details.phase[open] > summary h3::before {
+        content: '▾ ';
+      }
+      details.phase.has-failure {
+        background: rgba(248, 81, 73, 0.05);
+        border-radius: 8px;
+      }
+      .phase-status {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 1px 8px;
+        border-radius: 999px;
+        background: var(--pend);
+        color: var(--dim);
+      }
+      .phase-status-green {
+        background: rgba(63, 185, 80, 0.16);
+        color: var(--pass);
+      }
+      .phase-status-red {
+        background: rgba(248, 81, 73, 0.16);
+        color: var(--fail);
+      }
+      .phase-status-running {
+        background: rgba(210, 153, 34, 0.16);
+        color: var(--run);
+      }
+
       /* Header: environment badge sits beside the run state. */
       .hdr-right {
         display: flex;
@@ -639,6 +900,21 @@
       </details>
     </div>
 
+    <!--
+      FAILURES, WITH THE DIAGNOSIS ATTACHED. Operator 2026-08-01: "it must
+      include all the information the scenarios currently show. but also more
+      details, including all steps, the exact step that failed and any
+      screenshots. it must also show expected vs actual".
+
+      Placed ABOVE the phase lists: when something is red, it is the only thing
+      worth looking at. Open by default whenever it is non-empty — a failure
+      hidden behind a disclosure triangle is a failure nobody reads.
+    -->
+    <div class="panel" id="failPanel" style="display: none">
+      <h2>Failures <span class="unit" id="failCount"></span></h2>
+      <div id="failList"></div>
+    </div>
+
     <div class="panel">
       <h2>Devices</h2>
       <div class="devs" id="devs"></div>
@@ -797,7 +1073,7 @@
        * cannot run it — a true statement about the matrix and a useless one
        * about the app.
        */
-      function renderPhaseList(phase, cells, rows) {
+      function renderPhaseList(phase, cells, rows, status) {
         const meta = PHASE_META[phase] || { title: phase, glyph: '▫', blurb: '' };
         const head =
           '<th>#</th><th>Scenario</th><th>Feature</th>' +
@@ -841,13 +1117,40 @@
           })
           .join('');
 
+        // COLLAPSED BY DEFAULT, OPEN ON FAILURE. Operator 2026-08-01:
+        // "everything should be collapsed by default unless a failure occurs,
+        // then expand it". Three tables of 228 rows is a wall; the reason to
+        // look is a red cross, so that is what opens the section.
+        //
+        // The operator's own toggle wins over the automatic one: `openState`
+        // remembers a section they opened or closed by hand, so a poll two
+        // seconds later does not slam it shut again while they are reading.
+        const hasFailure = status === 'red';
+        const remembered = openState[phase];
+        const open = remembered === undefined ? hasFailure : remembered;
+        const st = PHASE_STATUS[status] || PHASE_STATUS.pending;
+
         return (
-          '<section class="phase phase-' +
+          '<details class="phase phase-' +
           esc(phase) +
-          '"><h3>' +
+          (hasFailure ? ' has-failure' : '') +
+          '" data-phase="' +
+          esc(phase) +
+          '"' +
+          (open ? ' open' : '') +
+          '><summary><h3>' +
           meta.glyph +
           ' ' +
           esc(meta.title) +
+          '<span class="phase-status phase-status-' +
+          esc(status) +
+          '" title="' +
+          esc(st.label) +
+          '">' +
+          st.glyph +
+          ' ' +
+          esc(st.label) +
+          '</span>' +
           '<span class="phase-count">' +
           rows.length +
           ' scenario' +
@@ -859,7 +1162,7 @@
           '</span>' +
           '<span class="phase-blurb">' +
           esc(meta.blurb) +
-          '</span></h3>' +
+          '</span></h3></summary>' +
           (rows.length === 0 || cells.length === 0
             ? '<p class="phase-empty">nothing in this phase for the current matrix</p>'
             : '<table class="grid"><thead><tr>' +
@@ -867,9 +1170,28 @@
               '</tr></thead><tbody>' +
               body +
               '</tbody></table>') +
-          '</section>'
+          '</details>'
         );
       }
+
+      /**
+       * Sections the operator has opened or closed by hand.
+       *
+       * Without this, every two-second poll re-renders the lists from scratch
+       * and throws away the disclosure state — so a section you opened to read
+       * closes under you mid-sentence, and one you closed springs back open.
+       */
+      const openState = {};
+      document.addEventListener(
+        'toggle',
+        (e) => {
+          const el = e.target;
+          if (el && el.matches && el.matches('details.phase[data-phase]')) {
+            openState[el.dataset.phase] = el.open;
+          }
+        },
+        true,
+      );
 
       function renderGrid(s) {
         const rows = s.matrix || [];
@@ -897,9 +1219,13 @@
               p.phase,
               p.cells,
               rows.filter((r) => r.kind === p.phase),
+              p.status,
             ),
           )
           .join('');
+
+        renderFailures(s);
+        paintVerdict(s);
 
         const started = rows.filter((r) => {
           const cells = (phases.find((p) => p.phase === r.kind) || { cells: [] }).cells;
@@ -911,6 +1237,193 @@
           'Scenario detail — ' + started + ' of ' + rows.length + ' scenarios started';
 
         autoScroll();
+      }
+
+      const STEP_GLYPH = { pass: '●', fail: '✕', notrun: '·', unknown: '?' };
+
+      /** One failure, with everything needed to diagnose it without re-running. */
+      function renderFailure(f, i) {
+        const steps = (f.steps || [])
+          .map(
+            (st, n) =>
+              '<li class="st st-' +
+              esc(st.state) +
+              '"><span class="st-ic">' +
+              (STEP_GLYPH[st.state] || '·') +
+              '</span><span class="st-n">' +
+              (n + 1) +
+              '</span><b>' +
+              esc(st.kind || '') +
+              '</b> ' +
+              esc(st.text) +
+              '</li>',
+          )
+          .join('');
+
+        const shots = (f.screenshots || [])
+          .map(
+            (s) =>
+              '<a class="shot" href="' +
+              esc(s.url) +
+              '" target="_blank" rel="noopener" title="' +
+              esc(s.name) +
+              '"><img src="' +
+              esc(s.url) +
+              '" alt="' +
+              esc(s.name) +
+              '" loading="lazy" /><span>' +
+              esc(s.name) +
+              '</span></a>',
+          )
+          .join('');
+
+        // The label is load-bearing. "derived" means the pair is the step text
+        // and the error message — real, but not extracted by a parser. Saying
+        // so stops a reader treating a sentence as a captured value.
+        const evLabel =
+          f.expectedActualSource === 'parsed'
+            ? 'parsed from the error message'
+            : 'derived — the step is the expectation, the error is what happened';
+
+        return (
+          '<details class="fail-item"' +
+          (i === 0 ? ' open' : '') +
+          '><summary>' +
+          '<span class="fail-cell">' +
+          (CELL_ICON[f.cell] || '▫') +
+          ' ' +
+          esc(shortCell(f.cell)) +
+          '</span>' +
+          '<span class="fail-scen">' +
+          esc(f.scenario) +
+          '</span>' +
+          '<span class="fail-file">' +
+          esc(String(f.file || '').replace(/\.feature$/, '')) +
+          '</span>' +
+          (f.code ? '<span class="tag">' + esc(f.code) + '</span>' : '') +
+          '</summary>' +
+          '<div class="fail-body">' +
+          '<div class="ea"><div class="ea-col ea-exp"><h4>Expected</h4><pre>' +
+          esc(f.expected || '—') +
+          '</pre></div>' +
+          '<div class="ea-col ea-act"><h4>Actual</h4><pre>' +
+          esc(f.actual || '—') +
+          '</pre></div></div>' +
+          '<p class="ea-src">' +
+          esc(evLabel) +
+          '</p>' +
+          (f.error ? '<h4>Error</h4><pre class="err">' + esc(f.error) + '</pre>' : '') +
+          '<h4>Steps' +
+          (f.failedStepIndex === null
+            ? ' <span class="unit">— the failing step could not be located in the corpus, so no step is highlighted</span>'
+            : '') +
+          '</h4><ol class="steps">' +
+          steps +
+          '</ol>' +
+          (shots ? '<h4>Screenshots</h4><div class="shots">' + shots + '</div>' : '') +
+          '</div></details>'
+        );
+      }
+
+      function renderFailures(s) {
+        const fails = s.failures || [];
+        const panel = $('failPanel');
+        if (!fails.length) {
+          panel.style.display = 'none';
+          $('failList').innerHTML = '';
+          return;
+        }
+        panel.style.display = '';
+        $('failCount').textContent =
+          '— ' +
+          fails.length +
+          ' scenario result' +
+          (fails.length === 1 ? '' : 's') +
+          ', newest first';
+        $('failList').innerHTML = fails.map(renderFailure).join('');
+      }
+
+      /**
+       * The whole page says pass or fail at a glance.
+       *
+       * Operator 2026-08-01: "turn the page background red if a failure happens.
+       * if the gauntlet completes and all is green, turn the background green
+       * also, and play a celebratory animation with sound".
+       *
+       * Red the moment ANYTHING fails — waiting for the run to end would leave
+       * hours of green-looking page after the failure that already decided it.
+       * Green ONLY on completion, because a run with nothing red yet is not a
+       * passing run, it is an unfinished one.
+       */
+      let celebrated = false;
+      function paintVerdict(s) {
+        const anyFailure = (s.failures || []).length > 0 || (s.counts && s.counts.failed > 0);
+        const finished = s.state === 'done' || s.state === 'failed' || s.state === 'died';
+        const allGreen = finished && !anyFailure;
+
+        document.body.classList.toggle('verdict-fail', anyFailure);
+        document.body.classList.toggle('verdict-pass', allGreen);
+
+        // Once per page load: re-firing on every two-second poll would turn a
+        // celebration into an alarm.
+        if (allGreen && !celebrated) {
+          celebrated = true;
+          celebrate();
+        }
+      }
+
+      /**
+       * Confetti + a short major arpeggio.
+       *
+       * WebAudio, not an audio file: the dashboard is served from a temp run
+       * directory and must stay a single self-contained file. Browsers block
+       * audio until the user has interacted with the page, so a silent
+       * celebration is expected on an untouched tab — the visual half always
+       * plays, and the sound is a bonus rather than the signal.
+       */
+      function celebrate() {
+        const wrap = document.createElement('div');
+        wrap.className = 'confetti';
+        const colours = ['#3fb950', '#58a6ff', '#d29922', '#ff7b72', '#e6e9ef'];
+        for (let i = 0; i < 90; i++) {
+          const bit = document.createElement('i');
+          bit.style.left = Math.random() * 100 + 'vw';
+          bit.style.background = colours[i % colours.length];
+          bit.style.animationDelay = (Math.random() * 0.8).toFixed(2) + 's';
+          bit.style.animationDuration = (2.2 + Math.random() * 1.8).toFixed(2) + 's';
+          bit.style.transform = 'rotate(' + Math.floor(Math.random() * 360) + 'deg)';
+          wrap.appendChild(bit);
+        }
+        document.body.appendChild(wrap);
+        setTimeout(() => wrap.remove(), 6000);
+
+        const banner = document.createElement('div');
+        banner.className = 'party';
+        banner.textContent = '🎉  ALL GREEN  🎉';
+        document.body.appendChild(banner);
+        setTimeout(() => banner.remove(), 6000);
+
+        try {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return;
+          const ac = new Ctx();
+          // C-E-G-C major arpeggio: unmistakably "good news" and over in a second.
+          [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+            const osc = ac.createOscillator();
+            const gain = ac.createGain();
+            osc.type = 'triangle';
+            osc.frequency.value = freq;
+            const t = ac.currentTime + i * 0.14;
+            gain.gain.setValueAtTime(0.0001, t);
+            gain.gain.exponentialRampToValueAtTime(0.22, t + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+            osc.connect(gain).connect(ac.destination);
+            osc.start(t);
+            osc.stop(t + 0.55);
+          });
+        } catch {
+          /* audio blocked or unavailable — the visual celebration still ran */
+        }
       }
 
       // Follow the frontier: scroll to the LAST row that has any non-pending
