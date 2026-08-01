@@ -184,6 +184,14 @@ describe('the iOS batch is attached and not placeholders', () => {
 });
 
 describe('batch 6 — the rest of the iOS surface', () => {
+  // SRC is scoped to the sibling describe above; re-read it here rather than
+  // reaching across scopes, which is what broke this block on first write.
+  const fs2 = require('fs');
+  const path2 = require('path');
+  const SRC = fs2.readFileSync(
+    path2.join(__dirname, '../../scripts/drivers/ios-appium-driver.js'),
+    'utf8',
+  );
   const BATCH_6 = [
     'iosAttemptProfileDeepLink',
     'iosEditBodyAndConfirm',
