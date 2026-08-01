@@ -1002,6 +1002,176 @@ async function createWebDriver({
     return page.__consoleErrors.slice();
   };
 
+  // ── SHY-0259 batch 4: the admin console ─────────────────────────────────
+  //
+  // Moderation actions are the highest-consequence thing an operator does in
+  // this product — approving an ID, banning a device, adjusting a balance —
+  // and every one of them was unreachable from the harness. Built on the
+  // navigation added in batch 2 so tab/search/confirm behaviour stays in one
+  // place. Real clicks against the real admin SPA.
+
+  /** Rows of the visible admin table, as arrays of cell text. */
+  async function adminRows() {
+    const page = await pageFor('default');
+    try {
+      return await page.$$eval('table tbody tr', (trs) =>
+        trs.map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => td.innerText.trim())),
+      );
+    } catch {
+      return [];
+    }
+  }
+  driver._adminRows = adminRows;
+
+  driver.webAdminGetRowCount = async () => (await adminRows()).length;
+
+  driver.webAdminShowsReportRow = async (needle) => {
+    const rows = await adminRows();
+    return rows.some((cells) => cells.some((c) => c.includes(String(needle))));
+  };
+
+  // The ID image is the thing a reviewer actually looks at, so its presence is
+  // asserted on a rendered <img> with a real source — not on a container that
+  // would be present even when the image failed to load.
+  driver.webAdminShowsIdImage = async () => {
+    const page = await pageFor('default');
+    try {
+      return await page.$$eval(
+        '[data-test-tag="admin_idImage"] img, img[alt*="ID" i], .id-image img',
+        (imgs) => imgs.some((im) => im.currentSrc && im.naturalWidth > 0),
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  driver.webAdminOpenReportAndTap = async (report, action) => {
+    if (!(await driver.webAdminOpenTab('reports'))) return false;
+    const page = await pageFor('default');
+    const opened =
+      (await driver.webTap(`report_${report}`)) || (await clickByLabel(page, String(report)));
+    if (!opened) return false;
+    return driver.webTapNamedButton(action);
+  };
+
+  driver.webAdminFilterByAction = async (action) => {
+    const page = await pageFor('default');
+    for (const sel of ['[data-test-tag="admin_actionFilter"]', 'select[name="action"]', 'select']) {
+      try {
+        await page
+          .locator(sel)
+          .first()
+          .selectOption({ label: String(action) }, { timeout: 2000 });
+        return true;
+      } catch {
+        /* next selector */
+      }
+    }
+    return clickByLabel(page, action);
+  };
+
+  driver.webAdminActOnSubmission = async (action, reason) =>
+    driver.webAdminTapWithReason(action, reason);
+
+  driver.webAdminActOnSubmissionByName = async (name, action, reason) => {
+    const page = await pageFor('default');
+    const found =
+      (await driver.webTap(`submission_${name}`)) || (await clickByLabel(page, String(name)));
+    if (!found) return false;
+    return driver.webAdminTapWithReason(action, reason);
+  };
+
+  driver.webAdminApproveSubmissions = async (names = []) => {
+    const list = Array.isArray(names) ? names : [names];
+    // Sequential on purpose: each approval reloads the queue, so firing them
+    // together would act on rows that have already moved.
+    for (const n of list) {
+      if (!(await driver.webAdminActOnSubmissionByName(n, 'Approve'))) return false;
+    }
+    return true;
+  };
+
+  driver.webAdminRejectSubmission = async (name, reason) =>
+    driver.webAdminActOnSubmissionByName(name, 'Reject', reason);
+
+  driver.webAdminLiftAppeal = async (user, reason) => {
+    if (!(await driver.webAdminOpenTab('appeals'))) return false;
+    if (!(await driver.webAdminSearchForUser(user))) return false;
+    return driver.webAdminTapWithReason('Lift', reason);
+  };
+
+  driver.webAdminDenyAppeal = async (user, reason) => {
+    if (!(await driver.webAdminOpenTab('appeals'))) return false;
+    if (!(await driver.webAdminSearchForUser(user))) return false;
+    return driver.webAdminTapWithReason('Deny', reason);
+  };
+
+  driver.webAdminAdjustShyCoins = async (user, amount, reason) => {
+    if (!(await driver.webAdminOpenTab('economy'))) return false;
+    if (!(await driver.webAdminSearchForUser(user))) return false;
+    const page = await pageFor('default');
+    if (!(await driver.webTapNamedButton('Adjust'))) return false;
+    try {
+      await page
+        .locator('[data-test-tag="admin_amount"], input[name="amount"]')
+        .first()
+        .fill(String(amount), { timeout: 2000 });
+    } catch {
+      return false;
+    }
+    return driver.webAdminTapWithReason('Confirm', reason);
+  };
+
+  driver.webAdminProcessRefund = async (receiptOrUser, reason) => {
+    if (!(await driver.webAdminOpenTab('economy'))) return false;
+    if (!(await driver.webAdminSearch(receiptOrUser))) return false;
+    return driver.webAdminTapWithReason('Refund', reason);
+  };
+
+  driver.webAdminOpenEconomyStats = async () => driver.webAdminOpenTab('economy');
+
+  driver.webAdminExecuteAgeDownFlow = async (user, reason) => {
+    if (!(await driver.webAdminOpenTab('age-verification'))) return false;
+    if (!(await driver.webAdminSearchForUser(user))) return false;
+    return driver.webAdminTapWithReason('Age down', reason);
+  };
+
+  // Device bans need the identifier typed as well as a reason — the override
+  // is a separate confirmation, so it is not folded into the reason dialog.
+  driver.webAdminTapAndTypeBanDevice = async (deviceId, reason) => {
+    const page = await pageFor('default');
+    if (!(await driver.webTapNamedButton('Ban device'))) return false;
+    try {
+      await page
+        .locator('[data-test-tag="admin_deviceId"], input[name="deviceId"]')
+        .first()
+        .fill(String(deviceId), { timeout: 2000 });
+    } catch {
+      return false;
+    }
+    return driver.webAdminTapWithReason('Confirm', reason);
+  };
+
+  driver.webAdminTapWithReasonAndOverride = async (action, reason) => {
+    if (!(await driver.webAdminTapWithReason(action, reason))) return false;
+    // A second, deliberate confirmation. Silently skipping it would leave the
+    // action un-applied while the driver reported success.
+    return (await driver.webTapNamedButton('Override')) || (await driver.webConfirmDialog());
+  };
+
+  // Which language the admin UI is actually rendering its own chrome in —
+  // read from the document, not assumed from a setting.
+  driver.webAdminDetectLabelLanguage = async () => {
+    const page = await pageFor('default');
+    try {
+      return await page.evaluate(
+        () => document.documentElement.getAttribute('lang') || navigator.language || 'en',
+      );
+    } catch {
+      return 'en';
+    }
+  };
+
   return driver;
 }
 

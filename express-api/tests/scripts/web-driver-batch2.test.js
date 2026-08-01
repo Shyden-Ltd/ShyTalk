@@ -183,3 +183,86 @@ describe('the batch is genuinely attached and not placeholders', () => {
     }
   });
 });
+
+/**
+ * Batch 4 — the admin console.
+ *
+ * Moderation is the highest-consequence surface in the product: approving an
+ * ID, banning a device, adjusting a balance. Every one of these was
+ * unreachable from the harness, so no journey could check that a moderator
+ * action does what it claims.
+ *
+ * Driven against the real admin SPA. The assertions below deliberately test
+ * the HONEST-FAILURE direction — a driver that reports success when the
+ * control is absent is worse than one that cannot act at all, because it
+ * turns an unrunnable scenario into a false green.
+ */
+describe('admin-console methods fail honestly on a page with no admin table', () => {
+  const ADMIN_BATCH = [
+    'webAdminGetRowCount',
+    'webAdminShowsReportRow',
+    'webAdminShowsIdImage',
+    'webAdminOpenReportAndTap',
+    'webAdminFilterByAction',
+    'webAdminActOnSubmission',
+    'webAdminActOnSubmissionByName',
+    'webAdminApproveSubmissions',
+    'webAdminRejectSubmission',
+    'webAdminLiftAppeal',
+    'webAdminDenyAppeal',
+    'webAdminAdjustShyCoins',
+    'webAdminProcessRefund',
+    'webAdminOpenEconomyStats',
+    'webAdminExecuteAgeDownFlow',
+    'webAdminTapAndTypeBanDevice',
+    'webAdminTapWithReasonAndOverride',
+    'webAdminDetectLabelLanguage',
+  ];
+
+  itLive('every admin method the runner calls is a real function', async () => {
+    expect(ADMIN_BATCH.filter((n) => typeof driver[n] !== 'function')).toEqual([]);
+  });
+
+  itLive('row count is 0, not a crash, when no table is present', async () => {
+    await driver.webOpenDeepLink(`${BASE}/`);
+    expect(await driver.webAdminGetRowCount()).toBe(0);
+  });
+
+  itLive('showsReportRow is false for a row that does not exist', async () => {
+    await driver.webOpenDeepLink(`${BASE}/`);
+    expect(await driver.webAdminShowsReportRow('zzz-no-such-report')).toBe(false);
+  });
+
+  itLive('showsIdImage is false when no ID image has loaded', async () => {
+    // Asserted on a rendered <img> with naturalWidth > 0 — a container that
+    // exists while the image failed to load must NOT read as present.
+    await driver.webOpenDeepLink(`${BASE}/`);
+    expect(await driver.webAdminShowsIdImage()).toBe(false);
+  });
+
+  itLive('a moderation action returns false when its control is absent', async () => {
+    await driver.webOpenDeepLink(`${BASE}/`);
+    expect(await driver.webAdminActOnSubmissionByName('nobody', 'Approve')).toBe(false);
+  });
+
+  itLive('detectLabelLanguage reads the real document language', async () => {
+    await driver.webOpenDeepLink(`${BASE}/`);
+    const lang = await driver.webAdminDetectLabelLanguage();
+    expect(typeof lang).toBe('string');
+    expect(lang.length).toBeGreaterThan(0);
+  });
+
+  test('no admin method is a stub', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const src = fs.readFileSync(
+      path.join(__dirname, '../../scripts/drivers/web-playwright-driver.js'),
+      'utf8',
+    );
+    for (const name of ADMIN_BATCH) {
+      const at = src.indexOf(`driver.${name} =`);
+      expect(at).toBeGreaterThan(-1);
+      expect(src.slice(at, at + 300)).not.toMatch(/'stub:|TODO|not implemented/i);
+    }
+  });
+});
