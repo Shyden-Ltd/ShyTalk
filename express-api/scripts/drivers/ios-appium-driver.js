@@ -461,7 +461,10 @@ async function createIosDriver({
       const esc = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       return new RegExp(`\\b(?:label|name|value)="[^"]*${esc}[^"]*"`).test(dump);
     }
-    return xcuiIdentifierPresent('toast_');
+    // `app_toast`, not `toast_`: every snackbar in the app renders through
+    // StyledSnackbarHost with that tag. `toast_` was never rendered anywhere, so
+    // this check could only fail — and it failed blaming the product.
+    return xcuiIdentifierPresent('app_toast');
   };
 
   driver.iosUiDump = async () => {

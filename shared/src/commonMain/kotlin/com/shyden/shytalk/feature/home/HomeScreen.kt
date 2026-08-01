@@ -156,7 +156,11 @@ fun RoomListContent(
                 PullToRefreshBox(
                     isRefreshing = uiState.isRefreshing,
                     onRefresh = { viewModel.refreshRooms() },
-                    modifier = Modifier.weight(1f),
+                    // The driver's note said "there is no refresh CONTROL in the
+                    // product; the list is a live listener". There is one — a
+                    // pull gesture rather than a button, which is why a search
+                    // for a tapped tag found nothing and concluded it was absent.
+                    modifier = Modifier.weight(1f).testTag("rooms_refresh"),
                 ) {
                     if (uiState.rooms.isEmpty()) {
                         Box(

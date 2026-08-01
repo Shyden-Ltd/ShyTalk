@@ -931,7 +931,20 @@ fun PrivateChatScreen(
                             // Tag aligned with manual-qa corpus naming
                             // (j07:31, j11:24, j13:78). Renamed from
                             // privateChat_sendButton → conversation_sendButton.
-                            modifier = Modifier.testTag("conversation_sendButton"),
+                            //
+                            // MODE-AWARE, because it is one control doing two
+                            // jobs. A journey asserting "Nora confirms the edit"
+                            // needs the button to be IN edit mode; a single tag
+                            // let that step pass against a plain send, which is
+                            // a different action with a different outcome.
+                            modifier =
+                                Modifier.testTag(
+                                    if (uiState.editingMessageId != null) {
+                                        "pm_confirmEdit"
+                                    } else {
+                                        "conversation_sendButton"
+                                    },
+                                ),
                         ) {
                             Icon(
                                 Icons.AutoMirrored.Filled.Send,

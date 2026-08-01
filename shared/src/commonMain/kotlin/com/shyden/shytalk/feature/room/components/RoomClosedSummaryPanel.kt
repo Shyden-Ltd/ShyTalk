@@ -32,6 +32,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -63,6 +64,10 @@ fun RoomClosedSummaryPanel(
         modifier =
             modifier
                 .fillMaxSize()
+                // The panel had no tag at all, so a journey asserting "the room
+                // closed and I was shown the summary" was checking for something
+                // the product never announced.
+                .testTag("roomClosedSummary_panel")
                 .padding(vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,

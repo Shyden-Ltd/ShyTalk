@@ -48,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,6 +89,7 @@ fun BackpackSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetMaxWidth = Dp.Unspecified,
+        modifier = Modifier.testTag("gift_open"),
     ) {
         val density = LocalDensity.current
         val screenHeightDp =
@@ -825,7 +827,9 @@ private fun BottomBar(
                     contentColor = Color.Black,
                     disabledContainerColor = CyanAccent.copy(alpha = 0.3f),
                 ),
-            modifier = Modifier.height(36.dp),
+            // The gift path is the money path, and it was entirely untagged —
+            // a journey sending a gift had nothing to tap by name.
+            modifier = Modifier.height(36.dp).testTag("gift_send"),
         ) {
             Text(
                 when {

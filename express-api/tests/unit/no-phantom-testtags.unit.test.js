@@ -47,10 +47,24 @@ function productTags() {
   if (cached) return cached;
   const tags = new Set();
   for (const f of walk(path.join(REPO, 'shared/src'), ['.kt'])) {
-    for (const m of fs.readFileSync(f, 'utf8').matchAll(/testTag\("([^"]+)"\)/g)) {
+    const src = fs.readFileSync(f, 'utf8');
+    // `testTag("literal")` — the common form.
+    for (const m of src.matchAll(/testTag\("([^"]+)"\)/g)) {
       // `roomList_roomCard_${room.roomId}` — the interpolation is per-instance;
       // the stable part is what a driver can match on.
       tags.add(m[1].replace(/\$\{[^}]*\}/g, '').replace(/\$\w+/g, ''));
+    }
+    // A tag chosen by a CONDITIONAL is still a rendered tag. One control can do
+    // two jobs — the private-chat send button becomes `pm_confirmEdit` while an
+    // edit is in flight — and a pattern that only understood a bare literal
+    // reported BOTH of its tags as never rendered. The scanner has to describe
+    // the code, not one of its shapes.
+    for (const m of src.matchAll(/testTag\(\s*(?:\n|.){0,400}?\)\s*,/g)) {
+      const chunk = m[0];
+      if (!/\bif\s*\(|\bwhen\s*[({]/.test(chunk)) continue;
+      for (const lit of chunk.matchAll(/"([A-Za-z][A-Za-z0-9_]*)"/g)) {
+        tags.add(lit[1].replace(/\$\{[^}]*\}/g, '').replace(/\$\w+/g, ''));
+      }
     }
   }
   for (const f of walk(path.join(REPO, 'iosApp'), ['.swift'])) {
@@ -115,19 +129,25 @@ const KNOWN_PHANTOM_TAGS = [
   // An OS permission dialog, not our UI. There is nothing for the product to
   // tag; it belongs to Android's permission controller.
   'permission_allow_foreground_only_button',
-  // Controls the product has not built yet. Each is a real gap: a driver taps
-  // it, nothing renders it, and the step fails blaming the app.
+  // Controls the product genuinely has not built. VERIFIED 2026-08-02 by
+  // searching shared/src for the screens themselves, not just the tags: there is
+  // no email-signup screen (signin_signUpLink, signup_dobPicker), no ID-upload
+  // screen (idUpload_gallery), no purchase-retry path (wallet_retryPurchase) and
+  // no followed-users picker. Each is a real feature gap, not a naming one.
+  //
+  // That distinction is the point of checking. Seven names left this list on the
+  // same day and NONE of them was unbuilt — they were built and untagged, which
+  // reads identically in a dump.
+  //
+  // The rooms refresh was the clearest case: the driver's own comment said
+  // "there is no refresh CONTROL in the product", and HomeScreen has had a
+  // PullToRefreshBox the whole time. It was a gesture rather than a button, so a
+  // search for a tappable tag found nothing and concluded wrongly.
   'followedPicker',
-  'gift_open',
-  'gift_send',
   'idUpload_gallery',
-  'pm_confirmEdit',
-  'rooms_refresh',
   'signin_signUpLink',
   'signup_dobPicker',
   'wallet_retryPurchase',
-  'roomClosedSummary_',
-  'toast_',
 ];
 
 describe('the scan is real', () => {
