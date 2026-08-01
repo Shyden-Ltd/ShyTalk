@@ -1961,31 +1961,27 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     if (!tag || !String(tag).trim()) return false;
     return new RegExp(`(?:text|content-desc)="[^"]*${esc(tag)}[^"]*"`, 'i').test(dump);
   };
-  driver.androidShowsInAppGiftNotification = async (_recipient, _sender, _giftId) => {
+  driver.androidShowsInAppGiftNotification = async (_viewer, sender, giftName) => {
+    // WAS: `async (_name, _sender, _gift) => /giftNotification_/.test(dump)` —
+    // a tag nothing rendered, because THE FEATURE DID NOT EXIST. A gift arriving
+    // while the app was open produced nothing at all.
+    //
+    // It exists now (SHY-0266): the push handler emits to GiftNotificationBus on
+    // foreground and HomeScreen shows it through the shared snackbar host, which
+    // carries the `app_toast` tag.
+    //
+    // BOTH names are asserted. "You received a gift" does not make the gesture
+    // land, and being seen is the entire value of gifting to the sender — so a
+    // banner naming only one of them is a real defect, not a cosmetic one.
+    if (!sender || !String(sender).trim()) return false;
+    if (!giftName || !String(giftName).trim()) return false;
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?giftNotification_[^"]*"[^>]*\/?>/;
-    return tagRx.test(dump);
+    if (!/resource-id="(?:[^"]*:id\/)?app_toast"/.test(dump)) return false;
+    const esc = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const shows = (v) => new RegExp(`(?:text|content-desc)="[^"]*${esc(v)}[^"]*"`, 'i').test(dump);
+    return shows(sender) && shows(giftName);
   };
-
-  // Wake 98 — `<Name>'s <Plat> UI shows <Other> in the results[ with
-  // displayName "<X>"]` (j01/j02). Discovery list result visibility.
-  // Optional displayName suffix. Driver receives
-  // `(viewer, target, displayName)` — displayName may be `null` (no
-  // `with displayName` suffix in step).
-  //
-  // Foundation strategy: presence-check on the `searchResults_*`
-  // testTag PREFIX. No `searchResults_*` testTag exists in
-  // shared/src/commonMain yet — NewMessageScreen.kt exposes only
-  // `newMessage_searchField` for the input box, not per-result tiles.
-  //
-  // Returns false in real journeys today; lands true when ships with
-  // searchResults_userTile / searchResults_container.
-  //
-  // Per-user verification needs user-id → testTag map. Per-displayName
-  // verification needs text-extraction. Both deferred. All 3 args
-  // (_viewer, _target, _displayName) accepted-and-ignored.
   driver.androidShowsInResults = async (_viewer, targetUniqueId, displayName) => {
     // WAS: `async (_name, _query, _target) => /searchResults_/.test(dump)` —
     // a check for a container that the product does not even render. It could

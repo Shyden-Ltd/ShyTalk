@@ -578,3 +578,55 @@ describe('androidShowsOfficialBadge — a badge that now exists', () => {
     );
   });
 });
+
+/**
+ * `androidShowsInAppGiftNotification` — both names, or it is not the claim.
+ *
+ * It checked `giftNotification_`, a tag nothing rendered, because THE FEATURE
+ * DID NOT EXIST: a gift arriving while the app was open produced nothing.
+ * SHY-0266 built it; this asserts it.
+ */
+describe('androidShowsInAppGiftNotification — sender AND gift', () => {
+  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
+  const withDump = (dump) =>
+    createAndroidDriver({ serial: 'test' }).then((d) => {
+      d.androidUiDump = async () => dump;
+      return d;
+    });
+  const banner = (text) => `<node resource-id="com.x:id/app_toast" text="${text}" />`;
+
+  test('true when the banner names the sender and the gift', async () => {
+    const d = await withDump(banner('Alice sent you a crown'));
+    expect(await d.androidShowsInAppGiftNotification('Selma', 'Alice', 'crown')).toBe(true);
+  });
+
+  test('FALSE when the gift is named but the sender is not', async () => {
+    // Being seen is the whole value of gifting to the sender, so an anonymous
+    // banner is a real defect rather than a cosmetic one.
+    const d = await withDump(banner('You received a crown'));
+    expect(await d.androidShowsInAppGiftNotification('Selma', 'Alice', 'crown')).toBe(false);
+  });
+
+  test('FALSE when the sender is named but the gift is not', async () => {
+    const d = await withDump(banner('Alice sent you something'));
+    expect(await d.androidShowsInAppGiftNotification('Selma', 'Alice', 'crown')).toBe(false);
+  });
+
+  test('FALSE when no banner is on screen at all', async () => {
+    const d = await withDump('<node resource-id="com.x:id/main_roomsTab" />');
+    expect(await d.androidShowsInAppGiftNotification('Selma', 'Alice', 'crown')).toBe(false);
+  });
+
+  test('FALSE when the names appear but NOT in a banner', async () => {
+    // "Alice" and "crown" elsewhere on screen — a conversation list, a gift
+    // wall — must not satisfy an assertion about a notification.
+    const d = await withDump('<node text="Alice sent you a crown" />');
+    expect(await d.androidShowsInAppGiftNotification('Selma', 'Alice', 'crown')).toBe(false);
+  });
+
+  test('a missing argument is refused rather than passing vacuously', async () => {
+    const d = await withDump(banner('Alice sent you a crown'));
+    expect(await d.androidShowsInAppGiftNotification('Selma', '', 'crown')).toBe(false);
+    expect(await d.androidShowsInAppGiftNotification('Selma', 'Alice', '')).toBe(false);
+  });
+});

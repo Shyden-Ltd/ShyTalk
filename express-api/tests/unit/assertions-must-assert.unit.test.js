@@ -89,7 +89,6 @@ function assertionsIgnoringEveryArgument(file, prefix) {
 // it checks exist". Neither subsumes the other.
 const KNOWN_HOLLOW = [
   'androidShowsFrozenBanner',
-  'androidShowsInAppGiftNotification',
   'androidShowsNonEmptyLocaleText',
   'androidShowsOwnRankInTop',
   'androidShowsSeatRequestNotification',
