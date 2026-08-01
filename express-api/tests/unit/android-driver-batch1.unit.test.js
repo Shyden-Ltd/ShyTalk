@@ -195,3 +195,149 @@ describe('every batch-1 method is actually attached to the driver', () => {
     }
   });
 });
+
+/**
+ * Batch 5 — composites, attempt-verbs and parsing.
+ *
+ * The parsing is tested for real here; the device round-trip is proven by the
+ * journey corpus on hardware. What could not be seen from a journey result is
+ * a parser that returns plausible-but-wrong structure, so that is what is
+ * pinned.
+ */
+describe('seat-grid parsing', () => {
+  const { parseSeatGrid } = require('../../scripts/drivers/ui-dump-query');
+
+  const seat = (i, occupant) =>
+    node({ id: `seat_${i}`, text: occupant || '', bounds: `[0,${i * 100}][100,${i * 100 + 90}]` });
+
+  it('reads each seat and its occupant', () => {
+    const dump = `<hierarchy>${seat(0, 'Theo')}${seat(1, '')}${seat(2, 'Alice')}</hierarchy>`;
+    expect(parseSeatGrid(dump)).toEqual([
+      { index: 0, occupant: 'Theo' },
+      { index: 1, occupant: null },
+      { index: 2, occupant: 'Alice' },
+    ]);
+  });
+
+  it('reports an EMPTY seat as null, not as an empty string', () => {
+    // A caller checking `if (seat.occupant)` must see empty and absent alike;
+    // '' is truthy in some comparisons and would read as occupied.
+    expect(parseSeatGrid(`<hierarchy>${seat(3, '')}</hierarchy>`)[0].occupant).toBeNull();
+  });
+
+  it('returns seats in index order regardless of dump order', () => {
+    const dump = `<hierarchy>${seat(2, 'C')}${seat(0, 'A')}${seat(1, 'B')}</hierarchy>`;
+    expect(parseSeatGrid(dump).map((s) => s.index)).toEqual([0, 1, 2]);
+  });
+
+  it('ignores non-seat nodes entirely', () => {
+    const dump = `<hierarchy>${node({ id: 'roomTitle', text: 'seat_9', bounds: '[0,0][1,1]' })}</hierarchy>`;
+    // A node whose TEXT merely mentions a seat id must not become a seat.
+    expect(parseSeatGrid(dump)).toEqual([]);
+  });
+
+  it('returns [] rather than throwing when the screen has not rendered', () => {
+    // Mid-journey this is normal, not an error; throwing would fail a scenario
+    // for a timing artefact.
+    expect(parseSeatGrid(null)).toEqual([]);
+    expect(parseSeatGrid('')).toEqual([]);
+  });
+});
+
+describe('layout direction', () => {
+  const { parseLayoutDirection } = require('../../scripts/drivers/ui-dump-query');
+
+  it('detects rtl from the marker the app sets', () => {
+    expect(parseLayoutDirection('<node rtl_marker="1"/>')).toBe('rtl');
+    expect(parseLayoutDirection('<node layout-direction="rtl"/>')).toBe('rtl');
+  });
+
+  it('defaults to ltr, including on a blank dump', () => {
+    // Guessing rtl would pass an RTL assertion against a screen that never
+    // rendered — a false green on an i18n check.
+    expect(parseLayoutDirection('<node/>')).toBe('ltr');
+    expect(parseLayoutDirection(null)).toBe('ltr');
+  });
+});
+
+describe('batch 5 is attached and honest', () => {
+  const SRC = fs.readFileSync(
+    path.join(__dirname, '../../scripts/drivers/android-adb-driver.js'),
+    'utf8',
+  );
+  const BATCH_5 = [
+    'androidAttemptAction',
+    'androidAttemptBlock',
+    'androidAttemptFollowViaProfile',
+    'androidAttemptStartConversation',
+    'androidAttemptProfileDeepLink',
+    'androidOpenDeepLink',
+    'androidOpenConversation',
+    'androidIsOnConversationWith',
+    'androidSendMessageTo',
+    'androidLongPressMessageAndTap',
+    'androidEditBodyAndConfirm',
+    'androidAcceptLegalAndContinue',
+    'androidPickDOB',
+    'androidSignupWithDOB',
+    'androidPickIdType',
+    'androidSelectGalleryImage',
+    'androidPickTestImageBySize',
+    'androidSelectGiftRecipient',
+    'androidSelectFromFollowedPicker',
+    'androidSendGift',
+    'androidCreateRoomComposite',
+    'androidRefreshRoomsList',
+    'androidTapEventInviteAction',
+    'androidRetrySamePurchase',
+    'androidRelaunchAndSignIn',
+    'androidForceRefreshJwt',
+    'androidForceRefreshSecureToken',
+    'androidGetLayoutDirection',
+    'androidShowsBannerFromUser',
+    'androidShowsCohortChangeBanner',
+    'androidShowsAdultCohortVisitor',
+    'androidShowsNewFollowerNotification',
+    'androidShowsStatsForUser',
+    'androidShowsTranslationOf',
+    'androidShowsPmWithBadge',
+    'androidShowsTabWithNoNavTo',
+    'androidSeatGridState',
+  ];
+
+  it.each(BATCH_5)('%s is defined', (name) => {
+    expect(SRC).toMatch(new RegExp(`driver\\.${name}\\s*=`));
+  });
+
+  it('a long-press outlasts the system threshold', () => {
+    // A swipe shorter than ~500ms registers as an ordinary tap, the context
+    // menu never opens, and the following step fails for the wrong reason.
+    // Format-independent on purpose: prettier wraps the argument array, and a
+    // regex that pinned the layout would fail on a reformat while the
+    // behaviour was untouched.
+    const at = SRC.indexOf('driver.androidLongPressMessageAndTap');
+    const body = SRC.slice(at, at + 900);
+    const durations = [...body.matchAll(/'(\d{3,})'/g)].map((m) => Number(m[1]));
+    expect(Math.max(0, ...durations)).toBeGreaterThanOrEqual(500);
+  });
+
+  it('attempt-verbs report actuation separately from permission', () => {
+    // The corpus uses these where refusal is EXPECTED. Returning a bare false
+    // for "blocked" would make a working safety gate look like a driver fault.
+    const at = SRC.indexOf('driver.androidAttemptAction');
+    expect(SRC.slice(at, at + 200)).toContain('attempted: true');
+    expect(SRC.slice(at, at + 200)).toContain('actuated');
+  });
+
+  it('deep links go through am start, exercising the real intent filters', () => {
+    const at = SRC.indexOf('driver.androidOpenDeepLink');
+    expect(SRC.slice(at, at + 400)).toContain('android.intent.action.VIEW');
+  });
+
+  it('none of batch 5 is a stub', () => {
+    for (const name of BATCH_5) {
+      const at = SRC.indexOf(`driver.${name} =`);
+      expect(SRC.slice(at, at + 300)).not.toMatch(/'stub:|TODO|not implemented/i);
+    }
+  });
+});

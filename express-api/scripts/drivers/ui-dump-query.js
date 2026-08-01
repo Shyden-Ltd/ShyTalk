@@ -121,3 +121,37 @@ module.exports = {
   hasEditableField,
   escapeInputText,
 };
+
+/**
+ * Seats and their occupants, parsed from a dump.
+ *
+ * Returns [] for an absent dump rather than throwing: a room screen that has
+ * not rendered yet is a normal mid-journey state, not an error, and throwing
+ * here would fail the scenario for a timing artefact.
+ */
+function parseSeatGrid(dump) {
+  if (!dump) return [];
+  const out = [];
+  for (const el of String(dump).match(/<node\b[^>]*>/g) || []) {
+    const id = /resource-id="(?:[^"]*:id\/)?seat_(\d+)"/.exec(el);
+    if (!id) continue;
+    const text = /text="([^"]*)"/.exec(el);
+    out.push({ index: Number(id[1]), occupant: text && text[1] ? text[1] : null });
+  }
+  return out.sort((a, b) => a.index - b.index);
+}
+
+/**
+ * Layout direction of the rendered hierarchy.
+ *
+ * uiautomator does not expose direction as an attribute, so this reads the
+ * marker the app sets. Defaults to 'ltr' on an absent dump — guessing 'rtl'
+ * would silently pass an RTL assertion against a blank screen.
+ */
+function parseLayoutDirection(dump) {
+  if (!dump) return 'ltr';
+  return /layout-direction="rtl"|rtl_marker/.test(String(dump)) ? 'rtl' : 'ltr';
+}
+
+module.exports.parseSeatGrid = parseSeatGrid;
+module.exports.parseLayoutDirection = parseLayoutDirection;

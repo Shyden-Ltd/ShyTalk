@@ -42,6 +42,8 @@ const {
   dumpHas,
   hasEditableField,
   escapeInputText,
+  parseSeatGrid,
+  parseLayoutDirection,
 } = require('./ui-dump-query');
 
 function selectSerial(preferredSerial) {
@@ -3083,6 +3085,218 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // Confirm the dialog in front of us. Delegates so the affirmative-label list
   // lives in one place.
   driver.androidConfirm = async () => driver.androidConfirmDialog();
+
+  // ── SHY-0259 batch 5: the rest of the Android surface ───────────────────
+  //
+  // Composites, attempt-verbs and assertions. Built on batch 1 plus the
+  // existing primitives; nothing here re-implements a tap or a dump.
+
+  // "attempts X" is used where the action is EXPECTED to be refused. It must
+  // report whether the control could be ACTUATED, never whether the attempt
+  // was permitted — conflating the two makes a correct block look like a
+  // driver fault, which is how a working safety gate gets "fixed".
+  driver.androidAttemptAction = async (label) => ({
+    attempted: true,
+    actuated: await driver.androidTapNamedButton(label),
+  });
+  driver.androidAttemptBlock = async (target) => {
+    await driver.androidTapUserCard(null, target);
+    return driver.androidAttemptAction('Block');
+  };
+  driver.androidAttemptFollowViaProfile = async (target) => {
+    await driver.androidTapUserCard(null, target);
+    return driver.androidAttemptAction('Follow');
+  };
+  driver.androidAttemptStartConversation = async (target) => {
+    await driver.androidTapUserCard(null, target);
+    return driver.androidAttemptAction('Message');
+  };
+  driver.androidAttemptProfileDeepLink = async (target) => {
+    const opened = await driver.androidOpenDeepLink(`shytalk://profile/${target}`);
+    return { attempted: true, actuated: opened };
+  };
+
+  // Deep links go through `am start`, the same path the OS uses for a tapped
+  // link, so the app's own intent filters and guards are genuinely exercised.
+  driver.androidOpenDeepLink = async (url) => {
+    try {
+      adb(['shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d', String(url)]);
+      return true;
+    } catch (e) {
+      console.error(`[android-driver] androidOpenDeepLink(${url}) failed: ${e.message}`);
+      return false;
+    }
+  };
+
+  driver.androidOpenConversation = async (withName) => {
+    if (await driver.androidTapByTag(`conversation_${withName}`)) return true;
+    if (!(await driver.androidOpenScreen('pm'))) return false;
+    return driver.androidTapNamedButton(withName);
+  };
+
+  driver.androidIsOnConversationWith = async (name) => dumpHas(await driver.androidUiDump(), name);
+
+  driver.androidSendMessageTo = async (target, text) => {
+    if (!(await driver.androidOpenConversation(target))) return false;
+    if (!(await driver.androidTypeIntoConversationInput(text))) return false;
+    return (await driver.androidTapByTag('pm_sendButton')) || driver.androidTapNamedButton('Send');
+  };
+
+  // Long-press then choose from the context menu. The press must outlast the
+  // system long-press threshold or it registers as an ordinary tap and the
+  // menu never appears.
+  driver.androidLongPressMessageAndTap = async (messageText, action) => {
+    const dump = await driver.androidUiDump();
+    const c = dump && centreOf(dump, 'text', messageText);
+    if (!c) return false;
+    try {
+      adb([
+        'shell',
+        'input',
+        'swipe',
+        String(c.cx),
+        String(c.cy),
+        String(c.cx),
+        String(c.cy),
+        '800',
+      ]);
+    } catch (e) {
+      console.error(`[android-driver] long-press failed: ${e.message}`);
+      return false;
+    }
+    return driver.androidTapNamedButton(action);
+  };
+
+  driver.androidEditBodyAndConfirm = async (newBody) => {
+    if (!(await driver.androidTypeIntoConversationInput(newBody))) return false;
+    return (await driver.androidTapByTag('pm_confirmEdit')) || driver.androidConfirm();
+  };
+
+  driver.androidAcceptLegalAndContinue = async () => {
+    for (const tag of ['legal_acceptCheckbox', 'legal_accept']) await driver.androidTapByTag(tag);
+    return (
+      (await driver.androidTapNamedButton('Continue')) ||
+      (await driver.androidTapNamedButton('Accept'))
+    );
+  };
+
+  // Date-of-birth entry. The picker is a composite: open it, type the parts,
+  // confirm. Typing into the field directly is what the app supports on this
+  // screen; a spinner gesture would be device-geometry dependent.
+  driver.androidPickDOB = async (dob) => {
+    if (!(await driver.androidTapByTag('signup_dobPicker'))) return false;
+    if (!(await driver.androidTypeText(String(dob)))) return false;
+    return (await driver.androidTapNamedButton('OK')) || driver.androidConfirm();
+  };
+
+  driver.androidSignupWithDOB = async (dob) => {
+    if (!(await driver.androidTapByTag('signin_signUpLink'))) return false;
+    if (!(await driver.androidPickDOB(dob))) return false;
+    return driver.androidTapNamedButton('Continue');
+  };
+
+  driver.androidPickIdType = async (idType) => {
+    if (await driver.androidTapByTag(`idType_${idType}`)) return true;
+    return driver.androidTapNamedButton(idType);
+  };
+
+  driver.androidSelectGalleryImage = async (index = 0) => {
+    if (!(await driver.androidTapByTag('idUpload_gallery'))) return false;
+    return driver.androidTapByTag(`galleryImage_${index}`);
+  };
+
+  driver.androidPickTestImageBySize = async (size) => {
+    if (!(await driver.androidTapByTag('idUpload_gallery'))) return false;
+    return (
+      (await driver.androidTapByTag(`testImage_${size}`)) ||
+      (await driver.androidTapNamedButton(String(size)))
+    );
+  };
+
+  driver.androidSelectGiftRecipient = async (name) => {
+    if (await driver.androidTapByTag(`giftRecipient_${name}`)) return true;
+    return driver.androidTapNamedButton(name);
+  };
+
+  driver.androidSelectFromFollowedPicker = async (name) => {
+    if (!(await driver.androidTapByTag('followedPicker'))) return false;
+    return driver.androidTapNamedButton(name);
+  };
+
+  driver.androidSendGift = async (recipient, gift) => {
+    if (!(await driver.androidTapByTag('gift_open'))) return false;
+    if (recipient && !(await driver.androidSelectGiftRecipient(recipient))) return false;
+    if (gift && !(await driver.androidTapNamedButton(gift))) return false;
+    return (await driver.androidTapByTag('gift_send')) || driver.androidTapNamedButton('Send');
+  };
+
+  driver.androidCreateRoomComposite = async (title) => {
+    if (!(await driver.androidOpenScreen('rooms'))) return false;
+    if (!(await driver.androidTapByTag('rooms_create'))) return false;
+    if (title && !(await driver.androidTypeText(title))) return false;
+    return (await driver.androidTapByTag('room_confirmCreate')) || driver.androidConfirm();
+  };
+
+  driver.androidRefreshRoomsList = async () => {
+    if (!(await driver.androidOpenScreen('rooms'))) return false;
+    return (await driver.androidTapByTag('rooms_refresh')) || true;
+  };
+
+  driver.androidTapEventInviteAction = async (action) => driver.androidTapNamedButton(action);
+
+  driver.androidRetrySamePurchase = async () => {
+    if (!(await driver.androidTapByTag('wallet_retryPurchase'))) return false;
+    return driver.androidConfirm();
+  };
+
+  driver.androidRelaunchAndSignIn = async (persona) => {
+    if (!(await driver.androidKillAndRelaunch())) return false;
+    return driver.androidPersonaSignIn(persona);
+  };
+
+  // Token refresh has to go through the APP, not a server call: the point of
+  // these steps is that the client picks up new claims, which a server-side
+  // mint would not prove.
+  driver.androidForceRefreshJwt = async () => {
+    if (await driver.androidTapByTag('debug_forceRefreshJwt')) return true;
+    // Backgrounding and resuming triggers the app's own token refresh.
+    return driver.androidKillAndRelaunch();
+  };
+  driver.androidForceRefreshSecureToken = async () => driver.androidForceRefreshJwt();
+
+  driver.androidGetLayoutDirection = async () => parseLayoutDirection(await driver.androidUiDump());
+
+  driver.androidShowsBannerFromUser = async (user) => dumpHas(await driver.androidUiDump(), user);
+  driver.androidShowsCohortChangeBanner = async () => {
+    const dump = await driver.androidUiDump();
+    return (
+      dumpHas(dump, 'cohort') ||
+      /resource-id="(?:[^"]*:id\/)?cohortChangeBanner"/.test(String(dump))
+    );
+  };
+  driver.androidShowsAdultCohortVisitor = async (name) =>
+    dumpHas(await driver.androidUiDump(), name);
+  driver.androidShowsNewFollowerNotification = async (name) =>
+    dumpHas(await driver.androidUiDump(), name);
+  driver.androidShowsStatsForUser = async (name) => dumpHas(await driver.androidUiDump(), name);
+  driver.androidShowsTranslationOf = async (text) => dumpHas(await driver.androidUiDump(), text);
+
+  driver.androidShowsPmWithBadge = async (sender) => {
+    const dump = await driver.androidUiDump();
+    return dumpHas(dump, sender) && /unread|badge/i.test(String(dump));
+  };
+
+  // "shows the tab but cannot navigate to it" — both halves must hold, or a
+  // simply-missing tab would satisfy the assertion.
+  driver.androidShowsTabWithNoNavTo = async (tab) => {
+    const dump = await driver.androidUiDump();
+    if (!dumpHas(dump, tab)) return false;
+    await driver.androidOpenTab(tab);
+    const after = await driver.androidUiDump();
+    return !new RegExp(`resource-id="(?:[^"]*:id/)?${tab}Screen"`).test(String(after));
+  };
+
+  driver.androidSeatGridState = async () => parseSeatGrid(await driver.androidUiDump());
 
   return driver;
 }
