@@ -1017,7 +1017,17 @@ router.post('/economy/gift-direct', async (req, res) => {
         const snap = await t.get(senderRef);
         const coins = snap.exists ? userField(snap.data(), 'shyCoins', 'shy_coins') || 0 : 0;
         if (coins < totalCost) throw new Error('Insufficient coins');
-        t.update(senderRef, { shyCoins: FieldValue.increment(-totalCost) });
+        // `giftSpendTotal` is the leaderboard's ranking key (SHY-0265).
+        // Denormalised here rather than summed from transactions at read
+        // time: ranking a cohort by summing each user's transaction
+        // subcollection would be a read per user per request, which is the
+        // per-user loop the endpoint's performance budget rules out.
+        // Incremented in the SAME transaction as the debit, so a partial
+        // failure can never leave a rank that was never paid for.
+        t.update(senderRef, {
+          shyCoins: FieldValue.increment(-totalCost),
+          giftSpendTotal: FieldValue.increment(totalCost),
+        });
         return coins - totalCost;
       });
     } catch (txErr) {
@@ -1219,7 +1229,17 @@ router.post('/economy/gift-batch', async (req, res) => {
         const snap = await t.get(senderRef);
         const coins = snap.exists ? userField(snap.data(), 'shyCoins', 'shy_coins') || 0 : 0;
         if (coins < totalCost) throw new Error('Insufficient coins');
-        t.update(senderRef, { shyCoins: FieldValue.increment(-totalCost) });
+        // `giftSpendTotal` is the leaderboard's ranking key (SHY-0265).
+        // Denormalised here rather than summed from transactions at read
+        // time: ranking a cohort by summing each user's transaction
+        // subcollection would be a read per user per request, which is the
+        // per-user loop the endpoint's performance budget rules out.
+        // Incremented in the SAME transaction as the debit, so a partial
+        // failure can never leave a rank that was never paid for.
+        t.update(senderRef, {
+          shyCoins: FieldValue.increment(-totalCost),
+          giftSpendTotal: FieldValue.increment(totalCost),
+        });
       }
     });
 
@@ -1928,6 +1948,89 @@ router.post('/economy/test-coins', async (req, res) => {
     res.json({ success: true, coinsAdded: amount, newBalance });
   } catch (err) {
     log.error('economy', 'POST /economy/test-coins failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── Leaderboards (SHY-0265) ──
+//
+// THE COHORT COMES FROM THE VERIFIED CLAIM, NEVER FROM A PARAMETER.
+//
+// ShyTalk segregates minors from adults in rooms, discovery and PMs. A
+// leaderboard that honoured `?cohort=` would re-open that boundary through a
+// back door: any adult could enumerate minors' display names and spending. So
+// the claim decides and the query string is ignored — asserted by a test that
+// sends `?cohort=minor` from an adult and expects adult rows back.
+//
+// Ranked from the denormalised `giftSpendTotal` on the user doc, maintained at
+// gift time. Summing each user's transactions here would be a read per user per
+// request, which is exactly the per-user loop the story's performance AC rules
+// out.
+const LEADERBOARD_LIMIT = 100;
+
+router.get('/economy/leaderboards', async (req, res) => {
+  try {
+    const uniqueId = req.auth.uniqueId;
+    const cohort = cohortFromClaim(req);
+
+    // One indexed query. `isBanned` is filtered in memory rather than in the
+    // query because a second inequality would need a composite index for a
+    // field that is absent on almost every document; the page size is capped
+    // at LEADERBOARD_LIMIT so the overfetch is bounded.
+    const snap = await db
+      .collection('users')
+      .where('cohort', '==', cohort)
+      .orderBy('giftSpendTotal', 'desc')
+      .limit(LEADERBOARD_LIMIT * 2)
+      .get();
+
+    const eligible = snap.docs
+      .map((d) => ({ id: d.id, data: d.data() }))
+      .filter(({ data }) => !(data.isBanned || data.is_banned))
+      .filter(({ data }) => Number(data.giftSpendTotal || 0) > 0);
+
+    // Deterministic tie-break. Firestore's ordering within equal values is not
+    // guaranteed stable across queries, so two equal spenders could swap places
+    // between two requests and make the board look untrustworthy.
+    eligible.sort((a, b) => {
+      const spend = Number(b.data.giftSpendTotal || 0) - Number(a.data.giftSpendTotal || 0);
+      return spend !== 0 ? spend : String(a.id).localeCompare(String(b.id));
+    });
+
+    const rows = eligible.slice(0, LEADERBOARD_LIMIT).map(({ id, data }, i) => ({
+      uniqueId: id,
+      // A blank display name would render an empty row that reads as a bug.
+      displayName: String(data.displayName || '').trim() || id,
+      rank: i + 1,
+      amount: Number(data.giftSpendTotal || 0),
+      cohort,
+    }));
+
+    // The caller's own standing, ALWAYS — including when they are unranked.
+    // Omitting them would leave a user unable to tell "I have no rank" from
+    // "the page failed to load".
+    const mine = rows.find((r) => r.uniqueId === uniqueId);
+    let me = mine || null;
+    if (!me) {
+      const selfSnap = await db.doc(`users/${uniqueId}`).get();
+      const self = selfSnap.exists ? selfSnap.data() : {};
+      const amount = Number(self.giftSpendTotal || 0);
+      const position = eligible.findIndex(({ id }) => id === uniqueId);
+      me = {
+        uniqueId,
+        displayName: String(self.displayName || '').trim() || uniqueId,
+        // null, not 0: "unranked" is a fact, and a rank of zero would sort to
+        // the top of any client that treats it as a number.
+        rank: position === -1 ? null : position + 1,
+        amount,
+        cohort,
+      };
+    }
+
+    log.info('economy', 'GET /economy/leaderboards', { cohort, rows: rows.length });
+    res.json({ rows, me });
+  } catch (err) {
+    log.error('economy', 'GET /economy/leaderboards failed', { error: err.message });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
