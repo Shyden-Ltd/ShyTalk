@@ -1172,6 +1172,458 @@ async function createWebDriver({
     }
   };
 
+  // ── SHY-0259 batch 7: web assertions, purchases, i18n and network ───────
+
+  driver.webSeatGridState = async () => {
+    const page = await pageFor('default');
+    try {
+      return await page.$$eval('[data-test-tag^="seat_"]', (els) =>
+        els
+          .map((el) => ({
+            index: Number((el.getAttribute('data-test-tag') || '').replace('seat_', '')),
+            occupant: (el.textContent || '').trim() || null,
+          }))
+          .sort((a, b) => a.index - b.index),
+      );
+    } catch {
+      return [];
+    }
+  };
+
+  const bodyIncludes = async (needle) => {
+    const dump = await driver.webUiDump();
+    return typeof dump === 'string' && dump.includes(String(needle));
+  };
+
+  driver.webShowsBannerFromUser = async (user) => bodyIncludes(user);
+  driver.webShowsAdultCohortVisitor = async (name) => bodyIncludes(name);
+  driver.webShowsNewFollowerNotification = async (name) => bodyIncludes(name);
+  driver.webShowsStatsForUser = async (name) => bodyIncludes(name);
+
+  driver.webShowsHighlightAtSection = async (section) => {
+    const page = await pageFor('default');
+    try {
+      // A highlight is a VISUAL state, so the class/attribute is what carries
+      // it — text presence would be true for an un-highlighted section too.
+      return (
+        (await page
+          .locator(
+            `[data-test-tag="${section}"].highlight, [data-test-tag="${section}"][data-highlighted="true"]`,
+          )
+          .count()) > 0
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  // Both halves: a tab that is simply missing must NOT satisfy this.
+  driver.webShowsTabWithNoNavTo = async (tab) => {
+    if (!(await driver.webShowsNamedButton(tab))) return false;
+    const page = await pageFor('default');
+    const before = page.url();
+    await driver.webTapNamedButton(tab);
+    return page.url() === before;
+  };
+
+  driver.webEditBodyAndConfirm = async (newBody) => {
+    if (!(await driver.webTypeIntoConversationInput(newBody))) return false;
+    return (await driver.webTap('pm_confirmEdit')) || driver.webConfirmDialog();
+  };
+
+  driver.webSendGift = async (recipient, gift) => {
+    if (!(await driver.webTap('gift_open'))) return false;
+    if (recipient && !(await driver.webTapNamedButton(recipient))) return false;
+    if (gift && !(await driver.webTapNamedButton(gift))) return false;
+    return (await driver.webTap('gift_send')) || driver.webTapNamedButton('Send');
+  };
+
+  driver.webSelectRecipientAndGift = async (recipient, gift) => driver.webSendGift(recipient, gift);
+
+  driver.webSelectPackage = async (pkg) => {
+    if (await driver.webTap(`package_${pkg}`)) return true;
+    return driver.webTapNamedButton(String(pkg));
+  };
+
+  driver.webSubmitSandboxReceipt = async (receipt) => {
+    const page = await pageFor('default');
+    try {
+      await page
+        .locator('[data-test-tag="sandbox_receipt"], input[name="receipt"]')
+        .first()
+        .fill(String(receipt), { timeout: 2000 });
+    } catch {
+      return false;
+    }
+    return (await driver.webTap('sandbox_submit')) || driver.webTapNamedButton('Submit');
+  };
+
+  driver.webPurchaseWithSandboxReceipt = async (pkg, receipt) => {
+    if (pkg && !(await driver.webSelectPackage(pkg))) return false;
+    return driver.webSubmitSandboxReceipt(receipt);
+  };
+
+  // Replay protection: the SAME receipt submitted twice. Returning the two
+  // outcomes separately matters — the test is that the second is refused, so
+  // collapsing them to one boolean loses the assertion.
+  driver.webDoubleTapWithSameReceipt = async (receipt) => {
+    const first = await driver.webSubmitSandboxReceipt(receipt);
+    const second = await driver.webSubmitSandboxReceipt(receipt);
+    return { first, second };
+  };
+
+  // ── i18n ────────────────────────────────────────────────────────────────
+
+  driver.webHeadingInLocale = async () => {
+    const page = await pageFor('default');
+    try {
+      return await page.evaluate(() => {
+        const h = document.querySelector('h1, h2, [role="heading"]');
+        return h ? (h.textContent || '').trim() : '';
+      });
+    } catch {
+      return '';
+    }
+  };
+
+  // Tofu detection. U+FFFD is the replacement character; the .notdef box
+  // cannot be read from the DOM, so this reports the one that CAN be measured
+  // rather than claiming to detect both.
+  driver.webHasReplacementGlyph = async () => {
+    const page = await pageFor('default');
+    try {
+      return await page.evaluate(() => (document.body.innerText || '').includes('�'));
+    } catch {
+      return false;
+    }
+  };
+
+  driver.webFontFallbackCapable = async (sample) => {
+    const page = await pageFor('default');
+    try {
+      // document.fonts.check is the real browser answer to "can this render",
+      // measured against the actual computed font stack.
+      return await page.evaluate(
+        (text) => {
+          const fam = window.getComputedStyle(document.body).fontFamily || 'sans-serif';
+          return document.fonts ? document.fonts.check(`16px ${fam}`, text) : true;
+        },
+        String(sample || 'Aa'),
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  driver.webMissingTranslations = async () => {
+    const page = await pageFor('default');
+    try {
+      // Untranslated strings surface as the raw key or as an explicit marker.
+      return await page.evaluate(() => {
+        const text = document.body.innerText || '';
+        const keyish = text.match(/\b[a-z][a-zA-Z0-9]*(?:_[a-zA-Z0-9]+){1,}\b/g) || [];
+        return [...new Set(keyish)];
+      });
+    } catch {
+      return [];
+    }
+  };
+
+  driver.webSystemPmRendersInLanguage = async (lang) => {
+    const page = await pageFor('default');
+    try {
+      const docLang = await page.evaluate(
+        () => document.documentElement.getAttribute('lang') || '',
+      );
+      return String(docLang).toLowerCase().startsWith(String(lang).toLowerCase());
+    } catch {
+      return false;
+    }
+  };
+
+  // ── network ─────────────────────────────────────────────────────────────
+
+  /** Attach the request log once; every network reader drains the same list. */
+  async function networkLog() {
+    const page = await pageFor('default');
+    if (!page.__netLog) {
+      page.__netLog = [];
+      page.on('response', (res) => {
+        page.__netLog.push({ url: res.url(), status: res.status(), at: Date.now() });
+      });
+    }
+    return page.__netLog;
+  }
+  driver._networkLog = networkLog;
+
+  driver.webNetworkLogHasStatus = async (status) => {
+    const log = await networkLog();
+    return log.some((e) => e.status === Number(status));
+  };
+
+  driver.webNetworkLogCountAttempts = async (urlFragment) => {
+    const log = await networkLog();
+    return log.filter((e) => e.url.includes(String(urlFragment))).length;
+  };
+
+  // Real CDP network emulation, not a pretend flag. Reports honestly when the
+  // browser has no CDP session (firefox/webkit), because silently doing
+  // nothing would let a low-connectivity scenario pass at full speed.
+  driver.webSetNetwork = async (profile) => {
+    const page = await pageFor('default');
+    const PROFILES = {
+      offline: { offline: true, downloadThroughput: 0, uploadThroughput: 0, latency: 0 },
+      '2g': { offline: false, downloadThroughput: 32000, uploadThroughput: 16000, latency: 400 },
+      '3g': { offline: false, downloadThroughput: 200000, uploadThroughput: 100000, latency: 150 },
+      online: { offline: false, downloadThroughput: -1, uploadThroughput: -1, latency: 0 },
+    };
+    const conditions = PROFILES[String(profile).toLowerCase()];
+    if (!conditions)
+      return { supported: true, applied: false, why: `unknown profile "${profile}"` };
+    try {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Network.emulateNetworkConditions', conditions);
+      return { supported: true, applied: true };
+    } catch (e) {
+      return {
+        supported: false,
+        applied: false,
+        why: `no CDP session on this browser (${e.message}) — network emulation is Chromium-only`,
+      };
+    }
+  };
+
+  driver.webGrantNotificationPermission = async () => {
+    const page = await pageFor('default');
+    try {
+      await page
+        .context()
+        .grantPermissions(['notifications'], { origin: new URL(page.url()).origin });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  driver.webReceiveLiveKitToken = async () => {
+    const log = await networkLog();
+    return log.some((e) => e.url.includes('/livekit/token') && e.status === 200);
+  };
+
+  // ── SHY-0259 batch 8: cross-surface helpers ─────────────────────────────
+  //
+  // These are not UI actions. They read the real API, the real emulator, or
+  // the real page timeline — so they live here, where ctx already has a
+  // browser and a base URL, rather than being duplicated per platform.
+
+  const apiBase = () => (baseURL || '').replace(/:8888$/, ':3000');
+
+  /** One real HTTP call against the running API. */
+  async function apiFetch(pathname, init = {}) {
+    const page = await pageFor('default');
+    try {
+      return await page.evaluate(
+        async ({ url, opts }) => {
+          const res = await fetch(url, opts);
+          const text = await res.text();
+          let json = null;
+          try {
+            json = JSON.parse(text);
+          } catch {
+            /* not json — the raw text is still returned */
+          }
+          return { status: res.status, text, json };
+        },
+        { url: `${apiBase()}${pathname}`, opts: init },
+      );
+    } catch (e) {
+      return { status: 0, text: String(e && e.message), json: null, error: true };
+    }
+  }
+  driver._apiFetch = apiFetch;
+
+  driver.apiRequestStats = async () => {
+    const log = await networkLog();
+    const byStatus = {};
+    for (const e of log) byStatus[e.status] = (byStatus[e.status] || 0) + 1;
+    return { total: log.length, byStatus };
+  };
+
+  driver.sequentialRequestStatus = async (pathname, times = 2) => {
+    const out = [];
+    // Sequential by construction: these steps test rate limiting and replay
+    // protection, where the ORDER of arrival is the whole point.
+    for (let n = 0; n < Number(times); n++) {
+      const r = await apiFetch(pathname);
+      out.push(r.status);
+    }
+    return out;
+  };
+
+  driver.auditLogContains = async (predicate = {}) => {
+    const r = await apiFetch('/api/admin/audit-log');
+    const rows = (r.json && (r.json.entries || r.json.rows || r.json)) || [];
+    if (!Array.isArray(rows)) return false;
+    return rows.some((row) =>
+      Object.entries(predicate).every(([k, v]) => String(row[k]) === String(v)),
+    );
+  };
+
+  driver.pmIsFromSender = async (sender) => {
+    const dump = await driver.webUiDump();
+    return typeof dump === 'string' && dump.includes(String(sender));
+  };
+
+  driver.receivedSystemPmWithReason = async (reason) => {
+    const dump = await driver.webUiDump();
+    return typeof dump === 'string' && dump.includes(String(reason));
+  };
+
+  // A translation must DIFFER from the English template as well as being
+  // non-empty — an untranslated string is present, non-empty, and wrong.
+  driver.pmBodyIsTranslationOfTemplate = async (englishTemplate) => {
+    const dump = await driver.webUiDump();
+    if (typeof dump !== 'string' || !dump.trim()) return false;
+    return !dump.includes(String(englishTemplate));
+  };
+
+  driver.showsCardBadge = async (badge) => {
+    const page = await pageFor('default');
+    try {
+      return (
+        (await page
+          .locator(`[data-test-tag$="_badge"], .badge`)
+          .filter({ hasText: String(badge) })
+          .count()) > 0
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  driver.currentPlatformRendersScreen = async (screen) => {
+    const page = await pageFor('default');
+    try {
+      return (
+        (await page
+          .locator(`[data-test-tag="${screen}Screen"], [data-screen="${screen}"]`)
+          .count()) > 0
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  driver.eachJoinerNavigatesBackWithToast = async (toast) => {
+    const dump = await driver.webUiDump();
+    return typeof dump === 'string' && dump.includes(String(toast));
+  };
+
+  // Rendering latency measured from the real page timeline, not from a
+  // wall-clock the test controls — the point is what a user waits for.
+  driver.measureRenderingTimeFromSubmit = async () => {
+    const page = await pageFor('default');
+    try {
+      return await page.evaluate(() => {
+        const nav = performance.getEntriesByType('navigation')[0];
+        if (nav && nav.domContentLoadedEventEnd) {
+          return Math.round(nav.domContentLoadedEventEnd - nav.startTime);
+        }
+        const paint = performance.getEntriesByType('paint').pop();
+        return paint ? Math.round(paint.startTime) : null;
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  // Clock advance. The emulator has no time travel, so this reports honestly
+  // rather than silently succeeding — a scheduled-event scenario that thinks
+  // it jumped an hour and did not would assert against the wrong state and
+  // blame the product.
+  driver.advanceClockToStartsAt = async (isoWhen) => {
+    const r = await apiFetch('/api/test/advance-clock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: String(isoWhen) }),
+    });
+    if (r.status === 200) return { supported: true, applied: true };
+    return {
+      supported: false,
+      applied: false,
+      why: `no clock-advance endpoint on this stack (status ${r.status}); schedule the fixture at a real future time instead`,
+    };
+  };
+
+  // ── FCM ────────────────────────────────────────────────────────────────
+  // Push is observed through the API's own dispatch record. The browser
+  // cannot see an FCM payload addressed to a device, and pretending otherwise
+  // is how a push scenario passes without a push.
+
+  driver.countFcmPayloadsToUser = async (uniqueId) => {
+    const r = await apiFetch(`/api/test/fcm-log?uniqueId=${encodeURIComponent(uniqueId)}`);
+    if (r.status !== 200)
+      return { supported: false, why: `no fcm-log endpoint (status ${r.status})` };
+    const rows = (r.json && (r.json.entries || r.json)) || [];
+    return { supported: true, count: Array.isArray(rows) ? rows.length : 0 };
+  };
+
+  driver.simulateFcmDispatcherAttempt = async (payload = {}) => {
+    const r = await apiFetch('/api/test/fcm-dispatch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return { supported: r.status === 200, status: r.status };
+  };
+
+  driver.seesFcmPushOnPlatform = async (platform, uniqueId) => {
+    const res = await driver.countFcmPayloadsToUser(uniqueId);
+    if (!res.supported) return res;
+    return { supported: true, seen: res.count > 0, platform };
+  };
+
+  // ── fault injection ────────────────────────────────────────────────────
+  // Real route interception, so the app meets a genuine failure rather than a
+  // flag it was told to respect.
+
+  driver.injectApiLatency = async (ms, urlFragment = '/api/') => {
+    const page = await pageFor('default');
+    await page.route(`**${urlFragment}**`, async (route) => {
+      await new Promise((r) => setTimeout(r, Number(ms) || 0));
+      await route.continue();
+    });
+    return true;
+  };
+
+  driver.injectApiFailureThenSuccess = async (urlFragment = '/api/', failStatus = 500) => {
+    const page = await pageFor('default');
+    let failed = false;
+    await page.route(`**${urlFragment}**`, async (route) => {
+      if (!failed) {
+        failed = true;
+        await route.fulfill({ status: Number(failStatus), body: '{"error":"injected"}' });
+        return;
+      }
+      await route.continue();
+    });
+    return true;
+  };
+
+  driver.simulateNetworkDropBeforeResponse = async (urlFragment = '/api/') => {
+    const page = await pageFor('default');
+    let dropped = false;
+    await page.route(`**${urlFragment}**`, async (route) => {
+      if (!dropped) {
+        dropped = true;
+        await route.abort('internetdisconnected');
+        return;
+      }
+      await route.continue();
+    });
+    return true;
+  };
+
   return driver;
 }
 

@@ -3298,6 +3298,56 @@ async function createAndroidDriver({ serial: preferred } = {}) {
 
   driver.androidSeatGridState = async () => parseSeatGrid(await driver.androidUiDump());
 
+  // ── SHY-0259 batch 8b: authenticated calls from the device ──────────────
+  //
+  // These exist because some journeys must prove the DEVICE's own credential
+  // works, not merely that the endpoint does. Issuing the call from the host
+  // would pass with a host-minted token and prove nothing about the app's
+  // session — so the request is made from the device, through its own
+  // network stack, via the reverse tunnels the driver already sets up.
+
+  async function deviceCurl(method, url, body) {
+    const parts = ['shell', 'curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', '-X', method];
+    if (body) parts.push('-H', 'Content-Type: application/json', '-d', escapeInputText(body));
+    parts.push(url);
+    try {
+      const out = adb(parts);
+      const status = Number(String(out).trim().slice(-3));
+      return Number.isFinite(status) ? status : 0;
+    } catch (e) {
+      console.error(`[android-driver] deviceCurl ${method} ${url} failed: ${e.message}`);
+      return 0;
+    }
+  }
+
+  driver.androidApiPost = async (pathname, body) =>
+    deviceCurl('POST', `http://localhost:3000${pathname}`, body ? JSON.stringify(body) : null);
+
+  // The app holds the session, so an authenticated call has to originate
+  // in-app. The debug hook is the only path that carries the real token; when
+  // it is absent we say so instead of falling back to an unauthenticated call
+  // that would return 401 and be read as a product failure.
+  driver.androidPerformAuthenticatedCall = async (_pathname) => {
+    if (await driver.androidTapByTag('debug_performAuthedCall')) {
+      const dump = await driver.androidUiDump();
+      const m = /authedCallStatus[^0-9]*(\d{3})/.exec(String(dump));
+      return { supported: true, status: m ? Number(m[1]) : null };
+    }
+    return {
+      supported: false,
+      why: 'no in-app debug hook for an authenticated call; a host-issued request would use a host token and prove nothing about the app session',
+    };
+  };
+
+  driver.androidReceiveLiveKitToken = async () => {
+    const dump = await driver.androidUiDump();
+    // The room screen renders only after a token is accepted, so its presence
+    // IS the observable evidence — there is no client log to read over adb.
+    return (
+      /resource-id="(?:[^"]*:id\/)?roomScreen"/.test(String(dump)) || dumpHas(dump, 'Connected')
+    );
+  };
+
   return driver;
 }
 
