@@ -94,8 +94,6 @@ const KNOWN_HOLLOW = [
   'androidShowsOfficialBadge',
   'androidShowsOwnRankInTop',
   'androidShowsSeatRequestNotification',
-  'androidShowsToastAndNavigates',
-  'androidShowsToastAndNavigatesBack',
   'androidShowsWelcomePmInLanguage',
 ];
 

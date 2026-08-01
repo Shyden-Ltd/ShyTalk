@@ -464,3 +464,74 @@ describe('androidShowsCountBadge — reads the named count', () => {
     expect(await absent.androidShowsStalkersDelta('Bea', 2)).toBe(false);
   });
 });
+
+/**
+ * The toast assertions check the MESSAGE and the DESTINATION.
+ *
+ * `androidShowsToastAndNavigates` took four arguments and used none, checking
+ * `toastWithRoute_` — never rendered. It could only return false.
+ *
+ * The step makes two claims and both matter: a toast with no navigation strands
+ * the user, navigation with no toast leaves them wondering what happened.
+ */
+describe('toast assertions — message AND destination', () => {
+  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
+  const withDump = (dump) =>
+    createAndroidDriver({ serial: 'test' }).then((d) => {
+      d.androidUiDump = async () => dump;
+      return d;
+    });
+  const toast = (msg) => `<node resource-id="com.x:id/app_toast" text="${msg}" />`;
+  const roomsList = '<node resource-id="com.x:id/main_roomsTab" />';
+
+  test('true when the right toast is shown AND the destination is reached', async () => {
+    const d = await withDump(toast('Room closed by host') + roomsList);
+    expect(await d.androidShowsToastAndNavigates('Ines', 'Room closed by host', 'rooms list')).toBe(
+      true,
+    );
+  });
+
+  test('FALSE when the toast is right but the user never left', async () => {
+    // Stranded: the message appeared and nothing happened.
+    const d = await withDump(
+      toast('Room closed by host') + '<node resource-id="com.x:id/room_seatGrid" />',
+    );
+    expect(await d.androidShowsToastAndNavigates('Ines', 'Room closed by host', 'rooms list')).toBe(
+      false,
+    );
+  });
+
+  test('FALSE when navigation happened with NO toast', async () => {
+    // The user is moved with no explanation — the other half of the bug.
+    const d = await withDump(roomsList);
+    expect(await d.androidShowsToastAndNavigates('Ines', 'Room closed by host', 'rooms list')).toBe(
+      false,
+    );
+  });
+
+  test('FALSE when a toast is shown but says something else', async () => {
+    const d = await withDump(toast('Network error') + roomsList);
+    expect(await d.androidShowsToastAndNavigates('Ines', 'Room closed by host', 'rooms list')).toBe(
+      false,
+    );
+  });
+
+  test('an unknown route is FALSE, not assumed true', async () => {
+    // "I do not know how to check this" is not "it passed".
+    const d = await withDump(toast('Room closed by host') + roomsList);
+    expect(
+      await d.androidShowsToastAndNavigates('Ines', 'Room closed by host', 'somewhere unmapped'),
+    ).toBe(false);
+  });
+
+  test('navigatesBack shares the same contract', async () => {
+    const good = await withDump(toast('Room closed by host') + roomsList);
+    expect(
+      await good.androidShowsToastAndNavigatesBack('Ines', 'Room closed by host', 'rooms list'),
+    ).toBe(true);
+    const noToast = await withDump(roomsList);
+    expect(
+      await noToast.androidShowsToastAndNavigatesBack('Ines', 'Room closed by host', 'rooms list'),
+    ).toBe(false);
+  });
+});

@@ -2162,46 +2162,63 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     // shows the after, not the difference. `stalkersDelta_` never existed.
     return driver.androidShowsCountBadge(_viewer, delta, 'stalkers');
   };
-  driver.androidShowsToastAndNavigates = async (_name, _toast, _route, _timeout) => {
+  /**
+   * Is the named destination on screen?
+   *
+   * The corpus names routes the way a person would ("the rooms list"), so they
+   * are mapped to the anchor testTag each screen actually renders. An unknown
+   * route returns false rather than true: "I do not know how to check this" is
+   * not "it passed".
+   */
+  const ROUTE_ANCHORS = {
+    'rooms list': 'main_roomsTab',
+    rooms: 'main_roomsTab',
+    'room list': 'main_roomsTab',
+    messages: 'main_messagesTab',
+    conversations: 'main_messagesTab',
+    profile: 'main_profileTab',
+    settings: 'settings_backButton',
+    wallet: 'wallet_balance',
+    'sign in': 'persona_picker_open',
+  };
+  driver.androidShowsRoute = async (route) => {
+    const key = String(route || '')
+      .trim()
+      .toLowerCase()
+      .replace(/^the\s+/, '');
+    const tag = ROUTE_ANCHORS[key];
+    if (!tag) return false;
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?toastWithRoute_[^"]*"[^>]*\/?>/;
-    return tagRx.test(dump);
+    return new RegExp(`resource-id="(?:[^"]*:id\\/)?${tag}"`).test(dump);
   };
 
-  // Wake 104 — `<Name>'s <Plat> UI shows a "<X>" toast and navigates
-  // back to "<Y>"` (j10). Toast + nav (no timeout prefix; distinct
-  // from Wake 93's `OR within Nms` variant — both share the same
-  // toast+route surface). Driver receives `(name, toast, route)`.
-  //
-  // Foundation strategy: presence-check on the `toastWithRoute_*`
-  // testTag PREFIX — same family as #784's `androidShowsToastAndNavigates`
-  // (j10 toast+nav surface is shared between OR-variant and direct
-  // variant). Returns false in real journeys today.
-  //
-  // Per-toast / per-route verification deferred. All 3 args (_name,
-  // _toast, _route) accepted-and-ignored.
-  driver.androidShowsToastAndNavigatesBack = async (_name, _toast, _route) => {
+  driver.androidShowsToastAndNavigates = async (_viewer, toast, route, _extra) => {
+    // WAS: four arguments, all ignored, checking `toastWithRoute_` — a tag the
+    // product never renders. It could only return false.
+    //
+    // The step makes TWO claims: a specific toast was shown, AND the user ended
+    // up somewhere specific. Both matter: a toast with no navigation strands
+    // the user, and navigation with no toast leaves them wondering what
+    // happened. Every snackbar in the app now renders through StyledSnackbarHost
+    // with the tag `app_toast`, so the message is findable and checkable.
+    if (!toast || !String(toast).trim()) return false;
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?toastWithRoute_[^"]*"[^>]*\/?>/;
-    return tagRx.test(dump);
+    const esc = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // 1. the toast is present AND says the right thing
+    const toastShown =
+      /resource-id="(?:[^"]*:id\/)?app_toast"/.test(dump) &&
+      new RegExp(`(?:text|content-desc)="[^"]*${esc(toast)}[^"]*"`, 'i').test(dump);
+    if (!toastShown) return false;
+    // 2. the destination is actually on screen. A route name maps to the
+    //    screen's own anchor tag; asserting the toast alone would pass while
+    //    the user sat on the screen they were supposed to leave.
+    if (!route || !String(route).trim()) return true;
+    return await driver.androidShowsRoute(route);
   };
-
-  // Wake 97 — `<Name>'s <Plat> UI shows <Other>'s user card` (j07).
-  // Inner step under `within Nms`. Bare user-card-visibility check.
-  // Driver receives `(viewer, target)`.
-  //
-  // Foundation strategy: presence-check on the `userCard_*` testTag
-  // PREFIX. No `userCard_*` testTag exists in shared/src/commonMain
-  // yet — user-card overlay is unbuilt. Returns false in real journeys
-  // today; lands true when ships with userCard_root / userCard_avatar
-  // etc.
-  //
-  // Per-user verification needs user-id → testTag map. Deferred. Both
-  // args (_viewer, _target) accepted-and-ignored.
+  driver.androidShowsToastAndNavigatesBack = async (_viewer, toast, route) =>
+    driver.androidShowsToastAndNavigates(_viewer, toast, route);
   driver.androidShowsUserCard = async (_viewer, targetUniqueId) => {
     // WAS: `async (_name, _target) => /userCard_/.test(dump)` — it took the
     // target and checked only that SOME card was open, so it passed on the
