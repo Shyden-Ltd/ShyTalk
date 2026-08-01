@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -99,7 +100,7 @@ fun ParticipantListPanel(
                     pendingRequests.associateBy { it.userId }
                 }
 
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(modifier = Modifier.fillMaxSize().testTag("participantsList_panel")) {
                 // Voice section
                 item { SectionHeader(stringResource(Res.string.voice), voiceUsers.size) }
                 if (voiceUsers.isEmpty()) {
@@ -194,6 +195,10 @@ private fun ParticipantRow(
             Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
+                // Per-participant, because the question a journey asks is "is
+                // Ines in this list", not "is there a list". An untagged panel
+                // let that assertion pass with anybody in it, or nobody.
+                .testTag("participantsList_${participant.user.uid}")
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),

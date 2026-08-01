@@ -437,7 +437,17 @@ fun PrivateChatScreen(
             // (tertiaryContainer), not error.
             if (uiState.conversation?.frozenAtMigration == true) {
                 Surface(
-                    modifier = Modifier.fillMaxWidth().testTag("privateChat_frozenBanner"),
+                    // The conversation id is in the tag so an assertion can name
+                    // WHICH thread is frozen. Without it a scenario asserting
+                    // "Nora's group is frozen" passes on a banner left over from
+                    // a different conversation entirely.
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .testTag(
+                                "privateChat_frozenBanner_" +
+                                    (uiState.conversation?.conversationId ?: conversationId ?: otherUserId),
+                            ),
                     color = MaterialTheme.colorScheme.tertiaryContainer,
                 ) {
                     Text(

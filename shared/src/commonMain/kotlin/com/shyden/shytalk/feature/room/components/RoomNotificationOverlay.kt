@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.shyden.shytalk.core.model.SeatRequest
@@ -75,21 +76,34 @@ fun RoomNotificationOverlay(
                 ) {
                     when (notif) {
                         is RoomNotification.SeatRequestReceived -> {
+                            // Tagged with the REQUESTER's id, not just "a seat
+                            // request exists". A host with two people asking to
+                            // sit needs the harness to tell which card is whose
+                            // — an untagged card lets a test approve the wrong
+                            // person and call it a pass.
                             Text(
                                 text = stringResource(Res.string.user_wants_to_sit, notif.request.userName),
                                 style = MaterialTheme.typography.bodyLarge,
                                 textAlign = TextAlign.Center,
+                                modifier = Modifier.testTag("seatRequestNotification_${notif.request.userId}"),
                             )
                             Text(
                                 text = stringResource(Res.string.seat_number, notif.request.seatIndex + 1),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.testTag("seatRequest_seat_${notif.request.userId}"),
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                OutlinedButton(onClick = { onDenySeatRequest(notif.request) }) {
+                                OutlinedButton(
+                                    onClick = { onDenySeatRequest(notif.request) },
+                                    modifier = Modifier.testTag("seatRequest_deny_${notif.request.userId}"),
+                                ) {
                                     Text(stringResource(Res.string.deny))
                                 }
-                                Button(onClick = { onApproveSeatRequest(notif.request) }) {
+                                Button(
+                                    onClick = { onApproveSeatRequest(notif.request) },
+                                    modifier = Modifier.testTag("seatRequest_approve_${notif.request.userId}"),
+                                ) {
                                     Text(stringResource(Res.string.accept))
                                 }
                             }

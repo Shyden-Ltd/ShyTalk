@@ -31,6 +31,9 @@
  * gift, a stale toast — and reports it as a pass.
  */
 
+const fs = require('fs');
+const path = require('path');
+
 const {
   SCREEN_MARKERS,
   TABLE_TAGS,
@@ -45,6 +48,43 @@ const {
   resolveRouteTag,
   navTabCandidates,
 } = require('./app-testtags');
+
+/**
+ * The app's own translation of a string key, for one locale.
+ *
+ * Read from `composeResources/values-<locale>/strings.xml` — the file the app
+ * actually ships — so a locale assertion checks the REAL translation rather
+ * than merely that some message arrived. A hard-coded expectation here would
+ * drift from the product the first time a translator changed a word.
+ *
+ * Returns null when the key or the locale is absent, and the caller REFUSES
+ * rather than passing: "there is no translation to compare against" is a
+ * harness gap, not a product failure.
+ */
+const RESOURCES = path.join(__dirname, '../../../shared/src/commonMain/composeResources');
+const stringCache = new Map();
+function localisedString(key, locale) {
+  const cacheKey = `${locale}::${key}`;
+  if (stringCache.has(cacheKey)) return stringCache.get(cacheKey);
+  const dir = locale === 'en' ? 'values' : `values-${locale}`;
+  let value = null;
+  try {
+    const xml = fs.readFileSync(path.join(RESOURCES, dir, 'strings.xml'), 'utf8');
+    // Plain string search, not a regex: an XML body can contain anything, and
+    // every pattern shape tried here tripped sonarjs/slow-regex.
+    const open = `<string name="${key}">`;
+    const start = xml.indexOf(open);
+    if (start !== -1) {
+      const from = start + open.length;
+      const end = xml.indexOf('</string>', from);
+      if (end !== -1) value = xml.slice(from, end).split("\\'").join("'").trim() || null;
+    }
+  } catch {
+    value = null;
+  }
+  stringCache.set(cacheKey, value);
+  return value;
+}
 
 /** A non-blank string, or null. Blank arguments must never match everything. */
 const str = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
@@ -167,8 +207,11 @@ function createSharedAppMethods({
       const d = await dump();
       return q.hasTag(d, tag);
     },
-    NavigatesToPath: async (_viewer, path) => {
-      const p = str(path);
+    NavigatesToPath: async (_viewer, deepLinkPath) => {
+      // Named `deepLinkPath`, not `path`: the module now requires node's `path`,
+      // and shadowing it here would silently break `localisedString` the moment
+      // anything in this closure reached for it.
+      const p = str(deepLinkPath);
       if (!p) return false;
       const tag = resolvePathTag(p);
       if (!tag) return false;
@@ -200,21 +243,113 @@ function createSharedAppMethods({
     AdminShowsAppealText: prefixPresent('adminAppeal_'),
     AdminShowsDashboardCounters: prefixPresent('adminDashboard_'),
     AdminShowsStat: prefixPresent('adminStat_'),
-    AlsoShowsInParticipantsList: prefixPresent('participantsList_'),
+    AlsoShowsInParticipantsList: async (_viewer, other) => {
+      const who = str(other === null || other === undefined ? null : String(other));
+      if (!who) return false;
+      const d = await dump();
+      if (!d) return false;
+      // WHO is in the list. The panel was untagged entirely, so this asserted a
+      // tag the product never rendered — a check that could only fail. Now that
+      // each row carries its participant, the step can name the person it means.
+      return (
+        q.hasTagPrefix(d, `participantsList_${who}`) ||
+        q.hasTagPrefixWithText(d, 'participantsList_', who)
+      );
+    },
     ApproveSeatRequest: prefixPresent('seatRequest_'),
     RefreshLanguageRail: prefixPresent('languageRail_'),
     ShowsBeansPerWeekChart: prefixPresent('beansChart_'),
     ShowsContributorsList: tagPresent('giftWall_grid'),
-    ShowsFrozenBanner: tagPresent('privateChat_frozenBanner'),
-    ShowsNonEmptyLocaleText: prefixPresent('localeText_'),
-    ShowsOnlyMinorCohortInRankings: prefixPresent('rankings_'),
-    ShowsOwnRankInTop: prefixPresent('ownRank_'),
+    ShowsOnlyMinorCohortInRankings: prefixPresent('giftWall_rankingHeader'),
     ShowsRoomWarningBanner: prefixPresent('roomWarningBanner_'),
-    ShowsSeatRequestNotification: prefixPresent('seatRequestNotification_'),
     ShowsUserCardSkeletons: prefixPresent('userCardSkeleton_'),
     ShowsSecondOffensiveMessage: tagPresent('privateChat_messageInput'),
     ShowsSystemPmFromOfficia: tagPresent('privateChat_messageInput'),
-    ShowsWelcomePmInLanguage: tagPresent('privateChat_messageInput'),
+
+    // ── Assertions that used to ignore every argument ──────────────────────
+    //
+    // Each of these took the thing that mattered and checked only that SOME
+    // element of the right family existed. That passes on the wrong
+    // conversation, the wrong requester, the wrong language — and reports it as
+    // a pass, which is worse than no assertion because it reads as coverage.
+    ShowsFrozenBanner: async (_viewer, conversationId) => {
+      const d = await dump();
+      if (!d) return false;
+      // WHICH conversation is frozen. The banner used to carry no id at all, so
+      // this asserted "a banner is on screen" — satisfied by a banner left over
+      // from a different thread. The id is now in the tag (PrivateChatScreen).
+      const id = str(
+        conversationId === null || conversationId === undefined ? null : String(conversationId),
+      );
+      return id
+        ? q.hasTagPrefix(d, `privateChat_frozenBanner_${id}`)
+        : q.hasTagPrefix(d, 'privateChat_frozenBanner');
+    },
+    ShowsNonEmptyLocaleText: async (_viewer, code) => {
+      const lang = str(code);
+      if (!lang) return false;
+      const d = await dump();
+      if (!d) return false;
+      // NON-EMPTY is the claim, and it is the half that catches the real defect:
+      // a missing translation renders the row with a blank label, and a
+      // presence-only check calls that a pass. `settings_language_<code>` is
+      // what the product actually renders — `localeText_` never existed.
+      const [el] = q.elementsWithTagPrefix(d, `settings_language_${lang}`);
+      if (!el) return false;
+      const text = q.grammar.textOf(el);
+      return Boolean(text && text.trim());
+    },
+    ShowsOwnRankInTop: async (viewer, topN) => {
+      const d = await dump();
+      if (!d) return false;
+      // "In the top N" is a claim about a NUMBER. Asserting only that a ranking
+      // row exists passes when the viewer is 400th.
+      const limit = Number(topN);
+      if (!Number.isFinite(limit) || limit <= 0) return false;
+      const rows = q.elementsWithTagPrefix(d, 'giftWall_rank_');
+      if (!rows.length) return false;
+      const who = str(viewer);
+      const index = who
+        ? rows.findIndex((el) => q.grammar.tagOf(el) === `giftWall_rank_${who}`)
+        : 0;
+      if (index < 0) return false;
+      return index < limit;
+    },
+    ShowsSeatRequestNotification: async (_host, requester) => {
+      const who = str(requester === null || requester === undefined ? null : String(requester));
+      if (!who) return false;
+      const d = await dump();
+      if (!d) return false;
+      // WHOSE request. A host with two people asking to sit needs to know which
+      // card is on screen — approving the wrong person is the defect this
+      // catches, and an untagged card made it invisible.
+      return (
+        q.hasTagPrefix(d, `seatRequestNotification_${who}`) ||
+        q.hasTagPrefixWithText(d, 'seatRequestNotification_', who)
+      );
+    },
+    ShowsWelcomePmInLanguage: async (_viewer, code) => {
+      const lang = str(code);
+      if (!lang) return false;
+      const d = await dump();
+      if (!d) return false;
+      // A RECEIVED message must exist. This used to assert
+      // `privateChat_messageInput` — the INPUT BOX, which renders on every
+      // conversation in every language and therefore could not fail.
+      if (!q.hasTagPrefix(d, 'privateChat_msg_recv_')) return false;
+      // And it must say the welcome line IN THAT LANGUAGE. The expected string
+      // is read from the app's own resource file for the locale, so this checks
+      // the actual translation rather than trusting that a message arrived —
+      // which is the entire claim the step makes.
+      const expected = localisedString('welcome_to_shytalk', lang);
+      if (!expected) {
+        return unsupported(
+          'ShowsWelcomePmInLanguage',
+          `a translation of welcome_to_shytalk for locale "${lang}"`,
+        );
+      }
+      return q.hasText(d, expected);
+    },
     SubmitStarFeedback: prefixPresent('feedbackScreen_'),
     OpenProfileAndTap: prefixPresent('profile_'),
     OpenProfileFrom: prefixPresent('profile_'),

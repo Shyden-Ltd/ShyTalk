@@ -3473,19 +3473,30 @@ describe('android-adb-driver — androidShowsFrozenBanner', () => {
     expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(true);
   });
 
-  test('convId-specified call (non-null) — also passes', async () => {
-    // Pins that the optional convId arg is correctly accepted-and-
-    // ignored when it carries a real value (the "opens conversation
-    // X" Gherkin variant).
+  test('the banner for THAT conversation → true', async () => {
+    // No longer "accepted-and-ignored": the banner now carries the conversation
+    // id, so a scenario asserting "Nora's group is frozen" can no longer pass on
+    // a banner belonging to a different thread.
     mockExec({
       "'uiautomator' 'dump'": '',
       "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/privateChat_frozenBanner" />',
+        '<node resource-id="com.shyden.shytalk.local:id/privateChat_frozenBanner_conv_abc123" />',
     });
     const driver = await createAndroidDriver();
     expect(
       await driver.androidShowsFrozenBanner('Theo', 'conv_abc123', 'with text-from-key X'),
     ).toBe(true);
+  });
+
+  test("a DIFFERENT conversation's frozen banner does not satisfy it", async () => {
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="privateChat_frozenBanner_conv_other" />',
+    });
+    const driver = await createAndroidDriver();
+    expect(
+      await driver.androidShowsFrozenBanner('Theo', 'conv_abc123', 'with text-from-key X'),
+    ).toBe(false);
   });
 
   test('different suffix variant — "with locale string Y" also passes', async () => {
@@ -3512,14 +3523,20 @@ describe('android-adb-driver — androidShowsFrozenBanner', () => {
     expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(false);
   });
 
-  test('right-boundary false-positive guarded — privateChat_frozenBanner_extra does NOT match', async () => {
+  test('an id-suffixed banner matches the un-scoped form — the product emits one now', async () => {
+    // RETIRED GUARD. This used to assert that `privateChat_frozenBanner_extra`
+    // must NOT match, which was right while the product emitted a bare tag. It
+    // now emits `privateChat_frozenBanner_<conversationId>`, so "a suffix means
+    // a different control" is no longer true — the suffix IS the conversation.
+    // The left-boundary guards below still hold and are what stop a genuinely
+    // unrelated tag matching.
     mockExec({
       "'uiautomator' 'dump'": '',
       "'cat' '/sdcard/dump.xml'":
         '<node resource-id="com.shyden.shytalk.local:id/privateChat_frozenBanner_extra" />',
     });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(false);
+    expect(await driver.androidShowsFrozenBanner('Theo', null, 'with text-from-key X')).toBe(true);
   });
 
   test('package-qualified left-boundary guarded — :id/pre_privateChat_frozenBanner does NOT match', async () => {
@@ -7962,220 +7979,86 @@ describe('android-adb-driver — androidShowsSystemPmFromOfficia', () => {
 // subject and pins the negative cases the presence check could not express.
 
 describe('android-adb-driver — androidShowsWelcomePmInLanguage', () => {
-  // Wake matcher (j13 corpus) — `<Name>'s Android UI shows the
-  // welcome PM in language "<code>"` — j13 locale verification.
-  // Driver receives `(name, code)` where code is a locale code
-  // (en, ru, ja, ar, etc.).
+  // REWRITTEN 2026-08-02. The previous block asserted that a dump containing
+  // only `privateChat_messageInput` returned true for "en", "ru" AND "ja" — and
+  // its own comment said the locale code was "accepted-and-ignored". That is the
+  // hollow behaviour PINNED AS THE CONTRACT: the input box renders on every
+  // conversation in every language, so the assertion could not fail, and the
+  // tests locked it that way.
   //
-  // Foundation strategy: presence-check the conversation thread is
-  // open (privateChat_messageInput testTag PRESENT). The locale
-  // code is accepted-and-ignored — verifying that text is in a
-  // specific language requires comparing the message body against
-  // localised welcome strings, which needs access to the strings.xml
-  // files for each locale. Foundation policy: ignore code.
-  //
-  // The journey ensures this matcher fires after locale switch
-  // settled. A future PR could layer locale verification via
-  // strings.xml comparison or by hashing the welcome string against
-  // a known-locale registry.
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  // The step claims a welcome PM arrived IN A LANGUAGE. So: a received message
+  // must exist, and it must carry the app's own translation of
+  // `welcome_to_shytalk` for that locale — read from the shipped strings.xml,
+  // so a translator changing a word does not silently break the check.
+  const recvWith = (text) =>
+    `<node resource-id="com.shyden.shytalk.local:id/privateChat_msg_recv_m1" text="${text}" bounds="[0,0][9,9]" />`;
 
-  test('privateChat_messageInput present + code "en" → true', async () => {
+  test('the English welcome line in the thread → true for "en"', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
+      "'cat' '/sdcard/dump.xml'": recvWith('Welcome to ShyTalk'),
     });
     const driver = await createAndroidDriver();
     expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(true);
   });
 
-  test('privateChat_messageInput present + code "ru" → true', async () => {
+  test('the ENGLISH line does NOT satisfy a Japanese assertion', async () => {
+    // The defect the old tests hid: a user whose welcome PM arrived untranslated
+    // is exactly what this step exists to catch.
+    mockExec({
+      "'uiautomator' 'dump'": '',
+      "'cat' '/sdcard/dump.xml'": recvWith('Welcome to ShyTalk'),
+    });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'ja')).toBe(false);
+  });
+
+  test('the message input alone is NOT a welcome PM', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
       "'cat' '/sdcard/dump.xml'":
         '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'ru')).toBe(true);
-  });
-
-  test('privateChat_messageInput present + code "ja" → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'ja')).toBe(true);
-  });
-
-  test('privateChat_messageInput absent (wrong screen) → false', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
     });
     const driver = await createAndroidDriver();
     expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(false);
   });
 
-  test('empty dump → false', async () => {
+  test('a SENT message does not count — the welcome PM is received', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '',
+      "'cat' '/sdcard/dump.xml'":
+        '<node resource-id="privateChat_msg_sent_m1" text="Welcome to ShyTalk" bounds="[0,0][9,9]" />',
     });
     const driver = await createAndroidDriver();
     expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(false);
   });
 
-  test('bare resource-id (no package prefix) → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '<node resource-id="privateChat_messageInput" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(true);
-  });
-
-  test('non-self-closing tag form → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput"><node text="Welcome message" /></node>',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(true);
-  });
-
-  test('left-boundary false-positive — pre_privateChat_messageInput_x does NOT match', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_privateChat_messageInput_x" />',
-    });
+  test('an empty dump → false', async () => {
+    mockExec({ "'uiautomator' 'dump'": '', "'cat' '/sdcard/dump.xml'": '' });
     const driver = await createAndroidDriver();
     expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(false);
   });
 
-  test('right-boundary false-positive — privateChat_messageInput_extra does NOT match', async () => {
+  test('a blank locale code → false, never a wildcard match', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput_extra" />',
+      "'cat' '/sdcard/dump.xml'": recvWith('Welcome to ShyTalk'),
     });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(false);
+    expect(await driver.androidShowsWelcomePmInLanguage('Selma', '')).toBe(false);
   });
 
-  test('package-qualified left-boundary — :id/pre_privateChat_messageInput does NOT match', async () => {
+  test('a locale the app does not ship REFUSES rather than failing the product', async () => {
+    // "There is no translation to compare against" is a harness gap. Reporting
+    // it as false would file a product defect against a language nobody built.
     mockExec({
       "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/pre_privateChat_messageInput" />',
+      "'cat' '/sdcard/dump.xml'": recvWith('Welcome to ShyTalk'),
     });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(false);
-  });
-
-  test('bare left-boundary no suffix — pre_privateChat_messageInput does NOT match', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_privateChat_messageInput" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(false);
-  });
-
-  test('uiautomator dump throws → false', async () => {
-    execSync.mockImplementation((cmd) => {
-      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
-      if (cmd.includes("'uiautomator' 'dump'")) {
-        throw new Error('adb: device offline');
-      }
-      return '';
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(false);
-  });
-
-  test('persona name ignored', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
-    });
-    const driver = await createAndroidDriver();
-    const okSelma = await driver.androidShowsWelcomePmInLanguage('Selma', 'en');
-
-    jest.clearAllMocks();
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
-    });
-    const driver2 = await createAndroidDriver();
-    const okBea = await driver2.androidShowsWelcomePmInLanguage('Bea', 'en');
-
-    expect(okSelma).toBe(true);
-    expect(okBea).toBe(true);
-  });
-
-  test('unknown locale code still passes — code accepted-and-ignored', async () => {
-    // Foundation contract pin: code is not validated against the
-    // app's 20-locale registry. The journey orchestrator ensures
-    // the locale switch settled before this matcher fires.
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'xx')).toBe(true);
-  });
-
-  test('undefined code → true (code accepted-and-ignored regardless of value)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsWelcomePmInLanguage('Selma', undefined)).toBe(true);
-  });
-
-  test('null name → true (name accepted-and-ignored regardless of value)', async () => {
-    // Regression guard: pins the accepted-and-ignored contract for `_name`
-    // so a future input-guard refactor cannot silently change behavior.
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsWelcomePmInLanguage(null, 'en')).toBe(true);
-  });
-
-  test('undefined name → true (name accepted-and-ignored regardless of value)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsWelcomePmInLanguage(undefined, 'en')).toBe(true);
-  });
-
-  test('first-match contract — two privateChat_messageInput nodes', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />' +
-        '<node resource-id="com.shyden.shytalk.local:id/privateChat_messageInput" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsWelcomePmInLanguage('Selma', 'en')).toBe(true);
+    await expect(driver.androidShowsWelcomePmInLanguage('Selma', 'zz')).rejects.toThrow(
+      /welcome_to_shytalk/,
+    );
   });
 });
 
@@ -11432,290 +11315,70 @@ describe('android-adb-driver — androidShowsNamedKind', () => {
 });
 
 describe('android-adb-driver — androidShowsNonEmptyLocaleText', () => {
-  // Wake 89 — `<Name>'s <Plat> UI shows non-empty <Language> text for
-  // section N` (j13:36). Locale section assertion. Driver checks that
-  // section N of the current screen contains non-empty text in the
-  // named language. Driver receives `(name, code, section)` — code is
-  // a BCP-47 locale code (en, ja, ar, etc.), section is a number.
+  // REWRITTEN 2026-08-02. The previous block asserted `localeText_*` — a testTag
+  // the product has never rendered, anywhere. Its own tests named the flaw:
+  // "name accepted-and-ignored", "any suffix matches". A phantom tag makes an
+  // assertion that can only fail, and blames the product when it does.
   //
-  // Foundation strategy: presence-check on the `localeText_*` testTag
-  // PREFIX. No `localeText_*` testTag exists in shared/src/commonMain
-  // yet — per-section locale-text testTags are unbuilt. Returns false
-  // in real journeys today; lands true when ships with
-  // localeText_section1 / localeText_section2 etc.
-  //
-  // Per-section verification needs a section-number → testTag map.
-  // Per-language verification needs text-extraction + script-category
-  // detection. Both deferred. All 3 args (_name, _code, _section)
-  // accepted-and-ignored.
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  // The product renders `settings_language_<code>`. And NON-EMPTY is the half
+  // that catches the real defect: a missing translation renders the row with a
+  // blank label, which a presence-only check calls a pass.
+  const langRow = (code, label) =>
+    `<node resource-id="com.shyden.shytalk.local:id/settings_language_${code}" text="${label}" bounds="[0,0][9,9]" />`;
 
-  test('localeText_section1 present → true', async () => {
+  test('a language row carrying its translated name → true', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
+      "'cat' '/sdcard/dump.xml'": langRow('ja', '日本語'),
     });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(true);
+    expect(await driver.androidShowsNonEmptyLocaleText('Selma', 'ja')).toBe(true);
   });
 
-  test('localeText_section2 present → true (any suffix matches)', async () => {
+  test('a row rendered EMPTY is a missing translation, not a pass', async () => {
+    // The whole point. This is what a dropped locale string looks like on
+    // screen, and the old presence-only check reported it as working.
     mockExec({
       "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section2" />',
+      "'cat' '/sdcard/dump.xml'": langRow('ja', ''),
     });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ar', 2)).toBe(true);
+    expect(await driver.androidShowsNonEmptyLocaleText('Selma', 'ja')).toBe(false);
   });
 
-  test('absent (no locale-text element) → false', async () => {
+  test('a row of only whitespace is also empty', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+      "'cat' '/sdcard/dump.xml'": langRow('ja', '   '),
     });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(false);
+    expect(await driver.androidShowsNonEmptyLocaleText('Selma', 'ja')).toBe(false);
   });
 
-  test('empty dump → false', async () => {
+  test('a DIFFERENT language being present does not satisfy the assertion', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '',
+      "'cat' '/sdcard/dump.xml'": langRow('en', 'English'),
     });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(false);
+    expect(await driver.androidShowsNonEmptyLocaleText('Selma', 'ja')).toBe(false);
   });
 
-  test('bare resource-id → true', async () => {
+  test('an empty dump → false', async () => {
+    mockExec({ "'uiautomator' 'dump'": '', "'cat' '/sdcard/dump.xml'": '' });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsNonEmptyLocaleText('Selma', 'ja')).toBe(false);
+  });
+
+  test('a blank code → false, never a wildcard match', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '<node resource-id="localeText_section1" />',
+      "'cat' '/sdcard/dump.xml'": langRow('ja', '日本語'),
     });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(true);
-  });
-
-  test('non-self-closing tag form → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1"><node text="こんにちは" /></node>',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(true);
-  });
-
-  test('left-boundary — pre_localeText_X does NOT match (package-qualified)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/pre_localeText_section1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(false);
-  });
-
-  test('bare left-boundary — pre_localeText_X does NOT match', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_localeText_section1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(false);
-  });
-
-  test('right-boundary — localeText_section1Extra still matches (prefix contract)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1Extra" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(true);
-  });
-
-  test('confusable prefix — locale_textSection1 does NOT match (package-qualified)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/locale_textSection1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(false);
-  });
-
-  test('bare confusable prefix — locale_textSection1 does NOT match', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '<node resource-id="locale_textSection1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(false);
-  });
-
-  test('uiautomator dump throws → false', async () => {
-    execSync.mockImplementation((cmd) => {
-      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
-      if (cmd.includes("'uiautomator' 'dump'")) {
-        throw new Error('adb: device offline');
-      }
-      return '';
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(false);
-  });
-
-  test('name accepted-and-ignored — Selma passes', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Selma', 'ja', 1)).toBe(true);
-  });
-
-  test('null name → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText(null, 'ja', 1)).toBe(true);
-  });
-
-  test('undefined name → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText(undefined, 'ja', 1)).toBe(true);
-  });
-
-  test('empty name → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('', 'ja', 1)).toBe(true);
-  });
-
-  test('whitespace name → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('   ', 'ja', 1)).toBe(true);
-  });
-
-  test('null code → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', null, 1)).toBe(true);
-  });
-
-  test('undefined code → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', undefined, 1)).toBe(true);
-  });
-
-  test('empty code → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', '', 1)).toBe(true);
-  });
-
-  test('whitespace code → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', '   ', 1)).toBe(true);
-  });
-
-  test('null section → true (accepted-and-ignored)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', null)).toBe(true);
-  });
-
-  test('undefined section → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', undefined)).toBe(true);
-  });
-
-  test('0 section → true (section accepted-and-ignored regardless of value)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 0)).toBe(true);
-  });
-
-  test('different code/section still passes (foundation does not match specifics)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ar', 99)).toBe(true);
-  });
-
-  test('first-match contract — two localeText_* nodes', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section1" />' +
-        '<node resource-id="com.shyden.shytalk.local:id/localeText_section2" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsNonEmptyLocaleText('Hayato', 'ja', 1)).toBe(true);
+    expect(await driver.androidShowsNonEmptyLocaleText('Selma', '')).toBe(false);
   });
 });
-
-// androidShowsOfficialBadge: the describe block that lived here asserted "the tag is present
-// → true", which is the defect itself rather than the behaviour. Replaced by
-// the block of the same name in android-auth-state.test.js, which asserts the
-// subject and pins the negative cases the presence check could not express.
 
 describe('android-adb-driver — androidShowsOnlyMinorCohortInRankings', () => {
   // Wake 99 — `<Name>'s <Plat> UI shows only minor-cohort users in the
@@ -11916,242 +11579,67 @@ describe('android-adb-driver — androidShowsOnlyMinorCohortInRankings', () => {
 });
 
 describe('android-adb-driver — androidShowsOwnRankInTop', () => {
-  // Wake 100 — `<Name>'s <Plat> UI shows (her|his|their) own rank in
-  // the top N` (j05). Leaderboard own-rank visibility. Pronoun is
-  // grammatical (not captured). Driver receives `(name, topN)` —
-  // topN is the integer cutoff (e.g. 10, 50, 100).
+  // REWRITTEN 2026-08-02. The previous block asserted `ownRank_*` — a testTag
+  // the product never renders — and its own test names admit the rest:
+  // "name accepted-and-ignored", "null name → true". So "is Bao in the top 3?"
+  // was answered without looking at Bao and without looking at 3.
   //
-  // Foundation strategy: presence-check on the `ownRank_*` testTag
-  // PREFIX. No `ownRank_*` testTag exists in shared/src/commonMain
-  // yet — leaderboard own-rank highlight is unbuilt. Returns false
-  // in real journeys today; lands true when ships with
-  // ownRank_indicator / ownRank_userRow etc.
-  //
-  // Per-topN verification (asserting the rank is within top N) needs
-  // text-extraction of the rank number. Deferred. Both args
-  // (_name, _topN) accepted-and-ignored.
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+  // The product renders the ranking as `giftWall_rank_<userId>` rows in order.
+  // "In the top N" is a claim about a POSITION, so the position is what is read.
+  const rankRows = (...ids) =>
+    ids
+      .map(
+        (id, k) =>
+          `<node resource-id="com.shyden.shytalk.local:id/giftWall_rank_${id}" text="#${k + 1}" bounds="[0,${k * 10}][9,${k * 10 + 9}]" />`,
+      )
+      .join('');
 
-  test('ownRank_indicator present → true', async () => {
+  test('a viewer sitting 2nd IS in the top 3', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
+      "'cat' '/sdcard/dump.xml'": rankRows('alice', 'Bao', 'theo', 'nora'),
     });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(true);
+    expect(await driver.androidShowsOwnRankInTop('Bao', 3)).toBe(true);
   });
 
-  test('ownRank_userRow present → true (any suffix matches)', async () => {
+  test('a viewer sitting 4th is NOT in the top 3', async () => {
+    // The defect the old block could not see: a ranking row exists for everyone,
+    // so presence proved nothing about position.
     mockExec({
       "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/ownRank_userRow" />',
+      "'cat' '/sdcard/dump.xml'": rankRows('alice', 'theo', 'nora', 'Bao'),
     });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', 50)).toBe(true);
+    expect(await driver.androidShowsOwnRankInTop('Bao', 3)).toBe(false);
   });
 
-  test('absent → false', async () => {
+  test('a viewer with no ranking row at all → false', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
+      "'cat' '/sdcard/dump.xml'": rankRows('alice', 'theo'),
     });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(false);
+    expect(await driver.androidShowsOwnRankInTop('Bao', 3)).toBe(false);
   });
 
-  test('empty dump → false', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '',
-    });
+  test('an empty ranking → false, not a vacuous pass', async () => {
+    mockExec({ "'uiautomator' 'dump'": '', "'cat' '/sdcard/dump.xml'": '<node />' });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(false);
+    expect(await driver.androidShowsOwnRankInTop('Bao', 3)).toBe(false);
   });
 
-  test('bare resource-id → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '<node resource-id="ownRank_indicator" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(true);
-  });
-
-  test('non-self-closing tag form → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator"><node text="#7" /></node>',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(true);
-  });
-
-  test('left-boundary — pre_ownRank_X does NOT match (package-qualified)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/pre_ownRank_indicator" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(false);
-  });
-
-  test('bare left-boundary — pre_ownRank_X does NOT match', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_ownRank_indicator" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(false);
-  });
-
-  test('right-boundary — ownRank_indicatorExtra still matches (prefix contract)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicatorExtra" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(true);
-  });
-
-  test('confusable prefix — own_rankPanel does NOT match (package-qualified)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/own_rankPanel" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(false);
-  });
-
-  test('bare confusable prefix — own_rankPanel does NOT match', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '<node resource-id="own_rankPanel" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(false);
-  });
-
-  test('uiautomator dump throws → false', async () => {
-    execSync.mockImplementation((cmd) => {
-      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
-      if (cmd.includes("'uiautomator' 'dump'")) {
-        throw new Error('adb: device offline');
-      }
-      return '';
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(false);
-  });
-
-  test('name accepted-and-ignored — Bao passes', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Bao', 10)).toBe(true);
-  });
-
-  test('null name → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop(null, 10)).toBe(true);
-  });
-
-  test('undefined name → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop(undefined, 10)).toBe(true);
-  });
-
-  test('empty name → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('', 10)).toBe(true);
-  });
-
-  test('whitespace name → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('   ', 10)).toBe(true);
-  });
-
-  test('null topN → true (accepted-and-ignored)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', null)).toBe(true);
-  });
-
-  test('undefined topN → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', undefined)).toBe(true);
-  });
-
-  test('0 topN → true (topN accepted-and-ignored regardless of value)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', 0)).toBe(true);
-  });
-
-  test('different topN still passes (foundation does not match specific cutoff)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', 9999)).toBe(true);
-  });
-
-  test('first-match contract — two ownRank_* nodes', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/ownRank_indicator" />' +
-        '<node resource-id="com.shyden.shytalk.local:id/ownRank_userRow" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsOwnRankInTop('Selma', 10)).toBe(true);
-  });
+  test.each([[0], [-1], ['many'], [null], [undefined]])(
+    'a non-positive or non-numeric N (%p) → false',
+    async (n) => {
+      mockExec({
+        "'uiautomator' 'dump'": '',
+        "'cat' '/sdcard/dump.xml'": rankRows('Bao'),
+      });
+      const driver = await createAndroidDriver();
+      expect(await driver.androidShowsOwnRankInTop('Bao', n)).toBe(false);
+    },
+  );
 });
 
 describe('android-adb-driver — androidShowsRoomClosedSummary', () => {
@@ -12563,287 +12051,67 @@ describe('android-adb-driver — androidShowsRoomWarningBanner', () => {
 });
 
 describe('android-adb-driver — androidShowsSeatRequestNotification', () => {
-  // Wake 101 — `<Name>'s <Plat> UI shows a seat-request notification
-  // with "<X>" + approve/deny` (j09). Host receives notification when
-  // a participant requests a seat. Driver receives `(host, requester)`.
+  // REWRITTEN 2026-08-02. The notification was fully BUILT — RoomNotificationOverlay
+  // renders "<name> wants to sit", a seat number and Deny/Accept — it simply
+  // carried no testTag, so the driver asserted `seatRequestNotification_*`
+  // against a dump that never contained it. A phantom tag: a check that can only
+  // fail, blaming the product for a harness gap.
   //
-  // Foundation strategy: presence-check on the
-  // `seatRequestNotification_*` testTag PREFIX. No
-  // `seatRequestNotification_*` testTag exists in
-  // shared/src/commonMain yet — host-side notification UI is unbuilt.
-  // Returns false in real journeys today; lands true when ships with
-  // seatRequestNotification_toast / seatRequestNotification_actionRow
-  // etc.
-  //
-  // Distinct-from `seatRequest_*` (#766 — the host approval button
-  // family); similar-but-distinct guard pinned. Both args (_host,
-  // _requester) accepted-and-ignored.
-  beforeEach(() => {
-    jest.clearAllMocks();
+  // The overlay is now tagged with the REQUESTER's id, because a host with two
+  // people asking to sit needs to know which card is on screen — approving the
+  // wrong person is the defect worth catching.
+  const card = (userId) =>
+    `<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_${userId}" text="wants to sit" bounds="[0,0][9,9]" />`;
+
+  test("the requester's own card → true", async () => {
+    mockExec({ "'uiautomator' 'dump'": '', "'cat' '/sdcard/dump.xml'": card('50000110') });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Theo', '50000110')).toBe(true);
   });
 
-  test('seatRequestNotification_toast present → true', async () => {
+  test("SOMEONE ELSE's card does not satisfy it", async () => {
+    // The old check passed on any seat-request card at all, so a host could
+    // approve the wrong person and the journey would call it a pass.
+    mockExec({ "'uiautomator' 'dump'": '', "'cat' '/sdcard/dump.xml'": card('50000999') });
+    const driver = await createAndroidDriver();
+    expect(await driver.androidShowsSeatRequestNotification('Theo', '50000110')).toBe(false);
+  });
+
+  test('the requester named in the card TEXT also satisfies it', async () => {
+    // The corpus names people, not ids, so both forms have to work.
     mockExec({
       "'uiautomator' 'dump'": '',
       "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
+        '<node resource-id="seatRequestNotification_50000110" text="Ines wants to sit" bounds="[0,0][9,9]" />',
     });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(true);
+    expect(await driver.androidShowsSeatRequestNotification('Theo', 'Ines')).toBe(true);
   });
 
-  test('seatRequestNotification_actionRow present → true (any suffix matches)', async () => {
+  test('no notification at all → false', async () => {
     mockExec({
       "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_actionRow" />',
+      "'cat' '/sdcard/dump.xml'": '<node resource-id="room_seatGrid" />',
     });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(true);
+    expect(await driver.androidShowsSeatRequestNotification('Theo', '50000110')).toBe(false);
   });
 
-  test('absent → false', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/main_roomsTab" />',
-    });
+  test('an empty dump → false', async () => {
+    mockExec({ "'uiautomator' 'dump'": '', "'cat' '/sdcard/dump.xml'": '' });
     const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
+    expect(await driver.androidShowsSeatRequestNotification('Theo', '50000110')).toBe(false);
   });
 
-  test('empty dump → false', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
-  });
-
-  test('bare resource-id → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '<node resource-id="seatRequestNotification_toast" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(true);
-  });
-
-  test('non-self-closing tag form → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast"><node text="Bao requests" /></node>',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(true);
-  });
-
-  test('left-boundary — pre_seatRequestNotification_X does NOT match (package-qualified)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/pre_seatRequestNotification_toast" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
-  });
-
-  test('bare left-boundary — pre_seatRequestNotification_X does NOT match', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '<node resource-id="pre_seatRequestNotification_toast" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
-  });
-
-  test('right-boundary — seatRequestNotification_toastExtra still matches (prefix contract)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toastExtra" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(true);
-  });
-
-  test('confusable prefix — seatRequest_Notification does NOT match (package-qualified)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_Notification" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
-  });
-
-  test('bare confusable prefix — seatRequest_Notification does NOT match', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'": '<node resource-id="seatRequest_Notification" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
-  });
-
-  test('similar-but-distinct — seatRequest_approveButton (host action) does NOT match', async () => {
-    // PR #766 shipped seatRequest_* for the host APPROVAL button.
-    // Distinct from the host-side seatRequestNotification_* for the
-    // incoming-request toast. Pin that they don't conflate.
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequest_approveButton" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
-  });
-
-  test('uiautomator dump throws → false', async () => {
-    execSync.mockImplementation((cmd) => {
-      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
-      if (cmd.includes("'uiautomator' 'dump'")) {
-        throw new Error('adb: device offline');
-      }
-      return '';
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(false);
-  });
-
-  test('host accepted-and-ignored — Ines passes', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Ines', 'Bao')).toBe(true);
-  });
-
-  test('null host → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification(null, 'Bao')).toBe(true);
-  });
-
-  test('undefined host → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification(undefined, 'Bao')).toBe(true);
-  });
-
-  test('empty host → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('', 'Bao')).toBe(true);
-  });
-
-  test('whitespace host → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('   ', 'Bao')).toBe(true);
-  });
-
-  test('null requester → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', null)).toBe(true);
-  });
-
-  test('undefined requester → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', undefined)).toBe(true);
-  });
-
-  test('empty requester → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', '')).toBe(true);
-  });
-
-  test('whitespace requester → true', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', '   ')).toBe(true);
-  });
-
-  test('different requester still passes (foundation does not match specific user)', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', 'NotInRequest')).toBe(true);
-  });
-
-  test('first-match contract — two seatRequestNotification_* nodes', async () => {
-    mockExec({
-      "'uiautomator' 'dump'": '',
-      "'cat' '/sdcard/dump.xml'":
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_toast" />' +
-        '<node resource-id="com.shyden.shytalk.local:id/seatRequestNotification_actionRow" />',
-    });
-    const driver = await createAndroidDriver();
-    expect(await driver.androidShowsSeatRequestNotification('Alice', 'Bao')).toBe(true);
-  });
+  test.each([[''], [null], [undefined]])(
+    'a blank requester (%p) → false, never a wildcard match',
+    async (who) => {
+      mockExec({ "'uiautomator' 'dump'": '', "'cat' '/sdcard/dump.xml'": card('50000110') });
+      const driver = await createAndroidDriver();
+      expect(await driver.androidShowsSeatRequestNotification('Theo', who)).toBe(false);
+    },
+  );
 });
-
-// androidShowsStalkersDelta: the describe block that lived here asserted "the tag is present
-// → true", which is the defect itself rather than the behaviour. Replaced by
-// the block of the same name in android-auth-state.test.js, which asserts the
-// subject and pins the negative cases the presence check could not express.
-
-// androidShowsToastAndNavigates: the describe block that lived here asserted "the tag is present
-// → true", which is the defect itself rather than the behaviour. Replaced by
-// the block of the same name in android-auth-state.test.js, which asserts the
-// subject and pins the negative cases the presence check could not express.
-
-// androidShowsToastAndNavigatesBack: the describe block that lived here asserted "the tag is present
-// → true", which is the defect itself rather than the behaviour. Replaced by
-// the block of the same name in android-auth-state.test.js, which asserts the
-// subject and pins the negative cases the presence check could not express.
-
-// androidShowsUserCard: the describe block that lived here asserted "the tag is present
-// → true", which is the defect itself rather than the behaviour. Replaced by
-// the block of the same name in android-auth-state.test.js, which asserts the
-// subject and pins the negative cases the presence check could not express.
 
 describe('android-adb-driver — androidShowsUserCardSkeletons', () => {
   // Wake 97 — `<Name>'s <Plat> UI shows skeleton placeholders for user

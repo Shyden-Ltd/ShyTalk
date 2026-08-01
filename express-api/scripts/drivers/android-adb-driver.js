@@ -948,27 +948,10 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return /(?<![\w-])enabled="false"/.test(tagMatch[0]);
   };
 
-  // Wake 99 — `<Name>'s Android UI[ opens conversation "<X>"] shows
-  // the frozen-banner element <suffix>` (j08, 4 corpus rows). Driver
-  // receives `(viewer, convId, suffix)` where convId is optional
-  // (null when no "opens conversation X" prefix in the Gherkin) and
-  // suffix is descriptive ("with text-from-key X" or "with locale
-  // string Y").
-  //
-  // Foundation policy: presence-check `privateChat_frozenBanner`
-  // testTag (PrivateChatScreen.kt:440) only. All three args are
-  // accepted-and-ignored at this layer — the assertion is "the
-  // frozen banner is currently visible". A future PR can layer
-  // text-from-key / locale-string verification once those contracts
-  // are clearer. Same shape as androidNavigatesToRoomScreen's
-  // suffix-ignore foundation (PR #732).
-  driver.androidShowsFrozenBanner = async (_viewer, _convId, _suffix) => {
-    const dump = await driver.androidUiDump();
-    if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_frozenBanner"[^>]*\/?>/;
-    return tagRx.test(dump);
-  };
+  // androidShowsFrozenBanner — REMOVED. It took its arguments and ignored them, so it
+  // asserted only that some element of the right family existed and passed on
+  // the wrong conversation / requester / language. The real implementation now
+  // lives in app-ui-methods.js and is registered on BOTH phones.
 
   // Wake 105 — `<Name>'s Android Admin UI shows the new report in
   // the queue` (j11). Single-arg assertion that the admin queue
@@ -1617,13 +1600,10 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const actual = parseLayoutDirection(await driver.androidUiDump());
     return actual === want;
   };
-  driver.androidShowsWelcomePmInLanguage = async (_name, _code) => {
-    const dump = await driver.androidUiDump();
-    if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?privateChat_messageInput"[^>]*\/?>/;
-    return tagRx.test(dump);
-  };
+  // androidShowsWelcomePmInLanguage — REMOVED. It took its arguments and ignored them, so it
+  // asserted only that some element of the right family existed and passed on
+  // the wrong conversation / requester / language. The real implementation now
+  // lives in app-ui-methods.js and is registered on BOTH phones.
 
   // Wake 87 — `<Name> on <Plat> selects N stars and submits feedback "<X>"`
   // (j17:60). Composite rating-action: pick N stars + type feedback + submit.
@@ -2035,13 +2015,10 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     }
     return true;
   };
-  driver.androidShowsNonEmptyLocaleText = async (_name, _code, _section) => {
-    const dump = await driver.androidUiDump();
-    if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?localeText_[^"]*"[^>]*\/?>/;
-    return tagRx.test(dump);
-  };
+  // androidShowsNonEmptyLocaleText — REMOVED. It took its arguments and ignored them, so it
+  // asserted only that some element of the right family existed and passed on
+  // the wrong conversation / requester / language. The real implementation now
+  // lives in app-ui-methods.js and is registered on BOTH phones.
 
   // Wake 88 — `<Name>'s <Plat> UI shows the official badge[ <suffix>]`
   // (j13/j18). Bare and suffixed forms; the optional trailing fragment
@@ -2090,26 +2067,10 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
-  // Wake 100 — `<Name>'s <Plat> UI shows (her|his|their) own rank in
-  // the top N` (j05). Leaderboard own-rank visibility. Driver receives
-  // `(name, topN)`.
-  //
-  // Foundation strategy: presence-check on the `ownRank_*` testTag
-  // PREFIX. No `ownRank_*` testTag exists in shared/src/commonMain
-  // yet — leaderboard own-rank highlight is unbuilt. Returns false in
-  // real journeys today; lands true when ships with
-  // ownRank_indicator / ownRank_userRow etc.
-  //
-  // Per-topN verification (asserting rank is within top N) needs
-  // text-extraction. Deferred. Both args (_name, _topN) accepted-
-  // and-ignored.
-  driver.androidShowsOwnRankInTop = async (_name, _topN) => {
-    const dump = await driver.androidUiDump();
-    if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?ownRank_[^"]*"[^>]*\/?>/;
-    return tagRx.test(dump);
-  };
+  // androidShowsOwnRankInTop — REMOVED. It took its arguments and ignored them, so it
+  // asserted only that some element of the right family existed and passed on
+  // the wrong conversation / requester / language. The real implementation now
+  // lives in app-ui-methods.js and is registered on BOTH phones.
 
   // Wake 103 — `<Name>'s <Plat> UI shows the room-closed summary
   // panel` (j09). Post-room-close summary view. Driver receives
@@ -2151,26 +2112,10 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     return tagRx.test(dump);
   };
 
-  // Wake 101 — `<Name>'s <Plat> UI shows a seat-request notification
-  // with "<X>" + approve/deny` (j09). Host receives notification when
-  // a participant requests a seat. Driver receives `(host, requester)`.
-  //
-  // Foundation strategy: presence-check on the
-  // `seatRequestNotification_*` testTag PREFIX. No
-  // `seatRequestNotification_*` testTag exists in shared/src/commonMain
-  // yet — host-side notification UI is unbuilt. Returns false in real
-  // journeys today; lands true when ships with
-  // seatRequestNotification_toast / _actionRow etc.
-  //
-  // Distinct-from `seatRequest_*` (#766 — the host approval button
-  // family). Both args (_host, _requester) accepted-and-ignored.
-  driver.androidShowsSeatRequestNotification = async (_host, _requester) => {
-    const dump = await driver.androidUiDump();
-    if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?seatRequestNotification_[^"]*"[^>]*\/?>/;
-    return tagRx.test(dump);
-  };
+  // androidShowsSeatRequestNotification — REMOVED. It took its arguments and ignored them, so it
+  // asserted only that some element of the right family existed and passed on
+  // the wrong conversation / requester / language. The real implementation now
+  // lives in app-ui-methods.js and is registered on BOTH phones.
 
   // Wake 103 — `<Name>'s <Plat> UI shows a +N in the stalkers/profile-
   // visits counter` (j07). Profile-visit count increment. Driver

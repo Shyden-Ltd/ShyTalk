@@ -44,8 +44,8 @@ const DRIVERS = path.join(__dirname, '../../scripts/drivers');
  */
 const ASSERTION_PREFIX = /^(Shows|Is|Has|Displays|Sees)/;
 
-function assertionsIgnoringEveryArgument(file, prefix) {
-  const src = fs.readFileSync(path.join(DRIVERS, file), 'utf8');
+function assertionsIgnoringEveryArgument(file, prefix, sourceOverride = null) {
+  const src = sourceOverride ?? fs.readFileSync(path.join(DRIVERS, file), 'utf8');
   const offenders = [];
   const re = new RegExp(
     `^[ \\t]*driver\\.(${prefix}[A-Za-z0-9_]*)\\s*=\\s*async\\s*\\(([^)]*)\\)`,
@@ -87,20 +87,39 @@ function assertionsIgnoringEveryArgument(file, prefix) {
 // userCardSkeleton_), and THAT is caught by no-phantom-testtags.unit.test.js.
 // Two guards, two questions: "does it check its subject" and "does the thing
 // it checks exist". Neither subsumes the other.
-const KNOWN_HOLLOW = [
-  'androidShowsFrozenBanner',
-  'androidShowsNonEmptyLocaleText',
-  'androidShowsOwnRankInTop',
-  'androidShowsSeatRequestNotification',
-  'androidShowsWelcomePmInLanguage',
-];
+// EMPTY. All five remaining entries were fixed on 2026-08-02: each took the
+// argument that mattered — which conversation, which requester, which language —
+// and ignored it, so it asserted that SOME element of the right family existed
+// and passed on the wrong one. Two of them needed a product change first
+// (`privateChat_frozenBanner` carried no conversation id; the seat-request card
+// carried no tag at all), which is why they had survived so long: there was
+// nothing in the dump to assert against.
+//
+// The real implementations now live in app-ui-methods.js, so they run on BOTH
+// phones rather than on Android alone.
+const KNOWN_HOLLOW = [];
 
 describe('the scan is real', () => {
-  it('finds assertions at all', () => {
-    // A regex that matched nothing would make the ratchet vacuously green while
-    // the debt grew unchecked.
-    const all = assertionsIgnoringEveryArgument('android-adb-driver.js', 'android');
-    expect(all.length).toBeGreaterThan(0);
+  it('catches a hollow assertion when there IS one', () => {
+    // Proven against a FIXTURE, not against live debt. This check used to read
+    // `expect(all.length).toBeGreaterThan(0)` on the real driver — which meant
+    // that the moment the debt reached zero, the sanity check failed and the
+    // obvious "fix" was to loosen it. A guard whose passing condition is
+    // "the problem still exists" cannot survive its own success.
+    const fixture = [
+      '  driver.androidShowsSomething = async (_viewer, _target) => {',
+      '    const dump = await driver.androidUiDump();',
+      '    return /resource-id="thing_"/.test(dump);',
+      '  };',
+    ].join('\n');
+    expect(assertionsIgnoringEveryArgument(null, 'android', fixture)).toEqual([
+      'androidShowsSomething',
+    ]);
+  });
+
+  it('the real driver carries no hollow assertions at all', () => {
+    // The state the fixture above proves is detectable.
+    expect(assertionsIgnoringEveryArgument('android-adb-driver.js', 'android')).toEqual([]);
   });
 
   it('recognises an argument-using assertion as fine', () => {

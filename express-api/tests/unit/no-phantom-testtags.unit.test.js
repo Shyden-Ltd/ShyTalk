@@ -106,21 +106,28 @@ function renderedByProduct(tag) {
  * Either way the current state is a scenario that fails and blames the product.
  */
 const KNOWN_PHANTOM_TAGS = [
+  // Debug affordances a release build deliberately does not ship. The shared
+  // methods that reach for these fall back to a real alternative (a cold
+  // relaunch) or report `supported: false` with a reason — they never answer
+  // "the product is broken" because a debug hook is absent.
   'debug_forceRefreshJwt',
-  'followedPicker',
   'debug_performAuthedCall',
+  // An OS permission dialog, not our UI. There is nothing for the product to
+  // tag; it belongs to Android's permission controller.
+  'permission_allow_foreground_only_button',
+  // Controls the product has not built yet. Each is a real gap: a driver taps
+  // it, nothing renders it, and the step fails blaming the app.
+  'followedPicker',
   'gift_open',
   'gift_send',
   'idUpload_gallery',
-  'participantsList_',
-  'permission_allow_foreground_only_button',
   'pm_confirmEdit',
-  'roomClosedSummary_',
   'rooms_refresh',
   'signin_signUpLink',
   'signup_dobPicker',
-  'toast_',
   'wallet_retryPurchase',
+  'roomClosedSummary_',
+  'toast_',
 ];
 
 describe('the scan is real', () => {
