@@ -172,9 +172,12 @@ async function createIosDriver({ udid: preferred } = {}) {
   // mirrors the Android cluster's pattern but adapted to iOS's
   // identifier attribute. Until all names have foundation
   // implementations, every unimplemented stub returns false.
-  for (const methodName of listMethods()) {
-    driver[methodName] = async (..._args) => false;
-  }
+  // NO STUB LOOP — see the note in web-playwright-driver.js.
+  //
+  // This one was the quietest of the four: `async () => false` with no log at
+  // all, so an unimplemented method produced a failing step and NOTHING
+  // anywhere said the driver had not been asked to do real work. An absent
+  // method at least names itself in the runner's `not configured` error.
 
   // ── Foundation presence-check methods ─────────────────────────────
   //

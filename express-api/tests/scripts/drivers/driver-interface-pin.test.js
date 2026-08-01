@@ -32,9 +32,17 @@ const DRIVERS_DIR = path.resolve(__dirname, '../../../scripts/drivers');
 
 // EXPECTED method counts per driver. Updated 2026-05-31 (PR #944 added
 // takeScreenshot to all 7 web drivers — gap C3).
+//
+// 2026-08-01 (SHY-0259): web-playwright 78 → 75. Three names —
+// hasPurchasedSuccessfully, neitherUserIsFollowingTheOther, webShowsCardBadge
+// — were DECLARED here and called by nothing: no runner matcher, no other
+// driver, no test. They existed only to be wired by the stub loop, so each
+// was a method that could resolve and return false without any step ever
+// asking for it. Removing the loop removed their only reason to exist.
+//
 // Drift in EITHER direction surfaces a red test for deliberate review.
 const EXPECTED_COUNTS = {
-  'web-playwright-driver': 78,
+  'web-playwright-driver': 75,
   'android-adb-driver': 73, // SHY-0096: +androidKillAndRelaunch
   'ios-devicectl-driver': 66,
   'ios-simctl-driver': 66,

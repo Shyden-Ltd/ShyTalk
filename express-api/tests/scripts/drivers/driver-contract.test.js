@@ -48,6 +48,7 @@ const HELPER_FILES = new Set([
   'ui-dump-query.js', // uiautomator dump queries
   'ios-element-query.js', // XCUITest locator construction
   'web-common-methods.js', // SHY-0259: shared web surface mixin, applied BY drivers
+  'render-timing.js', // SHY-0259: submit→render clock, shared by both device drivers
 ]);
 
 function discoverDrivers() {

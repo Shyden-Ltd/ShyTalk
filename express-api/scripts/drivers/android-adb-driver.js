@@ -36,6 +36,7 @@
 const { execSync } = require('child_process');
 const { dumpWithRetry, resolveDumpBackoffMs } = require('./ui-dump-retry');
 const { withDeviceLock } = require('./device-lock');
+const { createSubmitClock } = require('./render-timing');
 const {
   centreOf,
   centreOfCardWithLabel,
@@ -249,6 +250,8 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     throw new Error('No Android device connected (adb devices empty)');
   }
   const driver = { _serial: serial };
+  // Stamped by every submit action; read by measureRenderingTimeFromSubmit.
+  const submitClock = createSubmitClock();
 
   function adb(args) {
     const cmd = ['adb', '-s', serial, ...args].map((a) => `'${a}'`).join(' ');
@@ -291,14 +294,9 @@ async function createAndroidDriver({ serial: preferred } = {}) {
 
   ensureReverseTunnels();
 
-  for (const methodName of listMethods()) {
-    driver[methodName] = async (...args) => {
-      console.error(
-        `[android-driver] stub:${methodName}(${args.map((a) => JSON.stringify(a)).join(', ')}) — not implemented yet (device=${serial})`,
-      );
-      return false;
-    };
-  }
+  // NO STUB LOOP — see the note in web-playwright-driver.js. A declared but
+  // unimplemented method must be ABSENT so the runner reports it by name,
+  // never present-and-returning-false so the step reads as a product defect.
 
   // ── Real primitive implementations (override stubs) ─────────────────
 
@@ -3043,6 +3041,9 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     if (!(await driver.androidTypeText(text))) return false;
     try {
       adb(['shell', 'input', 'keyevent', '66']); // KEYCODE_ENTER
+      // Stamp AFTER the keyevent lands, so the render budget measures from the
+      // moment the app was actually asked to do the work.
+      submitClock.markSubmit();
       return true;
     } catch (e) {
       console.error(`[android-driver] androidTypeAndSubmit submit failed: ${e.message}`);
@@ -3347,6 +3348,42 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       /resource-id="(?:[^"]*:id\/)?roomScreen"/.test(String(dump)) || dumpHas(dump, 'Connected')
     );
   };
+
+  // ── cross-platform surface (unprefixed: BOTH ui drivers must define it) ──
+  //
+  // The runner reaches these through `ctx.uiDriver.<name>` with no platform in
+  // the name, because the step reads "no PM screen renders" — whichever device
+  // the cell owns is the one that must answer. An unprefixed method missing on
+  // one platform is a silent hole: the step is red on Android and skipped on
+  // iOS, and the two look like different defects.
+
+  driver.currentPlatformRendersScreen = async (screenName) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    const name = String(screenName).trim();
+    // Two shapes are in use across the app: a `<screen>_`-prefixed testTag on
+    // the screen root, and the bottom-nav `main_<screen>Tab`. Either one
+    // rendering means the screen is on display.
+    const tag = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(?:${tag}_|main_${tag}Tab|${tag}Screen)`, 'i').test(dump);
+  };
+
+  driver.showsCardBadge = async (kind, badge, suffix) => {
+    const dump = await driver.androidUiDump();
+    if (!dump) return false;
+    // `kind` scopes the search: a rail card and a plain card can carry the same
+    // badge text, and asserting on the wrong one would pass for the wrong
+    // reason. The rail scope is the rail container's testTag prefix.
+    if (kind === 'rail' && !dumpHas(dump, 'languageRail_') && !/rail/i.test(dump)) return false;
+    if (!dumpHas(dump, badge)) return false;
+    return suffix ? dumpHas(dump, suffix) : true;
+  };
+
+  driver.measureRenderingTimeFromSubmit = async (target) =>
+    submitClock.measureUntil(async () => {
+      const dump = await driver.androidUiDump();
+      return Boolean(dump) && dumpHas(dump, target);
+    });
 
   return driver;
 }

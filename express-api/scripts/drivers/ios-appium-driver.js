@@ -78,6 +78,7 @@ const {
   dumpHasText,
   dumpHasTextField,
 } = require('./ios-element-query');
+const { createSubmitClock } = require('./render-timing');
 
 const DEFAULT_APPIUM_BASE_URL = 'http://localhost:4723';
 
@@ -219,6 +220,8 @@ async function createIosDriver({
   const bundleId = explicitBundleId || envBundleId || bundleIdMap[target] || bundleIdMap.dev;
 
   const driver = { _udid: udid, _appiumBaseUrl: appiumBaseUrl, _bundleId: bundleId };
+  // Stamped by every submit action; read by measureRenderingTimeFromSubmit.
+  const submitClock = createSubmitClock();
 
   // Lazy-bootstrap the Appium session so the driver instance is cheap
   // to construct (tests don't pay the cost; live runs pay once on first
@@ -569,15 +572,21 @@ async function createIosDriver({
 
   // Stub registration: any iosShows* / iosTap* that doesn't have a real
   // body above falls back to a presence-check via iosUiDump.
-  for (const methodName of listMethods()) {
-    if (driver[methodName]) continue;
-    driver[methodName] = async (..._args) => {
-      const dump = await driver.iosUiDump();
-      // Presence-check fallback — methods can be specialised later as
-      // scenarios surface specific assertion shapes.
-      return dump.length > 0;
-    };
-  }
+  // NO FALLBACK LOOP.
+  //
+  // This used to fill any unimplemented declared name with
+  // `(await iosUiDump()).length > 0` — which returns TRUE whenever the app
+  // renders anything at all. Of the three stub loops in this directory it was
+  // the only one that manufactured GREEN: an assertion like "iOS shows the
+  // room-closed summary" would pass merely because the screen was not blank.
+  //
+  // Every one of the eleven declared names has a real body today, so nothing
+  // was passing falsely when this was removed — but the loop is a loaded
+  // trap, and a false pass is far more expensive than a false failure because
+  // nothing ever investigates a green cell.
+  //
+  // An unimplemented method is now simply absent, and the runner reports
+  // `ctx.uiDriver.<name> not configured` by name.
 
   driver.close = async () => {
     if (!_sessionId) return;
@@ -694,7 +703,11 @@ async function createIosDriver({
     if (!(await typeInto(el, text))) return false;
     // The on-screen Return key is the only reliable submit on iOS; a synthetic
     // keycode does not reach the field's editor.
-    return (await tapByLabel('Return')) || (await tapByLabel('Send')) || true;
+    const submitted = (await tapByLabel('Return')) || (await tapByLabel('Send')) || true;
+    // Stamp AFTER the key lands, so the render budget measures from the moment
+    // the app was actually asked to do the work.
+    submitClock.markSubmit();
+    return submitted;
   };
 
   driver.iosTypeIntoConversationInput = async (text) => {
@@ -710,6 +723,35 @@ async function createIosDriver({
   driver.iosShowsMessageInput = async () => dumpHasTextField(await driver.iosUiDump());
 
   driver.iosIsOnConversationWith = async (name) => dumpHasText(await driver.iosUiDump(), name);
+
+  /**
+   * Type into a screen's search field.
+   *
+   * Contract mirrored from `androidSearchIn` deliberately — the SAME runner
+   * matcher dispatches to both, so a difference in what counts as a valid
+   * screen or a valid query would mean the two platforms silently test
+   * different things. The tag map is the Android one, not an invented iOS one.
+   *
+   * Rejects a non-string or blank query before touching the device: typing
+   * "undefined" into a search box and reporting success is worse than
+   * reporting the refusal.
+   */
+  const SEARCH_FIELD_TAGS = { messages: 'newMessage_searchField' };
+  const DEFAULT_SEARCH_FIELD_TAG = 'newMessage_searchField';
+  driver.iosSearchIn = async (screen, text) => {
+    // typeof rejects null and undefined too (typeof null === 'object').
+    if (typeof text !== 'string' || !text.trim()) return false;
+    const tag = !screen
+      ? DEFAULT_SEARCH_FIELD_TAG
+      : SEARCH_FIELD_TAGS[String(screen).trim().toLowerCase()];
+    if (!tag) return false;
+    const el =
+      (await findEl('accessibility id', tag)) || (await findEl('xpath', xpathForTextField(tag)));
+    if (!el) return false;
+    // Tap first: a field that is not focused discards the value on iOS.
+    await clickEl(el);
+    return typeInto(el, text);
+  };
 
   driver.iosOpenScreen = async (screen) => {
     if (await driver.iosTapByTag(`nav_${screen}`)) return true;
@@ -863,6 +905,39 @@ async function createIosDriver({
     // the room screen IS the observable evidence a token arrived.
     return /name="roomScreen"|label="Connected"/.test(String(dump));
   };
+
+  // ── cross-platform surface (unprefixed: BOTH ui drivers must define it) ──
+  //
+  // Mirrors the Android implementations method-for-method. The runner reaches
+  // these with no platform in the name — "no PM screen renders" is answered by
+  // whichever device the cell owns — so a divergence between the two would
+  // mean the same step asserts different things depending on the cell.
+
+  driver.currentPlatformRendersScreen = async (screenName) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    const tag = String(screenName)
+      .trim()
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(?:${tag}_|main_${tag}Tab|${tag}Screen)`, 'i').test(dump);
+  };
+
+  driver.showsCardBadge = async (kind, badge, suffix) => {
+    const dump = await driver.iosUiDump();
+    if (!dump) return false;
+    // `kind` scopes the search — a rail card and a plain card can carry the
+    // same badge text, and asserting on the wrong one passes for the wrong
+    // reason.
+    if (kind === 'rail' && !/languageRail_|rail/i.test(dump)) return false;
+    if (!dumpHasText(dump, badge)) return false;
+    return suffix ? dumpHasText(dump, suffix) : true;
+  };
+
+  driver.measureRenderingTimeFromSubmit = async (renderTarget) =>
+    submitClock.measureUntil(async () => {
+      const dump = await driver.iosUiDump();
+      return Boolean(dump) && dumpHasText(dump, renderTarget);
+    });
 
   return driver;
 }

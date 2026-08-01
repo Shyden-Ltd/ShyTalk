@@ -28,11 +28,135 @@ const fs = require('fs');
 const path = require('path');
 
 const DRIVERS_DIR = path.join(__dirname, 'drivers');
+const RUNNER_FILE = path.join(__dirname, 'manual-qa-runner.js');
 const HELPER_FILES = new Set([
   'android-cdp-helpers.js',
   'ios-driver-loader.js',
   'driver-screenshot-helper.js',
 ]);
+
+/**
+ * The drivers the twelve matrix cells actually construct, and what each is
+ * accountable for.
+ *
+ * `ios-devicectl-driver` / `ios-simctl-driver` are deliberately absent: the
+ * loader picks Appium whenever WDA_TEAM_ID is set, which is the only
+ * configuration a real iPhone runs under. Holding a fallback driver to the
+ * full surface would inflate the gap count with work no cell ever executes.
+ *
+ * `platforms` lists the method-name prefixes the driver is answerable for.
+ * An Android driver asked for `iosTap` is a routing bug, not a driver gap, so
+ * the prefixes are what make this measurement meaningful rather than a naive
+ * union — the union claimed 47 missing on android-adb, where the honest number
+ * is zero.
+ */
+const MATRIX_DRIVERS = [
+  { file: 'android-adb-driver.js', namespace: 'uiDriver', platforms: ['android'] },
+  { file: 'ios-appium-driver.js', namespace: 'uiDriver', platforms: ['ios'] },
+  { file: 'web-playwright-driver.js', namespace: 'webDriver', platforms: ['web'] },
+  { file: 'web-mobile-chrome-android-driver.js', namespace: 'webDriver', platforms: ['web'] },
+  { file: 'web-mobile-samsung-android-driver.js', namespace: 'webDriver', platforms: ['web'] },
+  { file: 'web-mobile-edge-android-driver.js', namespace: 'webDriver', platforms: ['web'] },
+  { file: 'web-mobile-firefox-android-driver.js', namespace: 'webDriver', platforms: ['web'] },
+  { file: 'web-mobile-safari-ios-driver.js', namespace: 'webDriver', platforms: ['web'] },
+  { file: 'web-mobile-webkit-ios-driver.js', namespace: 'webDriver', platforms: ['web'] },
+];
+
+/** Which platform a method name is for, from its prefix. */
+function platformOf(name) {
+  if (/^android[A-Z]/.test(name)) return 'android';
+  if (/^ios[A-Z]/.test(name)) return 'ios';
+  if (/^web[A-Z]/.test(name)) return 'web';
+  return null; // unprefixed — every driver in the namespace must carry it
+}
+
+/**
+ * Every driver method the runner can demand, grouped by ctx namespace.
+ *
+ * Read from the runner's own source because the runner IS the consumer: the
+ * `ctx.<driver>.<name> not configured` strings it raises are the exact set of
+ * names a cell can be asked for at runtime.
+ */
+function referencedMethods(runnerSrc = fs.readFileSync(RUNNER_FILE, 'utf8')) {
+  const byNamespace = {};
+  for (const m of runnerSrc.matchAll(/ctx\.([A-Za-z0-9_]+)\.([A-Za-z0-9_]+)/g)) {
+    const [, ns, name] = m;
+    if (!/^(uiDriver|webDriver|firebaseAdmin)$/.test(ns)) continue;
+    (byNamespace[ns] = byNamespace[ns] || new Set()).add(name);
+  }
+  return byNamespace;
+}
+
+/**
+ * The method names a driver file DEFINES.
+ *
+ * Definition sites only — `driver.x = …` and the mixin's `def('x', …)`.
+ *
+ * The previous guard asked `driverSrc.includes(name)`, which is a SUBSTRING
+ * test: `webTap` passed because `webTapNamedButton` exists, and every short
+ * method name was invisible to it. Twenty-six methods reached a live gauntlet
+ * that way. A name mentioned in a comment satisfied it too.
+ */
+function definedMethods(file) {
+  const src = fs.readFileSync(path.join(DRIVERS_DIR, file), 'utf8');
+  const names = new Set();
+  // `[ \t]*` rather than `\s*`: what precedes a definition is INDENTATION, and
+  // `\s` matches newlines too, which lets the engine backtrack across the
+  // whole file for a line that never matches.
+  for (const m of src.matchAll(/^[ \t]*driver\.([A-Za-z0-9_]+)[ \t]*=/gm)) names.add(m[1]);
+  // `\s*` between `def(` and the name is load-bearing: prettier wraps a long
+  // call onto its own line, moving the name to the NEXT line. A regex that
+  // required them adjacent silently lost 24 methods the moment the file was
+  // reformatted — the extraction must describe the code, not its layout.
+  for (const m of src.matchAll(/\bdef\(\s*'([A-Za-z0-9_]+)'/g)) names.add(m[1]);
+  // A driver that attaches the shared web surface carries everything in it.
+  if (src.includes('attachCommonWebMethods') && file !== 'web-common-methods.js') {
+    for (const n of definedMethods('web-common-methods.js')) names.add(n);
+  }
+  return names;
+}
+
+/**
+ * Names a driver DECLARES but never implements.
+ *
+ * Three drivers wire every declared name to a stub that logs and returns
+ * false. A stub RESOLVES, so the runner records the step as the product
+ * failing rather than as a missing method — the single most expensive failure
+ * mode this report exists to expose, because it is indistinguishable from a
+ * real defect in a matrix report.
+ */
+function declaredButUnimplemented(file) {
+  const src = fs.readFileSync(path.join(DRIVERS_DIR, file), 'utf8');
+  const declared = new Set();
+  for (const block of src.matchAll(/const\s+\w*METHOD_NAMES\s*=\s*\[([\s\S]*?)\];/g)) {
+    for (const m of block[1].matchAll(/'([A-Za-z0-9_]+)'/g)) declared.add(m[1]);
+  }
+  const defined = definedMethods(file);
+  return [...declared].filter((n) => !defined.has(n)).sort();
+}
+
+/**
+ * Per-matrix-driver coverage gaps: what the runner can ask for and this
+ * driver cannot answer.
+ *
+ * @returns {Array<{driver: string, namespace: string, missing: string[], stubbed: string[]}>}
+ */
+function coverageGaps() {
+  const referenced = referencedMethods();
+  return MATRIX_DRIVERS.map(({ file, namespace, platforms }) => {
+    const wanted = [...(referenced[namespace] || [])].filter((n) => {
+      const p = platformOf(n);
+      return p === null || platforms.includes(p);
+    });
+    const defined = definedMethods(file);
+    return {
+      driver: file.replace(/\.js$/, ''),
+      namespace,
+      missing: wanted.filter((n) => !defined.has(n)).sort(),
+      stubbed: declaredButUnimplemented(file),
+    };
+  });
+}
 
 function discoverDrivers() {
   return fs
@@ -111,6 +235,30 @@ function formatJson(report) {
   return JSON.stringify(report);
 }
 
+/** Human-readable gap report. Names every missing method — the fix list IS the output. */
+function formatGaps(gaps) {
+  const lines = [];
+  let totalMissing = 0;
+  let totalStubbed = 0;
+  for (const g of gaps) {
+    totalMissing += g.missing.length;
+    totalStubbed += g.stubbed.length;
+    const flag = g.missing.length || g.stubbed.length ? '✗' : '✓';
+    lines.push(`${flag} ${g.driver} (${g.namespace})`);
+    if (g.missing.length) {
+      lines.push(`    missing (${g.missing.length}): ${g.missing.join(', ')}`);
+    }
+    if (g.stubbed.length) {
+      lines.push(`    declared but stubbed (${g.stubbed.length}): ${g.stubbed.join(', ')}`);
+    }
+  }
+  lines.push('');
+  lines.push(
+    `Totals: ${totalMissing} missing, ${totalStubbed} declared-but-stubbed across ${gaps.length} matrix drivers`,
+  );
+  return lines.join('\n');
+}
+
 function formatUsage() {
   return [
     'driver-surface-report — survey driver method-counts across the matrix',
@@ -120,6 +268,7 @@ function formatUsage() {
     '',
     'Flags:',
     '  --json       Emit JSON (array of {name, count, methods})',
+    '  --gaps       Report, per matrix driver, the runner-referenced methods it cannot answer',
     '  --help, -h   Print this help and exit',
     '',
     'Output (default table form):',
@@ -133,6 +282,17 @@ function main() {
     console.log(formatUsage());
     process.exit(0);
   }
+  if (args.includes('--gaps')) {
+    const gaps = coverageGaps();
+    if (args.includes('--json')) {
+      console.log(JSON.stringify(gaps));
+    } else {
+      console.log(formatGaps(gaps));
+    }
+    // Non-zero when anything is missing, so a shell caller can gate on it
+    // without parsing the output.
+    process.exit(gaps.some((g) => g.missing.length || g.stubbed.length) ? 1 : 0);
+  }
   const report = buildReport();
   const json = args.includes('--json');
   console.log(json ? formatJson(report) : formatTable(report));
@@ -145,6 +305,13 @@ module.exports = {
   formatTable,
   formatJson,
   formatUsage,
+  formatGaps,
+  MATRIX_DRIVERS,
+  platformOf,
+  referencedMethods,
+  definedMethods,
+  declaredButUnimplemented,
+  coverageGaps,
 };
 
 if (require.main === module) {

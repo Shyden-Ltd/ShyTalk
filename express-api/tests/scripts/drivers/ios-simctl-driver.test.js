@@ -191,10 +191,14 @@ describe('ios-simctl-driver — createIosDriver factory', () => {
     );
   });
 
-  test('returns driver with all IOS_METHOD_NAMES as async methods', async () => {
+  test('exposes the methods it actually implements as async functions', async () => {
     mockBooted();
     const driver = await createIosDriver();
-    for (const name of IOS_METHOD_NAMES) {
+    // Only the real ones. This used to assert EVERY declared name was a
+    // function, which was true because a stub loop manufactured a body for
+    // each — see the pair of tests below for why that was the bug rather
+    // than the feature.
+    for (const name of ['iosUiDump', 'iosTap', 'iosTapByTag']) {
       expect(typeof driver[name]).toBe('function');
     }
   });
@@ -211,43 +215,47 @@ describe('ios-simctl-driver — createIosDriver factory', () => {
     expect(typeof driver.simctl).toBe('function');
   });
 
-  test('default stub methods return false', async () => {
+  /**
+   * These two tests used to assert the OPPOSITE, and asserting the opposite
+   * is what kept the bug alive.
+   *
+   * The driver wired every declared-but-unimplemented name to
+   * `async () => false`. These tests pinned that: "default stub methods
+   * return false" and "…log to stderr". Both passed, so the arrangement
+   * looked deliberate and correct.
+   *
+   * What it actually produced: the runner calls the method, it resolves, and
+   * the step is recorded as the PRODUCT failing to do the thing — a harness
+   * gap wearing a product failure's clothes, indistinguishable from a real
+   * defect in a matrix report. Across the four drivers that had such a loop
+   * this was the quietest: no log at all, so nothing anywhere recorded that
+   * the driver had never been asked to do real work.
+   *
+   * The contract is now the reverse: an unimplemented name is ABSENT, and the
+   * runner reports `ctx.uiDriver.<name> not configured` by name.
+   */
+  test('an unimplemented declared name is ABSENT, not a body that returns false', async () => {
     mockBooted();
     const driver = await createIosDriver();
-    // Pick a name that is NOT later overridden with a real implementation
-    const stubMethod = IOS_METHOD_NAMES.find(
-      (n) =>
-        n !== 'iosOpenScreen' &&
-        n !== 'iosTap' &&
-        n !== 'iosTapByTag' &&
-        n !== 'iosTypeText' &&
-        n !== 'iosShowsText' &&
-        n !== 'iosUiDump',
-    );
-    expect(typeof stubMethod).toBe('string');
-    const result = await driver[stubMethod]('persona', 'arg2');
-    expect(result).toBe(false);
+    const unimplemented = IOS_METHOD_NAMES.filter((n) => typeof driver[n] !== 'function');
+    // The declaration list genuinely outruns this driver's implementations —
+    // that is the fact the runner must be allowed to see.
+    expect(unimplemented.length).toBeGreaterThan(0);
+    for (const name of unimplemented) {
+      expect(driver[name]).toBeUndefined();
+    }
   });
 
-  test('default stub methods log to stderr with method name and udid', async () => {
-    const udid = mockBooted('99998888-7777-6666-5555-444433332222');
+  test('no declared name resolves to a placeholder that silently returns false', async () => {
+    mockBooted();
     const driver = await createIosDriver();
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-    const stubMethod = IOS_METHOD_NAMES.find(
-      (n) =>
-        n !== 'iosOpenScreen' &&
-        n !== 'iosTap' &&
-        n !== 'iosTapByTag' &&
-        n !== 'iosTypeText' &&
-        n !== 'iosShowsText' &&
-        n !== 'iosUiDump',
-    );
-    await driver[stubMethod]('alice', 42);
-    expect(errorSpy).toHaveBeenCalledTimes(1);
-    const msg = errorSpy.mock.calls[0][0];
-    expect(msg).toContain(stubMethod);
-    expect(msg).toContain(udid);
-    expect(msg).toContain('not implemented yet');
+    // Every name that IS present must do real work. A body that takes any
+    // arguments and unconditionally returns false is the shape being banned.
+    for (const name of IOS_METHOD_NAMES) {
+      if (typeof driver[name] !== 'function') continue;
+      expect(String(driver[name])).not.toMatch(/=>[ \t]{0,4}false[ \t;)]{0,4}$/);
+    }
     errorSpy.mockRestore();
   });
 });

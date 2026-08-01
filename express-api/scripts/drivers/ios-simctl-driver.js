@@ -130,14 +130,10 @@ async function createIosDriver({ udid: preferred } = {}) {
   }
   driver.simctl = simctl;
 
-  for (const methodName of listMethods()) {
-    driver[methodName] = async (...args) => {
-      console.error(
-        `[ios-driver] stub:${methodName}(${args.map((a) => JSON.stringify(a)).join(', ')}) — not implemented yet (udid=${udid})`,
-      );
-      return false;
-    };
-  }
+  // NO STUB LOOP — see the note in web-playwright-driver.js. Nothing loads
+  // this driver today, but the loop is the trap rather than the loading: if a
+  // future change wires simctl back in, sixty-four declared-but-unimplemented
+  // methods must fail loudly by name rather than silently returning false.
 
   // Real implementation: open named screen via deep-link.
   //

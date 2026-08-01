@@ -88,7 +88,6 @@ const WEB_METHOD_NAMES = [
   'webShowsBalanceViaListener',
   'webShowsBanner',
   'webShowsBeansPerWeekChart',
-  'webShowsCardBadge',
   'webShowsContributorsList',
   'webShowsCountBadge',
   'webShowsEditedBodyWithTag',
@@ -127,10 +126,8 @@ const WEB_METHOD_NAMES = [
   'webPairedSessionShowsSameTotals',
   // Cycle-10 surfaced these as missing-but-needed:
   'fireSystemPmWebhook',
-  'neitherUserIsFollowingTheOther',
   'webOpenProfilePanel',
   'webAdminIssueWarning',
-  'hasPurchasedSuccessfully',
   'webDocumentDirection',
   'webShowsTranslationOf',
   'webScanAllRenderedStrings',
@@ -201,17 +198,18 @@ async function createWebDriver({
 
   const driver = { _browser: browser, _browserName: browserName, _pages: pages, pageFor };
 
-  // Wire every known method as a stub returning false + logging.
-  for (const methodName of listMethods()) {
-    driver[methodName] = async (...args) => {
-      // Driver-stub silent-fail signal — runner will surface this as a
-      // Major finding rather than crashing.
-      console.error(
-        `[web-driver] stub:${methodName}(${args.map((a) => JSON.stringify(a)).join(', ')}) — not implemented yet`,
-      );
-      return false;
-    };
-  }
+  // NO STUB LOOP.
+  //
+  // This used to wire every name in listMethods() to a body that logged
+  // `stub:<name>` and returned false, with real implementations overriding
+  // the ones that existed. The cost of that arrangement: an unimplemented
+  // method RESOLVES, so the runner records "the product did not do the
+  // thing" — a harness gap wearing a product failure's clothes, and
+  // indistinguishable from a real defect in a matrix report.
+  //
+  // Without the loop, an unimplemented method is simply absent, and the
+  // runner's own `ctx.webDriver.<name> not configured` names the gap
+  // exactly. Loud and attributable beats quiet and misleading.
 
   // ── Web surface parity with the Android driver (SHY-0259) ────────
   //
