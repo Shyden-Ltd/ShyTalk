@@ -1742,4 +1742,5 @@
     <string name="age_seg_age_up_welcome_pm">Welkom: je account is in de bredere ShyTalk-kring terechtgekomen.\n\nVanaf nu zul je meer mensen in ontdekkingen en lijsten zien. Eerdere verbindingen die zijn hersteld terwijl uw account zich in de kleinere kring bevond, kunnen niet automatisch worden hersteld, maar u kunt wel iedereen die u wilt volgen opnieuw toevoegen.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Uw accountgegevens zijn bijgewerkt door medewerkers van ShyTalk. Als gevolg hiervan zijn de voor u zichtbare mensen en kamers beperkt tot een kleinere kring.\n\nAls u denkt dat dit een vergissing is, neem dan contact op met de ondersteuning, zodat we dit kunnen beoordelen.</string>
+    <string name="official_badge">Officieel</string>
 </resources>

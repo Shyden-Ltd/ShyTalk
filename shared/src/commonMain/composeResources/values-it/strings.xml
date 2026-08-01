@@ -1742,4 +1742,5 @@
     <string name="age_seg_age_up_welcome_pm">Benvenuto: il tuo account è stato spostato nel circolo più ampio di ShyTalk.\n\nD\'ora in poi inizierai a vedere più persone nella scoperta e negli elenchi. Le connessioni precedenti che sono state riordinate mentre il tuo account era nella cerchia più piccola non possono essere ripristinate automaticamente, ma puoi aggiungere nuovamente chiunque desideri seguire.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">I dettagli del tuo account sono stati aggiornati dallo staff di ShyTalk. Di conseguenza, le persone e le stanze virtuali visibili per te sono state ristrette a una cerchia più piccola.\n\nSe ritieni che si tratti di un errore, contatta l\'assistenza e lo esamineremo.</string>
+    <string name="official_badge">Ufficiale</string>
 </resources>

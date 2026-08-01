@@ -1742,4 +1742,5 @@
     <string name="age_seg_age_up_welcome_pm">Hoş geldiniz — hesabınız daha geniş ShyTalk çevresine taşındı.\n\nBundan sonra keşiflerde ve listelerde daha fazla kişi görmeye başlayacaksınız. Hesabınız daha küçük bir çevredeyken düzenlenen önceki bağlantılar otomatik olarak geri yüklenemez, ancak takip etmek istediğiniz kişileri yeniden ekleyebilirsiniz.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Hesap bilgileriniz ShyTalk personeli tarafından güncellendi. Sonuç olarak, görebileceğiniz kişiler ve odalar daha küçük bir çevreye daraltıldı.\n\nBunun bir hata olduğunu düşünüyorsanız destek ekibiyle iletişime geçin, biz de durumu inceleyelim.</string>
+    <string name="official_badge">Resmî</string>
 </resources>

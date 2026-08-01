@@ -1742,4 +1742,5 @@
     <string name="age_seg_age_up_welcome_pm">Bem-vindo: sua conta passou para o círculo mais amplo do ShyTalk.\n\nVocê começará a ver mais pessoas em descobertas e listas a partir de agora. As conexões anteriores que foram organizadas enquanto sua conta estava no círculo menor não podem ser restauradas automaticamente, mas você pode adicionar novamente qualquer pessoa que gostaria de seguir.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Os detalhes da sua conta foram atualizados pela equipe do ShyTalk. Como resultado, as pessoas e salas visíveis para você foram reduzidas a um círculo menor.\n\nSe você acha que isso é um erro, entre em contato com o suporte e nós analisaremos o problema.</string>
+    <string name="official_badge">Oficial</string>
 </resources>

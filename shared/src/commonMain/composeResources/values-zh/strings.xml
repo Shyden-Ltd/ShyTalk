@@ -1742,4 +1742,5 @@
     <string name="age_seg_age_up_welcome_pm">欢迎 — 您的帐户已进入更广泛的 ShyTalk 圈子。\n\n从现在开始，您将开始在发现和列表中看到更多的人。当您的帐户处于较小圈子时，之前清理的联系人无法自动恢复，但您可以重新添加您想要关注的任何人。</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">ShyTalk 工作人员已更新您的帐户详细信息。因此，您可见的人员和房间已缩小到较小的圈子。\n\n如果您认为这是一个错误，请联系支持人员，我们将进行审核。</string>
+    <string name="official_badge">官方</string>
 </resources>

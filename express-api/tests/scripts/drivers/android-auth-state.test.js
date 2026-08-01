@@ -535,3 +535,46 @@ describe('toast assertions — message AND destination', () => {
     ).toBe(false);
   });
 });
+
+/**
+ * The official badge — implemented, then asserted.
+ *
+ * `androidShowsOfficialBadge` checked `officialBadge_`, which nothing rendered,
+ * because THE BADGE DID NOT EXIST. The assertion had been written for a feature
+ * nobody built, so it failed forever and the scenario blamed the app.
+ *
+ * It matters beyond tidiness: a system message carries real authority — age
+ * decisions, suspensions, safety notices. Without a visible marker, any user who
+ * names themselves "ShyTalk Official" is indistinguishable from the real thing.
+ * So the badge is driven by the message TYPE, never by a display name, since a
+ * name is exactly what an impersonator controls.
+ */
+describe('androidShowsOfficialBadge — a badge that now exists', () => {
+  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
+  const withDump = (dump) =>
+    createAndroidDriver({ serial: 'test' }).then((d) => {
+      d.androidUiDump = async () => dump;
+      return d;
+    });
+  const badge = '<node resource-id="com.x:id/privateChat_officialBadge" text="Official" />';
+  const from = (who) => `<node text="${who}" />`;
+
+  test('true when the badge is rendered', async () => {
+    const d = await withDump(badge);
+    expect(await d.androidShowsOfficialBadge('Hayato', null)).toBe(true);
+  });
+
+  test('FALSE when no badge is present — an ordinary message must not pass', async () => {
+    const d = await withDump('<node resource-id="com.x:id/privateChat_msg_recv_m1" text="hi" />');
+    expect(await d.androidShowsOfficialBadge('Hayato', null)).toBe(false);
+  });
+
+  test('when the step names a sender, that sender must be on screen', async () => {
+    const right = await withDump(badge + from('ShyTalk Official'));
+    expect(await right.androidShowsOfficialBadge('Hayato', 'ShyTalk Official')).toBe(true);
+    const wrongConversation = await withDump(badge + from('Vexa'));
+    expect(await wrongConversation.androidShowsOfficialBadge('Hayato', 'ShyTalk Official')).toBe(
+      false,
+    );
+  });
+});

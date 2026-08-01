@@ -1742,4 +1742,5 @@
     <string name="age_seg_age_up_welcome_pm">Xin chào — tài khoản của bạn đã chuyển sang vòng kết nối ShyTalk rộng hơn.\n\nTừ giờ trở đi, bạn sẽ bắt đầu thấy nhiều người hơn trong danh sách và khám phá. Các kết nối trước đây đã được sắp xếp gọn gàng khi tài khoản của bạn nằm trong vòng kết nối nhỏ hơn không thể được khôi phục tự động nhưng bạn có thể thêm lại bất kỳ ai mà bạn muốn theo dõi.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Thông tin tài khoản của bạn đã được nhân viên ShyTalk cập nhật. Do đó, những người và phòng hiển thị với bạn đã bị thu hẹp thành một vòng kết nối nhỏ hơn.\n\nNếu bạn cho rằng đây là sự nhầm lẫn, hãy liên hệ với bộ phận hỗ trợ và chúng tôi sẽ xem xét vấn đề đó.</string>
+    <string name="official_badge">Chính thức</string>
 </resources>

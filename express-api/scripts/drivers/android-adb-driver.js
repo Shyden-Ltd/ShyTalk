@@ -2033,27 +2033,32 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   //
   // Per-suffix dispatch (avatar vs label, language variant) deferred.
   // Both args (_name, _suffix) accepted-and-ignored.
-  driver.androidShowsOfficialBadge = async (_name, _suffix) => {
+  driver.androidShowsOfficialBadge = async (_viewer, sender) => {
+    // WAS: `async (_name, _suffix) => /officialBadge_/.test(dump)` — a tag
+    // nothing rendered, because THE BADGE DID NOT EXIST. The assertion was
+    // written for a feature nobody had built, so it failed forever and the
+    // scenario blamed the app.
+    //
+    // The badge is now real (PrivateMessageBubble.kt): system messages render
+    // a Verified icon plus the localised `official_badge` string, tagged
+    // `privateChat_officialBadge`. It is driven by the message TYPE, never by
+    // the sender's display name — a name is exactly what an impersonator
+    // controls, and the badge exists to defeat impersonation.
+    //
+    // So this asserts the badge is present AND that a system message is what
+    // carries it. A badge on an ordinary user's message would be the very bug
+    // the feature guards against.
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?officialBadge_[^"]*"[^>]*\/?>/;
-    return tagRx.test(dump);
+    if (!/resource-id="(?:[^"]*:id\/)?privateChat_officialBadge"/.test(dump)) return false;
+    // When the step names the sender, their name must be on screen too — the
+    // badge belongs to a specific conversation, not to the screen at large.
+    if (sender && String(sender).trim()) {
+      const esc = String(sender).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`(?:text|content-desc)="[^"]*${esc}[^"]*"`, 'i').test(dump);
+    }
+    return true;
   };
-
-  // Wake 99 — `<Name>'s <Plat> UI shows only minor-cohort users in the
-  // rankings` (j02). Cohort-filtered rankings list. Driver receives
-  // `(name)`.
-  //
-  // Foundation strategy: presence-check on the `rankings_*` testTag
-  // PREFIX. No `rankings_*` testTag exists in shared/src/commonMain
-  // yet — rankings UI is unbuilt. Returns false in real journeys today;
-  // lands true when ships with rankings_minorCohortList /
-  // rankings_userRow etc.
-  //
-  // Per-cohort verification (asserting ONLY minor-cohort users, not
-  // any users) needs row-level cohort attribute parsing. Deferred.
-  // The `_name` arg is accepted-and-ignored.
   driver.androidShowsOnlyMinorCohortInRankings = async (_name) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;

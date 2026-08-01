@@ -1742,4 +1742,5 @@
     <string name="age_seg_age_up_welcome_pm">Witamy — Twoje konto zostało przeniesione do szerszego kręgu ShyTalk.\n\nOd teraz zaczniesz widzieć więcej osób w odkrywaniu i na listach. Poprzednie połączenia, które zostały uporządkowane, gdy Twoje konto znajdowało się w mniejszym kręgu, nie mogą zostać przywrócone automatycznie, ale możesz ponownie dodać dowolną osobę, którą chcesz obserwować.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Dane Twojego konta zostały zaktualizowane przez pracowników ShyTalk. W rezultacie widoczne dla Ciebie osoby i pokoje zostały zawężone do mniejszego kręgu.\n\nJeśli uważasz, że to pomyłka, skontaktuj się z pomocą techniczną, a my to sprawdzimy.</string>
+    <string name="official_badge">Oficjalne</string>
 </resources>

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -110,12 +111,41 @@ fun PrivateMessageBubble(
                     .padding(horizontal = 16.dp, vertical = 4.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = message.text,
-                style = MaterialTheme.typography.bodySmall,
-                fontStyle = FontStyle.Italic,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // OFFICIAL BADGE. A system message carries real authority — age
+                // decisions, suspensions, safety notices — so a user must be
+                // able to tell a genuine one from an impersonation. Without a
+                // visible marker, any user who names themselves "ShyTalk
+                // Official" is indistinguishable from the real thing in a list
+                // of conversations.
+                //
+                // Rendered from the message TYPE, never from the sender's
+                // display name: a name is exactly what an impersonator controls.
+                Row(
+                    modifier = Modifier.testTag("privateChat_officialBadge"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Verified,
+                        contentDescription = stringResource(Res.string.official_badge),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Text(
+                        text = stringResource(Res.string.official_badge),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = message.text,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontStyle = FontStyle.Italic,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                )
+            }
         }
         return
     }

@@ -1740,4 +1740,5 @@
     <string name="age_seg_age_up_welcome_pm">Willkommen – Ihr Konto wurde in den größeren ShyTalk-Kreis verschoben.\n\nVon nun an werden Ihnen mehr Personen in Discovery und Listen angezeigt. Frühere Verbindungen, die aufgeräumt wurden, während Ihr Konto im kleineren Kreis war, können nicht automatisch wiederhergestellt werden. Sie können jedoch jeden, dem Sie folgen möchten, erneut hinzufügen.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">Ihre Kontodaten wurden von ShyTalk-Mitarbeitern aktualisiert. Dadurch wurden die für Sie sichtbaren Personen und Räume auf einen kleineren Kreis eingegrenzt.\n\nWenn Sie der Meinung sind, dass dies ein Fehler ist, kontaktieren Sie den Support und wir werden ihn überprüfen.</string>
+    <string name="official_badge">Offiziell</string>
 </resources>

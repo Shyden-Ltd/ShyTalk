@@ -1742,4 +1742,5 @@
     <string name="age_seg_age_up_welcome_pm">환영합니다. 귀하의 계정이 더 넓은 ShyTalk 서클로 ​​이동했습니다.\n\n이제부터 검색 및 목록에서 더 많은 사람들을 볼 수 있습니다. 귀하의 계정이 더 작은 서클에 있는 동안 정리된 이전 연결은 자동으로 복원될 수 없지만 팔로우하려는 사람을 다시 추가할 수 있습니다.</string>
     <!-- google-translated 2026-05-15 -->
     <string name="age_seg_age_down_admin_pm">귀하의 계정 세부 정보가 ShyTalk 직원에 의해 업데이트되었습니다. 결과적으로 귀하에게 표시되는 사람과 방은 더 작은 원으로 좁혀졌습니다.\n\n이것이 실수라고 생각하시면 지원팀에 문의하시면 검토해 드리겠습니다.</string>
+    <string name="official_badge">공식</string>
 </resources>
