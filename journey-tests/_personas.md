@@ -23,7 +23,7 @@ The dev environment is seeded by `express-api/scripts/provision-test-personas.js
 - **uniqueId**: 50000010 (`adult-power@shytalk.dev`)
 - **userType**: `MEMBER`
 - **Age**: 28 (DOB 1998-06-15)
-- **Cohort**: adult, `isAgeVerified=true`
+- **Cohort**: adult, `ageVerified=true`
 - **Locale**: en
 - **Device**: Web Chromium primary, iOS Sim spot-check
 - **Wallet**: shyCoins=5000, beans=2000, gcs=100

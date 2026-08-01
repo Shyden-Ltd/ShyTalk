@@ -51,11 +51,57 @@ const TARGET_BROWSER_ALLOWLIST = {
 };
 
 /**
+ * Narrow a browser list to the hardware actually present.
+ *
+ * Devices come and go. On 2026-08-01 the iPhone became unavailable mid-session
+ * while the Android device stayed, and there was no way to say so — the run
+ * could only spend driver-init time on five iOS cells that could not work, or
+ * have its allowlist hand-edited. An absent device is a normal operating
+ * condition, not an error.
+ *
+ * POSITIVE filter (name what to run), never negative: a typo in an exclusion
+ * list silently runs everything, while a typo here runs too little and is
+ * caught immediately — by throwing rather than by quietly returning less.
+ *
+ * @param {string[]} allowed the target's full allowlist
+ * @param {string} [scope] comma-separated slugs; falsy means "no narrowing"
+ * @returns {string[]} in ALLOWLIST order, not the caller's
+ */
+function scopeToHardware(allowed, scope) {
+  const wanted = String(scope || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (wanted.length === 0) return allowed;
+
+  const unknown = wanted.filter((b) => !allowed.includes(b));
+  if (unknown.length > 0) {
+    // Loud at configuration time. Silently dropping an unknown name is how a
+    // run ends up testing nothing while still exiting 0.
+    throw new Error(
+      `browser scope names ${unknown.join(', ')}, which this target does not allow. ` +
+        `Available: ${allowed.join(', ') || '(none)'}`,
+    );
+  }
+  // Allowlist order is preserved because cell order drives the resource
+  // grouping in matrix-dispatch — reordering would change what runs in
+  // parallel, and therefore which cells contend for the same device.
+  return allowed.filter((b) => wanted.includes(b));
+}
+
+/**
  * Returns the allowed-browser list for the given target, or [] if the
- * target is unknown. Pure — no side effects, safe to call repeatedly.
+ * target is unknown.
+ *
+ * Honours `GAUNTLET_BROWSERS` so an unattended run can be scoped to whatever
+ * hardware is plugged in without editing this file.
  */
 function allowedBrowsersFor(target) {
-  return TARGET_BROWSER_ALLOWLIST[target] || [];
+  const allowed = TARGET_BROWSER_ALLOWLIST[target] || [];
+  // An unknown target has no allowlist to narrow; returning [] beats throwing
+  // about a scope that was never going to apply.
+  if (allowed.length === 0) return allowed;
+  return scopeToHardware(allowed, process.env.GAUNTLET_BROWSERS);
 }
 
 /**
@@ -73,5 +119,6 @@ module.exports = {
   SUPPORTED_BROWSERS,
   TARGET_BROWSER_ALLOWLIST,
   allowedBrowsersFor,
+  scopeToHardware,
   isMobileBrowser,
 };

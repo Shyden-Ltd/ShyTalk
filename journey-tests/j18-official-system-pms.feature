@@ -16,7 +16,13 @@ Feature: j18 — Officia's system PMs
 
   Background:
     Given the local stack is healthy
-    Given Officia [P-19] exists with uniqueId=1, userType=SHYTALK_OFFICIAL, isOfficial=true, isUnblockable=true
+    # `isUnblockable` removed: the product has NO such flag. block-check.js has
+    # no official-account exemption at all, so a user can currently block
+    # ShyTalk Official and stop receiving system PMs — including safety
+    # notices, to a minor. Seeding a phantom flag made the unblockable
+    # scenario below look tested while it asserted nothing; it now fails
+    # honestly against an unimplemented safety control.
+    Given Officia [P-19] exists with uniqueId=1, userType=SHYTALK_OFFICIAL, isOfficial=true
     Given Adam [P-01] is signed in on Android with cohort=adult and locale=en
     Given Hayato [P-06] is signed in on Android with cohort=minor (post-j04 state) and locale=ja
     Given Alice [P-02] is signed in on Web Chromium with locale=en

@@ -51,7 +51,7 @@ Feature: j12 — Greta's admin daily routine
     Then within 3000ms Greta's Web Admin UI shows 5 rows
     When Greta on Web Admin approves submissions 1-3
     Then within 5000ms 3 audit entries with action "age_verification.approve" exist
-    Then within 5000ms the 3 corresponding users have isAgeVerified=true
+    Then within 5000ms the 3 corresponding users have ageVerified=true
     When Greta on Web Admin rejects submission 4 with reason "Image too blurry to read"
     Then within 3000ms the database has document "ageVerificationSubmissions/{sub4Id}" with field "status" equal to "REJECTED"
     Then within 3000ms the user receives a system PM from Officia with the reject reason

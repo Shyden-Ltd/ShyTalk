@@ -18,8 +18,8 @@ Feature: Fixture state-seed matchers
 
   @regression
   Scenario: persona has-field with boolean literal
-    Given Alice [P-02] has isAgeVerified=false
-    Then the database has document "users/50000010" with field "isAgeVerified" equal to false
+    Given Alice [P-02] has ageVerified=false
+    Then the database has document "users/50000010" with field "ageVerified" equal to false
 
   @regression
   Scenario: persona has-field with quoted-string literal

@@ -13,6 +13,23 @@
 
 const fs = require('fs');
 const path = require('path');
+
+/**
+ * Mic state as the PRODUCT stores it: on the seat, not in a room-level map.
+ *
+ * These assertions used to read `room.micStates[uniqueId]` — a map the
+ * harness invented and nothing in the product ever read
+ * (src/routes/room-mutations.js writes `seats.<index>.isMuted`). So
+ * "with mic muted" asserted a fiction, and every scenario gated on mic state
+ * was testing nothing.
+ */
+function seatMicStateFor(room, uniqueId) {
+  const seats = (room && room.seats) || {};
+  const seat = Object.values(seats).find((x) => String(x && x.userId) === String(uniqueId));
+  if (!seat) return undefined;
+  return seat.isMuted ? 'muted' : 'open';
+}
+
 const {
   parseGherkin,
   classifySeverity,
@@ -1014,12 +1031,12 @@ describe('Firestore doc-field equal-to matcher', () => {
 
   test('handles boolean literal', async () => {
     const ctx = makeCtx({
-      db: makeFakeDb({ 'users/50000010': { isAgeVerified: true } }),
+      db: makeFakeDb({ 'users/50000010': { ageVerified: true } }),
     });
     const r = await executeStep(
       {
         kind: 'Then',
-        text: 'the database has document "users/50000010" with field "isAgeVerified" equal to true',
+        text: 'the database has document "users/50000010" with field "ageVerified" equal to true',
       },
       ctx,
     );
@@ -1563,12 +1580,9 @@ describe('Persona state-seed matcher (Given <Persona> has <field>=<value>)', () 
   test('boolean literal', async () => {
     const db = makeStatefulFakeDb({ 'users/50000010': {} });
     const ctx = makeCtx({ db });
-    const r = await executeStep(
-      { kind: 'Given', text: 'Alice [P-02] has isAgeVerified=false' },
-      ctx,
-    );
+    const r = await executeStep({ kind: 'Given', text: 'Alice [P-02] has ageVerified=false' }, ctx);
     expect(r.ok).toBe(true);
-    expect(db._docs['users/50000010'].isAgeVerified).toBe(false);
+    expect(db._docs['users/50000010'].ageVerified).toBe(false);
   });
 
   test('quoted-string literal', async () => {
@@ -1626,12 +1640,12 @@ describe('Persona user-doc multi-field state-seed matcher (Given <P> has user do
     const r = await executeStep(
       {
         kind: 'Given',
-        text: 'Lena [P-05] has user doc with acceptedPrivacyVersion=2, lastLoginRewardDate="2026-04-01", loginStreak=0, fcmTokens=[]',
+        text: 'Lena [P-05] has user doc with acceptedLegalVersion=2, lastLoginRewardDate="2026-04-01", loginStreak=0, fcmTokens=[]',
       },
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(db._docs['users/50000020'].acceptedPrivacyVersion).toBe(2);
+    expect(db._docs['users/50000020'].acceptedLegalVersion).toBe(2);
     expect(db._docs['users/50000020'].lastLoginRewardDate).toBe('2026-04-01');
     expect(db._docs['users/50000020'].loginStreak).toBe(0);
     expect(db._docs['users/50000020'].fcmTokens).toEqual([]);
@@ -1856,13 +1870,13 @@ describe('Sign-in with kv-pair state seed (Given <P> is signed in on <Platform> 
     const r = await executeStep(
       {
         kind: 'Given',
-        text: 'Hayato [P-06] is signed in on Android with cohort=adult and isAgeVerified=true (post-j01 state)',
+        text: 'Hayato [P-06] is signed in on Android with cohort=adult and ageVerified=true (post-j01 state)',
       },
       ctx,
     );
     expect(r.ok).toBe(true);
     expect(db._docs['users/50000030'].cohort).toBe('adult');
-    expect(db._docs['users/50000030'].isAgeVerified).toBe(true);
+    expect(db._docs['users/50000030'].ageVerified).toBe(true);
   });
 
   test('no `with` clause — existing sign-in semantics unchanged', async () => {
@@ -2065,19 +2079,19 @@ describe('Persona has-state-seed — array literals + compound `and` + trailing 
     expect(db._docs['users/50000030'].followingIds).toEqual([50000010, 50000060]);
   });
 
-  test('compound "and" — has shyCoins=100 and isAgeVerified=false writes both fields', async () => {
+  test('compound "and" — has shyCoins=100 and ageVerified=false writes both fields', async () => {
     const db = makeStatefulFakeDb({ 'users/50000030': {} });
     const ctx = makeCtx({ db });
     const r = await executeStep(
       {
         kind: 'Given',
-        text: 'Hayato [P-06] has shyCoins=100 and isAgeVerified=false',
+        text: 'Hayato [P-06] has shyCoins=100 and ageVerified=false',
       },
       ctx,
     );
     expect(r.ok).toBe(true);
     expect(db._docs['users/50000030'].shyCoins).toBe(100);
-    expect(db._docs['users/50000030'].isAgeVerified).toBe(false);
+    expect(db._docs['users/50000030'].ageVerified).toBe(false);
   });
 
   test('mixed: array + scalar via `and` — has followingIds=[50000010] and shyCoins=200', async () => {
@@ -2225,7 +2239,7 @@ describe('Ephemeral persona sign-in (Adam P-01, Mia P-03 — accounts not in pro
     const r = await executeStep(
       {
         kind: 'Given',
-        text: 'Adam [P-01] is signed in on Android with cohort=adult and isAgeVerified=true (post-j01 state)',
+        text: 'Adam [P-01] is signed in on Android with cohort=adult and ageVerified=true (post-j01 state)',
       },
       ctx,
     );
@@ -2240,7 +2254,7 @@ describe('Ephemeral persona sign-in (Adam P-01, Mia P-03 — accounts not in pro
     // State seeded onto Adam's user doc
     const adamUid = session.persona.uniqueId;
     expect(db._docs[`users/${adamUid}`].cohort).toBe('adult');
-    expect(db._docs[`users/${adamUid}`].isAgeVerified).toBe(true);
+    expect(db._docs[`users/${adamUid}`].ageVerified).toBe(true);
   });
 
   test('Mia can be signed-in with state seed — same pattern as Adam', async () => {
@@ -2329,7 +2343,7 @@ describe('Persona exists-with full-state seed (Given <P> [P-NN] exists with <fie
     const r = await executeStep(
       {
         kind: 'Given',
-        text: 'Officia [P-19] exists with uniqueId=1, userType=SHYTALK_OFFICIAL, isOfficial=true, isUnblockable=true',
+        text: 'Officia [P-19] exists with uniqueId=1, userType=SHYTALK_OFFICIAL, isOfficial=true',
       },
       ctx,
     );
@@ -2338,7 +2352,9 @@ describe('Persona exists-with full-state seed (Given <P> [P-NN] exists with <fie
     expect(doc.uniqueId).toBe(1);
     expect(doc.userType).toBe('SHYTALK_OFFICIAL');
     expect(doc.isOfficial).toBe(true);
-    expect(doc.isUnblockable).toBe(true);
+    // Not `isUnblockable` — see the note on the Wake 82 seed. The product has
+    // no such flag; it derives unblockability from the official identity.
+    expect(doc.isUnblockable).toBeUndefined();
   });
 
   test('exists-with does NOT merge — fully replaces the user doc', async () => {
@@ -9745,7 +9761,7 @@ describe('Voice room state-seed', () => {
     const r = await executeStep({ kind: 'Given', text: 'Vexa created a voice room "rv1"' }, ctx);
     expect(r.ok).toBe(true);
     expect(db._docs['rooms/rv1']).toBeDefined();
-    expect(db._docs['rooms/rv1'].ownerUniqueId).toBe(vexa.uniqueId);
+    expect(db._docs['rooms/rv1'].ownerId).toBe(vexa.uniqueId);
     expect(db._docs['rooms/rv1'].id).toBe('rv1');
   });
 });
@@ -9962,7 +9978,7 @@ describe('Voice room create with joiners composite state-seed', () => {
     const roomDocs = Object.entries(db._docs).filter(([k]) => k.startsWith('rooms/'));
     expect(roomDocs.length).toBe(1);
     const [, room] = roomDocs[0];
-    expect(room.ownerUniqueId).toBe(theo.uniqueId);
+    expect(room.ownerId).toBe(theo.uniqueId);
     expect(room.participantIds.length).toBe(3); // owner + 2 joiners
   });
 });
@@ -10033,7 +10049,7 @@ describe('Voice room composite create with named room ID', () => {
     );
     expect(r.ok).toBe(true);
     expect(db._docs['rooms/ra1']).toBeDefined();
-    expect(db._docs['rooms/ra1'].ownerUniqueId).toBe(theo.uniqueId);
+    expect(db._docs['rooms/ra1'].ownerId).toBe(theo.uniqueId);
     expect(db._docs['rooms/ra1'].cohort).toBe('adult');
   });
 
@@ -10048,7 +10064,7 @@ describe('Voice room composite create with named room ID', () => {
     );
     expect(r.ok).toBe(true);
     expect(db._docs['rooms/rm1'].cohort).toBe('minor');
-    expect(db._docs['rooms/rm1'].ownerUniqueId).toBe(alice.uniqueId);
+    expect(db._docs['rooms/rm1'].ownerId).toBe(alice.uniqueId);
   });
 });
 
@@ -10211,7 +10227,7 @@ describe('Voice room composite state-seed (X created a <vis> <cohort>-cohort roo
     const roomDocs = Object.entries(db._docs).filter(([k]) => k.startsWith('rooms/'));
     expect(roomDocs.length).toBe(1);
     const [, room] = roomDocs[0];
-    expect(room.ownerUniqueId).toBe(theo.uniqueId);
+    expect(room.ownerId).toBe(theo.uniqueId);
     expect(room.visibility).toBe('public');
     expect(room.cohort).toBe('adult');
   });
@@ -10227,7 +10243,7 @@ describe('Voice room composite state-seed (X created a <vis> <cohort>-cohort roo
     );
     expect(r.ok).toBe(true);
     const roomDocs = Object.entries(db._docs).filter(([k]) => k.startsWith('rooms/'));
-    expect(roomDocs[0][1].ownerUniqueId).toBe(alice.uniqueId);
+    expect(roomDocs[0][1].ownerId).toBe(alice.uniqueId);
     expect(roomDocs[0][1].visibility).toBe('private');
     expect(roomDocs[0][1].cohort).toBe('minor');
   });
@@ -10473,7 +10489,7 @@ describe('Admin-moderation setup Givens (j04 phase-scoped scenario setup)', () =
     );
     expect(r.ok).toBe(true);
     expect(db._docs[`users/${hayato.uniqueId}`].cohort).toBe('minor');
-    expect(db._docs[`users/${hayato.uniqueId}`].isAgeVerified).toBe(false);
+    expect(db._docs[`users/${hayato.uniqueId}`].ageVerified).toBe(false);
     // shyCoins + followingIds preserved (merge: true)
     expect(db._docs[`users/${hayato.uniqueId}`].shyCoins).toBe(100);
     expect(db._docs[`users/${hayato.uniqueId}`].followingIds).toEqual([50000010]);
@@ -10743,7 +10759,7 @@ describe("Adam's first-day setup Givens (j01 phase-scoped scenario setup)", () =
     (p) => p.id === 'P-12',
   );
 
-  test('"<persona> has just signed up with a minor-default cohort" — seeds users/<uniqueId> with cohort=minor + isAgeVerified=false', async () => {
+  test('"<persona> has just signed up with a minor-default cohort" — seeds users/<uniqueId> with cohort=minor + ageVerified=false', async () => {
     const db = makeStatefulFakeDb({});
     const ctx = makeCtx({ db, scenarioVars: new Map() });
     const r = await executeStep(
@@ -10754,7 +10770,7 @@ describe("Adam's first-day setup Givens (j01 phase-scoped scenario setup)", () =
     const user = db._docs[`users/${ADAM_UNIQUE_ID}`];
     expect(user).toBeDefined();
     expect(user.cohort).toBe('minor');
-    expect(user.isAgeVerified).toBe(false);
+    expect(user.ageVerified).toBe(false);
     expect(user.uniqueId).toBe(ADAM_UNIQUE_ID);
     // {newUniqueId} interpolation variable is set for downstream
     // assertions referencing users/{newUniqueId}.
@@ -10773,10 +10789,15 @@ describe("Adam's first-day setup Givens (j01 phase-scoped scenario setup)", () =
     const user = db._docs[`users/${ADAM_UNIQUE_ID}`];
     expect(user.cohort).toBe('minor');
     // usersAcceptedPolicies entry written with current versions
-    const policies = db._docs[`usersAcceptedPolicies/${ADAM_UNIQUE_ID}`];
+    // The product keeps the accepted legal version on the USER DOC
+    // (`acceptedLegalVersion`, src/routes/users.js:611). The
+    // `usersAcceptedPolicies` collection this used to assert on exists only
+    // in a comment — nothing writes or reads it — so the old assertion was
+    // checking the harness's own fiction.
+    const policies = db._docs[`users/${ADAM_UNIQUE_ID}`];
     expect(policies).toBeDefined();
-    expect(policies.privacyVersion).toBeGreaterThan(0);
-    expect(policies.termsVersion).toBeGreaterThan(0);
+    expect(policies.acceptedLegalVersion).toBeGreaterThan(0);
+    expect(policies.acceptedLegalAt).toBeGreaterThan(0);
   });
 
   test('"<persona> has just been approved to cohort=adult by <admin>" — flips cohort + writes audit row', async () => {
@@ -10790,7 +10811,7 @@ describe("Adam's first-day setup Givens (j01 phase-scoped scenario setup)", () =
     // User flipped
     const user = db._docs[`users/${ADAM_UNIQUE_ID}`];
     expect(user.cohort).toBe('adult');
-    expect(user.isAgeVerified).toBe(true);
+    expect(user.ageVerified).toBe(true);
     // Audit row written with String-coerced ids per production convention
     const audits = Object.entries(db._docs).filter(([k]) => k.startsWith('auditLog/'));
     expect(audits).toHaveLength(1);
@@ -10810,9 +10831,9 @@ describe("Adam's first-day setup Givens (j01 phase-scoped scenario setup)", () =
     expect(r.ok).toBe(true);
     const user = db._docs[`users/${ADAM_UNIQUE_ID}`];
     expect(user.cohort).toBe('adult');
-    expect(user.isAgeVerified).toBe(true);
+    expect(user.ageVerified).toBe(true);
     // Policies accepted
-    expect(db._docs[`usersAcceptedPolicies/${ADAM_UNIQUE_ID}`]).toBeDefined();
+    expect(db._docs[`users/${ADAM_UNIQUE_ID}`].acceptedLegalVersion).toBeGreaterThan(0);
     // No audit row — this Given is the COMPOSE form (precondition for
     // a later scenario that doesn't care about the audit).
     const audits = Object.entries(db._docs).filter(([k]) => k.startsWith('auditLog/'));
@@ -10991,7 +11012,7 @@ describe("Mia's restricted-minor setup Givens (j02 phase-scoped scenario setup)"
   // exists to exercise the minor-cohort restrictions specifically.
   const MIA_UNIQUE_ID = 90000003;
 
-  test('"<persona> has just signed up as a minor" — seeds users/<uniqueId> with cohort=minor + isAgeVerified=false', async () => {
+  test('"<persona> has just signed up as a minor" — seeds users/<uniqueId> with cohort=minor + ageVerified=false', async () => {
     const db = makeStatefulFakeDb({});
     const ctx = makeCtx({ db, scenarioVars: new Map() });
     const r = await executeStep({ kind: 'Given', text: 'Mia has just signed up as a minor' }, ctx);
@@ -10999,7 +11020,7 @@ describe("Mia's restricted-minor setup Givens (j02 phase-scoped scenario setup)"
     const user = db._docs[`users/${MIA_UNIQUE_ID}`];
     expect(user).toBeDefined();
     expect(user.cohort).toBe('minor');
-    expect(user.isAgeVerified).toBe(false);
+    expect(user.ageVerified).toBe(false);
     expect(user.uniqueId).toBe(MIA_UNIQUE_ID);
     // {newUniqueId} interpolation variable seeded for downstream
     // assertions referencing users/{newUniqueId}.
@@ -11015,12 +11036,14 @@ describe("Mia's restricted-minor setup Givens (j02 phase-scoped scenario setup)"
     // from the j01 case where Adam later flips to adult).
     const user = db._docs[`users/${MIA_UNIQUE_ID}`];
     expect(user.cohort).toBe('minor');
-    expect(user.isAgeVerified).toBe(false);
-    // usersAcceptedPolicies entry written with current versions.
-    const policies = db._docs[`usersAcceptedPolicies/${MIA_UNIQUE_ID}`];
+    expect(user.ageVerified).toBe(false);
+    // Acceptance lives on the USER DOC (`acceptedLegalVersion`,
+    // src/routes/users.js:611). The `usersAcceptedPolicies` collection
+    // exists only in a comment — nothing writes or reads it.
+    const policies = db._docs[`users/${MIA_UNIQUE_ID}`];
     expect(policies).toBeDefined();
-    expect(policies.privacyVersion).toBeGreaterThan(0);
-    expect(policies.termsVersion).toBeGreaterThan(0);
+    expect(policies.acceptedLegalVersion).toBeGreaterThan(0);
+    expect(policies.acceptedLegalAt).toBeGreaterThan(0);
   });
 
   test('"<persona> has just signed up as a minor" — unknown persona → actionable error', async () => {
@@ -11060,12 +11083,12 @@ describe("Mia's restricted-minor setup Givens (j02 phase-scoped scenario setup)"
     expect(r1.ok).toBe(true);
     const r2 = await executeStep({ kind: 'Given', text: 'Mia has accepted legal as a minor' }, ctx);
     expect(r2.ok).toBe(true);
-    // Only ONE usersAcceptedPolicies entry — re-running merges the same
-    // doc, doesn't create a duplicate.
-    const policies = Object.entries(db._docs).filter(([k]) =>
-      k.startsWith('usersAcceptedPolicies/'),
-    );
-    expect(policies).toHaveLength(1);
+    // Re-running merges into the SAME user doc rather than accumulating
+    // acceptance records. (It used to count `usersAcceptedPolicies/` rows —
+    // a collection nothing in the product writes or reads.)
+    const userDocs = Object.keys(db._docs).filter((k) => k.startsWith('users/'));
+    expect(userDocs).toHaveLength(1);
+    expect(db._docs[userDocs[0]].acceptedLegalVersion).toBeGreaterThan(0);
   });
 
   test('Mia matcher does NOT collide with Adam matcher (j01) — different cohort phrasing routes correctly', async () => {
@@ -11774,7 +11797,7 @@ describe('Voice room state-seed with mic state (multi-field)', () => {
     );
     expect(r.ok).toBe(true);
     expect(db._docs['rooms/r1'].participantIds).toContain(hayato.uniqueId);
-    expect(db._docs['rooms/r1'].micStates?.[String(hayato.uniqueId)]).toBe('open');
+    expect(seatMicStateFor(db._docs['rooms/r1'], hayato.uniqueId)).toBe('open');
   });
 
   test('"with mic muted" variant', async () => {
@@ -11787,7 +11810,7 @@ describe('Voice room state-seed with mic state (multi-field)', () => {
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(db._docs['rooms/r1'].micStates?.[String(hayato.uniqueId)]).toBe('muted');
+    expect(seatMicStateFor(db._docs['rooms/r1'], hayato.uniqueId)).toBe('muted');
   });
 });
 
@@ -11952,8 +11975,17 @@ describe('Conversation doc field equality assertion', () => {
   });
 });
 
-describe('Array-of-quoted-strings in signed-in `with` clause (j17 Bao teaching languages)', () => {
-  test('teachingLanguages=["zh", "en"] writes a string-array to user doc', async () => {
+describe('Array-of-quoted-strings in a signed-in `with` clause', () => {
+  /**
+   * The behaviour under test is ARRAY PARSING; the field is incidental.
+   *
+   * It used to be `teachingLanguages`, which does not exist in the product —
+   * the lessons/teacher feature is not built. Testing a parser with a phantom
+   * field still tests the parser, but it also quietly documents a fiction as
+   * if it were schema, and the next author copies it. `fcmTokens` is a real
+   * string-array field and proves exactly the same parsing.
+   */
+  test('a quoted string-array is written to the user doc', async () => {
     const fetchSpy = jest.fn(async (url) => {
       if (typeof url === 'string' && url.includes('signInWithPassword')) {
         const idToken =
@@ -11967,13 +11999,13 @@ describe('Array-of-quoted-strings in signed-in `with` clause (j17 Bao teaching l
     const r = await executeStep(
       {
         kind: 'Given',
-        text: 'Bao [P-17] is signed in on Web Chromium with userType=TEACHER and teachingLanguages=["zh", "en"]',
+        text: 'Bao [P-17] is signed in on Web Chromium with userType=TEACHER and fcmTokens=["tok-a", "tok-b"]',
       },
       ctx,
     );
     expect(r.ok).toBe(true);
     expect(db._docs['users/50000090'].userType).toBe('TEACHER');
-    expect(db._docs['users/50000090'].teachingLanguages).toEqual(['zh', 'en']);
+    expect(db._docs['users/50000090'].fcmTokens).toEqual(['tok-a', 'tok-b']);
   });
 });
 
@@ -14011,7 +14043,7 @@ describe('Wake 69 — persona-cohort-room state-seed (no room id, abstract)', ()
     const room = db._docs[roomKeys[0]];
     expect(room.cohort).toBe('minor');
     expect(room.participantIds).toContain(60000010);
-    expect(room.micStates['60000010']).toBe('open');
+    expect(seatMicStateFor(room, '60000010')).toBe('open');
     expect(room.seats[0]).toEqual(expect.objectContaining({ userId: 60000010 }));
   });
 
@@ -14030,7 +14062,7 @@ describe('Wake 69 — persona-cohort-room state-seed (no room id, abstract)', ()
     expect(roomKeys).toHaveLength(1);
     const room = db._docs[roomKeys[0]];
     expect(room.cohort).toBe('adult');
-    expect(room.micStates['50000010']).toBe('muted');
+    expect(seatMicStateFor(room, '50000010')).toBe('muted');
   });
 
   test('unknown persona → fail', async () => {
@@ -14540,7 +14572,7 @@ describe('Wake 70 — "<Name> is currently in a voice room "<id>" with mic <stat
   // Sibling of the existing `is in voice room "X" with mic <state>` matcher
   // (line ~5480) — corpus authors mix "is in" and "is currently in" forms.
   // Same Firestore effect.
-  test('writes participantIds and micStates', async () => {
+  test('writes participantIds and seat mic state', async () => {
     const db = makeStatefulFakeDb({});
     const ctx = makeCtx({ db });
     // Raul = P-08 = 50000050
@@ -14550,7 +14582,7 @@ describe('Wake 70 — "<Name> is currently in a voice room "<id>" with mic <stat
     );
     expect(r.ok).toBe(true);
     expect(db._docs['rooms/r-test'].participantIds).toContain(50000050);
-    expect(db._docs['rooms/r-test'].micStates['50000050']).toBe('open');
+    expect(seatMicStateFor(db._docs['rooms/r-test'], '50000050')).toBe('open');
   });
 
   test('muted variant', async () => {
@@ -14561,7 +14593,7 @@ describe('Wake 70 — "<Name> is currently in a voice room "<id>" with mic <stat
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(db._docs['rooms/r9'].micStates['50000010']).toBe('muted');
+    expect(seatMicStateFor(db._docs['rooms/r9'], '50000010')).toBe('muted');
   });
 
   test('unknown persona → fail', async () => {
@@ -16145,9 +16177,9 @@ describe('Wake 76 — "Layla (locale=ar) is age-verified and Greta downgrades he
   // j13-locales-rtl-cjk.feature:91
   //   Given Layla (locale=ar) is age-verified and Greta downgrades her to minor
   // Composite state-seed: write the post-downgrade state in one shot
-  // (locale=ar, isAgeVerified=true, cohort=minor). Pronoun is optional
+  // (locale=ar, ageVerified=true, cohort=minor). Pronoun is optional
   // since corpus may use her/him/them.
-  test('writes locale, isAgeVerified, cohort=minor', async () => {
+  test('writes locale, ageVerified, cohort=minor', async () => {
     const db = makeStatefulFakeDb({ 'users/50000070': {} });
     const ctx = makeCtx({ db });
     // Layla = P-13 = 50000070
@@ -16160,7 +16192,7 @@ describe('Wake 76 — "Layla (locale=ar) is age-verified and Greta downgrades he
     );
     expect(r.ok).toBe(true);
     expect(db._docs['users/50000070'].locale).toBe('ar');
-    expect(db._docs['users/50000070'].isAgeVerified).toBe(true);
+    expect(db._docs['users/50000070'].ageVerified).toBe(true);
     expect(db._docs['users/50000070'].cohort).toBe('minor');
   });
 
@@ -17090,7 +17122,7 @@ describe('Wake 79 — "<Name>\'s mic is already open on the seated host slot" (s
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(db._docs['rooms/r-test'].micStates['50000080']).toBe('open');
+    expect(seatMicStateFor(db._docs['rooms/r-test'], '50000080')).toBe('open');
     expect(db._docs['rooms/r-test'].seats[0]).toEqual(
       expect.objectContaining({ userId: 50000080 }),
     );
@@ -17606,26 +17638,30 @@ describe('Wake 81 — "<Name> on <Plat> taps the gift icon and selects "<X>" wit
 
 // ── Wake 82 ──────────────────────────────────────────────────────────
 
-describe('Wake 82 — "<Name> [P-NN] exists with uniqueId=N, userType=X, isOfficial=B, isUnblockable=B"', () => {
+describe('Wake 82 — "<Name> [P-NN] exists with uniqueId=N, userType=X, isOfficial=B"', () => {
   // j18-official-system-pms.feature:19
   //   Given Officia [P-19] exists with uniqueId=1, userType=SHYTALK_OFFICIAL, isOfficial=true, isUnblockable=true
   // Complex multi-field state-seed for the Officia system account.
-  test('writes all four fields', async () => {
+  test('writes the three fields the product actually reads', async () => {
     const db = makeStatefulFakeDb({});
     const ctx = makeCtx({ db });
     const r = await executeStep(
       {
         kind: 'Given',
-        text: 'Officia [P-19] exists with uniqueId=1, userType=SHYTALK_OFFICIAL, isOfficial=true, isUnblockable=true',
+        text: 'Officia [P-19] exists with uniqueId=1, userType=SHYTALK_OFFICIAL, isOfficial=true',
       },
       ctx,
     );
-    expect(r.ok).toBe(true);
+    expect({ ok: r.ok, error: r.error }).toEqual({ ok: true, error: undefined });
+    // `isUnblockable` is gone: no product code reads such a flag, and
+    // block-check.js has no official-account exemption at all — a user can
+    // currently block ShyTalk Official and stop receiving system PMs. The
+    // unblockable property is derived from the official identity, so those
+    // are the fields the seed writes.
     expect(db._docs['users/1']).toEqual({
       uniqueId: 1,
       userType: 'SHYTALK_OFFICIAL',
       isOfficial: true,
-      isUnblockable: true,
     });
   });
 
@@ -17635,13 +17671,19 @@ describe('Wake 82 — "<Name> [P-NN] exists with uniqueId=N, userType=X, isOffic
     const r = await executeStep(
       {
         kind: 'Given',
-        text: 'Vexa exists with uniqueId=42, userType=MEMBER, isOfficial=false, isUnblockable=false',
+        text: 'Vexa exists with uniqueId=42, userType=MEMBER, isOfficial=false',
       },
       ctx,
     );
     expect(r.ok).toBe(true);
     expect(db._docs['users/42'].isOfficial).toBe(false);
-    expect(db._docs['users/42'].isUnblockable).toBe(false);
+    // `isUnblockable` is DELIBERATELY not written: no product code reads such
+    // a field, and block-check.js has no official-account exemption at all —
+    // a user can currently block ShyTalk Official and stop receiving system
+    // PMs. Seeding a phantom flag made j18's "system PM is unblockable"
+    // scenario look tested while it asserted nothing.
+    expect(db._docs['users/42'].isUnblockable).toBeUndefined();
+    expect(db._docs['users/42'].isOfficial).toBe(false);
   });
 
   test('no db → fail', async () => {
@@ -17649,7 +17691,7 @@ describe('Wake 82 — "<Name> [P-NN] exists with uniqueId=N, userType=X, isOffic
     const r = await executeStep(
       {
         kind: 'Given',
-        text: 'Officia exists with uniqueId=1, userType=X, isOfficial=true, isUnblockable=true',
+        text: 'Officia exists with uniqueId=1, userType=X, isOfficial=true',
       },
       ctx,
     );
@@ -17663,11 +17705,10 @@ describe('Wake 82 — "<Name> was just age-verified by admin (cohort flipped fro
   //   Given Adam was just age-verified by admin (cohort flipped from minor to adult)
   // Past-tense state-seed: writes cohort + ageVerificationFlippedAt
   // timestamp.
-  test('writes post-flip cohort + timestamp', async () => {
+  test('writes the post-flip cohort, and no phantom timestamp', async () => {
     // Adam = P-01 = 90000001 (ephemeral)
     const db = makeStatefulFakeDb({ 'users/90000001': {} });
     const ctx = makeCtx({ db });
-    const before = Date.now();
     const r = await executeStep(
       {
         kind: 'Given',
@@ -17675,11 +17716,14 @@ describe('Wake 82 — "<Name> was just age-verified by admin (cohort flipped fro
       },
       ctx,
     );
-    const after = Date.now();
     expect(r.ok).toBe(true);
     expect(db._docs['users/90000001'].cohort).toBe('adult');
-    expect(db._docs['users/90000001'].ageVerificationFlippedAt).toBeGreaterThanOrEqual(before);
-    expect(db._docs['users/90000001'].ageVerificationFlippedAt).toBeLessThanOrEqual(after);
+    // `ageVerificationFlippedAt` used to be written here and bracketed by
+    // before/after timestamps. Nothing in the product writes or reads such a
+    // field: the flip is evidenced by the cohort change itself and by the
+    // auditLog row the approve route writes, both of which the product does
+    // read. Timing a write nobody reads proved only that Date.now() works.
+    expect(db._docs['users/90000001'].ageVerificationFlippedAt).toBeUndefined();
   });
 
   test('different persona name', async () => {
@@ -18437,7 +18481,7 @@ describe('Wake 85 — "<Name> [P-NN] is on <Plat> joined to voice room "<X>" wit
     );
     expect(r.ok).toBe(true);
     expect(db._docs['rooms/r1'].participantIds).toContain(50000061);
-    expect(db._docs['rooms/r1'].micStates['50000061']).toBe('open');
+    expect(seatMicStateFor(db._docs['rooms/r1'], '50000061')).toBe('open');
   });
 
   test('muted variant', async () => {
@@ -18451,7 +18495,7 @@ describe('Wake 85 — "<Name> [P-NN] is on <Plat> joined to voice room "<X>" wit
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(db._docs['rooms/r2'].micStates['50000060']).toBe('muted');
+    expect(seatMicStateFor(db._docs['rooms/r2'], '50000060')).toBe('muted');
   });
 
   test('unknown persona → fail', async () => {
@@ -18487,7 +18531,7 @@ describe('Wake 85 — "<Name> is on <Plat> joined to room "<X>" seated with mic 
     expect(r.ok).toBe(true);
     expect(db._docs['rooms/r1'].participantIds).toContain(50000061);
     expect(db._docs['rooms/r1'].seats[0]).toEqual(expect.objectContaining({ userId: 50000061 }));
-    expect(db._docs['rooms/r1'].micStates['50000061']).toBe('open');
+    expect(seatMicStateFor(db._docs['rooms/r1'], '50000061')).toBe('open');
   });
 
   test('muted variant', async () => {
@@ -18501,7 +18545,7 @@ describe('Wake 85 — "<Name> is on <Plat> joined to room "<X>" seated with mic 
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(db._docs['rooms/r9'].micStates['50000010']).toBe('muted');
+    expect(seatMicStateFor(db._docs['rooms/r9'], '50000010')).toBe('muted');
   });
 });
 
@@ -22450,7 +22494,7 @@ describe('Wake 95 — "<Name> [P-NN] is signed in on <Plat> and hosting voice ro
     // Theo = P-10 = 50000060
     expect(ctx.sessions.get('Theo')?.customClaims.uniqueId).toBe(50000060);
     expect(db._docs['rooms/r1']).toBeDefined();
-    expect(db._docs['rooms/r1'].hostUid).toBe(50000060);
+    expect(db._docs['rooms/r1'].ownerId).toBe(50000060);
     expect(db._docs['rooms/r1'].state).toBe('OPEN');
     expect(db._docs['rooms/r1'].participantIds).toContain(50000060);
   });
@@ -22637,7 +22681,7 @@ describe('Wake 96 — "<Name>\'s user doc has teamRoster=[N, N, ...]"', () => {
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(db._docs['users/50000081'].teamRoster).toEqual([50000080]);
+    expect(db._docs['users/50000081'].participantIds).toEqual([50000080]);
   });
 
   test('multi-element roster', async () => {
@@ -22648,7 +22692,7 @@ describe('Wake 96 — "<Name>\'s user doc has teamRoster=[N, N, ...]"', () => {
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(db._docs['users/50000081'].teamRoster).toEqual([50000080, 50000081, 50000090]);
+    expect(db._docs['users/50000081'].participantIds).toEqual([50000080, 50000081, 50000090]);
   });
 
   test('no db → fail teamRoster step', async () => {
@@ -26582,17 +26626,17 @@ describe('Wake 106 — `N audit entries with action "<X>" exist`', () => {
   });
 });
 
-describe('Wake 106 — "the N corresponding users have isAgeVerified=true"', () => {
+describe('Wake 106 — "the N corresponding users have ageVerified=true"', () => {
   test('all verified → ok', async () => {
     const db = makeStatefulFakeDb({
-      'users/10': { isAgeVerified: true },
-      'users/20': { isAgeVerified: true },
-      'users/30': { isAgeVerified: true },
+      'users/10': { ageVerified: true },
+      'users/20': { ageVerified: true },
+      'users/30': { ageVerified: true },
     });
     const ctx = makeCtx({ db });
     ctx.lastUserIds = [10, 20, 30];
     const r = await executeStep(
-      { kind: 'Then', text: 'the 3 corresponding users have isAgeVerified=true' },
+      { kind: 'Then', text: 'the 3 corresponding users have ageVerified=true' },
       ctx,
     );
     expect(r.ok).toBe(true);
@@ -26600,25 +26644,25 @@ describe('Wake 106 — "the N corresponding users have isAgeVerified=true"', () 
 
   test('one not verified → fail', async () => {
     const db = makeStatefulFakeDb({
-      'users/10': { isAgeVerified: true },
-      'users/20': { isAgeVerified: false },
-      'users/30': { isAgeVerified: true },
+      'users/10': { ageVerified: true },
+      'users/20': { ageVerified: false },
+      'users/30': { ageVerified: true },
     });
     const ctx = makeCtx({ db });
     ctx.lastUserIds = [10, 20, 30];
     const r = await executeStep(
-      { kind: 'Then', text: 'the 3 corresponding users have isAgeVerified=true' },
+      { kind: 'Then', text: 'the 3 corresponding users have ageVerified=true' },
       ctx,
     );
     expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/20|isAgeVerified|verified/);
+    expect(r.error).toMatch(/20|ageVerified|verified/);
   });
 
   test('count mismatch → fail', async () => {
     const ctx = makeCtx({ db: makeStatefulFakeDb({}) });
     ctx.lastUserIds = [10, 20];
     const r = await executeStep(
-      { kind: 'Then', text: 'the 3 corresponding users have isAgeVerified=true' },
+      { kind: 'Then', text: 'the 3 corresponding users have ageVerified=true' },
       ctx,
     );
     expect(r.ok).toBe(false);

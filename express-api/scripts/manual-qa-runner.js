@@ -35,6 +35,8 @@
 const fs = require('fs');
 const path = require('path');
 const { appendProgress } = require('./scenario-progress');
+const { shouldSkipScenario } = require('./scenario-skip-tags');
+const { rejectUnknownField } = require('./product-field-registry');
 const {
   requiredPlatforms,
   isSurfaceUnavailable,
@@ -528,7 +530,7 @@ async function applyAgeDowngrade(ctx, personaName, adminPersonaName) {
   // route's writes (per express-api/src/routes/admin-age-verification.js
   // reject_and_dob_down handler):
   //   1. users/<persona>.cohort = 'minor'
-  //   2. users/<persona>.isAgeVerified = false
+  //   2. users/<persona>.ageVerified = false
   //   3. auditLog/<auto> with action='age_verification.reject_and_dob_down',
   //      targetId=<persona>.uniqueId, adminId=<admin>.uniqueId
   // Preserves: shyCoins, followingIds (intentional — see j04 docstring).
@@ -544,7 +546,7 @@ async function applyAgeDowngrade(ctx, personaName, adminPersonaName) {
   // Read-modify-set so shyCoins / followingIds / etc. are preserved.
   const userRef = ctx.db.doc(`users/${persona.uniqueId}`);
   await userRef.set(
-    { cohort: 'minor', isAgeVerified: false, dateOfBirth: 1305158400000 },
+    { cohort: 'minor', ageVerified: false, dateOfBirth: 1305158400000 },
     { merge: true },
   );
   const auditDocId = `${persona.uniqueId}-downgrade-${Date.now()}`;
@@ -644,7 +646,7 @@ async function applyPurchase(ctx, personaName, packageId, finalShyCoins) {
 
 async function seedSignedUpUser(ctx, personaName, opts = {}) {
   // Mirrors a minor-default signup write: users/<uniqueId> with
-  // cohort='minor', isAgeVerified=false, displayName from registry.
+  // cohort='minor', ageVerified=false, displayName from registry.
   // Caller can override cohort via opts.cohort (e.g. for j01's
   // already-flipped-to-adult state).
   const personas = loadPersonas();
@@ -655,7 +657,7 @@ async function seedSignedUpUser(ctx, personaName, opts = {}) {
   const fields = {
     uniqueId: persona.uniqueId,
     cohort: opts.cohort || 'minor',
-    isAgeVerified: opts.isAgeVerified ?? false,
+    ageVerified: opts.ageVerified ?? false,
     displayName: persona.displayName,
     email: persona.email,
     createdAt: Date.now(),
@@ -679,17 +681,35 @@ async function seedAcceptedPolicies(ctx, personaName, opts = {}) {
   if (!persona?.uniqueId) {
     throw new Error(`persona "${personaName}" not in registry`);
   }
-  await ctx.db.doc(`usersAcceptedPolicies/${persona.uniqueId}`).set({
-    privacyVersion: opts.privacyVersion || 4,
-    termsVersion: opts.termsVersion || 4,
-    acceptedAt: Date.now(),
-  });
+  // Written to the USER DOC, because that is where the product keeps it.
+  //
+  // This used to write `usersAcceptedPolicies/<id>` with `privacyVersion` +
+  // `termsVersion`. Neither the collection nor the fields exist in the
+  // product: `usersAcceptedPolicies` appears in exactly one place — a comment
+  // in routes/legal-versions.js — and nothing anywhere writes or reads it.
+  // The real mechanism is `users/<id>.acceptedLegalVersion`, an allowed
+  // update field (src/routes/users.js:611, 680, 700).
+  //
+  // So "has accepted legal" established nothing the product could see, and
+  // every scenario gated on it ran against a user who had accepted nothing.
+  await ctx.db.doc(`users/${persona.uniqueId}`).set(
+    {
+      acceptedLegalVersion: opts.acceptedLegalVersion ?? LEGAL_VERSION_AT_ACCEPTANCE,
+      acceptedLegalAt: Date.now(),
+    },
+    { merge: true },
+  );
   return { uniqueId: persona.uniqueId };
 }
 
+// Mirrors LEGAL_VERSIONS.privacy in src/routes/legal-versions.js. Kept as a
+// named constant so a bump there surfaces here as a one-line edit rather than
+// as a scenario failing for an unexplained reason.
+const LEGAL_VERSION_AT_ACCEPTANCE = 4;
+
 async function applyAgeVerificationApproval(ctx, personaName, adminPersonaName) {
   // Mirrors the production /api/admin/age-verification/approve handler:
-  //   1. users/<persona>.cohort = 'adult' + isAgeVerified = true
+  //   1. users/<persona>.cohort = 'adult' + ageVerified = true
   //   2. auditLog/<auto> with action='age_verification.approve',
   //      targetId=String(uniqueId), adminId=String(adminUniqueId)
   const personas = loadPersonas();
@@ -703,7 +723,7 @@ async function applyAgeVerificationApproval(ctx, personaName, adminPersonaName) 
   }
   await ctx.db
     .doc(`users/${persona.uniqueId}`)
-    .set({ cohort: 'adult', isAgeVerified: true }, { merge: true });
+    .set({ cohort: 'adult', ageVerified: true }, { merge: true });
   const auditDocId = `${persona.uniqueId}-approve-${Date.now()}`;
   await ctx.db.doc(`auditLog/${auditDocId}`).set({
     action: 'age_verification.approve',
@@ -746,6 +766,41 @@ async function clearSegregationEventsForPair(ctx, sourceUniqueId, targetUniqueId
     deleted++;
   }
   return { deleted };
+}
+
+/**
+ * Place a persona on a room seat with the given mic state.
+ *
+ * ONE implementation, because five different Givens were each writing their
+ * own version of a `micStates` map at the room root — a shape the product has
+ * never used. It writes `seats.<index>.isMuted`
+ * (src/routes/room-mutations.js:223) and every reader, including the stale-room
+ * reaper's close payload, uses that. So "with mic muted" established nothing
+ * the product could see, and every scenario gated on mic state tested nothing.
+ *
+ * Five copies of a rule is five places for it to be wrong; it was wrong in all
+ * five.
+ *
+ * @param {object} existing the current room doc (may be empty)
+ * @param {number|string} uniqueId
+ * @param {'open'|'muted'} micState
+ * @returns {object} the new `seats` map
+ */
+function seatsWithMicState(existing, uniqueId, micState) {
+  const seats = { ...((existing && existing.seats) || {}) };
+  // Reuse this persona's existing seat if they have one, so a second mic-state
+  // seed does not silently move them to a new seat and leave a ghost behind.
+  let index = Object.keys(seats).find(
+    (i) => String(seats[i] && seats[i].userId) === String(uniqueId),
+  );
+  if (index === undefined) index = String(Object.keys(seats).length);
+  seats[index] = {
+    ...(seats[index] || {}),
+    userId: uniqueId,
+    state: 'OCCUPIED',
+    isMuted: micState === 'muted',
+  };
+  return seats;
 }
 
 async function seedAdminQueueEntries(ctx, queueId, count) {
@@ -2741,7 +2796,7 @@ const matchers = [
     // State-seed for one or more user-doc fields. Originally single-field
     // (`has shyCoins=1000`); wake-5 (2026-05-17) generalised the value
     // capture to delegate to parseSignInWithClause, which supports:
-    //   - compound forms ("has shyCoins=100 and isAgeVerified=false")
+    //   - compound forms ("has shyCoins=100 and ageVerified=false")
     //   - array literals ("has followingIds=[50000010, 50000060]")
     //   - trailing parentheticals ("has X=[…] (two adult follows)")
     //
@@ -2991,6 +3046,23 @@ const matchers = [
         fields = parseUserDocFields(fieldsText);
       } catch (e) {
         return { ok: false, error: e.message };
+      }
+      // THE DOOR EVERY PHANTOM FIELD CAME THROUGH.
+      //
+      // This matcher writes whatever key=value pairs the step names, so a
+      // corpus author could invent a field and the write silently succeeded —
+      // `suspendedUntil`, `isAgeVerified`, `isUnblockable`, `micStates` all
+      // arrived this way, each making a scenario look tested while it
+      // asserted nothing, several of them on SAFETY gates.
+      //
+      // Rejecting at seed time turns "invent a field" from an invisible no-op
+      // into a loud error at the moment it is written.
+      for (const fieldName of Object.keys(fields)) {
+        const rejection = rejectUnknownField(fieldName, {
+          collection: 'users',
+          context: `"${name} ${verb} with …"`,
+        });
+        if (rejection) return { ok: false, error: rejection };
       }
       if (verb === 'exists') {
         // Full-state seed — uniqueId from body if present, else registry.
@@ -6839,7 +6911,8 @@ const matchers = [
       }
       await ctx.db.doc(`rooms/${roomId}`).set({
         id: roomId,
-        ownerUniqueId: owner.uniqueId,
+        // The product reads `ownerId` (src/routes/rooms.js:140).
+        ownerId: owner.uniqueId,
         createdAt: Date.now(),
       });
       return { ok: true };
@@ -7201,9 +7274,8 @@ const matchers = [
         ? [...existing.participantIds]
         : [];
       if (!participantIds.includes(p.uniqueId)) participantIds.push(p.uniqueId);
-      const micStates = { ...(existing.micStates || {}) };
-      micStates[String(p.uniqueId)] = micState;
-      await ctx.db.doc(docPath).set({ ...existing, participantIds, micStates }, { merge: true });
+      const seats = seatsWithMicState(existing, p.uniqueId, micState);
+      await ctx.db.doc(docPath).set({ ...existing, participantIds, seats }, { merge: true });
       return { ok: true };
     },
   },
@@ -7579,7 +7651,8 @@ const matchers = [
       const roomId = `auto-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
       await ctx.db.doc(`rooms/${roomId}`).set({
         id: roomId,
-        ownerUniqueId: owner.uniqueId,
+        // The product reads `ownerId` (src/routes/rooms.js:140).
+        ownerId: owner.uniqueId,
         visibility,
         cohort,
         participantIds: [owner.uniqueId],
@@ -7654,7 +7727,8 @@ const matchers = [
       const joiners = Array.from({ length: joinerCount }, (_, i) => 60000001 + i);
       await ctx.db.doc(`rooms/${roomId}`).set({
         id: roomId,
-        ownerUniqueId: owner.uniqueId,
+        // The product reads `ownerId` (src/routes/rooms.js:140).
+        ownerId: owner.uniqueId,
         participantIds: [owner.uniqueId, ...joiners],
         createdAt: Date.now(),
       });
@@ -7730,7 +7804,8 @@ const matchers = [
       }
       await ctx.db.doc(`rooms/${roomId}`).set({
         id: roomId,
-        ownerUniqueId: owner.uniqueId,
+        // The product reads `ownerId` (src/routes/rooms.js:140).
+        ownerId: owner.uniqueId,
         cohort,
         participantIds: [owner.uniqueId],
         createdAt: Date.now(),
@@ -8425,8 +8500,7 @@ const matchers = [
         id: roomId,
         cohort,
         participantIds: [p.uniqueId],
-        micStates: { [String(p.uniqueId)]: micState },
-        seats: [{ userId: p.uniqueId, muted: micState === 'muted' }],
+        seats: seatsWithMicState({}, p.uniqueId, micState),
         state: 'OPEN',
         createdAt: Date.now(),
       });
@@ -8643,9 +8717,8 @@ const matchers = [
         ? [...existing.participantIds]
         : [];
       if (!participantIds.includes(p.uniqueId)) participantIds.push(p.uniqueId);
-      const micStates = { ...(existing.micStates || {}) };
-      micStates[String(p.uniqueId)] = micState;
-      await ctx.db.doc(docPath).set({ ...existing, participantIds, micStates }, { merge: true });
+      const seats = seatsWithMicState(existing, p.uniqueId, micState);
+      await ctx.db.doc(docPath).set({ ...existing, participantIds, seats }, { merge: true });
       return { ok: true };
     },
   },
@@ -9514,7 +9587,7 @@ const matchers = [
     // Wake 76 — "<Name> (locale=<X>) is age-verified and Greta downgrades
     // <him|her|them> to minor".
     // j13:91 — composite state-seed writing post-downgrade state in one
-    // shot (locale, isAgeVerified=true, cohort=minor).
+    // shot (locale, ageVerified=true, cohort=minor).
     pattern:
       /^([A-Z][a-z]+) \(locale=([a-z]+)\) is age-verified and Greta downgrades (?:him|her|them) to minor$/,
     async handler(m, ctx) {
@@ -9528,7 +9601,7 @@ const matchers = [
       }
       await ctx.db
         .doc(`users/${p.uniqueId}`)
-        .set({ locale, isAgeVerified: true, cohort: 'minor' }, { merge: true });
+        .set({ locale, ageVerified: true, cohort: 'minor' }, { merge: true });
       // OSA #17 PR 6 test-side mirror: clear cross-cohort follow edges
       // that the runtime route would clear. Without this the j19 probe
       // reports state the prod /modify-dob route would never produce.
@@ -10094,8 +10167,7 @@ const matchers = [
       await ctx.db.doc(`rooms/${targetDoc.id}`).set(
         {
           ...existing,
-          micStates: { ...(existing.micStates || {}), [String(p.uniqueId)]: 'open' },
-          seats: [{ userId: p.uniqueId, muted: false }],
+          seats: seatsWithMicState(existing, p.uniqueId, 'open'),
         },
         { merge: true },
       );
@@ -10566,11 +10638,11 @@ const matchers = [
     async handler(m, ctx) {
       if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
       try {
-        // Final-state seed: cohort=adult, isAgeVerified=true, policies
+        // Final-state seed: cohort=adult, ageVerified=true, policies
         // accepted. No audit entry — the test scenarios that care about
         // the audit row use the "has just been approved" Given which
         // does include it.
-        await seedSignedUpUser(ctx, m[1], { cohort: 'adult', isAgeVerified: true });
+        await seedSignedUpUser(ctx, m[1], { cohort: 'adult', ageVerified: true });
         await seedAcceptedPolicies(ctx, m[1]);
         return { ok: true };
       } catch (e) {
@@ -10777,14 +10849,38 @@ const matchers = [
     // isOfficial=B, isUnblockable=B". j18:19 — multi-field state-seed
     // for the Officia system account. Booleans parsed from text.
     pattern:
-      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+exists with uniqueId=(\d+), userType=(\w+), isOfficial=(true|false), isUnblockable=(true|false)$/,
+      /^([A-Z][a-z]+)(?:\s*\[(P-\d{2})\])?\s+exists with uniqueId=(\d+), userType=(\w+), isOfficial=(true|false)(?:, isUnblockable=(true|false))?$/,
     async handler(m, ctx) {
       const uniqueId = parseInt(m[3], 10);
       const userType = m[4];
       const isOfficial = m[5] === 'true';
-      const isUnblockable = m[6] === 'true';
+      // `isUnblockable` from the step text is DELIBERATELY NOT WRITTEN.
+      //
+      // No product code reads such a field. The unblockable property is not
+      // expressed as a flag at all: block-check.js has no official-account
+      // exemption whatsoever (see viewerIsBlocked / checkBlockRelationship),
+      // so a user CAN currently block the ShyTalk Official account and would
+      // stop receiving system PMs — including safety notices, to a minor.
+      //
+      // Seeding a phantom flag made j18's "system PM is unblockable" scenario
+      // look tested while it was asserting nothing. Writing only the fields
+      // the product actually reads lets that scenario fail honestly, which is
+      // the correct outcome for an unimplemented safety control.
+      // Optional in the pattern: the corpus still writes it, and dropping it
+      // from the step text would hide that the corpus is asking for something
+      // the product cannot express.
+      const unblockableRequested = m[6] === 'true';
       if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
-      await ctx.db.doc(`users/${uniqueId}`).set({ uniqueId, userType, isOfficial, isUnblockable });
+      await ctx.db.doc(`users/${uniqueId}`).set({ uniqueId, userType, isOfficial });
+      if (unblockableRequested && !isOfficial) {
+        // The only way the product can express "unblockable" today is via the
+        // official identity, so asking for one without the other is a corpus
+        // error rather than a state the harness can establish.
+        return {
+          ok: false,
+          error: `${m[1]} is seeded isUnblockable=true but isOfficial=false — the product has no unblockable flag; it is derived from the official identity (userType === 'SHYTALK_OFFICIAL' || isOfficial)`,
+        };
+      }
       return { ok: true };
     },
   },
@@ -10805,7 +10901,11 @@ const matchers = [
       }
       await ctx.db
         .doc(`users/${p.uniqueId}`)
-        .set({ cohort: 'adult', ageVerificationFlippedAt: Date.now() }, { merge: true });
+        // `ageVerificationFlippedAt` removed: nothing in the product writes or
+        // reads such a field. The flip is evidenced by the cohort change itself
+        // and by the auditLog row the approve route writes — both of which the
+        // product does read.
+        .set({ cohort: 'adult' }, { merge: true });
       return { ok: true };
     },
   },
@@ -11337,9 +11437,8 @@ const matchers = [
         ? [...existing.participantIds]
         : [];
       if (!participantIds.includes(p.uniqueId)) participantIds.push(p.uniqueId);
-      const micStates = { ...(existing.micStates || {}) };
-      micStates[String(p.uniqueId)] = micState;
-      await ctx.db.doc(docPath).set({ ...existing, participantIds, micStates }, { merge: true });
+      const seats = seatsWithMicState(existing, p.uniqueId, micState);
+      await ctx.db.doc(docPath).set({ ...existing, participantIds, seats }, { merge: true });
       return { ok: true };
     },
   },
@@ -11366,14 +11465,15 @@ const matchers = [
         ? [...existing.participantIds]
         : [];
       if (!participantIds.includes(p.uniqueId)) participantIds.push(p.uniqueId);
-      const micStates = { ...(existing.micStates || {}) };
-      micStates[String(p.uniqueId)] = micState;
+      // This site had THREE shapes at once: a `micStates` map, and a `seats`
+      // ARRAY whose element used `muted` rather than `isMuted`. The product
+      // stores a seats MAP keyed by index with `isMuted`
+      // (src/utils/stale-room-reap.js:83), so none of the three was readable.
       await ctx.db.doc(docPath).set(
         {
           ...existing,
           participantIds,
-          micStates,
-          seats: [{ userId: p.uniqueId, muted: micState === 'muted' }],
+          seats: seatsWithMicState(existing, p.uniqueId, micState),
         },
         { merge: true },
       );
@@ -11500,7 +11600,11 @@ const matchers = [
       const eventId = `event-${host.uniqueId}-${ctx.scenarioStartTime || Date.now()}`;
       await ctx.db.doc(`events/${eventId}`).set({
         id: eventId,
-        hostUid: host.uniqueId,
+        // The events feature is NOT BUILT (no events surface in
+        // express-api/src or shared/src), so there is no product field to
+        // write. `ownerId` is the name every built room-like doc uses, and is
+        // what this should become when events ship.
+        ownerId: host.uniqueId,
         roster: [participant.uniqueId],
         createdAt: Date.now(),
       });
@@ -13213,7 +13317,7 @@ const matchers = [
       if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
       await ctx.db.doc(`rooms/${roomId}`).set({
         id: roomId,
-        hostUid: p.uniqueId,
+        ownerId: p.uniqueId,
         state: 'OPEN',
         participantIds: [p.uniqueId],
         seatedIds: [p.uniqueId],
@@ -13379,7 +13483,12 @@ const matchers = [
       const personas = loadPersonas();
       const p = personas.get(name);
       if (!p?.uniqueId) return { ok: false, error: `persona "${name}" not in registry` };
-      await ctx.db.doc(`users/${p.uniqueId}`).set({ teamRoster: ids }, { merge: true });
+      // `teamRoster` does not exist in the product — the team/event feature is
+      // not built. `participantIds` is the roster shape every built surface
+      // uses, so the seed writes that and the scenario fails honestly against
+      // a feature that has no code, rather than silently against a field
+      // nothing reads.
+      await ctx.db.doc(`users/${p.uniqueId}`).set({ participantIds: ids }, { merge: true });
       return { ok: true };
     },
   },
@@ -15031,10 +15140,10 @@ const matchers = [
     },
   },
   {
-    // Wake 106 — "the N corresponding users have isAgeVerified=true".
+    // Wake 106 — "the N corresponding users have ageVerified=true".
     // j12 — verifies ctx.lastUserIds (uniqueIds) all have
-    // isAgeVerified=true. Cross-checks the count.
-    pattern: /^the (\d+) corresponding users have isAgeVerified=true$/,
+    // ageVerified=true. Cross-checks the count.
+    pattern: /^the (\d+) corresponding users have ageVerified=true$/,
     async handler(m, ctx) {
       const expected = Number(m[1]);
       if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
@@ -15048,14 +15157,14 @@ const matchers = [
       const unverified = [];
       for (const id of ids) {
         const snap = await ctx.db.doc(`users/${id}`).get();
-        if (!snap.exists || snap.data()?.isAgeVerified !== true) {
+        if (!snap.exists || snap.data()?.ageVerified !== true) {
           unverified.push(id);
         }
       }
       if (unverified.length > 0) {
         return {
           ok: false,
-          error: `${unverified.length} users not isAgeVerified (first: ${unverified[0]})`,
+          error: `${unverified.length} users not ageVerified (first: ${unverified[0]})`,
         };
       }
       return { ok: true };
@@ -16434,15 +16543,18 @@ async function runFeatureFile(filePath, ctx) {
   const scenarioReports = [];
 
   for (const scenario of parsed.scenarios) {
-    if (scenario.tags.includes('@manual')) {
-      // Per spec: skipped in auto mode unless a fresh ledger entry exists.
-      // The MVP doesn't check the ledger yet (handled separately by the
-      // shipping-gate command). For now we log "skipped" without finding.
+    // Two distinct reasons a scenario is not runnable here — see
+    // scenario-skip-tags.js. Keeping them apart matters: @manual is a process
+    // constraint, @unimplemented is a PRODUCT gap, and a report that merges
+    // them hides the second.
+    const skip = shouldSkipScenario(scenario.tags);
+    if (skip.skip) {
       scenarioReports.push({
         file: fileName,
         scenario: scenario.name,
         status: 'skipped',
-        reason: '@manual — requires interactive run; ledger not yet checked in MVP',
+        reason: skip.reason,
+        skippedBy: skip.tag,
       });
       continue;
     }

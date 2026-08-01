@@ -112,6 +112,11 @@ cmd_launch() {
   # Seen 2026-07-31: both device cells stalled at 0 scenarios while the phone
   # thrashed on the persona picker. Auth wiring, not product debt.
   [ "$target" = "local" ] && env_prefix="NODE_ENV=local PERSONAS_PASSWORD=localdev123 WDA_TEAM_ID=F3XX4PM3MF IOS_BUNDLE_ID=com.shyden.shytalk "
+  # GAUNTLET_BROWSERS scopes the matrix to the hardware actually plugged in.
+  # Devices come and go; an absent one is a normal operating condition, not a
+  # reason to spend driver-init time on cells that cannot possibly work.
+  # Unset means the full matrix, so this is inert by default.
+  [ -n "${GAUNTLET_BROWSERS:-}" ] && env_prefix="${env_prefix}GAUNTLET_BROWSERS='${GAUNTLET_BROWSERS}' "
   [ "$target" = "dev" ] && env_prefix="FIREBASE_DATABASE_URL=https://shytalk-dev-default-rtdb.europe-west1.firebasedatabase.app WDA_TEAM_ID=F3XX4PM3MF "
 
   # --- fork detached ---------------------------------------------------------------

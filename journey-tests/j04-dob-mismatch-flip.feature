@@ -18,7 +18,7 @@ Feature: j04 — Hayato's DOB mismatch + cohort downgrade
     Given the device locale is "ja"
     Given Hayato [P-06] is signed in on Android with cohort=adult (DOB=2007-01-01 in users doc)
     Given Hayato has followingIds=[50000010, 50000060] (two adult follows)
-    Given Hayato has shyCoins=100 and isAgeVerified=false
+    Given Hayato has shyCoins=100 and ageVerified=false
     Given Hayato submitted an ageVerificationSubmission with status="PENDING" and an ID image showing DOB=2011-05-12
     Given Greta [P-12] is on Web Admin at "/admin#age-verification"
 
@@ -46,7 +46,7 @@ Feature: j04 — Hayato's DOB mismatch + cohort downgrade
     When Greta on Web Admin taps "reject_and_dob_down" with reason "DOB on ID is 2011-05-12" and dobOverride="2011-05-12"
     Then within 5000ms the database has document "users/50000030" with field "cohort" equal to "minor"
     Then the database has document "users/50000030" with field "dateOfBirth" equal to 1305158400000
-    Then the database has document "users/50000030" with field "isAgeVerified" equal to false
+    Then the database has document "users/50000030" with field "ageVerified" equal to false
     Then the database has document "ageVerificationSubmissions/{subId}" with field "status" equal to "REJECTED"
     Then the database has 1 entries in "auditLog" matching {action: "age_verification.reject_and_dob_down", targetId: 50000030, adminId: 90000001}
 

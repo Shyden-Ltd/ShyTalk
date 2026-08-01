@@ -14,7 +14,7 @@ Feature: j07 — Adam discovers + messages Alice
   Background:
     Given the local stack is healthy
     Given the device locale is "en"
-    Given Adam [P-01] is signed in on Android with cohort=adult and isAgeVerified=true (post-j01 state)
+    Given Adam [P-01] is signed in on Android with cohort=adult and ageVerified=true (post-j01 state)
     Given Alice [P-02] is signed in on Web Chromium at "/discovery"
     Given neither user is following the other
 

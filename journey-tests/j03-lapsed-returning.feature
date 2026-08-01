@@ -44,8 +44,7 @@ Feature: j03 — Lena's lapsed return
     Then Lena's Web UI shows a "What's changed" highlight pointing at section 11 (UK OSA cohorts)
     Then Lena's Web UI shows the heading in Chinese
     When Lena on Web checks both legal checkboxes and continues
-    Then within 5000ms the database has document "usersAcceptedPolicies/50000020" with field "privacyVersion" equal to 4
-    Then the database has document "usersAcceptedPolicies/50000020" with field "termsVersion" equal to 4
+    Then within 5000ms the database has document "users/50000020" with field "acceptedLegalVersion" equal to 4
 
   @blocker @browser-chromium @locale
   Scenario: Lena's daily-reward streak resets to 1 with the Chinese "Streak reset" toast
@@ -83,7 +82,7 @@ Feature: j03 — Lena's lapsed return
     Given Lena is on the legal acceptance screen
     When Lena on Web closes the modal via the X button without checking boxes
     Then Lena's Web UI does not show the element with tag "main_roomsTab"
-    Then the database does not have a new "usersAcceptedPolicies/50000020" with version 4
+    Then the database does not have a new "users/50000020" with version 4
 
   @browser-chromium @perf-budget:3000
   Scenario: Lena's sign-in completes within 3s on a cold session

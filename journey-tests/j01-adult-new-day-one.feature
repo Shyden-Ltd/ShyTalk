@@ -38,16 +38,16 @@ Feature: j01 — Adam's first day
     Then within 5000ms the database has document "identityMap/email:adam-new-{ts}@shytalk.dev" with field "uniqueId" of type "number"
     Then Adam's uniqueId is recorded as {newUniqueId} for the rest of this scenario
     Then within 5000ms the database has document "users/{newUniqueId}" with field "cohort" equal to "minor"
-    Then the database has document "users/{newUniqueId}" with field "isAgeVerified" equal to false
+    Then the database has document "users/{newUniqueId}" with field "ageVerified" equal to false
 
   @blocker @android-emulator
-  Scenario: Adam accepts privacy + terms — usersAcceptedPolicies doc written, main UI shown
+  Scenario: Adam accepts privacy + terms — acceptedLegalVersion recorded, main UI shown
     Given Adam has just signed up with a minor-default cohort
     Then within 5000ms Adam's Android UI shows the legal acceptance screen
     When Adam on Android taps "legal_acceptPrivacyCheckbox"
     When Adam on Android taps "legal_acceptTermsCheckbox"
     When Adam on Android taps "legal_continueButton"
-    Then the database has document "usersAcceptedPolicies/{newUniqueId}" with field "privacyVersion" greater than 0
+    Then the database has document "users/{newUniqueId}" with field "acceptedLegalVersion" greater than 0
     Then within 3000ms Adam's Android UI shows the element with tag "main_roomsTab"
 
   @blocker @android-emulator
@@ -74,7 +74,7 @@ Feature: j01 — Adam's first day
     When Greta on Web Admin refreshes the age-verification tab
     Then within 3000ms Greta's Web Admin UI shows 1 row for "{newUniqueId}" with status "PENDING"
     When Greta on Web Admin taps "approve" on the submission for "{newUniqueId}"
-    Then within 5000ms the database has document "users/{newUniqueId}" with field "isAgeVerified" equal to true
+    Then within 5000ms the database has document "users/{newUniqueId}" with field "ageVerified" equal to true
     Then the database has document "users/{newUniqueId}" with field "cohort" equal to "adult"
     Then the database has 1 entries in "auditLog" matching {action: "age_verification.approve", targetId: "{newUniqueId}", adminId: 90000001}
 
