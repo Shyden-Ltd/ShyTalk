@@ -308,3 +308,62 @@ describe('applicableCells', () => {
     expect(Object.values(applicableCells(steps, CAPS))).toEqual([true, true, true]);
   });
 });
+
+/**
+ * A driver that exists but drives the WRONG platform is still a surface
+ * mismatch.
+ *
+ * Caught by the 2026-08-01 gauntlet run, not by a test. On mobile-safari-ios
+ * `ctx.uiDriver` is the iOS driver, so an Android step produced
+ * `ctx.uiDriver.androidOpenScreen not configured`. The object-existence check
+ * saw a uiDriver present and called it framework debt — a FAIL — when the cell
+ * simply has no Android to drive.
+ *
+ * The distinction still matters in the other direction: on a cell that DOES
+ * drive Android, a missing android* method is real SHY-0259 debt and must stay
+ * red.
+ */
+describe('platform-aware surface gate', () => {
+  const { isSurfaceUnavailable, methodPlatform } = require('../../scripts/scenario-surface');
+
+  const iosCell = { webDriver: {}, uiDriver: { iosUiDump: () => {} } };
+  const androidCell = { webDriver: {}, uiDriver: { androidUiDump: () => {} } };
+
+  it('reads the platform out of the method name', () => {
+    expect(methodPlatform('ctx.uiDriver.androidOpenScreen not configured')).toBe('android');
+    expect(methodPlatform('ctx.uiDriver.iosSearchIn not configured')).toBe('ios');
+    expect(methodPlatform('ctx.webDriver.webOpenScreen not configured')).toBeNull();
+  });
+
+  it('SKIPS an android method on an iOS-only cell', () => {
+    expect(isSurfaceUnavailable('ctx.uiDriver.androidOpenScreen not configured', iosCell)).toBe(
+      true,
+    );
+  });
+
+  it('SKIPS an ios method on an Android-only cell', () => {
+    expect(isSurfaceUnavailable('ctx.uiDriver.iosSearchIn not configured', androidCell)).toBe(true);
+  });
+
+  it('still FAILS a genuinely missing android method on an Android cell', () => {
+    // Real debt on a cell that can drive the surface — hiding it would make
+    // the SHY-0259 backlog invisible again.
+    expect(
+      isSurfaceUnavailable('ctx.uiDriver.androidSomethingUnbuilt not configured', androidCell),
+    ).toBe(false);
+  });
+
+  it('still FAILS a webDriver method gap regardless of platform', () => {
+    expect(isSurfaceUnavailable('ctx.webDriver.webOpenScreen not configured', iosCell)).toBe(false);
+  });
+
+  it('SKIPS when there is no uiDriver at all, as before', () => {
+    expect(
+      isSurfaceUnavailable('ctx.uiDriver.androidOpenScreen not configured', { webDriver: {} }),
+    ).toBe(true);
+  });
+
+  it('never hides an ordinary product failure', () => {
+    expect(isSurfaceUnavailable('response status was 404, expected 405', androidCell)).toBe(false);
+  });
+});

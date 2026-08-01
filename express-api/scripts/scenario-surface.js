@@ -137,7 +137,25 @@ function blamedDriver(error) {
  */
 function isSurfaceUnavailable(error, ctx = {}) {
   const driver = blamedDriver(error);
-  return driver ? !ctx[driver] : false;
+  if (!driver) return false;
+  if (!ctx[driver]) return true;
+
+  // The driver OBJECT exists but may not drive the platform the method belongs
+  // to. On mobile-safari-ios, ctx.uiDriver is the iOS driver, so
+  // `ctx.uiDriver.androidOpenScreen not configured` is a surface mismatch, not
+  // framework debt — and the object-existence check alone called it a FAIL.
+  // Seen on the 2026-08-01 run: an iOS cell reporting Android methods missing.
+  if (driver === 'uiDriver') {
+    const platform = methodPlatform(error);
+    if (platform) return !cellCapabilities(ctx).has(platform);
+  }
+  return false;
+}
+
+/** Which platform a blamed uiDriver method belongs to, from its name prefix. */
+function methodPlatform(error) {
+  const m = /ctx\.uiDriver\.(android|ios)[A-Z]/.exec(String(error || ''));
+  return m ? m[1] : null;
 }
 
 /** Human reason recorded on the skipped scenario, so the skip is never mysterious. */
@@ -176,6 +194,7 @@ module.exports = {
   isMissingUiDriver,
   isSurfaceUnavailable,
   blamedDriver,
+  methodPlatform,
   skipReason,
   GATING_PLATFORMS,
 };
