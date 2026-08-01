@@ -255,5 +255,80 @@ router.get('/events/:eventId', async (req, res) => {
   }
 });
 
+/**
+ * Start a scheduled event.
+ *
+ * The event BINDS a room rather than inventing one, so seats, LiveKit and every
+ * existing room behaviour keep working. An event is a room with an owner who is
+ * allowed to change who sits in it.
+ *
+ * STARTING TWICE MUST NOT MAKE A SECOND ROOM. Two rooms for one event splits the
+ * audience in half and neither half can see the other — so a repeat returns the
+ * room that already exists. The host double-tapping "Start" is the expected
+ * case, not an error.
+ */
+router.post('/events/:eventId/start', async (req, res) => {
+  try {
+    const uniqueId = req.auth.uniqueId;
+    const { eventId } = req.params;
+
+    const snap = await db.doc(`events/${eventId}`).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Event not found' });
+    const event = snap.data();
+
+    if (event.hostId !== uniqueId) {
+      return res.status(403).json({ error: 'Only the host can start this event' });
+    }
+    if (event.state === STATE.CLOSED) {
+      return res.status(409).json({ error: 'This event has closed' });
+    }
+    // Already live: hand back the same room. Idempotent, not an error.
+    if (event.state === STATE.LIVE && event.roomId) {
+      return res.json({ ok: true, roomId: event.roomId, eventId });
+    }
+
+    const startsAt = Date.parse(event.startsAt);
+    if (Number.isFinite(startsAt) && startsAt > Date.now()) {
+      // "Not yet" without a number sends the host back to guess. Ceil so the
+      // last partial minute reads as 1 rather than 0.
+      const minutes = Math.ceil((startsAt - Date.now()) / 60_000);
+      return res.status(409).json({
+        error: `This event starts in ${minutes} minute${minutes === 1 ? '' : 's'}`,
+      });
+    }
+
+    // Only members who ACCEPTED are seeded. Holding a place for someone who
+    // declined is how a host waits on a performer who was never coming; someone
+    // who never answered simply is not expected, and must not block the start.
+    const accepted = (event.accepted || []).filter((id) => (event.roster || []).includes(id));
+
+    const roomId = `${eventId}-room`;
+    await db.doc(`rooms/${roomId}`).set({
+      roomId,
+      name: event.title,
+      ownerId: event.hostId,
+      // `state`, matching the ChatRoom model the rest of the product reads.
+      state: 'ACTIVE',
+      eventId,
+      participantIds: [],
+      rosterParticipants: accepted,
+      cohort: event.cohort,
+      createdAt: Date.now(),
+    });
+
+    await db.doc(`events/${eventId}`).update({
+      state: STATE.LIVE,
+      roomId,
+      startedAt: new Date().toISOString(),
+    });
+
+    log.info('events', 'event started', { eventId, roomId, roster: accepted.length });
+    res.json({ ok: true, roomId, eventId });
+  } catch (err) {
+    log.error('events', 'POST /events/:eventId/start failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;
 module.exports.STATE = STATE;
