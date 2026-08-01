@@ -673,6 +673,335 @@ async function createWebDriver({
     await browser.close();
   };
 
+  // ── SHY-0259 batch 2: web methods the corpus already assumed ────────────
+  //
+  // Same story as the Android batch: the corpus was written ahead of the
+  // drivers, so these names were called and never defined, and every scenario
+  // that touched one failed with `not configured` — indistinguishable from a
+  // product defect in a matrix report. Built on the primitives that exist
+  // (pageFor, webTap, webFillIn, webUiDump). Real browser calls only.
+
+  /**
+   * Click by accessible name, label, or visible text — in that order.
+   *
+   * The loose getByText fallback is DELIBERATELY withheld from short labels.
+   * `getByText('X', { exact: false })` substring-matches almost any page, so
+   * webCloseModalViaX reported success against a page with no modal at all —
+   * caught by driving a real browser, and invisible to any structural test.
+   * Roles and labels stay available for short names; only the text sweep is
+   * restricted.
+   */
+  async function clickByLabel(page, label) {
+    const short = String(label).trim().length < 3;
+    const attempts = [
+      () => page.getByRole('button', { name: label, exact: short }).first(),
+      () => page.getByRole('link', { name: label, exact: short }).first(),
+      () => page.getByLabel(label, { exact: short }).first(),
+      ...(short ? [] : [() => page.getByText(label, { exact: false }).first()]),
+    ];
+    for (const make of attempts) {
+      try {
+        await make().click({ timeout: 2000 });
+        return true;
+      } catch {
+        /* try the next strategy — a label can be a button, a link or plain text */
+      }
+    }
+    return false;
+  }
+  driver._clickByLabel = clickByLabel;
+
+  /** Screen name -> path. Kept in one place so a rename lands once. */
+  const SCREEN_PATHS = {
+    discovery: '/discovery',
+    rooms: '/rooms',
+    profile: '/profile',
+    wallet: '/wallet',
+    pm: '/pm',
+    settings: '/settings',
+    signin: '/signin',
+    admin: '/admin',
+  };
+  driver._screenPaths = SCREEN_PATHS;
+
+  // Navigate to a named screen. Tries in-app navigation first so client-side
+  // routing and its guards are genuinely exercised; falls back to a direct URL
+  // only when no nav control is present.
+  driver.webOpenScreen = async (screen) => {
+    const page = await pageFor('default');
+    if (!page.url() || page.url() === 'about:blank') await page.goto('/');
+    if (await driver.webTap(`nav_${screen}`)) return true;
+    if (await clickByLabel(page, screen)) return true;
+    const screenPath = SCREEN_PATHS[String(screen).toLowerCase()];
+    if (!screenPath) return false;
+    await page.goto(screenPath, { waitUntil: 'domcontentloaded' });
+    return true;
+  };
+
+  driver.webOpenListView = async (name) => driver.webOpenScreen(name);
+
+  // Sign in through the persona picker — the canonical journey auth path.
+  // NEVER drives Google/Apple OAuth: the repo rule is that journey tests use
+  // test personas, and an OAuth popup cannot be driven headlessly anyway.
+  driver.webSignIn = async (persona) => {
+    const page = await pageFor('default');
+    if (!page.url() || page.url() === 'about:blank') await page.goto('/');
+    if (!(await driver.webTap('signin_personaPickerButton'))) {
+      if (!(await clickByLabel(page, 'Test personas'))) return false;
+    }
+    if (!persona) return true;
+    if (await driver.webTap(`persona_${persona}`)) return true;
+    return await clickByLabel(page, persona);
+  };
+
+  driver.webOpenUserProfile = async (name) => {
+    if (await driver.webTap(`userCard_${name}`)) return true;
+    const page = await pageFor('default');
+    return await clickByLabel(page, name);
+  };
+
+  driver.webTapUserCard = async (_viewer, target) => driver.webOpenUserProfile(target || _viewer);
+
+  driver.webTapNamedButton = async (label) => {
+    if (await driver.webTap(label)) return true;
+    const page = await pageFor('default');
+    return await clickByLabel(page, label);
+  };
+
+  driver.webTapBareVerb = async (verb) => driver.webTapNamedButton(verb);
+  driver.webTapQuotedTarget = async (target) => driver.webTapNamedButton(target);
+  driver.webTapSameRoom = async (owner) => driver.webTapRoomCard(owner);
+
+  driver.webTapRoomCard = async (owner) => {
+    if (owner && (await driver.webTap(`roomCard_${owner}`))) return true;
+    const page = await pageFor('default');
+    if (owner && (await clickByLabel(page, owner))) return true;
+    try {
+      await page.locator('[data-test-tag^="roomCard_"]').first().click({ timeout: 2000 });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  // Type into a field and submit. Enter is what actually sends in the app's
+  // single-line inputs, so a fill without it looks successful and does nothing.
+  driver.webTypeAndSubmit = async (field, text) => {
+    const page = await pageFor('default');
+    if (!(await driver.webFillIn('default', { [field]: text }))) {
+      try {
+        await page.getByLabel(field, { exact: false }).first().fill(String(text));
+      } catch {
+        return false;
+      }
+    }
+    await page.keyboard.press('Enter');
+    return true;
+  };
+
+  driver.webTypeIntoConversationInput = async (text) => {
+    const page = await pageFor('default');
+    for (const sel of [
+      '[data-test-tag="pm_messageInput"]',
+      '[data-testid="pm_messageInput"]',
+      'textarea',
+      'input[type="text"]',
+    ]) {
+      try {
+        await page.locator(sel).first().fill(String(text), { timeout: 2000 });
+        return true;
+      } catch {
+        /* next selector */
+      }
+    }
+    return false;
+  };
+
+  driver.webOpenConversation = async (withName) => {
+    if (await driver.webTap(`conversation_${withName}`)) return true;
+    if (!(await driver.webOpenScreen('pm'))) return false;
+    const page = await pageFor('default');
+    return await clickByLabel(page, withName);
+  };
+
+  driver.webIsOnConversationWith = async (name) => {
+    const dump = await driver.webUiDump();
+    return typeof dump === 'string' && dump.includes(name);
+  };
+
+  driver.webShowsNamedButton = async (label) => {
+    const page = await pageFor('default');
+    for (const make of [
+      () => page.getByRole('button', { name: label, exact: false }),
+      () => page.getByRole('link', { name: label, exact: false }),
+      () => page.getByText(label, { exact: false }),
+    ]) {
+      try {
+        if ((await make().count()) > 0) return true;
+      } catch {
+        /* next strategy */
+      }
+    }
+    return false;
+  };
+
+  driver.webShowsMessageInput = async () => {
+    const page = await pageFor('default');
+    try {
+      const n = await page
+        .locator('[data-test-tag="pm_messageInput"], [data-testid="pm_messageInput"], textarea')
+        .count();
+      return n > 0;
+    } catch {
+      return false;
+    }
+  };
+
+  driver.webShowsPlaceholder = async (text) => {
+    const page = await pageFor('default');
+    try {
+      return (await page.getByPlaceholder(String(text), { exact: false }).count()) > 0;
+    } catch {
+      return false;
+    }
+  };
+
+  // Accept whatever dialog is in front of us. The affirmative-label list lives
+  // here once rather than at each call site.
+  driver.webConfirmDialog = async () => {
+    const page = await pageFor('default');
+    if (await driver.webTap('dialog_confirm')) return true;
+    for (const label of ['Confirm', 'OK', 'Yes', 'Continue', 'Accept']) {
+      if (await clickByLabel(page, label)) return true;
+    }
+    return false;
+  };
+  driver.webConfirm = async () => driver.webConfirmDialog();
+
+  driver.webAcceptLegalAndContinue = async () => {
+    const page = await pageFor('default');
+    for (const tag of ['legal_acceptCheckbox', 'legal_accept', 'legal_continue']) {
+      await driver.webTap(tag);
+    }
+    return (await clickByLabel(page, 'Continue')) || (await clickByLabel(page, 'Accept'));
+  };
+
+  // Close the open modal. Scoped to a real dialog and to controls that are
+  // actually close buttons — never a bare text sweep, which matched arbitrary
+  // page content and reported a modal closed when none was open.
+  driver.webCloseModalViaX = async () => {
+    const page = await pageFor('default');
+    if (await driver.webTap('modal_close')) return true;
+    const dialog = page.getByRole('dialog').first();
+    try {
+      if ((await dialog.count()) === 0) return false;
+    } catch {
+      return false;
+    }
+    for (const make of [
+      () => dialog.getByRole('button', { name: /close|dismiss|×/i }).first(),
+      () => dialog.locator('[aria-label="Close" i], [data-test-tag="modal_close"]').first(),
+    ]) {
+      try {
+        await make().click({ timeout: 2000 });
+        return true;
+      } catch {
+        /* next strategy */
+      }
+    }
+    return false;
+  };
+
+  driver.webOpenDeepLink = async (pathOrUrl) => {
+    const page = await pageFor('default');
+    await page.goto(String(pathOrUrl), { waitUntil: 'domcontentloaded' });
+    return true;
+  };
+
+  // "attempts X" — the corpus uses this where the action is EXPECTED to be
+  // refused. It must report whether the control could be actuated at all, not
+  // whether the attempt succeeded, or a correctly-blocked action reads as a
+  // driver failure.
+  driver.webAttemptAction = async (label) => {
+    const acted = await driver.webTapNamedButton(label);
+    return { attempted: true, actuated: acted };
+  };
+
+  // Admin console navigation. The admin surface is a tabbed SPA, so these are
+  // clicks, not URL loads — loading a URL skips the tab's own data fetch.
+  driver.webAdminOpenTab = async (tab) => {
+    const page = await pageFor('default');
+    if (await driver.webTap(`admin_tab_${tab}`)) return true;
+    if (await clickByLabel(page, tab)) return true;
+    await page.goto(`/admin#${tab}`, { waitUntil: 'domcontentloaded' });
+    return true;
+  };
+
+  driver.webAdminOpenSubtab = async (subtab) => driver.webAdminOpenTab(subtab);
+
+  driver.webAdminRefreshTab = async () => {
+    const page = await pageFor('default');
+    if (await driver.webTap('admin_refresh')) return true;
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    return true;
+  };
+
+  driver.webAdminRefreshAgeVerification = async () => {
+    await driver.webAdminOpenTab('age-verification');
+    return driver.webAdminRefreshTab();
+  };
+
+  driver.webAdminSearch = async (query) => {
+    const page = await pageFor('default');
+    for (const sel of ['[data-test-tag="admin_search"]', 'input[type="search"]']) {
+      try {
+        await page.locator(sel).first().fill(String(query), { timeout: 2000 });
+        await page.keyboard.press('Enter');
+        return true;
+      } catch {
+        /* next selector */
+      }
+    }
+    return false;
+  };
+
+  driver.webAdminSearchForUser = async (user) => driver.webAdminSearch(user);
+
+  driver.webAdminConfirmDialog = async () => driver.webConfirmDialog();
+
+  // Reason-carrying admin actions. The reason is a required audit field, so it
+  // is typed before confirming rather than left blank.
+  driver.webAdminTapWithReason = async (action, reason) => {
+    if (!(await driver.webTapNamedButton(action))) return false;
+    const page = await pageFor('default');
+    try {
+      await page
+        .locator('[data-test-tag="admin_reason"], textarea, input[name="reason"]')
+        .first()
+        .fill(String(reason ?? ''), { timeout: 2000 });
+    } catch {
+      /* some actions take no reason field */
+    }
+    return driver.webConfirmDialog();
+  };
+
+  driver.webAdminConfirmWithReason = async (reason) =>
+    driver.webAdminTapWithReason('Confirm', reason);
+
+  // Console errors collected from the live page. Real browser signal — the
+  // listener is attached on first use and drains what it has seen since.
+  driver.webConsoleErrors = async () => {
+    const page = await pageFor('default');
+    if (!page.__consoleErrors) {
+      page.__consoleErrors = [];
+      page.on('console', (m) => {
+        if (m.type() === 'error') page.__consoleErrors.push(m.text());
+      });
+      page.on('pageerror', (e) => page.__consoleErrors.push(String(e && e.message)));
+    }
+    return page.__consoleErrors.slice();
+  };
+
   return driver;
 }
 
