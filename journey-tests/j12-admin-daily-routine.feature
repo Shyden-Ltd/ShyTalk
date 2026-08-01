@@ -65,7 +65,7 @@ Feature: j12 — Greta's admin daily routine
     When Greta on Web Admin opens the "appeals" tab
     Then Greta's Web Admin UI shows 2 rows
     When Greta on Web Admin lifts the first appeal
-    Then within 3000ms that user has suspendedUntil=null
+    Then within 3000ms that user has isSuspended=false
     When Greta on Web Admin denies the second appeal with reason "Persistent pattern of harassment"
     Then within 3000ms the database has document "suspensionAppeals/{appealId}" with field "status" equal to "DENIED"
 

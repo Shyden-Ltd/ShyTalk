@@ -102,7 +102,8 @@ Feature: j11 — Full harassment moderation lifecycle
   @blocker
   Scenario: Raul's user doc records the 3-day suspension with reason + audit row
     Given Greta has issued a 3-day suspension to Raul
-    Then within 5000ms the database has document "users/50000050" with field "suspendedUntil" approximately equal to now + 3 days
+    Then within 5000ms the database has document "users/50000050" with field "isSuspended" equal to true
+    Then within 5000ms the database has document "users/50000050" with field "suspensionEndDate" approximately equal to now + 3 days
     Then the database has document "users/50000050" with field "suspensionReason" equal to "Repeat harassment"
     Then the database has 1 entries in "auditLog" matching {action: "suspend", targetId: 50000050, durationDays: 3}
 
@@ -123,8 +124,8 @@ Feature: j11 — Full harassment moderation lifecycle
 
   @blocker
   Scenario: Suspended Raul cannot create conversations or LiveKit tokens (403 on both)
-    Given Raul is in a suspendedUntil state 3 days from now
-    When POST /api/conversations with body as Raul
+    Given Raul is in a suspended state 3 days from now
+    When POST /api/conversations/c-raul-nora/messages with text="still talking", senderName="Raul" as Raul
     Then the response status is 403
     When POST /api/livekit/token as Raul
     Then the response status is 403
@@ -145,7 +146,8 @@ Feature: j11 — Full harassment moderation lifecycle
     When Greta on Web Admin opens the suspension-appeals tab
     Then Greta's Web Admin UI shows Raul's appeal with the text
     When Greta on Web Admin taps "Lift suspension" with reason "Appeal accepted — first repeat, leniency"
-    Then within 5000ms the database has document "users/50000050" with field "suspendedUntil" equal to null
+    Then within 5000ms the database has document "users/50000050" with field "isSuspended" equal to false
+    Then within 5000ms the database has document "users/50000050" with field "suspensionEndDate" equal to null
     Then the database has 1 entries in "auditLog" matching {action: "unsuspend", targetId: 50000050}
 
   @blocker @android-physical @ios-sim

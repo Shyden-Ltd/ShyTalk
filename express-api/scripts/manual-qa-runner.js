@@ -997,6 +997,10 @@ async function signInPersonaRest(ctx, name, persona) {
     refreshToken: body.refreshToken,
     localId: body.localId,
     customClaims: decodeJwtPayload(body.idToken),
+    // When THIS session was established. Firebase revocation is a
+    // comparison against tokensValidAfterTime, so "is this session
+    // revoked" is meaningless without knowing when it began.
+    signedInAt: Date.now(),
   });
   return ctx.sessions.get(name);
 }
@@ -1408,6 +1412,10 @@ const matchers = [
         refreshToken: body.refreshToken,
         localId: body.localId,
         customClaims: decodeJwtPayload(body.idToken),
+        // When THIS session was established. Firebase revocation is a
+        // comparison against tokensValidAfterTime, so "is this session
+        // revoked" is meaningless without knowing when it began.
+        signedInAt: Date.now(),
       });
       if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
       ctx.personaPlatforms.set(name, 'Android physical');
@@ -1485,6 +1493,10 @@ const matchers = [
         refreshToken: body.refreshToken,
         localId: body.localId,
         customClaims: decodeJwtPayload(body.idToken),
+        // When THIS session was established. Firebase revocation is a
+        // comparison against tokensValidAfterTime, so "is this session
+        // revoked" is meaningless without knowing when it began.
+        signedInAt: Date.now(),
       });
       if (!ctx.personaPlatforms) ctx.personaPlatforms = new Map();
       ctx.personaPlatforms.set(name, platform);
@@ -1562,6 +1574,10 @@ const matchers = [
           refreshToken: body.refreshToken,
           localId: body.localId,
           customClaims: decodeJwtPayload(body.idToken),
+          // When THIS session was established. Firebase revocation is a
+          // comparison against tokensValidAfterTime, so "is this session
+          // revoked" is meaningless without knowing when it began.
+          signedInAt: Date.now(),
         });
       }
       // If a `with` clause was captured, route based on prefix:
@@ -2761,6 +2777,10 @@ const matchers = [
         refreshToken: body.refreshToken,
         localId: body.localId,
         customClaims: decodeJwtPayload(body.idToken),
+        // When THIS session was established. Firebase revocation is a
+        // comparison against tokensValidAfterTime, so "is this session
+        // revoked" is meaningless without knowing when it began.
+        signedInAt: Date.now(),
       });
       ctx.personaPlatforms.set(name, platform);
       ctx.locale = locale;
@@ -8619,24 +8639,18 @@ const matchers = [
       return { ok: true };
     },
   },
-  {
-    // Wake 70 — "<Name> is suspended until N days from now" (state-seed).
-    // j11:67 — writes users/<uniqueId>.suspendedUntil = Date.now() + N days.
-    pattern: /^([A-Z][a-z]+) is suspended until (\d+) days from now$/,
-    async handler(m, ctx) {
-      const name = m[1];
-      const days = parseInt(m[2], 10);
-      if (!ctx.db) return { ok: false, error: 'ctx.db not initialised' };
-      const personas = loadPersonas();
-      const p = personas.get(name);
-      if (!p?.uniqueId) {
-        return { ok: false, error: `persona "${name}" not in registry` };
-      }
-      const suspendedUntil = Date.now() + days * 24 * 60 * 60 * 1000;
-      await ctx.db.doc(`users/${p.uniqueId}`).set({ suspendedUntil }, { merge: true });
-      return { ok: true };
-    },
-  },
+  // Wake 70 — "<Name> is suspended until N days from now" — DELETED, folded
+  // into the real-route suspension Given below.
+  //
+  // It wrote `users/<id>.suspendedUntil` directly: a MIRROR of what the
+  // suspend route does, and the mirror had drifted. The product has never
+  // written `suspendedUntil` — it writes `isSuspended` + `suspensionEndDate`
+  // (src/routes/admin-users.js:1117) — so this Given seeded a field nothing
+  // reads. Every scenario that used it ran against a user the API considered
+  // perfectly active, and then reported the PRODUCT as failing to enforce a
+  // suspension that had never been applied.
+  //
+  // Nothing tested it, which is how it drifted unnoticed.
   {
     // Wake 71 — bare "POST <path> as <persona>" (no body).
     // j11:73 — `POST /api/livekit/token as Raul`. Endpoints that derive
@@ -8768,8 +8782,13 @@ const matchers = [
   },
   {
     // Wake 71 — predicate state-seed "has been warned but not suspended".
-    // j11:101 — writes hasActiveWarning=true AND zeroes suspendedUntil.
-    // Tests the transition state — warning exists, suspension does not.
+    // j11:101 — the transition state: a warning exists, a suspension does not.
+    //
+    // Used to zero `suspendedUntil`, a field the product has never written.
+    // "Not suspended" therefore asserted nothing: the user's real
+    // `isSuspended` flag was left exactly as the previous scenario left it,
+    // so a leftover suspension silently persisted into a scenario whose whole
+    // point is that the user is NOT suspended.
     pattern: /^([A-Z][a-z]+) has been warned but not suspended$/,
     async handler(m, ctx) {
       const name = m[1];
@@ -8779,9 +8798,15 @@ const matchers = [
       if (!p?.uniqueId) {
         return { ok: false, error: `persona "${name}" not in registry` };
       }
-      await ctx.db
-        .doc(`users/${p.uniqueId}`)
-        .set({ hasActiveWarning: true, suspendedUntil: 0 }, { merge: true });
+      await ctx.db.doc(`users/${p.uniqueId}`).set(
+        {
+          hasActiveWarning: true,
+          // The fields the middleware and the admin routes actually read.
+          isSuspended: false,
+          suspensionEndDate: null,
+        },
+        { merge: true },
+      );
       return { ok: true };
     },
   },
@@ -15180,16 +15205,18 @@ const matchers = [
     // "Greta has issued a 3-day suspension to Raul" — j11:104.
     // "Raul has been suspended for 3 days for "Repeat harassment"" — j11:118.
     // "Raul has just been suspended for 3 days while seated in "r-test"" — j11:111.
-    // "Raul is in a suspendedUntil state 3 days from now" — j11:126.
+    // "Raul is in a suspended state 3 days from now" — j11:126.
+    // "Raul is suspended until 2 days from now" — j11:163, folded in here
+    // when its own handler was deleted for writing a phantom field.
     //
-    // One matcher, four phrasings: they all mean the same established
-    // state, and four near-identical handlers is four places to drift.
+    // One matcher, five phrasings: they all mean the same established
+    // state, and five near-identical handlers is five places to drift.
     pattern:
-      /^(?:([A-Z][a-z]+) has issued an? (\d+)-day suspension to ([A-Z][a-z]+)|([A-Z][a-z]+) has (?:just )?been suspended for (\d+) days?(?: for "([^"]+)")?(?: while seated in "([^"]+)")?|([A-Z][a-z]+) is in a suspendedUntil state (\d+) days? from now)$/,
+      /^(?:([A-Z][a-z]+) has issued an? (\d+)-day suspension to ([A-Z][a-z]+)|([A-Z][a-z]+) has (?:just )?been suspended for (\d+) days?(?: for "([^"]+)")?(?: while seated in "([^"]+)")?|([A-Z][a-z]+) is in a suspended state (\d+) days? from now|([A-Z][a-z]+) is suspended until (\d+) days? from now)$/,
     async handler(m, ctx) {
       const adminName = m[1] || 'Greta';
-      const targetName = m[3] || m[4] || m[8];
-      const days = Number(m[2] || m[5] || m[9]);
+      const targetName = m[3] || m[4] || m[8] || m[10];
+      const days = Number(m[2] || m[5] || m[9] || m[11]);
       const reason = m[6] || 'Repeat harassment';
       try {
         await callApiAs(
@@ -16905,9 +16932,48 @@ function parseValueLiteralOrArray(valRaw) {
   if (valRaw.startsWith('[') && valRaw.endsWith(']')) {
     const inner = valRaw.slice(1, -1).trim();
     if (!inner) return [];
-    return inner.split(',').map((s) => parseLiteral(s.trim()));
+    // splitTopLevelCommas, not `inner.split(',')`: an element that is a
+    // quoted string containing a comma — `["alice", "bao, the tutor"]` — was
+    // torn into `"bao` and `the tutor"`. The predicate parser already
+    // respected quotes; this one did not, so the same corpus text parsed two
+    // different ways depending on which entry point reached it.
+    return splitTopLevelCommas(inner).map((s) => parseLiteral(s.trim()));
   }
   return parseLiteral(valRaw);
+}
+
+/**
+ * Split on commas that are not inside a double-quoted string or a bracket.
+ *
+ * ONE implementation, because two tokenisers over the same corpus syntax will
+ * disagree eventually — and did: the predicate parser respected quotes while
+ * the array parser did not.
+ *
+ * @param {string} text
+ * @returns {string[]} raw segments, untrimmed
+ */
+function splitTopLevelCommas(text) {
+  const parts = [];
+  let buf = '';
+  let inString = false;
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"' && text[i - 1] !== '\\') inString = !inString;
+    if (!inString) {
+      if (c === '[') depth++;
+      else if (c === ']') depth--;
+    }
+    if (c === ',' && !inString && depth === 0) {
+      parts.push(buf);
+      buf = '';
+      continue;
+    }
+    buf += c;
+  }
+  if (buf.trim() !== '') parts.push(buf);
+  if (depth !== 0) throw new Error(`unbalanced brackets: "${text}"`);
+  return parts;
 }
 
 /**
@@ -16927,20 +16993,12 @@ function parseValueLiteralOrArray(valRaw) {
 function parseJsonishPredicate(text) {
   const out = {};
   if (text === '' || text === undefined) return out;
-  const pairs = [];
-  let buf = '';
-  let inString = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (c === '"' && text[i - 1] !== '\\') inString = !inString;
-    if (c === ',' && !inString) {
-      pairs.push(buf);
-      buf = '';
-      continue;
-    }
-    buf += c;
-  }
-  if (buf.trim() !== '') pairs.push(buf);
+  // Bracket-aware, so a comma INSIDE an array value does not split the pair.
+  // `participantIds: [1, 50000030]` used to tokenise as `participantIds: [1`
+  // and `50000030]`, and the second has no colon — j04 and j18 failed on
+  // every cell of every run with a parse error that named the fragment
+  // rather than the unsupported syntax.
+  const pairs = splitTopLevelCommas(text);
 
   for (const raw of pairs) {
     const trimmed = raw.trim();
@@ -16959,10 +17017,20 @@ function parseJsonishPredicate(text) {
     const key = trimmed.slice(0, colonIdx).trim();
     const valRaw = trimmed.slice(colonIdx + 1).trim();
     // Detect unresolved placeholder {name} — bare identifier in braces.
-    if (/^\{[A-Za-z_][\w]*\}$/.test(valRaw)) {
-      throw new Error(`unresolved placeholder ${valRaw} (variable resolution not yet implemented)`);
+    // Checked ANYWHERE in the value, not just as the whole of it, so
+    // `[1, {adamId}]` is reported too. Coercing it to the literal string
+    // "{adamId}" would compare against braces and fail later as a confusing
+    // value mismatch rather than as a missing variable.
+    const placeholder = /\{([A-Za-z_]\w*)\}/.exec(valRaw);
+    if (placeholder) {
+      throw new Error(
+        `unresolved placeholder {${placeholder[1]}} (variable resolution not yet implemented)`,
+      );
     }
-    out[key] = parseLiteral(valRaw);
+    // parseValueLiteralOrArray, not parseLiteral: the array-aware coercion
+    // already existed for the state-seed parser and was simply never wired in
+    // here, so this parser could tokenise an array but not type one.
+    out[key] = parseValueLiteralOrArray(valRaw);
   }
   return out;
 }
@@ -17938,6 +18006,26 @@ async function main() {
     progressBrowser: opts.browser || null,
     _driverCleanup: driverCleanup,
   };
+
+  // Firebase Auth revocation checks (j04 + j11). Attached AFTER ctx exists
+  // because the driver reads ctx.sessions live — a snapshot taken here would
+  // be empty, since sign-in Givens populate it during the scenario.
+  //
+  // Best-effort: a run configured without Admin credentials still works for
+  // every step that does not assert revocation, and those that do report
+  // `not configured` by name rather than silently answering "not revoked" —
+  // which, for a security control, is the answer you least want invented.
+  try {
+    const admin = require('firebase-admin');
+    if (admin.apps.length) {
+      ctx.firebaseAdmin = require('./drivers/firebase-admin-driver').createFirebaseAdminDriver({
+        auth: admin.auth(),
+        sessions: ctx.sessions,
+      });
+    }
+  } catch (e) {
+    console.error(`[runner] firebase-admin driver init failed: ${e.message}`);
+  }
 
   const resolvedFiles = opts.journey
     ? [path.join(opts.planDir, opts.journey)]

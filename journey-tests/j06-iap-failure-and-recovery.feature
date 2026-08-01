@@ -43,7 +43,9 @@ Feature: j06 — Alice IAP failure paths
 
   @android-physical
   Scenario: Missing productId → 400 with clear message
-    When Alice on Android POSTs /api/economy/purchase with no productId
+    # purchaseToken present, productId absent — so the 400 provably comes from
+    # the missing field rather than from an entirely empty body.
+    When Alice on Android POSTs /api/economy/purchase with purchaseToken="receipt-R1"
     Then the response status is 400
     Then the response body contains "productId"
 

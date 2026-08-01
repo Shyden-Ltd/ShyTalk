@@ -315,3 +315,69 @@ describe('the Givens fail loudly rather than half-succeeding', () => {
     expect(r.error).toMatch(/40[13]/);
   });
 });
+
+/**
+ * The phantom field, closed at the root.
+ *
+ * A second suspension Given — "<Name> is suspended until N days from now" —
+ * wrote `users/<id>.suspendedUntil` DIRECTLY, mirroring what the suspend
+ * route does. The mirror had drifted: the product writes `isSuspended` +
+ * `suspensionEndDate` and has never written `suspendedUntil`, so the Given
+ * seeded a field nothing reads.
+ *
+ * The consequence is the expensive part. Every scenario using it ran against
+ * a user the API considered perfectly active, then reported the PRODUCT as
+ * failing to enforce a suspension that had never been applied. Four corpus
+ * assertions were written against the same phantom, so the corpus and the
+ * harness agreed with each other and disagreed with the product.
+ *
+ * Nothing tested that Given, which is exactly how it drifted.
+ */
+describe('every suspension phrasing establishes state the PRODUCT can see', () => {
+  const PHRASINGS = [
+    'Greta has issued a 3-day suspension to Raul',
+    'Raul has been suspended for 3 days',
+    'Raul is in a suspended state 3 days from now',
+    'Raul is suspended until 2 days from now',
+  ];
+
+  test.each(PHRASINGS)('%s → the real route ran', async (step) => {
+    const ctx = makeRunnerCtx();
+    expectStepOk(await run(step, ctx));
+  });
+
+  test.each(PHRASINGS)(
+    '%s → the user doc carries isSuspended, not suspendedUntil',
+    async (step) => {
+      const ctx = makeRunnerCtx();
+      expectStepOk(await run(step, ctx));
+      const snap = await ctx.db.doc(`users/${OFFENDER}`).get();
+      const user = snap.data();
+      // The field the middleware actually reads (src/middleware/auth.js:158).
+      expect(user.isSuspended).toBe(true);
+      expect(user.suspensionEndDate).toBeTruthy();
+      // The phantom must not reappear: a Given that writes BOTH would look
+      // green here while still teaching the next corpus author the wrong name.
+      expect(user.suspendedUntil).toBeUndefined();
+    },
+  );
+
+  test('a suspended user is genuinely refused by the real middleware', async () => {
+    // The property that actually matters, and the one the phantom field
+    // silently removed. Asserting the document shape alone would still pass
+    // if the middleware read some third field — only a real 403 from the real
+    // authMiddleware proves the seeded state has the effect the corpus
+    // assumes when it writes "Then the response status is 403".
+    const ctx = makeRunnerCtx();
+    expectStepOk(await run('Raul is suspended until 2 days from now', ctx));
+    const res = await request(app)
+      .post('/api/conversations/c-does-not-matter/messages')
+      .set('Authorization', `Bearer ${tokens.get('Raul').idToken}`)
+      .send({ body: 'should never be delivered' });
+    // 403 BEFORE the route can 404 on the conversation id: suspension is
+    // enforced in middleware, so the id is never reached. If this ever
+    // returns 404 the gate has moved and the corpus assertion is wrong again.
+    expect(res.status).toBe(403);
+    expect(String(res.body.error)).toMatch(/suspend/i);
+  });
+});

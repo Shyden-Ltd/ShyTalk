@@ -53,6 +53,9 @@ const EXPECTED_COUNTS = {
   'web-mobile-firefox-android-driver': 3,
   'web-mobile-safari-ios-driver': 3,
   'web-mobile-webkit-ios-driver': 3,
+  // SHY-0259: Firebase Auth revocation checks (j04 + j11). Small by design —
+  // it reads Auth state and nothing else; UI belongs on the device drivers.
+  'firebase-admin-driver': 4,
 };
 
 /**

@@ -221,6 +221,61 @@ describe('parseJsonishPredicate', () => {
     );
   });
 
+  /**
+   * Array values — set membership, which the corpus genuinely needs.
+   *
+   * `{participantIds: [1, 50000030]}` asks "is this the conversation between
+   * these two people". The comma splitter respected quotes but not brackets,
+   * so it produced the pairs `participantIds: [1` and `50000030]`, and the
+   * second has no colon. Both j04 and j18 failed every run on this
+   * (2026-08-01, 25 occurrences across the matrix) with a parse error that
+   * named the fragment rather than the unsupported syntax.
+   *
+   * `parseValueLiteralOrArray` already existed and already handled arrays —
+   * it was simply never wired into THIS parser, which called `parseLiteral`
+   * instead. One concept, two call sites, only one of which learned.
+   */
+  test('array value is not split on its internal commas', () => {
+    expect(parseJsonishPredicate('participantIds: [1, 50000030]')).toEqual({
+      participantIds: [1, 50000030],
+    });
+  });
+
+  test('array value alongside ordinary pairs', () => {
+    expect(
+      parseJsonishPredicate('type: "direct", participantIds: [1, 2, 3], frozen: false'),
+    ).toEqual({ type: 'direct', participantIds: [1, 2, 3], frozen: false });
+  });
+
+  test('empty array', () => {
+    expect(parseJsonishPredicate('tags: []')).toEqual({ tags: [] });
+  });
+
+  test('array of quoted strings, including one containing a comma', () => {
+    expect(parseJsonishPredicate('names: ["alice", "bao, the tutor"]')).toEqual({
+      names: ['alice', 'bao, the tutor'],
+    });
+  });
+
+  test('an unresolved placeholder INSIDE an array is still reported', () => {
+    // j18 writes `participantIds: [1, {adamId}]`. Silently coercing the
+    // placeholder to the string "{adamId}" would make the assertion compare
+    // against literal braces and fail later with a confusing mismatch, so the
+    // parser must still name the missing variable.
+    expect(() => parseJsonishPredicate('participantIds: [1, {adamId}]')).toThrow(
+      /placeholder.*adamId/i,
+    );
+  });
+
+  test('a genuinely malformed pair is still rejected', () => {
+    // The bracket handling must not swallow real syntax errors.
+    expect(() => parseJsonishPredicate('participantIds [1, 2]')).toThrow(/malformed pair/);
+  });
+
+  test('an unclosed bracket is rejected rather than silently consuming the rest', () => {
+    expect(() => parseJsonishPredicate('participantIds: [1, 2, frozen: false')).toThrow();
+  });
+
   test('malformed pair (missing colon) throws', () => {
     expect(() => parseJsonishPredicate('not_a_pair')).toThrow(/no colon/i);
   });
@@ -14611,28 +14666,53 @@ describe('Wake 70 — UI shows an end date N days from now', () => {
   });
 });
 
-describe('Wake 70 — "<Name> is suspended until N days from now" (state-seed)', () => {
-  // j11-harassment-moderation-cycle.feature:67
-  //   Given Raul is suspended until 2 days from now
-  // Writes a relative-date field to users/<uniqueId>.suspendedUntil. The
-  // resolved timestamp is computed at runner time (Date.now() + N days).
-  test('writes suspendedUntil ~ N days ahead', async () => {
-    // Raul = P-08 = 50000050
+describe('"<Name> is suspended until N days from now" drives the real suspend route', () => {
+  /**
+   * THESE TESTS USED TO PIN THE BUG.
+   *
+   * The Given had its own handler writing `users/<id>.suspendedUntil`
+   * directly, and this block asserted exactly that — "writes suspendedUntil ~
+   * N days ahead" — against a fake db. It passed for months.
+   *
+   * The product has never written `suspendedUntil`. It writes `isSuspended` +
+   * `suspensionEndDate` (src/routes/admin-users.js:1117), and the middleware
+   * reads `isSuspended` (src/middleware/auth.js:158). So the Given seeded a
+   * field nothing reads: every scenario using it ran against a user the API
+   * considered perfectly active, then reported the PRODUCT as failing to
+   * enforce a suspension that had never been applied.
+   *
+   * The harness, the corpus and this test all agreed with each other and
+   * disagreed with the product — which is what mirroring a route's writes
+   * inside the harness buys you.
+   *
+   * The handler is deleted; the phrasing now routes to the Given that calls
+   * `POST /api/user/<id>/suspend` for real. What that route establishes is
+   * verified against the real emulator in
+   * tests/scripts/journey-moderation-seed-givens.test.js — a fake db cannot
+   * prove a suspension actually blocks anything.
+   */
+  test('the phrasing reaches the real route, not a Firestore write', async () => {
     const db = makeStatefulFakeDb({ 'users/50000050': {} });
     const ctx = makeCtx({ db });
-    const before = Date.now();
-    const r = await executeStep(
-      { kind: 'Given', text: 'Raul is suspended until 2 days from now' },
-      ctx,
-    );
-    const after = Date.now();
-    expect(r.ok).toBe(true);
-    const susUntil = db._docs['users/50000050'].suspendedUntil;
-    expect(susUntil).toBeGreaterThanOrEqual(before + 2 * 24 * 60 * 60 * 1000);
-    expect(susUntil).toBeLessThanOrEqual(after + 2 * 24 * 60 * 60 * 1000);
+    await executeStep({ kind: 'Given', text: 'Raul is suspended until 2 days from now' }, ctx);
+    // The mirror is gone: nothing writes this field behind the route's back.
+    expect(db._docs['users/50000050'].suspendedUntil).toBeUndefined();
   });
 
-  test('unknown persona → fail', async () => {
+  test('the phantom field appears nowhere in the runner', () => {
+    // Belt and braces on the deletion. A future edit that reintroduces the
+    // direct write reddens here by name rather than in a device run.
+    const fs = require('fs');
+    const src = fs.readFileSync(
+      path.resolve(__dirname, '../../scripts/manual-qa-runner.js'),
+      'utf8',
+    );
+    // Mentioned only in the comment recording why it was removed.
+    const writes = src.match(/suspendedUntil\s*[,:}]/g) || [];
+    expect(writes).toEqual([]);
+  });
+
+  test('unknown persona → fail, naming the persona', async () => {
     const db = makeStatefulFakeDb({});
     const ctx = makeCtx({ db });
     const r = await executeStep(
@@ -14641,16 +14721,6 @@ describe('Wake 70 — "<Name> is suspended until N days from now" (state-seed)',
     );
     expect(r.ok).toBe(false);
     expect(r.error).toMatch(/Zzzghost/);
-  });
-
-  test('no db → fail', async () => {
-    const ctx = makeCtx();
-    const r = await executeStep(
-      { kind: 'Given', text: 'Raul is suspended until 2 days from now' },
-      ctx,
-    );
-    expect(r.ok).toBe(false);
-    expect(r.error).toMatch(/db/);
   });
 });
 
@@ -14949,9 +15019,18 @@ describe('Wake 71 — predicate state-seed "has been warned but not suspended"',
   // suspendedUntil=0 (or absent). Tests the transition state — warning
   // exists, suspension does not. Conjunction is part of the assertion
   // intent so we set BOTH fields, not just one.
-  test('writes hasActiveWarning=true and clears suspendedUntil', async () => {
+  test('writes hasActiveWarning=true and clears the REAL suspension fields', async () => {
+    // Was: asserted `suspendedUntil` went to 0. That field is a phantom — the
+    // product writes `isSuspended` + `suspensionEndDate` and the middleware
+    // reads `isSuspended`. Zeroing the phantom meant "not suspended" asserted
+    // nothing: a leftover real suspension from an earlier scenario survived
+    // untouched into a scenario whose entire premise is that it is absent.
     const db = makeStatefulFakeDb({
-      'users/50000050': { hasActiveWarning: false, suspendedUntil: 999999999 },
+      'users/50000050': {
+        hasActiveWarning: false,
+        isSuspended: true,
+        suspensionEndDate: 999999999,
+      },
     });
     const ctx = makeCtx({ db });
     const r = await executeStep(
@@ -14959,8 +15038,14 @@ describe('Wake 71 — predicate state-seed "has been warned but not suspended"',
       ctx,
     );
     expect(r.ok).toBe(true);
-    expect(db._docs['users/50000050'].hasActiveWarning).toBe(true);
-    expect(db._docs['users/50000050'].suspendedUntil).toBe(0);
+    const user = db._docs['users/50000050'];
+    expect(user.hasActiveWarning).toBe(true);
+    expect(user.isSuspended).toBe(false);
+    expect(user.suspensionEndDate).toBeNull();
+    // The phantom must not be written alongside the real fields — doing both
+    // would look green here while still teaching the next author the wrong
+    // field name.
+    expect(user.suspendedUntil).toBeUndefined();
   });
 
   test('unknown persona → fail', async () => {
