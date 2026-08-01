@@ -81,7 +81,11 @@ async function recordEventGift({ roomId, senderId, giftId, coinValue, beanReward
  * person — a summary that changes between two reads is not a summary.
  */
 async function summariseEvent(eventId) {
-  const snap = await db.collection(`events/${eventId}/giftLedger`).get();
+  const [snap, eventSnap] = await Promise.all([
+    db.collection(`events/${eventId}/giftLedger`).get(),
+    db.doc(`events/${eventId}`).get(),
+  ]);
+  const roster = eventSnap.exists ? eventSnap.data().roster || [] : [];
 
   let coinTotal = 0;
   let beanTotal = 0;
@@ -106,6 +110,35 @@ async function summariseEvent(eventId) {
     }
   }
 
+  // Per-performer, because one total tells the host what the night made and
+  // tells each performer nothing about what THEY earned — which is the silence
+  // this whole feature exists to end.
+  //
+  // Seeded from the roster first so a performer who earned nothing appears at
+  // ZERO rather than being absent. Absent and zero are different facts, and
+  // someone who performed to a quiet room should see that they earned nothing
+  // rather than wonder whether the page is broken.
+  const perPerformer = new Map();
+  for (const id of roster) {
+    perPerformer.set(id, { uniqueId: id, giftCount: 0, coinTotal: 0, beanTotal: 0 });
+  }
+  for (const doc of snap.docs) {
+    const entry = doc.data();
+    // Unattributed gifts belong to the event, not to a performance, so they are
+    // excluded from the per-performer split.
+    if (entry.unattributed) continue;
+    const row = perPerformer.get(entry.recipientId) || {
+      uniqueId: entry.recipientId,
+      giftCount: 0,
+      coinTotal: 0,
+      beanTotal: 0,
+    };
+    row.giftCount += 1;
+    row.coinTotal += Number(entry.coinValue) || 0;
+    row.beanTotal += Number(entry.beanReward) || 0;
+    perPerformer.set(entry.recipientId, row);
+  }
+
   return {
     eventId,
     giftCount: snap.size,
@@ -113,6 +146,7 @@ async function summariseEvent(eventId) {
     beanTotal,
     topContributorId,
     topContributorCoins: topContributorId ? topSpend : 0,
+    perPerformer: [...perPerformer.values()],
   };
 }
 

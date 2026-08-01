@@ -496,5 +496,64 @@ router.get('/events/:eventId/summary', async (req, res) => {
   }
 });
 
+/**
+ * Close the event.
+ *
+ * The ROOM closes with it. A room left open after its event ends is a room
+ * nobody owns — the host has gone and the audience is still sitting in it.
+ *
+ * THE SUMMARY IS FROZEN ONTO THE EVENT. The ledger could always be re-read, but
+ * a summary that recomputes can change after the fact, and a performer who was
+ * told they earned 255 must still see 255 tomorrow.
+ */
+router.post('/events/:eventId/close', async (req, res) => {
+  try {
+    const uniqueId = req.auth.uniqueId;
+    const { eventId } = req.params;
+
+    const snap = await db.doc(`events/${eventId}`).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Event not found' });
+    const event = snap.data();
+
+    if (event.hostId !== uniqueId) {
+      return res.status(403).json({ error: 'Only the host can close this event' });
+    }
+    // Already closed: idempotent. A host tapping "End event" twice on a slow
+    // connection has not done anything wrong.
+    if (event.state === STATE.CLOSED) {
+      return res.json({ ok: true, summary: event.finalSummary || null });
+    }
+
+    const summary = await summariseEvent(eventId);
+
+    if (event.roomId) {
+      const roomRef = db.doc(`rooms/${event.roomId}`);
+      const roomSnap = await roomRef.get();
+      if (roomSnap.exists) {
+        const seats = Object.fromEntries(
+          Object.keys(roomSnap.data().seats || {}).map((i) => [
+            i,
+            { userId: null, state: 'EMPTY', isMuted: false },
+          ]),
+        );
+        await roomRef.update({ state: 'CLOSED', closedAt: Date.now(), seats });
+      }
+    }
+
+    await db.doc(`events/${eventId}`).update({
+      state: STATE.CLOSED,
+      currentPerformerId: null,
+      closedAt: new Date().toISOString(),
+      finalSummary: summary,
+    });
+
+    log.info('events', 'event closed', { eventId, gifts: summary.giftCount });
+    res.json({ ok: true, summary });
+  } catch (err) {
+    log.error('events', 'close failed', { error: err.message });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;
 module.exports.STATE = STATE;
