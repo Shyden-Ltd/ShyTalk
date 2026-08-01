@@ -1,8 +1,10 @@
 /* eslint-disable no-console -- driver methods log diagnostics for the
    manual QA runner (operator-facing CLI), not application code. */
-/* eslint-disable sonarjs/no-os-command-from-path -- `adb` is the Android
-   Debug Bridge CLI; resolving via PATH is the standard pattern.
-   Operator-installed; not user input. */
+/* The `sonarjs/no-os-command-from-path` suppression that used to sit here is
+   gone, and its absence is the point: every invocation now goes through
+   `execFileSync(resolveAdbPath(), argv)` — an absolute path, no PATH search,
+   and no shell. The rule no longer fires because the condition it warns about
+   no longer exists. */
 /**
  * Android driver backed by `adb` (shell + uiautomator).
  *
@@ -33,9 +35,11 @@
  * navigation registry. For now, methods log "not implemented" and the
  * runner surfaces a finding listing the matcher and the missing call.
  */
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const { dumpWithRetry, resolveDumpBackoffMs } = require('./ui-dump-retry');
 const { withDeviceLock } = require('./device-lock');
+const { resolveAdbPath } = require('./android-cdp-helpers');
+const { quoteAdbArgs, deviceShellArg } = require('./device-shell');
 const { createSubmitClock } = require('./render-timing');
 const { execBounds, describeExecFailure, DEFAULT_ADB_TIMEOUT_MS } = require('./device-io-timeout');
 const {
@@ -51,9 +55,11 @@ const {
 function selectSerial(preferredSerial) {
   let devices;
   try {
-    // is the Android Debug Bridge CLI; resolving it via PATH is the
-    // standard pattern. Operator-installed; not user-supplied input.
-    devices = execSync('adb devices', { encoding: 'utf8' });
+    // execFileSync + resolved path: no shell, and no PATH search. There is no
+    // user input here, but leaving one shell behind invites the next call to
+    // be added the same way — and this one was also unbounded, so a wedged
+    // adb server hung driver construction before a single scenario ran.
+    devices = execFileSync(resolveAdbPath(), ['devices'], execBounds({ timeoutMs: 15000 }));
   } catch (_e) {
     return null;
   }
@@ -268,17 +274,39 @@ async function createAndroidDriver({ serial: preferred } = {}) {
    * unbounded one loses the whole cell, and with it every scenario the cell
    * never reached.
    *
-   * NOTE: the command is still assembled as a shell string with manual
-   * single-quoting (see `escapeInputText`, which exists because free-form user
-   * text reaches here). Moving to execFileSync with an argument array would
-   * remove the shell entirely — worth doing, but it changes the quoting
-   * contract for every caller that passes text and so needs a device run to
-   * verify. Out of scope for this timeout fix.
+   * NO HOST SHELL. `execFileSync` with an argument array — nothing is
+   * interpolated into a command line, so no host-side metacharacter can be
+   * interpreted, and free-form user text needs no host-side escaping at all.
+   *
+   * THERE ARE TWO SHELLS, AND ONLY ONE OF THEM GOES AWAY.
+   *
+   * `adb shell X Y Z` does not pass X Y Z as argv. adb JOINS them with spaces
+   * and hands the result to `/system/bin/sh` ON THE DEVICE. So removing the
+   * host shell leaves the device shell parsing everything after `shell`.
+   *
+   * The previous code escaped apostrophes for the HOST shell and stopped
+   * there. The host shell then consumed that escaping, and the device shell
+   * received a bare apostrophe. Verified against the connected device on
+   * 2026-08-01:
+   *
+   *   adb -s … shell echo 'Selma'\''s%sroom'
+   *   → /system/bin/sh: no closing quote
+   *
+   * So `androidTypeText("Selma's room")` — and every journey step typing a
+   * name with an apostrophe — was already failing, and the comment claiming
+   * to have fixed exactly that case was describing the wrong shell.
+   *
+   * Quoting therefore MOVES to the device side, applied here rather than at
+   * 25 call sites so a new one cannot forget. Round-tripped against the real
+   * device for apostrophes, spaces, `$HOME`, backticks, pipes and semicolons.
    */
+  const ADB_PATH = resolveAdbPath();
+
   function adb(args, { timeoutMs = DEFAULT_ADB_TIMEOUT_MS } = {}) {
-    const cmd = ['adb', '-s', serial, ...args].map((a) => `'${a}'`).join(' ');
+    // Only the words after `shell` reach the device shell — see device-shell.js.
+    const argv = quoteAdbArgs(args);
     try {
-      return execSync(cmd, execBounds({ timeoutMs }));
+      return execFileSync(ADB_PATH, ['-s', serial, ...argv], execBounds({ timeoutMs }));
     } catch (e) {
       throw describeExecFailure(e, {
         label: `android-driver ${serial}`,
@@ -288,6 +316,7 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     }
   }
   driver.adb = adb;
+  driver._deviceShellArg = deviceShellArg;
 
   // Wire reverse port-forwards so wireless devices can reach
   // laptop-hosted local services (Express API, Firebase emulators,
@@ -935,8 +964,8 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // Text encoding: adb's `shell input text` splits on spaces by
   // default (each arg becomes a separate command). The standard
   // workaround is to encode spaces as `%s`. Non-space chars pass
-  // through literally — no shell interpretation because adb()
-  // single-quotes every arg.
+  // through literally: adb() quotes each argument for the DEVICE
+  // shell, and there is no host shell any more.
   const SEARCH_FIELD_TAGS = { messages: 'newMessage_searchField' };
   const DEFAULT_SEARCH_FIELD_TAG = 'newMessage_searchField';
   driver.androidSearchIn = async (screen, text) => {
@@ -954,28 +983,21 @@ async function createAndroidDriver({ serial: preferred } = {}) {
     const tapped = await driver.androidTapByTag(tag);
     if (!tapped) return false;
     try {
-      // Round 1 C-1: text is the first USER-CONTROLLED free-form
-      // string reaching adb() in the cluster. Prior methods passed
-      // only known-safe values (numeric coords, alphanumeric tags).
-      // adb() wraps each arg in single quotes; a single quote in
-      // `text` (e.g. "O'Brien", "can't") would produce unbalanced
-      // quotes and shell misparse.
+      // `text` is USER-CONTROLLED free-form input — "O'Brien", "can't".
       //
-      // POSIX escape: replace ' with '\'' (close quote + escaped
-      // literal quote + reopen quote). Inside the surrounding
-      // single quotes that adb() adds, this round-trips correctly —
-      // the device receives the literal text.
+      // This used to carry its OWN copy of the escaping (POSIX-escape the
+      // apostrophe, then encode spaces) rather than calling the shared
+      // helper. Two implementations of one rule is how they drift, and both
+      // were escaping for the HOST shell, which `adb()` no longer uses:
+      // quoting now happens on the DEVICE side, where the only remaining
+      // shell is. Escaping here as well would double-escape and type the
+      // escape sequence into the search box.
       //
-      // KNOWN LIMITATION (Round 1 I-1): the literal sequence `%s` in
-      // `text` is indistinguishable from an encoded space on the
-      // device side — adb's `input text` decodes `%s` as a literal
-      // space and has no `%%`-style escape. Searching for a string
-      // containing `%s` will yield spaces at those positions. Not
-      // fixable without a different keyboard-driver primitive
-      // (e.g. uiautomator setText via UI Automator API) — separate PR.
-      const quoteEscaped = text.replace(/'/g, "'\\''");
-      const spaceEncoded = quoteEscaped.replace(/ /g, '%s');
-      adb(['shell', 'input', 'text', spaceEncoded]);
+      // KNOWN LIMITATION (unchanged): a literal `%s` in `text` is
+      // indistinguishable from an encoded space — `input text` has no
+      // `%%`-style escape. Not fixable without a different keyboard-driver
+      // primitive (uiautomator setText via the UI Automator API).
+      adb(['shell', 'input', 'text', escapeInputText(text)]);
       return true;
     } catch (e) {
       console.error(
@@ -1568,11 +1590,11 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // tap submit) is deferred until per-element testTags exist. The (name,
   // stars, feedback) args are accepted-and-ignored.
   //
-  // Shell-escape note: when the real action ships, the `feedback` text
-  // MUST POSIX-escape `'` before any adb-shell interpolation (per the
-  // pattern fixed in PR #741 for free-form-text driver methods). The
-  // foundation does not call adb with free-form text, so the
-  // shell-injection surface is currently empty.
+  // Shell-escape note: when the real action ships, `feedback` goes through
+  // `adb()` like any other text — it quotes for the device shell itself, so
+  // no call-site escaping is needed (or wanted: a second layer would type
+  // the escape sequence). The foundation does not call adb with free-form
+  // text, so the injection surface is currently empty either way.
   driver.androidSubmitStarFeedback = async (_name, _stars, _feedback) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;
@@ -3045,9 +3067,10 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   /**
    * Type free text into whatever holds focus.
    *
-   * `adb()` wraps every argument in single quotes, so an apostrophe in user
-   * text would close the quote and hand the rest to the shell. POSIX-escape it
-   * first. Spaces become %s because `input text` splits on them.
+   * Only the space encoding is applied here — `input text` splits on spaces
+   * and decodes `%s` back to one. Shell quoting is NOT this function's job:
+   * `adb()` quotes for the device shell, which is the only shell left now
+   * that the host one is gone.
    */
   driver.androidTypeText = async (text) => {
     if (text === undefined || text === null) return false;
@@ -3339,7 +3362,12 @@ async function createAndroidDriver({ serial: preferred } = {}) {
 
   async function deviceCurl(method, url, body) {
     const parts = ['shell', 'curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', '-X', method];
-    if (body) parts.push('-H', 'Content-Type: application/json', '-d', escapeInputText(body));
+    // The body goes through UNCHANGED. It used to be passed through
+    // `escapeInputText`, which encodes spaces as `%s` — that is a property of
+    // `adb shell input text`, not of curl, so `{"a": 1}` was being sent as
+    // `{"a":%s1}` and the API received invalid JSON. `adb()` quotes it for the
+    // device shell, which is all this needs.
+    if (body) parts.push('-H', 'Content-Type: application/json', '-d', String(body));
     parts.push(url);
     try {
       const out = adb(parts);

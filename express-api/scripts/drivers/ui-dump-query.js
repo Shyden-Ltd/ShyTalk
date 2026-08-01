@@ -103,14 +103,30 @@ function hasEditableField(dump) {
 }
 
 /**
- * Escape free text for `adb shell input text`.
+ * Encode free text for `adb shell input text`.
  *
- * The driver's adb() helper wraps every argument in single quotes, so an
- * apostrophe in user text closes the quote and hands the rest to the shell.
- * Spaces are encoded because `input text` splits on them.
+ * ONLY the space encoding. `input text` splits its argument on spaces, and
+ * `%s` is the encoding it decodes back to one — a property of the Android
+ * `input` command itself, independent of any shell.
+ *
+ * IT NO LONGER ESCAPES APOSTROPHES, and the escaping it used to do never
+ * worked. It escaped for the HOST shell (`'` → `'\''`), but `adb shell X Y Z`
+ * does not pass X Y Z as argv: adb joins them and hands the result to
+ * `/system/bin/sh` ON THE DEVICE. The host shell consumed the escaping and
+ * the device shell then received a bare apostrophe. Verified against the
+ * connected device on 2026-08-01:
+ *
+ *   adb -s … shell echo 'Selma'\''s%sroom'  →  /system/bin/sh: no closing quote
+ *
+ * Quoting now happens on the DEVICE side, in the driver's `adb()` helper,
+ * which is the only place that knows which arguments reach a device shell.
+ * Doing it here as well would double-escape and type the escape sequence.
+ *
+ * KNOWN LIMITATION (unchanged): a literal `%s` in the text is
+ * indistinguishable from an encoded space — `input text` has no `%%` escape.
  */
 function escapeInputText(text) {
-  return String(text).replace(/'/g, `'\\''`).replace(/ /g, '%s');
+  return String(text).replace(/ /g, '%s');
 }
 
 module.exports = {

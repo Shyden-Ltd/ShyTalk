@@ -32,7 +32,38 @@
 
 jest.mock('child_process');
 
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
+
+/**
+ * The driver calls `execFileSync(adbPath, argv)` — no host shell (SHY-0259).
+ *
+ * These tests were written against a single command STRING, and that string
+ * is still exactly what reaches the device: `quoteAdbArgs` quotes each word
+ * after `shell`, so joining the argv reproduces the same `'input' 'tap'`
+ * shape the assertions below look for. So the calls are adapted rather than
+ * the assertions rewritten — the adapter derives the string from the REAL
+ * argv, it does not model it.
+ */
+/**
+ * Render a call as the command line it represents.
+ *
+ * The adb PATH is normalised to `adb`: where the binary lives is an
+ * implementation detail (resolveAdbPath walks known install locations), not
+ * part of what is being invoked, and pinning an absolute path would make
+ * these tests fail on a machine with a different Android SDK layout.
+ */
+const asCommand = (file, args) => [String(file).split('/').pop(), ...(args || [])].join(' ');
+
+const execSync = {
+  mockImplementation: (responder) =>
+    execFileSync.mockImplementation((file, args) => responder(asCommand(file, args))),
+  mockClear: () => execFileSync.mockClear(),
+  get mock() {
+    return {
+      calls: execFileSync.mock.calls.map((c) => [asCommand(c[0], c[1]), c[2]]),
+    };
+  },
+};
 const path = require('path');
 
 const REPO_ROOT = path.resolve(__dirname, '../../../..');
@@ -16043,10 +16074,14 @@ describe('android-adb-driver — androidNetworkDropFor', () => {
     jest.useRealTimers();
   });
 
-  const WIFI_DISABLE = "'adb' '-s' 'emulator-5554' 'shell' 'svc' 'wifi' 'disable'";
-  const DATA_DISABLE = "'adb' '-s' 'emulator-5554' 'shell' 'svc' 'data' 'disable'";
-  const WIFI_ENABLE = "'adb' '-s' 'emulator-5554' 'shell' 'svc' 'wifi' 'enable'";
-  const DATA_ENABLE = "'adb' '-s' 'emulator-5554' 'shell' 'svc' 'data' 'enable'";
+  // SHY-0259: `adb`, `-s` and the serial are argv — never shell-parsed — so
+  // they are no longer quoted. Only the words after `shell`, which the DEVICE
+  // shell parses, carry quotes. The old form quoted everything because the
+  // whole line went through a host shell that no longer exists.
+  const WIFI_DISABLE = "adb -s emulator-5554 shell 'svc' 'wifi' 'disable'";
+  const DATA_DISABLE = "adb -s emulator-5554 shell 'svc' 'data' 'disable'";
+  const WIFI_ENABLE = "adb -s emulator-5554 shell 'svc' 'wifi' 'enable'";
+  const DATA_ENABLE = "adb -s emulator-5554 shell 'svc' 'data' 'enable'";
 
   test('issues svc-disable + svc-enable for both wifi + data', async () => {
     mockExec({});

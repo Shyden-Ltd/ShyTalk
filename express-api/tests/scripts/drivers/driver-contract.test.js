@@ -50,6 +50,7 @@ const HELPER_FILES = new Set([
   'web-common-methods.js', // SHY-0259: shared web surface mixin, applied BY drivers
   'render-timing.js', // SHY-0259: submit→render clock, shared by both device drivers
   'device-io-timeout.js', // SHY-0259: I/O bounds shared by every device driver
+  'device-shell.js', // SHY-0259: device-shell quoting; pure, so it is unit-testable without a phone
 ]);
 
 function discoverDrivers() {

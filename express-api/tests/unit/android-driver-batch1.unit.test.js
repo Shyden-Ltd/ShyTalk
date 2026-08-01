@@ -129,30 +129,56 @@ describe('centreOf — where a tap actually lands', () => {
     expect(dumpHas(null, 'x')).toBe(false);
   });
 
-  it('escapes free text for adb, apostrophes and all', () => {
-    expect(escapeInputText("Selma's room")).toBe(`Selma'\\''s%sroom`);
+  it('encodes spaces for `input text` and touches nothing else', () => {
+    // It used to POSIX-escape apostrophes too, and this test asserted that.
+    // The escaping was for the HOST shell, which adb() no longer uses — and
+    // it never reached the DEVICE shell, so "Selma's room" failed on the
+    // phone with `/system/bin/sh: no closing quote` while this test was
+    // green. Quoting now lives in device-shell.js; doing it here as well
+    // would double-escape and type the escape sequence.
+    expect(escapeInputText("Selma's room")).toBe("Selma's%sroom");
     expect(escapeInputText('hello world')).toBe('hello%sworld');
     expect(escapeInputText('plain')).toBe('plain');
   });
 });
 
-describe('androidTypeText escaping — the shell-injection trap', () => {
-  // adb() wraps every argument in single quotes, so an apostrophe in user text
-  // closes the quote and hands the remainder to the shell. This is the exact
-  // pattern flagged in the driver-method conventions.
-  const escape = (t) => String(t).replace(/'/g, `'\\''`).replace(/ /g, '%s');
+describe('androidTypeText — text reaches the device intact', () => {
+  /**
+   * THIS BLOCK USED TO TEST ITS OWN COPY OF THE LOGIC.
+   *
+   *   const escape = (t) => String(t).replace(/'/g, `'\\''`).replace(/ /g, '%s');
+   *
+   * It defined the rule locally and asserted on that, so it passed no matter
+   * what the driver did — and the driver was broken: the escaping targeted
+   * the HOST shell, while `adb shell` hands everything to a shell ON THE
+   * DEVICE. Verified 2026-08-01 against the connected phone,
+   * `/system/bin/sh: no closing quote`.
+   *
+   * Now it calls the real functions, composed the way production composes
+   * them, so a regression in either one fails here.
+   */
+  const { escapeInputText: encode } = require('../../scripts/drivers/ui-dump-query');
+  const { deviceShellArg } = require('../../scripts/drivers/device-shell');
 
-  it("neutralises an apostrophe so it cannot escape adb's quoting", () => {
-    expect(escape("Selma's room")).toBe(`Selma'\\''s%sroom`);
-    expect(escape("Selma's room")).not.toMatch(/[^\\]'[a-z ]*$/);
+  /** Exactly what the driver builds for `adb shell input text <arg>`. */
+  const asDriverSends = (t) => deviceShellArg(encode(t));
+
+  it('quotes the apostrophe that used to break the device shell', () => {
+    expect(asDriverSends("Selma's room")).toBe(`'Selma'\\''s%sroom'`);
   });
 
   it('encodes spaces, which `input text` would otherwise split on', () => {
-    expect(escape('hello world')).toBe('hello%sworld');
+    expect(asDriverSends('hello world')).toBe("'hello%sworld'");
   });
 
-  it('leaves ordinary text untouched', () => {
-    expect(escape('hello')).toBe('hello');
+  it('leaves ordinary text untouched apart from the quoting', () => {
+    expect(asDriverSends('hello')).toBe("'hello'");
+  });
+
+  it('does not double-escape — the escape sequence must not be typed', () => {
+    // If encode() started escaping apostrophes again, the user would see
+    // literal backslashes and quotes appear in the field.
+    expect(encode("it's")).toBe("it's");
   });
 });
 
