@@ -56,6 +56,7 @@
  */
 
 const fs = require('fs');
+const { posixShellArg } = require('../../scripts/drivers/device-shell');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
@@ -160,7 +161,10 @@ function classifyFiles(yamlText, files) {
   // production variable that doesn't exist.
   const flagsInit =
     'ANDROID_APP=false IOS_APP=false APP=false BACKEND=false WEB=false INTEGRATION=false OTHER=false';
-  const fileList = files.map((f) => `'${f.replace(/'/g, "'\\''")}'`).join(' ');
+  // Shared POSIX quoting, not a local copy — see device-shell.js. Two copies
+  // of one escaping rule is how they drift, and both copies end up wrong in
+  // the same way (that is exactly what happened to the adb driver).
+  const fileList = files.map(posixShellArg).join(' ');
   const script = `
 set -e
 ${flagsInit}

@@ -45,9 +45,20 @@
  * @param {unknown} arg
  * @returns {string} a single shell word
  */
-function deviceShellArg(arg) {
+function posixShellArg(arg) {
   return `'${String(arg).replace(/'/g, `'\\''`)}'`;
 }
+
+/**
+ * The same rule, named for the caller that needs it most.
+ *
+ * Kept as an alias rather than a second implementation: CI-script tests
+ * quote file lists for a HOST shell with the identical idiom, and two copies
+ * of one escaping rule is how they drift — which is exactly what happened
+ * between `escapeInputText` and `androidSearchIn`, where both copies were
+ * wrong in the same way.
+ */
+const deviceShellArg = posixShellArg;
 
 /**
  * Quote the arguments of an adb invocation, but ONLY the ones a device shell
@@ -66,4 +77,4 @@ function quoteAdbArgs(args) {
   return ['shell', ...args.slice(1).map(deviceShellArg)];
 }
 
-module.exports = { deviceShellArg, quoteAdbArgs };
+module.exports = { deviceShellArg, posixShellArg, quoteAdbArgs };
