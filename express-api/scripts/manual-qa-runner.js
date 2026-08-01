@@ -13875,7 +13875,16 @@ const matchers = [
       if (!driver?.[methodName]) {
         return { ok: false, error: `${driverName}.${methodName} not configured` };
       }
-      const ok = await driver[methodName](viewer, target, displayName);
+      // The result row is tagged with the target's uniqueId; a persona NAME
+      // cannot identify it (display names are neither unique nor stable).
+      const found = loadPersonas().get(target);
+      if (!found?.uniqueId) {
+        return {
+          ok: false,
+          error: `persona "${target}" not in registry — cannot identify their result row`,
+        };
+      }
+      const ok = await driver[methodName](viewer, found.uniqueId, displayName);
       if (!ok) {
         return {
           ok: false,

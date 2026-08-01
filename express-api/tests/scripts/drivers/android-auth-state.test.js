@@ -290,3 +290,62 @@ describe('private-chat assertions check messages, not the input box', () => {
     }
   });
 });
+
+/**
+ * `androidShowsInResults` must name the person it is looking for.
+ *
+ * It was `(_name, _query, _target) => /searchResults_/.test(dump)` — a check
+ * for a container the product does not render at all. So it could only ever
+ * return false: every "shows X in the results" step failed, blaming the app for
+ * a search that had actually worked.
+ *
+ * NewMessageScreen now tags each row `newMessage_result_<uniqueId>`.
+ */
+describe('androidShowsInResults — names its subject', () => {
+  const { createAndroidDriver } = require('../../../scripts/drivers/android-adb-driver');
+  const row = (id, name) =>
+    `<node resource-id="com.x:id/newMessage_result_${id}" text="${name || ''}" bounds="[0,0][9,9]" />`;
+  const withDump = (dump) =>
+    createAndroidDriver({ serial: 'test' }).then((d) => {
+      d.androidUiDump = async () => dump;
+      return d;
+    });
+
+  test('true when the target is in the results', async () => {
+    const d = await withDump(row('50000010', 'Alice'));
+    expect(await d.androidShowsInResults('Adam', '50000010', null)).toBe(true);
+  });
+
+  test('FALSE when the search returned someone else', async () => {
+    // The case the old version could not distinguish, because it never looked
+    // at who was in the list.
+    const d = await withDump(row('50000099', 'Vexa'));
+    expect(await d.androidShowsInResults('Adam', '50000010', null)).toBe(false);
+  });
+
+  test('FALSE when the results are empty', async () => {
+    const d = await withDump('<node resource-id="com.x:id/newMessage_searchField" />');
+    expect(await d.androidShowsInResults('Adam', '50000010', null)).toBe(false);
+  });
+
+  test('a displayName in the step is asserted, not decoration', async () => {
+    // A search that finds the right uid but renders a stale or blank name is a
+    // real defect, and the step says so — so it must fail.
+    const rightIdBlankName = await withDump(row('50000010', ''));
+    expect(await rightIdBlankName.androidShowsInResults('Adam', '50000010', 'Alice')).toBe(false);
+    const rightIdRightName = await withDump(row('50000010', 'Alice'));
+    expect(await rightIdRightName.androidShowsInResults('Adam', '50000010', 'Alice')).toBe(true);
+  });
+
+  test('a shorter id does not satisfy a longer one', async () => {
+    const d = await withDump(row('5000001', 'Alice'));
+    expect(await d.androidShowsInResults('Adam', '50000010', null)).toBe(false);
+  });
+
+  test('no target is refused rather than passing vacuously', async () => {
+    const d = await withDump(row('50000010', 'Alice'));
+    for (const bad of [undefined, null, '']) {
+      expect(await d.androidShowsInResults('Adam', bad, null)).toBe(false);
+    }
+  });
+});

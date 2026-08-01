@@ -1977,45 +1977,32 @@ async function createAndroidDriver({ serial: preferred } = {}) {
   // Per-user verification needs user-id → testTag map. Per-displayName
   // verification needs text-extraction. Both deferred. All 3 args
   // (_viewer, _target, _displayName) accepted-and-ignored.
-  driver.androidShowsInResults = async (_viewer, _target, _displayName) => {
+  driver.androidShowsInResults = async (_viewer, targetUniqueId, displayName) => {
+    // WAS: `async (_name, _query, _target) => /searchResults_/.test(dump)` —
+    // a check for a container that the product does not even render. It could
+    // only ever return false, so every "shows X in the results" step failed and
+    // blamed the app for a search that had worked.
+    //
+    // NewMessageScreen now tags each row `newMessage_result_<uniqueId>`, so the
+    // assertion can name the person it is looking for.
+    if (targetUniqueId === undefined || targetUniqueId === null || targetUniqueId === '') {
+      return false;
+    }
     const dump = await driver.androidUiDump();
     if (!dump) return false;
-
-    const tagRx = /<node[^>]*resource-id="(?:[^"]*:id\/)?searchResults_[^"]*"[^>]*\/?>/;
-    return tagRx.test(dump);
+    const esc = String(targetUniqueId).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Closing quote anchored: result_5000001 must not answer for result_50000010.
+    const row = new RegExp(`resource-id="(?:[^"]*:id\\/)?newMessage_result_${esc}"`);
+    if (!row.test(dump)) return false;
+    // When the step names the displayName it is asserting the row RENDERS it —
+    // a search that finds the right uid but shows a stale or blank name is a
+    // real defect, and the step says so.
+    if (displayName) {
+      const escName = String(displayName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (!new RegExp(`(?:text|content-desc)="[^"]*${escName}[^"]*"`).test(dump)) return false;
+    }
+    return true;
   };
-
-  // Wake 69/71 — `<Name>'s <Plat> UI shows the <noun> <kind>` (positive)
-  // and `... no longer shows ...` (negative; runner inverts assertion).
-  // Generic noun+kind matcher. Driver receives `(name, noun, kind)`.
-  // kind ∈ {button|screen|banner|dialog|panel|tab}.
-  //
-  // Foundation strategy: 7th *_TAGS scaffold (NOUN_KIND_TAGS) keyed by
-  // lowercase `${noun}::${kind}` composite → Compose testTag (exact
-  // match, NOT prefix). ONE mapping currently grounded (j11:86):
-  //
-  //   'appeal::button' → 'suspension_submitAppealButton'
-  //     (SuspensionScreen.kt:251 — user-side appeal flow)
-  //
-  // Unmapped composites return false — FAIL-loud (consistent with
-  // SURFACE_TARGET_TAGS / INPUT_TAGS scaffolds).
-  //
-  // The `_name` arg is accepted-and-ignored; `noun` and `kind` are
-  // REQUIRED (input rejection on empty/whitespace/null/undefined).
-  // Wake 89 — `<Name>'s <Plat> UI shows non-empty <Language> text for
-  // section N` (j13:36). Locale section assertion. Driver receives
-  // `(name, code, section)`.
-  //
-  // Foundation strategy: presence-check on the `localeText_*` testTag
-  // PREFIX. No `localeText_*` testTag exists in shared/src/commonMain
-  // yet — per-section locale-text testTags are unbuilt. Returns false
-  // in real journeys today; lands true when ships with
-  // localeText_section1 / localeText_section2 etc.
-  //
-  // Per-section verification needs a section-number → testTag map.
-  // Per-language verification needs text-extraction + script-category
-  // detection. Both deferred. All 3 args (_name, _code, _section)
-  // accepted-and-ignored.
   driver.androidShowsNonEmptyLocaleText = async (_name, _code, _section) => {
     const dump = await driver.androidUiDump();
     if (!dump) return false;

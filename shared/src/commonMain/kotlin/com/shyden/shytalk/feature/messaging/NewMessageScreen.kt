@@ -330,6 +330,11 @@ private fun UserSelectionRow(
     Row(
         modifier =
             Modifier
+                // Carries WHICH user this result row is for. The driver
+                // assertion "shows <Other> in the results" previously checked
+                // only that a results container existed, so it passed when the
+                // search returned the wrong person, or nobody.
+                .testTag("newMessage_result_${user.uniqueId}")
                 .fillMaxWidth()
                 .clickable(onClick = onToggle)
                 .padding(vertical = 8.dp),
