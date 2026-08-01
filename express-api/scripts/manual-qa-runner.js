@@ -17481,10 +17481,21 @@ function buildDriverFactories({ headed }) {
    * Closing is all-or-nothing for the same reason: leaking a browser because
    * the device failed is how the next run finds a port already bound.
    */
-  const both = async (u, app) => {
+  const both = async (u, ...apps) => {
     const web = await desktop(u);
+    const uis = [];
     try {
-      const ui = await app();
+      for (const app of apps) uis.push(await app());
+      // Merge the device drivers into one uiDriver. Every method is
+      // platform-prefixed (`androidX` / `iosX`) so there are no collisions —
+      // which is what makes a tri-platform cell possible at all: one ctx that
+      // can drive the Android app, the iPhone app and a browser in one journey.
+      const ui = {};
+      for (const d of uis) {
+        for (const k of Object.keys(d)) {
+          if (typeof d[k] === 'function' && !ui[k]) ui[k] = d[k].bind(d);
+        }
+      }
       return {
         webDriver: web,
         uiDriver: ui,
@@ -17492,11 +17503,14 @@ function buildDriverFactories({ headed }) {
         // browser cell rather than reporting "method not configured".
         webUiDump: (...a) => web.webUiDump(...a),
         close: async () => {
-          await Promise.allSettled([web.close(), ui.close()]);
+          await Promise.allSettled([web.close(), ...uis.map((d) => d.close())]);
         },
       };
     } catch (e) {
-      await web.close().catch(() => {});
+      // All-or-nothing: half a cross-over cell cannot run a single cross-over
+      // scenario, and leaking a browser or an Appium session because the second
+      // device failed is how the next run finds a port already bound.
+      await Promise.allSettled([web.close(), ...uis.map((d) => d.close())]);
       throw e;
     }
   };
@@ -17508,6 +17522,8 @@ function buildDriverFactories({ headed }) {
     // ── cross-over cells: a desktop browser AND a device ────────────────
     'cross-android': ({ baseURL: u }) => both(u, androidApp),
     'cross-ios': ({ baseURL: u }) => both(u, iosApp),
+    // Tri-platform: a desktop browser AND both phones, held by one cell.
+    'cross-all': ({ baseURL: u }) => both(u, androidApp, iosApp),
     chromium: ({ baseURL: u }) =>
       require('./drivers/web-playwright-driver').createWebDriver({
         baseURL: u,
@@ -18211,10 +18227,13 @@ async function main() {
   // A cell with no --browser (a manual single-cell run) has no registry entry
   // and keeps the attach-everything behaviour: there is no matrix and therefore
   // no contention, and narrowing there would break ad-hoc debugging.
-  const { isKnownCell, appDeviceFor } = require('./matrix-cells');
-  const cellAppDevice = isKnownCell(opts.browser) ? appDeviceFor(opts.browser) : undefined;
-  const mayDriveAndroid = cellAppDevice === undefined || cellAppDevice === 'android';
-  const mayDriveIos = cellAppDevice === undefined || cellAppDevice === 'ios';
+  const { isKnownCell, drivesApp } = require('./matrix-cells');
+  const known = isKnownCell(opts.browser);
+  // `cross-all` drives BOTH apps, so this is a per-device question, not a
+  // single-valued one. Asking "which device is this cell's?" could not express a
+  // cell that holds two — and 67 of the 228 corpus scenarios need exactly that.
+  const mayDriveAndroid = !known || drivesApp(opts.browser, 'android');
+  const mayDriveIos = !known || drivesApp(opts.browser, 'ios');
   if ((opts.driver === 'adb' || opts.driver === 'all') && mayDriveAndroid) {
     try {
       const { createAndroidDriver } = require('./drivers/android-adb-driver');

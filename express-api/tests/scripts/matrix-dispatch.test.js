@@ -1309,3 +1309,70 @@ describe('classifyCrashExit — main() catch classification', () => {
     expect(classifyCrashExit(e)).toEqual({ exitCode: 2, label: 'RUNNER_CRASH' });
   });
 });
+
+// ── multi-resource cells (cross-all) ──────────────────────────────────
+
+describe('a cell needing TWO devices holds both while it runs', () => {
+  /**
+   * `cross-all` drives the Android app, the iPhone app and a browser in one
+   * journey — 67 of the 228 corpus scenarios need exactly that. The parallel
+   * driver runs one worker per resource group concurrently, so without locks a
+   * cell in the android queue would run alongside the iphone queue and another
+   * cell would grab the second phone mid-handoff. That does not slow the
+   * tri-platform journey down, it corrupts it, and the failure reads as a
+   * product defect.
+   */
+  test('cross-all does not overlap with a cell on either device', async () => {
+    const active = new Set();
+    const overlaps = [];
+    const dispatchOne = async ({ browser }) => {
+      active.add(browser);
+      if (browser === 'cross-all' && active.size > 1) overlaps.push([...active]);
+      if (active.has('cross-all') && active.size > 1) overlaps.push([...active]);
+      await new Promise((r) => setTimeout(r, 5));
+      active.delete(browser);
+      return true;
+    };
+    const result = await runMatrix({
+      browsers: ['app-android', 'app-ios', 'cross-all', 'chromium'],
+      dispatchOne,
+      parallel: true,
+    });
+    expect(result.totals.pass).toBe(4);
+    // chromium is on the Mac and may legitimately overlap; the DEVICE cells
+    // must not. Assert on device cells only.
+    const deviceOverlaps = overlaps.filter((set) =>
+      set.some((b) => b === 'app-android' || b === 'app-ios'),
+    );
+    expect(deviceOverlaps).toEqual([]);
+  });
+
+  test('the Mac still runs in parallel with it — locks are per-resource, not global', async () => {
+    // Over-locking would serialise the whole matrix behind one cell and undo
+    // the parallelism the phased run depends on.
+    const started = [];
+    const release = {};
+    const dispatchOne = ({ browser }) => {
+      started.push(browser);
+      return new Promise((resolve) => {
+        release[browser] = () => resolve(true);
+      });
+    };
+    const p = runMatrix({ browsers: ['cross-all', 'chromium'], dispatchOne, parallel: true });
+    await new Promise((r) => setImmediate(r));
+    expect(started.sort()).toEqual(['chromium', 'cross-all']);
+    release['cross-all']();
+    release.chromium();
+    await p;
+  });
+
+  test('resourcesOf reports both devices for cross-all and one for the rest', () => {
+    const { resourcesOf } = require('../../scripts/matrix-dispatch');
+    expect(resourcesOf('cross-all').slice().sort()).toEqual(['android', 'iphone']);
+    expect(resourcesOf('app-android')).toEqual(['android']);
+    expect(resourcesOf('chromium')).toEqual(['mac']);
+    // An ad-hoc slug still gets the single-resource guess, so generic callers
+    // of runMatrix keep working.
+    expect(resourcesOf('some-ad-hoc-android-thing')).toEqual(['android']);
+  });
+});

@@ -64,35 +64,33 @@ describe('buildDriverFactories — exported helper', () => {
     buildDriverFactories = require(RUNNER_PATH).buildDriverFactories;
   });
 
-  test('returns an object keyed by every supported cell slug', () => {
+  test('returns an object keyed by every matrix CELL', () => {
+    // Keyed by cell, not by browser. Those used to be the same list; they are
+    // not any more. `app-android` drives the APK with no browser at all, and
+    // `cross-all` drives a browser AND both phones — neither is expressible as
+    // a browser slug, which is precisely why the cell registry exists.
+    //
+    // Asserted against CELL_SLUGS rather than a hand-written array so a new
+    // cell cannot be added to the matrix without a factory. That exact drift
+    // shipped once: the four new cells reported "fail | 0ms" on --check-drivers,
+    // 0ms being the tell that nothing was even attempted.
+    const { CELL_SLUGS } = require(path.join(REPO_ROOT, 'express-api/scripts/matrix-cells'));
     const factories = buildDriverFactories({ headed: false });
-    const expectedSlugs = [
-      'chromium',
-      'firefox',
-      'webkit',
-      'edge',
-      'mobile-chrome-android',
-      'mobile-samsung-android',
-      'mobile-edge-android',
-      'mobile-firefox-android',
-      'mobile-safari-ios',
-      'mobile-chrome-ios',
-      'mobile-firefox-ios',
-      'mobile-edge-ios',
-    ];
-    for (const slug of expectedSlugs) {
+    for (const slug of CELL_SLUGS) {
       expect(typeof factories[slug]).toBe('function');
     }
-    expect(Object.keys(factories).sort()).toEqual(expectedSlugs.sort());
+    expect(Object.keys(factories).sort()).toEqual([...CELL_SLUGS].sort());
   });
 
-  test('each factory is an arrow function expecting { baseURL }', () => {
+  test('every factory is callable with { baseURL }', () => {
+    // Arity is no longer uniform: an app cell needs no baseURL because it
+    // launches no browser, so `app-android` declares zero parameters. Pinning
+    // `fn.length === 1` would force a meaningless unused argument onto them.
+    // What matters is that each is a function the health check can call.
     const factories = buildDriverFactories({ headed: false });
     for (const [slug, fn] of Object.entries(factories)) {
-      // Factories are arrow functions: 1 declared param ({ baseURL }).
-      expect(fn.length).toBe(1);
       expect(typeof fn).toBe('function');
-      // Sanity: factory name doesn't matter, but the arity does.
+      expect(fn.length).toBeLessThanOrEqual(1);
       void slug;
     }
   });
@@ -132,16 +130,19 @@ describe('buildDriverFactories — exported helper', () => {
     jest.resetModules();
   });
 
-  test('factory count matches browser-allowlist SUPPORTED_BROWSERS', () => {
-    // Drift-catch: if a new cell is added to browser-allowlist but the
-    // factory map isn't updated, --check-drivers/--smoke would fail
-    // mid-dispatch with "no factory registered for browser slug X".
-    // Pin the contract here so the test fails immediately.
+  test('every browser in the allowlist is still reachable through some cell', () => {
+    // The old assertion compared factory keys to SUPPORTED_BROWSERS directly.
+    // That stopped being the right question once cells and browsers diverged —
+    // but the underlying worry is still valid: a supported browser that no cell
+    // launches is a browser nothing tests. Asked properly, via the registry.
+    const { MATRIX_CELLS } = require(path.join(REPO_ROOT, 'express-api/scripts/matrix-cells'));
     const { SUPPORTED_BROWSERS } = require(
       path.join(REPO_ROOT, 'express-api/scripts/browser-allowlist'),
     );
-    const factories = buildDriverFactories({ headed: false });
-    expect(Object.keys(factories).sort()).toEqual([...SUPPORTED_BROWSERS].sort());
+    const launched = new Set(MATRIX_CELLS.map((c) => c.browser).filter(Boolean));
+    for (const browser of SUPPORTED_BROWSERS) {
+      expect([...launched]).toContain(browser);
+    }
   });
 
   test('lazy require — does not load driver modules at construction time', () => {

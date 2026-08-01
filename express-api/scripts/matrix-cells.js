@@ -33,13 +33,17 @@
  * So the two questions get two fields, and neither is derived from a string
  * suffix ever again:
  *
- *   resource   — the physical thing this cell contends for (serialisation)
- *   appDevice  — the device whose NATIVE APP this cell drives (null = none)
+ *   resources  — the physical things this cell contends for (serialisation)
+ *   appDevices — the devices whose NATIVE APP this cell drives ([] = none)
+ *
+ * Both are LISTS because a cell can legitimately need more than one device:
+ * `cross-all` drives the Android app, the iOS app and a desktop browser in one
+ * journey, and 67 of the 228 corpus scenarios need exactly that.
  *
  * THE CELL TAXONOMY THAT FALLS OUT OF IT (operator's three lists):
  *
- *   app    — appDevice set, no browser. The APK alone.
- *   web    — browser set, no appDevice. A browser alone, wherever it runs.
+ *   app    — appDevices set, no browser. The APK alone.
+ *   web    — browser set, no appDevices. A browser alone, wherever it runs.
  *   cross  — both. ONE cell holding two surfaces, which is the only way a
  *            "send a gift on the phone, see it on the web" journey can run.
  *
@@ -60,56 +64,81 @@ const CHROMIUM = 'chromium';
  */
 const MATRIX_CELLS = [
   // ── app: the native app, alone ──────────────────────────────────────────
-  { cell: 'app-android', browser: null, appDevice: 'android', resource: 'android' },
-  { cell: 'app-ios', browser: null, appDevice: 'ios', resource: 'iphone' },
+  { cell: 'app-android', browser: null, appDevices: ['android'], resources: ['android'] },
+  { cell: 'app-ios', browser: null, appDevices: ['ios'], resources: ['iphone'] },
 
   // ── web: a browser, alone ───────────────────────────────────────────────
-  { cell: 'chromium', browser: 'chromium', appDevice: null, resource: 'mac' },
-  { cell: 'firefox', browser: 'firefox', appDevice: null, resource: 'mac' },
-  { cell: 'webkit', browser: 'webkit', appDevice: null, resource: 'mac' },
-  { cell: 'edge', browser: 'edge', appDevice: null, resource: 'mac' },
+  { cell: 'chromium', browser: 'chromium', appDevices: [], resources: ['mac'] },
+  { cell: 'firefox', browser: 'firefox', appDevices: [], resources: ['mac'] },
+  { cell: 'webkit', browser: 'webkit', appDevices: [], resources: ['mac'] },
+  { cell: 'edge', browser: 'edge', appDevices: [], resources: ['mac'] },
   // These run ON the phone (CDP-over-adb) so they contend for it — but they
   // drive a browser, not the APK. That distinction is the whole point.
   {
     cell: 'mobile-chrome-android',
     browser: 'mobile-chrome-android',
-    appDevice: null,
-    resource: 'android',
+    appDevices: [],
+    resources: ['android'],
   },
   {
     cell: 'mobile-samsung-android',
     browser: 'mobile-samsung-android',
-    appDevice: null,
-    resource: 'android',
+    appDevices: [],
+    resources: ['android'],
   },
   {
     cell: 'mobile-edge-android',
     browser: 'mobile-edge-android',
-    appDevice: null,
-    resource: 'android',
+    appDevices: [],
+    resources: ['android'],
   },
   {
     cell: 'mobile-firefox-android',
     browser: 'mobile-firefox-android',
-    appDevice: null,
-    resource: 'android',
+    appDevices: [],
+    resources: ['android'],
   },
-  { cell: 'mobile-safari-ios', browser: 'mobile-safari-ios', appDevice: null, resource: 'iphone' },
-  { cell: 'mobile-chrome-ios', browser: 'mobile-chrome-ios', appDevice: null, resource: 'iphone' },
+  {
+    cell: 'mobile-safari-ios',
+    browser: 'mobile-safari-ios',
+    appDevices: [],
+    resources: ['iphone'],
+  },
+  {
+    cell: 'mobile-chrome-ios',
+    browser: 'mobile-chrome-ios',
+    appDevices: [],
+    resources: ['iphone'],
+  },
   {
     cell: 'mobile-firefox-ios',
     browser: 'mobile-firefox-ios',
-    appDevice: null,
-    resource: 'iphone',
+    appDevices: [],
+    resources: ['iphone'],
   },
-  { cell: 'mobile-edge-ios', browser: 'mobile-edge-ios', appDevice: null, resource: 'iphone' },
+  { cell: 'mobile-edge-ios', browser: 'mobile-edge-ios', appDevices: [], resources: ['iphone'] },
 
   // ── cross: both surfaces in one cell ────────────────────────────────────
   // Keyed to the DEVICE, not the Mac: the phone is the scarce resource, and a
   // cross cell keyed to 'mac' would run concurrently with the browser cells
   // already using the phone — the deadlock this exercise removed.
-  { cell: 'cross-android', browser: CHROMIUM, appDevice: 'android', resource: 'android' },
-  { cell: 'cross-ios', browser: CHROMIUM, appDevice: 'ios', resource: 'iphone' },
+  { cell: 'cross-android', browser: CHROMIUM, appDevices: ['android'], resources: ['android'] },
+  { cell: 'cross-ios', browser: CHROMIUM, appDevices: ['ios'], resources: ['iphone'] },
+  // THE TRI-PLATFORM CELL. Measured 2026-08-01: 67 of the 228 corpus scenarios —
+  // 29% — require android AND ios AND web in the same journey, and no cell could
+  // run any of them. Not a regression: no cell has ever held both phones, so
+  // those 67 have never once executed. They are exactly the journeys the product
+  // is about — an Android user, an iPhone user and a web user in one room.
+  //
+  // It holds BOTH devices, so it locks both resources and nothing else touches
+  // either while it runs. Listed last: it is the most expensive cell in the
+  // matrix and the one that most wants the others already proven.
+  {
+    cell: 'cross-all',
+    browser: CHROMIUM,
+    appDevices: ['android', 'ios'],
+    resources: ['android', 'iphone'],
+  },
 ];
 
 const BY_SLUG = new Map(MATRIX_CELLS.map((c) => [c.cell, c]));
@@ -123,7 +152,7 @@ const RESOURCE_FOR_DEVICE = { android: 'android', ios: 'iphone' };
 
 /**
  * @param {string} cell
- * @returns {{cell:string, browser:string|null, appDevice:string|null, resource:string}}
+ * @returns {{cell:string, browser:string|null, appDevices:string[], resources:string[]}}
  * @throws when the slug is not a cell — never guesses.
  */
 function cellSpec(cell) {
@@ -135,7 +164,7 @@ function cellSpec(cell) {
     // obvious at the point of failure.
     throw new Error(
       `"${cell}" is not a matrix cell. Known cells: ${CELL_SLUGS.join(', ')}. ` +
-        `Add it to MATRIX_CELLS with an explicit browser + appDevice rather than ` +
+        `Add it to MATRIX_CELLS with an explicit browser + appDevices rather than ` +
         `relying on the slug's shape.`,
     );
   }
@@ -152,14 +181,35 @@ function browserFor(cell) {
   return cellSpec(cell).browser;
 }
 
-/** The device whose NATIVE APP this cell drives, or null. */
-function appDeviceFor(cell) {
-  return cellSpec(cell).appDevice;
+/** Every device whose NATIVE APP this cell drives. Empty for a browser-only cell. */
+function appDevicesFor(cell) {
+  return cellSpec(cell).appDevices;
 }
 
-/** The physical resource this cell contends for: 'mac' | 'android' | 'iphone'. */
+/** True if this cell drives `device`'s native app. */
+function drivesApp(cell, device) {
+  return cellSpec(cell).appDevices.includes(device);
+}
+
+/**
+ * EVERY physical resource this cell contends for.
+ *
+ * `cross-all` returns two. The dispatcher locks all of them before running the
+ * cell, so nothing else can touch either phone while a tri-platform journey is
+ * mid-handoff — the whole point of the cell is that one process holds both.
+ */
+function resourcesFor(cell) {
+  return cellSpec(cell).resources;
+}
+
+/**
+ * The PRIMARY resource, used only for grouping cells into dispatch queues.
+ *
+ * A multi-resource cell sits in its first resource's queue and takes locks on
+ * the rest; grouping needs one answer, correctness comes from `resourcesFor`.
+ */
 function resourceKeyFor(cell) {
-  return cellSpec(cell).resource;
+  return cellSpec(cell).resources[0];
 }
 
 /**
@@ -169,10 +219,10 @@ function resourceKeyFor(cell) {
  * arrays directly without sorting at every call site.
  */
 function capsFor(cell) {
-  const { browser, appDevice } = cellSpec(cell);
+  const { browser, appDevices } = cellSpec(cell);
   const caps = [];
   if (browser) caps.push('web');
-  if (appDevice) caps.push(appDevice);
+  caps.push(...appDevices);
   return caps;
 }
 
@@ -184,9 +234,9 @@ function capsFor(cell) {
  * is this" is exactly how the dashboard and the runner came to disagree.
  */
 function phaseOf(cell) {
-  const { browser, appDevice } = cellSpec(cell);
-  if (browser && appDevice) return 'cross';
-  if (appDevice) return 'app';
+  const { browser, appDevices } = cellSpec(cell);
+  if (browser && appDevices.length) return 'cross';
+  if (appDevices.length) return 'app';
   if (browser) return 'web';
   return null;
 }
@@ -267,14 +317,17 @@ function allowedCellsFor(target, env = process.env) {
   // The target's browser policy, already scoped by GAUNTLET_BROWSERS.
   const browsers = allowedBrowsersFor(target);
 
-  let cells = MATRIX_CELLS.filter((c) => devices.includes(c.resource)).filter(
+  // EVERY resource must be present: cross-all needs both phones, so it drops out
+  // the moment either is unavailable. `some` would schedule a tri-platform
+  // journey against one device and fail it as a product defect.
+  let cells = MATRIX_CELLS.filter((c) => c.resources.every((r) => devices.includes(r))).filter(
     (c) => c.browser === null || browsers.includes(c.browser),
   );
 
   const wantedDevices = parseScope(env.GAUNTLET_DEVICES);
   if (wantedDevices) {
     rejectUnknown('device', wantedDevices, devices, 'GAUNTLET_DEVICES');
-    cells = cells.filter((c) => wantedDevices.includes(c.resource));
+    cells = cells.filter((c) => c.resources.every((r) => wantedDevices.includes(r)));
   }
 
   const wantedCells = parseScope(env.GAUNTLET_CELLS);
@@ -296,6 +349,9 @@ function allowedCellsFor(target, env = process.env) {
 
 module.exports = {
   MATRIX_CELLS,
+  appDevicesFor,
+  drivesApp,
+  resourcesFor,
   CELL_SLUGS,
   PHASES,
   TARGET_DEVICES,
@@ -304,7 +360,6 @@ module.exports = {
   cellSpec,
   isKnownCell,
   browserFor,
-  appDeviceFor,
   resourceKeyFor,
   capsFor,
   phaseOf,

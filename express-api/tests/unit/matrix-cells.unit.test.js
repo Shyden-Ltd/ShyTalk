@@ -42,7 +42,7 @@ const {
   capsFor,
   resourceKeyFor,
   browserFor,
-  appDeviceFor,
+  appDevicesFor,
   phaseOf,
   cellsInPhase,
   isKnownCell,
@@ -58,17 +58,17 @@ describe('the two questions that were conflated', () => {
     // the phone at once; keeping the app claim is the original bug.
     for (const cell of ['mobile-chrome-android', 'mobile-samsung-android']) {
       expect(resourceKeyFor(cell)).toBe('android');
-      expect(appDeviceFor(cell)).toBeNull();
+      expect(appDevicesFor(cell)).toEqual([]);
     }
   });
 
   it('an iOS-browser cell likewise owns the iPhone without driving the app', () => {
     expect(resourceKeyFor('mobile-safari-ios')).toBe('iphone');
-    expect(appDeviceFor('mobile-safari-ios')).toBeNull();
+    expect(appDevicesFor('mobile-safari-ios')).toEqual([]);
   });
 
   it('an app cell drives the app and has NO browser', () => {
-    expect(appDeviceFor('app-android')).toBe('android');
+    expect(appDevicesFor('app-android')).toEqual(['android']);
     expect(browserFor('app-android')).toBeNull();
     expect(resourceKeyFor('app-android')).toBe('android');
   });
@@ -77,7 +77,7 @@ describe('the two questions that were conflated', () => {
     // The whole point of the phase: one cell that can send a gift on the phone
     // and read it on the web. Split across two cells it cannot be tested at all.
     expect(browserFor('cross-android')).toBe('chromium');
-    expect(appDeviceFor('cross-android')).toBe('android');
+    expect(appDevicesFor('cross-android')).toEqual(['android']);
   });
 
   it('cross-over pairs the app with a DESKTOP browser, never the same phone', () => {
@@ -94,14 +94,16 @@ describe('the two questions that were conflated', () => {
 describe('the whole-matrix property no per-cell test could see', () => {
   it('exactly TWO cells drive each device: one app, one cross-over', () => {
     for (const device of ['android', 'ios']) {
-      const drivers = MATRIX_CELLS.filter((c) => c.appDevice === device).map((c) => c.cell);
-      expect(drivers).toEqual([`app-${device}`, `cross-${device}`]);
+      const drivers = MATRIX_CELLS.filter((c) => c.appDevices.includes(device)).map((c) => c.cell);
+      // Three, each deliberate: the app-only cell, the one-device cross-over,
+      // and the tri-platform cell that holds BOTH phones. Four was the bug.
+      expect(drivers).toEqual([`app-${device}`, `cross-${device}`, 'cross-all']);
     }
   });
 
   it('no browser-only cell attaches an app driver', () => {
     const offenders = MATRIX_CELLS.filter(
-      (c) => c.browser !== null && c.appDevice !== null && phaseOf(c.cell) !== 'cross',
+      (c) => c.browser !== null && c.appDevices.length > 0 && phaseOf(c.cell) !== 'cross',
     ).map((c) => c.cell);
     // Named in the failure so the regression points at the cell that regrew.
     expect(offenders).toEqual([]);
@@ -120,13 +122,13 @@ describe('the whole-matrix property no per-cell test could see', () => {
       }).length;
       expect(needsDevice).toBeGreaterThan(0);
 
-      const cellsDriving = MATRIX_CELLS.filter((c) => c.appDevice === device).length;
+      const cellsDriving = MATRIX_CELLS.filter((c) => c.appDevices.includes(device)).length;
       const runs = needsDevice * cellsDriving;
 
-      // Two cells drive the device, but they run DISJOINT halves of the corpus:
-      // app-* takes the app-only scenarios, cross-* takes the cross-over ones.
-      // So the honest bound is one pass over the device-needing corpus, not
-      // `needsDevice * cellsDriving`. Assert the disjointness directly.
+      // The cells driving a device run DISJOINT slices of the corpus: app-*
+      // takes the app-only scenarios, cross-* the two-surface ones, cross-all
+      // the tri-platform ones no other cell can run. So the honest bound is one
+      // pass over the device-needing corpus, not `needsDevice * cellsDriving`.
       const appOnly = corpus.filter((s) => {
         const r = requiredPlatforms(s.steps);
         return r.has(device) && !r.has('web');
@@ -138,14 +140,14 @@ describe('the whole-matrix property no per-cell test could see', () => {
 
       expect(appOnly + crossOver).toBe(needsDevice);
       // The pre-fix matrix ran `needsDevice` on EVERY android browser cell.
-      expect(runs).toBeLessThanOrEqual(needsDevice * 2);
+      expect(runs).toBeLessThanOrEqual(needsDevice * 3);
     }
   });
 
   it('the four phone-browser cells add ZERO app-driver load', () => {
     // The 375 wasted runs, stated as the property that removed them.
     const phoneBrowserCells = MATRIX_CELLS.filter(
-      (c) => c.resource === 'android' && c.browser !== null && c.appDevice === null,
+      (c) => c.resources[0] === 'android' && c.browser !== null && c.appDevices.length === 0,
     );
     expect(phoneBrowserCells.length).toBe(4);
     for (const c of phoneBrowserCells) {
@@ -200,7 +202,13 @@ describe('phases', () => {
     // and the runner disagreed in the first place.
     for (const c of MATRIX_CELLS) {
       const expected =
-        c.browser && c.appDevice ? 'cross' : c.appDevice ? 'app' : c.browser ? 'web' : null;
+        c.browser && c.appDevices.length
+          ? 'cross'
+          : c.appDevices.length
+            ? 'app'
+            : c.browser
+              ? 'web'
+              : null;
       expect(phaseOf(c.cell)).toBe(expected);
     }
   });
@@ -379,7 +387,7 @@ describe('the registry is internally consistent', () => {
 
   it('every cell names a real resource', () => {
     for (const c of MATRIX_CELLS) {
-      expect(['mac', 'android', 'iphone']).toContain(c.resource);
+      for (const r of c.resources) expect(['mac', 'android', 'iphone']).toContain(r);
     }
   });
 
@@ -387,8 +395,10 @@ describe('the registry is internally consistent', () => {
     // An app cell keyed to the Mac would run concurrently with the browser cell
     // already using the phone — the deadlock this whole exercise removed.
     const expected = { android: 'android', ios: 'iphone' };
-    for (const c of MATRIX_CELLS.filter((x) => x.appDevice)) {
-      expect(c.resource).toBe(expected[c.appDevice]);
+    // Asserted over ALL resources: cross-all drives two apps and locks two
+    // devices, so checking a single grouping key would call it a violation.
+    for (const c of MATRIX_CELLS.filter((x) => x.appDevices.length)) {
+      for (const device of c.appDevices) expect(c.resources).toContain(expected[device]);
     }
   });
 
@@ -397,5 +407,66 @@ describe('the registry is internally consistent', () => {
     for (const c of MATRIX_CELLS.filter((x) => x.browser)) {
       expect(SUPPORTED_BROWSERS).toContain(c.browser);
     }
+  });
+});
+
+describe('cross-all — the 67 scenarios nothing could run', () => {
+  const { resourcesFor, capsFor, browserFor, drivesApp } = require('../../scripts/matrix-cells');
+  const { requiredPlatforms: reqPlatforms } = require('../../scripts/scenario-surface');
+
+  it('exists, and drives all three surfaces', () => {
+    expect(capsFor('cross-all')).toEqual(['web', 'android', 'ios']);
+    expect(drivesApp('cross-all', 'android')).toBe(true);
+    expect(drivesApp('cross-all', 'ios')).toBe(true);
+  });
+
+  it('pairs the two phones with a DESKTOP browser', () => {
+    // Both phones are already playing the two app actors, so the web actor
+    // needs its own machine. A phone browser would make one device play two
+    // parts in a journey whose entire subject is the handoff between parts.
+    expect(browserFor('cross-all')).toBe('chromium');
+  });
+
+  it('locks BOTH devices, so nothing else touches either while it runs', () => {
+    // A tri-platform journey is mid-handoff for its whole duration. Another
+    // cell grabbing one of the phones in the middle does not slow it down — it
+    // corrupts it, and the failure reads as a product defect.
+    expect(resourcesFor('cross-all').slice().sort()).toEqual(['android', 'iphone']);
+  });
+
+  it('closes the coverage hole it was added for', () => {
+    // MEASURED 2026-08-01: 67 of 228 scenarios require android + ios + web
+    // together. Every cell before this one drove at most one device, so all 67
+    // were "not applicable" everywhere — never once executed, and counted as
+    // n/a rather than as a gap.
+    const corpus = readCorpus(JOURNEY_DIR);
+    const triPlatform = corpus.filter((s) => {
+      const r = reqPlatforms(s.steps);
+      return r.has('android') && r.has('ios');
+    });
+    expect(triPlatform.length).toBeGreaterThan(50);
+
+    // Every one of them can now run somewhere.
+    const caps = new Set(capsFor('cross-all'));
+    for (const s of triPlatform) {
+      const required = [...reqPlatforms(s.steps)].filter((p) => GATING_PLATFORMS.has(p));
+      expect(required.every((p) => caps.has(p))).toBe(true);
+    }
+  });
+
+  it('is the ONLY cell that can run them — so it cannot be dropped silently', () => {
+    const runners = MATRIX_CELLS.filter(
+      (c) => c.appDevices.includes('android') && c.appDevices.includes('ios'),
+    ).map((c) => c.cell);
+    expect(runners).toEqual(['cross-all']);
+  });
+
+  it('drops out entirely when either phone is absent', () => {
+    // Running a tri-platform journey against one device would fail it as a
+    // product defect. Absent hardware is a reason to skip, never to pretend.
+    const { allowedCellsFor: allowed } = require('../../scripts/matrix-cells');
+    expect(allowed('local', { GAUNTLET_DEVICES: 'mac,android' })).not.toContain('cross-all');
+    expect(allowed('local', { GAUNTLET_DEVICES: 'mac,iphone' })).not.toContain('cross-all');
+    expect(allowed('local', { GAUNTLET_DEVICES: 'mac,android,iphone' })).toContain('cross-all');
   });
 });

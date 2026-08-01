@@ -248,13 +248,22 @@ describe('--filter — composition with --dry-run', () => {
     ]);
   });
 
-  test('--filter android selects exactly the cells whose resource IS the phone', () => {
-    // Stated as the property rather than a list, so a new Android cell added
-    // without updating the filter shows up here instead of silently not running.
-    const { CELL_SLUGS, resourceKeyFor } = require('../../scripts/matrix-cells');
+  test('--filter android excludes cross-all, which also needs the iPhone', () => {
+    // `cross-all` groups under 'android' but LOCKS both phones — a tri-platform
+    // journey cannot run against one device. Narrowing to android must therefore
+    // leave it out, and the name-substring filter does exactly that. Asserted
+    // explicitly because "it happens to work" is not a contract.
+    const { CELL_SLUGS, resourcesFor } = require('../../scripts/matrix-cells');
     const r = runCli(['--dry-run', '--target', 'local', '--filter', 'android']);
     const cells = JSON.parse(r.stdout).cells;
-    expect(cells).toEqual(CELL_SLUGS.filter((c) => resourceKeyFor(c) === 'android'));
+    expect(cells).not.toContain('cross-all');
+    // Everything it DOES select needs only the phone.
+    for (const c of cells) expect(resourcesFor(c)).toEqual(['android']);
+    // And nothing android-only was dropped.
+    const androidOnly = CELL_SLUGS.filter(
+      (c) => resourcesFor(c).length === 1 && resourcesFor(c)[0] === 'android',
+    );
+    expect(cells).toEqual(androidOnly);
   });
 
   test('--dry-run --target local --filter chrom → matches chromium + mobile-chrome-*', () => {

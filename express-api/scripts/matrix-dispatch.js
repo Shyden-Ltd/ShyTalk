@@ -136,7 +136,7 @@ function classifyCrashExit(err) {
  * four Android browser cells were handed the Android app driver too — 500 device
  * scenario runs where 125 were needed. Owning the device says nothing about
  * whether the APK should be launched. That question now lives in
- * `matrix-cells.appDeviceFor()`, and nothing here answers it.
+ * `matrix-cells.drivesApp()`, and nothing here answers it.
  *
  * Known cells come from the registry, which states the resource outright. The
  * substring fallback survives only for callers that pass an ad-hoc slug — the
@@ -150,6 +150,19 @@ function defaultResourceKey(browser) {
   if (b.includes('android')) return 'android';
   if (b.includes('ios')) return 'iphone';
   return 'mac';
+}
+
+/**
+ * EVERY resource a cell contends for, for the parallel driver's locks.
+ *
+ * Distinct from `defaultResourceKey`, which answers the single-valued grouping
+ * question. `cross-all` holds both phones at once, so scheduling it correctly
+ * needs the full set — grouping puts it in one queue, the locks keep the other
+ * device's queue out while it runs.
+ */
+function resourcesOf(browser) {
+  const { isKnownCell, resourcesFor } = require('./matrix-cells');
+  return isKnownCell(browser) ? resourcesFor(browser) : [defaultResourceKey(browser)];
 }
 
 /**
@@ -353,6 +366,38 @@ async function runMatrix({
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(browser);
     }
+    // A cell may need MORE than one resource. `cross-all` drives the Android
+    // app, the iPhone app and a browser in one journey — 67 of the 228 corpus
+    // scenarios need exactly that — so it must hold BOTH device queues while it
+    // runs. Grouping alone cannot express that: a cell belongs to one group.
+    //
+    // Per-resource mutex, acquired in sorted order. Sorted order is what makes
+    // it deadlock-free: two cells wanting {android, iphone} can never take them
+    // in opposite orders and wait on each other.
+    const resourceLocks = new Map();
+    async function withResources(keys, fn) {
+      const ordered = [...new Set(keys)].sort();
+      const releases = [];
+      for (const key of ordered) {
+        const prior = resourceLocks.get(key) || Promise.resolve();
+        let release;
+        const held = new Promise((r) => {
+          release = r;
+        });
+        resourceLocks.set(
+          key,
+          prior.then(() => held),
+        );
+        await prior;
+        releases.push(release);
+      }
+      try {
+        return await fn();
+      } finally {
+        for (const release of releases) release();
+      }
+    }
+
     const cellByBrowser = new Map();
     await Promise.all(
       [...groups.values()].map(async (groupBrowsers) => {
@@ -362,7 +407,7 @@ async function runMatrix({
             cellByBrowser.set(browser, skipCell(browser, gate));
             continue;
           }
-          const cell = await runOneCell(browser);
+          const cell = await withResources(resourcesOf(browser), () => runOneCell(browser));
           cellByBrowser.set(browser, cell);
           applyGates(cell, gate);
         }
@@ -516,6 +561,7 @@ module.exports = {
   installIncompleteRunGuard,
   classifyCrashExit,
   defaultResourceKey,
+  resourcesOf,
   runMatrix,
   formatMatrixResult,
   formatMatrixResultJson,

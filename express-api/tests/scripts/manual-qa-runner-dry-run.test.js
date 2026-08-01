@@ -69,6 +69,7 @@ describe('formatDryRunJson — target resolution', () => {
       'mobile-chrome-android',
       'cross-android',
       'cross-ios',
+      'cross-all',
     ]);
   });
 
@@ -124,6 +125,7 @@ describe('formatDryRunJson — --matrix flag', () => {
       'mobile-chrome-android',
       'cross-android',
       'cross-ios',
+      'cross-all',
     ]);
   });
 
@@ -191,6 +193,7 @@ describe('CLI integration — --dry-run with --target', () => {
       'mobile-chrome-android',
       'cross-android',
       'cross-ios',
+      'cross-all',
     ]);
   });
 

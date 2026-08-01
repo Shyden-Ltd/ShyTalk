@@ -33,7 +33,7 @@
  * Both are closed the same way: the predicate has ONE definition, in
  * scripts/matrix-cells.js, and this file imports it.
  */
-const { appDeviceFor, isKnownCell, MATRIX_CELLS } = require('../../scripts/matrix-cells');
+const { drivesApp, isKnownCell, MATRIX_CELLS } = require('../../scripts/matrix-cells');
 
 /**
  * The runner's attachment predicate, IMPORTED not restated.
@@ -43,10 +43,10 @@ const { appDeviceFor, isKnownCell, MATRIX_CELLS } = require('../../scripts/matri
  * everything; a known cell attaches only what it declares.
  */
 const affinity = (cell) => {
-  const appDevice = isKnownCell(cell) ? appDeviceFor(cell) : undefined;
+  const known = isKnownCell(cell);
   return {
-    android: appDevice === undefined || appDevice === 'android',
-    ios: appDevice === undefined || appDevice === 'ios',
+    android: !known || drivesApp(cell, 'android'),
+    ios: !known || drivesApp(cell, 'ios'),
   };
 };
 
@@ -103,31 +103,54 @@ describe('cross-over cells hold one app plus a desktop browser', () => {
 });
 
 describe('the whole local matrix', () => {
-  const { CELL_SLUGS, resourceKeyFor } = require('../../scripts/matrix-cells');
+  const { CELL_SLUGS } = require('../../scripts/matrix-cells');
 
-  it('every cell that attaches an app driver contends for THAT device', () => {
-    // The dispatcher serialises within a resource group, so "the cells driving
-    // Android all sit in the android group" is what makes concurrency safe.
+  it('every cell that attaches an app driver LOCKS that device', () => {
+    // Asserted against `resourcesFor` (all of them), not `resourceKeyFor` (the
+    // grouping key). A cell driving both phones has one grouping key and two
+    // locks; checking the key alone would call that a violation.
+    const { resourcesFor } = require('../../scripts/matrix-cells');
     for (const cell of CELL_SLUGS) {
       const a = affinity(cell);
-      if (a.android) expect(resourceKeyFor(cell)).toBe('android');
-      if (a.ios) expect(resourceKeyFor(cell)).toBe('iphone');
+      if (a.android) expect(resourcesFor(cell)).toContain('android');
+      if (a.ios) expect(resourcesFor(cell)).toContain('iphone');
     }
   });
 
-  it('never lets one cell claim BOTH physical devices', () => {
-    // A cell holding both would serialise the two device groups against each
-    // other through itself, re-creating the starvation by another route.
-    for (const cell of CELL_SLUGS) {
-      const a = affinity(cell);
-      expect(a.android && a.ios).toBe(false);
-    }
+  it('only the tri-platform cell claims BOTH physical devices', () => {
+    // Holding both was once forbidden outright, because an accidental
+    // both-devices cell serialises the two device groups through itself. But 67
+    // of the 228 corpus scenarios need Android AND iOS AND web in one journey,
+    // and no cell could run a single one of them. `cross-all` is that cell —
+    // deliberate, named, and the ONLY one, with the dispatcher locking both
+    // resources so nothing else touches either phone while it runs.
+    const bothDevices = CELL_SLUGS.filter((c) => affinity(c).android && affinity(c).ios);
+    expect(bothDevices).toEqual(['cross-all']);
   });
 
-  it('exactly two cells attach each app driver — the app cell and its cross cell', () => {
-    // The count IS the fix. Four was the bug; the number is what nobody checked.
-    expect(CELL_SLUGS.filter((c) => affinity(c).android)).toEqual(['app-android', 'cross-android']);
-    expect(CELL_SLUGS.filter((c) => affinity(c).ios)).toEqual(['app-ios', 'cross-ios']);
+  it('exactly three cells attach each app driver — app, cross, and cross-all', () => {
+    // The count IS the fix. FOUR browser cells silently driving the phone was
+    // the bug, and nobody was counting. It is three now, each deliberate: the
+    // app-only cell, the one-device cross-over, and the tri-platform cell.
+    expect(CELL_SLUGS.filter((c) => affinity(c).android)).toEqual([
+      'app-android',
+      'cross-android',
+      'cross-all',
+    ]);
+    expect(CELL_SLUGS.filter((c) => affinity(c).ios)).toEqual([
+      'app-ios',
+      'cross-ios',
+      'cross-all',
+    ]);
+  });
+
+  it('cross-all drives both apps AND a desktop browser', () => {
+    const { capsFor, browserFor } = require('../../scripts/matrix-cells');
+    expect(affinity('cross-all')).toEqual({ android: true, ios: true });
+    expect(capsFor('cross-all')).toEqual(['web', 'android', 'ios']);
+    // A desktop browser, not a phone browser: the two phones are already
+    // playing the two app actors, so the web actor needs its own machine.
+    expect(browserFor('cross-all')).toBe('chromium');
   });
 
   it('the registry and the predicate cannot disagree', () => {
@@ -135,8 +158,8 @@ describe('the whole local matrix', () => {
     // of this file proved that a locally-copied predicate silently diverges.
     for (const c of MATRIX_CELLS) {
       const a = affinity(c.cell);
-      expect(a.android).toBe(c.appDevice === 'android');
-      expect(a.ios).toBe(c.appDevice === 'ios');
+      expect(a.android).toBe(c.appDevices.includes('android'));
+      expect(a.ios).toBe(c.appDevices.includes('ios'));
     }
   });
 });

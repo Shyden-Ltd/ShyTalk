@@ -94,7 +94,9 @@ describe('three lists, each with only its own columns', () => {
     // "show the browsers used and device used for the app side" — one cell that
     // holds both, which is the only arrangement in which the handoff can run.
     const cross = s.phases.find((p) => p.phase === 'cross');
-    expect(cross.cells).toEqual(['cross-android', 'cross-ios']);
+    // Three: one per device, plus the tri-platform cell that holds both and is
+    // the only thing able to run the 67 android+ios+web scenarios.
+    expect(cross.cells).toEqual(['cross-android', 'cross-ios', 'cross-all']);
   });
 
   it('every planned cell appears in exactly one list', () => {
@@ -200,6 +202,7 @@ describe('the environment under test is on the payload', () => {
       expect(s.phases.find((p) => p.phase === 'cross').cells).toEqual([
         'cross-android',
         'cross-ios',
+        'cross-all',
       ]);
     } finally {
       restore();
