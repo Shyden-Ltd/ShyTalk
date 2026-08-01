@@ -48,10 +48,22 @@ async function evictSuspendedUser(uid) {
     try {
       await db.doc(`users/${uid}`).set({ currentRoomId: null }, { merge: true });
     } catch (err) {
-      // instanceof Error narrows out frozen objects, primitives, and null
-      // throws — assigning to those would silently no-op under sloppy mode
-      // and route catches would mis-classify the failure as cascade-abort.
-      if (err instanceof Error) {
+      // Tag the error with phase: 'user_doc' so the route's catch can set
+      // userDocFailed: true accurately rather than reporting a generic cascade
+      // abort — but ONLY when the tag can actually be written.
+      //
+      // `instanceof Error` does NOT narrow out frozen errors, whatever the
+      // previous comment here claimed: `Object.freeze(new Error('x'))` is still
+      // an Error. Modules are strict mode, so assigning to it THROWS a
+      // TypeError — which then propagates in place of the real error, and the
+      // caller sees "Cannot add property phase, object is not extensible"
+      // instead of the failure that actually happened. A diagnostic that
+      // destroys the diagnosis.
+      //
+      // Extensibility is the property that decides whether the write succeeds,
+      // so that is what is checked. An un-taggable error still propagates
+      // untouched, which is strictly better than losing it.
+      if (err instanceof Error && Object.isExtensible(err)) {
         err.phase = 'user_doc';
       }
       throw err;

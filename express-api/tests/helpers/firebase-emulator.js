@@ -56,14 +56,13 @@ function firestoreHostPort() {
 }
 
 /**
- * Fast, bounded reachability probe for the Firestore emulator. Resolves
- * if something is listening; rejects within `timeoutMs` with an
- * actionable message otherwise. A raw TCP connect (no HTTP semantics) is
- * the most reliable "is it up" signal and needs no clear-text URL.
- * @param {{ timeoutMs?: number }} [opts]
- * @returns {Promise<void>}
+ * Raw TCP connect — "is anything listening on the port?"
+ *
+ * Cheap and unambiguous when the stack is simply down. NOT sufficient on its
+ * own: see `assertEmulatorReachable` for the state where this succeeds and
+ * every Admin SDK call still hangs for 60s.
  */
-function assertEmulatorReachable({ timeoutMs = 5000 } = {}) {
+function assertPortOpen({ timeoutMs = 5000 } = {}) {
   const { host, port } = firestoreHostPort();
   return new Promise((resolve, reject) => {
     const socket = net.connect({ host, port });
@@ -97,6 +96,156 @@ function assertEmulatorReachable({ timeoutMs = 5000 } = {}) {
     socket.once('timeout', () => fail(`no response within ${timeoutMs}ms`));
     socket.once('error', (err) => fail(err.code || err.message));
   });
+}
+
+/**
+ * Has the gRPC round-trip already been proven in this process?
+ *
+ * Only a SUCCESS is cached. Caching a failure would keep a suite red after the
+ * operator restarted the stack, which is how a guard earns a reputation for
+ * lying and gets disabled.
+ */
+let grpcProven = false;
+
+/** Test seam — forget the cached success. */
+function resetLivenessCache() {
+  grpcProven = false;
+}
+
+/**
+ * A Firestore client the probe OWNS, rather than borrowing the product's.
+ *
+ * The first version lazily did `require('../../src/utils/firebase')`. That
+ * module calls `process.exit(1)` when `FIREBASE_DATABASE_URL` is unset outside
+ * NODE_ENV=local — so the moment a suite that does NOT configure it called this
+ * guard, the guard killed the worker. Six suites (`firestore-rules/*`,
+ * `migrate-participant-ids`, `backfill-cross-cohort-flag`) went from passing to
+ * "Test suite failed to run: process.exit called with 1".
+ *
+ * A guard must not be able to take down the thing it guards. A separately-named
+ * Admin app depends on nothing but the emulator env, so the probe answers
+ * "can a gRPC client reach this emulator?" without asking whether the PRODUCT is
+ * configured — which was never the question.
+ */
+let probeApp = null;
+function probeDb() {
+  const { initializeApp, getApps } = require('firebase-admin/app');
+  const { getFirestore } = require('firebase-admin/firestore');
+  const NAME = 'emulator-liveness-probe';
+  if (!probeApp) {
+    probeApp =
+      getApps().find((a) => a.name === NAME) ||
+      initializeApp({ projectId: process.env.GCLOUD_PROJECT || 'demo-shytalk' }, NAME);
+  }
+  return getFirestore(probeApp);
+}
+
+/**
+ * Prove the emulator can actually serve the Admin SDK, then let tests run.
+ *
+ * TWO CHECKS, BECAUSE THE FIRST ONE IS NOT ENOUGH.
+ *
+ * This used to be a raw TCP connect alone, with a docstring promising it would
+ * "fail FAST with an actionable message rather than letting the Admin SDK hang
+ * on a gRPC deadline". A TCP connect cannot deliver that promise. Measured
+ * 2026-08-01, after the emulator had been up ~22 hours across two full suite
+ * runs:
+ *
+ *   TCP connect        instant
+ *   REST write         403 in 0.048s   (rules rejected it — but it ANSWERED)
+ *   Admin SDK write    DEADLINE_EXCEEDED after 60.004s, "Waiting for LB pick"
+ *
+ * The port was open, HTTP was healthy, and the gRPC listener was dead. The probe
+ * said "reachable"; eleven suites then failed on `Exceeded timeout of 10000 ms
+ * for a hook` — 36 failures and ~20 minutes of wall clock, behind a message that
+ * named neither the emulator nor the fix. Restarting the stack took the same
+ * call from 60,000ms to 223ms.
+ *
+ * So the probe now performs the round-trip the tests themselves depend on, and
+ * bounds it with `Promise.race`: the gRPC deadline is 60s and belongs to the
+ * transport, so only racing guarantees the CALLER stops waiting.
+ *
+ * @param {object} [opts]
+ * @param {number} [opts.timeoutMs=5000]    TCP connect bound
+ * @param {number} [opts.roundTripMs=8000]  gRPC round-trip bound
+ * @param {object} [opts.dbImpl]            injected Firestore (tests only)
+ * @param {boolean} [opts.skipTcp]          skip the port probe (tests only)
+ * @returns {Promise<void>}
+ */
+async function assertEmulatorReachable({
+  timeoutMs = 5000,
+  roundTripMs = 8000,
+  dbImpl,
+  skipTcp = false,
+} = {}) {
+  if (!skipTcp) await assertPortOpen({ timeoutMs });
+  // Hundreds of files call this in beforeAll; the round-trip is paid once.
+  // `resetLivenessCache()` is the seam for tests that need a fresh probe —
+  // exempting an injected db here instead would mean the cache was never
+  // exercised by the tests that claim to cover it.
+  if (grpcProven) return;
+
+  // NO ADMIN SDK CONFIGURED, NO ROUND-TRIP — and that is not a weakening.
+  //
+  // `FIRESTORE_EMULATOR_HOST` is what tells the Admin SDK to talk to the
+  // emulator instead of real Google Cloud; `src/utils/firebase` sets it at
+  // require time under NODE_ENV=local. A suite where it is unset is not using
+  // the Admin gRPC channel at all — the `firestore-rules/*` suites drive the
+  // emulator through `@firebase/rules-unit-testing`, which speaks WebChannel
+  // over HTTP. Sure enough, when the gRPC listener wedged on 2026-08-01 those
+  // suites were unaffected while every Admin-SDK suite died. Probing gRPC on
+  // their behalf would test something they do not depend on — and, worse,
+  // without the env var the Admin SDK would reach for REAL Firestore.
+  if (!dbImpl && !process.env.FIRESTORE_EMULATOR_HOST) return;
+
+  const db = dbImpl || probeDb();
+  const { host, port } = firestoreHostPort();
+  // NOT `__emulator_liveness_probe__`: Firestore reserves every identifier
+  // matching `__.*__` and rejects it with INVALID_ARGUMENT. The unit tests use
+  // an injected db and could not see that — the real emulator caught it on the
+  // first run, which is the argument for this probe existing at all.
+  const ref = db
+    .collection('emulator-liveness-probe')
+    .doc(`p-${process.pid}-${Date.now().toString(36)}`);
+
+  let timer;
+  const expiry = new Promise((_resolve, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `Firestore emulator at ${host}:${port} is ACCEPTING CONNECTIONS but not ` +
+              `answering Admin SDK calls — no round-trip within ${roundTripMs}ms. ` +
+              `The port is open and REST may well be healthy; it is the gRPC listener ` +
+              `that is wedged, which every test in this repo depends on. Seen after the ` +
+              `emulator has been up for many hours or several full suite runs. ` +
+              `Restart the stack: \`bash local/stop.sh && bash local/start.sh\` ` +
+              `(free port 3000 first if the pre-flight refuses). Without this check the ` +
+              `symptom is dozens of "Exceeded timeout of 10000 ms for a hook" failures ` +
+              `that name neither the emulator nor the fix.`,
+          ),
+        ),
+      roundTripMs,
+    );
+    // Never hold the process open for the sake of the bound itself.
+    if (typeof timer.unref === 'function') timer.unref();
+  });
+
+  try {
+    // Write, read, delete: a wedged channel fails the write, and a read-only
+    // check would pass against a stale cache.
+    await Promise.race([
+      (async () => {
+        await ref.set({ at: Date.now() });
+        await ref.get();
+        await ref.delete();
+      })(),
+      expiry,
+    ]);
+    grpcProven = true;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -192,6 +341,8 @@ async function clearPrefixed(db, collectionPath, prefix, batchSize = 500) {
 
 module.exports = {
   assertEmulatorReachable,
+  assertPortOpen,
+  resetLivenessCache,
   clearCollection,
   clearCollectionGroup,
   clearPrefixed,
