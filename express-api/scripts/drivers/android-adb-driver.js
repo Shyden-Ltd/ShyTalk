@@ -2739,6 +2739,24 @@ async function createAndroidDriver({ serial: preferred } = {}) {
         await new Promise((r) => setTimeout(r, 1200)); // sleep-ok: settle before the loop re-dumps
         continue;
       }
+      // Fresh-install legal acceptance. Every checkbox must be ticked before
+      // Continue enables, so the CHECKBOX LIST IS READ FROM THE DUMP rather
+      // than hard-coded: the screen currently has four
+      // (terms / privacy / community / cyber-bullying), it had fewer before,
+      // and a hard-coded list silently under-ticks the day a fifth is added —
+      // leaving Continue disabled and the run reporting a device problem.
+      //
+      // Reachable now because a stale Firebase session can no longer be
+      // cleared with `pm clear` on this device, so the harness clears the app's
+      // data directly and lands here. Before that it was only ever seen on a
+      // genuinely fresh install, which is why nothing handled it.
+      if (state === 'legal_gate') {
+        const boxes = [...new Set([...dump.matchAll(/legal_accept\w*Checkbox/g)].map((m) => m[0]))];
+        for (const box of boxes) await driver.androidTapByTag(box);
+        await driver.androidTapByTag('legal_continueButton');
+        await new Promise((r) => setTimeout(r, 1500)); // sleep-ok: settle before the loop re-dumps
+        continue;
+      }
       if (/Claim Today|Daily Reward/i.test(dump)) {
         await tapByVisibleText('Later');
         await new Promise((r) => setTimeout(r, 800)); // sleep-ok: settle before the loop re-dumps

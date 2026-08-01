@@ -17180,11 +17180,20 @@ describe('android-adb-driver — androidSignOut', () => {
     await assertion;
   });
 
-  test('I-2: legal/onboarding gate → throws a specific error (not a blind nav tap)', async () => {
+  test('I-2: a legal gate that never clears throws, rather than blind-tapping nav', async () => {
+    // The advice this error used to give — "sign-out cannot clear a
+    // fresh-install gate. Re-install or provision the device" — is obsolete:
+    // the launch-gate loop now ticks the checkboxes and continues. What must
+    // NOT change is the behaviour when the gate refuses to clear: fail loudly
+    // instead of tapping into a nav that is not on screen.
+    //
+    // `legalNode()` here never advances however many times it is tapped, which
+    // is the stuck case. A gate that DOES clear is covered by the
+    // _advancePastLaunchGates tests below.
     mockByTaps(() => legalNode());
     const driver = await createAndroidDriver();
-    const assertion = expect(driver.androidSignOut()).rejects.toThrow(/legal.*gate/i);
-    await jest.advanceTimersByTimeAsync(3000);
+    const assertion = expect(driver.androidSignOut()).rejects.toThrow(/legal|gate|picker/i);
+    await jest.advanceTimersByTimeAsync(30000);
     await assertion;
   });
 
@@ -17271,6 +17280,71 @@ describe('android-adb-driver — _advancePastLaunchGates / _tapByVisibleText / _
       return '';
     });
   }
+
+  /**
+   * THE LEGAL GATE, and why the checkbox list is read from the dump.
+   *
+   * Reachable in ordinary operation for the first time on 2026-08-01: this
+   * device refuses `pm clear` (SecurityException: CLEAR_APP_USER_DATA), so
+   * recovering from a stale Firebase session — left behind whenever the Auth
+   * emulator is restarted — means clearing the app's data directly, which lands
+   * on the fresh-install legal screen. Nothing handled it, so every sign-in
+   * afterwards failed at a gate the classifier could name but not clear.
+   *
+   * Continue stays disabled until EVERY box is ticked. The screen has four
+   * today (terms / privacy / community / cyber-bullying) and had fewer before,
+   * so a hard-coded list silently under-ticks the day a fifth is added — and
+   * the run then reports a device problem.
+   */
+  test('_advancePastLaunchGates: legal gate → ticks EVERY checkbox in the dump, then continues', async () => {
+    const LEGAL =
+      dumpWithId('legal_acceptTermsCheckbox') +
+      dumpWithId('legal_acceptPrivacyCheckbox') +
+      dumpWithId('legal_acceptCommunityCheckbox') +
+      dumpWithId('legal_acceptCyberBullyingCheckbox') +
+      dumpWithId('legal_continueButton');
+    // Four checkboxes + Continue = 5 taps, then the picker appears.
+    mockByTaps((taps) => (taps >= 5 ? dumpWithId('persona_picker_open') : LEGAL));
+    const driver = await createAndroidDriver();
+    const promise = driver._advancePastLaunchGates();
+    await jest.advanceTimersByTimeAsync(20000);
+    expect(await promise).toBe('picker');
+    const taps = execSync.mock.calls.filter((c) => c[0].includes("'input' 'tap'"));
+    expect(taps.length).toBeGreaterThanOrEqual(5);
+  });
+
+  test('_advancePastLaunchGates: a FIFTH checkbox would also be ticked', async () => {
+    // The property, not the count. A hard-coded four-item list passes the test
+    // above and fails here — which is exactly the drift being guarded against.
+    const LEGAL =
+      dumpWithId('legal_acceptTermsCheckbox') +
+      dumpWithId('legal_acceptSomethingNewCheckbox') +
+      dumpWithId('legal_continueButton');
+    let seen = [];
+    let taps = 0;
+    execSync.mockImplementation((cmd) => {
+      if (cmd === 'adb devices') return 'List of devices attached\nemulator-5554\tdevice\n';
+      if (cmd.includes("'input' 'tap'")) {
+        taps += 1;
+        return '';
+      }
+      if (cmd.includes("'cat' '/sdcard/dump.xml'")) {
+        return taps >= 3 ? dumpWithId('persona_picker_open') : LEGAL;
+      }
+      return '';
+    });
+    const driver = await createAndroidDriver();
+    driver.androidTapByTag = jest.fn(async (tag) => {
+      seen.push(tag);
+      taps += 1;
+      return true;
+    });
+    const promise = driver._advancePastLaunchGates();
+    await jest.advanceTimersByTimeAsync(20000);
+    await promise;
+    expect(seen).toContain('legal_acceptSomethingNewCheckbox');
+    expect(seen).toContain('legal_continueButton');
+  });
 
   test('_advancePastLaunchGates: stable picker is returned directly', async () => {
     mockByDumpCount(() => dumpWithId('persona_picker_open'));
