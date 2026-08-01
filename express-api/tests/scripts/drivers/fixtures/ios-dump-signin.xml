@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AppiumAUT>
+  <XCUIElementTypeApplication type="XCUIElementTypeApplication" name="ShyTalk" label="ShyTalk" enabled="true" visible="true" accessible="false" x="0" y="0" width="420" height="912" index="0" traits="" processId="48904" bundleId="com.shyden.shytalk">
+    <XCUIElementTypeWindow type="XCUIElementTypeWindow" enabled="true" visible="true" accessible="false" x="0" y="0" width="420" height="912" index="0" traits="">
+      <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="420" height="912" index="0" traits="">
+        <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="420" height="912" index="0" traits="">
+          <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="420" height="912" index="0" traits="">
+            <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="420" height="912" index="0" traits="">
+              <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="420" height="912" index="0" traits="">
+                <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="false" accessible="false" x="0" y="0" width="420" height="912" index="0" traits=""/>
+                <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="420" height="912" index="1" traits=""/>
+                <XCUIElementTypeScrollView type="XCUIElementTypeScrollView" enabled="true" visible="true" accessible="false" x="0" y="0" width="420" height="912" index="2" traits="">
+                  <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="420" height="912" index="0" traits="">
+                    <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="420" height="912" index="0" traits="">
+                      <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="257" y="75" width="153" height="136" index="0" traits=""/>
+                      <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="ShyTalk Preview" name="ShyTalk Preview" label="ShyTalk Preview" enabled="true" visible="true" accessible="true" x="338" y="75" width="72" height="20" index="1" traits="StaticText"/>
+                      <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="local · 1.0 (1) · api unknown " name="local · 1.0 (1) · api unknown " label="local · 1.0 (1) · api unknown " enabled="true" visible="true" accessible="true" x="257" y="94" width="146" height="20" index="2" traits="StaticText"/>
+                      <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="●" name="●" label="●" enabled="true" visible="true" accessible="true" x="402" y="94" width="8" height="20" index="3" traits="StaticText"/>
+                      <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="?" name="?" label="?" enabled="true" visible="true" accessible="true" x="405" y="113" width="5" height="20" index="4" traits="StaticText"/>
+                      <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="? · 07-31 17:23" name="? · 07-31 17:23" label="? · 07-31 17:23" enabled="true" visible="true" accessible="true" x="337" y="133" width="73" height="20" index="5" traits="StaticText"/>
+                      <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="iPhone · iOS 27.0" name="iPhone · iOS 27.0" label="iPhone · iOS 27.0" enabled="true" visible="true" accessible="true" x="327" y="152" width="83" height="20" index="6" traits="StaticText"/>
+                      <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="UID: -" name="UID: -" label="UID: -" enabled="true" visible="true" accessible="true" x="380" y="171" width="30" height="20" index="7" traits="StaticText"/>
+                      <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="en · sign_in" name="en · sign_in" label="en · sign_in" enabled="true" visible="true" accessible="true" x="351" y="191" width="59" height="20" index="8" traits="StaticText"/>
+                      <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="420" height="912" index="9" traits=""/>
+                      <XCUIElementTypeOther type="XCUIElementTypeOther" enabled="true" visible="true" accessible="false" x="0" y="0" width="420" height="912" index="10" traits=""/>
+                      <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="ShyTalk" name="ShyTalk" label="ShyTalk" enabled="true" visible="true" accessible="true" x="164" y="345" width="92" height="32" index="11" traits="StaticText"/>
+                      <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="Voice chat rooms, reimagined." name="Voice chat rooms, reimagined." label="Voice chat rooms, reimagined." enabled="true" visible="true" accessible="true" x="127" y="385" width="166" height="16" index="12" traits="StaticText"/>
+                      <XCUIElementTypeButton type="XCUIElementTypeButton" name="signIn_googleButton" label="Sign in with Google" enabled="true" visible="true" accessible="true" x="32" y="433" width="356" height="48" index="13" traits="Button">
+                        <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="Sign in with Google" name="Sign in with Google" label="Sign in with Google" enabled="true" visible="true" accessible="false" x="171" y="449" width="106" height="16" index="0" traits="StaticText"/>
+                      </XCUIElementTypeButton>
+                      <XCUIElementTypeButton type="XCUIElementTypeButton" name="signIn_appleButton" label="Sign in with Apple" enabled="true" visible="true" accessible="true" x="32" y="493" width="356" height="48" index="14" traits="Button">
+                        <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="Sign in with Apple" name="Sign in with Apple" label="Sign in with Apple" enabled="true" visible="true" accessible="false" x="174" y="509" width="100" height="16" index="0" traits="StaticText"/>
+                      </XCUIElementTypeButton>
+                      <XCUIElementTypeButton type="XCUIElementTypeButton" name="persona_picker_open" label="Sign in as test persona" enabled="true" visible="true" accessible="true" x="135" y="553" width="150" height="48" index="15" traits="Button">
+                        <XCUIElementTypeStaticText type="XCUIElementTypeStaticText" value="Sign in as test persona" name="Sign in as test persona" label="Sign in as test persona" enabled="true" visible="true" accessible="false" x="147" y="569" width="126" height="16" index="0" traits="StaticText"/>
+                      </XCUIElementTypeButton>
+                    </XCUIElementTypeOther>
+                  </XCUIElementTypeOther>
+                </XCUIElementTypeScrollView>
+              </XCUIElementTypeOther>
+            </XCUIElementTypeOther>
+          </XCUIElementTypeOther>
+        </XCUIElementTypeOther>
+      </XCUIElementTypeOther>
+    </XCUIElementTypeWindow>
+  </XCUIElementTypeApplication>
+</AppiumAUT>

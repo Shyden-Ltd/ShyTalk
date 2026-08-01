@@ -52,6 +52,14 @@ const HELPER_FILES = new Set([
   'device-io-timeout.js', // SHY-0259: I/O bounds shared by every device driver
   'device-shell.js', // SHY-0259: device-shell quoting; pure, so it is unit-testable without a phone
   'surface-circuit-breaker.js', // SHY-0259: stops a cell grinding on a dead surface
+  // SHY-0259: the shared app surface. These are the OPPOSITE of a driver — a
+  // driver owns one device, and these are what the two device drivers have in
+  // common, extracted so an app method cannot be written for one phone only.
+  // They are the reason the corpus can say "on the app"; `driver-parity` is the
+  // test that holds them to it.
+  'ui-grammar.js', // the two dump grammars + pure queries over them
+  'app-testtags.js', // the testTag vocabulary the corpus speaks
+  'app-ui-methods.js', // the shared methods, registered BY both device drivers
 ]);
 
 function discoverDrivers() {

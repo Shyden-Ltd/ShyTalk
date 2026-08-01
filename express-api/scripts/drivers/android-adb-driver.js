@@ -41,6 +41,8 @@ const { withDeviceLock } = require('./device-lock');
 const { resolveAdbPath } = require('./android-cdp-helpers');
 const { quoteAdbArgs, deviceShellArg } = require('./device-shell');
 const { createSurfaceBreaker } = require('./surface-circuit-breaker');
+const { ANDROID_GRAMMAR, createDumpQueries } = require('./ui-grammar');
+const { createSharedAppMethods, SHARED_METHOD_NAMES } = require('./app-ui-methods');
 const { createSubmitClock } = require('./render-timing');
 const { execBounds, describeExecFailure, DEFAULT_ADB_TIMEOUT_MS } = require('./device-io-timeout');
 const {
@@ -150,7 +152,7 @@ const PACKAGE_BY_TARGET = {
  * manual-qa-runner.js. Each name maps to a stub returning false +
  * log; real implementations replace stubs incrementally.
  */
-const ANDROID_METHOD_NAMES = [
+const HAND_WRITTEN_METHOD_NAMES = [
   // Wake 86-106 vocabulary (matcher contract):
   'androidAdminShowsAppealText',
   'androidAdminShowsDashboardCounters',
@@ -249,8 +251,33 @@ const ANDROID_METHOD_NAMES = [
   'androidKillAndRelaunch',
 ];
 
+/**
+ * Every method this driver provides — the hand-written ones AND the shared
+ * surface registered at the end of the factory.
+ *
+ * The hand list alone had drifted to 73 while the factory defined 138, so
+ * anything reading it to decide "can Android do this?" was answering from an old
+ * snapshot. A declared list allowed to disagree with the code reports an absence
+ * that is not real and hides a presence that is.
+ */
+const ANDROID_METHOD_NAMES = [
+  ...new Set([...HAND_WRITTEN_METHOD_NAMES, ...SHARED_METHOD_NAMES.map((n) => `android${n}`)]),
+].sort();
+
+/**
+ * Every method this driver provides.
+ *
+ * The hand-maintained list below had drifted — it declared 73 while the factory
+ * defined 138 — so anything reading it to decide "can Android do this?" was
+ * answering from an old snapshot. A declared list allowed to disagree with the
+ * code reports an absence that is not real and hides a presence that is.
+ */
+function listAndroidMethodNames() {
+  return [...ANDROID_METHOD_NAMES];
+}
+
 function listMethods() {
-  return [...new Set(ANDROID_METHOD_NAMES)].sort();
+  return listAndroidMethodNames();
 }
 
 /**
@@ -3591,6 +3618,35 @@ async function createAndroidDriver({ serial: preferred } = {}) {
       const dump = await driver.androidUiDump();
       return Boolean(dump) && dumpHas(dump, target);
     });
+
+  // ── the shared app surface (see app-ui-methods.js) ───────────────────────
+  //
+  // Android already implements every one of these by hand, so this registration
+  // is a NO-OP today — it exists so that tomorrow's method cannot be written for
+  // one phone only. A new shared method lands on both the moment it is added,
+  // and `driver-parity.unit.test.js` fails if one platform falls behind.
+  //
+  // Registration SKIPS a name this driver already defines: the hand-written
+  // Android versions carry device knowledge (adb quoting, dump retry, wireless
+  // guards) the shared version cannot, and replacing them would be a regression
+  // dressed up as parity.
+  const sharedMethods = createSharedAppMethods({
+    platform: 'android',
+    queries: createDumpQueries(ANDROID_GRAMMAR),
+    uiDump: () => driver.androidUiDump(),
+    tapByTag: (tag) => driver.androidTapByTag(tag),
+    tapAt: (x, y) => driver.androidTap(x, y),
+    longPressAt: (x, y, ms) =>
+      driver.androidLongPress ? driver.androidLongPress(x, y, ms) : Promise.resolve(false),
+    typeText: (text) => driver.androidTypeText(text),
+    relaunchApp: () => driver.androidKillAndRelaunch('shared'),
+    dropNetwork: (seconds) => driver.androidNetworkDropFor('shared', seconds),
+    sibling: (name) => driver[`android${name}`],
+  });
+  for (const [name, impl] of Object.entries(sharedMethods)) {
+    if (typeof driver[`android${name}`] === 'function') continue;
+    driver[`android${name}`] = impl;
+  }
 
   return driver;
 }

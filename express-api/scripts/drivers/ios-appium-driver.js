@@ -46,12 +46,13 @@
  */
 
 const { execFileSync } = require('child_process');
+const { createSharedAppMethods, SHARED_METHOD_NAMES } = require('./app-ui-methods');
 
 // Method names mirror ios-devicectl-driver.js's IOS_METHOD_NAMES. Each
 // is wired to an Appium-backed implementation in this driver. The
 // runner's matchers dispatch on these names regardless of which driver
 // is registered on ctx.uiDriver.
-const IOS_METHOD_NAMES = [
+const HAND_WRITTEN_METHOD_NAMES = [
   // App lifecycle + UI inspection (all real here, via Appium)
   'iosLaunchApp',
   'iosUiDump',
@@ -69,6 +70,14 @@ const IOS_METHOD_NAMES = [
   'iosShowsRoomClosedSummary',
 ];
 
+// Every method this driver provides — the hand-written ones AND the shared
+// surface registered at the end of the factory. The hand list alone declared 11
+// while the factory defined 61; a declared list allowed to disagree with the
+// code reports an absence that is not real and hides a presence that is.
+const IOS_METHOD_NAMES = [
+  ...new Set([...HAND_WRITTEN_METHOD_NAMES, ...SHARED_METHOD_NAMES.map((n) => `ios${n}`)]),
+].sort();
+
 const {
   xpathForText,
   xpathContainingText,
@@ -79,6 +88,7 @@ const {
   dumpHasTextField,
 } = require('./ios-element-query');
 const { createSubmitClock } = require('./render-timing');
+const { IOS_GRAMMAR, createDumpQueries } = require('./ui-grammar');
 const { boundedFetch, SESSION_TIMEOUT_MS } = require('./device-io-timeout');
 const { createSurfaceBreaker } = require('./surface-circuit-breaker');
 
@@ -157,8 +167,21 @@ function selectUdid(preferredUdid) {
   }
 }
 
+/**
+ * Every method this driver provides.
+ *
+ * The hand-maintained `IOS_METHOD_NAMES` had drifted badly — it declared 11
+ * while the factory defined 61 — so anything reading it to decide "can iOS do
+ * this?" was answering from a five-year-old snapshot. A declared list that is
+ * allowed to disagree with the code is worse than no list: it reports an absence
+ * that is not real, and hides a presence that is.
+ *
+ * The shared names are appended because they are registered unconditionally at
+ * the end of the factory; the hand-written ones stay because several are defined
+ * only under a capability check.
+ */
 function listMethods() {
-  return [...new Set(IOS_METHOD_NAMES)].sort();
+  return [...new Set([...IOS_METHOD_NAMES, ...SHARED_METHOD_NAMES.map((n) => `ios${n}`)])].sort();
 }
 
 /**
@@ -972,6 +995,81 @@ async function createIosDriver({
       const dump = await driver.iosUiDump();
       return Boolean(dump) && dumpHasText(dump, renderTarget);
     });
+
+  /**
+   * Press and hold at a coordinate.
+   *
+   * W3C pointer actions with a `pause` between down and up — Appium has no
+   * dedicated long-press command on the XCUITest driver, and the mobile:
+   * touchAndHold extension needs an element, which the seat/message cases do
+   * not have (they are located by dump geometry).
+   */
+  driver.iosLongPress = async (x, y, ms = 800) => {
+    try {
+      const sid = await ensureSession();
+      const r = await fetchImpl(`${appiumBaseUrl}/session/${sid}/actions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actions: [
+            {
+              type: 'pointer',
+              id: 'finger1',
+              parameters: { pointerType: 'touch' },
+              actions: [
+                { type: 'pointerMove', duration: 0, x, y },
+                { type: 'pointerDown', button: 0 },
+                { type: 'pause', duration: Math.max(1, Number(ms) || 800) },
+                { type: 'pointerUp', button: 0 },
+              ],
+            },
+          ],
+        }),
+      });
+      return r.ok;
+    } catch (e) {
+      console.error(`[ios-appium-driver] iosLongPress(${x},${y}) failed: ${e.message}`);
+      return false;
+    }
+  };
+
+  // ── the shared app surface (see app-ui-methods.js) ───────────────────────
+  //
+  // Android carried 73 corpus methods against this driver's 61, which is why
+  // every app scenario had to say "on Android". The shared layer supplies the
+  // ones this driver has not written for itself, so the corpus can say "on the
+  // app" and mean it.
+  //
+  // Registration SKIPS a name this driver already defines: the hand-written iOS
+  // versions (iosSearchIn, iosTapRoomCard, …) know things about XCUITest that
+  // the shared version cannot, and silently replacing them would be a
+  // regression dressed up as parity.
+  const sharedMethods = createSharedAppMethods({
+    platform: 'ios',
+    queries: createDumpQueries(IOS_GRAMMAR),
+    uiDump: () => driver.iosUiDump(),
+    tapByTag: (tag) => driver.iosTapByTag(tag),
+    tapAt: (x, y) => driver.iosTap(x, y),
+    longPressAt: (x, y, ms) => driver.iosLongPress(x, y, ms),
+    typeText: (text) => driver.iosTypeText(text),
+    relaunchApp: () => driver.iosLaunchApp(),
+    // Real, and honest about when it is unavailable: iOS exposes network
+    // conditioning only through the Developer settings' Network Link
+    // Conditioner, and iosNetworkLinkConditioner reports `supported: false`
+    // when the device does not have it enabled rather than no-opping.
+    dropNetwork: async (seconds) => {
+      const r = await driver.iosNetworkLinkConditioner('100% Loss');
+      if (!r.supported) return r;
+      await new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(seconds) || 0) * 1000));
+      await driver.iosNetworkLinkConditioner('Off');
+      return { supported: true, applied: true };
+    },
+    sibling: (name) => driver[`ios${name}`],
+  });
+  for (const [name, impl] of Object.entries(sharedMethods)) {
+    if (typeof driver[`ios${name}`] === 'function') continue;
+    driver[`ios${name}`] = impl;
+  }
 
   return driver;
 }
