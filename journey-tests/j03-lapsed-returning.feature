@@ -21,7 +21,7 @@ Feature: j03 — Lena's lapsed return
   Background:
     Given the local stack is healthy
     Given the device locale is "de"
-    Given Lena [P-05] has user doc with acceptedPrivacyVersion=2, lastLoginRewardDate="2026-04-01", loginStreak=0, fcmTokens=[]
+    Given Lena [P-05] has user doc with acceptedLegalVersion=2, lastLoginRewardDate="2026-04-01", loginStreak=0, fcmTokens=[]
     Given the current privacy version is 4 in /api/legal/versions
     Given Lena [P-05] is on Web Chromium at "/" with no Firebase session
 

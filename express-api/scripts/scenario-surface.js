@@ -21,9 +21,30 @@
 // "Adam on Android taps ..." / "Alice on Web sees ..." / "Mia on iPhone opens ..."
 // Anchored on the ` on <Platform> ` phrasing the corpus uses for the actor's
 // surface, so a platform word inside a quoted value is not mistaken for one.
-const PLATFORM_PHRASE = /\bon\s+(Android|iOS|iPhone|Web)\b/gi;
+// `on the app` is the PLATFORM-NEUTRAL form: this step runs on the native app,
+// whichever one the cell drives.
+//
+// Operator 2026-08-01: "why are most of the app scenarios android only??? all
+// app scenarios must be on both apps". Measured at the time: 114 Android-only
+// scenarios against 12 iOS-only, and the iOS cell skipping 282 of 228×… because
+// the corpus says "on Android" in 376 steps for behaviour that is identical on
+// both. A skip looks like a decision, so the skew was invisible.
+//
+// Naming a concrete platform still works and still pins — some scenarios ARE
+// specific (an APK install, a Play billing dialog) and erasing that distinction
+// would be its own bug.
+const PLATFORM_PHRASE = /\bon\s+(?:the\s+)?(Android|iOS|iPhone|Web|app)\b/gi;
 
-const NORMALISE = { android: 'android', ios: 'ios', iphone: 'ios', web: 'web' };
+const NORMALISE = { android: 'android', ios: 'ios', iphone: 'ios', web: 'web', app: 'app' };
+
+/**
+ * Platforms that any ONE native app satisfies.
+ *
+ * `app` is a requirement for *a* device, not a specific one, so a cell holding
+ * either phone can run it — which is exactly what doubles the app corpus
+ * without writing a new scenario.
+ */
+const ANY_APP = new Set(['android', 'ios']);
 
 /** Every platform a scenario's steps demand. Empty means "runs anywhere". */
 function requiredPlatforms(steps = []) {
@@ -74,7 +95,7 @@ function cellCapabilities(ctx = {}) {
  * matrix nothing to drop: every one of the 12 cells is a browser cell, so `web`
  * is universal there and never told two cells apart.
  */
-const GATING_PLATFORMS = new Set(['android', 'ios']);
+const GATING_PLATFORMS = new Set(['android', 'ios', 'app']);
 
 /**
  * @returns {{ok: boolean, missing: string[]}} `missing` is always empty when ok,
@@ -82,7 +103,13 @@ const GATING_PLATFORMS = new Set(['android', 'ios']);
  */
 function canRunScenario(required = new Set(), capabilities = new Set()) {
   const missing = [...required]
-    .filter((p) => GATING_PLATFORMS.has(p) && !capabilities.has(p))
+    .filter((p) => {
+      if (!GATING_PLATFORMS.has(p)) return false;
+      // `app` is satisfied by EITHER native app — that is the whole point of
+      // the neutral form. Everything else must match exactly.
+      if (p === 'app') return ![...ANY_APP].some((d) => capabilities.has(d));
+      return !capabilities.has(p);
+    })
     .sort();
   return missing.length === 0 ? { ok: true, missing: [] } : { ok: false, missing };
 }
@@ -187,6 +214,7 @@ function applicableCells(steps, capsByCell = {}) {
 }
 
 module.exports = {
+  ANY_APP,
   requiredPlatforms,
   cellCapabilities,
   canRunScenario,

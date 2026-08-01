@@ -367,3 +367,90 @@ describe('platform-aware surface gate', () => {
     expect(isSurfaceUnavailable('response status was 404, expected 405', androidCell)).toBe(false);
   });
 });
+
+/**
+ * "ON THE APP" — one scenario, both apps.
+ *
+ * Operator 2026-08-01: "why are most of the app scenarios android only??? all
+ * app scenarios must be on both apps" — and then: "why are there so little app
+ * scenarios... ??? there should be MANY more. so many gaps need to be filled
+ * here. the app is the core product".
+ *
+ * MEASURED, and it is as bad as it sounds:
+ *
+ *   Android-only scenarios : 114
+ *   iOS-only scenarios     :  12
+ *   app screens with ZERO journey coverage : 29 of 37
+ *   app testTags referenced by any journey : 15 of 160  (9.4%)
+ *
+ * The corpus says "on Android" in 376 steps and "on iOS" in 120, and
+ * `requiredPlatforms` reads that literally — so a scenario about signing in,
+ * which is identical on both apps, is pinned to one of them forever. The iOS
+ * cell then SKIPS 282 scenarios, and the skew is invisible because a skip looks
+ * like a decision rather than an omission.
+ *
+ * `on the app` says what these scenarios actually mean: this runs on the native
+ * app, whichever one this cell drives. One sentence, both platforms, and the
+ * count of app scenarios doubles without writing a single new one.
+ */
+describe('"on the app" — platform-neutral app steps', () => {
+  const { requiredPlatforms, canRunScenario } = require('../../scripts/scenario-surface');
+  const step = (text) => ({ text });
+
+  it('requires an app, without naming which', () => {
+    expect([...requiredPlatforms([step('Adam [P-01] on the app taps "rooms"')])]).toEqual(['app']);
+  });
+
+  it('is satisfied by the Android cell', () => {
+    expect(canRunScenario(new Set(['app']), new Set(['android'])).ok).toBe(true);
+  });
+
+  it('is satisfied by the iOS cell', () => {
+    expect(canRunScenario(new Set(['app']), new Set(['ios'])).ok).toBe(true);
+  });
+
+  it('is NOT satisfied by a browser-only cell', () => {
+    // The whole point is that it needs a device. A web cell must skip it, not
+    // fail it — same contract as a concrete platform.
+    const v = canRunScenario(new Set(['app']), new Set(['web']));
+    expect(v.ok).toBe(false);
+    expect(v.missing).toEqual(['app']);
+  });
+
+  it('still lets a genuinely Android-specific scenario pin itself', () => {
+    // Some scenarios ARE platform-specific — an APK install flow, a Play
+    // billing dialog. Naming the platform must keep working, or the neutral
+    // form becomes a blunt instrument that erases real distinctions.
+    expect([...requiredPlatforms([step('Adam [P-01] on Android taps "rooms"')])]).toEqual([
+      'android',
+    ]);
+    expect(canRunScenario(new Set(['android']), new Set(['ios'])).ok).toBe(false);
+  });
+
+  it('combines with web for a cross-over scenario', () => {
+    const required = requiredPlatforms([
+      step('Adam [P-01] on the app sends a gift'),
+      step('Alice [P-02] on Web sees the gift'),
+    ]);
+    expect([...required].sort()).toEqual(['app', 'web']);
+    // A cross cell holding either device can run it.
+    expect(canRunScenario(required, new Set(['web', 'android'])).ok).toBe(true);
+    expect(canRunScenario(required, new Set(['web', 'ios'])).ok).toBe(true);
+  });
+
+  it('a scenario naming BOTH concrete apps still needs both', () => {
+    // cross-all territory — unchanged by the neutral form.
+    const required = requiredPlatforms([
+      step('Adam [P-01] on Android sends'),
+      step('Mia [P-07] on iOS receives'),
+    ]);
+    expect(canRunScenario(required, new Set(['android'])).ok).toBe(false);
+    expect(canRunScenario(required, new Set(['android', 'ios'])).ok).toBe(true);
+  });
+
+  it('does not match "app" inside an ordinary word', () => {
+    // "on the application", "on Apple" — anchored on the exact phrase, or every
+    // sentence mentioning an app becomes a device requirement.
+    expect([...requiredPlatforms([step('Adam sees the appearance settings')])]).toEqual([]);
+  });
+});
